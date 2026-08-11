@@ -146,7 +146,17 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   backup; **the Worry Box does not and is accepted to die on an Erase All** — "let it go" notes
   are deliberately device-only. When this happens the app says so: a correct passcode surfaces
   "Sealed data can no longer be opened on this device. Reset app lock to continue." rather than
-  silently failing to decrypt.
+  silently failing to decrypt — and the reset it names is reachable from that very screen (the
+  unlock overlay grows its own card for this state, because a correct passcode never trips the
+  failed-attempt ladder that the app's other reset button hangs off). Three narrower properties
+  keep that message honest. A keychain that merely *would not answer* — the device auto-locked
+  during the scrypt derive, protected data unavailable — is a **different, retryable** error that
+  never mentions reset; only a provably absent or provably rejecting enclave key is terminal. The
+  two surfaces that never receive the content key (the progress-photo strip, which seals under its
+  own intact key, and Settings → App lock) still open on the verifier match, so the terminal state
+  degrades non-hub entry to a passcode check rather than bricking it. And while biometrics are
+  enabled the bypass copy below is a real recovery path: Face ID re-establishes the enclave wrap
+  from it, so the app offers that repair *before* it offers the destructive reset.
 - **With biometrics enabled, the strongest form of the claim does not hold.** Face ID / Touch ID
   unlock keeps a second copy of the raw content key in its own keychain item
   (`WhenPasscodeSetThisDeviceOnly` + `.biometryCurrentSet`) rather than inside the enclave. It
@@ -154,7 +164,12 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   but while it exists the content key lives behind a data-protection ACL, not enclave
   non-exportability. **"The key never exists in extractable form except behind the Secure
   Enclave" is exactly true only with biometrics off.** Routing that copy through the enclave too
-  is a tracked follow-up, not done here.
+  is a tracked follow-up, not done here. The same copy is also, honestly, a **recovery path**: if
+  the enclave key dies while biometrics are on, a Face ID unlock still opens the corpus and
+  re-establishes the wrap, so a hard-bound install is not unconditionally lost — it is lost when
+  the enclave key dies *and* no bypass copy exists. The enclave never yields to it, though: an
+  openable enclave wrap outranks the bypass, and a bypass whose bytes the enclave contradicts is
+  deleted rather than honored (nothing unauthenticated may overwrite the authoritative wrap).
 - **The hard binding is an off-device guarantee, not an on-device one.** The enclave key is gated
   on device unlock, not on the app passcode, so a forensic attacker working on the *unlocked
   device itself* can ask the enclave to unwrap the content key without knowing the app PIN. For a
@@ -198,7 +213,14 @@ shipped; the rest are still open.
    enclave wrap has been proven to unwrap to exactly the authoritative key, and no error path ever
    deletes. Two residuals stay open and are stated in §5: the biometric-bypass copy of the key is
    not enclave-wrapped, and the enclave key is device-unlock gated rather than app-PIN gated, so
-   the guarantee is off-device rather than on-device.
+   the guarantee is off-device rather than on-device. Four properties keep the terminal state from
+   being worse than the trade it was approved as, and each is pinned by a test in
+   `FernletTests/SecureEnclaveWrapTests`: the reset the error prescribes is reachable from the
+   unlock overlay itself; a transient keychain read failure is a separate retryable error that
+   never advises a reset; the two scopes that never receive the content key still unlock on the
+   verifier match (so Settings → App lock cannot be bricked); and while a biometric bypass copy
+   survives, the repair is offered before the destruction — with the enclave, never the bypass, as
+   the authority on what the key is.
    **Precondition partly satisfied (2026-08-10, security-hardening Phase 3):** journal narratives
    and intimacy logs are now first-class sealed-backup payload types (`journalNarratives`,
    `intimacyLogs`, launched directly on record format v2), each behind its own opt-in toggle, so

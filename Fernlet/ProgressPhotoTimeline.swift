@@ -285,6 +285,13 @@ private struct ProgressPhotoUnlockSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        // `onResetRequested: nil` is deliberate, and it is only safe because of the scope rule in
+        // `FernletLockService.unlock`: `.progressPhotos` never receives the lock's content key
+        // (these photos seal under `PrivateMediaKeyStore`'s own key), so a dead Secure-Enclave key
+        // cannot strand this sheet — the unlock succeeds on the verifier match alone and the
+        // unrecoverable card never renders here. Offering a destructive app-lock reset from the
+        // photo strip would be the wrong place for it; the Private Hub gate and Settings → App
+        // lock both carry it.
         FernletLockView(scope: .progressPhotos, onUnlocked: { dismiss() }, onResetRequested: nil)
             .environment(lockService)
             .onChange(of: lockService.state) { _, newState in

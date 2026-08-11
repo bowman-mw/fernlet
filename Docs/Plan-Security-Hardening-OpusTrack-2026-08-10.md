@@ -772,7 +772,15 @@ accessibility confined to `PrivateMediaKeyStore` + `IdentityService`) are **unaf
 synchronizable or bare-accessibility spelling (the SE key uses `WhenUnlockedThisDeviceOnly`, which the
 matcher ignores via its ThisDeviceOnly suffix check :171-185). The at-rest format-pin tests
 (`FernletLockCryptoTests`, `ColumnCryptoDeviceBindingTests`, `SealedBackupFormatPinTests`) are unchanged —
-#1 changes key **custody**, not the sealed-column or escrow **format**, which is the point. `Verifiability.md`
+#1 changes key **custody**, not the sealed-column or escrow **format**, which is the point.
+**Deviation (P4 review, recorded rather than left to drift):** the format pins themselves are unchanged,
+but `FernletLockCryptoTests`' FIXTURE is not. `configuredVerifierIsDigestNotWrappingKey` asserts against
+the persisted scrypt wrap, which no longer exists after a born-hard-bound `configure()` on enclave
+hardware, so the test now builds its service with enclave-wrap persistence refused (`freshService(persistEnclaveWrap: false)`)
+and keeps its assertions UNCONDITIONAL instead of hiding them behind an `if let` that goes dead on every
+Apple-silicon host. The hard-bound property gets its own pin beside it
+(`hardBoundConfigureLeavesNoPasscodeDerivedRowThatOpensTheKey`), so both custody states are pinned on every
+host rather than one state per host. `Verifiability.md`
 is CODEOWNERS-protected: §4/§5/§6.1 edited in the same commit as the code (§6.1 moves from "awaiting owner
 decision" to done; §5 gains the same-device-restore honest limit). No S3-wall or No-Tracking impact
 (`FernletLock` legitimately imports `PrivateStoreCore`/`PrivateHealthStore`; nothing new crosses the wall).

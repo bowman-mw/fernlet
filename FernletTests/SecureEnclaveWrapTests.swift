@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import LocalAuthentication
 import Security
 import Testing
 import FernletFoundation
@@ -23,17 +24,39 @@ struct SecureEnclaveWrapTests {
     /// real enclave otherwise hard-binds at `configure()`. The refusing store reports success and
     /// drops the write, so `storeVerified`'s read-back fails exactly as a hosed keychain would
     /// and `maintainSecureEnclaveWrap` swallows it — leaving no persisted wrap to verify against.
+    ///
+    /// `refusingWritesFor` extends the same trick to any other row, which is how the partial-write
+    /// paths (a `changeCredential` that dies mid-rewrite, a `configure` that dies at its first
+    /// write) are reachable at all. `unreadableRows` forces `KeychainItem.ReadResult.unreadable`
+    /// out of the custody/enclave-blob reads — the "the keychain would not answer" state that must
+    /// never be mistaken for an absence.
     @MainActor
-    private func makeService(keychainService: String, persistEnclaveWrap: Bool = true) -> FernletLockService {
-        let refusingStore: ((Data, LockKeychainKey, String) -> OSStatus)? = persistEnclaveWrap ? nil : { data, key, service in
-            guard key != .seWrappedContentKey else { return errSecSuccess }
+    private func makeService(
+        keychainService: String,
+        persistEnclaveWrap: Bool = true,
+        refusingWritesFor: Set<LockKeychainKey> = [],
+        unreadableRows: [LockKeychainKey: OSStatus] = [:],
+        biometricBypassLoader: ((String, String) throws -> Data)? = nil,
+        biometricTypeOverride: (() -> LABiometryType)? = nil
+    ) -> FernletLockService {
+        var refused = refusingWritesFor
+        if !persistEnclaveWrap { refused.insert(.seWrappedContentKey) }
+        let refusingStore: ((Data, LockKeychainKey, String) -> OSStatus)? = refused.isEmpty ? nil : { data, key, service in
+            guard !refused.contains(key) else { return errSecSuccess }
             return KeychainItem.store(data, for: key, service: service)
+        }
+        let distinguishingLoad: ((LockKeychainKey, String) -> KeychainItem.ReadResult)? = unreadableRows.isEmpty ? nil : { key, service in
+            if let status = unreadableRows[key] { return .unreadable(status) }
+            return KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: service)
         }
         return FernletLockService(
             keychainService: keychainService,
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
             sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
-            keychainStore: refusingStore
+            biometricBypassLoader: biometricBypassLoader,
+            biometricTypeOverride: biometricTypeOverride,
+            keychainStore: refusingStore,
+            keychainLoadDistinguishing: distinguishingLoad
         )
     }
 
@@ -75,8 +98,11 @@ struct SecureEnclaveWrapTests {
     // MARK: Proves the lock service maintains the SE wrap across configure and unlock, that the
     // blob opens to the real content key, and — while the install is still LEGACY, which is the
     // only state where the question is meaningful — that a CORRUPTED blob never blocks an unlock
-    // and is silently repaired by it. (Once hard-bound, a wrap that will not open is fatal by
-    // design and is covered by `enclaveKeyDeathAfterHardBindingSurfacesTheExplicitError`.)
+    // and is silently repaired by it. (Once hard-bound, a wrap that will not open fails the
+    // PASSCODE path with the explicit error —
+    // `enclaveKeyDeathAfterHardBindingSurfacesTheExplicitError` — but it is not unconditionally
+    // fatal: while a `.biometryCurrentSet` bypass copy survives, the biometric path re-establishes
+    // the wrap from it, which `hardBoundRecoveryFailureKeepsTheBiometricRepairReachable` pins.)
     @MainActor
     @Test func lockServiceMaintainsAndRepairsTheWrapWithoutEverBlockingUnlock() async throws {
         let service = "com.fernlet.lock.test.se.svc.\(UUID().uuidString)"
@@ -286,6 +312,8 @@ struct SecureEnclaveWrapTests {
 
         #expect(!scryptItemExists(service: service),
                 "configure() on enclave hardware must delete the scrypt item after the wrap verifies")
+        #expect(!lockService.hardBindingNoticePending,
+                "a fresh setup already acknowledged the disclosure sheet — no migration notice is owed")
         let blob = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service))
         #expect(SecureEnclaveContentKeyWrap.unwrap(blob, service: service) == contentKeyData)
 
@@ -324,6 +352,12 @@ struct SecureEnclaveWrapTests {
         if SecureEnclaveContentKeyWrap.isAvailable {
             #expect(!scryptItemExists(service: service),
                     "first unlock under P4 must hard-bind: scrypt item deleted")
+            // A MIGRATING install acquires a strictly larger loss mode without ever seeing the
+            // setup disclosure again, so the flip owes the user a one-shot notice.
+            #expect(migrating.hardBindingNoticePending,
+                    "an existing install must be told its recovery properties changed")
+            migrating.acknowledgeHardBindingNotice()
+            #expect(!migrating.hardBindingNoticePending, "the notice is one-shot")
             let blob = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service))
             #expect(SecureEnclaveContentKeyWrap.unwrap(blob, service: service) == contentKeyData)
             // And the install stays usable afterward, via the enclave only.
@@ -407,6 +441,380 @@ struct SecureEnclaveWrapTests {
         #expect(lockService.contentKey(for: .privateHub) == nil)
         #expect(lockService.state == .locked(cooldownDeadline: nil))
         #expect(lockService.currentAttemptCount == 1, "a correct passcode is not a failed attempt")
+        // requiresReset stays FALSE — which is why the unlock overlay needs its own card for this
+        // state: `resetRequiredCard` (the app's only other route to reset()) is keyed off this
+        // flag and can never appear here. Auto-setting it would also relabel a correct passcode as
+        // "too many failed attempts", which it is not.
+        #expect(!lockService.requiresReset, "a correct passcode must never trip the failed-attempt ladder")
+        // With no bypass row there is genuinely nothing left to repair from: this IS the designed
+        // terminal state, and nothing in the fixes below weakens it.
+        #expect(!lockService.hasBiometricRecoveryCopy)
+        #expect(!lockService.isBiometricUnlockAvailable)
+    }
+
+    // MARK: Proves a dead enclave key does not seal off the two surfaces that never receive the
+    // content key. `.progressPhotos` seals under `PrivateMediaKeyStore`'s own (intact) key and
+    // `.appLockSettings` hosts the reset — so both unlock on the verifier match alone, holding no
+    // key, while `.privateHub` still gets the honest terminal error. Without this the app-lock
+    // settings page — the only route to the reset the error prescribes — would be behind a gate
+    // that can never open again.
+    @MainActor
+    @Test func nonHubScopesStillOpenAfterTheEnclaveKeyDies() async throws {
+        let service = "com.fernlet.lock.test.se.nonhub.\(UUID().uuidString)"
+        let lockService = makeService(keychainService: service)
+        defer {
+            try? lockService.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+
+        try await lockService.configure(credential: .pin6("202122"), grantingScope: .privateHub)
+        guard SecureEnclaveContentKeyWrap.isAvailable, !scryptItemExists(service: service) else {
+            // SE-less: no hard binding exists, so nothing can be lost — the legacy unlock is
+            // unchanged for every scope, which is the property worth asserting here.
+            lockService.lock(reason: .manual)
+            _ = try await lockService.unlock(passcode: "202122", for: .progressPhotos)
+            #expect(lockService.isUnlocked(for: .progressPhotos))
+            #expect(scryptItemExists(service: service))
+            return
+        }
+
+        SecureEnclaveContentKeyWrap.deleteKey(service: service)
+
+        for scope in [FernletLockScope.progressPhotos, .appLockSettings] {
+            lockService.lock(reason: .manual)
+            _ = try await lockService.unlock(passcode: "202122", for: scope)
+            #expect(lockService.state == .unlocked(scope: scope))
+            #expect(!lockService.hasResidentContentKey,
+                    "\(scope.rawValue) must unlock WITHOUT a content key, never with a placeholder")
+            #expect(lockService.contentKey(for: scope) == nil)
+            #expect(lockService.contentKey(for: .privateHub) == nil)
+        }
+        #expect(lockService.currentAttemptCount == 0, "the tolerated path must not touch the ladder")
+
+        // The hub is the scope that actually needs the key, and it still says so plainly.
+        lockService.lock(reason: .manual)
+        do {
+            _ = try await lockService.unlock(passcode: "202122", for: .privateHub)
+            Issue.record("the Private Hub unlocked without a recoverable content key")
+        } catch FernletLockError.contentKeyUnrecoverable { }
+        #expect(!lockService.hasResidentContentKey)
+    }
+
+    // MARK: Proves the documented biometric self-heal is REACHABLE in the one state that needs it.
+    // A hard-bound install whose enclave wrap will not open fails the passcode path — but the
+    // `.biometryCurrentSet` bypass still holds a working copy of the key, and PIN-before-biometrics
+    // must not strand it: the correct passcode entry itself (not the completed unlock) is what
+    // re-arms the biometric offer, the biometric unlock then recovers the same key AND repairs the
+    // wrap, and a subsequent passcode unlock works again.
+    @MainActor
+    @Test func hardBoundRecoveryFailureKeepsTheBiometricRepairReachable() async throws {
+        let service = "com.fernlet.lock.test.se.biorepair.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+
+        try await setup.configure(credential: .pin6("232425"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        try await setup.setBiometricEnabled(true, passcode: "232425")
+        guard SecureEnclaveContentKeyWrap.isAvailable, !scryptItemExists(service: service) else {
+            // SE-less: the install stays legacy, so no recovery failure exists to repair — and the
+            // passcode path must keep working untouched.
+            setup.lock(reason: .manual)
+            _ = try await setup.unlock(passcode: "232425", for: .privateHub)
+            #expect(try contentKeyBytes(setup) == contentKeyData)
+            #expect(scryptItemExists(service: service))
+            return
+        }
+        #expect(setup.hasBiometricRecoveryCopy, "enabling biometrics must write the bypass row")
+
+        // The enclave wrap is destroyed (its blob replaced with garbage the live SE key rejects),
+        // and the app relaunches: a cold service, nothing cached.
+        KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey, service: service)
+        let relaunched = makeService(
+            keychainService: service,
+            biometricBypassLoader: { _, _ in contentKeyData },
+            biometricTypeOverride: { .faceID }
+        )
+        // PIN-before-biometrics still holds on a fresh process: nothing has been entered yet.
+        #expect(!relaunched.isBiometricUnlockAvailable)
+
+        do {
+            _ = try await relaunched.unlock(passcode: "232425", for: .privateHub)
+            Issue.record("a hard-bound unlock succeeded although the wrap cannot be opened")
+        } catch FernletLockError.contentKeyUnrecoverable { }
+
+        // The correct entry counts as authentication even though recovery failed…
+        #expect(relaunched.passcodeVerifiedThisProcess)
+        #expect(!relaunched.passcodeUnlockedThisProcess, "no full unlock happened")
+        #expect(relaunched.isBiometricUnlockAvailable, "the surviving key copy must be reachable")
+        #expect(relaunched.hasBiometricRecoveryCopy)
+
+        // …so the bypass copy opens the corpus and re-establishes the wrap on the way through.
+        _ = try await relaunched.unlockWithBiometrics(for: .privateHub)
+        #expect(try contentKeyBytes(relaunched) == contentKeyData)
+        let repaired = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service))
+        #expect(SecureEnclaveContentKeyWrap.unwrap(repaired, service: service) == contentKeyData,
+                "the biometric path must re-establish a wrap of the same key")
+        #expect(!scryptItemExists(service: service), "the repair must not resurrect the scrypt item")
+
+        // And the passcode path works again, through the enclave alone.
+        relaunched.lock(reason: .manual)
+        _ = try await relaunched.unlock(passcode: "232425", for: .privateHub)
+        #expect(try contentKeyBytes(relaunched) == contentKeyData)
+    }
+
+    // MARK: Proves the widened passcode flag did NOT weaken PIN-before-biometrics: on a fresh
+    // process biometrics are refused, and a WRONG passcode leaves them refused — only a verifier
+    // match may ever arm them.
+    @MainActor
+    @Test func aWrongPasscodeNeverArmsTheBiometricPath() async throws {
+        let service = "com.fernlet.lock.test.se.pinfirst.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        try await setup.configure(credential: .pin6("262728"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        try await setup.setBiometricEnabled(true, passcode: "262728")
+
+        let relaunched = makeService(
+            keychainService: service,
+            biometricBypassLoader: { _, _ in contentKeyData },
+            biometricTypeOverride: { .faceID }
+        )
+        #expect(relaunched.biometricEnabled)
+        #expect(!relaunched.passcodeVerifiedThisProcess)
+        #expect(!relaunched.isBiometricUnlockAvailable)
+        do {
+            _ = try await relaunched.unlockWithBiometrics(for: .privateHub)
+            Issue.record("biometrics were the first factor after launch")
+        } catch FernletLockError.biometricNotAvailable { }
+
+        do {
+            _ = try await relaunched.unlock(passcode: "999999", for: .privateHub)
+            Issue.record("a wrong passcode unlocked the service")
+        } catch FernletLockError.invalidPasscode { }
+        #expect(!relaunched.passcodeVerifiedThisProcess, "a wrong attempt must arm nothing")
+        #expect(!relaunched.isBiometricUnlockAvailable)
+        do {
+            _ = try await relaunched.unlockWithBiometrics(for: .privateHub)
+            Issue.record("a wrong passcode attempt unlocked the biometric path")
+        } catch FernletLockError.biometricNotAvailable { }
+    }
+
+    // MARK: Proves a keychain that merely would not ANSWER is never reported as a destroyed key.
+    // The enclave key is `WhenUnlockedThisDeviceOnly` and the unlock straddles a multi-hundred-ms
+    // scrypt derive, so `errSecInteractionNotAllowed` is a reachable, transient state — answering
+    // it with "reset app lock to continue" would tell a user with an intact key to destroy it.
+    @MainActor
+    @Test func anUnreadableEnclaveBlobIsRetryableNotTerminal() async throws {
+        let service = "com.fernlet.lock.test.se.transient.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service)
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        try await setup.configure(credential: .pin6("293031"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        guard SecureEnclaveContentKeyWrap.isAvailable, !scryptItemExists(service: service) else {
+            #expect(scryptItemExists(service: service), "SE-less hardware must stay legacy")
+            return
+        }
+
+        let blocked = makeService(
+            keychainService: service,
+            unreadableRows: [.seWrappedContentKey: errSecInteractionNotAllowed]
+        )
+        do {
+            _ = try await blocked.unlock(passcode: "293031", for: .privateHub)
+            Issue.record("an unreadable keychain produced a successful unlock")
+        } catch FernletLockError.contentKeyTemporarilyUnavailable(let status) {
+            #expect(status == errSecInteractionNotAllowed)
+        } catch FernletLockError.contentKeyUnrecoverable {
+            Issue.record("a transient read failure was reported as a destroyed key")
+        }
+        #expect(!blocked.hasResidentContentKey)
+        #expect(blocked.currentAttemptCount == 0, "a correct passcode is not a failed attempt")
+
+        // Nothing was destroyed: the very next normal unlock recovers the same key, still with no
+        // scrypt item in existence.
+        let recovered = makeService(keychainService: service)
+        _ = try await recovered.unlock(passcode: "293031", for: .privateHub)
+        #expect(try contentKeyBytes(recovered) == contentKeyData)
+        #expect(!scryptItemExists(service: service))
+    }
+
+    // MARK: Proves the custody discriminator refuses to GUESS. `KeychainItem.load` returns nil for
+    // a failed read exactly as it does for an absent item, so inferring custody from it would read
+    // a transient failure as "hard-bound" — taking the enclave branch on a live legacy install
+    // (installing a possibly stale key with no equality gate) and letting `changeCredential`
+    // rewrite the verifier while skipping the wrap it authenticates. Both must throw instead, and
+    // changeCredential must leave every row byte-identical.
+    @MainActor
+    @Test func anUnreadableCustodyRowRefusesToActRatherThanGuess() async throws {
+        let service = "com.fernlet.lock.test.se.custodyread.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service, persistEnclaveWrap: false)
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        try await setup.configure(credential: .pin6("323334"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        #expect(scryptItemExists(service: service), "this test needs the LEGACY state")
+
+        let priorSalt = try #require(KeychainItem.load(for: .salt, service: service))
+        let priorVerifier = try #require(KeychainItem.load(for: .verifier, service: service))
+        let priorWrapped = try #require(KeychainItem.load(for: .wrappedContentKey, service: service))
+
+        let blind = makeService(
+            keychainService: service,
+            persistEnclaveWrap: false,
+            unreadableRows: [.wrappedContentKey: errSecNotAvailable]
+        )
+        do {
+            _ = try await blind.unlock(passcode: "323334", for: .privateHub)
+            Issue.record("unlock acted on an undeterminable custody state")
+        } catch FernletLockError.keychainFailure(_, let status) {
+            #expect(status == errSecNotAvailable)
+        }
+        do {
+            try await blind.changeCredential(current: "323334", new: .pin6("353637"))
+            Issue.record("changeCredential acted on an undeterminable custody state")
+        } catch FernletLockError.keychainFailure { }
+
+        #expect(KeychainItem.load(for: .salt, service: service) == priorSalt)
+        #expect(KeychainItem.load(for: .verifier, service: service) == priorVerifier)
+        #expect(KeychainItem.load(for: .wrappedContentKey, service: service) == priorWrapped)
+
+        // …and the install is untouched: the ORIGINAL passcode still opens the original key.
+        let healthy = makeService(keychainService: service, persistEnclaveWrap: false)
+        _ = try await healthy.unlock(passcode: "323334", for: .privateHub)
+        #expect(try contentKeyBytes(healthy) == contentKeyData)
+    }
+
+    // MARK: Proves the biometric path can never DESTROY the hard-bound wrap it is supposed to
+    // repair. The bypass bytes are the one input to `maintainSecureEnclaveWrap` that nothing
+    // authenticates, and `storeVerified` is delete-then-add, so re-wrapping over an openable
+    // hard-bound blob would overwrite the only recoverable copy of the key from an unverified
+    // source. The openable blob is the authority: it survives byte-for-byte, its bytes win the
+    // session, and the contradicted bypass row is dropped rather than honored.
+    @MainActor
+    @Test func biometricUnlockNeverOverwritesAnOpenableHardBoundWrap() async throws {
+        let service = "com.fernlet.lock.test.se.divergent.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        try await setup.configure(credential: .pin6("383940"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        try await setup.setBiometricEnabled(true, passcode: "383940")
+        guard SecureEnclaveContentKeyWrap.isAvailable, !scryptItemExists(service: service) else {
+            // SE-less: there is no authoritative wrap to protect, and legacy behavior (the scrypt
+            // item stays authoritative and repairs the wrap) must be untouched.
+            #expect(scryptItemExists(service: service))
+            return
+        }
+        let blobBefore = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service))
+
+        // A bypass row that disagrees with the enclave — the divergence the old code would have
+        // "repaired" by overwriting the enclave's copy.
+        let divergent = Data(repeating: 0xAB, count: 32)
+        let biometric = makeService(
+            keychainService: service,
+            biometricBypassLoader: { _, _ in divergent },
+            biometricTypeOverride: { .faceID }
+        )
+        _ = try await biometric.unlock(passcode: "383940", for: .privateHub)
+        biometric.lock(reason: .manual)
+        _ = try await biometric.unlockWithBiometrics(for: .privateHub)
+
+        #expect(KeychainItem.load(for: .seWrappedContentKey, service: service) == blobBefore,
+                "an openable hard-bound wrap must never be overwritten from unverified bytes")
+        #expect(try contentKeyBytes(biometric) == contentKeyData,
+                "the enclave outranks the bypass — its bytes seat the session")
+        #expect(!biometric.hasBiometricRecoveryCopy,
+                "a bypass the enclave contradicts must be dropped, not honored")
+
+        // And the passcode path still recovers the original key from the untouched wrap.
+        biometric.lock(reason: .manual)
+        _ = try await biometric.unlock(passcode: "383940", for: .privateHub)
+        #expect(try contentKeyBytes(biometric) == contentKeyData)
+    }
+
+    // MARK: Proves configure() destroys every copy of the OLD content key BEFORE it writes the new
+    // credential. Ordering is the property: a throw (or an app kill) between the first write and a
+    // trailing delete would leave a stale biometric bypass — holding the previous content key —
+    // paired with the new passcode, i.e. a Face ID unlock that installs the wrong key.
+    @MainActor
+    @Test func configureClearsStaleKeyCopiesBeforeWritingTheNewCredential() async throws {
+        let service = "com.fernlet.lock.test.se.configorder.\(UUID().uuidString)"
+        defer {
+            KeychainItem.deleteAll(service: service)
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        // Residue from a previous lock: a bypass row and its enabled flag.
+        KeychainItem.store(Data(repeating: 0x11, count: 32), for: .biometricBypass, service: service)
+        KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: service)
+
+        // A configure that dies at its very FIRST write.
+        let failing = makeService(keychainService: service, refusingWritesFor: [.salt])
+        do {
+            try await failing.configure(credential: .pin6("414243"), grantingScope: .privateHub)
+            Issue.record("configure succeeded although the salt write was refused")
+        } catch FernletLockError.keychainFailure { }
+
+        #expect(KeychainItem.load(for: .biometricBypass, service: service) == nil,
+                "the stale bypass must already be gone when the first write is attempted")
+        #expect(KeychainItem.load(for: .biometricEnabledFlag, service: service) == nil)
+        #expect(KeychainItem.load(for: .salt, service: service) == nil)
+    }
+
+    // MARK: Proves a partially applied re-key is rolled back. `changeCredential` writes five rows;
+    // a failure partway would otherwise leave salt + verifier derived from the NEW passcode over a
+    // wrap only the SUPERSEDED derived key opens — a lock that accepts the new passcode and can
+    // never recover the content key again.
+    @MainActor
+    @Test func aPartiallyAppliedReKeyIsRolledBack() async throws {
+        let service = "com.fernlet.lock.test.se.rekeyrollback.\(UUID().uuidString)"
+        let setup = makeService(keychainService: service, persistEnclaveWrap: false)
+        defer {
+            try? setup.reset()
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        try await setup.configure(credential: .pin6("444546"), grantingScope: .privateHub)
+        let contentKeyData = try contentKeyBytes(setup)
+        #expect(scryptItemExists(service: service), "this test needs the LEGACY state")
+
+        let priorSalt = try #require(KeychainItem.load(for: .salt, service: service))
+        let priorVerifier = try #require(KeychainItem.load(for: .verifier, service: service))
+        let priorWrapped = try #require(KeychainItem.load(for: .wrappedContentKey, service: service))
+
+        // The SECOND of the five writes fails — the dangerous ordering, because the new salt is
+        // already on disk by then and only the rollback can put the old one back.
+        let failing = makeService(keychainService: service, persistEnclaveWrap: false, refusingWritesFor: [.verifier])
+        do {
+            try await failing.changeCredential(current: "444546", new: .pin6("474849"))
+            Issue.record("changeCredential succeeded although a credential write was refused")
+        } catch FernletLockError.keychainFailure { }
+
+        #expect(KeychainItem.load(for: .salt, service: service) == priorSalt,
+                "a failed re-key must not leave a newer salt behind")
+        #expect(KeychainItem.load(for: .verifier, service: service) == priorVerifier)
+        #expect(KeychainItem.load(for: .wrappedContentKey, service: service) == priorWrapped)
+
+        // The lock is still the one it was: old passcode in, new passcode out.
+        let after = makeService(keychainService: service, persistEnclaveWrap: false)
+        _ = try await after.unlock(passcode: "444546", for: .privateHub)
+        #expect(try contentKeyBytes(after) == contentKeyData)
+        after.lock(reason: .manual)
+        do {
+            _ = try await after.unlock(passcode: "474849", for: .privateHub)
+            Issue.record("the half-written new passcode opened the lock")
+        } catch FernletLockError.invalidPasscode { }
     }
 
     // MARK: Proves a hard-bound re-key survives: `changeCredential` recovers the content key from

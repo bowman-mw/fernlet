@@ -31,8 +31,12 @@ import FernletUI
 /// step with both passcode fields cleared and the error shown inline. Runs on the main actor
 /// (the module's default isolation).
 ///
-/// - Important: The disclosure is not ceremonial — a forgotten passcode makes the sealed
-///   journal, cycle, and intimacy notes permanently unreadable; there is no recovery path.
+/// - Important: The disclosure is not ceremonial, and it covers TWO loss modes, not one. A
+///   forgotten passcode makes the sealed journal, cycle, and intimacy notes permanently
+///   unreadable — and on Secure-Enclave hardware so does losing the device's enclave key (an
+///   erase, an enclave reset, or a restore onto replacement hardware), because the content key is
+///   hard-bound to it and a remembered passcode is not enough elsewhere. There is no recovery
+///   path except the sealed backup.
 public struct FernletLockSetupView: View {
     /// The surface whose unlock the freshly-created passcode grants. The user is authenticated at
     /// the moment they confirm it, so that one screen opens — but only that one, so setting a lock
@@ -304,16 +308,33 @@ public struct FernletLockSetupView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
 
-                    Text("If you forget your passcode:")
+                    Text("There is no recovery path")
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
-                    Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+                    Text("If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
 
-                    Text("There is no recovery path. Only set a passcode if you're confident you'll remember it.")
+                    // The second loss mode is strictly larger than the first, and it is new with
+                    // hard Secure-Enclave binding: the key lives inside THIS device's enclave, so a
+                    // remembered passcode does not help on erased or replacement hardware. Shown
+                    // only where an enclave exists — SE-less hardware stays legacy forever and its
+                    // scrypt-wrapped key really does restore, so the old copy is still true there.
+                    if FernletLockService.isSecureEnclaveBindingAvailable {
+                        Text("The same is true if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware. The key lives inside this device's Secure Enclave and never leaves it.")
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+
+                        Text("Turn on Sealed backup for journal, cycle, and intimate logs in Privacy & Data to keep an encrypted copy that survives. Worry Box notes are never backed up and are always lost.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+
+                    Text("Only set a passcode if you're confident you'll remember it.")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
@@ -333,7 +354,7 @@ public struct FernletLockSetupView: View {
                 }
                 .padding(24)
             }
-            .navigationTitle("If you forget your passcode")
+            .navigationTitle("Before you set a passcode")
             .navigationBarTitleDisplayMode(.inline)
         }
         .tint(Color.moss)
@@ -475,6 +496,15 @@ public struct FernletLockView: View {
     @State private var isCheckingBiometric = false
     @State private var isUnlocking = false
     @State private var cooldownRemaining: TimeInterval = 0
+    /// How many times IN A ROW a correct passcode has come back
+    /// `FernletLockError.contentKeyUnrecoverable` on this screen. Reset by any other outcome.
+    ///
+    /// Two, not one, before the destructive card appears: the service classifies a keychain that
+    /// merely would not answer as the retryable `.contentKeyTemporarilyUnavailable`, but nothing
+    /// is free, and a second identical answer is cheap insurance against advising a user with a
+    /// recoverable key to destroy it. On the first occurrence the passcode pad stays live and the
+    /// message points at Face ID (which really can repair the wrap) instead.
+    @State private var contentKeyUnrecoverableCount = 0
     /// One-second tick that keeps the cooldown countdown text current while a deadline
     /// is active.
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -536,7 +566,12 @@ public struct FernletLockView: View {
                 }
 
                 // Input
-                if lockService.requiresReset {
+                if contentKeyUnrecoverableCount >= 2 {
+                    // Checked FIRST: this state is not a failed attempt (requiresReset is false and
+                    // stays false), so nothing else in this switch would ever surface it — and the
+                    // reset it prescribes has to be reachable from the very screen that prescribes it.
+                    contentKeyUnrecoverableCard
+                } else if lockService.requiresReset {
                     resetRequiredCard
                 } else if isInputDisabled {
                     cooldownCard
@@ -685,6 +720,66 @@ public struct FernletLockView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
     }
 
+    /// The terminal hard-binding card: the passcode was right and this device's Secure-Enclave key
+    /// is gone, so the sealed notes are already unreadable.
+    ///
+    /// Its job is to make the remedy the error names actually reachable. `requiresReset` is false
+    /// here (a correct passcode is not a failed attempt, and the service deliberately never
+    /// records one), so `resetRequiredCard` — the app's only other route to `onResetRequested` —
+    /// can never appear in this state; without this card the overlay would re-invite the passcode
+    /// forever, and the Settings reset button sits behind an `.appLockSettings` gate. The copy is
+    /// honest about what reset does and does NOT do: it clears the lock so the app is usable
+    /// again, it does not recover anything. When a biometric copy of the key survives, that repair
+    /// leads and the destructive button is explicitly framed as destroying it.
+    private var contentKeyUnrecoverableCard: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.trianglebadge.exclamationmark.fill")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(Color.terracotta)
+
+            Text("Sealed data can't be opened on this device")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+
+            Text("Your passcode was correct. This device's Secure Enclave key — the only thing that can open your sealed journal, cycle, and intimacy notes — is gone. Resetting app lock does not bring those notes back; it clears the lock so you can use Fernlet again.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+
+            if canRepairWithBiometrics {
+                Text("\(biometricName(lockService.biometricType)) can still open your notes on this device and repair its key. Try that first — resetting destroys that surviving copy.")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.bark)
+                    .multilineTextAlignment(.center)
+                    .fernletWrappingText()
+
+                Button("Unlock with \(biometricName(lockService.biometricType))") { triggerBiometric() }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .buttonStyle(.plain)
+                    .disabled(isCheckingBiometric)
+                    .padding(.top, 4)
+            }
+
+            if let onReset = onResetRequested {
+                Button("Reset app lock", role: .destructive, action: onReset)
+                    .font(.fernlet(.label))
+                    .padding(.top, 4)
+            }
+        }
+        .padding(20)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    /// True while a `.biometryCurrentSet` copy of the content key survives AND biometrics may be
+    /// offered — the state where the honest first move is a repair, not a destructive reset.
+    private var canRepairWithBiometrics: Bool {
+        lockService.isBiometricUnlockAvailable && lockService.hasBiometricRecoveryCopy
+    }
+
     private var biometricButton: some View {
         Button {
             triggerBiometric()
@@ -715,21 +810,36 @@ public struct FernletLockView: View {
             do {
                 _ = try await lockService.unlock(passcode: passcode, for: scope)
                 passcode = ""
+                contentKeyUnrecoverableCount = 0
                 onUnlocked()
             } catch FernletLockError.cooldownActive {
                 passcode = ""
+                contentKeyUnrecoverableCount = 0
                 refreshCooldown()
                 errorMessage = nil
             } catch FernletLockError.resetRequired {
                 passcode = ""
+                contentKeyUnrecoverableCount = 0
                 errorMessage = "Reset required."
             } catch FernletLockError.contentKeyUnrecoverable {
                 // The passcode was RIGHT; this device's Secure Enclave key is gone, so the sealed
                 // data is unopenable. Say so instead of inviting another attempt (nothing-silent).
+                // The FIRST occurrence keeps the pad live and points at the biometric repair; the
+                // second raises the card that actually offers the reset (see the count's doc).
                 passcode = ""
-                errorMessage = "Sealed data can no longer be opened on this device. Reset app lock to continue."
+                contentKeyUnrecoverableCount += 1
+                errorMessage = canRepairWithBiometrics
+                    ? "Your passcode was correct, but this device's key for sealed data is gone. Try \(biometricName(lockService.biometricType)) — it can still open and repair it."
+                    : "Your passcode was correct, but sealed data can no longer be opened on this device. Enter it once more to confirm."
+            } catch FernletLockError.contentKeyTemporarilyUnavailable(let status) {
+                // NOT the terminal state: the keychain would not answer, which says nothing about
+                // whether the key survives. Never advance the count, never mention reset.
+                passcode = ""
+                contentKeyUnrecoverableCount = 0
+                errorMessage = FernletLockError.contentKeyTemporarilyUnavailable(status: status).errorDescription
             } catch {
                 passcode = ""
+                contentKeyUnrecoverableCount = 0
                 errorMessage = error.localizedDescription
             }
         }
@@ -746,6 +856,9 @@ public struct FernletLockView: View {
             defer { isCheckingBiometric = false }
             do {
                 _ = try await lockService.unlockWithBiometrics(for: scope)
+                // The bypass copy opened the corpus (and re-established the enclave wrap on the
+                // way through), so the terminal state is over.
+                contentKeyUnrecoverableCount = 0
                 onUnlocked()
             } catch FernletLockError.biometricNotAvailable {
                 // Quietly fall back to passcode entry.

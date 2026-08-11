@@ -39,6 +39,13 @@ public enum FernletLockError: Error, LocalizedError {
     /// moves the app forward. Distinct from ``invalidPasscode`` on purpose: nothing about the
     /// entry was wrong, so the user must not be told to try again (the nothing-silent principle).
     case contentKeyUnrecoverable
+    /// The passcode was CORRECT and the lock is hard-bound to this device's Secure Enclave, but
+    /// the enclave/keychain could not be READ at this instant (`errSecInteractionNotAllowed`
+    /// while the device is locked, `errSecNotAvailable` before first unlock, protected data
+    /// unavailable). The key's fate is unknown, so this is deliberately NOT
+    /// ``contentKeyUnrecoverable``: nothing here justifies telling the user to run a destructive
+    /// reset. Retry once the device is unlocked.
+    case contentKeyTemporarilyUnavailable(status: OSStatus)
 
     /// User-facing description for each case, suitable for direct display in the lock UI.
     public var errorDescription: String? {
@@ -78,6 +85,9 @@ public enum FernletLockError: Error, LocalizedError {
             return "App lock is locked."
         case .contentKeyUnrecoverable:
             return "Sealed data can no longer be opened on this device. Reset app lock to continue."
+        case .contentKeyTemporarilyUnavailable:
+            // Never mentions reset: the key may be perfectly intact and only unreadable right now.
+            return "Fernlet couldn't reach this device's secure hardware. Make sure iPhone is unlocked and try again."
         }
     }
 }

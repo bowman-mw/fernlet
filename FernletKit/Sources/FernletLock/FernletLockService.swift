@@ -46,8 +46,9 @@ public protocol FernletLockServicing: PeriodLockContext {
     /// Failed passcode attempts recorded since the last success or cooldown escalation.
     var currentAttemptCount: Int { get }
 
-    /// First-time setup: derives the verifier, mints and wraps the content key, maintains the
-    /// additive Secure-Enclave wrap, and unlocks `grantingScope` — that surface only.
+    /// First-time setup: derives the verifier, mints and wraps the content key, establishes and
+    /// verifies the Secure-Enclave wrap — and on enclave hardware deletes the scrypt-wrapped item,
+    /// so the install is born HARD-BOUND — then unlocks `grantingScope`, that surface only.
     func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws
     /// Re-keys the credential in place, preserving the content key (no sealed-data loss).
     func changeCredential(current: String, new: FernletLockCredential) async throws
@@ -432,6 +433,11 @@ public enum LockKeychainKey: String {
     case requiresReset = "com.fernlet.lock.requiresReset"
     /// The scrypt N the stored verifier was derived with (native-endian `Int32` bytes).
     case scryptN = "com.fernlet.lock.scryptN"
+    /// Presence flag: an EXISTING install just migrated to the hard Secure-Enclave binding and
+    /// has not yet been told. Never set by `configure()` — a fresh setup already acknowledged the
+    /// disclosure sheet; this exists because a migrating install never sees that sheet again and
+    /// would otherwise acquire a strictly larger loss mode with no signal at all.
+    case hardBindingNoticePending = "com.fernlet.lock.hardBindingNoticePending"
 }
 
 /// Injection seam for "now", letting tests drive cooldown-deadline arithmetic
@@ -645,7 +651,12 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
 /// hard-bound, an enclave key destroyed out from under the app (Erase All Content and Settings,
 /// a Secure-Enclave reset, a restore onto other hardware) makes the sealed corpus unopenable:
 /// that surfaces as the explicit `FernletLockError.contentKeyUnrecoverable`, never a silent
-/// wrong key.
+/// wrong key. Three properties keep that error honest rather than merely dramatic: a keychain
+/// that would not ANSWER is a different, retryable error
+/// (`.contentKeyTemporarilyUnavailable(status:)`); the two scopes that never receive the content
+/// key still unlock on the verifier match, so Settings → App lock (and its reset) stays reachable;
+/// and while a `.biometryCurrentSet` bypass copy survives, the biometric path can re-establish the
+/// wrap from it instead of destroying anything.
 ///
 /// **Brute force.** Every 4th failed passcode attempt escalates a cooldown
 /// (60s → 15min → 1h → 4h), tracked against BOTH the wall clock and monotonic uptime so
@@ -689,6 +700,22 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// ``unlockWithBiometrics(for:)``). Observable (not `@ObservationIgnored`) so the lock UI
     /// re-evaluates its biometric offer when the flag flips.
     public private(set) var passcodeUnlockedThisProcess = false
+    /// True once a correct passcode has been ENTERED in this process — set at the verifier match,
+    /// **before** key recovery is attempted, and by ``configure(credential:grantingScope:)``;
+    /// cleared only by ``reset()``.
+    ///
+    /// Deliberately distinct from ``passcodeUnlockedThisProcess``, which records a fully
+    /// successful unlock. The difference is the whole point in the hard-bound state: when the
+    /// enclave key is gone, every passcode unlock throws before the unlock tail, so the narrower
+    /// flag can never become true — and gating biometrics on it alone would strand the
+    /// `.biometricBypass` copy of the content key, the one surviving copy that can repair the
+    /// wrap (see ``unlockWithBiometrics(for:)``). PIN-before-biometrics is preserved exactly: this
+    /// flag is set ONLY by a correct passcode entry (never by a biometric success, never by a
+    /// wrong attempt), so biometrics still cannot be the first factor after launch.
+    ///
+    /// Never persisted (one service per process). Observable so the lock UI re-evaluates its
+    /// biometric offer the moment a verifier match lands.
+    public private(set) var passcodeVerifiedThisProcess = false
 
     /// Combine mirror of ``state`` for subscribers outside the Observation system.
     public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
@@ -716,6 +743,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     @ObservationIgnored private let biometricTypeOverride: (() -> LABiometryType)?
     @ObservationIgnored private let keychainStore: (Data, LockKeychainKey, String) -> OSStatus
     @ObservationIgnored private let keychainLoad: (LockKeychainKey, String) -> Data?
+    /// The absence-distinguishing read used by the custody discriminator (and only by it).
+    /// Separate from ``keychainLoad`` because custody may never be inferred from a nil that also
+    /// means "the read failed"; injectable so a test can force `.unreadable` and prove the service
+    /// refuses to guess.
+    @ObservationIgnored private let keychainLoadDistinguishing: (LockKeychainKey, String) -> KeychainItem.ReadResult
     /// The sealed CoreData stack whose encrypted entities ``reset()`` purges.
     @ObservationIgnored private let privatePersistenceController: PrivatePersistenceController
     /// The unwrapped content key; non-nil only while `.unlocked`, scrubbed on lock/reset.
@@ -736,6 +768,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         biometricTypeOverride: (() -> LABiometryType)? = nil,
         keychainStore: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
         keychainLoad: ((LockKeychainKey, String) -> Data?)? = nil,
+        keychainLoadDistinguishing: ((LockKeychainKey, String) -> KeychainItem.ReadResult)? = nil,
         privatePersistenceController: PrivatePersistenceController? = nil
     ) {
         self.keychainService = keychainService
@@ -750,6 +783,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
         self.keychainLoad = keychainLoad ?? { key, service in
             KeychainItem.load(for: key, service: service)
+        }
+        self.keychainLoadDistinguishing = keychainLoadDistinguishing ?? { key, service in
+            KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: service)
         }
         self.privatePersistenceController = privatePersistenceController ?? .shared
 
@@ -794,8 +830,57 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// auto-prompt — reference this property rather than restating the conjunction, so the
     /// rule lives in exactly one place. A later duress phase adds one conjunct here
     /// (`&& !isDuressSessionActive`) and nowhere else; do not inline the rule at call sites.
+    ///
+    /// The passcode conjunct is the DISJUNCTION of "a full unlock succeeded"
+    /// (``passcodeUnlockedThisProcess``) and "a correct passcode was entered"
+    /// (``passcodeVerifiedThisProcess``). Both are set only by a correct passcode entry, so the
+    /// PIN-before-biometrics guarantee is identical; the second one is what keeps the biometric
+    /// repair path reachable when a hard-bound unlock fails at key recovery *after* the passcode
+    /// proved correct.
     public var isBiometricUnlockAvailable: Bool {
-        biometricEnabled && biometricType != .none && passcodeUnlockedThisProcess
+        biometricEnabled && biometricType != .none
+            && (passcodeUnlockedThisProcess || passcodeVerifiedThisProcess)
+    }
+
+    /// Whether this device can hard-bind the content key to a Secure Enclave — i.e. whether a
+    /// passcode set up here will be born HARD-BOUND (and so die with the device's enclave key).
+    ///
+    /// Exposed for the setup disclosure in `FernletLockUI`, which must name the second loss mode
+    /// only where it applies: SE-less hardware stays LEGACY permanently and its scrypt-wrapped key
+    /// really does restore from an encrypted backup, so the older "if you forget your passcode"
+    /// copy remains exactly true there. `SecureEnclaveContentKeyWrap` itself stays
+    /// module-internal — this hands out a Bool about the hardware, never the wrap.
+    public static var isSecureEnclaveBindingAvailable: Bool {
+        SecureEnclaveContentKeyWrap.isAvailable
+    }
+
+    /// Whether an EXISTING install has just been migrated to the hard Secure-Enclave binding and
+    /// still owes the user the disclosure for it.
+    ///
+    /// The migration changes the recovery properties of a lock the user consented to under an
+    /// older build — from "you lose the notes if you forget the passcode" to "…and also if this
+    /// iPhone is erased, has its Secure Enclave reset, or is restored onto other hardware." A
+    /// fresh setup acknowledges that in the disclosure sheet; a migrating install would never see
+    /// a sheet again, so the gate shows a one-shot notice keyed off this flag and clears it via
+    /// ``acknowledgeHardBindingNotice()``. Presence-flagged in the keychain (survives relaunch, so
+    /// a kill before acknowledgement does not swallow the disclosure) and swept by ``reset()``.
+    public var hardBindingNoticePending: Bool {
+        keychainLoad(.hardBindingNoticePending, keychainService) != nil
+    }
+
+    /// Clears ``hardBindingNoticePending`` once the user has been shown the migration disclosure.
+    public func acknowledgeHardBindingNotice() {
+        KeychainItem.delete(for: .hardBindingNoticePending, service: keychainService)
+    }
+
+    /// Whether a `.biometryCurrentSet`-gated copy of the content key exists in the keychain.
+    ///
+    /// Read by the unlock UI to choose its copy in the hard-bound unrecoverable state: while this
+    /// is true a working second copy of the key survives outside the enclave, so the honest first
+    /// offer is "unlock with Face ID to repair this device's key", not a destructive reset. Never
+    /// a reveal seam — it answers a Bool about a row's existence, never hands back the row.
+    public var hasBiometricRecoveryCopy: Bool {
+        KeychainItem.load(for: .biometricBypass, service: keychainService) != nil
     }
 
     /// The configured credential kind read from the keychain, or `nil` before setup.
@@ -844,6 +929,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         let contentKeyData = cryptoProvider.generateContentKey()
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
+        // A fresh content key has been minted: every surviving copy of the OLD one must go BEFORE
+        // the new records are written, not after. Ordering is load-bearing — a throw (or an app
+        // kill) between the first write and a trailing delete would otherwise leave a stale
+        // biometric bypass holding the previous content key paired with the new credential, i.e.
+        // a Face ID unlock that installs the wrong key. Deleting first can only ever cost a
+        // re-enrollment, never mis-pair a key.
+        KeychainItem.delete(for: .seWrappedContentKey, service: keychainService)
+        KeychainItem.delete(for: .biometricBypass, service: keychainService)
+        KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
+
         try storeVerified(saltData, for: .salt)
         // Store the DIGEST of the derived key, not the derived key itself — the derived key is the
         // content-key wrapping key (used just above) and must never be persisted. See verifierDigest.
@@ -852,11 +947,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         try storeVerified(wrappedContentKey, for: .wrappedContentKey)
         var configuredN = Int32(FernletLockCrypto.scryptN)
         try storeVerified(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN)
-        // A fresh content key was just minted: any surviving Secure-Enclave wrap protects the OLD
-        // key and must not linger (maintain below re-creates it for the new key when SE exists).
-        KeychainItem.delete(for: .seWrappedContentKey, service: keychainService)
-        KeychainItem.delete(for: .biometricBypass, service: keychainService)
-        KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
         KeychainItem.delete(for: .cooldownMonotonicAnchor, service: keychainService)
         KeychainItem.delete(for: .cooldownDurationSeconds, service: keychainService)
@@ -869,12 +959,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         hasAutoPromptedBiometricForCurrentLockSession = false
         // Initial setup counts as this process's passcode success (PIN-before-biometrics, P0b).
         passcodeUnlockedThisProcess = true
+        passcodeVerifiedThisProcess = true
         // Scope-independent: the SE wrap protects the key at rest, not the session, so it is
         // established for the freshly minted key whichever surface the setup happened on.
         maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
         // …and where the enclave proved itself, this install is born hard-bound: the scrypt item
         // written moments ago is deleted, so the key just minted exists only inside the enclave.
-        hardBindToSecureEnclaveIfVerified(contentKeyData: contentKeyData)
+        hardBindToSecureEnclaveIfVerified(contentKeyData: contentKeyData, migratingExistingInstall: false)
         FernletAuditLog.log("lock.configured", context: [
             "kind": credential.kind.rawValue,
             "scope": grantingScope.rawValue
@@ -893,6 +984,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// recovers the key from the Secure Enclave and **never rewrites that item** — a re-key
     /// changes only the passcode gate, and the enclave wrap is indifferent to it, so
     /// resurrecting a scrypt-wrapped copy would silently undo the hard binding.
+    ///
+    /// The credential rows are written **all-or-nothing**: a failure anywhere in the write block
+    /// rolls salt, verifier, kind, scrypt N and the wrapped content key back to their prior values
+    /// (see `rollBackCredentialRecords`), because a new verifier over a stale wrap is a lock that
+    /// takes the new passcode and can never open the content key again. An undeterminable custody
+    /// read throws before any write at all.
     public func changeCredential(current: String, new: FernletLockCredential) async throws {
         try new.validate()
         guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
@@ -914,18 +1011,40 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
         case .hardBoundToSecureEnclave:
             contentKeyData = try secureEnclaveBoundContentKey()
+        case .undeterminable(let status):
+            throw FernletLockError.keychainFailure(operation: "read wrappedContentKey", status: status)
         }
         let newSalt = try cryptoProvider.generateSalt()
         let newDerivedKey = try await cryptoProvider.deriveVerifier(passcode: new.rawValue, salt: newSalt, n: FernletLockCrypto.scryptN)
 
-        try storeVerified(newSalt, for: .salt)
-        try storeVerified(FernletLockCrypto.verifierDigest(of: newDerivedKey), for: .verifier)
-        try storeVerified(Data(new.kind.rawValue.utf8), for: .kind)
-        if case .legacyScryptWrapped = custody {
-            try storeVerified(try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey), for: .wrappedContentKey)
+        // Re-keying is a MULTI-ROW write with one invariant: salt + verifier and the wrapped
+        // content key are written together or not at all. A throw partway (any storeVerified can
+        // fail on a hosed keychain) would otherwise leave a verifier derived from the NEW passcode
+        // sitting over a wrap only the SUPERSEDED derived key opens — a lock that accepts the new
+        // passcode and can never recover the content key again. So capture the prior records and
+        // put them back on any failure.
+        let priorKind = KeychainItem.load(for: .kind, service: keychainService)
+        let priorScryptN = KeychainItem.load(for: .scryptN, service: keychainService)
+        let priorWrappedContentKey = KeychainItem.load(for: .wrappedContentKey, service: keychainService)
+        do {
+            try storeVerified(newSalt, for: .salt)
+            try storeVerified(FernletLockCrypto.verifierDigest(of: newDerivedKey), for: .verifier)
+            try storeVerified(Data(new.kind.rawValue.utf8), for: .kind)
+            if case .legacyScryptWrapped = custody {
+                try storeVerified(try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey), for: .wrappedContentKey)
+            }
+            var newN = Int32(FernletLockCrypto.scryptN)
+            try storeVerified(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN)
+        } catch {
+            rollBackCredentialRecords(
+                salt: saltData,
+                verifier: storedVerifier,
+                kind: priorKind,
+                scryptN: priorScryptN,
+                wrappedContentKey: priorWrappedContentKey
+            )
+            throw error
         }
-        var newN = Int32(FernletLockCrypto.scryptN)
-        try storeVerified(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN)
 
         if KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil {
             try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
@@ -959,9 +1078,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// on its first unlock under this build). HARD-BOUND recovers the key from the enclave
     /// alone — there is no scrypt item left to compare against, so the equality gate is not
     /// consulted; if the enclave cannot open its wrap, the unlock fails with
-    /// `FernletLockError.contentKeyUnrecoverable` rather than installing a wrong key, and the
-    /// attempt state is left untouched (the passcode was right; nothing about it should be
-    /// penalized or forgiven).
+    /// `FernletLockError.contentKeyUnrecoverable` (terminal) or
+    /// `.contentKeyTemporarilyUnavailable(status:)` (the keychain would not answer) rather than
+    /// installing a wrong key, and the attempt state is left untouched (the passcode was right;
+    /// nothing about it should be penalized or forgiven).
+    ///
+    /// **The terminal failure is tolerated for the two scopes that never receive the key.** A dead
+    /// enclave key seals the sealed corpus, and `.privateHub` says so; it must not also seal the
+    /// progress-photo wall (a different, intact key) or Settings → App lock (which hosts the only
+    /// reachable reset). Those two unlock on the verifier match alone, holding no key — which is
+    /// all they ever held.
     ///
     /// Unlocks FOR ONE SURFACE. `scope` is the caller's own surface — never a default, so a new
     /// gated screen cannot inherit someone else's unlock by forgetting to say who it is. The
@@ -988,8 +1114,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
             throw FernletLockError.invalidPasscode
         }
+        // A correct passcode HAS been entered in this process, whatever key recovery does next.
+        // Recorded here (not in the unlock tail) so a hard-bound recovery failure cannot strand
+        // the biometric repair path; PIN-before-biometrics is untouched because only a verifier
+        // match reaches this line.
+        passcodeVerifiedThisProcess = true
 
-        let contentKeyData: Data
+        let contentKeyData: Data?
         switch custody {
         case .legacyScryptWrapped(let wrappedData):
             let scryptUnwrapped = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
@@ -1000,10 +1131,29 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             // The migration flip: with a freshly re-read enclave wrap proven to open to exactly
             // this key, the scrypt item goes and this install becomes hard-bound. Compares
             // against the scrypt-unwrapped bytes deliberately — the authoritative source, not
-            // the copy the enclave just handed back.
-            hardBindToSecureEnclaveIfVerified(contentKeyData: scryptUnwrapped)
+            // the copy the enclave just handed back. Deliberately BEFORE the scope is consulted,
+            // so a non-hub unlock migrates too (the wrap is at-rest state, not session state).
+            hardBindToSecureEnclaveIfVerified(contentKeyData: scryptUnwrapped, migratingExistingInstall: true)
         case .hardBoundToSecureEnclave:
-            contentKeyData = try secureEnclaveBoundContentKey()
+            do {
+                contentKeyData = try secureEnclaveBoundContentKey()
+            } catch FernletLockError.contentKeyUnrecoverable where scope != .privateHub {
+                // Entitlement, not convenience. `FernletLockScope` says `.privateHub` is the only
+                // scope entitled to the content key, and `retainContentKey` scrubs it for the
+                // other two anyway: progress photos seal under `PrivateMediaKeyStore`'s own
+                // (intact) key and App-lock settings re-derive from the entered passcode. A dead
+                // enclave key must not seal off a healthy photo wall — nor Settings → App lock,
+                // which hosts the only reachable reset(). `.privateHub` still throws: the sealed
+                // corpus really is gone, and saying so is the honest terminal state.
+                FernletAuditLog.log("lock.contentKeyUnrecoverable.toleratedForScope", context: [
+                    "scope": scope.rawValue
+                ])
+                contentKeyData = nil
+            }
+        case .undeterminable(let status):
+            // The custody read failed; guessing would either install a stale enclave key over a
+            // live legacy install or advise a destructive reset on a transient. Neither.
+            throw FernletLockError.keychainFailure(operation: "read wrappedContentKey", status: status)
         }
         // First successful unlock under a build that splits the verifier from the wrapping key:
         // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).
@@ -1039,15 +1189,31 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Biometric counterpart of ``unlock(passcode:for:)`` — same one-surface grant, same
     /// `.privateHub`-only key retention.
     /// - Returns: An ``UnlockResult`` with method `.biometric`.
+    ///
+    /// **The enclave outranks the bypass.** Once hard-bound, an openable enclave wrap is the
+    /// authority on what the content key IS; the bypass row is only a convenience copy. So in
+    /// that state the bytes this path recovered are checked against the enclave's before anything
+    /// is installed, and a contradicted bypass is deleted rather than honored — a stale bypass
+    /// must never seat a wrong key for the session. When the enclave has no openable blob at all
+    /// (its key was rotated or destroyed), the bypass IS the surviving copy and
+    /// `maintainSecureEnclaveWrap` re-establishes the wrap from it: that is the repair the
+    /// unrecoverable state points the user at.
     public func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
         // PIN-before-biometrics (P0b): fail closed at the service, before any keychain or
         // LocalAuthentication work. The UI gates are advisory; this guard is the guarantee.
-        guard passcodeUnlockedThisProcess else { throw FernletLockError.biometricNotAvailable }
+        // Either flag satisfies it because BOTH are set only by a correct passcode entry in this
+        // process — the wider one keeps this path (the surviving key copy, and the wrap repair it
+        // performs) reachable when a hard-bound unlock fails at key recovery after the passcode
+        // proved correct. A wrong attempt sets neither, so biometrics are still never the first
+        // factor after launch.
+        guard passcodeUnlockedThisProcess || passcodeVerifiedThisProcess else {
+            throw FernletLockError.biometricNotAvailable
+        }
         isPerformingBiometricUnlock = true
         defer { isPerformingBiometricUnlock = false }
 
-        let contentKeyData: Data
+        var contentKeyData: Data
         if let biometricBypassLoader {
             contentKeyData = try biometricBypassLoader("Unlock Fernlet", keychainService)
         } else {
@@ -1080,6 +1246,18 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // (.biometryCurrentSet) ACL, so the un-migrated raw verifier is only a second, less-gated path
         // to the same key; and everything here is ThisDeviceOnly (no off-device/iCloud exposure). The
         // first subsequent passcode unlock (unlock/changeCredential) migrates the verifier to its digest.
+
+        // Hard-bound: the enclave is the authority, so a bypass it contradicts is stale — install
+        // the enclave's bytes and drop the row rather than seat a key the at-rest wrap disagrees
+        // with. A recovery FAILURE here is not fatal: it means the enclave has nothing openable,
+        // which is exactly the state this path exists to repair below.
+        if case .hardBoundToSecureEnclave = contentKeyCustody(),
+           let enclaveKey = try? secureEnclaveBoundContentKey(),
+           !constantTimeEqual(enclaveKey, contentKeyData) {
+            FernletAuditLog.log("lock.biometricBypassContradictedByEnclave")
+            KeychainItem.delete(for: .biometricBypass, service: keychainService)
+            contentKeyData = enclaveKey
+        }
         retainContentKey(contentKeyData, for: scope)
         state = .unlocked(scope: scope)
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -1172,6 +1350,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // Back to a fresh notConfigured process state: the next passcode success (a new
         // configure) must re-earn the biometric offer (PIN-before-biometrics).
         passcodeUnlockedThisProcess = false
+        passcodeVerifiedThisProcess = false
         FernletAuditLog.log("lock.reset")
         // Nothing-silent: the rows are gone, but the file they lived in could not be rebuilt, so
         // the caller must be able to say so rather than promise a clean store.
@@ -1210,6 +1389,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
                 contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
             case .hardBoundToSecureEnclave:
                 contentKeyData = try secureEnclaveBoundContentKey()
+            case .undeterminable(let status):
+                throw FernletLockError.keychainFailure(operation: "read wrappedContentKey", status: status)
             }
             // Opportunistically migrate a legacy raw-key verifier to its digest (see unlock()).
             migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
@@ -1265,14 +1446,18 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// still gates every read; this makes that gate belt-and-braces rather than the only barrier.
     ///
     /// Independent of the at-rest Secure-Enclave wrap below: `maintainSecureEnclaveWrap` is called
-    /// on every configure/unlock regardless of scope, because the wrap protects the key at rest,
-    /// not the session.
-    private func retainContentKey(_ contentKeyData: Data, for scope: FernletLockScope) {
-        if scope == .privateHub {
-            _contentKey = SymmetricKey(data: contentKeyData)
-        } else {
+    /// on every configure and on every LEGACY unlock regardless of scope, because the wrap
+    /// protects the key at rest, not the session (a hard-bound unlock only unwraps — see
+    /// `secureEnclaveBoundContentKey()`).
+    private func retainContentKey(_ contentKeyData: Data?, for scope: FernletLockScope) {
+        guard scope == .privateHub, let contentKeyData else {
+            // nil arrives only from the tolerated hard-bound recovery failure on a non-hub scope,
+            // where the key is not the caller's to hold anyway. Scrub — never fabricate
+            // placeholder bytes; no dummy key may ever exist.
             scrubContentKey()
+            return
         }
+        _contentKey = SymmetricKey(data: contentKeyData)
     }
 
     // MARK: - Content-key custody: LEGACY (scrypt authoritative) ⇄ HARD-BOUND (Secure Enclave)
@@ -1283,44 +1468,122 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// `.legacyScryptWrapped` carries the blob so callers never re-read (and never race) the
     /// item between deciding and unwrapping. `.hardBoundToSecureEnclave` carries nothing: the
     /// enclave wrap is read at the moment of use, because a hard-bound recovery has exactly one
-    /// place it can fail and that failure must be explicit.
+    /// place it can fail and that failure must be explicit. `.undeterminable` exists because the
+    /// third outcome is real: a keychain read can FAIL, and a failure is not an absence.
     private enum ContentKeyCustody {
         /// The scrypt-wrapped item exists and is authoritative (pre-migration, or SE-less
         /// hardware where it stays authoritative forever).
         case legacyScryptWrapped(Data)
         /// The scrypt item is gone; `seWrappedContentKey` is the only recoverable copy.
         case hardBoundToSecureEnclave
+        /// The custody question could not be answered: the keychain read failed, or the scrypt
+        /// item is absent on hardware with NO enclave (which is a fault, not a custody state —
+        /// nothing could ever have hard-bound there). Callers must refuse to act, never guess.
+        case undeterminable(OSStatus)
     }
 
     /// Reads the current custody state straight from the keychain (never cached — the state
     /// flips mid-session, on the very unlock that migrates it).
+    ///
+    /// Fails CLOSED and identifies hard-binding POSITIVELY. `KeychainItem.load` returns nil both
+    /// for a genuinely absent item and for a failed `SecItemCopyMatching`, so inferring custody
+    /// from it would read a transient read failure as "the scrypt item was deleted after proof" —
+    /// which would take the enclave branch on a legacy install (installing a stale key with no
+    /// equality gate) and make `changeCredential` skip rewriting the scrypt wrap while rewriting
+    /// the verifier over it. `loadDistinguishingAbsence` keeps the three outcomes apart, and an
+    /// absence on enclave-less hardware is reported as undeterminable rather than as a hard-bound
+    /// state that could never have been reached there.
     private func contentKeyCustody() -> ContentKeyCustody {
-        if let wrapped = KeychainItem.load(for: .wrappedContentKey, service: keychainService) {
+        switch keychainLoadDistinguishing(.wrappedContentKey, keychainService) {
+        case .found(let wrapped):
             return .legacyScryptWrapped(wrapped)
+        case .unreadable(let status):
+            FernletAuditLog.log("lock.custodyUnreadable", context: ["status": "\(status)"])
+            return .undeterminable(status)
+        case .absent:
+            guard SecureEnclaveContentKeyWrap.isAvailable else {
+                FernletAuditLog.log("lock.custodyUnreadable", context: ["status": "noEnclave"])
+                return .undeterminable(errSecItemNotFound)
+            }
+            return .hardBoundToSecureEnclave
         }
-        return .hardBoundToSecureEnclave
     }
 
     /// Recovers the content key in the HARD-BOUND state: the stored enclave wrap, opened by the
     /// non-exportable Secure-Enclave key, with no scrypt copy to fall back on or compare against.
     ///
-    /// - Throws: `FernletLockError.contentKeyUnrecoverable` when the enclave is unavailable, the
-    ///   wrap is missing, or the enclave refuses to open it — i.e. the enclave key was destroyed
-    ///   (Erase All Content and Settings, an SE reset, or a restore onto other hardware). The
-    ///   passcode was correct and the sealed corpus is nonetheless gone; saying so plainly is the
-    ///   honest half of the hard-binding trade (nothing-silent), and it is why this throws
-    ///   instead of returning a wrong key that would decrypt to garbage.
+    /// Two failures live here and they must never be confused. **Terminal** means the enclave key
+    /// is provably gone (the key row reports `errSecItemNotFound`, or it is readable and still
+    /// refuses the blob, or the blob itself is absent) — the corpus is unopenable and the app says
+    /// so. **Transient** means the keychain would not answer right now
+    /// (`errSecInteractionNotAllowed` while the device is locked, `errSecNotAvailable` before
+    /// first unlock, protected data unavailable): the key may be perfectly intact, and the honest
+    /// answer is "try again", not the destructive-reset copy. The unlock flow straddles a
+    /// several-hundred-millisecond scrypt derive during which the device can auto-lock, so the
+    /// transient case is a real, reachable state — collapsing it into the terminal one would tell
+    /// a user with an intact key to destroy it.
+    ///
+    /// - Throws: `FernletLockError.contentKeyUnrecoverable` for the terminal states;
+    ///   `FernletLockError.contentKeyTemporarilyUnavailable(status:)` for the transient ones.
     private func secureEnclaveBoundContentKey() throws -> Data {
-        guard SecureEnclaveContentKeyWrap.isAvailable,
-              let blob = KeychainItem.load(for: .seWrappedContentKey, service: keychainService),
-              let contentKeyData = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService) else {
-            FernletAuditLog.log("lock.contentKeyUnrecoverable", context: [
-                "enclaveAvailable": "\(SecureEnclaveContentKeyWrap.isAvailable)",
-                "wrapPresent": "\(KeychainItem.load(for: .seWrappedContentKey, service: keychainService) != nil)"
-            ])
-            throw FernletLockError.contentKeyUnrecoverable
+        guard SecureEnclaveContentKeyWrap.isAvailable else {
+            // Hard-bound state on hardware that reports no enclave: the wrap cannot be opened, but
+            // nothing proves the key is destroyed either (a simulator/OS transition can report
+            // this). Retryable, never a reset prompt.
+            throw unrecoverableOrTransient(.unavailable(errSecNotAvailable), blobPresent: false)
         }
-        return contentKeyData
+        let blob: Data
+        switch keychainLoadDistinguishing(.seWrappedContentKey, keychainService) {
+        case .found(let data):
+            blob = data
+        case .absent:
+            // No wrap and no way to make one: the authoritative copy is gone.
+            throw unrecoverableOrTransient(.keyAbsent, blobPresent: false)
+        case .unreadable(let status):
+            throw unrecoverableOrTransient(.unavailable(status), blobPresent: false)
+        }
+        switch SecureEnclaveContentKeyWrap.unwrapResult(blob, service: keychainService) {
+        case .recovered(let contentKeyData):
+            return contentKeyData
+        case .keyAbsent:
+            throw unrecoverableOrTransient(.keyAbsent, blobPresent: true)
+        case .blobRejected:
+            throw unrecoverableOrTransient(.blobRejected, blobPresent: true)
+        case .unavailable(let status):
+            throw unrecoverableOrTransient(.unavailable(status), blobPresent: true)
+        }
+    }
+
+    /// Classifies a hard-bound recovery failure into the terminal or the retryable error, and
+    /// audit-logs the outcome WITH its status so a field report can tell the two apart.
+    private func unrecoverableOrTransient(
+        _ outcome: SecureEnclaveContentKeyWrap.UnwrapOutcome,
+        blobPresent: Bool
+    ) -> FernletLockError {
+        let error: FernletLockError
+        let classification: String
+        switch outcome {
+        case .recovered:
+            // Not a failure; kept exhaustive rather than defaulted so a new outcome must be
+            // classified here deliberately.
+            return .internalError("recovered outcome routed through the failure classifier")
+        case .keyAbsent:
+            error = .contentKeyUnrecoverable
+            classification = "terminal.keyAbsent"
+        case .blobRejected:
+            error = .contentKeyUnrecoverable
+            classification = "terminal.blobRejected"
+        case .unavailable(let status):
+            error = .contentKeyTemporarilyUnavailable(status: status)
+            classification = "transient.\(status)"
+        }
+        FernletAuditLog.log("lock.contentKeyRecoveryFailed", context: [
+            "classification": classification,
+            "enclaveAvailable": "\(SecureEnclaveContentKeyWrap.isAvailable)",
+            "wrapPresent": "\(blobPresent)",
+            "biometricCopy": "\(hasBiometricRecoveryCopy)"
+        ])
+        return error
     }
 
     /// The keep-old-until-verified migration flip: deletes the scrypt-wrapped item once — and
@@ -1336,7 +1599,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// - Parameter contentKeyData: The authoritative content key (the scrypt-unwrapped bytes at
     ///   unlock, the freshly minted key at configure).
-    private func hardBindToSecureEnclaveIfVerified(contentKeyData: Data) {
+    /// - Parameter migratingExistingInstall: True on the unlock path, where the flip changes the
+    ///   recovery properties of a lock the user set up under an older build and never re-consented
+    ///   to. That case arms ``hardBindingNoticePending`` so the app can say so once; `configure()`
+    ///   passes false because its setup disclosure already covered it.
+    private func hardBindToSecureEnclaveIfVerified(contentKeyData: Data, migratingExistingInstall: Bool) {
         guard SecureEnclaveContentKeyWrap.isAvailable else { return }
         // Nothing to delete: already hard-bound (or never written).
         guard KeychainItem.load(for: .wrappedContentKey, service: keychainService) != nil else { return }
@@ -1344,7 +1611,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
               let seUnwrapped = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService),
               constantTimeEqual(seUnwrapped, contentKeyData) else { return }
         KeychainItem.delete(for: .wrappedContentKey, service: keychainService)
-        FernletAuditLog.log("lock.hardBoundToSecureEnclave")
+        if migratingExistingInstall {
+            // Best-effort: a flag that cannot be written costs a disclosure, never data.
+            KeychainItem.store(Data([1]), for: .hardBindingNoticePending, service: keychainService)
+        }
+        FernletAuditLog.log("lock.hardBoundToSecureEnclave", context: [
+            "migration": "\(migratingExistingInstall)"
+        ])
     }
 
     /// The content key a LEGACY passcode unlock installs, preferring the Secure-Enclave wrap when
@@ -1372,25 +1645,41 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// blob unwraps to exactly this key, otherwise re-wraps (round-trip-verified inside
     /// `SecureEnclaveContentKeyWrap.wrapVerified`) and stores the new blob.
     ///
-    /// Strictly best-effort: every failure path leaves the current custody state untouched, and
-    /// **nothing is ever deleted here** — the one deletion in the whole scheme lives in
-    /// `hardBindToSecureEnclaveIfVerified(contentKeyData:)`, behind its own re-read proof. Called
-    /// in both custody states; in the hard-bound state a healthy wrap makes it a no-op, and a
-    /// wrap that no longer opens is re-established from the key the caller already holds (the
-    /// biometric path's self-heal after an enclave key rotation).
+    /// Strictly best-effort: every failure path leaves the current custody state untouched. The
+    /// one deletion in the whole scheme lives in `hardBindToSecureEnclaveIfVerified(contentKeyData:migratingExistingInstall:)`,
+    /// behind its own re-read proof.
+    ///
+    /// **An openable HARD-BOUND blob is never overwritten.** `storeVerified` is delete-then-add,
+    /// so re-wrapping in that state would destroy the only recoverable copy of the key — and one
+    /// caller (`unlockWithBiometrics`) passes bytes nothing has authenticated: they come straight
+    /// out of the `.biometricBypass` row, never compared against the verifier, the scrypt item or
+    /// the enclave. In LEGACY that write is harmless (the scrypt item is still authoritative and
+    /// the equality gate repairs the wrap on the next passcode unlock); in HARD-BOUND it would be
+    /// deletion by another name. So divergence from an openable hard-bound blob is a fact to
+    /// SURFACE, not to repair. The genuine hard-bound heal — no openable blob at all — still runs,
+    /// which is what lets the biometric path re-establish a wrap after an enclave key rotation.
     private func maintainSecureEnclaveWrap(contentKeyData: Data) {
         guard SecureEnclaveContentKeyWrap.isAvailable else { return }
-        if let blob = keychainLoad(.seWrappedContentKey, keychainService),
-           let unwrapped = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService),
-           constantTimeEqual(unwrapped, contentKeyData) {
-            return
+        let existing = keychainLoad(.seWrappedContentKey, keychainService)
+            .flatMap { SecureEnclaveContentKeyWrap.unwrap($0, service: keychainService) }
+        if let existing {
+            if constantTimeEqual(existing, contentKeyData) { return }
+            guard case .legacyScryptWrapped = contentKeyCustody() else {
+                FernletAuditLog.log("lock.seWrapDivergence")
+                return
+            }
         }
         guard let blob = SecureEnclaveContentKeyWrap.wrapVerified(contentKeyData, service: keychainService) else { return }
         do {
             try storeVerified(blob, for: .seWrappedContentKey)
             FernletAuditLog.log("lock.seWrapEstablished")
         } catch {
-            // Best-effort: an unstorable wrap changes nothing; the next unlock retries.
+            // Best-effort: an unstorable wrap changes nothing; the next unlock retries. Loud when
+            // it matters, though — in the hard-bound state this leaves the install with NO wrap
+            // row, which is the one condition worth finding in a log rather than inferring.
+            if case .hardBoundToSecureEnclave = contentKeyCustody() {
+                FernletAuditLog.log("lock.seWrapMissingAfterFailedStore")
+            }
         }
     }
 
@@ -1431,6 +1720,39 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         guard keychainLoad(key, keychainService) == data else {
             throw FernletLockError.keychainFailure(operation: "read back \(key.rawValue)", status: errSecItemNotFound)
         }
+    }
+
+    /// Puts the pre-re-key credential records back after a partially applied
+    /// ``changeCredential(current:new:)``, restoring the "salt + verifier and the wrapped content
+    /// key move together" invariant.
+    ///
+    /// Best-effort and non-throwing by design: it runs on an error path where the keychain is
+    /// already misbehaving, and a throw here would replace a recoverable half-write with a
+    /// swallowed one. A row whose prior value was absent is deleted rather than left holding the
+    /// new value — that is what "restore" means for the hard-bound state, where
+    /// `wrappedContentKey` legitimately does not exist. Loud rather than silent: the outcome is
+    /// audit-logged either way.
+    private func rollBackCredentialRecords(
+        salt: Data,
+        verifier: Data,
+        kind: Data?,
+        scryptN: Data?,
+        wrappedContentKey: Data?
+    ) {
+        var restored = true
+        func put(_ data: Data?, _ key: LockKeychainKey) {
+            guard let data else {
+                KeychainItem.delete(for: key, service: keychainService)
+                return
+            }
+            if keychainStore(data, key, keychainService) != errSecSuccess { restored = false }
+        }
+        put(salt, .salt)
+        put(verifier, .verifier)
+        put(kind, .kind)
+        put(scryptN, .scryptN)
+        put(wrappedContentKey, .wrappedContentKey)
+        FernletAuditLog.log("lock.changeCredential.rolledBack", context: ["complete": "\(restored)"])
     }
 
     /// Throws `FernletLockError.keychainFailure` for any status other than `errSecSuccess`.
