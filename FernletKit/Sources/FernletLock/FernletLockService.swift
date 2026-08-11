@@ -166,6 +166,22 @@ public enum FernletLockCredential {
         }
     }
 
+    /// Builds a credential of `kind` around an already-entered secret.
+    ///
+    /// The lock renders exactly ONE entry surface — the pad or field matching the *configured*
+    /// ``FernletLockCredentialKind`` — so any secret the user must be able to type there has to
+    /// share that kind. The duress PIN is the case in point: a 6-digit duress PIN on a `pin4`
+    /// install could never be submitted, because the 4-digit pad auto-submits at four taps. This
+    /// initializer is how a caller holding only a kind and a string reaches the enum; it does not
+    /// validate — call ``validate()``.
+    public init(kind: FernletLockCredentialKind, rawValue: String) {
+        switch kind {
+        case .pin4: self = .pin4(rawValue)
+        case .pin6: self = .pin6(rawValue)
+        case .alphanumeric: self = .alphanumeric(rawValue)
+        }
+    }
+
     /// Enforces the format rules — exactly 4 or 6 digits for PINs, 8–64 characters for
     /// passwords — throwing `FernletLockError.invalidCredential` otherwise.
     public func validate() throws {
@@ -233,6 +249,56 @@ public struct UnlockResult {
     public init(method: UnlockMethod) {
         self.method = method
     }
+}
+
+/// What entering the duress PIN does — exactly one response per configured duress PIN.
+///
+/// Fernlet stores ONE duress PIN with ONE chosen mode rather than several PINs each mapped to a
+/// mode: every configured duress PIN costs one extra scrypt derivation on every unlock, so N PINs
+/// would multiply unlock latency by N for a capability nobody asked for.
+///
+/// Persisted as a single raw byte in ``LockKeychainKey/duressMode``, so the raw values are part of
+/// the on-device format and must never be renumbered. A missing or unrecognised byte reads as
+/// ``decoy``: fail-closed in BOTH directions — a corrupt row can never escalate into a wipe, and
+/// can never fall through into the real unlock either.
+///
+/// Every mode ends in the same visible outcome (the empty decoy hub) by design. That is the whole
+/// point: an observer standing over the user's shoulder must not be able to tell a decoy from a
+/// wipe from a recovery-lock, nor any of them from a benign unlock.
+public enum DuressMode: UInt8, CaseIterable, Sendable, Equatable {
+    /// Non-destructive and fully reversible. The unlock succeeds KEYLESS — no content key is ever
+    /// installed — so every sealed surface renders empty, and the real data is untouched and
+    /// returns the moment the real passcode is entered.
+    case decoy = 0
+    /// Destructive: crypto-erase every local key sub-second, re-mint a throwaway lock under the
+    /// duress PIN (so the decoy survives a re-lock), present the decoy, then hand the durable purge
+    /// of the sealed rows and cloud copies to `FernletLockService.duressPurgeHook`.
+    ///
+    /// - Warning: Irreversible. The Secure-Enclave key, the biometric bypass and the content key are
+    ///   destroyed outright, so every sealed byte on the device — and every copy of it in a backup
+    ///   or a dead-drop — becomes permanently unopenable. Off-device ciphertext still EXISTS until
+    ///   the background purge or its own age-out reaches it; what the erase guarantees is that no
+    ///   one can read it.
+    case silentWipe = 1
+    /// Destroy the LOCAL unlock keys while keeping the sealed ciphertext plus a recovery blob
+    /// sealed to an enrolled custodian device, then present the decoy. The coerced user then
+    /// truthfully cannot open the data; recovery is an in-person ceremony with the custodian.
+    ///
+    /// What survives is the whole mode: `.recoveryBlob` and the custodian's two public keys, the
+    /// sealed corpus, the ProximityKit identity keys the return ceremony authenticates with, and
+    /// the journal / Worry Box device fallback keys (which no recovery blob could give back). What
+    /// does NOT happen is equally deliberate: no throwaway lock is re-minted — the point is that no
+    /// local unlock survives — and ``FernletLockService/duressPurgeHook`` never fires, because the
+    /// corpus is being kept for the custodian, not deleted.
+    ///
+    /// - Note: Selectable only once a custodian is enrolled
+    ///   (``FernletLockService/hasRecoveryCustodian``), and it fails closed at trigger time too: if
+    ///   the recovery material has vanished by then, the non-destructive ``decoy`` is presented
+    ///   instead of an unrecoverable destruction the user never chose.
+    /// - Warning: If the custodian device is lost, wiped, or has its identity keys rotated, the
+    ///   sealed corpus is permanently unopenable. Possession of the custodian device (plus its own
+    ///   unlock) IS full recovery capability — a custodian is a second key holder, not an escrow.
+    case recoveryLock = 2
 }
 
 // MARK: - Cryptographic primitives
@@ -438,6 +504,37 @@ public enum LockKeychainKey: String {
     /// disclosure sheet; this exists because a migrating install never sees that sheet again and
     /// would otherwise acquire a strictly larger loss mode with no signal at all.
     case hardBindingNoticePending = "com.fernlet.lock.hardBindingNoticePending"
+    /// The duress PIN's OWN scrypt salt — deliberately NOT the primary ``salt``.
+    ///
+    /// Two reasons it is separate. (1) It survives a re-key: ``FernletLockService/changeCredential(current:new:)``
+    /// rewrites the primary salt and verifier, and the app never holds the duress plaintext at that
+    /// moment, so a duress verifier derived under the shared salt would be silently stranded by any
+    /// passcode change. (2) Cryptographic independence, for one extra derivation that is already
+    /// off-main.
+    ///
+    /// **Present unconditionally, even with no duress PIN configured.** Unlock derives against this
+    /// row every time (a random dummy compared against a never-matching verifier when unconfigured),
+    /// so unlock latency is a constant two derivations and cannot be timed to reveal whether a
+    /// duress PIN exists. Its presence therefore says NOTHING about configuration — that question is
+    /// ``duressVerifier``'s.
+    case duressSalt = "com.fernlet.lock.duressSalt"
+    /// `SHA256(scrypt(duressPIN, duressSalt))`, written only while a duress PIN is configured, and
+    /// therefore the discriminator ``FernletLockService/hasDuressConfigured`` reads. Like
+    /// ``verifier``, only the digest is persisted — never the derived key itself.
+    case duressVerifier = "com.fernlet.lock.duressVerifier"
+    /// The configured ``DuressMode`` as a single raw byte.
+    case duressMode = "com.fernlet.lock.duressMode"
+    /// The content key sealed to an enrolled custodian device's key-agreement public key, for the
+    /// ``DuressMode/recoveryLock`` response. Safe to keep locally — and safe to SURVIVE the key
+    /// destruction that response performs — because opening it requires the custodian device's
+    /// private key, which never exists on this device.
+    case recoveryBlob = "com.fernlet.lock.recoveryBlob"
+    /// The enrolled custodian device's Ed25519 signing public key, captured by the in-person QR
+    /// mutual-auth ceremony.
+    case custodianSigningPublicKey = "com.fernlet.lock.custodianSigningPublicKey"
+    /// The enrolled custodian device's X25519 key-agreement public key — the key ``recoveryBlob``
+    /// is sealed to.
+    case custodianKeyAgreementPublicKey = "com.fernlet.lock.custodianKeyAgreementPublicKey"
 }
 
 /// Injection seam for "now", letting tests drive cooldown-deadline arithmetic
@@ -658,6 +755,38 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
 /// and while a `.biometryCurrentSet` bypass copy survives, the biometric path can re-establish the
 /// wrap from it instead of destroying anything.
 ///
+/// **Duress (P7).** One optional duress PIN, with one chosen ``DuressMode``, sits in front of every
+/// credential entry point. It has its OWN salt and verifier (``LockKeychainKey/duressSalt`` /
+/// ``LockKeychainKey/duressVerifier``) so a passcode change cannot strand it, and the derivation
+/// against that salt runs UNCONDITIONALLY — dummy salt, never-matching verifier when unconfigured —
+/// so unlock latency is a constant two derivations and cannot be timed to reveal whether a duress
+/// PIN exists. The compare runs before the `requiresReset`/cooldown guards and before the attempt
+/// counter, so a duress PIN still works during a lockout (exactly when coercion is likeliest) and
+/// leaves no residue distinguishing it from a benign unlock; ``changeCredential(current:new:)`` and
+/// ``setBiometricEnabled(_:passcode:)`` consult it first too, so a coerced PIN can never re-key the
+/// real lock or write the real content key into the biometric bypass. A match opens the KEYLESS
+/// decoy — no content key is installed, so every sealed surface renders empty — sets
+/// ``isDuressSessionActive``, and returns the same `UnlockResult` and audit line as a real unlock.
+/// The flag survives ``lock(reason:)`` on purpose and clears only on an act that proves the real
+/// credential, which is what keeps the biometric side door shut for the whole duress session.
+///
+/// ``DuressMode/silentWipe`` adds a destructive step in front of that decoy: every local key,
+/// the Secure-Enclave key included, is deleted synchronously (sub-second crypto-erase), a
+/// throwaway empty lock is re-minted under the duress PIN so the decoy survives a re-lock, and
+/// ``duressPurgeHook`` then runs the durable cleanup through the app's delete funnel. This is the
+/// ONE seam that destroys `com.fernlet.lock` — the ordinary "delete everything" funnel keeps it,
+/// and cannot reach here (see `Docs/PrivacyWipeCoverage.md`).
+///
+/// ``DuressMode/recoveryLock`` destroys the same local unlock keys but KEEPS what the corpus can be
+/// recovered from: the recovery blob sealed to an enrolled custodian device
+/// (``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:sealingContentKeyTo:)``),
+/// the custodian's public keys, the ciphertext itself, and the device fallback keys. No throwaway
+/// lock is minted and no purge fires. The way back is an in-person QR + sealed-mesh ceremony driven
+/// by the app-side `DuressRecoveryCoordinator` — this module gains no ProximityKit edge and there is
+/// no cloud recovery route — ending at
+/// ``reestablishLocalUnlock(contentKey:credential:grantingScope:)``, which refuses any key that is
+/// not the one the blob seals.
+///
 /// **Brute force.** Every 4th failed passcode attempt escalates a cooldown
 /// (60s → 15min → 1h → 4h), tracked against BOTH the wall clock and monotonic uptime so
 /// clock rollback cannot shorten it; exhausting the ladder sets ``requiresReset``, after
@@ -716,6 +845,55 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Never persisted (one service per process). Observable so the lock UI re-evaluates its
     /// biometric offer the moment a verifier match lands.
     public private(set) var passcodeVerifiedThisProcess = false
+    /// True while a DURESS session is in force — the lock is presenting the empty decoy instead of
+    /// the user's real data, because the duress PIN was entered.
+    ///
+    /// A duress unlock is deliberately indistinguishable from a benign one *to an observer*: same
+    /// state transition, same audit label, same cleared attempt state, same `UnlockResult`. This
+    /// flag is the app's only internal signal that it happened, and it is what the app-side
+    /// sensitive-visibility gates mirror (a later P7 stage) so the decoy lives in the SERVICE
+    /// rather than in a per-view `if`.
+    ///
+    /// **Lifetime is load-bearing.** Cleared ONLY by an act that PROVES the real credential — a
+    /// real-passcode unlock success, ``configure(credential:grantingScope:)``, ``reset()``,
+    /// ``configureDuress(pin:mode:)``,
+    /// ``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:sealingContentKeyTo:)``
+    /// or ``reestablishLocalUnlock(contentKey:credential:grantingScope:)`` — and **never** by
+    /// ``lock(reason:)``.
+    /// In the non-destructive decoy the `.biometricBypass` row still holds the REAL content key, so
+    /// a decoy session that ended at the next re-lock would re-open the biometric side door; the
+    /// suppression has to outlive the lock and end only when the real PIN is entered. Both
+    /// ``isBiometricUnlockAvailable`` (the UI policy) and the fail-closed guard at the top of
+    /// ``unlockWithBiometrics(for:)`` (the guarantee) consult it.
+    ///
+    /// Never persisted — one service per process, so it dies with the process exactly like
+    /// ``passcodeUnlockedThisProcess``. Observable so the store gates and the lock UI re-evaluate
+    /// the moment it flips.
+    public private(set) var isDuressSessionActive = false
+
+    /// The durable-purge seam fired — once, fire-and-forget — after a ``DuressMode/silentWipe``
+    /// has crypto-erased the local keys.
+    ///
+    /// **Not the erase.** The wipe's guarantee is the synchronous key destruction that runs before
+    /// this is called: by the time the hook fires, every key that could open a sealed byte on this
+    /// device is already gone, so the sealed corpus is meaningless whether or not the hook ever
+    /// completes. What the hook buys is *tidiness* — the sealed CoreData rows, the day blob and the
+    /// cloud copies going away for real — which is why it is best-effort and why nothing waits on
+    /// it. It is wired app-side to `FernletStore.deleteAllData`, the one audited deletion funnel, so
+    /// the wipe reuses that path rather than growing a second one.
+    ///
+    /// **`FernletLock` cannot call the funnel itself** — `FernletStore` lives in the app target,
+    /// above this module — so the seam is an injected closure, set once during the app's launch
+    /// wiring. An unwired hook degrades to "crypto-erased but the ciphertext rows are still on
+    /// disk", never to a failed wipe.
+    ///
+    /// Only the duress wipe reaches this. The ordinary delete funnel runs in the opposite direction
+    /// (the app calls the store, which never calls back into the lock), so `deleteAllData` cannot
+    /// trigger a key destruction by any route — the destructive seam stays duress-only.
+    ///
+    /// `@MainActor`-isolated because the store it drives is, and `@ObservationIgnored` because it is
+    /// launch-time wiring no view observes.
+    @ObservationIgnored public var duressPurgeHook: (@MainActor () -> Void)?
 
     /// Combine mirror of ``state`` for subscribers outside the Observation system.
     public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
@@ -828,8 +1006,14 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// Both `FernletLockView` sites — the manual biometric button and the `onAppear`
     /// auto-prompt — reference this property rather than restating the conjunction, so the
-    /// rule lives in exactly one place. A later duress phase adds one conjunct here
-    /// (`&& !isDuressSessionActive`) and nowhere else; do not inline the rule at call sites.
+    /// rule lives in exactly one place; do not inline the rule at call sites.
+    ///
+    /// The `!isDuressSessionActive` conjunct is the duress phase's contribution (P7). Without it a
+    /// user who unlocked normally earlier in the process, locked, and then unlocked under duress
+    /// would still be OFFERED Face ID — and the `.biometricBypass` row holds the REAL content key
+    /// in the non-destructive decoy, so accepting that offer would hand the coercer everything the
+    /// decoy exists to hide. The offer is suppressed for as long as the duress session lasts, which
+    /// is until the real passcode is entered (``isDuressSessionActive`` survives ``lock(reason:)``).
     ///
     /// The passcode conjunct is the DISJUNCTION of "a full unlock succeeded"
     /// (``passcodeUnlockedThisProcess``) and "a correct passcode was entered"
@@ -840,6 +1024,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     public var isBiometricUnlockAvailable: Bool {
         biometricEnabled && biometricType != .none
             && (passcodeUnlockedThisProcess || passcodeVerifiedThisProcess)
+            && !isDuressSessionActive
     }
 
     /// Whether this device can hard-bind the content key to a Secure Enclave — i.e. whether a
@@ -923,10 +1108,65 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// setting a lock up from Settings → App lock leaves the Private Hub locked, as it should.
     public func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws {
         try credential.validate()
+        let contentKeyData = try await mintLockRecords(for: credential)
 
+        retainContentKey(contentKeyData, for: grantingScope)
+        state = .unlocked(scope: grantingScope)
+        hasAutoPromptedBiometricForCurrentLockSession = false
+        // Initial setup counts as this process's passcode success (PIN-before-biometrics, P0b).
+        passcodeUnlockedThisProcess = true
+        passcodeVerifiedThisProcess = true
+        // One of the places a duress session may end (P7): configuring a lock is a real-PIN act by
+        // definition — the user just chose the credential — and the rows any prior duress PIN lived
+        // in were deleted by the mint above.
+        isDuressSessionActive = false
+        // Scope-independent: the SE wrap protects the key at rest, not the session, so it is
+        // established for the freshly minted key whichever surface the setup happened on.
+        maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
+        // …and where the enclave proved itself, this install is born hard-bound: the scrypt item
+        // written moments ago is deleted, so the key just minted exists only inside the enclave.
+        hardBindToSecureEnclaveIfVerified(contentKeyData: contentKeyData, migratingExistingInstall: false)
+        FernletAuditLog.log("lock.configured", context: [
+            "kind": credential.kind.rawValue,
+            "scope": grantingScope.rawValue
+        ])
+    }
+
+    /// Mints a fresh content key and writes the COMPLETE set of lock records for `credential`,
+    /// leaving the service's in-memory state (key residency, `state`, the process flags, the audit
+    /// line) entirely to the caller.
+    ///
+    /// Extracted from ``configure(credential:grantingScope:)`` because the P7 duress wipe re-mints a
+    /// throwaway lock and the two record sets MUST be byte-shaped identically. A throwaway lock
+    /// missing a row a real setup writes — `.scryptN`, say — is a forensic tell: it is exactly the
+    /// kind of difference someone comparing a coerced device against a normal one would find. One
+    /// body, so they cannot drift.
+    ///
+    /// Deliberately does NOT validate the credential: ``configure(credential:grantingScope:)`` does
+    /// that before calling, and the duress path must never refuse — a re-mint that threw on a format
+    /// rule would leave a wiped device with no lock at all, i.e. a "set up app lock" screen, the
+    /// loudest tell there is.
+    ///
+    /// - Parameters:
+    ///   - credential: The credential the new records gate on.
+    ///   - suppliedContentKey: The key the records must wrap, or nil to mint a fresh one. Non-nil
+    ///     only for ``reestablishLocalUnlock(contentKey:credential:grantingScope:)``, which rebuilds
+    ///     the passcode gate around the key a custodian handed back — the sealed corpus is already
+    ///     encrypted under it, so minting a fresh one there would lose everything.
+    ///   - preservingRecoveryMaterial: Keeps `.recoveryBlob` + the custodian keys through the mint.
+    ///     True only for the recovery re-establish, where the blob still seals the very key being
+    ///     installed and the custodian therefore stays valid. (A device merely *awaiting* recovery
+    ///     is protected without the flag — see ``isAwaitingCustodianRecovery``.)
+    /// - Returns: The content-key bytes the records wrap (never persisted in the clear; the caller
+    ///   decides whether to retain them).
+    private func mintLockRecords(
+        for credential: FernletLockCredential,
+        contentKey suppliedContentKey: Data? = nil,
+        preservingRecoveryMaterial: Bool = false
+    ) async throws -> Data {
         let saltData = try cryptoProvider.generateSalt()
         let derivedKey = try await cryptoProvider.deriveVerifier(passcode: credential.rawValue, salt: saltData, n: FernletLockCrypto.scryptN)
-        let contentKeyData = cryptoProvider.generateContentKey()
+        let contentKeyData = suppliedContentKey ?? cryptoProvider.generateContentKey()
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
         // A fresh content key has been minted: every surviving copy of the OLD one must go BEFORE
@@ -938,6 +1178,28 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         KeychainItem.delete(for: .seWrappedContentKey, service: keychainService)
         KeychainItem.delete(for: .biometricBypass, service: keychainService)
         KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
+        // …and the same reasoning covers the duress rows. A duress PIN bound to a SUPERSEDED lock
+        // must never survive into a new one (it would open a decoy for a passcode this user never
+        // chose). Deleted BEFORE the new records are written, for the same ordering reason as the
+        // copies above.
+        for key in [LockKeychainKey.duressSalt, .duressVerifier, .duressMode] {
+            KeychainItem.delete(for: key, service: keychainService)
+        }
+        // The recovery material is the ONE exception, and it is a data-loss exception. A fresh
+        // content key normally makes the blob (and the custodian enrolled against it) meaningless,
+        // so it goes with the rest — EXCEPT while this device is awaiting a custodian recovery, or
+        // while the caller is the recovery itself. A recovery-locked device is `.notConfigured` and
+        // therefore shows "set up app lock"; a user who taps that before reaching their custodian
+        // would otherwise destroy the only route back to their corpus, silently and permanently.
+        if !preservingRecoveryMaterial && !isAwaitingCustodianRecovery {
+            for key in [
+                LockKeychainKey.recoveryBlob,
+                .custodianSigningPublicKey,
+                .custodianKeyAgreementPublicKey
+            ] {
+                KeychainItem.delete(for: key, service: keychainService)
+            }
+        }
 
         try storeVerified(saltData, for: .salt)
         // Store the DIGEST of the derived key, not the derived key itself — the derived key is the
@@ -953,23 +1215,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         KeychainItem.delete(for: .attemptCount, service: keychainService)
         KeychainItem.delete(for: .cooldownLevel, service: keychainService)
         KeychainItem.delete(for: .requiresReset, service: keychainService)
-
-        retainContentKey(contentKeyData, for: grantingScope)
-        state = .unlocked(scope: grantingScope)
-        hasAutoPromptedBiometricForCurrentLockSession = false
-        // Initial setup counts as this process's passcode success (PIN-before-biometrics, P0b).
-        passcodeUnlockedThisProcess = true
-        passcodeVerifiedThisProcess = true
-        // Scope-independent: the SE wrap protects the key at rest, not the session, so it is
-        // established for the freshly minted key whichever surface the setup happened on.
-        maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
-        // …and where the enclave proved itself, this install is born hard-bound: the scrypt item
-        // written moments ago is deleted, so the key just minted exists only inside the enclave.
-        hardBindToSecureEnclaveIfVerified(contentKeyData: contentKeyData, migratingExistingInstall: false)
-        FernletAuditLog.log("lock.configured", context: [
-            "kind": credential.kind.rawValue,
-            "scope": grantingScope.rawValue
-        ])
+        return contentKeyData
     }
 
     /// Re-keys the lock under a new credential while preserving the content key.
@@ -985,6 +1231,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// changes only the passcode gate, and the enclave wrap is indifferent to it, so
     /// resurrecting a scrypt-wrapped copy would silently undo the hard binding.
     ///
+    /// **Duress-aware in both directions (P7).** `current` is compared against the duress verifier
+    /// FIRST, so a coerced re-key silently becomes a decoy instead of re-keying the real lock; and
+    /// `new` is rejected if it equals the duress PIN, which would otherwise strand the real content
+    /// key behind a passcode that always takes the duress branch.
+    ///
     /// The credential rows are written **all-or-nothing**: a failure anywhere in the write block
     /// rolls salt, verifier, kind, scrypt N and the wrapped content key back to their prior values
     /// (see `rollBackCredentialRecords`), because a new verifier over a stale wrap is a lock that
@@ -996,6 +1247,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
               let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService) else {
             throw FernletLockError.notConfigured
         }
+        // DURESS FIRST — before the custody read, before the real verifier is even derived, and
+        // therefore before any credential row can be touched. Forgetting this check here is one of
+        // the two ways a coerced user's duress PIN could act on the REAL content key: "change your
+        // passcode" is a plausible demand, and honoring it would re-key the real lock to a passcode
+        // the coercer chose. A match returns the decoy instead, having rewritten nothing.
+        if let mode = await duressMode(for: current) {
+            await handleDuress(mode, passcode: current, scope: state.unlockedScope ?? .appLockSettings)
+            return
+        }
         let custody = contentKeyCustody()
 
         let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData, n: storedScryptN())
@@ -1003,6 +1263,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // rewrites it in the new digest format regardless, so no separate migration step is needed.
         if case .none = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier) {
             throw FernletLockError.invalidPasscode
+        }
+        // The NEW credential may not BE the duress PIN either. Without this guard a re-key could
+        // silently promote the duress PIN to the real passcode, after which every unlock takes the
+        // duress branch first and the real content key is unreachable forever — data loss dressed
+        // as a passcode change. Deliberately placed AFTER the verifier match above, so the "that
+        // code is special" signal is only ever given to someone who has just proved they hold the
+        // real passcode.
+        if await duressMode(for: new.rawValue) != nil {
+            throw FernletLockError.invalidCredential(Self.duressPINMatchesPasscodeMessage)
         }
 
         let contentKeyData: Data
@@ -1071,6 +1340,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// `FernletLockError.invalidPasscode`; on success it migrates a legacy verifier if
     /// needed, clears attempt state, installs the content key, and unlocks.
     ///
+    /// **Duress runs first (P7).** Before the reset/cooldown guards and before the real verifier is
+    /// consulted, the entry is compared against the duress verifier; a match dispatches
+    /// ``DuressMode`` and returns a benign-looking ``UnlockResult`` that opens the KEYLESS decoy.
+    /// The comparison happens on EVERY unlock whether or not a duress PIN is configured, so unlock
+    /// latency is constant and cannot be timed to answer "is there a duress PIN?"
+    ///
     /// **Key custody.** The verifier check is identical in both states — it is what gates the
     /// attempt counter, and it runs before either recovery path. Recovery then splits: LEGACY
     /// unwraps the scrypt item, prefers a provably equal Secure-Enclave copy, and finally
@@ -1095,15 +1370,30 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// other scope recovers it purely as the act of verifying the passcode and then drops it.
     /// - Returns: An ``UnlockResult`` with method `.passcode`.
     public func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult {
+        guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
+              let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService) else {
+            throw FernletLockError.notConfigured
+        }
+        // DURESS FIRST (P7): the duress compare runs after the records load but BEFORE the
+        // requiresReset and cooldown guards, and returns without ever reaching
+        // `recordFailedAttempt`. Both halves of that placement are deliberate.
+        //
+        // *Before the guards*, because lockout is exactly when coercion is likeliest — a duress PIN
+        // that goes inert after four wrong attempts is a duress PIN that fails at the only moment
+        // it was built for. This is not a brute-force oracle on the real passcode: the derivation
+        // here is compared ONLY against the duress verifier, and a non-match falls straight through
+        // into the untouched guards below.
+        //
+        // *Before the attempt counter*, because a duress entry must leave no forensic residue that
+        // tells it apart from a benign unlock — see `enterDecoySession`, which clears attempt state
+        // exactly as a successful unlock does and logs the same audit label.
+        if let mode = await duressMode(for: passcode) {
+            return await handleDuress(mode, passcode: passcode, scope: scope)
+        }
         guard !requiresReset else { throw FernletLockError.resetRequired }
         if let deadline = activeCooldownDeadline() {
             state = .locked(cooldownDeadline: deadline)
             throw FernletLockError.cooldownActive(deadline: deadline)
-        }
-
-        guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
-              let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService) else {
-            throw FernletLockError.notConfigured
         }
         let custody = contentKeyCustody()
 
@@ -1165,6 +1455,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // The process's passcode-first requirement is satisfied only HERE, at the end of a
         // fully successful passcode unlock — never on the biometric path (PIN-before-biometrics).
         passcodeUnlockedThisProcess = true
+        // A REAL passcode has opened the lock, so any decoy session in force ends here. This is the
+        // primary clear site; the others are the remaining proven-real-credential acts (configure,
+        // reset, configureDuress, enrollRecoveryCustodian, reestablishLocalUnlock). Notably lock()
+        // is NOT one of them, so a decoy survives re-locking and keeps biometrics suppressed until
+        // this line runs.
+        isDuressSessionActive = false
         FernletAuditLog.log("lock.released", context: ["method": "passcode", "scope": scope.rawValue])
         return UnlockResult(method: .passcode)
     }
@@ -1208,6 +1504,17 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // proved correct. A wrong attempt sets neither, so biometrics are still never the first
         // factor after launch.
         guard passcodeUnlockedThisProcess || passcodeVerifiedThisProcess else {
+            throw FernletLockError.biometricNotAvailable
+        }
+        // Duress suppression, at the same fail-closed seam and for the same reason (P7). The UI
+        // policy `isBiometricUnlockAvailable` also carries this conjunct, but the guarantee has to
+        // live HERE: in the non-destructive decoy the `.biometricBypass` row still holds the REAL
+        // content key, and the process flags above may well already be true (a normal unlock
+        // earlier in the same launch sets them and only reset() clears them), so without this line
+        // a coercer could walk straight around the decoy with Face ID. Same error as every other
+        // refusal on this path, so the unlock view falls back to passcode entry silently rather
+        // than surfacing anything a duress session could be read from.
+        guard !isDuressSessionActive else {
             throw FernletLockError.biometricNotAvailable
         }
         isPerformingBiometricUnlock = true
@@ -1351,6 +1658,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // configure) must re-earn the biometric offer (PIN-before-biometrics).
         passcodeUnlockedThisProcess = false
         passcodeVerifiedThisProcess = false
+        // The duress rows went with the sweep above, so no duress PIN survives to defend against —
+        // the most final of the flag's clear sites.
+        isDuressSessionActive = false
         FernletAuditLog.log("lock.reset")
         // Nothing-silent: the rows are gone, but the file they lived in could not be rebuilt, so
         // the caller must be able to say so rather than promise a clean store.
@@ -1369,11 +1679,24 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// while biometrics are enabled the hard-bound guarantee is weakened to that ACL's strength
     /// (`WhenPasscodeSetThisDeviceOnly` + `.biometryCurrentSet`, still device-bound and destroyed
     /// by ``reset()``) — see `Docs/Verifiability.md` §5.
+    ///
+    /// **Duress-aware (P7):** the passcode is compared against the duress verifier FIRST, so a
+    /// coerced "turn on Face ID" enables nothing and presents the decoy instead.
     public func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws {
         if enabled {
             guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
                   let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService) else {
                 throw FernletLockError.notConfigured
+            }
+            // DURESS FIRST (P7) — the second of the two ways a duress PIN could otherwise reach the
+            // REAL content key. Enabling biometrics writes the raw content key into the
+            // `.biometryCurrentSet` bypass row, i.e. a permanent, PIN-free door around the decoy
+            // for whoever holds the coerced device's face. A match presents the decoy and enables
+            // NOTHING. Only the enabling branch needs the check: disabling consults no passcode
+            // and only ever deletes.
+            if let mode = await duressMode(for: passcode) {
+                await handleDuress(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
+                return
             }
             let custody = contentKeyCustody()
 
@@ -1400,6 +1723,738 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             KeychainItem.delete(for: .biometricBypass, service: keychainService)
             KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
         }
+    }
+
+    // MARK: - Duress PIN (P7)
+
+    /// The rejection copy shown when a duress PIN is the same secret as the real passcode (in
+    /// either direction: choosing it as the duress PIN, or re-keying the real passcode to it).
+    /// A constant so the two rejection sites and their tests cannot drift apart.
+    static let duressPINMatchesPasscodeMessage = "Your duress code must be different from your passcode."
+
+    /// The rejection copy shown when ``DuressMode/recoveryLock`` is chosen with no enrolled
+    /// custodian device — a response that would otherwise destroy the local keys with nothing on
+    /// the other side able to give them back.
+    static let duressRecoveryCustodianRequiredMessage =
+        "Set up a recovery device before choosing this response."
+
+    /// The rejection copy shown when a recovery device is un-enrolled while ``DuressMode/recoveryLock``
+    /// is still the armed duress response — removing it would leave a response that destroys the
+    /// local keys with nothing left to give them back.
+    static let recoveryCustodianInUseMessage =
+        "Change your duress response before removing your recovery device."
+
+    /// The rejection copy shown when an enrollment is offered public keys that are not the exact
+    /// Curve25519 raw length the ceremony produces.
+    static let recoveryCustodianInvalidKeyMessage =
+        "That recovery device's code wasn't valid. Scan it again."
+
+    /// The rejection copy shown when ``reestablishLocalUnlock(contentKey:credential:grantingScope:)``
+    /// is handed a key that is NOT the key the recovery blob seals. Installing it would re-lock the
+    /// device around bytes that open nothing, permanently — so it is refused instead.
+    static let recoveryKeyMismatchMessage =
+        "That key doesn't match this phone's sealed data, so it wasn't installed."
+
+    /// The rejection copy shown when a recovery is attempted on a device that never enrolled a
+    /// custodian (or whose recovery material is gone).
+    static let recoveryNotAvailableMessage =
+        "This phone has no recovery device set up."
+
+    /// Raw Curve25519 public-key length, the only shape an enrolled custodian's keys may have.
+    ///
+    /// Mirrors `ProximityKit.ProximityVerifySignature.publicKeyByteCount` **by value rather than by
+    /// import**: the ceremony that produces these keys lives app-side precisely so this module gains
+    /// no ProximityKit edge (§11 "Seam placement / wall"), so the constant is restated here and the
+    /// app-side coordinator's tests pin that the two agree.
+    static let recoveryCustodianPublicKeyByteCount = 32
+
+    /// Whether a duress PIN is configured.
+    ///
+    /// Reads the presence of ``LockKeychainKey/duressVerifier`` — deliberately NOT of
+    /// ``LockKeychainKey/duressSalt``, which exists unconditionally so the derivation shape (and
+    /// therefore the unlock latency) never depends on the answer to this question.
+    public var hasDuressConfigured: Bool {
+        keychainLoad(.duressVerifier, keychainService) != nil
+    }
+
+    /// The response the configured duress PIN triggers, or `nil` when no duress PIN is configured.
+    ///
+    /// Exists for the settings screen, which has to show the user which response is armed and
+    /// pre-select it when they change it — "you have a duress code" without "and this is what it
+    /// does" is exactly the kind of half-state that gets a destructive response armed by accident.
+    ///
+    /// Gated on ``hasDuressConfigured`` rather than reading the mode row alone, so a stale byte left
+    /// by a partially-removed configuration can never be read as an armed response. It discloses
+    /// nothing a keychain reader could not already see, and only a caller that already holds the
+    /// real credential ever reaches it (see ``configureDuress(pin:mode:)`` on why that gate is by
+    /// construction).
+    public var configuredDuressMode: DuressMode? {
+        guard hasDuressConfigured else { return nil }
+        return storedDuressMode() ?? .decoy
+    }
+
+    /// Whether a recovery custodian — the user's own second device — is enrolled: BOTH of its public
+    /// keys AND the sealed recovery blob are present.
+    ///
+    /// Deliberately reads all THREE rows rather than the two public keys. The question this property
+    /// actually answers, everywhere it is asked, is "may this device destroy its local unlock keys
+    /// and still get them back?" — and the answer is no without the blob, which is the only thing
+    /// the custodian can turn back into a content key. Two public keys with no blob is a half-written
+    /// enrollment, and treating it as an enrolled custodian would let ``DuressMode/recoveryLock`` be
+    /// armed over an unrecoverable device.
+    ///
+    /// The enrollment ceremony (in-person QR mutual auth) lives in the app-side
+    /// `DuressRecoveryCoordinator` so `FernletLock` gains no ProximityKit edge; the persistence half
+    /// is ``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:sealingContentKeyTo:)``,
+    /// which writes the blob LAST for exactly this reason.
+    public var hasRecoveryCustodian: Bool {
+        custodianRecoveryBlob != nil
+            && keychainLoad(.custodianSigningPublicKey, keychainService) != nil
+            && keychainLoad(.custodianKeyAgreementPublicKey, keychainService) != nil
+    }
+
+    /// Whether this device is sitting in the post-``DuressMode/recoveryLock`` state: recovery
+    /// material intact, no local unlock left at all.
+    ///
+    /// Read by the app-side recovery flow to know a ceremony is owed, and — more importantly —
+    /// by ``mintLockRecords(for:contentKey:preservingRecoveryMaterial:)``, which normally sweeps the
+    /// recovery rows when a fresh content key is minted. In THIS state that sweep would be silent,
+    /// permanent data loss: the blob is the only route back to the sealed corpus, and "set up app
+    /// lock" is exactly what a recovery-locked device offers, so a user who taps it before reaching
+    /// their custodian would destroy the route while trying to get on with their day.
+    public var isAwaitingCustodianRecovery: Bool {
+        hasRecoveryCustodian && keychainLoad(.verifier, keychainService) == nil
+    }
+
+    /// The enrolled custodian device's Ed25519 signing public key, or nil when none is enrolled.
+    ///
+    /// The recovery ceremony compares the peer it proved against this: a valid QR + challenge round
+    /// with SOME device is not recovery, it is recovery **with the enrolled custodian**, and the
+    /// difference is what stops a stranger's phone from handing back bytes that would be installed
+    /// as the content key.
+    public var enrolledCustodianSigningPublicKey: Data? {
+        keychainLoad(.custodianSigningPublicKey, keychainService)
+    }
+
+    /// The enrolled custodian device's X25519 key-agreement public key — the key
+    /// ``custodianRecoveryBlob`` is sealed to, and the only key that can open it.
+    public var enrolledCustodianKeyAgreementPublicKey: Data? {
+        keychainLoad(.custodianKeyAgreementPublicKey, keychainService)
+    }
+
+    /// The sealed recovery blob to hand the custodian, or nil when none is enrolled.
+    ///
+    /// The stored row is `digest ‖ sealed` (see
+    /// ``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:sealingContentKeyTo:)``);
+    /// only the sealed half leaves this device. The digest half never does — it is this device's own
+    /// check value for what comes back, and sending it would hand a would-be custodian a target to
+    /// grind against rather than a key to open.
+    public var custodianRecoveryBlob: Data? {
+        guard let row = keychainLoad(.recoveryBlob, keychainService),
+              row.count > SHA256.byteCount else { return nil }
+        return Data(row.dropFirst(SHA256.byteCount))
+    }
+
+    /// This device's check value for the content key the recovery blob seals: the first
+    /// `SHA256.byteCount` bytes of the `.recoveryBlob` row.
+    ///
+    /// Domain-separated (see ``recoveryContentKeyDigest(of:)``) and never sent anywhere. It exists
+    /// so ``reestablishLocalUnlock(contentKey:credential:grantingScope:)`` can REFUSE a key that is
+    /// not the one this device's corpus is sealed under — turning "the ceremony returned the wrong
+    /// bytes" from permanent silent data loss into a named error.
+    private func storedRecoveryContentKeyDigest() -> Data? {
+        guard let row = keychainLoad(.recoveryBlob, keychainService),
+              row.count > SHA256.byteCount else { return nil }
+        return Data(row.prefix(SHA256.byteCount))
+    }
+
+    /// The recovery blob's content-key check value: `SHA256("fernlet.lock.recovery.contentkey.v1" ‖ key)`.
+    ///
+    /// Domain-separated from ``FernletLockCrypto/verifierDigest(of:)`` on purpose — the two digests
+    /// live in the same keychain namespace and are both SHA-256 over key material, and a value that
+    /// could be moved from one row to the other is a value that could be used to install the wrong
+    /// key. Safe to persist: SHA-256 of a uniformly random 256-bit key is neither invertible nor
+    /// grindable.
+    private nonisolated static func recoveryContentKeyDigest(of contentKey: Data) -> Data {
+        Data(SHA256.hash(data: Data("fernlet.lock.recovery.contentkey.v1".utf8) + contentKey))
+    }
+
+    /// Configures — or replaces — the single duress PIN and the one response it triggers.
+    ///
+    /// **Real-PIN-gated by construction, not by a re-prompt.** The only entry point is Settings →
+    /// App lock, a `.appLockSettings` surface the user must already have unlocked with the REAL
+    /// passcode: biometrics can never be the first factor after launch (PIN-before-biometrics), and
+    /// during a duress session they are suppressed outright. Reaching this call therefore already
+    /// proves the real credential, which is why it takes no `current` passcode of its own.
+    ///
+    /// **Emits no audit event, deliberately.** `FernletAuditLog` event names reach the unified log
+    /// with `.auto` privacy, so a `lock.duressConfigured` line would survive in a sysdiagnose and
+    /// tell anyone who pulled one that this device HAS a duress PIN — the single fact the whole
+    /// feature depends on hiding. Configuration is a calm, user-initiated, UI-visible act; the
+    /// audit trail buys nothing here and costs the property that matters. ``removeDuress()`` is
+    /// silent for the same reason.
+    ///
+    /// - Parameters:
+    ///   - pin: The duress secret, validated against ``credentialKind`` because the lock renders
+    ///     exactly one entry surface and a PIN that cannot be typed there is not a duress PIN.
+    ///   - mode: The response a duress entry triggers.
+    /// - Throws: `FernletLockError.notConfigured` when no lock exists;
+    ///   `FernletLockError.invalidCredential` when the PIN does not fit the configured credential's
+    ///   format, when it EQUALS the real passcode (which would make every unlock a duress unlock
+    ///   and strand the real content key), or when ``DuressMode/recoveryLock`` is chosen with no
+    ///   enrolled custodian; `FernletLockError.keychainFailure` when a row cannot be written.
+    public func configureDuress(pin: String, mode: DuressMode) async throws {
+        guard let saltData = keychainLoad(.salt, keychainService),
+              let storedVerifier = keychainLoad(.verifier, keychainService),
+              let kind = credentialKind else {
+            throw FernletLockError.notConfigured
+        }
+        try FernletLockCredential(kind: kind, rawValue: pin).validate()
+        guard mode != .recoveryLock || hasRecoveryCustodian else {
+            throw FernletLockError.invalidCredential(Self.duressRecoveryCustodianRequiredMessage)
+        }
+        // A duress PIN equal to the real passcode is a data-loss trap rather than a nuisance: the
+        // duress compare runs FIRST in unlock(), so the real content key would become permanently
+        // unreachable the moment this was accepted. Checked through the same verifierMatch the real
+        // unlock path uses, so a legacy raw-key verifier is caught too.
+        let derivedUnderPrimarySalt = try await cryptoProvider.deriveVerifier(
+            passcode: pin,
+            salt: saltData,
+            n: storedScryptN()
+        )
+        switch verifierMatch(computedVerifier: derivedUnderPrimarySalt, storedVerifier: storedVerifier) {
+        case .none:
+            break  // Distinct from the real passcode — proceed.
+        case .current, .legacy:
+            throw FernletLockError.invalidCredential(Self.duressPINMatchesPasscodeMessage)
+        }
+
+        // Own salt, and a FIXED cost parameter. `storedScryptN()` is deliberately not used: it is
+        // rewritten by changeCredential, which would strand a duress verifier derived under the old
+        // value on the very next passcode change — the same stranding the own-salt decision exists
+        // to avoid.
+        let duressSalt = try cryptoProvider.generateSalt()
+        let duressDerived = try await cryptoProvider.deriveVerifier(
+            passcode: pin,
+            salt: duressSalt,
+            n: FernletLockCrypto.scryptN
+        )
+        // Write order is disarm → salt → mode → VERIFIER LAST, because the verifier is the
+        // discriminator `hasDuressConfigured` reads. Replacing an existing duress PIN otherwise has
+        // a window where the old verifier sits over the new salt: a duress PIN that silently no
+        // longer works while the UI still reports one is configured. Disarming first makes every
+        // intermediate state legible — "no duress PIN" until the last write lands, at which point
+        // its salt and mode are already in place.
+        KeychainItem.delete(for: .duressVerifier, service: keychainService)
+        try storeVerified(duressSalt, for: .duressSalt)
+        try storeVerified(Data([mode.rawValue]), for: .duressMode)
+        try storeVerified(FernletLockCrypto.verifierDigest(of: duressDerived), for: .duressVerifier)
+        // Reconfiguring is a real-PIN act (see the gating note above), so it ends a decoy session.
+        isDuressSessionActive = false
+    }
+
+    /// Removes the configured duress PIN and its mode.
+    ///
+    /// The salt row goes too; the next unlock re-mints a dummy in its place, restoring the
+    /// unconditional-derivation shape. Silent for the same reason ``configureDuress(pin:mode:)``
+    /// is. Idempotent — deleting a missing keychain item is not an error.
+    public func removeDuress() {
+        KeychainItem.delete(for: .duressVerifier, service: keychainService)
+        KeychainItem.delete(for: .duressMode, service: keychainService)
+        KeychainItem.delete(for: .duressSalt, service: keychainService)
+    }
+
+    /// The duress response `passcode` triggers, or `nil` when it is not the duress PIN.
+    ///
+    /// **Runs unconditionally, in a constant shape.** Every caller reaches this on every attempt,
+    /// configured or not: the salt row is minted on demand, the scrypt derivation always happens at
+    /// the fixed ``FernletLockCrypto/scryptN``, and the constant-time compare always runs — against
+    /// a freshly generated never-matching value when there is no stored verifier. So an unlock costs
+    /// exactly two derivations whether or not a duress PIN exists, and the timing side channel that
+    /// would otherwise answer "does this device have a duress PIN?" does not exist.
+    ///
+    /// Fails CLOSED in the only direction that matters: a derivation failure, an unreadable row, or
+    /// a corrupt mode byte yields "not duress" or the non-destructive ``DuressMode/decoy``, never a
+    /// spurious wipe — and never leaks into the real unlock path, which re-derives independently.
+    private func duressMode(for passcode: String) async -> DuressMode? {
+        let salt = duressSaltEnsuringPresence()
+        guard let derived = try? await cryptoProvider.deriveVerifier(
+            passcode: passcode,
+            salt: salt,
+            n: FernletLockCrypto.scryptN
+        ) else { return nil }
+        let storedVerifier = keychainLoad(.duressVerifier, keychainService) ?? neverMatchingVerifier()
+        guard constantTimeEqual(FernletLockCrypto.verifierDigest(of: derived), storedVerifier) else { return nil }
+        // The verifier matched, so this IS the duress PIN; an unreadable or unrecognised mode byte
+        // must not turn that into a normal unlock. Fall back to the non-destructive decoy.
+        return storedDuressMode() ?? .decoy
+    }
+
+    /// The duress salt, minting and persisting a random dummy when none exists.
+    ///
+    /// The row is present whether or not a duress PIN is configured — that is what makes the
+    /// derivation in ``duressMode(for:)`` unconditional. A dummy carries no secret and no PIN is
+    /// bound to it, so persisting it is best-effort: a write that fails costs a re-mint on the next
+    /// unlock, never correctness.
+    private func duressSaltEnsuringPresence() -> Data {
+        if let existing = keychainLoad(.duressSalt, keychainService) { return existing }
+        guard let minted = try? cryptoProvider.generateSalt() else {
+            // Pathological RNG failure. Derive against a fixed dummy anyway — the invariant is that
+            // a derivation ALWAYS happens, and with no verifier row this can only ever miss.
+            return Data(repeating: 0, count: FernletLockCrypto.saltLength)
+        }
+        try? storeVerified(minted, for: .duressSalt)
+        return minted
+    }
+
+    /// A random digest-sized value standing in for the stored duress verifier when none exists, so
+    /// the constant-time compare still runs instead of being skipped. Never persisted, regenerated
+    /// per call, and — being random — never matched by a real derivation.
+    private func neverMatchingVerifier() -> Data {
+        var bytes = [UInt8](repeating: 0, count: SHA256.byteCount)
+        // A failed RNG leaves the buffer zeroed, which no SHA-256 digest of a real derivation will
+        // equal either; the compare still runs and still misses, which is the fail-closed outcome.
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes)
+    }
+
+    /// The persisted ``DuressMode``, or `nil` when the row is absent or holds an unrecognised byte.
+    private func storedDuressMode() -> DuressMode? {
+        guard let data = keychainLoad(.duressMode, keychainService),
+              let byte = data.first else { return nil }
+        return DuressMode(rawValue: byte)
+    }
+
+    /// Performs the configured duress response and returns the benign-looking unlock result.
+    ///
+    /// Every mode converges on the same DECOY presentation. That is the design, not a shortcut: the
+    /// silent wipe has nothing left to show once it has crypto-erased itself, and the recovery-lock
+    /// deliberately does NOT announce that a recovery-lock happened (a "needs recovery on your other
+    /// device" screen would tell the coercer both that they were defeated and where to look next).
+    ///
+    /// - Parameters:
+    ///   - mode: The configured response.
+    ///   - passcode: The secret the user just entered — i.e. the duress PIN itself, which
+    ///     ``DuressMode/silentWipe`` needs in order to re-mint the throwaway lock under it. Passed
+    ///     rather than re-read because it exists nowhere else: only the digest is persisted.
+    ///   - scope: The surface the entry was made on; the decoy opens exactly that one.
+    @discardableResult
+    private func handleDuress(_ mode: DuressMode, passcode: String, scope: FernletLockScope) async -> UnlockResult {
+        switch mode {
+        case .decoy:
+            return enterDecoySession(scope: scope)
+        case .silentWipe:
+            return await performSilentWipe(duressPIN: passcode, scope: scope)
+        case .recoveryLock:
+            return performRecoveryLock(scope: scope)
+        }
+    }
+
+    /// ``DuressMode/recoveryLock``: destroy every LOCAL way into the content key while keeping
+    /// everything the in-person custodian ceremony needs, then present the decoy.
+    ///
+    /// The difference from ``performSilentWipe(duressPIN:scope:)`` is the whole mode, and it is four
+    /// deliberate omissions:
+    ///
+    /// - **The recovery material survives.** `.recoveryBlob` plus the custodian's two public keys
+    ///   stay, which is what makes this recoverable at all. So does the sealed ciphertext corpus
+    ///   (nothing here touches the store) and the ProximityKit identity keys under
+    ///   `com.fernlet.identity` — a different keychain service this module never sweeps, and the
+    ///   keys the return ceremony authenticates with.
+    /// - **The journal / Worry Box device fallback keys survive.** The wipe destroys them because
+    ///   "crypto-erased" would otherwise be false for the two entities that are sealed under those
+    ///   keys whenever the lock is closed. Here the promise is the opposite one — *recoverable* —
+    ///   and nothing in the recovery blob can give those keys back, so destroying them would be
+    ///   unrecoverable loss on the one mode built to avoid it. The rows they seal were never
+    ///   protected by the app lock in the first place (they are written while it is closed, by
+    ///   design), so this leaves the residual an ordinary locked device already carries rather than
+    ///   creating a new one — and it takes forensic extraction to reach, not tapping around a decoy.
+    /// - **No re-mint.** The point of the mode is that NO local unlock survives: the coerced user
+    ///   can then say truthfully that they cannot open the data, and mean it.
+    /// - **No purge hook.** The corpus is being kept, not deleted; firing the delete funnel here
+    ///   would destroy exactly what the custodian is holding the key for.
+    ///
+    /// Fails CLOSED on missing recovery material. `configureDuress(pin:mode:)` refuses this mode
+    /// without an enrolled custodian, but the rows could still be gone by the time the PIN is
+    /// entered (a keychain that lost them, a partially-swept install). Destroying the local keys
+    /// then would be an unannounced permanent wipe the user never chose — the one outcome this mode
+    /// exists to avoid — so the non-destructive decoy is presented instead, indistinguishably.
+    private func performRecoveryLock(scope: FernletLockScope) -> UnlockResult {
+        guard hasRecoveryCustodian else { return enterDecoySession(scope: scope) }
+        destroyLocalUnlockKeys(
+            alsoDestroyingRecoveryMaterial: false,
+            alsoDestroyingDeviceFallbackKeys: false
+        )
+        return enterDecoySession(scope: scope)
+    }
+
+    /// ``DuressMode/silentWipe``: crypto-erase this device, put a convincing empty lock in the
+    /// wiped one's place, present the decoy, and hand the durable cleanup to the delete funnel.
+    ///
+    /// The order of the four steps is the whole design:
+    ///
+    /// 1. **Destroy, synchronously.** `destroyLocalUnlockKeys` deletes every key that can open a
+    ///    sealed byte — including the Secure-Enclave key, which nothing else but ``reset()`` ever
+    ///    touches. This is pure keychain deletion, so it completes in milliseconds and it is what
+    ///    the sub-second claim rests on: from here the sealed corpus (on disk, in an iCloud backup,
+    ///    in a dead-drop) is ciphertext nobody can open, whether or not anything below succeeds.
+    /// 2. **Re-mint.** A fresh salt/verifier/content key under the SAME PIN the user just entered,
+    ///    through the SAME `mintLockRecords` a real setup uses. Without this the wiped device shows
+    ///    "set up app lock" the moment it re-locks — a tell that says both "there was a duress PIN"
+    ///    and "it fired". With it, the coercer's PIN keeps opening an app that is simply empty.
+    ///    Failure here is survivable and deliberately swallowed: a device with no lock is worse copy
+    ///    than a device with one, but neither un-erases anything.
+    /// 3. **Present the decoy.** Same keyless session, same audit line, same cleared attempt state
+    ///    as every other duress mode — the wipe must not be distinguishable from the decoy either.
+    /// 4. **Fire the purge hook**, last and fire-and-forget, for the sealed rows and cloud copies.
+    ///
+    /// **This inverts the lock-survives-wipe rule, on this seam only.** `deleteAllData` deliberately
+    /// keeps `com.fernlet.lock` (documented in `Docs/PrivacyWipeCoverage.md`); the duress wipe
+    /// destroys it. The inversion is safe precisely because the direction of the call is
+    /// one-way — the funnel never calls back into the lock, so no non-duress path can reach this.
+    ///
+    /// - Note: The re-minted lock makes the duress PIN the REAL passcode of the now-empty app, and
+    ///   no duress PIN survives until the user sets a new one. That is the accepted trade (§11): the
+    ///   alternative leaves a "set up app lock" CTA where a lock used to be.
+    private func performSilentWipe(duressPIN: String, scope: FernletLockScope) async -> UnlockResult {
+        destroyLocalUnlockKeys(
+            alsoDestroyingRecoveryMaterial: true,
+            alsoDestroyingDeviceFallbackKeys: true
+        )
+        await mintThrowawayLock(under: duressPIN)
+        let result = enterDecoySession(scope: scope)
+        // After the decoy is on screen, never before: the purge is a background errand and the user
+        // in front of the coercer must see an ordinary unlock, not a pause.
+        duressPurgeHook?()
+        return result
+    }
+
+    /// Deletes every keychain item that can lead to the content key, plus the Secure-Enclave key
+    /// itself, and drops the in-memory copy.
+    ///
+    /// The list is exhaustive by intent, not by convenience — each row is a way in:
+    /// `.salt`/`.verifier` (the passcode gate), `.wrappedContentKey` (the scrypt-wrapped key),
+    /// `.seWrappedContentKey` + the SE key (the hard-bound copy), `.biometricBypass` (the RAW key
+    /// behind Face ID — the copy most easily forgotten and the one a coercer can use without any
+    /// PIN at all), `.biometricEnabledFlag`, the duress rows themselves, and the journal / Worry Box
+    /// **device fallback keys** under ``sealedContentKeyServices``.
+    ///
+    /// - Parameters:
+    ///   - alsoDestroyingRecoveryMaterial: Whether to destroy `.recoveryBlob` and the enrolled
+    ///     custodian's public keys too. `true` for the WIPE, where the recovery blob is a sealing of
+    ///     the very content key being erased and leaving it would make "crypto-erased" false — the
+    ///     custodian device could still open it. `false` for ``DuressMode/recoveryLock``, whose
+    ///     entire purpose is that this material survives.
+    ///   - alsoDestroyingDeviceFallbackKeys: Whether to sweep ``sealedContentKeyServices``. `true`
+    ///     for the WIPE, where those keys open two of the four sealed entities and leaving them
+    ///     would make the sub-second crypto-erase claim false. `false` for
+    ///     ``DuressMode/recoveryLock``: nothing in the recovery blob can give those keys back, so
+    ///     destroying them there would be unrecoverable loss on the one mode that promises recovery
+    ///     (see ``performRecoveryLock(scope:)`` for the full argument).
+    private func destroyLocalUnlockKeys(
+        alsoDestroyingRecoveryMaterial: Bool,
+        alsoDestroyingDeviceFallbackKeys: Bool
+    ) {
+        var keys: [LockKeychainKey] = [
+            .salt,
+            .verifier,
+            .duressSalt,
+            .duressVerifier,
+            .duressMode,
+            .wrappedContentKey,
+            .seWrappedContentKey,
+            .biometricBypass,
+            .biometricEnabledFlag
+        ]
+        if alsoDestroyingRecoveryMaterial {
+            keys += [.recoveryBlob, .custodianSigningPublicKey, .custodianKeyAgreementPublicKey]
+        }
+        for key in keys {
+            KeychainItem.delete(for: key, service: keychainService)
+        }
+        // A `kSecClassKey` item, outside the generic-password rows above — the same explicit sweep
+        // `reset()` needs, and the difference between "the wrap blob is gone" and "the key that
+        // opens it is gone".
+        SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        // The third sweep, for the same reason `reset()` documents: journal and Worry Box rows are
+        // sealed under DEVICE FALLBACK keys — not the content key — whenever they are written while
+        // the lock is closed. Destroying the content key alone would leave exactly those rows
+        // openable, so "crypto-erased" would be false for two of the four sealed entities. The
+        // delete funnel this wipe hands off to deletes the same two keys, but asynchronously; the
+        // sub-second claim needs them gone HERE. They regenerate lazily on next use.
+        //
+        // Deliberately skipped by the recovery-lock: those keys are not in the recovery blob, so
+        // destroying them there would be loss no ceremony can undo.
+        if alsoDestroyingDeviceFallbackKeys {
+            for service in sealedContentKeyServices {
+                KeychainItem.deleteAll(service: service)
+            }
+        }
+        scrubContentKey()
+    }
+
+    /// Puts an empty, fully-formed lock in the wiped one's place, keyed to the duress PIN.
+    ///
+    /// Goes through ``mintLockRecords(for:)`` — the same body a real setup uses — so the throwaway
+    /// carries the identical record set, and then establishes the same Secure-Enclave hard binding,
+    /// so a wiped device's custody state matches a freshly configured one instead of standing out as
+    /// the only install in the world with no enclave wrap.
+    ///
+    /// **The enclave work is open-coded rather than delegated to `maintainSecureEnclaveWrap` /
+    /// `hardBindToSecureEnclaveIfVerified`, and that is the point of this function existing.** Those
+    /// two emit `lock.seWrapEstablished` and `lock.hardBoundToSecureEnclave` — audit event NAMES
+    /// reach the unified log with `.auto` privacy and survive a sysdiagnose. A hard-bound install's
+    /// benign unlock emits neither, so emitting them in the same instant as a `lock.released` would
+    /// be a legible signature reading "a lock was minted from scratch during that unlock" — i.e. the
+    /// duress wipe fired. The wipe must leave the audit trail of an ordinary unlock and nothing
+    /// else, so this path performs the same two steps silently. The one invariant that matters is
+    /// preserved verbatim: the scrypt item is deleted ONLY against a blob the enclave demonstrably
+    /// opens back to the exact key bytes (`wrapVerified` proves the round trip, and the equality
+    /// re-check below is the same keep-old-until-verified guard).
+    ///
+    /// Best-effort by design: every failure is swallowed. The erase already happened, and a re-mint
+    /// that threw would only add a "set up app lock" screen to a device that is already safe.
+    ///
+    /// - Parameter pin: The duress PIN, now the real (and only) passcode of the empty app.
+    private func mintThrowawayLock(under pin: String) async {
+        let credential = FernletLockCredential(kind: credentialKind ?? inferredCredentialKind(for: pin), rawValue: pin)
+        guard let contentKeyData = try? await mintLockRecords(for: credential) else { return }
+        // The throwaway key is deliberately NOT retained: the decoy that follows is keyless (see
+        // `enterDecoySession`), and a resident key would be a second thing to get wrong.
+        guard SecureEnclaveContentKeyWrap.isAvailable,
+              let blob = SecureEnclaveContentKeyWrap.wrapVerified(contentKeyData, service: keychainService),
+              (try? storeVerified(blob, for: .seWrappedContentKey)) != nil,
+              let roundTripped = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService),
+              constantTimeEqual(roundTripped, contentKeyData) else { return }
+        KeychainItem.delete(for: .wrappedContentKey, service: keychainService)
+    }
+
+    /// The credential kind a raw secret would be entered as, used ONLY as the fallback when the
+    /// `.kind` row cannot be read during a wipe re-mint.
+    ///
+    /// The stored kind is authoritative wherever it exists — it decides which pad the lock renders,
+    /// so guessing a different one would change the unlock screen, which is itself a tell. This
+    /// exists so a missing row degrades to a plausible lock rather than to no lock.
+    private func inferredCredentialKind(for secret: String) -> FernletLockCredentialKind {
+        guard secret.allSatisfy(\.isNumber) else { return .alphanumeric }
+        switch secret.count {
+        case 4: return .pin4
+        case 6: return .pin6
+        default: return .alphanumeric
+        }
+    }
+
+    /// Opens the KEYLESS decoy session for `scope` and returns the same ``UnlockResult`` a benign
+    /// passcode unlock returns.
+    ///
+    /// Four properties make this indistinguishable from a real unlock, and all four are load-bearing:
+    /// - **No content key.** `retainContentKey` is deliberately not called, so `_contentKey` stays
+    ///   nil and ``contentKey(for:)`` returns nil even for `.privateHub`. Sealed journal/worry
+    ///   activation therefore lands in its deactivated branch and the sealed surfaces render empty —
+    ///   the decoy is an absence of a key, never a decoy key (no dummy key may ever exist).
+    /// - **No attempt residue.** ``clearAttemptState()`` runs exactly as it does on a successful
+    ///   unlock, so no lingering counter, cooldown record or `requiresReset` flag can tell the two
+    ///   apart afterwards.
+    /// - **The same audit line.** `lock.released` with `method=passcode` and the scope — byte for
+    ///   byte what a benign passcode unlock emits.
+    /// - **Neither passcode flag.** ``passcodeUnlockedThisProcess`` and
+    ///   ``passcodeVerifiedThisProcess`` stay untouched, because a duress entry must not satisfy the
+    ///   PIN-before-biometrics requirement that guards the real content key's bypass copy.
+    ///
+    /// Nothing here persists and nothing here deletes: the decoy is entirely in-memory flags plus
+    /// the existing scrub path, so it is fully reversible by entering the real passcode. (A bug that
+    /// persisted the forced-hidden visibility would turn a reversible decoy into silent data hiding
+    /// — gate on this flag, never on a settings setter.)
+    private func enterDecoySession(scope: FernletLockScope) -> UnlockResult {
+        clearAttemptState()
+        scrubContentKey()
+        isDuressSessionActive = true
+        state = .unlocked(scope: scope)
+        hasAutoPromptedBiometricForCurrentLockSession = false
+        FernletAuditLog.log("lock.released", context: ["method": "passcode", "scope": scope.rawValue])
+        return UnlockResult(method: .passcode)
+    }
+
+    // MARK: - Recovery custodian (P7)
+
+    /// Enrolls the user's own second device as the recovery custodian for
+    /// ``DuressMode/recoveryLock``: seals the content key to that device and persists the sealing
+    /// plus the two public keys the return ceremony authenticates against.
+    ///
+    /// **The content key is released into a closure, never returned.** `FernletLock` cannot seal —
+    /// the X25519/HKDF/ChaChaPoly sealing and the QR ceremony that produced `keyAgreementPublicKey`
+    /// live in ProximityKit, and this module deliberately has no edge to it (§11 "Seam placement /
+    /// wall"). So the app-side `DuressRecoveryCoordinator` passes its `IdentityService.seal(_:to:
+    /// format:)` in as `seal`, this method hands it the key bytes for the duration of that one call,
+    /// and the sealing it returns is persisted here. The alternative shape — hand the app the
+    /// content key and let it call back with a finished blob — would have needed a second reveal
+    /// seam beside ``contentKey(for:)`` (which yields nil for `.appLockSettings`, the scope
+    /// enrollment actually runs under) and a window in which the app holds a blob it must remember
+    /// to store. This deviates from the plan's `enrollRecoveryCustodian(sealedBlob:signingPub:kaPub:)`
+    /// signature for exactly that reason.
+    ///
+    /// **Real-passcode gated, and duress-aware.** The passcode is compared against the duress
+    /// verifier FIRST — this is the THIRD credential entry point, and the most dangerous one to
+    /// forget: enrolling under a coerced PIN would seal the REAL content key to a device the coercer
+    /// chose, i.e. hand them an exfiltration route with the user's own hands. A match enrolls
+    /// nothing and presents the decoy. (The UI reaches this from Settings → App lock, which the user
+    /// already unlocked with the real passcode; the explicit re-entry here is what actually recovers
+    /// the key, since `.appLockSettings` deliberately keeps none resident.)
+    ///
+    /// **Emits no audit event**, for the same reason ``configureDuress(pin:mode:)`` does not: an
+    /// event name reaches the unified log with `.auto` privacy and survives a sysdiagnose, and
+    /// "this device enrolled a recovery custodian" is a near-synonym for "this device has a duress
+    /// PIN" — the single fact the feature depends on hiding.
+    ///
+    /// The row order is disarm → keys → **blob LAST**, because ``hasRecoveryCustodian`` reads all
+    /// three: every intermediate state therefore reads as "no custodian", never as an enrolled
+    /// custodian whose blob is missing — which is the state that would let ``DuressMode/recoveryLock``
+    /// be armed over an unrecoverable device.
+    ///
+    /// - Parameters:
+    ///   - passcode: The REAL passcode. Verified through the same `verifierMatch` the unlock path
+    ///     uses (so a legacy raw-key verifier is accepted and migrated).
+    ///   - signingPublicKey: The custodian's Ed25519 public key, ceremony-proven by the caller.
+    ///   - keyAgreementPublicKey: The custodian's X25519 public key — what the blob is sealed to.
+    ///   - seal: Seals the content-key bytes to `keyAgreementPublicKey`. Called exactly once, with
+    ///     the key alive only for the duration of the call.
+    /// - Throws: `FernletLockError.notConfigured`, `.invalidPasscode`, `.invalidCredential` for a
+    ///   malformed public key, `.keychainFailure` for an unwritable row, the custody errors from a
+    ///   hard-bound recovery, or whatever `seal` throws.
+    public func enrollRecoveryCustodian(
+        passcode: String,
+        signingPublicKey: Data,
+        keyAgreementPublicKey: Data,
+        sealingContentKeyTo seal: (Data) throws -> Data
+    ) async throws {
+        guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
+              let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService) else {
+            throw FernletLockError.notConfigured
+        }
+        // DURESS FIRST (P7) — before the custody read and before the real verifier is derived, so a
+        // coerced enrollment touches nothing. See the doc comment: this is the one entry point where
+        // honoring a duress PIN would EXPORT the content key rather than merely reveal it locally.
+        if let mode = await duressMode(for: passcode) {
+            await handleDuress(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
+            return
+        }
+        guard signingPublicKey.count == Self.recoveryCustodianPublicKeyByteCount,
+              keyAgreementPublicKey.count == Self.recoveryCustodianPublicKeyByteCount else {
+            throw FernletLockError.invalidCredential(Self.recoveryCustodianInvalidKeyMessage)
+        }
+        let custody = contentKeyCustody()
+        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
+        let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
+        if case .none = match { throw FernletLockError.invalidPasscode }
+
+        let contentKeyData: Data
+        switch custody {
+        case .legacyScryptWrapped(let wrappedData):
+            contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
+        case .hardBoundToSecureEnclave:
+            contentKeyData = try secureEnclaveBoundContentKey()
+        case .undeterminable(let status):
+            throw FernletLockError.keychainFailure(operation: "read wrappedContentKey", status: status)
+        }
+        migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
+
+        let sealed = try seal(contentKeyData)
+        guard !sealed.isEmpty else {
+            throw FernletLockError.internalError("recovery blob sealing produced no bytes")
+        }
+        KeychainItem.delete(for: .recoveryBlob, service: keychainService)
+        try storeVerified(signingPublicKey, for: .custodianSigningPublicKey)
+        try storeVerified(keyAgreementPublicKey, for: .custodianKeyAgreementPublicKey)
+        try storeVerified(Self.recoveryContentKeyDigest(of: contentKeyData) + sealed, for: .recoveryBlob)
+        // A proven real-passcode act, so it ends any decoy session in force — same rule as
+        // `configureDuress`.
+        isDuressSessionActive = false
+    }
+
+    /// Un-enrolls the recovery custodian, deleting the blob and both public keys.
+    ///
+    /// Refuses while ``DuressMode/recoveryLock`` is the armed duress response, because that pairing
+    /// is a trap rather than a configuration: the response destroys every local unlock key and the
+    /// custodian is the only thing that gives them back. (``performRecoveryLock(scope:)`` also fails
+    /// closed if the rows vanish some other way, but a refusal the user can read is better than a
+    /// silent downgrade of the response they chose.) Change or remove the duress response first.
+    ///
+    /// Silent and idempotent, for the same reasons ``removeDuress()`` is.
+    ///
+    /// - Throws: `FernletLockError.invalidCredential(recoveryCustodianInUseMessage)`.
+    public func removeRecoveryCustodian() throws {
+        if hasDuressConfigured, storedDuressMode() == .recoveryLock {
+            throw FernletLockError.invalidCredential(Self.recoveryCustodianInUseMessage)
+        }
+        for key in [LockKeychainKey.recoveryBlob, .custodianSigningPublicKey, .custodianKeyAgreementPublicKey] {
+            KeychainItem.delete(for: key, service: keychainService)
+        }
+    }
+
+    /// Rebuilds a local unlock around a content key a custodian handed back, under a NEW credential.
+    ///
+    /// The tail of the in-person recovery ceremony. The app-side coordinator has proved the peer is
+    /// the enrolled custodian, sent it ``custodianRecoveryBlob``, and opened its sealed reply; this
+    /// turns those key bytes back into a working lock — fresh salt and verifier, the recovered key
+    /// wrapped under the new credential, a fresh Secure-Enclave binding, and no biometric bypass
+    /// until the user re-enables one.
+    ///
+    /// **A wrong key is REFUSED, not installed.** The recovered bytes are checked against this
+    /// device's own digest of the key the blob seals (``storedRecoveryContentKeyDigest()``). Without
+    /// that check a custodian that returned the wrong bytes — a bug, a stale blob, a second corpus —
+    /// would silently re-lock the device around a key that opens nothing, and the corpus would be
+    /// gone with no error ever raised. This is the one place that can still tell.
+    ///
+    /// **Audit-identical to a fresh setup.** It emits `lock.configured` with the same fields, and
+    /// the enclave helpers emit exactly what a first-time setup emits — so a sysdiagnose pulled later
+    /// cannot be read as "a recovery happened here", which would disclose that a duress PIN existed.
+    ///
+    /// The recovery material is deliberately KEPT: this installs the very key the blob seals, so the
+    /// enrolled custodian remains correct and the user stays protected without re-running the QR
+    /// ceremony. The duress rows do not come back — the response was spent, and a new one must be
+    /// chosen deliberately.
+    ///
+    /// - Parameters:
+    ///   - contentKey: The recovered content-key bytes.
+    ///   - credential: The NEW credential to gate the rebuilt lock on.
+    ///   - grantingScope: The surface the recovery ran on, unlocked on success exactly as
+    ///     ``configure(credential:grantingScope:)`` unlocks the surface a lock was created from.
+    /// - Throws: `FernletLockError.invalidCredential` when the credential fails validation, when no
+    ///   recovery material is present, or when the key does not match this device's check value;
+    ///   `.keychainFailure` when a record cannot be written.
+    public func reestablishLocalUnlock(
+        contentKey: Data,
+        credential: FernletLockCredential,
+        grantingScope: FernletLockScope
+    ) async throws {
+        try credential.validate()
+        guard let expectedDigest = storedRecoveryContentKeyDigest() else {
+            throw FernletLockError.invalidCredential(Self.recoveryNotAvailableMessage)
+        }
+        guard contentKey.count == FernletLockCrypto.keyLength,
+              constantTimeEqual(Self.recoveryContentKeyDigest(of: contentKey), expectedDigest) else {
+            throw FernletLockError.invalidCredential(Self.recoveryKeyMismatchMessage)
+        }
+        let installed = try await mintLockRecords(
+            for: credential,
+            contentKey: contentKey,
+            preservingRecoveryMaterial: true
+        )
+        retainContentKey(installed, for: grantingScope)
+        state = .unlocked(scope: grantingScope)
+        hasAutoPromptedBiometricForCurrentLockSession = false
+        // The user just chose this credential in front of a ceremony they physically ran, which is
+        // exactly what initial setup proves — so the same PIN-before-biometrics flags are satisfied,
+        // and the decoy session the recovery-lock opened ends here.
+        passcodeUnlockedThisProcess = true
+        passcodeVerifiedThisProcess = true
+        isDuressSessionActive = false
+        maintainSecureEnclaveWrap(contentKeyData: installed)
+        hardBindToSecureEnclaveIfVerified(contentKeyData: installed, migratingExistingInstall: false)
+        FernletAuditLog.log("lock.configured", context: [
+            "kind": credential.kind.rawValue,
+            "scope": grantingScope.rawValue
+        ])
     }
 
     /// The sealed-content key, released ONLY to the scope that owns it and only while that scope
@@ -1928,7 +2983,14 @@ extension LockKeychainKey: CaseIterable {
             .attemptCount,
             .cooldownLevel,
             .requiresReset,
-            .scryptN
+            .scryptN,
+            .hardBindingNoticePending,
+            .duressSalt,
+            .duressVerifier,
+            .duressMode,
+            .recoveryBlob,
+            .custodianSigningPublicKey,
+            .custodianKeyAgreementPublicKey
         ]
     }
 }

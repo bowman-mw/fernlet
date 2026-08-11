@@ -67,6 +67,40 @@ would re-lock, recreate the unlock view, and re-prompt Face ID in a loop. The
 back from — a child screen whose still-visible parent is also gated (the progress-photo
 detail returning to its timeline strip).
 
+**The duress model, and why none of it is visible here (security-hardening Phase 7).** A Fernlet
+lock may carry one optional *duress code* — a second secret, of the same kind as the real one, that
+opens the app while doing something else entirely. There is exactly ONE duress code with ONE chosen
+`DuressMode`: `.decoy` opens a KEYLESS session in which every sealed surface renders empty and
+nothing is deleted; `.silentWipe` crypto-erases every local key first, sub-second, then re-mints a
+throwaway lock under the same code so the empty app survives a re-lock; `.recoveryLock` destroys this
+phone's unlock keys while KEEPING the sealed corpus and a blob only the user's own enrolled second
+device can open. All three converge on the same empty view, deliberately.
+
+That convergence is why this module has no duress-specific screens, no duress branch, and no
+"duress" string anywhere: **an unlock under duress must be indistinguishable from a benign one on
+screen, in the keychain, and in the audit log.** `FernletLockService.unlock(passcode:for:)` compares
+the duress verifier before the real one and before the `requiresReset`/cooldown guards, then returns
+the same `UnlockResult(method: .passcode)` and emits the same `lock.released` line — so
+``FernletLockView`` dismisses exactly as it always does, having asked nothing extra and rendered
+nothing different. The only observable difference is the *absence* of a key: `contentKey(for:)`
+stays nil, which the gated screens already handle as "there is nothing sealed here". Two things this
+module DOES carry: it reads the service's `isBiometricUnlockAvailable`, which ANDs
+`!isDuressSessionActive`, so the Face ID button disappears for the whole duress session (the bypass
+item still holds the REAL content key in the non-destructive decoy — that suppression is the door it
+closes); and the flag deliberately survives `lock(reason:)`, so re-locking during a decoy does not
+hand the biometric side-door back.
+
+The decoy's second invariant belongs to the app rather than to this module, and is stated here
+because a future gate could break it: **the decoy must persist nothing and delete nothing.** It rides
+the existing sensitive-visibility machinery through an in-memory flag mirrored into
+`FernletStore.duressSessionActive`; a gate that wrote the forced-hidden state into a *preference*
+would turn a reversible decoy into silent data hiding and could reach the sealed-backup toggles that
+delete the iCloud copy. Configuration lives in the app target's `DuressPINSetupView` under Settings →
+App lock — a `.appLockSettings` surface the user must already have unlocked with the real passcode,
+which is what makes `configureDuress(pin:mode:)` real-PIN-gated by construction rather than by a
+re-prompt — and it emits no audit event at all, since an event NAME reaching the unified log would
+itself disclose that a duress code exists.
+
 Relative to the S3 privacy wall, `FernletLockUI` lives on the protected side but is not
 itself sealed: it holds no persistence and no cryptography of its own. All key material,
 keychain state, and attempt/cooldown bookkeeping stay inside `FernletLockService`, which

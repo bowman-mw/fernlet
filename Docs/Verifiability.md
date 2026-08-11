@@ -126,6 +126,20 @@ protected by keys that never leave the device:
   taken *after* the flip, and a user who takes neither route keeps the old, backup-restorable
   custody rather than being bound without a recovery path.
 
+- **Destroyed on the duress WIPE (Phase 7):** every key listed above that this device holds for the
+  sealed corpus — the salt/verifier pair, the scrypt-wrapped and enclave-wrapped content keys, **the
+  Secure-Enclave key itself**, **the biometric bypass copy** (the one that would otherwise let a
+  coercer walk around the wipe with Face ID), the duress and recovery rows, and the journal /
+  Worry Box device fallback keys — is deleted synchronously when the duress PIN is entered on a
+  device configured for `DuressMode.silentWipe`. That is the whole of the sub-second crypto-erase:
+  what remains on disk, in a sealed iCloud backup, or in a heart-drop dead-drop is ciphertext with
+  no surviving key anywhere. A throwaway empty lock is re-minted under the same PIN afterwards, so
+  the device is a normal, empty install rather than an obvious one. This is the ONE seam that
+  destroys `com.fernlet.lock` — "Delete everything" still keeps it (see
+  [`PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md)) and cannot reach this path.
+
+- **Destroyed on the duress RECOVERY-LOCK (Phase 7):** the same local keys as the wipe — salt/verifier, both wrapped content keys, **the Secure-Enclave key**, **the biometric bypass**, the biometric-enabled flag and the duress rows — with two deliberate survivors. The recovery blob and the enrolled custodian's public keys stay, because they are the entire point: the corpus is not erased, it is locked out of reach of this phone and recoverable in person from the user's own second device. And the journal / Worry Box device fallback keys stay, because nothing in the recovery blob can give them back — destroying them would be unrecoverable loss on the one response built to be recoverable, and the rows they seal were never protected by the app lock in the first place. The return ceremony ends at `reestablishLocalUnlock`, which verifies the recovered key against a device-local, domain-separated digest of the key the blob seals and REFUSES anything else, so a wrong answer is a named error rather than a silent, permanent re-lock around bytes that open nothing.
+
 **What this buys, concretely:** a bulk copy of the app's files plus a keychain dump is
 cryptographically worthless off the device — on enclave hardware, *even with the passcode*, which
 is what kills off-device PIN brute force (a 4-digit PIN through scrypt is ~10⁴ tries). And a future app version that wanted to make sealed
@@ -255,7 +269,17 @@ shipped; the rest are still open.
    enclave wrap has been proven to unwrap to exactly the authoritative key, and no error path ever
    deletes. Two residuals stay open and are stated in §5: the biometric-bypass copy of the key is
    not enclave-wrapped, and the enclave key is device-unlock gated rather than app-PIN gated, so
-   the guarantee is off-device rather than on-device. Four properties keep the terminal state from
+   the guarantee is off-device rather than on-device.
+   **The bypass residual is narrowed, not closed, by Phase 7 (duress).** Both destructive duress
+   responses delete the `.biometricBypass` row and the Secure-Enclave key outright (§4), so the
+   copy of the content key that sits behind Face ID rather than inside the enclave — the copy a
+   coercer could use with no PIN at all — does not survive a duress WIPE or a duress RECOVERY-LOCK.
+   In the non-destructive DECOY it *does* survive, by design (nothing is destroyed there), and the
+   defense is behavioural instead: `isBiometricUnlockAvailable` and the fail-closed guard inside
+   `unlockWithBiometrics` both AND in `!isDuressSessionActive`, and that flag deliberately survives
+   a re-lock, so biometrics stay suppressed for the whole duress session. Both halves —
+   PIN-before-biometrics and the duress flag — must hold for that to be safe; neither alone is
+   sufficient. Four properties keep the terminal state from
    being worse than the trade it was approved as, and each is pinned by a test in
    `FernletTests/SecureEnclaveWrapTests`: the reset the error prescribes is reachable from the
    unlock overlay itself; a transient keychain read failure is a separate retryable error that

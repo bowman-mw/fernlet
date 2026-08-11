@@ -45,7 +45,8 @@ import AIContext
 /// - Sensitive-surface gating is DERIVED (`isPeriodTrackingVisible` /
 ///   `isIntimacyTrackingVisible`) and fail-closed; hiding must also scrub resident plaintext
 ///   (`periodScrubHook`, `scrubHiddenHealthContext`), and the device-local resolution sidecar
-///   protects the choice from mixed-version peers.
+///   protects the choice from mixed-version peers. The duress decoy (``duressSessionActive``)
+///   rides that same derivation and must stay purely in-memory — it never writes a preference.
 /// - "Delete everything" (`deleteAllData`) is a single ordered funnel: writers stopped first,
 ///   sealed rows dropped WITHOUT decrypting, then the sealed store FILE destroyed and re-created
 ///   (`sealedStoreRebuildHook`, keyless) so the row-delete's `-wal`/freelist residue goes too;
@@ -148,6 +149,24 @@ final class FernletStore {
     }
     var photowallSeeds: [PhotowallSeed] = []
     var lockState: FernletLockState = .notConfigured
+    /// Mirror of `FernletLockService.isDuressSessionActive`: true while the app is showing the
+    /// DECOY because the duress PIN was entered (Phase 7).
+    ///
+    /// Wired in `ContentView` — from the launch `.task`, from the lock-state observer, and from its
+    /// own `.onChange` on the service flag (the duress branches of `changeCredential` /
+    /// `setBiometricEnabled` can flip it without any lock-state transition to observe).
+    ///
+    /// **In-memory ONLY, and that is the invariant.** Nothing writes it to `settings`, to the
+    /// snapshot, or to a sidecar. `isPeriodTrackingVisible` / `isIntimacyTrackingVisible` AND-in
+    /// `!duressSessionActive`, which rides the existing hide machinery — the
+    /// `.onChange(of: sensitiveSurfaceVisibility)` scrub drops resident cycle state and the bridge
+    /// trends, `PrivateHubSection` hides the sections, and `allowedHealthCapabilities` stops the
+    /// HealthKit reads — so the decoy is complete and, when the real passcode clears the flag,
+    /// completely reversible. Persisting the forced-hidden value instead (writing
+    /// `settings.periodTrackingVisible = false`) would turn a reversible decoy into silent data
+    /// hiding, and would reach the sealed-backup toggles that DELETE the iCloud backup. Gate on this
+    /// flag; never on a setter.
+    var duressSessionActive = false
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
     /// their FIRST friend and presence was never offered before). Observable, memory-only —
     /// the persistent never-re-prompt marker is `settings.hasPromptedForPresence`.
@@ -738,15 +757,23 @@ final class FernletStore {
     ///
     /// This is a HARD gate — see `PeriodTrackerStore.isVisible`. Callers must not treat it as a
     /// display hint.
+    ///
+    /// A duress session (``duressSessionActive``) forces it shut regardless of the preference — the
+    /// decoy's cycle half. Read-only and in-memory: the stored preference is untouched, so the
+    /// surfaces come straight back when the real passcode clears the flag.
     var isPeriodTrackingVisible: Bool {
-        settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
+        guard !duressSessionActive else { return false }
+        return settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
     }
 
     /// Whether intimate-activity surfaces are visible. Age is a separate, non-overridable floor —
     /// an adult who hides the feature and an under-18 user are both invisible, but for different
     /// reasons, and the UI must say the right one (see `intimacyHiddenReason`).
+    ///
+    /// A duress session forces it shut too, on the same terms as `isPeriodTrackingVisible`.
     var isIntimacyTrackingVisible: Bool {
-        isIntimateLoggingAllowed && settings.intimacyTrackingVisible
+        guard !duressSessionActive else { return false }
+        return isIntimateLoggingAllowed && settings.intimacyTrackingVisible
     }
 
     /// The gate value for filtering navigation surfaces. Display-only — never persist a list filtered

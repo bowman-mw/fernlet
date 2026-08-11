@@ -1824,6 +1824,13 @@ struct MemoryEditorSheet: View {
 /// (via the inline verify sheet); disabling does not. Resetting the lock is confirmed with an
 /// explicit warning that the sealed journal, cycle, and intimacy notes become permanently
 /// unreadable — the reset destroys the keys, not just the passcode.
+///
+/// It also hosts the duress entry points (security-hardening Phase 7): ``DuressPINSetupView`` for
+/// setting the duress code and choosing its response, and the two halves of the in-person recovery
+/// ceremony. Those live here rather than on a page of their own precisely because this page is
+/// already `.appLockSettings`-gated — reaching it proves the REAL passcode, which is what makes
+/// `configureDuress` and `enrollRecoveryCustodian` real-PIN-gated by construction instead of by a
+/// re-prompt.
 struct AppLockSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
@@ -1838,6 +1845,12 @@ struct AppLockSettingsView: View {
     @State private var verifyCurrentPasscode = ""
     @State private var verifyError: String?
     @State private var pendingBiometricEnable = false
+    /// Duress-code setup (security-hardening Phase 7, step 9).
+    @State private var showDuressSetup = false
+    /// The custodian half of the recovery ceremony, offered whether or not THIS phone has a lock.
+    @State private var showRecoveryCustodian = false
+    /// The return ceremony, offered only on a phone left in the post-`recoveryLock` state.
+    @State private var showRecoveryReturn = false
 
     var body: some View {
         ScrollView {
@@ -1847,9 +1860,11 @@ struct AppLockSettingsView: View {
                 if lockService.state != .notConfigured {
                     actionsCard
                     biometricCard
+                    duressCard
                     dangerCard
                 } else {
                     setupCTACard
+                    duressCard
                 }
             }
             .padding(20)
@@ -1868,6 +1883,18 @@ struct AppLockSettingsView: View {
         }
         .sheet(isPresented: $showBiometricPasscodeVerify) {
             biometricVerifySheet
+        }
+        .sheet(isPresented: $showDuressSetup) {
+            DuressPINSetupView()
+                .environment(lockService)
+        }
+        .sheet(isPresented: $showRecoveryCustodian) {
+            DuressRecoveryEnrollmentSheet()
+                .environment(lockService)
+        }
+        .sheet(isPresented: $showRecoveryReturn) {
+            DuressRecoveryReturnSheet()
+                .environment(lockService)
         }
         .confirmationDialog(
             "Reset app lock?",
@@ -1964,6 +1991,61 @@ struct AppLockSettingsView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Duress code + recovery device (security-hardening Phase 7).
+    ///
+    /// Three rows with three different availability rules, deliberately:
+    /// - **Duress code** needs a configured lock, because a duress code is an alternative way to
+    ///   enter one.
+    /// - **Be a recovery device** is offered ALWAYS, including on a phone with no app lock of its
+    ///   own. Acting as somebody else's recovery device uses only the proximity identity keys, and
+    ///   requiring a lock here would mean a user's spare phone could not be their recovery device.
+    ///   It discloses nothing about THIS phone: the row reads the same whether or not a duress code
+    ///   is configured, which is the property the whole feature depends on.
+    /// - **Recover this phone** appears whenever a custodian is enrolled — deliberately WIDER than
+    ///   `isAwaitingCustodianRecovery`. A phone left by `DuressMode.recoveryLock` shows "set up app
+    ///   lock", and a user who takes that offer before reaching their custodian leaves that state
+    ///   (`isAwaitingCustodianRecovery` reads the ABSENCE of a verifier) while the recovery material
+    ///   survives. Gating on the narrow state would make the route back unreachable at exactly that
+    ///   moment. On a phone that never fired a duress response the row is harmless: the ceremony
+    ///   re-installs the same content key under a new passcode, and it sits behind the
+    ///   `.appLockSettings` gate either way.
+    private var duressCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Duress & recovery")
+
+            if lockService.state != .notConfigured {
+                Button {
+                    showDuressSetup = true
+                } label: {
+                    settingsRow(icon: "lock.shield", title: "Duress code")
+                }
+                .accessibilityIdentifier("appLock.duressCode")
+
+                FernletRowDivider()
+            }
+
+            if lockService.hasRecoveryCustodian {
+                Button {
+                    showRecoveryReturn = true
+                } label: {
+                    settingsRow(icon: "arrow.clockwise", title: "Recover this phone")
+                }
+                .accessibilityIdentifier("appLock.recoverThisPhone")
+
+                FernletRowDivider()
+            }
+
+            Button {
+                showRecoveryCustodian = true
+            } label: {
+                settingsRow(icon: "iphone.and.arrow.forward", title: "Be a recovery device")
+            }
+            .accessibilityIdentifier("appLock.beRecoveryDevice")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
