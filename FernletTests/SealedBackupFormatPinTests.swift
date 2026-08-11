@@ -300,6 +300,56 @@ struct SealedBackupFormatPinTests {
         defer { KeychainItem.deleteAll(service: restoringService) }
         #expect(try SealedBackupCrypto.open(record, identityService: restoringIdentity) == plaintext)
     }
+
+    // MARK: EVERY payload type is pinned, not just the two that existed when v2 shipped. The rawValue
+    // keys the CloudKit record name AND is bound into the AAD, so this walks `allCases` — a payload
+    // added later without a pin would otherwise ship unverified, and renaming an existing one would
+    // orphan every backup already in users' databases.
+    @Test func everyPayloadTypeSealsAndOpensOnV2() throws {
+        let (identity, service) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+
+        // The rawValues are at-rest format. Spelled out literally so a rename is a failing diff here
+        // rather than a silent orphaning of existing CloudKit records.
+        #expect(Set(SealedBackupPayloadType.allCases.map(\.rawValue))
+                == ["sensitiveNotes", "periodData", "journalNarratives", "intimacyLogs"])
+
+        for payloadType in SealedBackupPayloadType.allCases {
+            let plaintext = Data("payload for \(payloadType.rawValue)".utf8)
+            let record = try SealedBackupCrypto.seal(
+                plaintext,
+                payloadType: payloadType,
+                identityService: identity,
+                generation: 3,
+                keySalt: knownKeySalt
+            )
+            #expect(record.formatVersion == 2, "\(payloadType.rawValue) did not seal as record format v2")
+            #expect(record.keySalt == knownKeySalt)
+            #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext,
+                    "\(payloadType.rawValue) failed to round-trip on v2")
+        }
+    }
+
+    // MARK: The payload type is AUTHENTICATED, so a chunk cannot be replayed as a different payload —
+    // the property that keeps four separate backups from becoming one interchangeable pool. Proved by
+    // relabelling a sealed journal record as intimacy and watching the open fail.
+    @Test func aChunkCannotBeReplayedAsADifferentPayloadType() throws {
+        let (identity, service) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+
+        let record = try SealedBackupCrypto.seal(
+            Data("journal chunk".utf8),
+            payloadType: .journalNarratives,
+            identityService: identity,
+            generation: 4,
+            keySalt: knownKeySalt
+        )
+        var replayed = record
+        replayed.payloadType = .intimacyLogs
+        #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try SealedBackupCrypto.open(replayed, identityService: identity)
+        }
+    }
 }
 
 private extension Data {

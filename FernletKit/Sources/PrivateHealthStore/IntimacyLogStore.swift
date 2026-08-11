@@ -18,6 +18,10 @@ public nonisolated struct IntimacyTrackingHiddenError: Error, Equatable {
 /// `insert()` throws (no seal happens). Deletes are deliberately NOT gated, so hiding never blocks a
 /// wipe — mirroring `IntimacyLogRepository.deleteAll()`, which deletes rows without decrypting them.
 ///
+/// The sealed-backup coordinator is the second client (added 2026-08-10 with the `intimacyLogs`
+/// payload) and builds its OWN instance wired to the same derived gate — see the sealed-backup seam
+/// at the bottom of this type, where each member documents whether it is gated and why.
+///
 /// `isVisible` is injected as a closure (this store is a leaf with no access to settings) and read
 /// lazily, so a toggle mid-session takes effect on the very next call — including a flip while the log
 /// sheet is still open, which `insert()` then refuses (closing that write race). It defaults to
@@ -63,5 +67,50 @@ public final class IntimacyLogStore {
     /// purpose: hiding must never block the "delete everything" wipe.
     public func deleteAll() throws {
         try repository.deleteAll()
+    }
+
+    // MARK: - Sealed-backup seam
+
+    // The app's `SealedBackupCoordinator` reaches intimacy data through THIS funnel, not through a raw
+    // `IntimacyLogRepository` — the wiring `SensitiveSurfaceGateTests` greps the app target for. Which
+    // members are gated is the whole design, so each says why.
+
+    /// Whether this install has ever written an intimacy log — the one-way divergence latch the
+    /// sealed-backup restore consults so it can never resurrect logs the user deleted.
+    ///
+    /// **Ungated on purpose.** It reads a device-local boolean (backfilled from a row count) and
+    /// decrypts nothing. Gating it would make a hidden store answer "never populated", which is the
+    /// hidden-means-empty bug: a restore would then happily write the cloud copy in behind the gate.
+    public var hasEverStoredLog: Bool { repository.hasEverStoredLog }
+
+    /// Total stored logs, counted without decrypting (or faulting in) any row.
+    ///
+    /// **Ungated for the same reason as ``hasEverStoredLog``** — and additionally because the
+    /// sealed-backup re-upload guard uses it to refuse exporting from an empty store; a hidden store
+    /// reading as 0 there would let a re-upload overwrite the user's cloud backup with an empty one.
+    public func backupLogCount() throws -> Int {
+        try repository.logCount()
+    }
+
+    /// One page of logs for the sealed-backup export, in a stable total order.
+    ///
+    /// **Gated**, and throws rather than returning `[]`: this decrypts every note it touches, so it is
+    /// a decrypt seam. Returning empty while hidden would be worse than throwing — the export writes a
+    /// head record even for zero records, so a silent empty page would REPLACE the user's cloud backup
+    /// with nothing. The caller checks visibility first; this is the backstop that makes a regression
+    /// there loud instead of destructive.
+    public func backupPage(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [IntimacyLog] {
+        guard isVisible() else { throw IntimacyTrackingHiddenError() }
+        return try repository.logs(offset: offset, limit: limit, contentKey: contentKey)
+    }
+
+    /// Writes a restored batch of logs in ONE all-or-nothing transaction (sealed-backup restore).
+    ///
+    /// **Gated**, matching ``insert(_:contentKey:)``: a restore seals plaintext into the store, so it
+    /// must not run behind the visibility gate. A hidden restore therefore fails and is retried once
+    /// the user un-hides, rather than quietly repopulating a surface the app is presenting as off.
+    public func restore(_ logs: [IntimacyLog], contentKey: SymmetricKey?) throws {
+        guard isVisible() else { throw IntimacyTrackingHiddenError() }
+        try repository.insertAtomically(logs, contentKey: contentKey)
     }
 }

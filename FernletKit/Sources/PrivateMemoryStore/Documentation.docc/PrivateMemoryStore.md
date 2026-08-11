@@ -38,8 +38,16 @@ than blanking the whole result, and every mutation prunes the store's persistent
 The two repositories differ in lifecycle, on purpose. Journal narratives are the sealed half of a
 strip/hydrate cycle driven by the app's `JournalSealingCoordinator` (through the
 ``JournalNarrativeStoring`` seam): journal text is stripped out of the synced snapshot blob,
-sealed here, and hydrated back for display. Worry Box notes never touch the synced blob at all —
-they are write-once, device-only, excluded from `SealedBackup`, and support a bulk
+sealed here, and hydrated back for display. Since the 2026-08-10 backup-coverage work
+``JournalNarrativeRepository`` is also a `SealedBackup` payload source (`journalNarratives`): it
+owns a one-way "ever stored" divergence latch (device-local, non-synced `UserDefaults`, injected
+so tests get isolation) plus a keyless row count, a paged reader in a *total* order (`entryDate`
+then the unique `id`, so successive export chunks never overlap or skip), and an all-or-nothing
+`insertAtomically` used by restore. Every mutation — deletes included — sets the latch, so a
+restore can never resurrect entries the user deliberately deleted. Because the day blob holds only
+the entry SKELETON, journal restore is paired with a host hook that rebuilds those skeletons;
+without it a sync-off device reset would restore rows nothing renders. Worry Box notes never touch
+the synced blob at all — they are write-once, device-only, excluded from `SealedBackup`, and support a bulk
 device-key → user-key migration (``WorryStoring/reencryptAll(from:to:)``) because
 `WorryBoxService` lets the user write worries before any app lock exists.
 
@@ -47,7 +55,9 @@ Concurrency: this target sets no `defaultIsolation(MainActor.self)` — both rep
 nonisolated `final class`es whose every operation runs synchronously inside
 `NSManagedObjectContext.performAndWait` on the sealed store's view context, so they can be called
 from the nonisolated contexts that own them without cross-actor hops. The value types
-(``JournalNarrative``, ``WorryNarrative``) are plain `Equatable` structs.
+(``JournalNarrative``, ``WorryNarrative``) are plain `Equatable` structs; ``JournalNarrative`` is
+additionally `Codable` so the sealed-backup export can serialize decrypted rows into its
+re-encrypted chunks.
 
 ## Topics
 

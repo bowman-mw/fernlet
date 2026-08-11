@@ -74,9 +74,14 @@ func makeTestStoreWithRepositories(
         legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
     )
     // Use an in-memory JournalNarrativeRepository so tests never touch
-    // PrivatePersistenceController.shared (a real on-device store).
+    // PrivatePersistenceController.shared (a real on-device store). Its "ever stored" divergence latch
+    // gets a THROWAWAY defaults suite for the same reason the store is in-memory: the latch lives in
+    // `.standard`, which is process-global under the test runner, so any test that writes a journal
+    // entry would otherwise mark every later test's device as "already diverged" and silently invert
+    // the sealed-backup restore assertions.
     let journalNarrativeRepository = JournalNarrativeRepository(
-        controller: PrivatePersistenceController(inMemory: true)
+        controller: PrivatePersistenceController(inMemory: true),
+        defaults: UserDefaults(suiteName: "fernlet.tests.journalLatch.\(UUID().uuidString)") ?? .standard
     )
     let store = FernletStore(
         date: date,

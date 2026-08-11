@@ -16,7 +16,10 @@ import PrivateStoreCore
 /// ordering fields (`id`, `dayKey`, `tag`, `entryDate`, `createdAt`, `updatedAt`)
 /// are stored as plaintext Core Data attributes so rows can be fetched and sorted
 /// without a content key.
-public struct JournalNarrative: Identifiable, Equatable {
+///
+/// `Codable` so the app-side sealed-backup export can serialize decrypted rows into its
+/// re-encrypted chunks (payload type `journalNarratives`) and the restore can decode them back.
+public struct JournalNarrative: Identifiable, Codable, Equatable {
     /// Stable identity shared with the day's in-memory journal entry, used for upsert/delete matching.
     public var id: UUID
     /// The owning day's key (plaintext), used to fetch a day's narratives without decrypting them.
@@ -96,6 +99,12 @@ public protocol JournalNarrativeStoring: AnyObject {
 /// ciphertext does not linger in the transaction log — best-effort (`try?`) after upserts, but
 /// rethrown after deletes.
 ///
+/// The app's `SealedBackupCoordinator` is the other caller: it exports via the paged
+/// ``narratives(offset:limit:contentKey:)`` / ``narrativeCount()`` pair, restores via
+/// ``insertAtomically(_:contentKey:)``, and consults ``hasEverStoredNarrative`` so a restore can never
+/// resurrect entries the user deliberately deleted. Every mutation — deletes included — sets that
+/// one-way latch.
+///
 /// Failure modes: seal/open rethrow `ColumnCrypto` (CryptoKit/JSON) errors; a failed upsert save
 /// rolls back the in-memory change before rethrowing so the context is left clean.
 public final class JournalNarrativeRepository: JournalNarrativeStoring {
@@ -105,17 +114,67 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
     /// at-rest format and must never change.
     private let crypto = ColumnCrypto(label: "journal-narrative")
 
+    /// Device-local marker for "this install has written journal narratives at some point", used by the
+    /// sealed-backup restore to tell TWO very different empty stores apart:
+    ///
+    /// - **never populated** (a genuine reinstall / new device) — restoring the sealed backup is the
+    ///   whole point, and there is nothing local to lose.
+    /// - **emptied by the user** (they deleted their journal entries) — the cloud backup is stale by
+    ///   construction, because deleting an entry drops the narrative row without reconciling the
+    ///   sealed backup. Restoring there would silently resurrect entries the user deliberately deleted.
+    ///
+    /// A plain row count cannot distinguish them, so this flag carries the missing bit. Mirrors
+    /// `MenstrualNarrativeRepository.hasEverStoredNarrative` exactly, including living in **standard
+    /// (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a real
+    /// reinstall clears it for free, while a delete-all on a live install leaves it SET so the wipe
+    /// cannot be undone by a stale cloud copy. Never cleared once set — a one-way latch.
+    ///
+    /// - Important: The key string is device-local state a shipped build already writes; changing it
+    ///   would silently reset every existing install's latch back to "never populated".
+    private static let everStoredDefaultsKey = "fernlet.journalNarrative.everStored"
+
+    /// Injected so tests get an isolated suite — the latch is process-global otherwise, and one test
+    /// writing a narrative would leak "this device has diverged" into every later test in the run.
+    private let defaults: UserDefaults
+
+    /// Reads the latch, BACKFILLING it from the row count first: installs whose journal rows predate the
+    /// latch (it ships later than the store) have rows but no defaults bit, and without the backfill an
+    /// upgrading user who then deleted their entries would read as "never populated" — re-opening the
+    /// resurrection this latch exists to close. A count error leaves the latch unread and un-backfilled
+    /// (return the raw bit): claiming divergence on an error would wrongly block a genuine reinstall's
+    /// restore forever, and the restore path's own no-clobber count check still refuses a populated store.
+    public var hasEverStoredNarrative: Bool {
+        if defaults.bool(forKey: Self.everStoredDefaultsKey) { return true }
+        guard let count = try? narrativeCount(), count > 0 else { return false }
+        markNarrativeStored()
+        return true
+    }
+
+    /// Sets the one-way divergence latch. Called by every mutation — deletes included — AFTER the
+    /// write actually commits, so a failed write never claims this device has diverged.
+    private func markNarrativeStored() {
+        defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
     /// Creates a repository on a private-store controller's view context.
     ///
-    /// - Parameter controller: The sealed store to use; `nil` (the default) means the shared
-    ///   on-device `PrivatePersistenceController`. Tests pass an in-memory controller.
-    public init(controller: PrivatePersistenceController? = nil) {
+    /// - Parameters:
+    ///   - controller: The sealed store to use; `nil` (the default) means the shared on-device
+    ///     `PrivatePersistenceController`. Tests pass an in-memory controller.
+    ///   - defaults: Suite holding the divergence latch; tests inject an isolated suite.
+    public init(controller: PrivatePersistenceController? = nil, defaults: UserDefaults = .standard) {
         self.context = (controller ?? .shared).container.viewContext
+        self.defaults = defaults
     }
 
     /// Creates a repository directly on an arbitrary managed-object context (test seam).
-    public init(context: NSManagedObjectContext) {
+    ///
+    /// - Parameters:
+    ///   - context: The managed-object context every operation is funneled through.
+    ///   - defaults: Suite holding the divergence latch; tests inject an isolated suite.
+    public init(context: NSManagedObjectContext, defaults: UserDefaults = .standard) {
         self.context = context
+        self.defaults = defaults
     }
 
     /// Seals `narrative` into the store — an upsert: an existing row with the same `id` is
@@ -148,6 +207,43 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
             // Prune history after an upsert so a re-sealed (edited) row leaves no prior ciphertext in
             // the transaction log. Best-effort — a prune failure must not undo the write that succeeded.
             try? PrivatePersistentHistoryPruner.prune(context: context)
+            // Latch AFTER a successful save, so a failed write never claims this device has diverged.
+            markNarrativeStored()
+        }
+    }
+
+    /// Inserts many narratives in a SINGLE transaction: either all commit or none do. Used by the
+    /// sealed-backup RESTORE so a mid-batch failure cannot leave a partially-populated store — a partial
+    /// store would trip the restore no-clobber gate (`narrativeCount() != 0`) on the next launch and
+    /// never retry, silently dropping the un-inserted sealed records.
+    ///
+    /// Deliberately a PLAIN insert, not ``insert(_:contentKey:)``'s upsert: the caller has already
+    /// proven the store is empty, so the per-row existence fetch would be pure cost, and an upsert would
+    /// quietly overwrite a row this gate says cannot exist rather than surfacing the contradiction.
+    ///
+    /// - Important: Throws `FernletLockError.locked` when `contentKey` is `nil`. On any per-record
+    ///   failure the whole batch is rolled back and the error rethrown, leaving the store empty so the
+    ///   next launch re-pulls the full backup.
+    public func insertAtomically(_ narratives: [JournalNarrative], contentKey: SymmetricKey?) throws {
+        guard let contentKey else { throw FernletLockError.locked }
+        guard !narratives.isEmpty else { return }
+        try context.performAndWait {
+            do {
+                for narrative in narratives {
+                    let object = NSEntityDescription.insertNewObject(forEntityName: "JournalNarrative", into: context)
+                    try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
+                }
+                try context.saveSealed()
+            } catch {
+                context.rollback()
+                throw error
+            }
+            // Prune history after the atomic restore so no per-record transaction lingers in the
+            // persistent-history transaction log (best-effort).
+            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // Latch AFTER the transaction commits. A restore that populates the store also counts as
+            // "this device has journal narratives", so a later delete-everything cannot re-pull them.
+            markNarrativeStored()
         }
     }
 
@@ -171,18 +267,28 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
             }
             // Prune history so the prior ciphertext for this row is not retained (best-effort).
             try? PrivatePersistentHistoryPruner.prune(context: context)
+            // An update proves a row existed — latch even when the ORIGINAL insert predates the latch
+            // (an upgrading install), so a later empty store still reads as "diverged", not "fresh".
+            markNarrativeStored()
         }
     }
 
     /// Deletes the row with `id` without decrypting it — no content key needed, so deletion
     /// stays available while the app is locked. The history prune here rethrows (not best-effort):
     /// a delete's promise includes removing the ciphertext from the transaction log.
+    ///
+    /// Sets the divergence latch when a row was actually removed: the deletion itself is the proof this
+    /// device diverged from the cloud snapshot (the sealed backup is NOT reconciled by deletes), so
+    /// without it, deleting the last entry would leave an empty, unlatched store that a later restore
+    /// would happily re-populate from the stale cloud copy.
     public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = request(id: id)
-            try context.fetch(request).forEach(context.delete)
+            let rows = try context.fetch(request)
+            rows.forEach(context.delete)
             try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
+            if !rows.isEmpty { markNarrativeStored() }
         }
     }
 
@@ -191,8 +297,52 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
     /// `PrivateRowPlumbing.deleteRows` sequence (fetch → delete → save → rethrowing history prune), like
     /// every sealed repository's `deleteAll()`. Not part of ``JournalNarrativeStoring``: the app's
     /// delete-all-data hook constructs the concrete repository to call it.
+    ///
+    /// Sets the divergence latch iff rows were actually removed — same reasoning as ``delete(id:)``,
+    /// and what keeps "delete everything" from being undone by a stale cloud backup that survived a
+    /// failed chunk delete.
     public func deleteAll() throws {
-        try PrivateRowPlumbing.deleteRows(entityName: "JournalNarrative", in: context)
+        if try PrivateRowPlumbing.deleteRows(entityName: "JournalNarrative", in: context) {
+            markNarrativeStored()
+        }
+    }
+
+    /// Total number of stored journal narratives, counted without decrypting (or even faulting in) any
+    /// rows. Lets the sealed-backup export size its chunks up front, and lets the restore's no-clobber
+    /// gate run without a content key.
+    public func narrativeCount() throws -> Int {
+        try context.performAndWait {
+            try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative"))
+        }
+    }
+
+    /// A single page of narratives, decrypted, in a stable TOTAL order (`entryDate`, then the unique
+    /// `id` tiebreaker). Backs the chunked sealed-backup export: paging by `offset`/`limit` keeps each
+    /// chunk bounded regardless of how long the journal is, instead of loading every entry into memory
+    /// before sealing.
+    ///
+    /// The `id` tiebreaker is what makes the order *total* — two entries written in the same second
+    /// (or migrated with an identical `entryDate`) would otherwise sort non-deterministically, and
+    /// successive pages could overlap or skip rows. Returns `[]` without a key; rows that fail to
+    /// decrypt are skipped rather than failing the page.
+    public func narratives(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [JournalNarrative] {
+        guard let contentKey, limit > 0 else { return [] }
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "entryDate", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchOffset = max(0, offset)
+            request.fetchLimit = limit
+            return try context.fetch(request).compactMap { object in
+                do {
+                    return try decrypt(object, contentKey: contentKey)
+                } catch {
+                    return nil
+                }
+            }
+        }
     }
 
     /// All decryptable narratives for `dayKey`, ascending by `entryDate`.

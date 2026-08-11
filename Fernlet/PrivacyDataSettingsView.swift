@@ -115,6 +115,10 @@ struct PrivacyDataSettingsView: View {
     @State private var didSeedUITestPreferences = false
     @State private var showTrainerShare = false
     @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
+    /// Payloads whose "turn the backup off" CloudKit delete FAILED. Their preference is deliberately
+    /// left ON (so the orphaned CKRecords stay targetable by a retry or by delete-all) and the status
+    /// banner says so, instead of the failure being swallowed by an off-looking toggle.
+    @State private var sealedBackupDisableFailures: Set<SealedBackupPayloadType> = []
     /// Drives the shared destructive-confirmation alert. Any OFF/destructive toggle assigns to this
     /// instead of mutating directly, so the warning (and only-on-confirm mutation) is guaranteed (WS-5).
     @State private var pendingDestructiveAction: DestructiveConfirmation?
@@ -458,6 +462,23 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+
+            Toggle("Sealed backup for journal entries", isOn: sealedJournalBinding)
+                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+
+            // Withheld while intimacy tracking is hidden, for exactly the reason the period toggle is:
+            // the reconcile honors the hard visibility gate by SKIPPING (disabling the pref would delete
+            // the iCloud backup, making "hide" destructive), and that skip is silent — so a live toggle
+            // here would promise an upload that never happens.
+            if store?.isIntimacyTrackingVisible ?? true {
+                Toggle("Sealed backup for intimate logs", isOn: sealedIntimacyBinding)
+                    .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+            } else {
+                Text("Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
@@ -520,9 +541,21 @@ struct PrivacyDataSettingsView: View {
                     guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
                     return SealedBackupAttention(payload: payload, outcome: outcome)
                 }
-            if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred || !attentionItems.isEmpty {
+            if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
+                || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Encrypted backup status")
+
+                    // A failed disable-delete. The pref stayed ON deliberately (see applySealedBackup),
+                    // so the remedy is the toggle the user already has — say so rather than leaving an
+                    // off-looking switch and a live backup.
+                    ForEach(SealedBackupPayloadType.allCases.filter(sealedBackupDisableFailures.contains), id: \.self) { payload in
+                        Text("Couldn't delete your encrypted \(payload.displayNoun) backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.disableFailed")
+                    }
 
                     if store.sealedBackupPeriodReuploadDeferred {
                         // Two states share the flag: period still hidden (the un-hide is the remedy — and
@@ -592,7 +625,7 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, payload: SealedBackupPayloadType) -> String {
-        let noun = payload == .periodData ? "period" : "private notes"
+        let noun = payload.displayNoun
         switch outcome {
         case .deferredKeyNotSynced:
             return "Couldn't restore your \(noun) backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
@@ -929,10 +962,24 @@ struct PrivacyDataSettingsView: View {
         )
     }
 
+    private var sealedJournalBinding: Binding<Bool> {
+        Binding(
+            get: { storagePreferencesStore.preferences.sealedBackupJournalEnabled },
+            set: { newValue in handleSealedBackupToggle(.journalNarratives, enabled: newValue) }
+        )
+    }
+
+    private var sealedIntimacyBinding: Binding<Bool> {
+        Binding(
+            get: { storagePreferencesStore.preferences.sealedBackupIntimacyEnabled },
+            set: { newValue in handleSealedBackupToggle(.intimacyLogs, enabled: newValue) }
+        )
+    }
+
     private func handleSealedBackupToggle(_ payload: SealedBackupPayloadType, enabled: Bool) {
         FernletAuditLog.log(
-            payload == .periodData ? "privacy.sealedBackup.periodChanged" : "privacy.sealedBackup.sensitiveNotesChanged",
-            context: ["enabled": enabled ? "true" : "false"]
+            "privacy.sealedBackup.changed",
+            context: ["payload": payload.rawValue, "enabled": enabled ? "true" : "false"]
         )
         if enabled {
             // Require explicit, informed confirmation before any data leaves the device.
@@ -940,15 +987,13 @@ struct PrivacyDataSettingsView: View {
         } else {
             // Turning a sealed backup OFF permanently deletes that encrypted backup from iCloud — a
             // destructive, irreversible action that must be confirmed first (WS-5).
-            let noun = payload == .periodData ? "period" : "sensitive-notes"
+            let noun = payload.displayNoun
             pendingDestructiveAction = DestructiveConfirmation(
                 title: "Turn off encrypted \(noun) backup?",
                 message: "This permanently deletes your encrypted \(noun) backup from iCloud. "
                     + "If you lose or replace this device, that data can't be recovered. Turn off anyway?",
                 confirmLabel: "Turn off",
-                auditEvent: payload == .periodData
-                    ? "privacy.sealedBackup.periodDisableConfirmed"
-                    : "privacy.sealedBackup.sensitiveNotesDisableConfirmed"
+                auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)"
             ) {
                 applySealedBackup(payload, enabled: false)
             }
@@ -965,10 +1010,25 @@ struct PrivacyDataSettingsView: View {
             let ok = await store.setSealedBackupEnabled(enabled, payloadType: payload)
             await MainActor.run {
                 if enabled {
-                    if ok { setSealedBackupPreference(payload, true) }
-                } else {
-                    // Honor the user's "off" intent regardless of the delete outcome.
+                    if ok {
+                        setSealedBackupPreference(payload, true)
+                        sealedBackupDisableFailures.remove(payload)
+                    }
+                } else if ok {
                     setSealedBackupPreference(payload, false)
+                    sealedBackupDisableFailures.remove(payload)
+                } else {
+                    // The CloudKit delete FAILED. Clearing the pref here would "honor the off intent"
+                    // by making the surviving CKRecords unreachable: `hasSealedBackup` reads false, so
+                    // neither delete-all nor a re-toggle would ever target them again, and the backup
+                    // outlives the user's decision to remove it. Keep the pref ON — mirroring
+                    // delete-all's `keepSealedBackupFlags` — and surface the failure non-silently so
+                    // the retry (toggling off again) still has something to point at.
+                    sealedBackupDisableFailures.insert(payload)
+                    FernletAuditLog.log(
+                        "privacy.sealedBackup.disableFailed",
+                        context: ["payload": payload.rawValue]
+                    )
                 }
             }
         }
@@ -979,6 +1039,8 @@ struct PrivacyDataSettingsView: View {
             switch payload {
             case .periodData: $0.sealedBackupPeriodEnabled = value
             case .sensitiveNotes: $0.sealedBackupSensitiveNotesEnabled = value
+            case .journalNarratives: $0.sealedBackupJournalEnabled = value
+            case .intimacyLogs: $0.sealedBackupIntimacyEnabled = value
             }
         }
     }
@@ -989,8 +1051,15 @@ struct PrivacyDataSettingsView: View {
             "Apple can't read it.",
             "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device."
         ]
-        if payload == .periodData {
+        switch payload {
+        case .periodData:
             lines.append("Period data is sensitive; it is uploaded only in this encrypted form.")
+        case .intimacyLogs:
+            lines.append("Intimate logs are sensitive; they are uploaded only in this encrypted form.")
+        case .journalNarratives:
+            lines.append("Your journal text is uploaded only in this encrypted form.")
+        case .sensitiveNotes, nil:
+            break
         }
         return lines.joined(separator: "\n\n")
     }

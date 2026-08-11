@@ -2567,12 +2567,16 @@ final class FernletStore {
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
+        journalRepository: JournalNarrativeRepository? = nil,
+        intimacyStore: IntimacyLogStore? = nil,
         scope: SealedBackupCoordinator.RestoreScope = .freshInstall
     ) throws -> Int {
         try sealedBackupCoordinator.applyRestoredPayload(
             plaintext,
             payloadType: payloadType,
             narrativeRepository: narrativeRepository,
+            journalRepository: journalRepository,
+            intimacyStore: intimacyStore,
             scope: scope
         )
     }
@@ -2583,9 +2587,17 @@ final class FernletStore {
     func applyRestoredChunks(
         _ chunks: [Data],
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        journalRepository: JournalNarrativeRepository? = nil,
+        intimacyStore: IntimacyLogStore? = nil
     ) throws -> Int {
-        try sealedBackupCoordinator.applyRestoredChunks(chunks, payloadType: payloadType, narrativeRepository: narrativeRepository)
+        try sealedBackupCoordinator.applyRestoredChunks(
+            chunks,
+            payloadType: payloadType,
+            narrativeRepository: narrativeRepository,
+            journalRepository: journalRepository,
+            intimacyStore: intimacyStore
+        )
     }
 
     func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
@@ -3936,6 +3948,8 @@ final class FernletStore {
         switch payloadType {
         case .sensitiveNotes: return preferences.sealedBackupSensitiveNotesEnabled
         case .periodData: return preferences.sealedBackupPeriodEnabled
+        case .journalNarratives: return preferences.sealedBackupJournalEnabled
+        case .intimacyLogs: return preferences.sealedBackupIntimacyEnabled
         }
     }
 
@@ -4859,6 +4873,38 @@ extension FernletStore: SealedBackupContext {
     func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool) {
         sealedBackupPeriodReuploadDeferred = deferred
         sealedBackupDeferralPersistHook?(deferred)
+    }
+
+    /// Rebuilds day-blob journal skeletons for restored journal narratives (P3 journal
+    /// self-sufficiency). See `SealedBackupContext.reinstateJournalEntries(from:)` for why this exists.
+    ///
+    /// The skeleton is written with **empty text and no emotions** on purpose. Both are sealed columns;
+    /// writing the decrypted values into the day blob would put journal content back into the very
+    /// (iCloud-mirrored) blob the sealing exists to keep it out of. What the blob is allowed to hold —
+    /// and all the UI needs to render the entry — is the id, tag, and date; the text and emotion chips
+    /// are then hydrated by id from the sealed store, exactly as they are after every lock/unlock cycle
+    /// (`JournalSealingCoordinator.refreshSealedJournals` / `hydratingDecryptedJournals`).
+    ///
+    /// Existing ids are never touched, so a restore that races a partially-present day cannot duplicate
+    /// or overwrite an entry. Entries are kept in date order to match how the diary renders them.
+    func reinstateJournalEntries(from narratives: [JournalNarrative]) {
+        guard !narratives.isEmpty else { return }
+        for (dayKey, rows) in Dictionary(grouping: narratives, by: \.dayKey) {
+            diary.mutateDay(date: dayKey) { day in
+                var known = Set(day.journals.map(\.id))
+                for row in rows where !known.contains(row.id) {
+                    day.journals.append(
+                        JournalEntry(id: row.id, text: "", tag: row.tag, date: row.entryDate, emotions: [])
+                    )
+                    known.insert(row.id)
+                }
+                day.journals.sort { $0.date < $1.date }
+            }
+        }
+        scheduleSnapshotSave()
+        // Hydrate the text back in by id (today + the previousJournals window). Older days hydrate
+        // lazily on read via `loadDayWithDecryptedJournals`, so nothing is lost for them either.
+        journalSealingCoordinator.refreshAfterSnapshotApply()
     }
 }
 

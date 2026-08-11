@@ -24,6 +24,8 @@ struct StoragePreferencesTests {
             ],
             sealedBackupSensitiveNotesEnabled: true,
             sealedBackupPeriodEnabled: true,
+            sealedBackupJournalEnabled: true,
+            sealedBackupIntimacyEnabled: true,
             sealedBackupPeriodReuploadDeferred: true,
             lastModifiedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
@@ -59,6 +61,35 @@ struct StoragePreferencesTests {
         // Same tolerance for the (newer still) period re-upload deferral: absent key → default false,
         // everything else preserved.
         #expect(decoded.sealedBackupPeriodReuploadDeferred == false)
+        // …and for the Phase-3 journal/intimacy backup flags. A non-tolerant decode of these would
+        // throw on EVERY existing user's blob, resetting their iCloud and backup choices on upgrade —
+        // and a reset `sealedBackup*` flag makes "delete everything" skip a backup it should erase.
+        #expect(decoded.sealedBackupJournalEnabled == false)
+        #expect(decoded.sealedBackupIntimacyEnabled == false)
+        // The user's real, still-enabled backups keep `hasSealedBackup` true, so the delete dialog
+        // still promises (and performs) the iCloud removal.
+        #expect(decoded.hasSealedBackup)
+    }
+
+    /// `hasSealedBackup` is what the delete dialog reads to decide whether it may truthfully claim to
+    /// remove an iCloud copy, and what gates the wipe's per-payload delete loop. A payload missing from
+    /// that expression is a backup "delete everything" would silently leave behind — so each flag is
+    /// asserted to be individually sufficient.
+    @Test func everySealedBackupFlagIndependentlyMakesHasSealedBackupTrue() {
+        #expect(StoragePreferences().hasSealedBackup == false)
+
+        let flags: [(String, (inout StoragePreferences) -> Void)] = [
+            ("sensitiveNotes", { $0.sealedBackupSensitiveNotesEnabled = true }),
+            ("periodData", { $0.sealedBackupPeriodEnabled = true }),
+            ("journalNarratives", { $0.sealedBackupJournalEnabled = true }),
+            ("intimacyLogs", { $0.sealedBackupIntimacyEnabled = true })
+        ]
+        for (name, enable) in flags {
+            var preferences = StoragePreferences()
+            enable(&preferences)
+            #expect(preferences.hasSealedBackup, "\(name) is not OR'd into hasSealedBackup")
+            #expect(preferences.hasAnyCloudCopy, "\(name) is not reflected in hasAnyCloudCopy")
+        }
     }
 
     @Test func defaultValuesMatchStorageSpec() {
@@ -72,7 +103,10 @@ struct StoragePreferencesTests {
         #expect(preferences.healthKitCapabilityEnabled == StoragePreferences.defaultHealthKitCapabilityEnabled)
         #expect(preferences.sealedBackupSensitiveNotesEnabled == false)
         #expect(preferences.sealedBackupPeriodEnabled == false)
+        #expect(preferences.sealedBackupJournalEnabled == false)
+        #expect(preferences.sealedBackupIntimacyEnabled == false)
         #expect(preferences.sealedBackupPeriodReuploadDeferred == false)
+        #expect(preferences.hasSealedBackup == false)
         #expect(preferences.healthKitCapabilityEnabled.values.allSatisfy { $0 == false })
     }
 

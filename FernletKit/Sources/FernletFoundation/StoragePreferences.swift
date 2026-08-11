@@ -34,6 +34,18 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var sealedBackupSensitiveNotesEnabled: Bool
     /// Whether the sealed (encrypted) backup of period/intimacy data is uploaded to iCloud.
     public var sealedBackupPeriodEnabled: Bool
+    /// Whether the sealed (encrypted) backup of JOURNAL narratives is uploaded to iCloud.
+    ///
+    /// Its own toggle rather than a rider on ``sealedBackupSensitiveNotesEnabled``: that payload is the
+    /// Tier-2 behavioral memories, which are derived summaries, while this is the user's own journal
+    /// text — a different consent question, and the per-type opt-in is the promise the Privacy & Data
+    /// screen makes.
+    public var sealedBackupJournalEnabled: Bool
+    /// Whether the sealed (encrypted) backup of INTIMACY logs is uploaded to iCloud.
+    ///
+    /// Separate from ``sealedBackupPeriodEnabled`` for the same reason the surfaces are separately
+    /// hideable: someone may want their cycle history recoverable and their intimacy notes not.
+    public var sealedBackupIntimacyEnabled: Bool
     /// Set when the sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key —
     /// the escrow adopt (or a re-seal) ran while period tracking was hidden, so the cloud chunk is
     /// still sealed to the replaced key. Persisted (not session-only) so the promised remedy —
@@ -62,6 +74,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         healthKitCapabilityEnabled: [String: Bool] = StoragePreferences.defaultHealthKitCapabilityEnabled,
         sealedBackupSensitiveNotesEnabled: Bool = false,
         sealedBackupPeriodEnabled: Bool = false,
+        sealedBackupJournalEnabled: Bool = false,
+        sealedBackupIntimacyEnabled: Bool = false,
         sealedBackupPeriodReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
         lastModifiedAt: Date = Date()
@@ -72,6 +86,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.healthKitCapabilityEnabled = healthKitCapabilityEnabled
         self.sealedBackupSensitiveNotesEnabled = sealedBackupSensitiveNotesEnabled
         self.sealedBackupPeriodEnabled = sealedBackupPeriodEnabled
+        self.sealedBackupJournalEnabled = sealedBackupJournalEnabled
+        self.sealedBackupIntimacyEnabled = sealedBackupIntimacyEnabled
         self.sealedBackupPeriodReuploadDeferred = sealedBackupPeriodReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
         self.lastModifiedAt = lastModifiedAt
@@ -94,6 +110,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
             ?? StoragePreferences.defaultHealthKitCapabilityEnabled
         sealedBackupSensitiveNotesEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupSensitiveNotesEnabled) ?? false
         sealedBackupPeriodEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodEnabled) ?? false
+        sealedBackupJournalEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalEnabled) ?? false
+        sealedBackupIntimacyEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyEnabled) ?? false
         sealedBackupPeriodReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
         lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
@@ -118,8 +136,15 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     }
 
     /// Whether a sealed (encrypted) backup of the sensitive stores may be sitting in iCloud.
+    ///
+    /// - Important: EVERY sealed-backup payload flag must be OR'd in here. This is what the delete
+    ///   dialog reads to decide whether it may truthfully claim to remove an iCloud copy; a payload
+    ///   missing from this expression is a backup "delete everything" would leave behind.
     public var hasSealedBackup: Bool {
-        sealedBackupSensitiveNotesEnabled || sealedBackupPeriodEnabled
+        sealedBackupSensitiveNotesEnabled
+            || sealedBackupPeriodEnabled
+            || sealedBackupJournalEnabled
+            || sealedBackupIntimacyEnabled
     }
 
     /// Default per-capability map: every HealthKit capability disabled.

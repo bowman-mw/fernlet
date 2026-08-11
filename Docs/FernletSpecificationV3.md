@@ -822,7 +822,7 @@ iCloud Keychain:
 
 CloudKit private database (opt-in, default on for core data):
 - Core device data: meals, workouts, journal entries, hydration, hygiene, sleep records, scoring snapshots, settings, derived signals, core memories. Synced to the user's CloudKit private database. Apple sees this data in its standard CloudKit privacy model.
-- Encrypted sealed backup (separate opt-in, default off): sealed store types (sensitive memory, period data) encrypted client-side with AES-GCM before upload. Apple sees only ciphertext. See Section 19 for architecture.
+- Encrypted sealed backup (separate opt-in per type, default off): sealed store types (sensitive memory, period data, journal narratives, intimacy logs — the last two added 2026-08-10, reversing the earlier "intimacy not in backup" call; Worry Box stays out by design) encrypted client-side with AES-GCM before upload. Apple sees only ciphertext. See Section 19 for architecture.
 - Period data encrypted backup is a hard opt-in with a dedicated warning modal explaining that period data will leave the device in encrypted form, and that losing iCloud Keychain access on all devices makes this data permanently unrecoverable. Default off.
 - Sensitive memory encrypted backup: opt-in, default off. Same key derivation and unrecoverability disclosure.
 - Photos: never uploaded to CloudKit. Included in standard iCloud device backup through the app container only.
@@ -920,7 +920,13 @@ This asymmetry is intentional: iCloud deletion is about removing the cloud copy,
 
 ### Encrypted Sealed Backup
 
-The encrypted sealed backup path covers Sensitive Memory and period data. Each is controlled by a separate opt-in toggle in Settings → Privacy → Backup.
+The encrypted sealed backup path covers Sensitive Memory, period data, **journal narratives**, and **intimacy logs**. Each is controlled by a separate opt-in toggle in Settings → Privacy → Backup.
+
+> **Decision reversed 2026-08-10 (owner-locked, security-hardening Phase 3):** intimacy logs — previously **excluded** from every sealed-backup payload — are now a first-class payload type (`intimacyLogs`), alongside the newly added `journalNarratives`. The reason the earlier call is overturned: hard-binding the lock content key to the Secure Enclave (Verifiability §6.1) makes any sealed type *outside* the backup unrecoverable after a device reset, so "not in the backup" stopped meaning "less exposed" and started meaning "destroyed". Both new payloads are opt-in, off by default, launched directly on record format v2, and gated exactly like period data — the intimacy toggle is withheld while intimacy tracking is hidden, and the reconcile is a silent no-op (never a pref flip) if the surface is hidden, so hiding is never destructive.
+>
+> **The Worry Box stays OUT, by design.** "Let it go" notes are deliberately device-only: they are not mirrored into the synced blob and are not part of any backup payload, so they die on a device reset. That is the accepted property, not an oversight.
+>
+> **No-lock installs are not covered.** The backup pages the lock content key; with no lock configured, journal (and Worry) rows are sealed under a device-bound Keychain key the backup coordinator deliberately cannot see, so those users cannot enable journal/period/intimacy sealed backup at all.
 
 Encryption model:
 - Derive a 256-bit symmetric key from the user's X25519 private key using HKDF-SHA256, info label `com.fernlet.sealed-backup`.
@@ -929,9 +935,9 @@ Encryption model:
 - Apple sees only ciphertext. The decryption key never leaves the device except via iCloud Keychain sync.
 
 Opt-in UX:
-- Each sealed type (Sensitive Memory, period data) has its own toggle.
+- Each sealed type (Sensitive Memory, period data, journal narratives, intimacy logs) has its own toggle.
 - Enabling either toggle presents a modal with three pieces of information: (1) the data will leave the device encrypted, (2) Apple cannot read it, (3) if iCloud Keychain is permanently lost, the data cannot be recovered on a new device. The user must tap a confirm button, not just dismiss.
-- Period data toggle is a hard opt-in with additional context about the political sensitivity of period data leaving a device in any form, even encrypted.
+- Period data toggle is a hard opt-in with additional context about the political sensitivity of period data leaving a device in any form, even encrypted. The intimacy toggle carries the equivalent sensitivity line, and the journal toggle states that journal text is uploaded only in encrypted form.
 
 Key recovery:
 - Primary recovery path: iCloud Keychain sync carries the X25519 private key to new devices automatically.
