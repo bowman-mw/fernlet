@@ -21,7 +21,11 @@ import FernletLockUI
 
 @MainActor
 private func freshService() -> FernletLockService {
-    let service = FernletLockService(keychainService: "com.fernlet.lock.test.\(UUID().uuidString)")
+    let service = FernletLockService(
+        keychainService: "com.fernlet.lock.test.\(UUID().uuidString)",
+        // reset() sweeps the sealed-content device keys too; keep that off the real service.
+        sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+    )
     try? service.reset()      // Clear any leftover Keychain state
     return service
 }
@@ -203,7 +207,10 @@ struct FernletLockTests {
         }
         #expect(serviceA.currentAttemptCount == 2)
 
-        let serviceB = FernletLockService(keychainService: serviceA.keychainService)
+        let serviceB = FernletLockService(
+            keychainService: serviceA.keychainService,
+            sealedContentKeyServices: serviceA.sealedContentKeyServices
+        )
         #expect(serviceB.currentAttemptCount == 2)
 
         try? serviceB.reset()
@@ -232,7 +239,10 @@ struct FernletLockTests {
         #expect(service.currentAttemptCount == 0)
         #expect(!service.requiresReset)
 
-        let service2 = FernletLockService(keychainService: service.keychainService)
+        let service2 = FernletLockService(
+            keychainService: service.keychainService,
+            sealedContentKeyServices: service.sealedContentKeyServices
+        )
         #expect(service2.state == .notConfigured)
         #expect(KeychainItem.load(for: .cooldownMonotonicAnchor, service: service.keychainService) == nil)
         #expect(KeychainItem.load(for: .cooldownDurationSeconds, service: service.keychainService) == nil)

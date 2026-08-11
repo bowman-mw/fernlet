@@ -413,6 +413,50 @@ struct FernletLockServiceTests {
         #expect(firstVerifier != secondVerifier)
     }
 
+    /// `reset()` is documented — in `Docs/PrivacyWipeCoverage.md`, `PrivateStoreCore.md`, and its own
+    /// doc comment — as Fernlet's one FULLY honest erase: "crypto-erased", every surviving byte of
+    /// ciphertext instantly meaningless. That claim used to be false for half the sealed corpus.
+    /// Journal and Worry Box rows are sealed under the DEVICE fallback keys whenever no content key
+    /// exists (`JournalSealingCoordinator`, `WorryBoxService`), and those keys live under a different
+    /// keychain service that the single `deleteAll(service: keychainService)` sweep never touched —
+    /// so exactly the rows written while the lock was closed stayed openable against the file-system
+    /// residue the docs concede survives `destroyPersistentStore` (APFS COW / wear-levelling).
+    @Test func resetDestroysEverySealedContentKeyNotJustTheLockService() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+
+        _ = KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: harness.sealedContentKeyServiceID)
+        _ = KeychainItem.loadOrCreateSymmetricKey(for: .deviceWorryKey, service: harness.sealedContentKeyServiceID)
+        #expect(KeychainItem.load(for: .deviceJournalKey, service: harness.sealedContentKeyServiceID) != nil,
+                "precondition: the journal device key was never minted")
+        #expect(KeychainItem.load(for: .deviceWorryKey, service: harness.sealedContentKeyServiceID) != nil,
+                "precondition: the Worry Box device key was never minted")
+
+        try service.reset()
+
+        #expect(KeychainItem.load(for: .deviceJournalKey, service: harness.sealedContentKeyServiceID) == nil,
+                "reset() claims crypto-erasure, but the journal device key still opens the residue it left behind")
+        #expect(KeychainItem.load(for: .deviceWorryKey, service: harness.sealedContentKeyServiceID) == nil,
+                "reset() claims crypto-erasure, but the Worry Box device key still opens the residue it left behind")
+        #expect(allKeychainAttributes(service: harness.serviceID).isEmpty, "the lock service sweep regressed")
+    }
+
+    /// The sweep is INJECTED, not hardcoded, and that is a safety property rather than a style
+    /// choice: a `FernletLockService` built by any test (or a preview) calls the same `reset()`, and
+    /// with a hardcoded `KeychainItem.journalService` that reset would destroy the real device keys
+    /// of whatever simulator it runs in — silently making another test's sealed rows undecryptable.
+    @Test func theSealedContentKeySweepIsScopedToTheInjectedServices() {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+
+        #expect(harness.makeService().sealedContentKeyServices == [harness.sealedContentKeyServiceID])
+        // …and production still points at the real one, so the injection cannot silently disable it.
+        #expect(FernletLockService(keychainService: "com.fernlet.lock.test.default.\(UUID().uuidString)")
+            .sealedContentKeyServices == [KeychainItem.journalService])
+    }
+
     @Test func pin4Setup() async throws {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
@@ -646,6 +690,11 @@ struct FernletLockServiceTests {
 @MainActor
 final class LockTestHarness {
     let serviceID = "com.fernlet.lock.test.\(UUID().uuidString)"
+    /// The scoped stand-in for `KeychainItem.journalService`, which `reset()` now sweeps. Injected
+    /// for the same reason `serviceID` is: an unscoped harness would have every reset() in this
+    /// suite destroy the simulator's REAL journal/Worry Box device keys, taking any sealed rows
+    /// another test just wrote with them.
+    let sealedContentKeyServiceID = "com.fernlet.journal.test.\(UUID().uuidString)"
     let clock = FakeDateProvider(now: Date(timeIntervalSinceReferenceDate: 1_000_000))
     let uptime = MockUptimeProvider(systemUptime: 100_000)
     let crypto = FakeLockCryptoProvider()
@@ -656,6 +705,7 @@ final class LockTestHarness {
     ) -> FernletLockService {
         FernletLockService(
             keychainService: serviceID,
+            sealedContentKeyServices: [sealedContentKeyServiceID],
             dateProvider: clock,
             uptimeProvider: uptime,
             cryptoProvider: crypto,
@@ -666,6 +716,7 @@ final class LockTestHarness {
 
     func cleanup() {
         KeychainItem.deleteAll(service: serviceID)
+        KeychainItem.deleteAll(service: sealedContentKeyServiceID)
         try? PendingNarrativeBuffer().purge()
     }
 }

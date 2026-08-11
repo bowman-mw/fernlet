@@ -1831,6 +1831,9 @@ struct AppLockSettingsView: View {
     @State private var showSetup = false
     @State private var showChangePasscode = false
     @State private var showResetConfirm = false
+    /// Presents the nothing-silent alert when the reset destroyed the keys and the rows but could
+    /// not rebuild the sealed store file (it used to be swallowed by a `try?`).
+    @State private var showResetRebuildFailure = false
     @State private var showBiometricPasscodeVerify = false
     @State private var verifyCurrentPasscode = ""
     @State private var verifyError: String?
@@ -1872,12 +1875,26 @@ struct AppLockSettingsView: View {
             titleVisibility: .visible
         ) {
             Button("Reset app lock", role: .destructive) {
-                try? lockService.reset()
-                dismiss()
+                do {
+                    try lockService.reset()
+                    dismiss()
+                } catch {
+                    // Keys and rows are gone either way; the store FILE could not be re-created.
+                    // Stay on this screen and say so rather than dismissing on a promise the app
+                    // did not keep.
+                    print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
+                    FernletAuditLog.log("lock.reset.rebuild.failed")
+                    showResetRebuildFailure = true
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+        }
+        .alert("App lock reset", isPresented: $showResetRebuildFailure) {
+            Button("OK", role: .cancel) { dismiss() }
+        } message: {
+            Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
         }
     }
 

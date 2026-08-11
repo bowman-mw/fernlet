@@ -13,6 +13,7 @@ import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
 import PrivateMemoryStore
+import PrivateStoreCore
 import PeriodContextBridge
 import HealthKitGateway
 import FernletUI
@@ -725,6 +726,14 @@ struct ContentView: View {
         // service owns the buffer, so the store can only reach it through a hook.
         store.pendingNarrativeBufferPurgeHook = { [lockService] in
             (try? lockService.purgePendingNarratives()) != nil
+        }
+        // The residue half of the wipe: the row hooks above empty the sealed store, this destroys
+        // and re-creates the FILE they lived in so the freed pages and `-wal` frames go with it.
+        // Keyless like the row deletes (it never touches the content key), so it works while the
+        // app is locked. `.shared` because that is the one on-device sealed store every sealed
+        // repository above writes through.
+        store.sealedStoreRebuildHook = {
+            (try? PrivatePersistenceController.shared.rebuildStore()) != nil
         }
         store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
             await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()

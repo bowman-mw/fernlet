@@ -43,7 +43,11 @@ struct SecureEnclaveWrapTests {
     @MainActor
     @Test func lockServiceMaintainsAndRepairsTheWrapWithoutEverBlockingUnlock() async throws {
         let service = "com.fernlet.lock.test.se.svc.\(UUID().uuidString)"
-        let lockService = FernletLockService(keychainService: service)
+        let lockService = FernletLockService(
+            keychainService: service,
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
         defer {
             try? lockService.reset()
             SecureEnclaveContentKeyWrap.deleteKey(service: service)
@@ -82,7 +86,11 @@ struct SecureEnclaveWrapTests {
     @Test func resetRemovesTheEnclaveKey() async throws {
         guard SecureEnclaveContentKeyWrap.isAvailable else { return }
         let service = "com.fernlet.lock.test.se.reset.\(UUID().uuidString)"
-        let lockService = FernletLockService(keychainService: service)
+        let lockService = FernletLockService(
+            keychainService: service,
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
         try await lockService.configure(credential: .pin6("246802"), grantingScope: .privateHub)
         #expect(SecureEnclaveContentKeyWrap.loadKey(service: service) != nil)
         try lockService.reset()
@@ -106,7 +114,11 @@ struct SecureEnclaveWrapTests {
     @MainActor
     @Test func configureEstablishesTheWrapAndGrantsOnlyTheRequestedScope() async throws {
         let service = "com.fernlet.lock.test.se.configscope.\(UUID().uuidString)"
-        let lockService = FernletLockService(keychainService: service)
+        let lockService = FernletLockService(
+            keychainService: service,
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
         defer {
             try? lockService.reset()
             SecureEnclaveContentKeyWrap.deleteKey(service: service)
@@ -150,7 +162,11 @@ struct SecureEnclaveWrapTests {
     @MainActor
     @Test func unlockMaintainsTheWrapForEveryScopeButRetainsTheKeyOnlyForTheHub() async throws {
         let service = "com.fernlet.lock.test.se.unlockscope.\(UUID().uuidString)"
-        let lockService = FernletLockService(keychainService: service)
+        let lockService = FernletLockService(
+            keychainService: service,
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
         defer {
             try? lockService.reset()
             SecureEnclaveContentKeyWrap.deleteKey(service: service)

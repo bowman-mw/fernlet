@@ -676,6 +676,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// The keychain service namespace all ``LockKeychainKey`` items live under
     /// (`KeychainItem.productionService` by default; tests inject isolated services).
     public let keychainService: String
+    /// The keychain services holding the OTHER keys that seal rows in the same private store —
+    /// today the journal and Worry Box device fallback keys under `KeychainItem.journalService`.
+    /// ``reset()`` sweeps each of them, which is what makes its "crypto-erased" claim true for all
+    /// four sealed entities and not just the two that are always sealed under the content key.
+    /// Injected (like ``keychainService``) so a test's `reset()` cannot destroy the real device
+    /// keys of the simulator or the developer's machine.
+    public let sealedContentKeyServices: [String]
     @ObservationIgnored private let dateProvider: FernletDateProviding
     @ObservationIgnored private let uptimeProvider: FernletUptimeProviding
     @ObservationIgnored private let cryptoProvider: FernletLockCryptoProviding
@@ -701,6 +708,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// exists, otherwise `.locked` with any still-active cooldown deadline.
     public init(
         keychainService: String = KeychainItem.productionService,
+        sealedContentKeyServices: [String] = [KeychainItem.journalService],
         dateProvider: FernletDateProviding? = nil,
         uptimeProvider: FernletUptimeProviding? = nil,
         cryptoProvider: FernletLockCryptoProviding? = nil,
@@ -711,6 +719,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         privatePersistenceController: PrivatePersistenceController? = nil
     ) {
         self.keychainService = keychainService
+        self.sealedContentKeyServices = sealedContentKeyServices
         self.dateProvider = dateProvider ?? SystemFernletDateProvider()
         self.uptimeProvider = uptimeProvider ?? SystemFernletUptimeProvider()
         self.cryptoProvider = cryptoProvider ?? SystemFernletLockCryptoProvider()
@@ -1041,16 +1050,57 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// The destructive escape hatch: deletes every lock keychain item (including the
     /// Secure-Enclave key and its wrap), purges the pending-narrative buffer AND the sealed
-    /// encrypted CoreData entities, scrubs the content key, and returns to `.notConfigured` —
-    /// which by construction is no scope's unlock.
+    /// encrypted CoreData entities, rebuilds the sealed store file, scrubs the content key, and
+    /// returns to `.notConfigured` — which by construction is no scope's unlock.
+    ///
+    /// This is Fernlet's one FULLY honest erase, and the seam the Phase-7 duress WIPE reuses:
+    /// EVERY key that seals a byte in the private store is destroyed, which makes every surviving
+    /// byte of ciphertext instantly meaningless, AND the store file is destroyed and re-created,
+    /// which removes the logical `-wal`/freelist residue the row purge leaves behind. "Every key"
+    /// is three sweeps, and it takes all three to earn the claim:
+    /// - `KeychainItem.deleteAll(service:)` over ``keychainService`` — every generic password under
+    ///   the lock service, the wrapped content key among them;
+    /// - `SecureEnclaveContentKeyWrap.deleteKey` — the SE wrap, a `kSecClassKey` item outside that
+    ///   generic-password sweep;
+    /// - `KeychainItem.deleteAll(service:)` over each of ``sealedContentKeyServices`` — the journal
+    ///   and Worry Box **device fallback keys**, which seal those two entities' rows whenever no
+    ///   content key exists (`JournalSealingCoordinator`, `WorryBoxService`). Without this sweep
+    ///   "crypto-erased" would be false for exactly the rows written while the lock was closed.
+    ///
+    /// The "delete everything" funnel gets only the file half — the app-lock keychain is a
+    /// documented survivor there — so its honest claim is weaker (see
+    /// `PrivatePersistenceController.rebuildStore()`). One asymmetry stays flagged rather than
+    /// fixed here: the locked-note buffer key (`com.fernlet.narrative-buffer`) is not swept, and
+    /// removing it is a tracked owner call.
+    ///
+    /// Ordering: rows first, then the rebuild, so a rebuild failure still leaves the rows deleted.
+    /// A rebuild failure is rethrown, but only AFTER the in-memory state has been returned to
+    /// `.notConfigured` — the keychain rows are already gone by then, so bailing early would leave
+    /// the service claiming an unlock it can no longer honor.
     ///
     /// - Important: Sealed content is unrecoverable afterward — the content key is gone.
     public func reset() throws {
         KeychainItem.deleteAll(service: keychainService)
         // The Secure Enclave key is a kSecClassKey item outside the generic-password sweep above.
         SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        // The journal / Worry Box device fallback keys seal rows in the store this method is about
+        // to purge whenever no content key exists, so leaving them alive would leave the residue
+        // this method claims to have crypto-erased openable. Destroyed BEFORE the purge/rebuild, so
+        // the claim holds even if a later step throws; they regenerate lazily on next use (the same
+        // reasoning `FernletStore.deleteAllData` applies when it deletes the same two keys).
+        for service in sealedContentKeyServices {
+            KeychainItem.deleteAll(service: service)
+        }
         try buffer.purge()
         try privatePersistenceController.purgeEncryptedEntities()
+        // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
+        // locked deletion path, and this one has just destroyed the key anyway.
+        var rebuildError: (any Error)?
+        do {
+            try privatePersistenceController.rebuildStore()
+        } catch {
+            rebuildError = error
+        }
         scrubContentKey()
         state = .notConfigured
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -1059,6 +1109,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // configure) must re-earn the biometric offer (PIN-before-biometrics).
         passcodeUnlockedThisProcess = false
         FernletAuditLog.log("lock.reset")
+        // Nothing-silent: the rows are gone, but the file they lived in could not be rebuilt, so
+        // the caller must be able to say so rather than promise a clean store.
+        if let rebuildError { throw rebuildError }
     }
 
     /// Enables or disables biometric unlock.

@@ -16,6 +16,14 @@ import Foundation
 /// destructive lock-reset wipe batches all four entities under a SINGLE save so the wipe is
 /// atomic across entities — per-entity adoption of this helper would permit a partial wipe.
 ///
+/// Honest limit: a row-delete + history prune removes the rows and the transaction log, but does
+/// not checkpoint the WAL or vacuum the freelist, so the prior ciphertext can linger in `-wal`
+/// frames and freed pages until they are reused — class-key-protected and key-bound, but present.
+/// The bulk-wipe callers (the "delete everything" funnel and `FernletLockService.reset()`) follow
+/// their `deleteAll()`s with `PrivatePersistenceController.rebuildStore()`, which destroys the file
+/// that residue is in. A single-row delete does not, by design: rebuilding the whole store to
+/// retire one journal entry would be a wildly disproportionate write.
+///
 /// A caseless enum used purely as a namespace.
 public enum PrivateRowPlumbing {
     /// Fetches the matching rows, deletes them, saves, and prunes the persistent history —
@@ -49,7 +57,7 @@ public enum PrivateRowPlumbing {
             let rows = try context.fetch(request)
             guard !rows.isEmpty else { return false }
             rows.forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
             return true
         }

@@ -7,7 +7,19 @@ verify green → commit → merge), updates the ledger below, and either advance
 - Plans (source of truth for each phase's design/steps/tests):
   [`Plan-Security-Hardening-OpusTrack-2026-08-10.md`](Plan-Security-Hardening-OpusTrack-2026-08-10.md)
   and [`Plan-Security-Hardening-FableTrack-2026-08-10.md`](Plan-Security-Hardening-FableTrack-2026-08-10.md).
+  **P8 is the exception:** its spec is [`Design-Capture-Protection-2026-08-10.md`](Design-Capture-Protection-2026-08-10.md).
 - The **fixed global phase order** governs execution across both tracks; never reorder it.
+
+### P8 is queued here, not ranked here
+
+P8 (capture protection) was added to this ledger on 2026-08-10 at the owner's request so the loop
+builds it too. It is **a different class of work** from P0–P7 and the distinction must survive:
+P0–P7 move key custody, at-rest formats, and deletion semantics — mechanical guarantees with
+tripwire tests behind them. P8 draws rectangles over views. It is *friction* against casual
+self-sharing, never a security control, and it must never be described to users in the same register
+(see the brief's §1 and [`Verifiability.md`](Verifiability.md) §5). **This ledger is an execution
+queue, not a strength ranking.** P8 has no dependencies — it is last because it is lowest priority,
+not because anything blocks it.
 
 ## Phase ledger
 
@@ -27,6 +39,7 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
 | P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | TODO | |
 | P6 | Hardening #6 — default-on backup exclusion | Fable | P4 | auto | TODO | |
 | P7 | Duress PIN — decoy, silent-wipe, recovery-lock | Opus | P0a, P1a, P4 | auto | TODO | |
+| P8 | Capture protection — Tiers 1+2 on the Private tab | Fable | — | auto | TODO | Spec is [`Design-Capture-Protection-2026-08-10.md`](Design-Capture-Protection-2026-08-10.md), **not** a track doc. Different class of work — see §"P8 is queued here, not ranked here" below |
 
 ## Per-iteration protocol
 
@@ -38,11 +51,19 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
    **on the feature branch only**, then set the row `BLOCKED` with note `awaiting owner go/no-go —
    branch <name> is green+reviewed`, and stop the loop. Merge on a later invocation once approved.
 3. **Branch.** From current `main`: `git checkout -b claude/harden-<phaseid>`.
-4. **Implement (Workflow).** Read the phase's section in its track doc; implement its ordered steps
-   exactly. Pass `model: 'opus'` to implementer agents for **Opus-track** phases; default model for
-   **Fable-track** phases. Honor every same-commit obligation the section names (wall doc, DocC page,
-   custody-tripwire test, `PrivacyWipeCoverage.md` row). Every new type/member gets a `///` doc
-   comment. New files just drop into their synced folder — no pbxproj surgery.
+4. **Implement (Workflow).** Read the phase's section in its track doc (for **P8**, the whole
+   capture-protection brief); implement its ordered steps exactly. Pass `model: 'opus'` to
+   implementer agents for **Opus-track** phases; default model for **Fable-track** phases. Honor
+   every same-commit obligation the section names (wall doc, DocC page, custody-tripwire test,
+   `PrivacyWipeCoverage.md` row). Every new type/member gets a `///` doc comment. New files just drop
+   into their synced folder — no pbxproj surgery.
+   - **P8 only:** run the brief's §9 "two empirical checks" FIRST (does the `.background` lock already
+     paint before the OS snapshot; does `app.screenshot()` post the notification) — both change how
+     much machinery is warranted. Follow the brief's documented **leans** for its open sub-decisions
+     rather than stopping, EXCEPT the two scope calls (`lookingBackCard`, the First Aid worry
+     composer): if the owner has not recorded a decision on those in this ledger's note column, build
+     the six agreed Private-tab surfaces only and surface the two as a follow-up. Do not silently
+     widen scope onto the Home tab.
 5. **Review (Workflow).** Multi-dimension adversarial review of the branch diff `main..HEAD`
    (dimensions per phase: crypto/key-custody, data-loss/migration-reversibility, S3 + no-tracking
    walls, silent regressions). Dedup → verify each finding refute-by-default (`effort: 'high'`,

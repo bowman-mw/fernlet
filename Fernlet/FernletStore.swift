@@ -47,8 +47,10 @@ import AIContext
 ///   (`periodScrubHook`, `scrubHiddenHealthContext`), and the device-local resolution sidecar
 ///   protects the choice from mixed-version peers.
 /// - "Delete everything" (`deleteAllData`) is a single ordered funnel: writers stopped first,
-///   sealed rows dropped WITHOUT decrypting, every leg reported through ``DeleteAllOutcome`` —
-///   an unwired hook counts as failure, never success.
+///   sealed rows dropped WITHOUT decrypting, then the sealed store FILE destroyed and re-created
+///   (`sealedStoreRebuildHook`, keyless) so the row-delete's `-wal`/freelist residue goes too;
+///   every leg reported through ``DeleteAllOutcome`` — an unwired row hook counts as failure,
+///   never success.
 /// - AI call sites route through `aiGate` (rebuilt per read); the concrete provider type is
 ///   named only in ``FernletAIComposition`` so this file stays off the S3 grep-wall's AI list.
 ///
@@ -3877,6 +3879,28 @@ final class FernletStore {
     /// so without this, replacing `reset()` with the row hooks SILENTLY DROPPED the buffer purge, and a
     /// note written while locked would be re-inserted into the emptied store on the next unlock.
     @ObservationIgnored var pendingNarrativeBufferPurgeHook: (() -> Bool)?
+    /// Destroys and re-creates the sealed `FernletPrivate` store FILE after the row hooks above have
+    /// emptied it — the physical half of the crypto-erasure baseline (Option B,
+    /// Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
+    ///
+    /// Row-delete is not erasure: SQLite frees the pages, the history prune clears the shadow
+    /// tables, and neither checkpoints the WAL or vacuums the freelist — so the just-deleted
+    /// ciphertext can linger in `-wal` frames and freed pages until they are reused. This hook
+    /// removes the file that residue lives in (and the `_SUPPORT` external-blob directory beside
+    /// it). Like the row hooks it is KEYLESS — no decrypt, no re-wrap — so it runs while the app is
+    /// locked, which is the primary delete path.
+    ///
+    /// Honest limits, because the confirm dialog's promises have to be true: in THIS funnel the
+    /// app-lock content key survives by design, so the claim is "no live ciphertext, and any
+    /// physical residue is class-key-protected and key-bound" — NOT "crypto-erased". The fully
+    /// honest erase is `FernletLockService.reset()` (Settings → Reset app lock, and the duress WIPE
+    /// built on the same seam), which destroys the key as well.
+    ///
+    /// Reported with `== false`, not the row hooks' `!= true`: a nil hook here means an unwired
+    /// TEST store, and unlike the row hooks the wipe is not incomplete without it — the rows are
+    /// already gone, this is the residue layer on top. Production wiring is enforced separately, by
+    /// the `ContentView` seam scan in `PrivacyWipeCoverageTests`.
+    @ObservationIgnored var sealedStoreRebuildHook: (() -> Bool)?
     /// Returns storage preferences to first-launch defaults. A hook because the preferences store is
     /// app-scoped, not owned by `FernletStore`.
     ///
@@ -4317,6 +4341,19 @@ final class FernletStore {
         // it too rather than leaving a wiped device still holding a verdict about its user. Both gates
         // return to fail-closed until the user verifies again.
         ageAssurance.clear()
+        // LAST, and after every sealed-row delete in BOTH wipe legs — the funnel's `periodData`/
+        // `intimacyData`/`journalData` hooks upstream and `worryBoxResetHook` just above. Deleting
+        // rows frees SQLite pages; it does not erase them, so the ciphertext can sit in `-wal`
+        // frames and the freelist until reused. This destroys and re-creates the sealed store file
+        // itself, taking that residue (and the `_SUPPORT` external-blob directory) with it.
+        //
+        // Row-delete first, rebuild second, deliberately: a rebuild that fails still leaves the
+        // rows gone, whereas rebuilding first would hand a failing purge an intact store to leave
+        // rows in. Keyless, like the row deletes — it must work while the app is locked.
+        //
+        // Placed in `resetAll()` rather than in `deleteAllData` so it runs ONCE per wipe and covers
+        // the standalone "Reset everything" too (same reasoning as `worryBoxResetHook`).
+        if sealedStoreRebuildHook?() == false { incompleteStores.append("your sealed store") }
         return incompleteStores
     }
 

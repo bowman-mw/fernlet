@@ -149,7 +149,7 @@ public nonisolated final class IntimacyLogRepository {
             request.fetchLimit = 1
             request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
             try context.fetch(request).forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
         }
     }

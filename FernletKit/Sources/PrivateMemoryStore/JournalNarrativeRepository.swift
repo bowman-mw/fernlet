@@ -140,7 +140,7 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
             }
             do {
                 try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-                try context.save()
+                try context.saveSealed()
             } catch {
                 if isNew { context.delete(object) } else { context.rollback() }
                 throw error
@@ -164,7 +164,7 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
             let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
             do {
                 try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-                try context.save()
+                try context.saveSealed()
             } catch {
                 context.rollback()
                 throw error
@@ -181,7 +181,7 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
         try context.performAndWait {
             let request = request(id: id)
             try context.fetch(request).forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
         }
     }

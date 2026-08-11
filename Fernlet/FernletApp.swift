@@ -136,6 +136,11 @@ struct FernletApp: App {
                     }
                     lockService.lock(reason: .background)
                 } else if newPhase == .active {
+                    // Self-heal a sealed store whose rebuild could not re-add it — the dominant
+                    // cause is the device auto-locking mid-wipe, and writing anything again means
+                    // unlocking the device, which lands here. Without this the coordinator stays
+                    // storeless for the whole session and every sealed write fails.
+                    try? PrivatePersistenceController.shared.reloadStoreIfNeeded()
                     // Pick up a guided-workout finish or set/rest advance made from the Live Activity
                     // while the app was backgrounded — even if the Move tab isn't the one on screen.
                     // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
