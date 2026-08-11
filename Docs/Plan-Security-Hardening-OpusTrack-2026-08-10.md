@@ -429,9 +429,11 @@ CloudKit.
   salt/version.
 - **Decode, fail-closed for v2.** `formatVersion = (record["formatVersion"] as? Int) ?? 1`. If `>= 2`,
   **require** a 32-byte `keySalt` (else `malformedRecord` — the generation precedent). If `== 1`,
-  `keySalt = Data()`. This never breaks v1 records (they lack both fields → version 1, empty salt). Add
-  `sameKeySalt` + `sameFormatVersion` to `sealedBackupChunks` contiguity checks: a spliced mixed set
-  fails closed. A chunk set is single-generation → all-v1 or all-v2 (mixed → `malformedRecord`).
+  `keySalt = Data()`. This never breaks v1 records (they lack both fields → version 1, empty salt).
+  **Revised by review:** `sealedBackupChunks` deliberately does **not** gate on matching
+  `formatVersion`/`keySalt` — both are unauthenticated fields a downlevel writer can leave mixed on an
+  otherwise valid set — so contiguity + `chunkCount` + `generation` stay the transport-level checks and
+  the mixed-set rejection happens at the decrypt, where AES-GCM is the authority.
 
 **Old/new coexistence rule (state it once).** A v1 record has no `formatVersion`/`keySalt` fields →
 decodes as version 1, empty salt, `"com.fernlet.sealed-backup"` info. A v2 record carries
@@ -469,6 +471,18 @@ opening; do not make `keySalt` globally required or bump the AAD tag. **Perf:** 
 candidates per record under that record's salt; a 250-chunk v2 restore does 250 keychain enumerations ×
 candidates — acceptable (restore is rare, network-bound per chunk), note it, hoist if a hot path appears.
 **CloudKit schema:** the two new fields must reach production before v2 writes land.
+**Downlevel writers during the rollout window (review finding, fixed read-side).** A CloudKit save is a
+per-**field** update, not a record replace, so a build from before v2 rewrites a record's ciphertext while
+the server keeps the prior v2 write's `formatVersion`/`keySalt` — an intact backup wearing a label that no
+longer matches its bytes. `SealedBackupCrypto.open` therefore retries the v1 derivation once when a
+v2-labelled record fails to authenticate; the version field is a *hint about which key to try*, never an
+authorization decision, so AES-GCM stays the sole authority, the AAD is untouched, and the generation
+high-water check still catches rollback. For the same reason `sealedBackupChunks` no longer treats
+disagreeing `formatVersion`/`keySalt` as fatal (a downlevel writer that grows a set leaves stale fields on
+the old indices and none on the new tail): contiguity + `chunkCount` + `generation` + the per-chunk AAD
+carry the anti-splice property, and a genuinely wrong salt still fails closed at the decrypt. Residual
+limits: without that fallback a stale build's write is unreadable to updated devices, and a v2 write is
+unreadable to stale builds regardless — no forward compatibility is promised.
 
 **Wall/custody / same-commit docs.** The escrow-key change alters only its HKDF salt/info, not its
 keychain accessibility/synchronizable attributes — it stays within the single sanctioned synchronizable

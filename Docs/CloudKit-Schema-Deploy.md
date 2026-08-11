@@ -94,3 +94,24 @@ must be promoted in the CloudKit console before the build that writes it ships.
 | --- | --- | --- | --- |
 | `HeartDrop` | `tag` (queryable), `payload` (bytes) | 2026-07-25 | Offline away-hearts dead-drop. |
 | `SealedBackupRecord` | `generation` (Int64) | 2026-08-09 | Sealed-backup rollback defense (code review finding 14). It is bound into the GCM AAD and required on decode, so **a Production container without this field cannot restore any backup at all** — promote it before shipping. |
+| `SealedBackupRecord` | `formatVersion` (Int64), `keySalt` (bytes) | 2026-08-10 | Record format v2 — the per-generation escrow HKDF salt (`Verifiability.md` §6.4). Every new write stamps `formatVersion = 2` plus a 32-byte `keySalt`; **the salt is the only way to re-derive that generation's key, so a Production container that silently drops it makes those backups permanently unopenable.** Both fields must exist in Production **before** the build that writes v2 ships. Reads are unaffected either way: a record lacking both fields decodes as v1. |
+
+**Owner action, not a code step.** `SealedBackupRecord` is a hand-rolled `CKRecord` type (not a Core
+Data mirrored `CD_*` entity), so the Development schema picks the two v2 fields up automatically on the
+first save from a Debug build — but **Production does not**, and no code path can promote it:
+`initializeCloudKitSchema` only ever writes Development, and there is no API for the Development →
+Production deploy. The owner must open the [CloudKit Console](https://icloud.developer.apple.com/) ▸
+`iCloud.MBO.Fernlet` ▸ **Deploy Schema Changes** ▸ review ▸ **Deploy to Production**, and confirm
+`formatVersion` and `keySalt` are present on `SealedBackupRecord` there, **before** shipping a build
+that writes record format v2.
+
+**Do not ship an intermediate build between the two.** A CloudKit save is a per-**field** update, not a
+record replace: keys the saved record never sets are left untouched server-side (clearing one requires
+explicitly assigning nil on the record being saved). So a build that writes `generation` but not
+`formatVersion`/`keySalt` — i.e. any build from before v2 — rewrites the ciphertext of a v2 record while
+the server keeps the previous write's `formatVersion = 2` and 32-byte salt, producing a record whose
+label no longer matches its bytes. `SealedBackupCrypto.open` recovers from that (it retries the v1
+derivation when a v2-labelled record fails to authenticate, covered by
+`CloudKitDataServiceTests.downlevelWriteLeavesStaleV2MetadataAndTheBackupStillOpens`), but the safe
+rollout is still to go straight from the current shipped build to a v2 build. Note also that a v2 record
+is not readable by a stale build at all — no forward compatibility is promised or attempted.

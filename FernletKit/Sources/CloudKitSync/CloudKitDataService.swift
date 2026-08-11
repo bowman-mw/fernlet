@@ -412,13 +412,24 @@ public final class CloudKitDataService {
         cloudRecord["chunkIndex"] = record.chunkIndex as CKRecordValue
         cloudRecord["chunkCount"] = record.chunkCount as CKRecordValue
         cloudRecord["generation"] = record.generation as CKRecordValue
+        cloudRecord["formatVersion"] = record.formatVersion as CKRecordValue
+        // Stamped UNCONDITIONALLY — an empty salt writes an explicit nil, which is not the same thing
+        // as omitting the key. CloudKit's `.allKeys` save policy is a per-FIELD update, not a record
+        // replace: a key that is absent from the record being saved is left untouched server-side, and
+        // assigning nil is the only way to clear one. Omitting it on a v1 write would leave a prior v2
+        // generation's 32-byte salt riding on the record and mislabel it. (That protects writes made by
+        // THIS build; an older build cannot clear what it does not know about, which is why
+        // `SealedBackupCrypto.open` also carries a v1 retry.) `decodeSealedBackup` reads an absent salt
+        // as empty, and requires 32 bytes whenever `formatVersion >= 2`.
+        cloudRecord["keySalt"] = record.keySalt.isEmpty ? nil : record.keySalt as CKRecordValue
         cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
         try await database.saveRecords([cloudRecord])
         FernletAuditLog.log("cloudkit.sealedBackup.saved", context: [
             "payloadType": record.payloadType.rawValue,
             "chunkIndex": String(record.chunkIndex),
             "chunkCount": String(record.chunkCount),
-            "generation": String(record.generation)
+            "generation": String(record.generation),
+            "formatVersion": String(record.formatVersion)
         ])
     }
 
@@ -440,8 +451,10 @@ public final class CloudKitDataService {
     /// Fetches the full, ordered chunk set for a payload: the head (chunk 0) carries `chunkCount`, then
     /// chunks `1...chunkCount-1` are fetched by their deterministic record IDs. Returns `[]` when no
     /// backup exists. Throws `SealedBackupError.malformedRecord` if the set is incomplete or
-    /// inconsistent (a missing chunk, or a chunk left over from a differently-sized prior backup), so
-    /// the caller restores all-or-nothing rather than reassembling a corrupt history.
+    /// inconsistent (a missing chunk, a chunk left over from a differently-sized prior backup, or a
+    /// mixed-generation set), so the caller restores all-or-nothing rather than reassembling a corrupt
+    /// history. Disagreeing `formatVersion`/`keySalt` values are deliberately *not* fatal here — see
+    /// the inline note; AES-GCM in `SealedBackupCrypto.open` is the authority on those.
     public func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
         guard let head = try await sealedBackup(payloadType: payloadType) else { return [] }
         guard head.chunkCount > 1 else { return [head] }
@@ -463,6 +476,15 @@ public final class CloudKitDataService {
         // itself validly sealed at the same index and count.
         let sameChunkCount = records.allSatisfy { $0.chunkCount == head.chunkCount }
         let sameGeneration = records.allSatisfy { $0.generation == head.generation }
+        // NOT gated here: `formatVersion`/`keySalt` agreement across the set. Both are unauthenticated
+        // CloudKit fields, and CloudKit merges fields rather than replacing records, so a downlevel
+        // writer that grows a set (3 → 4 chunks) leaves stale v2 metadata on indices 0..n-1 and none on
+        // the new tail — a set that is entirely, validly v1-sealed but would look "mixed". Rejecting
+        // before any decrypt is attempted would brick it. The anti-splice property those two checks
+        // were reaching for is already carried by `sameGeneration` plus the per-chunk AAD (a spliced
+        // chunk comes from a different generation, and the generation is bound into the AEAD), and a
+        // genuinely mismatched salt still fails closed one layer down: `SealedBackupCrypto.open`
+        // derives per record and AES-GCM rejects a wrong key. Crypto is the judge, not the metadata.
         guard isContiguous, sameChunkCount, sameGeneration else {
             throw SealedBackupError.malformedRecord
         }
@@ -556,6 +578,20 @@ public final class CloudKitDataService {
         guard let generation = record["generation"] as? Int64 else {
             throw SealedBackupError.malformedRecord
         }
+        // Record format (hardening #4). Absent field → version 1: that is exactly what every record
+        // written before v2 existed looks like, and v1 must keep opening byte-identically. From v2 up,
+        // the salt is load-bearing (it derives the key), so it is REQUIRED and must be exactly 32 bytes
+        // — anything else fails closed rather than deriving a wrong-but-plausible key, following the
+        // `generation` precedent above.
+        // A v1 record has NO salt by definition, so any bytes sitting in that field are ignored rather
+        // than carried onto the in-memory record: a downlevel writer cannot clear a field it never
+        // sets, so a former-v2 record rewritten by an old build keeps its stale salt server-side.
+        // Zeroing here is what stops that stale value from leaking into chunk-set comparisons.
+        let formatVersion = (record["formatVersion"] as? Int) ?? 1
+        let keySalt = formatVersion >= 2 ? ((record["keySalt"] as? Data) ?? Data()) : Data()
+        if formatVersion >= 2 {
+            guard keySalt.count == 32 else { throw SealedBackupError.malformedRecord }
+        }
         return SealedBackupRecord(
             payloadType: payloadType,
             signingPublicKey: signingPublicKey,
@@ -566,7 +602,9 @@ public final class CloudKitDataService {
             updatedAt: updatedAt,
             chunkIndex: chunkIndex,
             chunkCount: chunkCount,
-            generation: generation
+            generation: generation,
+            formatVersion: formatVersion,
+            keySalt: keySalt
         )
     }
 

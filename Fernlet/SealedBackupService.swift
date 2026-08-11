@@ -13,8 +13,15 @@ import CloudKitSync
 /// additional-authenticated-data, so a chunk cannot be replayed in another slot, across
 /// differently-sized backup generations, or as part of an older generation.
 /// ``open(_:identityService:)`` attempts decryption against every escrow key candidate the device
-/// holds and consults the record's identity tag only to classify failures (someone else's record
-/// versus a tampered/corrupt one of ours). Records are bound to the backup-escrow public key
+/// holds — derived under **that record's** format version and salt — and consults the record's
+/// identity tag only to classify failures (someone else's record versus a tampered/corrupt one of
+/// ours). New writes are record format v2 (a per-generation HKDF salt, so one escrow-key compromise
+/// no longer opens every generation); v1 records already in CloudKit keep opening unchanged, which is
+/// why the salt/version travel on the record rather than being assumed. Because those two fields are
+/// unauthenticated CloudKit metadata that an older writer can leave stale (CloudKit merges fields, it
+/// does not replace records), `open` retries the v1 derivation once when a v2-labelled record fails —
+/// AES-GCM, not the label, decides. Records are bound to the
+/// backup-escrow public key
 /// (which syncs via iCloud Keychain) rather than the per-device proximity key, so a backup sealed
 /// on one device is recognized and restorable on another. Stateless namespace; the methods are
 /// `@MainActor` because `IdentityService` is. ``SealedBackupService`` is the only production
@@ -34,8 +41,14 @@ enum SealedBackupCrypto {
     ///     matching what survives a CloudKit round trip).
     ///   - generation: The minted rollback counter for this write, bound into the AAD so an older
     ///     but validly-sealed generation cannot be substituted.
+    ///   - keySalt: The generation's per-backup HKDF salt (32 random bytes), shared by every chunk of
+    ///     the generation. Non-empty selects **record format v2** (salted derivation under the
+    ///     versioned info string); empty — the default, kept only for v1 fixtures and legacy call
+    ///     sites — reproduces the v1 static derivation byte-for-byte. Every production write passes a
+    ///     freshly minted salt.
     /// - Returns: The sealed record, tagged with the escrow public key so another of the user's
-    ///   devices recognizes it as theirs.
+    ///   devices recognizes it as theirs, and stamped with the format version + salt needed to
+    ///   re-derive its key.
     @MainActor
     static func seal(
         _ plaintext: Data,
@@ -44,9 +57,13 @@ enum SealedBackupCrypto {
         chunkIndex: Int = 0,
         chunkCount: Int = 1,
         updatedAt: Date = Date(),
-        generation: Int64
+        generation: Int64,
+        keySalt: Data = Data()
     ) throws -> SealedBackupRecord {
-        let key = try identityService.sealedBackupKey()
+        // The salt's presence IS the format choice at the seal seam; from here down the version is
+        // explicit, and it is what the record carries (the reader never re-infers it).
+        let formatVersion = keySalt.isEmpty ? 1 : 2
+        let key = try identityService.sealedBackupKey(formatVersion: formatVersion, salt: keySalt)
         let nonce = AES.GCM.Nonce()
         let signingPublicKey = identityService.localSigningPublicKey
         let sealedBox = try AES.GCM.seal(
@@ -76,11 +93,17 @@ enum SealedBackupCrypto {
             updatedAt: updatedAt,
             chunkIndex: chunkIndex,
             chunkCount: chunkCount,
-            generation: generation
+            generation: generation,
+            formatVersion: formatVersion,
+            keySalt: keySalt
         )
     }
 
     /// Opens a sealed record, trying every backup-escrow key this device holds.
+    ///
+    /// Candidates are derived under the record's own `formatVersion`/`keySalt` first; if none of them
+    /// authenticate and the record claims v2, the v1 (static, empty-salt) candidates are retried once.
+    /// See the inline note on why that retry is security-neutral.
     ///
     /// - Returns: The decrypted plaintext when any candidate key authenticates the record.
     /// - Throws: `SealedBackupError.keyAgreementIdentityMismatch` when the record is not tagged
@@ -97,7 +120,16 @@ enum SealedBackupCrypto {
         // cross-device escrow conflict (content-addressing keeps that genuine key alive). The tag is
         // consulted ONLY to classify the failure: a record not tagged with ANY of our escrow identities is
         // someone else's (or unrelated) → mismatch; otherwise it is a tampered/corrupt record of ours.
-        let candidates = identityService.sealedBackupKeyCandidates()
+        //
+        // Candidates are derived under THIS record's format version and salt, so a v1 record and a v2
+        // record open on the same identity with no migration and no fetch-order dependency. (Each
+        // record re-derives; a restore of N chunks therefore does N derivations × candidates. Restore
+        // is rare and network-bound per chunk, so that is deliberate rather than hoisted — hoisting
+        // would have to key a cache by salt anyway.)
+        let candidates = identityService.sealedBackupKeyCandidates(
+            formatVersion: record.formatVersion,
+            salt: record.keySalt
+        )
         guard !candidates.isEmpty else { throw IdentityError.notProvisioned }
 
         if let nonce = try? AES.GCM.Nonce(data: record.nonce),
@@ -110,16 +142,47 @@ enum SealedBackupCrypto {
                 generation: record.generation,
                 updatedAt: record.updatedAt
             )
-            for candidate in candidates {
-                if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
-                    return plaintext
-                }
+            if let plaintext = firstOpening(sealedBox, aad: aad, candidates: candidates) { return plaintext }
+
+            // STALE-METADATA FALLBACK. `formatVersion`/`keySalt` are unauthenticated CloudKit fields,
+            // and CloudKit's `.allKeys` save is a per-FIELD update, not a record replace: a writer that
+            // never sets those keys (any build from before v2 shipped) overwrites the ciphertext while
+            // the server KEEPS the previous v2 write's version + salt. The resulting record is v1
+            // ciphertext wearing v2 metadata, and deriving only under the stamped version would strand
+            // a perfectly recoverable backup forever. So when a v2-labelled record fails, retry the v1
+            // derivation once before declaring corruption.
+            //
+            // Security-neutral by construction: the version field is a HINT about which key to try,
+            // never an authorization decision. AES-GCM remains the sole authority — a genuine v2
+            // ciphertext cannot open under a v1 key, a tampered record still fails both passes, the AAD
+            // is untouched, and the generation high-water check in `SealedBackupService.restoreChunks`
+            // still catches rollback. Cost is one extra derivation pass on the already-failing path.
+            if record.formatVersion >= 2 {
+                let legacy = identityService.sealedBackupKeyCandidates(formatVersion: 1, salt: Data())
+                if let plaintext = firstOpening(sealedBox, aad: aad, candidates: legacy) { return plaintext }
             }
         }
         if !candidates.contains(where: { $0.publicKey == record.keyAgreementPublicKey }) {
             throw SealedBackupError.keyAgreementIdentityMismatch
         }
         throw SealedBackupError.malformedRecord
+    }
+
+    /// The plaintext from the first candidate key that authenticates `sealedBox` under `aad`, or `nil`
+    /// when none does. Factored out so ``open(_:identityService:)`` can run the same decrypt-first
+    /// sweep twice — once under the record's stamped format, once under v1 as the stale-metadata
+    /// fallback — without duplicating the loop.
+    private static func firstOpening(
+        _ sealedBox: AES.GCM.SealedBox,
+        aad: Data,
+        candidates: [(publicKey: Data, key: SymmetricKey)]
+    ) -> Data? {
+        for candidate in candidates {
+            if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
+                return plaintext
+            }
+        }
+        return nil
     }
 
     /// Binds the payload type, signing identity, the record's position within its chunk set, and the
@@ -207,7 +270,8 @@ final class SealedBackupService {
                 plaintext,
                 payloadType: payloadType,
                 identityService: identityService,
-                generation: generationStore.mintNext(for: payloadType)
+                generation: generationStore.mintNext(for: payloadType),
+                keySalt: Self.mintKeySalt()
             )
             try await cloudDataService.saveSealedBackup(record)
         } else {
@@ -220,7 +284,8 @@ final class SealedBackupService {
     /// suffixed chunks (`1...n-1`) are written first and the head (`0`, which carries `chunkCount`) is
     /// written last as the commit marker, so a restore only ever sees a complete set. Stale chunks
     /// from a previously larger backup are then pruned. Each chunk's GCM AAD binds its index/count, so
-    /// a mixed-generation set fails closed on restore.
+    /// a mixed-generation set fails closed on restore. The whole set shares one generation counter and
+    /// one per-generation HKDF salt (record format v2), both stamped on every chunk.
     func reconcileChunked(
         payloadType: SealedBackupPayloadType,
         chunkCount: Int,
@@ -230,13 +295,18 @@ final class SealedBackupService {
         // ONE generation for the whole set, minted before the first write. Minting per chunk would
         // make every multi-chunk backup look mixed-generation and fail its own restore check.
         let generation = generationStore.mintNext(for: payloadType)
+        // ONE salt for the whole set, for the same reason — and stamped on EVERY chunk rather than
+        // only the head, because the head is written last as the commit marker, so a head-only salt
+        // could not be read while the suffix chunks were being sealed.
+        let keySalt = Self.mintKeySalt()
         for index in stride(from: count - 1, through: 1, by: -1) {
             try await saveChunk(
                 chunk(index),
                 payloadType: payloadType,
                 chunkIndex: index,
                 chunkCount: count,
-                generation: generation
+                generation: generation,
+                keySalt: keySalt
             )
         }
         try await saveChunk(
@@ -244,7 +314,8 @@ final class SealedBackupService {
             payloadType: payloadType,
             chunkIndex: 0,
             chunkCount: count,
-            generation: generation
+            generation: generation,
+            keySalt: keySalt
         )
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
     }
@@ -255,7 +326,8 @@ final class SealedBackupService {
         payloadType: SealedBackupPayloadType,
         chunkIndex: Int,
         chunkCount: Int,
-        generation: Int64
+        generation: Int64,
+        keySalt: Data
     ) async throws {
         let record = try SealedBackupCrypto.seal(
             plaintext,
@@ -263,15 +335,26 @@ final class SealedBackupService {
             identityService: identityService,
             chunkIndex: chunkIndex,
             chunkCount: chunkCount,
-            generation: generation
+            generation: generation,
+            keySalt: keySalt
         )
         try await cloudDataService.saveSealedBackup(record)
+    }
+
+    /// Mints one backup generation's HKDF salt: 32 CSPRNG bytes from `SymmetricKey(size: .bits256)`.
+    ///
+    /// **Never empty.** An empty salt would mean record format v1 at the seal seam, silently
+    /// reintroducing the static derivation this hardening exists to remove (the versioned info string
+    /// is the second line of defense, not the first). Every production write goes through here.
+    private static func mintKeySalt() -> Data {
+        SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
     }
 
     /// Fetches and opens every chunk of a payload, returning each chunk's plaintext in chunk order, or
     /// `nil` when no backup exists. Works for both single-record and multi-record payloads (a single
     /// blob is just `chunkCount == 1`). Throws if the chunk set is incomplete or mixed-generation
-    /// (`CloudKitDataService.sealedBackupChunks` validates contiguity), so callers restore all-or-nothing.
+    /// (`CloudKitDataService.sealedBackupChunks` validates contiguity), and if any chunk fails to open,
+    /// so callers restore all-or-nothing.
     func restoreChunks(payloadType: SealedBackupPayloadType) async throws -> [Data]? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }
