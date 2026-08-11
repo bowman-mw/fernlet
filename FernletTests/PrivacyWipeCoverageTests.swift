@@ -489,6 +489,35 @@ struct PrivacyWipeCoverageTests {
         return tokens
     }
 
+    /// The Phase-6 prior-use marker (`FernletPriorUseMarker`) survives "delete everything" BY
+    /// DESIGN — which puts it in exactly the class the funnel-bounded token scan can never see: a
+    /// KEPT key never appears in the wipe bodies, so removing its documentation fails nothing
+    /// mechanical. And unlike keychain services (below), UserDefaults keys have no
+    /// `…service`-shaped binding to anchor a discovery floor on, so this pin is per-key: the
+    /// marker's literal must stay in the deliberate-exceptions table — after the exceptions
+    /// heading, never in the cleared table (it is a survivor, not a promise).
+    @MainActor
+    @Test func theWipeSurvivingPriorUseMarkerIsDocumentedAsADeliberateException() throws {
+        let root = try Self.repoRoot()
+        let doc = try String(contentsOf: root.appendingPathComponent("Docs/PrivacyWipeCoverage.md"), encoding: .utf8)
+        let key = FernletPriorUseMarker.defaultsKey
+
+        guard let exceptionsStart = doc.range(of: "## Deliberate exceptions") else {
+            throw BoundingError.malformedCoverageDoc("the deliberate-exceptions heading is gone")
+        }
+        let tail = doc[exceptionsStart.upperBound...]
+        let exceptionsSection = tail.range(of: "\n## ").map { tail[..<$0.lowerBound] } ?? tail
+
+        #expect(
+            exceptionsSection.contains(key),
+            "the wipe-surviving prior-use marker (\(key)) lost its deliberate-exceptions row in Docs/PrivacyWipeCoverage.md — a kept key the funnel-bounded scan structurally cannot catch, so this pin is its only enforcement."
+        )
+        #expect(
+            !doc[..<exceptionsStart.lowerBound].contains(key),
+            "the prior-use marker (\(key)) appears before the deliberate-exceptions section — it survives the wipe by design and must never be listed as a cleared surface."
+        )
+    }
+
     /// Every `com.fernlet.*` keychain service the app uses must be named in one of the two tables —
     /// that is the doc's stated contract, and two services (the HealthKit anchors and the
     /// locked-note buffer key) used to be in neither.

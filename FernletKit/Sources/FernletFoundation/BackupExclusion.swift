@@ -56,11 +56,25 @@ public nonisolated enum BackupExclusion {
             urls.append(supportDirectory(for: storeURL))
         }
         for url in urls {
-            do {
-                try (url as NSURL).setResourceValue(excluded, forKey: URLResourceKey.isExcludedFromBackupKey)
-            } catch {
-                print("[Fernlet] Failed to set backup exclusion (\(excluded)) for \(url.lastPathComponent): \(error)")
-            }
+            apply(fileURL: url, excluded: excluded)
+        }
+    }
+
+    /// Sets `isExcludedFromBackupKey` to `excluded` on a single standalone file or directory — the
+    /// variant for stores with no Core Data sidecars (today: `LocalFernletRepository`'s JSON day
+    /// blob, security-hardening Phase 6). Kept separate from
+    /// ``apply(storeURL:excluded:includeSupportDir:)`` so a sidecar-less caller does not log a
+    /// permanent failure for `-wal`/`-shm` files that can never exist. Same contract otherwise:
+    /// idempotent, and a failure (e.g. the file does not exist yet) is logged, never fatal.
+    ///
+    /// - Important: The flag lives on the file's inode, so an ATOMIC rewrite (temp file + rename)
+    ///   silently drops it — callers that rewrite their file must re-apply after every write, the
+    ///   way `LocalFernletRepository.saveDatabase` does.
+    public static func apply(fileURL: URL, excluded: Bool) {
+        do {
+            try (fileURL as NSURL).setResourceValue(excluded, forKey: URLResourceKey.isExcludedFromBackupKey)
+        } catch {
+            print("[Fernlet] Failed to set backup exclusion (\(excluded)) for \(fileURL.lastPathComponent): \(error)")
         }
     }
 }

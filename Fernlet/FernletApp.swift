@@ -3,6 +3,7 @@ import CloudKitSync
 import FernletFoundation
 import FernletLock
 import HealthKitGateway
+import LocalPersistence
 import PrivateStoreCore
 import UserNotifications
 #if canImport(UIKit)
@@ -24,10 +25,14 @@ import FernletUI
 /// `LaunchFailureView` (failed). Scene-phase changes relock the app and flush the pending
 /// snapshot save on background, and reconcile guided-workout/cooking runs made from the Live
 /// Activity on re-activation. Storage-preference changes reload `PersistenceController` (queueing
-/// a follow-up reload when one is already in flight) and re-apply the sealed store's backup
-/// exclusion; a delayed post-startup task activates CloudKit sync so launch never waits on it.
-/// DEBUG launch arguments (`-resetOnboarding`, `-completeOnboarding`,
-/// `FERNLET_UI_TEST_OPEN_PRIVACY_DATA`) support the UI-test harness.
+/// a follow-up reload when one is already in flight) and re-apply the sealed store's and the
+/// local day blob's backup exclusion; a delayed post-startup task activates CloudKit sync so
+/// launch never waits on it. The ready phase also runs the one-shot Phase-6
+/// `BackupExclusionLaunchGate` (fresh installs default to backup-excluded; existing installs get
+/// a one-time honest trade-off alert); a launch whose preferences keychain was unreadable defers
+/// the gate and retries it on each foreground activation. DEBUG launch arguments
+/// (`-resetOnboarding`, `-completeOnboarding`, `FERNLET_UI_TEST_OPEN_PRIVACY_DATA`) support the
+/// UI-test harness.
 @main
 struct FernletApp: App {
     @State private var lockService = FernletLockService()
@@ -36,6 +41,16 @@ struct FernletApp: App {
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
     @State private var didScheduleStartupCloudSync = false
     @State private var pendingPreferenceReload: StoragePreferences?
+    /// One-shot guard for the Phase-6 backup-exclusion launch gate — set once the gate actually
+    /// RESOLVES (like `didScheduleStartupCloudSync`), so a re-fired `.task` can't re-run the
+    /// resolution. Deliberately left false when the gate defers on an unreadable keychain
+    /// (pre-first-unlock prewarm / background relaunch): the scene-activation hook retries until
+    /// a launch can read the blob and resolve for real.
+    @State private var didResolveBackupExclusionDefault = false
+    /// Presents the one-time existing-install backup-exclusion prompt (see
+    /// `BackupExclusionLaunchGate`); only ever set when the gate classifies this launch as an
+    /// existing install with no recorded choice.
+    @State private var backupExclusionPromptPresented = false
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -152,6 +167,12 @@ struct FernletApp: App {
                         // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
                         // orphan cooking activity is retired and the walker/card stay in step.
                         store.reconcileCookingRunFromAppGroup()
+                        // Phase-6 gate retry: a launch that reached readyContent while the
+                        // preferences keychain was unreadable (pre-first-unlock prewarm /
+                        // background relaunch) DEFERRED the backup-exclusion resolution; every
+                        // foreground activation retries until it resolves. A no-op once
+                        // `didResolveBackupExclusionDefault` is set.
+                        resolveBackupExclusionDefaultIfNeeded()
                     }
                 }
             }
@@ -252,6 +273,39 @@ struct FernletApp: App {
         .task {
             await activateCloudSyncAfterStartupIfNeeded()
         }
+        // Phase-6 default-on backup exclusion. Runs here — after StoragePreferencesStore loaded in
+        // `init` and the store is ready — and BEFORE onboarding can complete, which is what makes
+        // the fresh-vs-existing classification sound: a genuinely fresh install still shows
+        // onboarding at this moment, so it carries neither prior-use signal.
+        .task {
+            resolveBackupExclusionDefaultIfNeeded()
+        }
+        .alert("Keep Fernlet data out of device backups?", isPresented: $backupExclusionPromptPresented) {
+            Button("Exclude from backups", role: .destructive) {
+                BackupExclusionLaunchGate().recordPromptChoice(
+                    excludeFromBackups: true,
+                    store: storagePreferencesStore,
+                    applyExclusionNow: applyLocalBackupExclusionNow
+                )
+            }
+            Button("Keep in backups") {
+                BackupExclusionLaunchGate().recordPromptChoice(
+                    excludeFromBackups: false,
+                    store: storagePreferencesStore,
+                    applyExclusionNow: applyLocalBackupExclusionNow
+                )
+            }
+        } message: {
+            // The honest trade-off, matching the Privacy & Data exclude confirmation: name exactly
+            // what excluding costs (no device-backup restore for the sealed store) and what it
+            // doesn't (escrow-backed encrypted iCloud backups restore regardless).
+            Text("Fernlet can keep its local data — including your journals, intimate logs, and "
+                + "cycle notes — out of iPhone and iCloud device backups. They're encrypted with a "
+                + "key that never leaves this device, so a backup can't reveal them; but if you "
+                + "exclude them, they won't come back if you restore this device from a backup. "
+                + "Anything you've switched on an encrypted iCloud backup for is restored from that "
+                + "backup either way. You can change this anytime in Privacy & Data.")
+        }
     }
 
     /// Defers CloudKit-sync activation ~5 s past first render so launch never blocks on iCloud.
@@ -270,17 +324,57 @@ struct FernletApp: App {
         await reloadPersistenceForPreferenceChange(current)
     }
 
+    /// Runs the Phase-6 backup-exclusion launch gate — once per process once it actually
+    /// resolves: fresh installs silently adopt the excluded default, existing installs with no
+    /// recorded choice get the one-time honest trade-off alert above. When the gate defers
+    /// because the preferences keychain is unreadable (a pre-first-unlock prewarmed or
+    /// background-relaunched process), the one-shot flag stays unset and the scene-activation
+    /// hook retries on the next foreground. Suppressed entirely under any test harness — an
+    /// unanswered launch alert would deadlock every UI test, and a unit-test host would mutate
+    /// the real preference blob (`UITestSupport.isTestHarnessActive`; release builds always run).
+    @MainActor
+    private func resolveBackupExclusionDefaultIfNeeded() {
+        guard !didResolveBackupExclusionDefault else { return }
+        guard !UITestSupport.isTestHarnessActive else {
+            didResolveBackupExclusionDefault = true
+            return
+        }
+        switch BackupExclusionLaunchGate().resolveAtLaunch(
+            store: storagePreferencesStore,
+            applyExclusionNow: applyLocalBackupExclusionNow
+        ) {
+        case .resolved(let needsPrompt):
+            didResolveBackupExclusionDefault = true
+            if needsPrompt {
+                backupExclusionPromptPresented = true
+            }
+        case .deferredKeychainUnreadable:
+            // Nothing happened (no classification, no write, no marker latch); the next
+            // foreground activation retries via the scenePhase hook.
+            break
+        }
+    }
+
+    /// Immediately flags the two stores whose exclusion does not ride the Core Data reload — the
+    /// sealed `FernletPrivate` store and the local JSON day blob — so a gate/prompt decision (or a
+    /// toggle change) lands on disk in the same moment it is recorded. The synced store follows
+    /// via `reloadPersistenceForPreferenceChange`, which re-applies exclusion at store load.
+    @MainActor
+    private func applyLocalBackupExclusionNow(_ excluded: Bool) {
+        PrivatePersistenceController.shared.applyBackupExclusion(excluded: excluded)
+        LocalFernletRepository().applyBackupExclusion(excluded: excluded)
+    }
+
     /// Reloads the Core Data stack for a storage-preference change (iCloud sync on/off, backup
     /// exclusion). If a reload is already in flight the request is parked in
     /// `pendingPreferenceReload` and replayed afterwards; a failed reload is audit-logged rather
     /// than crashing the scene.
     @MainActor
     private func reloadPersistenceForPreferenceChange(_ preferences: StoragePreferences) async {
-        // The sealed store is local-only and never reloads, so re-apply its backup exclusion here so a
-        // runtime toggle covers it immediately instead of lagging until the next launch.
-        PrivatePersistenceController.shared.applyBackupExclusion(
-            excluded: preferences.localBackupExcludedFromiOSBackup
-        )
+        // The sealed store is local-only and never reloads, and the local JSON day blob has no
+        // reload at all — re-apply both here so a runtime toggle covers them immediately instead
+        // of lagging until the next launch.
+        applyLocalBackupExclusionNow(preferences.localBackupExcludedFromiOSBackup)
         guard !PersistenceController.shared.isReloading else {
             pendingPreferenceReload = preferences
             return

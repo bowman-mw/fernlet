@@ -29,6 +29,7 @@ struct StoragePreferencesTests {
             sealedBackupPeriodReuploadDeferred: true,
             sealedBackupJournalReuploadDeferred: true,
             sealedBackupIntimacyReuploadDeferred: true,
+            backupExclusionChoiceMade: true,
             lastModifiedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
 
@@ -74,6 +75,54 @@ struct StoragePreferencesTests {
         // The user's real, still-enabled backups keep `hasSealedBackup` true, so the delete dialog
         // still promises (and performs) the iCloud removal.
         #expect(decoded.hasSealedBackup)
+        // And for the Phase-6 `backupExclusionChoiceMade` tri-state: absent key → false ("never
+        // decided"), so the launch gate may run for this user — never true, which would silently
+        // mark the question settled.
+        #expect(decoded.backupExclusionChoiceMade == false)
+    }
+
+    /// The Phase-6 no-silent-flip pin. Flipping the sealed store to default-excluded must ride the
+    /// launch gate's fresh-install path — NEVER the tolerant decode: a pre-Phase-6 blob (no
+    /// `backupExclusionChoiceMade` key) must decode with its stored
+    /// `localBackupExcludedFromiOSBackup` value byte-for-byte unchanged, in BOTH directions. An
+    /// absent-key default of `true` on either field would silently flip every existing included
+    /// user to excluded — a surprise loss of their sealed-store device-backup recovery.
+    @Test func decodingLegacyBlobNeverFlipsTheStoredBackupExclusionValue() throws {
+        // An existing user who deliberately stayed included (or was never asked): stays included.
+        let includedJSON = """
+        {
+            "iCloudSyncEnabled": false,
+            "localBackupExcludedFromiOSBackup": false,
+            "lastModifiedAt": 700000000
+        }
+        """
+        let included = try JSONDecoder().decode(StoragePreferences.self, from: Data(includedJSON.utf8))
+        #expect(included.localBackupExcludedFromiOSBackup == false)
+        #expect(included.backupExclusionChoiceMade == false)
+
+        // An existing user who opted into exclusion via the toggle: stays excluded, and the gate
+        // still sees "no recorded choice" so it can record one without prompting.
+        let excludedJSON = """
+        {
+            "localBackupExcludedFromiOSBackup": true,
+            "lastModifiedAt": 700000000
+        }
+        """
+        let excluded = try JSONDecoder().decode(StoragePreferences.self, from: Data(excludedJSON.utf8))
+        #expect(excluded.localBackupExcludedFromiOSBackup == true)
+        #expect(excluded.backupExclusionChoiceMade == false)
+
+        // A blob with BOTH keys (written by this build) round-trips both values exactly.
+        let decidedJSON = """
+        {
+            "localBackupExcludedFromiOSBackup": false,
+            "backupExclusionChoiceMade": true,
+            "lastModifiedAt": 700000000
+        }
+        """
+        let decided = try JSONDecoder().decode(StoragePreferences.self, from: Data(decidedJSON.utf8))
+        #expect(decided.localBackupExcludedFromiOSBackup == false)
+        #expect(decided.backupExclusionChoiceMade == true)
     }
 
     /// `hasSealedBackup` is what the delete dialog reads to decide whether it may truthfully claim to
@@ -130,9 +179,13 @@ struct StoragePreferencesTests {
         let preferences = StoragePreferences()
 
         #expect(preferences.iCloudSyncEnabled == false)
-        // Default NOT excluded: local data (esp. the no-cloud-recovery sealed store) stays recoverable
-        // via same-device backups unless the user opts into exclusion.
+        // The TYPE default stays NOT-excluded forever: the tolerant decode and every load-failure
+        // fallback resolve to this value, so `true` here would silently flip existing users. The
+        // Phase-6 fresh-install excluded default is applied by `BackupExclusionLaunchGate` (which
+        // also sets `backupExclusionChoiceMade`), never by this initializer.
         #expect(preferences.localBackupExcludedFromiOSBackup == false)
+        // "Never decided" is the default — the launch gate's permission to run.
+        #expect(preferences.backupExclusionChoiceMade == false)
         #expect(preferences.healthKitMasterEnabled == false)
         #expect(preferences.healthKitCapabilityEnabled == StoragePreferences.defaultHealthKitCapabilityEnabled)
         #expect(preferences.sealedBackupSensitiveNotesEnabled == false)
@@ -213,6 +266,64 @@ struct StoragePreferencesTests {
         let attributes = try #require(keychainAttributes(account: KeychainItem.Account.storagePreferences.rawValue, service: service))
         #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
         #expect((attributes[kSecAttrSynchronizable as String] as? Bool) != true)
+    }
+
+    /// `persistedBlobState` distinguishes the three keychain-reachable outcomes the tolerant
+    /// `currentPreferences` collapses: absent (never stored), decoded (a live blob), and
+    /// undecodable (a row whose JSON rotted). The fourth case, `.unreadable`, cannot be produced
+    /// against a real simulator keychain (it needs a pre-first-unlock read failure), so its
+    /// fail-closed handling is pinned at the consumer instead —
+    /// `BackupExclusionLaunchGateTests/unreadableKeychainDefersResolutionWithoutLatchingOrWriting`.
+    @Test func persistedBlobStateDistinguishesAbsentDecodedAndUndecodable() throws {
+        let service = testServiceID()
+        defer { KeychainItem.delete(for: .storagePreferences, service: service) }
+
+        // Absent: nothing stored yet.
+        guard case .absent = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("an empty service must read .absent")
+            return
+        }
+
+        // Decoded: a real blob round-trips with its values.
+        let store = StoragePreferencesStore(keychainService: service)
+        store.update { $0.iCloudSyncEnabled = true }
+        guard case .decoded(let decoded) = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("a stored blob must read .decoded")
+            return
+        }
+        #expect(decoded.iCloudSyncEnabled == true)
+
+        // Undecodable: a present row that is not the blob's JSON — present, but values unknown.
+        KeychainItem.store(Data("not json".utf8), for: .storagePreferences, service: service)
+        guard case .undecodable = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("a corrupt row must read .undecodable, never .absent — its presence is prior-use evidence")
+            return
+        }
+    }
+
+    /// `refreshFromPersistedBlob` replaces a stale in-memory copy with the live keychain value —
+    /// the seam that lets a launch-time writer (the Phase-6 gate) mutate the user's REAL
+    /// preferences instead of persisting the launch-frozen fallback copy over them.
+    @Test func refreshFromPersistedBlobReplacesAStaleInMemoryCopy() {
+        let service = testServiceID()
+        defer { KeychainItem.delete(for: .storagePreferences, service: service) }
+
+        // `stale` loads while nothing is stored: its copy is frozen defaults.
+        let stale = StoragePreferencesStore(keychainService: service)
+        #expect(stale.preferences.iCloudSyncEnabled == false)
+
+        // Another writer persists the real blob afterwards.
+        let writer = StoragePreferencesStore(keychainService: service)
+        writer.update {
+            $0.iCloudSyncEnabled = true
+            $0.sealedBackupPeriodEnabled = true
+        }
+
+        stale.refreshFromPersistedBlob()
+
+        #expect(stale.preferences == writer.preferences)
+        // A refresh is a read, never a write: the persisted blob is byte-identical afterwards.
+        #expect(StoragePreferencesStore.currentPreferences(service: service) == writer.preferences)
     }
 
     private func testServiceID() -> String {

@@ -22,7 +22,24 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var iCloudSyncEnabled: Bool
     /// Whether the local store files are excluded from iOS device backups. Defaults to false so
     /// the sealed store — which has no cloud recovery — stays recoverable via encrypted backups.
+    ///
+    /// - Important: The TYPE default (and the absent-key decode default) must stay `false` forever:
+    ///   `StoragePreferencesStore.loadPreferences` maps any decode fallback to this default, so a
+    ///   `true` here would silently flip every EXISTING user to excluded — a surprise loss of their
+    ///   sealed-store recovery. The security-hardening Phase-6 default flip for FRESH installs rides
+    ///   the app's launch gate (`BackupExclusionLaunchGate`) plus ``backupExclusionChoiceMade``,
+    ///   never this default.
     public var localBackupExcludedFromiOSBackup: Bool
+    /// Whether ``localBackupExcludedFromiOSBackup`` has actually been DECIDED — by the user (the
+    /// Privacy & Data toggle or the one-time launch prompt) or by the fresh-install default path.
+    ///
+    /// The tri-state that fixes "a stored default and a chosen false are indistinguishable": with
+    /// only the bool, an existing user who deliberately stays included looks identical to one who
+    /// was never asked, so no default flip could ever be applied safely. `false` means "never
+    /// decided" (the app's launch gate may run); `true` means the question is settled and the
+    /// launch gate must never prompt again. Additive and tolerantly decoded (`?? false`) like every
+    /// other field, so pre-Phase-6 blobs decode with their exclusion value byte-for-byte unchanged.
+    public var backupExclusionChoiceMade: Bool
     /// The master HealthKit switch; when false, every capability is off regardless of the
     /// per-capability map.
     public var healthKitMasterEnabled: Bool
@@ -102,6 +119,11 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalReuploadDeferred: Bool = false,
         sealedBackupIntimacyReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
+        // Default false = "never decided", NOT "keep included": the launch gate reads false as
+        // permission to run (fresh installs adopt excluded; existing installs get the one-time
+        // prompt). A true default would mark every fresh install as already-decided and the gate
+        // would never set the excluded default it exists to set.
+        backupExclusionChoiceMade: Bool = false,
         lastModifiedAt: Date = Date()
     ) {
         self.iCloudSyncEnabled = iCloudSyncEnabled
@@ -117,6 +139,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.sealedBackupJournalReuploadDeferred = sealedBackupJournalReuploadDeferred
         self.sealedBackupIntimacyReuploadDeferred = sealedBackupIntimacyReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
+        self.backupExclusionChoiceMade = backupExclusionChoiceMade
         self.lastModifiedAt = lastModifiedAt
     }
 
@@ -144,6 +167,11 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalReuploadDeferred) ?? false
         sealedBackupIntimacyReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
+        // Phase-6 pin: the DEFAULT FLIP MUST NOT RIDE THIS DECODE. Both this `?? false` and the
+        // `localBackupExcludedFromiOSBackup` decode above stay false-for-absent forever, so an
+        // existing user's blob decodes with their exclusion value unchanged; only the launch gate —
+        // fresh-install detection or an explicit prompt answer — may set either field.
+        backupExclusionChoiceMade = try container.decodeIfPresent(Bool.self, forKey: .backupExclusionChoiceMade) ?? false
         lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
     }
 
@@ -221,6 +249,32 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     }
 }
 
+/// Four-way state of the persisted ``StoragePreferences`` keychain blob, as distinguished by
+/// ``StoragePreferencesStore/persistedBlobState(service:)``.
+///
+/// Exists for callers that must NOT collapse "no blob" and "the keychain could not be read" into
+/// one answer the way the tolerant ``StoragePreferencesStore/currentPreferences(service:)`` does.
+/// The blob is stored `AfterFirstUnlockThisDeviceOnly`, so a process launched before first device
+/// unlock (iOS prewarming after a reboot, a background relaunch) reads `errSecInteractionNotAllowed`
+/// — a transient failure that must never be treated as "never stored". The Phase-6
+/// backup-exclusion launch gate classifies over this state: it defers on ``unreadable`` and treats
+/// a present-but-corrupt blob (``undecodable``) as prior-use evidence with default values.
+public nonisolated enum StoragePreferencesBlobState: Sendable {
+    /// A blob exists and decoded; carries the decoded live value.
+    case decoded(StoragePreferences)
+    /// No keychain row exists — genuinely never stored (fresh install, or reset by
+    /// "delete everything"). Safe to treat as first-launch defaults.
+    case absent
+    /// A row exists but its JSON no longer decodes. Readers should treat the VALUES as fresh
+    /// defaults (matching `loadPreferences`' fallback), but the row's presence still evidences
+    /// that this install stored preferences before.
+    case undecodable
+    /// The keychain read itself failed (any non-`errSecItemNotFound` status — most notably
+    /// `errSecInteractionNotAllowed` before first unlock). The blob's existence is UNKNOWN:
+    /// callers must not classify, prompt, or write over it — fail closed and retry later.
+    case unreadable
+}
+
 /// The observable owner of the persisted ``StoragePreferences``, backed by the keychain.
 ///
 /// The app's single writer for storage choices: settings and onboarding surfaces mutate through
@@ -235,6 +289,10 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
 /// `nonisolated` ``currentPreferences(service:)``, a pure keychain read + JSON decode. Any load
 /// failure (missing or undecodable blob) yields fresh defaults — see the tolerant-decode note on
 /// ``StoragePreferences/init(from:)`` for why that fallback makes additive fields mandatory.
+/// That tolerance also applies to the ONE-SHOT `init` load: a process launched before first
+/// device unlock (prewarming) holds fresh defaults for its whole lifetime unless something calls
+/// ``refreshFromPersistedBlob()`` — launch-time writers must do so (after checking
+/// ``persistedBlobState(service:)``) or their `update` persists the defaults over the real blob.
 /// ``resetToDefaults()`` deletes the keychain row outright rather than writing defaults, so
 /// "delete everything" leaves no `lastModifiedAt` trace of use.
 @MainActor
@@ -292,6 +350,23 @@ public final class StoragePreferencesStore {
         KeychainItem.store(data, for: .storagePreferences, service: keychainService)
     }
 
+    /// Replaces the in-memory ``preferences`` with the live persisted value — a re-read, never a
+    /// write (nothing is persisted and `lastModifiedAt` is not stamped).
+    ///
+    /// Exists because the in-memory copy is loaded exactly once, in `init`, at process launch: a
+    /// process launched before first device unlock (iOS prewarming, a background relaunch) cannot
+    /// read the `AfterFirstUnlockThisDeviceOnly` blob then, so its copy is fresh defaults for the
+    /// rest of the process — and any later ``update(_:)`` would persist those defaults over the
+    /// user's real choices. Launch-time consumers that WRITE through this store (the Phase-6
+    /// `BackupExclusionLaunchGate`) call this first so their mutation lands on the live values.
+    ///
+    /// - Important: Call only when the keychain is known readable (check
+    ///   ``persistedBlobState(service:)`` first): the underlying load still collapses a read
+    ///   failure to defaults, so refreshing blind would replace a good in-memory copy with them.
+    public func refreshFromPersistedBlob() {
+        preferences = Self.loadPreferences(service: keychainService)
+    }
+
     /// Reads the live persisted preferences straight from the keychain, bypassing any in-memory
     /// copy; returns fresh defaults when nothing is stored (or the blob fails to decode).
     ///
@@ -299,6 +374,31 @@ public final class StoragePreferencesStore {
     /// to call from any executor (e.g. the non-MainActor CloudKitDataService sync-enabled closure).
     nonisolated public static func currentPreferences(service: String = KeychainItem.storagePreferencesService) -> StoragePreferences {
         loadPreferences(service: service)
+    }
+
+    /// Reads the live persisted blob distinguishing all four outcomes — decoded / absent /
+    /// undecodable / unreadable — via `KeychainItem.loadDistinguishingAbsence`, unlike
+    /// ``currentPreferences(service:)``, which tolerantly collapses every failure to fresh
+    /// defaults. See ``StoragePreferencesBlobState`` for what each case licenses a caller to do;
+    /// built for the Phase-6 backup-exclusion launch gate, whose one-time prompt (and prompted
+    /// write) must fail closed rather than run over a pre-first-unlock read failure.
+    ///
+    /// `nonisolated`: pure keychain read + JSON decode, callable from any executor.
+    nonisolated public static func persistedBlobState(service: String = KeychainItem.storagePreferencesService) -> StoragePreferencesBlobState {
+        switch KeychainItem.loadDistinguishingAbsence(
+            account: KeychainItem.Account.storagePreferences.rawValue,
+            service: service
+        ) {
+        case .found(let data):
+            guard let decoded = try? JSONDecoder().decode(StoragePreferences.self, from: data) else {
+                return .undecodable
+            }
+            return .decoded(decoded)
+        case .absent:
+            return .absent
+        case .unreadable:
+            return .unreadable
+        }
     }
 
     nonisolated private static func loadPreferences(service: String) -> StoragePreferences {

@@ -140,6 +140,18 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 /// - **Legacy migration.** When no file exists, `LegacyKeys` UserDefaults data (the
 ///   pre-database persistence) seeds the first database, and the first successful save clears
 ///   those keys.
+/// - **Backup exclusion (security-hardening Phase 6).** When
+///   `StoragePreferences.localBackupExcludedFromiOSBackup` is set, the day-blob file itself is
+///   flagged `isExcludedFromBackup` — at `init` (covering launch) and again after every
+///   successful save, because the atomic rewrite replaces the inode the flag lives on. The file
+///   this protects is the LEGACY one: production always runs `CoreDataFernletRepository` over
+///   `Fernlet.sqlite` (excluded under the same preference at store load, in `CloudKitSync`'s
+///   `PersistenceController`), and this repository is only the one-time legacy-migration source —
+///   but the JSON blob can still hold a user's pre-migration history in plaintext, and it was
+///   the last local Fernlet-data file the Privacy & Data toggle's "your local Fernlet data is
+///   excluded" copy did not reach. The explicit ``applyBackupExclusion(excluded:)`` seam is how
+///   a runtime preference change (either direction) reaches the file immediately, mirroring
+///   `PrivatePersistenceController.applyBackupExclusion`.
 ///
 /// Concurrency: nonisolated with a fully synchronous API. The struct is a value-type facade over
 /// a shared reference-type `State` box, so copies observe the same recovery/cleanup flags; the
@@ -162,18 +174,55 @@ public struct LocalFernletRepository: FernletRepository {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let state = State()
+    /// Live read of the user's `localBackupExcludedFromiOSBackup` choice, consulted at `init` and
+    /// after every successful save (the atomic rewrite drops the inode-level exclusion flag).
+    /// A closure so tests can pin it without touching the real preferences keychain; production
+    /// resolves to `StoragePreferencesStore.currentPreferences()` — the same live-read pattern
+    /// `PrivatePersistenceController` uses, so a stale in-memory copy can never mis-flag the file.
+    private let backupExclusionPreference: () -> Bool
 
     /// Creates a repository backed by the given file, defaulting to
     /// `Application Support/Fernlet/FernletDatabase.json` (see ``defaultFileURL()``).
     ///
-    /// - Parameter fileURL: Override used by tests and by callers that stage a database in a
-    ///   custom location; `nil` selects the production path.
-    public init(fileURL: URL? = nil) {
+    /// Applies the backup-exclusion preference to an existing file immediately (set-only: a `true`
+    /// preference excludes; a `false` one changes nothing here, because a keychain read that falls
+    /// back to defaults must never silently RE-INCLUDE a deliberately excluded file — re-inclusion
+    /// goes through the explicit ``applyBackupExclusion(excluded:)`` seam).
+    ///
+    /// - Parameters:
+    ///   - fileURL: Override used by tests and by callers that stage a database in a
+    ///     custom location; `nil` selects the production path.
+    ///   - backupExclusionPreference: Test seam for the exclusion choice; `nil` selects the live
+    ///     `StoragePreferencesStore.currentPreferences()` read.
+    public init(fileURL: URL? = nil, backupExclusionPreference: (() -> Bool)? = nil) {
         let resolvedURL = fileURL ?? Self.defaultFileURL()
         assert(!resolvedURL.path.isEmpty, "repository path must not be empty")
         self.fileURL = resolvedURL
         self.encoder = RowPayloadCoders.makeEncoder(prettyPrinted: true)
         self.decoder = RowPayloadCoders.makeDecoder()
+        self.backupExclusionPreference = backupExclusionPreference
+            ?? { StoragePreferencesStore.currentPreferences().localBackupExcludedFromiOSBackup }
+        applyBackupExclusionFromPreferenceIfSet()
+    }
+
+    /// Applies (or clears) the day-blob file's `isExcludedFromBackup` flag — the explicit seam for
+    /// a runtime preference change, called alongside `PrivatePersistenceController`'s equivalent so
+    /// one toggle covers the sealed store AND the local JSON blob in the same moment. Both
+    /// directions on purpose: this path carries a deliberate user choice, unlike the fail-safe
+    /// set-only application at `init`/save. A no-op when no file exists yet (the flag would land on
+    /// nothing; the save path re-applies once the file is written).
+    public func applyBackupExclusion(excluded: Bool) {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        BackupExclusion.apply(fileURL: fileURL, excluded: excluded)
+    }
+
+    /// Set-only preference application: excludes the existing file when the preference says so,
+    /// and touches nothing otherwise (see the `init` doc for why `false` is deliberately inert
+    /// here). Called from `init` and after every successful `saveDatabase` write, because the
+    /// atomic rewrite replaces the inode the flag lives on.
+    private func applyBackupExclusionFromPreferenceIfSet() {
+        guard FileManager.default.fileExists(atPath: fileURL.path), backupExclusionPreference() else { return }
+        BackupExclusion.apply(fileURL: fileURL, excluded: true)
     }
 
     /// Loads the full aggregate for `todayKey`, substituting a fresh empty day when no day row
@@ -328,6 +377,9 @@ public struct LocalFernletRepository: FernletRepository {
             return false
         }
         guard write(data) else { return false }
+        // Re-apply the backup-exclusion preference: the atomic write above replaced the inode,
+        // which silently dropped any exclusion flag the previous file carried.
+        applyBackupExclusionFromPreferenceIfSet()
         if state.pendingLegacyCleanup {
             state.pendingLegacyCleanup = false
             Self.clearLegacyUserDefaultsIfPresent()

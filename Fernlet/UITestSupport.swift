@@ -65,6 +65,24 @@ enum UITestSupport {
     /// while the canvas is blank, so without this the naming / shop-listing confirmation step (and its
     /// moderation alert) is unreachable from a UI test.
     static var shouldSeedStudioCanvas: Bool { env["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] == "1" }
+
+    /// True when a test harness owns this process: an XCTest runner is attached (the unit-test
+    /// host app), or the app was launched by a UI test (`XCTestSessionIdentifier`, the
+    /// `-completeOnboarding`/`-resetOnboarding` arguments, or any `FERNLET_UI_TEST_*` hook).
+    ///
+    /// Consumed by `FernletApp` to suppress the one-time backup-exclusion launch gate
+    /// (`BackupExclusionLaunchGate`): an unanswered launch alert would deadlock every UI test,
+    /// and a unit-test host running the gate would mutate the REAL storage-preferences keychain
+    /// blob and prior-use marker on the test simulator. Release builds hard-code `false`, so the
+    /// gate always runs for real users.
+    static var isTestHarnessActive: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+            || arguments.contains("-completeOnboarding")
+            || arguments.contains("-resetOnboarding")
+            || env.keys.contains { $0.hasPrefix("FERNLET_UI_TEST_") }
+    }
     #else
     static var shouldSeedDemoContent: Bool { false }
     static var bypassPrivateLockGate: Bool { false }
@@ -73,6 +91,7 @@ enum UITestSupport {
     static var initialSheet: FernletSheet? { nil }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
+    static var isTestHarnessActive: Bool { false }
     #endif
 }
 

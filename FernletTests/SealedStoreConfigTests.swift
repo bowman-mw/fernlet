@@ -119,8 +119,11 @@ struct SealedStoreConfigTests {
         #expect(try storeURL.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup != true)
     }
 
-    /// Regression guard for finding #1: the DEFAULT must be NOT-excluded, so the sealed store (which has
-    /// no cloud recovery) is recoverable via same-device backup unless the user opts into exclusion.
+    /// Regression guard for finding #1, sharpened by security-hardening Phase 6: the TYPE default
+    /// must be NOT-excluded, because the tolerant decode and every load-failure fallback resolve to
+    /// it — a `true` here would silently flip existing users to excluded. The Phase-6 default flip
+    /// for FRESH installs rides `BackupExclusionLaunchGate` (with `backupExclusionChoiceMade`
+    /// recording that it happened), never this initializer default.
     @Test func defaultStoragePreferencesDoesNotExcludeLocalBackup() {
         #expect(StoragePreferences().localBackupExcludedFromiOSBackup == false)
     }
