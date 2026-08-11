@@ -31,6 +31,11 @@ public enum SealedBackupPayloadType: String, Codable, CaseIterable {
 /// reconcile/restore service stay app-side with the identity service. Payloads too large for
 /// one record are split into a chunk set whose head (`chunkIndex == 0`) carries the
 /// authoritative `chunkCount`; records written before chunking existed decode as chunk 0 of 1.
+///
+/// ``formatVersion`` + ``keySalt`` are the at-rest **record format** discriminator: a record written
+/// before they existed decodes as version 1 (legacy static escrow derivation, empty salt), while every
+/// new write is version 2 (per-generation salted derivation). Both open through the same crypto on the
+/// same identity, so v1 and v2 records coexist in one container with no migration.
 public struct SealedBackupRecord: Equatable {
     public var payloadType: SealedBackupPayloadType
     /// The owner's signing public key, carried as provenance for the app-side restore checks.
@@ -63,6 +68,35 @@ public struct SealedBackupRecord: Equatable {
     /// fine: the guarantee is "never accept older than what I have already seen", which holds
     /// regardless of which device minted a given value.
     public var generation: Int64
+    /// Which at-rest **record format** this record was sealed in — the discriminator that lets v1 and v2
+    /// records coexist in one container with no migration.
+    ///
+    /// `1` (the default, and what a record written before this field existed decodes as) means the
+    /// legacy static key derivation: empty HKDF salt, info `com.fernlet.sealed-backup`. `2` means the
+    /// per-generation-salt derivation: HKDF salted with ``keySalt`` under info
+    /// `com.fernlet.sealed-backup.v2`. All new writes are v2; v1 is read-compat only.
+    ///
+    /// This is deliberately an **explicit** discriminator rather than inferring the format from
+    /// "is `keySalt` empty" — an inference would silently downgrade a v2 record whose salt field was
+    /// dropped in transit, whereas the explicit version makes that case fail closed on decode.
+    ///
+    /// Note this is orthogonal to the `fernlet.sealed-backup.aad.v2` tag inside the GCM
+    /// additional-authenticated-data, which versions the **AAD byte layout** and is unchanged here.
+    public var formatVersion: Int
+    /// The 32 random bytes mixed into the escrow HKDF for this backup **generation** (empty for v1).
+    ///
+    /// Minted once per generation beside the ``generation`` counter and stamped on **every** chunk of
+    /// that generation, so each record is self-describing and `open()` never depends on fetch order (the
+    /// head chunk is written last as the commit marker, so "store the salt in the head" would not work).
+    ///
+    /// It is a plaintext CKRecord field, like ``nonce``, and must be: it derives the key that opens the
+    /// ciphertext, so a salt hidden inside the payload would be unrecoverable. It is deliberately **not**
+    /// bound into the AAD — a tampered salt already yields the wrong key and fails AES-GCM open, so
+    /// binding it would be redundant and would needlessly fork the pinned AAD layout.
+    ///
+    /// The security win is blast radius: one escrow-key compromise no longer derives a single key that
+    /// opens every past and future backup, only one key per generation.
+    public var keySalt: Data
 
     public init(
         payloadType: SealedBackupPayloadType,
@@ -74,7 +108,9 @@ public struct SealedBackupRecord: Equatable {
         updatedAt: Date,
         chunkIndex: Int = 0,
         chunkCount: Int = 1,
-        generation: Int64
+        generation: Int64,
+        formatVersion: Int = 1,
+        keySalt: Data = Data()
     ) {
         self.payloadType = payloadType
         self.signingPublicKey = signingPublicKey
@@ -86,6 +122,8 @@ public struct SealedBackupRecord: Equatable {
         self.chunkIndex = chunkIndex
         self.chunkCount = chunkCount
         self.generation = generation
+        self.formatVersion = formatVersion
+        self.keySalt = keySalt
     }
 }
 

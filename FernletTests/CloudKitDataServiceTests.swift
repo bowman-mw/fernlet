@@ -285,6 +285,14 @@ struct CloudKitDataServiceTests {
 
         #expect(database.recordsByType["SealedBackupRecord"]?.count == chunkCount)
 
+        // Every new write is record format v2, and the whole generation shares ONE 32-byte salt
+        // stamped on every chunk (not just the head, which is written last as the commit marker).
+        let written = try await cloud.sealedBackupChunks(payloadType: .periodData)
+        #expect(written.count == chunkCount)
+        #expect(written.allSatisfy { $0.formatVersion == 2 }, "a new sealed-backup write was not v2")
+        #expect(Set(written.map(\.keySalt)).count == 1, "chunks of one generation disagreed on the salt")
+        #expect(written[0].keySalt.count == 32)
+
         let chunks = try #require(try await service.restoreChunks(payloadType: .periodData))
         #expect(chunks.count == chunkCount)
         let restored = try chunks.flatMap { try JSONDecoder().decode([MenstrualNarrative].self, from: $0) }
@@ -295,7 +303,41 @@ struct CloudKitDataServiceTests {
         #expect(try await service.restoreChunks(payloadType: .periodData) == nil)
     }
 
-    private func sealedBackupChunk(_ index: Int, of count: Int) -> SealedBackupRecord {
+    /// The single-record reconcile path (sensitive notes) mints a salt of its own — v2 is not a
+    /// chunked-only property, or the smaller payload would keep the static derivation forever.
+    @Test func singleRecordReconcileWritesFormatV2AndRestores() async throws {
+        let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let identity = IdentityService(keychainService: serviceID)
+        try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()
+
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let cloud = makeService(database: database, zoneID: zoneID)
+        let service = SealedBackupService(cloudDataService: cloud, identityService: identity)
+
+        let plaintext = Data("one-record payload".utf8)
+        try await service.reconcile(plaintext, payloadType: .sensitiveNotes, enabled: true)
+
+        let head = try #require(try await cloud.sealedBackup(payloadType: .sensitiveNotes))
+        #expect(head.formatVersion == 2)
+        #expect(head.keySalt.count == 32)
+        #expect(try await service.restoreChunks(payloadType: .sensitiveNotes) == [plaintext])
+
+        // Two writes must not reuse a salt — that is the whole per-generation bound.
+        try await service.reconcile(plaintext, payloadType: .sensitiveNotes, enabled: true)
+        let second = try #require(try await cloud.sealedBackup(payloadType: .sensitiveNotes))
+        #expect(second.keySalt != head.keySalt, "two generations shared one salt")
+        #expect(try await service.restoreChunks(payloadType: .sensitiveNotes) == [plaintext])
+    }
+
+    private func sealedBackupChunk(
+        _ index: Int,
+        of count: Int,
+        formatVersion: Int = 1,
+        keySalt: Data = Data()
+    ) -> SealedBackupRecord {
         SealedBackupRecord(
             payloadType: .periodData,
             signingPublicKey: Data("signing".utf8),
@@ -306,8 +348,126 @@ struct CloudKitDataServiceTests {
             updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
             chunkIndex: index,
             chunkCount: count,
-            generation: 1
+            generation: 1,
+            formatVersion: formatVersion,
+            keySalt: keySalt
         )
+    }
+
+    // MARK: - Sealed-backup record format v1/v2
+
+    /// A stand-in for a minted per-generation salt: 32 bytes, the only length decode accepts for v2.
+    private var testKeySalt: Data { Data(repeating: 0x5A, count: 32) }
+
+    /// The stored `CKRecord` behind a sealed-backup record name, so a test can edit the *wire* shape
+    /// (drop a field, truncate the salt) the way a legacy or spliced record would differ.
+    private func storedSealedBackup(
+        in database: MockCloudKitRecordDatabase,
+        named name: String
+    ) throws -> CKRecord {
+        try #require((database.recordsByType["SealedBackupRecord"] ?? [])
+            .first { $0.recordID.recordName == name })
+    }
+
+    /// A record written before format v2 existed carries neither field. It must decode as v1 with an
+    /// empty salt — anything else strands every backup already in a user's CloudKit database.
+    @Test func sealedBackupWithoutFormatFieldsDecodesAsVersionOne() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        try await service.saveSealedBackup(sealedBackupChunk(0, of: 1))
+
+        // Strip the discriminator the way a pre-v2 writer would have left it: absent entirely.
+        let stored = try storedSealedBackup(in: database, named: "sealed-backup.periodData")
+        stored["formatVersion"] = nil
+        #expect(stored["keySalt"] == nil, "an unsalted write must not stamp a keySalt field at all")
+
+        let fetched = try #require(try await service.sealedBackup(payloadType: .periodData))
+        #expect(fetched.formatVersion == 1)
+        #expect(fetched.keySalt.isEmpty)
+    }
+
+    /// A v2 record round-trips both new fields through the CloudKit encode/decode seam.
+    @Test func sealedBackupV2RoundTripsFormatVersionAndSalt() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        let record = sealedBackupChunk(0, of: 1, formatVersion: 2, keySalt: testKeySalt)
+
+        try await service.saveSealedBackup(record)
+        let fetched = try #require(try await service.sealedBackup(payloadType: .periodData))
+        #expect(fetched == record)
+        #expect(fetched.formatVersion == 2)
+        #expect(fetched.keySalt == testKeySalt)
+    }
+
+    /// Fail-closed: from v2 up the salt derives the key, so a missing or wrong-length one is a
+    /// malformed record — never a silent fallback to some other derivation.
+    @Test func sealedBackupV2WithMissingOrShortSaltFailsClosed() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        try await service.saveSealedBackup(sealedBackupChunk(0, of: 1, formatVersion: 2, keySalt: testKeySalt))
+        let stored = try storedSealedBackup(in: database, named: "sealed-backup.periodData")
+
+        stored["keySalt"] = nil
+        await #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try await service.sealedBackup(payloadType: .periodData)
+        }
+
+        stored["keySalt"] = Data(repeating: 0x5A, count: 16) as CKRecordValue
+        await #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try await service.sealedBackup(payloadType: .periodData)
+        }
+
+        // ...and the same record with the full 32 bytes back is fine, so the guard is the length,
+        // not some unrelated breakage.
+        stored["keySalt"] = testKeySalt as CKRecordValue
+        #expect(try await service.sealedBackup(payloadType: .periodData)?.keySalt == testKeySalt)
+    }
+
+    /// One generation means one format and one salt on every chunk. A set that mixes either was
+    /// spliced together, so reassembly fails closed rather than restoring a half-forged history.
+    @Test func sealedBackupChunkSetFailsClosedOnMixedFormatOrSalt() async throws {
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+
+        // Mixed salt: chunk 2 carries a different (still valid, still 32-byte) salt.
+        let mixedSaltDB = MockCloudKitRecordDatabase()
+        let mixedSaltService = makeService(database: mixedSaltDB, zoneID: zoneID)
+        for index in 0..<3 {
+            let salt = index == 2 ? Data(repeating: 0x11, count: 32) : testKeySalt
+            try await mixedSaltService.saveSealedBackup(
+                sealedBackupChunk(index, of: 3, formatVersion: 2, keySalt: salt)
+            )
+        }
+        await #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try await mixedSaltService.sealedBackupChunks(payloadType: .periodData)
+        }
+
+        // Mixed format: a v1 chunk spliced into an otherwise v2 set.
+        let mixedVersionDB = MockCloudKitRecordDatabase()
+        let mixedVersionService = makeService(database: mixedVersionDB, zoneID: zoneID)
+        for index in 0..<3 {
+            let chunk = index == 1
+                ? sealedBackupChunk(index, of: 3)
+                : sealedBackupChunk(index, of: 3, formatVersion: 2, keySalt: testKeySalt)
+            try await mixedVersionService.saveSealedBackup(chunk)
+        }
+        await #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try await mixedVersionService.sealedBackupChunks(payloadType: .periodData)
+        }
+
+        // Control: a uniform v2 set reassembles, so the two rejections above are the mixing.
+        let uniformDB = MockCloudKitRecordDatabase()
+        let uniformService = makeService(database: uniformDB, zoneID: zoneID)
+        for index in 0..<3 {
+            try await uniformService.saveSealedBackup(
+                sealedBackupChunk(index, of: 3, formatVersion: 2, keySalt: testKeySalt)
+            )
+        }
+        let fetched = try await uniformService.sealedBackupChunks(payloadType: .periodData)
+        #expect(fetched.map(\.chunkIndex) == [0, 1, 2])
+        #expect(fetched.allSatisfy { $0.formatVersion == 2 && $0.keySalt == testKeySalt })
     }
 
     @Test func notSignedInStateThrowsRightErrorForBothMethods() async throws {

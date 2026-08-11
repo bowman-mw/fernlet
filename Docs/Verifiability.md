@@ -55,7 +55,7 @@ xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulato
 | AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
 | Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
-| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (escrow HKDF derivation + the sealed-backup AAD v2 byte layout, pinned end-to-end). |
+| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity). |
 | Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 
@@ -130,9 +130,11 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   list below rather than silently done: it trades away a recovery path.
 - **The escrow-sealed iCloud backup is, by design, exactly as strong as the user's Apple
   account.** It is openable on any device holding the user's iCloud Keychain — it can never be
-  bound tighter without destroying its purpose. Its static key derivation means one escrow-key
-  compromise opens all backup generations (a per-generation-salt hardening would bound, not
-  eliminate, that — see §6).
+  bound tighter without destroying its purpose. The per-generation-salt hardening (§6.4, done)
+  **bounds** a compromise to one generation per derived key; it does not eliminate it — the escrow
+  private key still derives every generation's key, one at a time. Records written before that
+  change (format v1) remain openable under the single static derivation, by design: re-keying them
+  is impossible without the plaintext, and they are replaced by their next re-seal.
 - **iOS builds are not byte-exactly reproducible** (§2, last row). Checksums + signed tags are a
   self-build baseline and an attribution trail, not a store-binary proof.
 - **Apple frameworks are trusted, not audited.** CloudKit, WeatherKit, APNs, and the OS itself
@@ -167,10 +169,17 @@ documented product decision. Recorded so the trade is decided consciously, not b
    sanctioned cross-device route. Note: the "harden the photo store before gym progress pics"
    follow-up is gated on this decision.
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
-   The bounded hardening already sketched in `IdentityService`'s own doc comment (mix a random
-   per-generation salt, stored in the head chunk, into the HKDF) limits a key-compromise blast
-   radius per backup while keeping restore. It changes the record format, so old/new coexistence
-   needs a versioned info string — an owner call on format churn.
+   **DONE (2026-08-10): the bounded hardening shipped as record format v2.** Every backup generation
+   mints a 32-byte CSPRNG salt, stamped on *every* chunk of that generation (not just the head — the
+   head is written last as the commit marker) and mixed into the escrow HKDF under the versioned info
+   string `com.fernlet.sealed-backup.v2`. One escrow-key compromise now derives one key per
+   generation instead of one key for all of them. Coexistence is pure read-compat with no migration:
+   a record with no `formatVersion`/`keySalt` decodes as v1 (empty salt, info
+   `com.fernlet.sealed-backup`) and keeps opening byte-identically, while a `formatVersion >= 2`
+   record *requires* a 32-byte salt or fails closed as malformed, and a chunk set that mixes formats
+   or salts is rejected. All new writes are v2. The device-binding half stays rejected, unchanged:
+   binding the escrow key would destroy cross-device restore. Pinned by
+   `FernletTests/SealedBackupFormatPinTests`.
 5. **The escrow custody model itself.** It is exactly as strong as iCloud Keychain E2EE plus the
    user's Apple account. If that is not acceptable, the alternative is a user-held recovery
    secret or a device-to-device QR ceremony instead of iCloud Keychain — and zero-config

@@ -412,13 +412,21 @@ public final class CloudKitDataService {
         cloudRecord["chunkIndex"] = record.chunkIndex as CKRecordValue
         cloudRecord["chunkCount"] = record.chunkCount as CKRecordValue
         cloudRecord["generation"] = record.generation as CKRecordValue
+        cloudRecord["formatVersion"] = record.formatVersion as CKRecordValue
+        // Only stamped when non-empty: a v1 record must be byte-for-byte the shape it has always had,
+        // and an empty-bytes CloudKit field buys nothing. `decodeSealedBackup` reads an absent salt as
+        // empty, and requires 32 bytes whenever `formatVersion >= 2`.
+        if !record.keySalt.isEmpty {
+            cloudRecord["keySalt"] = record.keySalt as CKRecordValue
+        }
         cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
         try await database.saveRecords([cloudRecord])
         FernletAuditLog.log("cloudkit.sealedBackup.saved", context: [
             "payloadType": record.payloadType.rawValue,
             "chunkIndex": String(record.chunkIndex),
             "chunkCount": String(record.chunkCount),
-            "generation": String(record.generation)
+            "generation": String(record.generation),
+            "formatVersion": String(record.formatVersion)
         ])
     }
 
@@ -440,8 +448,9 @@ public final class CloudKitDataService {
     /// Fetches the full, ordered chunk set for a payload: the head (chunk 0) carries `chunkCount`, then
     /// chunks `1...chunkCount-1` are fetched by their deterministic record IDs. Returns `[]` when no
     /// backup exists. Throws `SealedBackupError.malformedRecord` if the set is incomplete or
-    /// inconsistent (a missing chunk, or a chunk left over from a differently-sized prior backup), so
-    /// the caller restores all-or-nothing rather than reassembling a corrupt history.
+    /// inconsistent (a missing chunk, a chunk left over from a differently-sized prior backup, or a set
+    /// mixing record formats / per-generation salts), so the caller restores all-or-nothing rather than
+    /// reassembling a corrupt history.
     public func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
         guard let head = try await sealedBackup(payloadType: payloadType) else { return [] }
         guard head.chunkCount > 1 else { return [head] }
@@ -463,7 +472,12 @@ public final class CloudKitDataService {
         // itself validly sealed at the same index and count.
         let sameChunkCount = records.allSatisfy { $0.chunkCount == head.chunkCount }
         let sameGeneration = records.allSatisfy { $0.generation == head.generation }
-        guard isContiguous, sameChunkCount, sameGeneration else {
+        // One generation means one record format and one salt: the salt is minted once per generation
+        // and stamped on every chunk. A set mixing formats or salts is spliced, not ours — fail closed
+        // rather than let a v1 chunk ride along inside a v2 set (or vice versa).
+        let sameFormatVersion = records.allSatisfy { $0.formatVersion == head.formatVersion }
+        let sameKeySalt = records.allSatisfy { $0.keySalt == head.keySalt }
+        guard isContiguous, sameChunkCount, sameGeneration, sameFormatVersion, sameKeySalt else {
             throw SealedBackupError.malformedRecord
         }
         return records
@@ -556,6 +570,16 @@ public final class CloudKitDataService {
         guard let generation = record["generation"] as? Int64 else {
             throw SealedBackupError.malformedRecord
         }
+        // Record format (hardening #4). Absent field → version 1: that is exactly what every record
+        // written before v2 existed looks like, and v1 must keep opening byte-identically. From v2 up,
+        // the salt is load-bearing (it derives the key), so it is REQUIRED and must be exactly 32 bytes
+        // — anything else fails closed rather than deriving a wrong-but-plausible key, following the
+        // `generation` precedent above.
+        let formatVersion = (record["formatVersion"] as? Int) ?? 1
+        let keySalt = (record["keySalt"] as? Data) ?? Data()
+        if formatVersion >= 2 {
+            guard keySalt.count == 32 else { throw SealedBackupError.malformedRecord }
+        }
         return SealedBackupRecord(
             payloadType: payloadType,
             signingPublicKey: signingPublicKey,
@@ -566,7 +590,9 @@ public final class CloudKitDataService {
             updatedAt: updatedAt,
             chunkIndex: chunkIndex,
             chunkCount: chunkCount,
-            generation: generation
+            generation: generation,
+            formatVersion: formatVersion,
+            keySalt: keySalt
         )
     }
 
