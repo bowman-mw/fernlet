@@ -561,9 +561,14 @@ struct PrivacyWipeMediaKeySurvivalTests {
     }
 
     @Test func deleteAllKeepsTheSharedMediaKeySoTheKeptPhotoWallStaysReadable() async {
-        // Mint (or read) the one shared row every PrivateMediaStore encrypts under.
-        let before = keyBytes(KeychainPrivateMediaKeyProvider().mediaKey())
+        // Mint (or read) BOTH rows of the Phase-5 media-key split. The friend row is the one the
+        // kept photo wall decrypts under; the own row is kept too (owner decision) — its STORES are
+        // emptied by the wipe instead, so the key protects nothing, while deleting it would
+        // reintroduce the same stale-cache hazard for anything captured between wipe and relaunch.
+        let before = keyBytes(KeychainPrivateMediaKeyProvider(role: .friendWall).mediaKey())
+        let ownBefore = keyBytes(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
         #expect(before != nil, "precondition: could not read or mint the shared media key")
+        #expect(ownBefore != nil, "precondition: could not read or mint the own-photo media key")
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("wipe-media-key-\(UUID().uuidString).json")
@@ -572,10 +577,15 @@ struct PrivacyWipeMediaKeySurvivalTests {
 
         // A FRESH provider holds no cached key, so this is the next launch reading the keychain —
         // exactly the path that used to mint a brand-new key and strand every retained photo.
-        let after = keyBytes(KeychainPrivateMediaKeyProvider().mediaKey())
+        let after = keyBytes(KeychainPrivateMediaKeyProvider(role: .friendWall).mediaKey())
         #expect(
             after == before,
             "the wipe destroyed the shared media key: every photo on the deliberately-kept friend photo wall now decrypts to garbage"
+        )
+        let ownAfter = keyBytes(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
+        #expect(
+            ownAfter == ownBefore,
+            "the wipe destroyed the own-photo media key, so anything captured before relaunch would seal under a key that no longer exists"
         )
     }
 }

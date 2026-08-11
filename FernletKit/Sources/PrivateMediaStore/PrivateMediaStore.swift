@@ -59,9 +59,11 @@ public struct PrivateMediaStore {
     /// - Parameters:
     ///   - indexURL: Location of the metadata index JSON; the `MeshPhotos/` and
     ///     `MeshPhotoThumbnails/` directories are created as its siblings.
-    ///   - keyProvider: Source of the AES-256-GCM at-rest key; defaults to the shared
-    ///     keychain-backed provider, with tests injecting an in-memory one.
-    public init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
+    ///   - keyProvider: Source of the AES-256-GCM at-rest key; defaults to the keychain-backed
+    ///     FRIEND-WALL provider — the original, backup-restorable row, which the Phase-5 key split
+    ///     left untouched precisely so the wall needs no re-encryption. Tests inject an in-memory
+    ///     one. This store has no dual-open fallback and needs none: its key never changed.
+    public init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .friendWall)) {
         self.indexURL = indexURL
         let baseURL = indexURL.deletingLastPathComponent()
         self.imageDirectoryURL = baseURL.appendingPathComponent("MeshPhotos", isDirectory: true)

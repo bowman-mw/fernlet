@@ -239,6 +239,64 @@ struct MealPhotoStoreTests {
         // Still usable after a wipe.
         #expect(store.save(jpeg(width: 100, height: 100)) != nil)
     }
+
+    // MARK: - Phase-5 key split: dual-open safety net
+
+    @Test func dualOpenReturnsAPreSplitPhotoAndReSealsItUnderTheOwnKey() throws {
+        // The window this covers: the media key has been split, but the eager migration pass has not
+        // reached this file yet, so it is still sealed under the OLD shared (now friend-wall) key.
+        // Without the fallback the user's own photo would simply vanish from the UI.
+        let legacyKey = SymmetricKey(size: .bits256)
+        let ownKey = SymmetricKey(size: .bits256)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MealPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Write the file the way the pre-split build did: sealed under the legacy key.
+        let legacyStore = MealPhotoStore(directory: dir, keyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey))
+        let id = try #require(legacyStore.save(jpeg(width: 180, height: 180)))
+        let expected = try #require(legacyStore.imageData(for: id))
+
+        // Own key alone cannot open it...
+        let ownOnly = MealPhotoStore(directory: dir, keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey))
+        #expect(ownOnly.imageData(for: id) == nil, "the split is meaningless if the own key opens pre-split bytes")
+
+        // ...but with the legacy provider injected as the fallback the bytes come back, and the file
+        // is upgraded in place so it leaves the legacy generation on this first read.
+        let dualOpen = MealPhotoStore(
+            directory: dir,
+            keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey),
+            legacyKeyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey)
+        )
+        #expect(dualOpen.imageData(for: id) == expected)
+        #expect(ownOnly.imageData(for: id) == expected, "the dual-open read did not re-seal under the own key")
+        // And the legacy key no longer opens it — the upgrade is a move, not a copy.
+        let legacyOnly = MealPhotoStore(directory: dir, keyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey))
+        #expect(legacyOnly.imageData(for: id) == nil)
+    }
+
+    @Test func dualOpenNeverLaundersPlaintextIntoTheSealedStore() throws {
+        // The fallback accepts only bytes that GCM-open under the app's own pre-split key. A
+        // plaintext JPEG dropped at a valid id path in a born-sealed store must STILL be refused —
+        // adding a second key must not reopen the laundering hole the upgrade flag closed.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MealPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MealPhotoStore(
+            directory: dir,
+            keyProvider: InMemoryPrivateMediaKeyProvider(),
+            allowsLegacyPlaintextUpgrade: false,
+            legacyKeyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+
+        let id = UUID()
+        let plaintext = jpeg(width: 150, height: 150)
+        try plaintext.write(to: fileURL(dir, id))
+
+        #expect(store.imageData(for: id) == nil, "the dual-open fallback trusted unsealed bytes")
+        let afterRead = try #require(try? Data(contentsOf: fileURL(dir, id)))
+        #expect(afterRead == plaintext, "unsealed bytes were laundered into authentic ciphertext")
+    }
 }
 
 /// A key provider that never yields a key — exercises the fail-closed save path.

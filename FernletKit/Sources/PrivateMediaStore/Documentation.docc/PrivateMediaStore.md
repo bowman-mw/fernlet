@@ -22,16 +22,48 @@ It holds three kinds of media, each with its own store type but one shared at-re
   and seals that index too, because a body-photo timeline's dates and notes are as personal as
   the pictures.
 
-All three seal under a single symmetric key supplied by ``PrivateMediaKeyProviding``, whose
-production conformer ``KeychainPrivateMediaKeyProvider`` mints one random 256-bit key and stores
-it in a fixed keychain row — backup-restorable (`kSecAttrAccessibleAfterFirstUnlock`) so an
-iCloud device backup restored onto a new phone can still open the cache it carried. The seal /
+All three seal under a symmetric key supplied by ``PrivateMediaKeyProviding``, whose production
+conformer ``KeychainPrivateMediaKeyProvider`` mints a random 256-bit key per
+``KeychainPrivateMediaKeyProvider/Role`` and stores it in a fixed keychain row. The seal /
 open / seal-then-write mechanics are one internal extension on that protocol (`gcmSeal`,
 `gcmOpen`, `sealAndWrite` in `MediaAtRestCrypto.swift`) which all three stores call, replacing a
 hand-rolled copy per store; the helpers are deliberately policy-free, so each store's fail-closed
 decision stays at its own call site. Note this module does NOT use `FernletCrypto`/ColumnCrypto:
 it seals via CryptoKit directly with its own keychain key. `UIImage` helpers for outbound
 friend-photo sizing round out the module.
+
+### Two media keys, not one (security-hardening Phase 5)
+
+There used to be exactly one media key behind all four corpora, deliberately backup-restorable, so
+the user's own meal and body photos were readable by anyone who could restore the device backup.
+Phase 5 splits custody in two while leaving the friend wall byte-for-byte alone:
+
+| Role | Keychain account | Custody | Corpora |
+| --- | --- | --- | --- |
+| ``KeychainPrivateMediaKeyProvider/Role/friendWall`` | `…private-media.contentKey` (original) | `AfterFirstUnlock`, non-sync — **backup-restorable, permanently** | the friend photowall cache |
+| ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | `AfterFirstUnlock` today, **flips to `…ThisDeviceOnly` in step 5c** | meal, recipe, progress bytes + the progress index |
+
+The wall keeps the original row precisely so nothing about it changes: no re-encryption, no
+migration, and the survives-delete-all / never-deleted-by-wipe properties hold verbatim. The
+`ownPhotos` row is the one that becomes device-bound, which is what makes bulk file + keychain
+theft of the user's own photos worthless off-device.
+
+Three pieces carry own photos across that split, all in `OwnPhotoKeyMigration.swift`:
+
+- ``OwnPhotoCorpusLayout`` — the on-disk names of the own corpora, in one place, because a name
+  that drifted would silently leave a corpus un-migrated (and therefore still backup-restorable)
+  without failing any build.
+- ``OwnPhotoKeyMigrator`` — the **eager, idempotent, crash-safe** re-seal pass, run once per launch
+  off the main path. Eager is not an optimization: a lazily-migrated corpus leaves every photo the
+  user never reopens under the backup-restorable key forever.
+- ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing is left under
+  the old key. Both the 5c binding flip and the removal of the dual-open fallback are gated on it.
+
+Until the latch is set, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an
+injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under
+the own key on access. That fallback only ever trusts bytes that GCM-open under a key this app
+owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused
+exactly where it was before.
 
 ### Position relative to the S3 wall
 
@@ -63,6 +95,9 @@ Every store here fails **closed**, and changes must preserve that:
   the friend photowall deliberately survives it (friends' photos are the friends' gift, removed
   one at a time) — which is why
   ``KeychainPrivateMediaKeyProvider/deleteKeychainRowForWipe()`` intentionally has no callers.
+  **Neither** keychain row is deleted by the wipe: the friend key because the wall it protects
+  survives, the own key because its stores are emptied instead (an empty store's key protects
+  nothing, and deleting the row would strand anything captured between the wipe and relaunch).
   The `invalidateEncryptionKeyCache()` seams drop provider-cached keys after a wipe so RAM
   matches the keychain (see `Docs/PrivacyWipeCoverage.md`).
 
@@ -87,3 +122,11 @@ provider instance across isolation domains.
 
 - ``PrivateMediaKeyProviding``
 - ``KeychainPrivateMediaKeyProvider``
+
+### Own-photo key migration
+
+- ``OwnPhotoCorpusLayout``
+- ``OwnPhotoSealedLocations``
+- ``OwnPhotoKeyMigrator``
+- ``OwnPhotoKeyMigrationResult``
+- ``OwnPhotoMigrationLatch``

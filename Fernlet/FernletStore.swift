@@ -318,25 +318,53 @@ final class FernletStore {
     /// held so its ODR access isn't reclaimed for the app session. See BrandedCatalogResourceLoader.
     @ObservationIgnored private let brandedCatalogLoader = BrandedCatalogResourceLoader()
     @ObservationIgnored private var isReloadingFromRepository = false
+    /// The app container's Documents directory — the root of every own-photo corpus below and the
+    /// input to the own-photo key migration. Falls back to the temporary directory only if the
+    /// container is unreachable (the historical behavior of each store's inline expression).
+    nonisolated static let photoDocumentsDirectory: URL =
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+    /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
+    /// stores below. Separate keychain row from the friend photo wall's, which stays on the
+    /// original backup-restorable key inside `MeshNetworkManager`.
+    ///
+    /// Not `Sendable`: each store constructs its own instance of the same role (they read one
+    /// keychain row, so they share the key material and differ only in their private cache), and
+    /// every one of them stays on this main-actor store — see `PrivateMediaKeyProviding`.
+    /// `ownPhotoLegacyKeyProvider` is the PRE-SPLIT key, injected as the read-path dual-open
+    /// fallback for files `OwnPhotoKeyMigrator`'s eager pass has not re-sealed yet; step 5c drops
+    /// these arguments once the migration latch proves them unnecessary.
+    nonisolated private static func ownPhotoKeyProvider() -> KeychainPrivateMediaKeyProvider {
+        KeychainPrivateMediaKeyProvider(role: .ownPhotos)
+    }
+    /// The pre-split (now friend-wall) key, read-only: `mintsIfAbsent: false` so a fallback probe
+    /// can never CREATE the wall's row — a fresh random key would open nothing and would install a
+    /// row that later looks authoritative.
+    nonisolated private static func ownPhotoLegacyKeyProvider() -> KeychainPrivateMediaKeyProvider {
+        KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
+    }
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("MealPhotos", isDirectory: true)
+        directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// The user's gym progress-photo timeline (#11). Body photos, so it seals the bytes AND the dated
     /// index; reuses the same hardened media path as meal photos, in its own directory.
     @ObservationIgnored private let progressPhotoStore = ProgressPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("ProgressPhotos", isDirectory: true)
+        directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// The recipe's picture (#1), sealed and keyed by the recipe id. Holds the user's own photo —
     /// which always wins — or, since the 2026-08-09 owner decision (reversing the 2026-07-16
     /// "no external image fetch" tester decision), a web-imported recipe's page picture, downloaded
     /// once by a user-present path and sealed through the same normalize-and-encrypt pipeline.
     @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("RecipePhotos", isDirectory: true),
+        directory: OwnPhotoCorpusLayout.recipePhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
-        allowsLegacyPlaintextUpgrade: false
+        allowsLegacyPlaintextUpgrade: false,
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// Backing store for ``RecipeWebImageAttemptMemory`` — the device-local "one automatic
     /// web-image attempt per device" bookkeeping (the synced half of that contract is
@@ -4325,15 +4353,21 @@ final class FernletStore {
         // so they carry no incomplete-store signal.
         KeychainItem.delete(for: .deviceJournalKey, service: KeychainItem.journalService)
         KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
-        // The shared private-media content key (`com.fernlet.private-media`) is deliberately NOT
-        // deleted, and must not be re-added here. It is ONE keychain row behind EVERY
-        // `PrivateMediaStore` — including `MeshNetworkManager.photoCacheStore`, which holds the
-        // friend photo wall this funnel keeps by design (see the survivors list above). Deleting it
-        // would not orphan a key, it would shred the wall: the next `mediaKey()` finds no row, mints
-        // a fresh random one, and every retained photo decrypts to garbage — permanently, with no
-        // failure signal anywhere. A key whose OTHER stores were just emptied protects nothing extra,
-        // so keeping it discloses nothing. The cache invalidations below stay: they are still correct
-        // hygiene for the emptied stores (next read re-fetches the surviving row).
+        // NEITHER private-media content key (service `com.fernlet.private-media`) is deleted, and
+        // neither must be re-added here.
+        //   • `…contentKey` (friend wall) backs `MeshNetworkManager.photoCacheStore`, which holds
+        //     the friend photo wall this funnel keeps by design (see the survivors list above).
+        //     Deleting it would not orphan a key, it would shred the wall: the next `mediaKey()`
+        //     finds no row, mints a fresh random one, and every retained photo decrypts to garbage —
+        //     permanently, with no failure signal anywhere.
+        //   • `…ownContentKey` (the Phase-5 own-photos key) backs the meal/recipe/progress stores,
+        //     whose FILES this funnel does delete just above. The row is kept anyway (owner
+        //     decision): the stores are empty, so the key protects nothing and discloses nothing,
+        //     while deleting it would re-introduce the same stale-cache hazard for anything captured
+        //     between the wipe and relaunch.
+        // A key whose stores were just emptied protects nothing extra, so keeping it discloses
+        // nothing. The cache invalidations below stay: they are still correct hygiene for the
+        // emptied stores (next read re-fetches the surviving row).
         mealPhotoStore.invalidateEncryptionKeyCache()
         progressPhotoStore.invalidateEncryptionKeyCache()
         recipePhotoStore.invalidateEncryptionKeyCache()
@@ -4586,6 +4620,28 @@ final class FernletStore {
         // until (and if) this attaches; a missing/purged asset just leaves us on base coverage.
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
+        migrateOwnPhotosToOwnKey()
+    }
+
+    /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media
+    /// key onto the own-photos key, eagerly, once per launch until it is proven complete.
+    ///
+    /// Eager on purpose. A lazy, read-triggered migration would leave every photo the user never
+    /// reopens sealed under the backup-restorable key indefinitely — and "own photos stop being
+    /// readable off this device" is the whole point of the split, so the corpus has to be swept,
+    /// not sampled. The read-path dual-open fallback covers only the window until this finishes.
+    ///
+    /// Off the main path in two senses: it runs from `deferredPostLaunchTasks` (after the UI is
+    /// up), and on a detached utility task so the file I/O never touches the main actor. The
+    /// migrator builds its OWN key providers inside that task — `PrivateMediaKeyProviding` is not
+    /// `Sendable`, so the store's providers must not travel with it — and only `URL` values cross
+    /// the boundary. Fully idempotent and cheap after completion: the latch short-circuits it, and
+    /// even without the latch a migrated corpus costs one GCM open per file.
+    private func migrateOwnPhotosToOwnKey() {
+        let documentsDirectory = Self.photoDocumentsDirectory
+        Task.detached(priority: .utility) {
+            OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
+        }
     }
 
     func flushPendingSnapshotSave() {

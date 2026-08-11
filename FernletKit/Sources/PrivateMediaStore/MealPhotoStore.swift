@@ -9,8 +9,9 @@ import FernletDomainModel
 /// this store had to be sealed before they were added).
 ///
 /// Every photo is normalized (downscaled + re-encoded to a bounded JPEG) and then AES-256-GCM-sealed
-/// under the shared `PrivateMediaKeyProviding` key before it touches disk — the same at-rest scheme as
-/// `PrivateMediaStore`. It used to write the raw, full-resolution JPEG in the clear (relying only on
+/// under the injected `PrivateMediaKeyProviding` key — since the Phase-5 key split, the OWN-photos key
+/// (`KeychainPrivateMediaKeyProvider.Role.ownPhotos`), never the friend wall's — before it touches
+/// disk; the same at-rest scheme as `PrivateMediaStore`. It used to write the raw, full-resolution JPEG in the clear (relying only on
 /// iOS `.completeFileProtection`); that was fine for a lunch snapshot but not for a body photo, and it
 /// stored multi-megabyte originals. Normalizing on the way in also means a 48 MP phone photo is bounded
 /// rather than rejected the way the peer decompression-bomb gate would reject it.
@@ -27,6 +28,16 @@ import FernletDomainModel
 public struct MealPhotoStore {
     private let directory: URL
     private let keyProvider: PrivateMediaKeyProviding
+    /// Optional PRE-SPLIT key, tried on read when the own key can't open a file — the dual-open
+    /// safety net for the window in which `OwnPhotoKeyMigrator`'s eager pass has not yet re-sealed
+    /// everything (a crash, a locked keychain, a corpus larger than one launch's work).
+    ///
+    /// Bytes it opens are authentic ciphertext under a key this app owns, so — unlike the
+    /// legacy-PLAINTEXT branch — trusting them launders nothing: they are re-sealed under the own
+    /// key in place and the file leaves the legacy generation on first access. Nil disables the
+    /// fallback entirely; step 5c passes nil once the migration latch proves it is unnecessary,
+    /// which is what makes the own key's device binding meaningful.
+    private let legacyKeyProvider: PrivateMediaKeyProviding?
     /// Whether an unsealed on-disk file that parses as a safe-bounds image is trusted as pre-sealing
     /// "legacy plaintext", re-sealed in place, and returned. TRUE only for the original meal-photo store,
     /// which legitimately has such files from the pre-sealing build. Body (progress) photos and recipe
@@ -47,18 +58,24 @@ public struct MealPhotoStore {
     ///
     /// - Parameters:
     ///   - directory: Where the sealed `<uuid>.jpg` files live; each logical store gets its own.
-    ///   - keyProvider: Source of the shared at-rest key; defaults to the keychain-backed provider.
+    ///   - keyProvider: Source of the at-rest key; defaults to the keychain-backed OWN-photos
+    ///     provider, because every instance of this store holds the user's own pictures. (The
+    ///     friend wall uses `PrivateMediaStore`, whose default is the friend-wall role.)
     ///   - allowsLegacyPlaintextUpgrade: Pass true ONLY for a store that really has a pre-sealing
     ///     plaintext generation on disk (the original meal-photo store); pass false for stores that
     ///     were born sealed (recipe/body photos) so unsealed bytes are refused, not laundered.
+    ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net (see
+    ///     ``legacyKeyProvider``). Nil — the default — means no fallback.
     public init(
         directory: URL,
-        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(),
-        allowsLegacyPlaintextUpgrade: Bool = true
+        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
+        allowsLegacyPlaintextUpgrade: Bool = true,
+        legacyKeyProvider: PrivateMediaKeyProviding? = nil
     ) {
         self.directory = directory
         self.keyProvider = keyProvider
         self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
+        self.legacyKeyProvider = legacyKeyProvider
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -90,12 +107,28 @@ public struct MealPhotoStore {
     /// Returns the decrypted photo bytes for `id`, or nil when there is no file, no key, or the
     /// bytes won't open (never ciphertext/garbage).
     ///
-    /// When `allowsLegacyPlaintextUpgrade` is true, a pre-sealing plaintext JPEG at this id is
-    /// returned and re-sealed in place on this first access; otherwise unsealed bytes are refused.
+    /// Two upgrade-on-read paths can fire here, in this order and no other:
+    /// 1. **Dual-open** — bytes still sealed under the PRE-SPLIT shared key open via
+    ///    `legacyKeyProvider` (when one is injected) and are re-sealed under the own key in place.
+    ///    Must precede the plaintext branch: those bytes are ciphertext, and the plaintext branch
+    ///    would (correctly) refuse them.
+    /// 2. **Legacy plaintext** — when `allowsLegacyPlaintextUpgrade` is true, a pre-sealing
+    ///    plaintext JPEG at this id is returned and re-sealed in place; otherwise unsealed bytes
+    ///    are refused.
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).
         if let opened = keyProvider.gcmOpen(stored) {
+            return opened
+        }
+        // Dual-open safety net: a file the eager migration pass has not reached yet is still sealed
+        // under the pre-split shared key. Open it, hand back the bytes, and re-seal under the own
+        // key so this file leaves the legacy generation now rather than waiting for the next pass.
+        // A failed re-seal is deliberately non-fatal: the user still sees their photo, and the file
+        // stays legacy (so the migration latch stays closed — which is exactly the fail-closed
+        // signal that binding must not proceed yet).
+        if let legacyKeyProvider, let opened = legacyKeyProvider.gcmOpen(stored) {
+            keyProvider.sealAndWrite(opened, to: url(for: id))
             return opened
         }
         // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for

@@ -105,8 +105,10 @@ protected by keys that never leave the device:
   install on enclave hardware is born hard-bound at setup; an existing install flips on its first
   unlock under this build.
 - **The two deliberate exceptions**, each of which exists to serve the user, not the developer:
-  the **media key** (`AfterFirstUnlock`, non-sync) rides the encrypted device backup so photos
-  survive onto a replacement phone; the **backup-escrow key** is the *only* synchronizable key
+  the **media keys** (`AfterFirstUnlock`, non-sync) ride the encrypted device backup so photos
+  survive onto a replacement phone — since the Phase-5 split there are two of them, and only the
+  friend-wall row keeps that property permanently (the own-photos row is on its way to
+  device-bound, §6.3 item 3); the **backup-escrow key** is the *only* synchronizable key
   (iCloud Keychain E2EE) because cross-device restore of the opt-in sealed backup is its entire
   purpose.
 
@@ -248,6 +250,24 @@ shipped; the rest are still open.
    add a deliberate export/import ceremony (or fold photos into the escrow-sealed backup) as the
    sanctioned cross-device route. Note: the "harden the photo store before gym progress pics"
    follow-up is gated on this decision.
+   **IN PROGRESS (2026-08-11, Phase 5 step 5a): custody is split, binding is not yet flipped.**
+   The middle path above was chosen. There are now TWO media keys under one keychain service: the
+   friend photo wall keeps the original backup-restorable row (`…contentKey`, `AfterFirstUnlock`,
+   non-sync — that product decision is unchanged and permanent, because the wall's whole value is
+   surviving onto a replacement phone), while the user's OWN photos — meal, recipe, gym-progress
+   bytes and the sealed progress index — moved to a new `…ownContentKey` row. The own row is still
+   minted `AfterFirstUnlock` today, so **nothing about restore-ability has changed yet**; what has
+   changed is that binding is now a one-line policy flip
+   (`KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for:)`) instead of a flag-day. An eager,
+   idempotent, crash-safe pass (`OwnPhotoKeyMigrator`, run once per launch off the main path)
+   re-seals the own corpora onto the own key, with a read-path dual-open fallback so nothing is
+   unreadable in the meantime. The flip is gated on `OwnPhotoMigrationLatch` — the persisted proof
+   that zero own files are still under the old key — AND on the sanctioned cross-device route
+   (escrow photo backup or explicit consent). Honest limit until the latch is set: an un-migrated
+   own photo is still openable under the backup-restorable friend key. Pinned by
+   `FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
+   (`ownPhotoKeyIsASecondRowWithItsOwnBindingPolicy` asserts the row against the *current* shipping
+   policy, so flipping the policy without re-minting fails loudly).
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
    **DONE (2026-08-10): the bounded hardening shipped as record format v2.** Every backup generation
    mints a 32-byte CSPRNG salt, stamped on *every* chunk of that generation (not just the head — the

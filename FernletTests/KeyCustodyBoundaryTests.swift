@@ -142,6 +142,36 @@ struct KeyCustodyBoundaryTests {
         #expect(attrs?.synchronizable == false, "media key must never reach iCloud Keychain")
     }
 
+    // MARK: Phase-5 media-key split. The user's OWN photos moved to a SECOND row
+    // (`…ownContentKey`), distinct from the friend wall's above. Two properties are pinned here:
+    // the two rows really are two independent keys (a split that vended the same bytes twice would
+    // be theatre), and the own row is non-synchronizable like everything else.
+    //
+    // Its accessibility class is asserted against the CURRENT shipping policy, read from
+    // `KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for:)` rather than hard-coded — this is
+    // the tripwire for step 5c, not a blocker of it. When 5c flips that policy to device-bound, the
+    // expectation follows it in the same build, and the same-commit rule (Docs/Verifiability.md
+    // §6.3) is what makes the flip a deliberate, reviewable diff rather than a silent one.
+    @MainActor
+    @Test func ownPhotoKeyIsASecondRowWithItsOwnBindingPolicy() {
+        let friend = KeychainPrivateMediaKeyProvider(role: .friendWall)
+        let own = KeychainPrivateMediaKeyProvider(role: .ownPhotos)
+        let friendBytes = friend.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        let ownBytes = own.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        #expect(friendBytes != nil, "friend media key could not be minted/read")
+        #expect(ownBytes != nil, "own-photo media key could not be minted/read")
+        #expect(friendBytes != ownBytes, "the media-key split vends ONE key under two names")
+
+        let attrs = rowAttributes(account: "com.fernlet.private-media.ownContentKey",
+                                  service: "com.fernlet.private-media")
+        let expected = KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for: .ownPhotos)
+            ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+            : kSecAttrAccessibleAfterFirstUnlock as String
+        #expect(attrs?.accessible == expected,
+                "the own-photo key's row does not match the shipping binding policy")
+        #expect(attrs?.synchronizable == false, "own-photo media key must never reach iCloud Keychain")
+    }
+
     // MARK: Proves the proximity identity private keys provision as ThisDeviceOnly and that a
     // freshly minted escrow key is WITHHELD from sync (WS-2: ThisDeviceOnly until a later launch
     // promotes it) — sanctioned exception 2 of 2 is the *promotion*, pinned by the grep-wall.

@@ -47,6 +47,11 @@ public struct ProgressPhotoStore {
     private let photoStore: MealPhotoStore
     private let indexURL: URL
     private let keyProvider: PrivateMediaKeyProviding
+    /// Optional PRE-SPLIT key for the dual-open safety net, forwarded to the inner photo store and
+    /// applied to the sealed index too — the index is sealed under the same key as the bytes, so a
+    /// migration that reached the photos but not `index.bin` would render an empty timeline over a
+    /// full photo directory. See `MealPhotoStore.legacyKeyProvider`.
+    private let legacyKeyProvider: PrivateMediaKeyProviding?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -56,21 +61,32 @@ public struct ProgressPhotoStore {
     ///
     /// - Parameters:
     ///   - directory: Root for this timeline's files.
-    ///   - keyProvider: Source of the shared at-rest key, passed through to the inner photo
-    ///     store so both seal under the same key; defaults to the keychain-backed provider.
-    public init(directory: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
+    ///   - keyProvider: Source of the at-rest key, passed through to the inner photo store so both
+    ///     seal under the same key; defaults to the keychain-backed OWN-photos provider (body
+    ///     photos are the user's own, never friend-wall media).
+    ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net, applied to both
+    ///     the index and the inner photo store. Nil — the default — means no fallback.
+    public init(
+        directory: URL,
+        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
+        legacyKeyProvider: PrivateMediaKeyProviding? = nil
+    ) {
         self.directory = directory
         self.keyProvider = keyProvider
+        self.legacyKeyProvider = legacyKeyProvider
         // Body photos never had a plaintext generation, so the legacy-plaintext-upgrade read path is
         // disabled: an unsealed file dropped at a valid id path (tampered restore, shared-container
         // write) resolves to nil rather than being trusted and re-sealed into authentic ciphertext.
         // This mirrors the sealed index's own fail-closed refusal (see `readIndex`).
         self.photoStore = MealPhotoStore(
-            directory: directory.appendingPathComponent("Photos", isDirectory: true),
+            directory: directory.appendingPathComponent(
+                OwnPhotoCorpusLayout.progressPhotosInnerDirectoryName, isDirectory: true
+            ),
             keyProvider: keyProvider,
-            allowsLegacyPlaintextUpgrade: false
+            allowsLegacyPlaintextUpgrade: false,
+            legacyKeyProvider: legacyKeyProvider
         )
-        self.indexURL = directory.appendingPathComponent("index.bin")
+        self.indexURL = directory.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName)
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
         self.encoder = enc
@@ -195,13 +211,26 @@ public struct ProgressPhotoStore {
     /// would be trusted as the user's own body-photo timeline and then RE-SEALED under the real media key
     /// on the next mutation, laundering attacker plaintext into the authentic store. The seal seam is
     /// fail-closed: bytes that don't decrypt resolve to `.undecodable`, never to trusted plaintext.
+    ///
+    /// The Phase-5 dual-open fallback is a different thing and stays safe: it accepts only bytes that
+    /// GCM-open (and then decode) under the app's OWN pre-split key, so nothing an attacker could
+    /// author is ever trusted — and it re-seals under the current key on the spot, so the index leaves
+    /// the legacy generation on first read rather than on the next mutation.
     private func readIndex() -> IndexState {
         guard let stored = try? Data(contentsOf: indexURL), !stored.isEmpty else { return .absent }
-        guard let opened = keyProvider.gcmOpen(stored),
-              let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) else {
-            return .undecodable
+        if let opened = keyProvider.gcmOpen(stored),
+           let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) {
+            return .records(records)
         }
-        return .records(records)
+        if let legacyKeyProvider,
+           let opened = legacyKeyProvider.gcmOpen(stored),
+           let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) {
+            // Re-seal in place under the current (own) key; a failed write just leaves the index
+            // legacy for the migration pass to retry, which is the fail-closed direction.
+            keyProvider.sealAndWrite(opened, to: indexURL)
+            return .records(records)
+        }
+        return .undecodable
     }
 
     /// Records to display: an unreadable index reads as empty rather than erroring (fail-closed display).
