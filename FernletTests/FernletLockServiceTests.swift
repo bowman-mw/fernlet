@@ -29,11 +29,17 @@ struct FernletLockServiceTests {
         } catch FernletLockError.invalidPasscode {
         }
 
+        // The content-key row is whichever one this hardware's custody state keeps: the scrypt
+        // item when legacy, the enclave wrap once configure() hard-bound the install (P4).
+        let contentKeyRow: LockKeychainKey =
+            keychainData(account: LockKeychainKey.wrappedContentKey.rawValue, service: harness.serviceID) != nil
+            ? .wrappedContentKey
+            : .seWrappedContentKey
         for key in [
             LockKeychainKey.salt,
             .verifier,
             .kind,
-            .wrappedContentKey,
+            contentKeyRow,
             .attemptCount
         ] {
             guard let attributes = keychainAttributes(account: key.rawValue, service: harness.serviceID) else {

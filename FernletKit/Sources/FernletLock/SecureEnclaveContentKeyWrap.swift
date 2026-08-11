@@ -1,11 +1,12 @@
 // SecureEnclaveContentKeyWrap.swift
 // Fernlet
 //
-// Additive Secure-Enclave second wrap of the lock content key (Docs/Verifiability.md §4).
-// The legacy scrypt-wrapped item remains authoritative and untouched; this wrap exists so
-// that HARD device-binding (deleting the scrypt item, making the sealed corpus unopenable
-// off-device even with the passcode) becomes a one-line policy flip instead of a flag-day
-// migration — that flip is an explicit owner decision (Verifiability.md §6.1), not this code.
+// Secure-Enclave wrap of the lock content key (Docs/Verifiability.md §4, §6.1).
+// HARD device-binding: on hardware with an enclave this wrap becomes the AUTHORITATIVE — and
+// only — recoverable copy of the content key once `FernletLockService` has proven a full
+// unwrap round-trip and deleted the scrypt-wrapped item, so the sealed corpus plus a full
+// keychain dump is useless off-device even with the passcode. Where no enclave exists the
+// scrypt item is never deleted and this file is inert.
 
 import CryptoKit
 import Foundation
@@ -13,12 +14,29 @@ import Security
 
 /// ECIES wrap/unwrap of the lock content key under a non-exportable Secure Enclave P-256 key.
 ///
-/// Purely additive plumbing driven by `FernletLockService`: after every successful unlock the
-/// service verifies (or creates, with a full round-trip check) a second copy of the content key
-/// wrapped under a Secure-Enclave-resident key, stored beside the legacy scrypt-wrapped item.
-/// Every operation is best-effort and fails soft to `nil` — on a device or simulator without a
-/// Secure Enclave, under any keychain error, or on a stale wrap, behavior degrades to exactly
-/// the pre-existing scrypt path. Nothing here may ever *block* an unlock or delete legacy state.
+/// Driven entirely by `FernletLockService`, which maintains the wrap (creating it with a full
+/// round-trip check) on every successful configure and on every LEGACY unlock; a hard-bound
+/// unlock only unwraps, because the stored blob is already the authoritative copy. The wrap's
+/// standing depends on the service's two custody states — this type is deliberately unaware of
+/// which one is in force:
+/// - **LEGACY** (scrypt item present, or no enclave at all): additive. Every operation fails soft
+///   to `nil`, and behavior degrades to exactly the pre-existing scrypt path — nothing here may
+///   block an unlock.
+/// - **HARD-BOUND** (scrypt item deleted after this wrap proved a round-trip): authoritative.
+///   Deleting the scrypt item is the service's decision, made only against a freshly re-read blob
+///   that this type demonstrably opens.
+///
+/// A recovery failure is NOT one outcome. ``unwrap(_:service:)`` collapses every failure into
+/// `nil` and is the right primitive for the fail-soft maintenance paths, but the hard-bound
+/// recovery path must distinguish "the enclave key is genuinely gone" (terminal: the corpus is
+/// unopenable) from "the keychain would not answer right now" (retryable: the device is locked,
+/// protected data is unavailable). ``unwrapResult(_:service:)`` is that classifier, and
+/// `FernletLockService.secureEnclaveBoundContentKey()` is its only caller — telling a user to run
+/// a destructive reset because of a transient `errSecInteractionNotAllowed` would be the exact
+/// inverse of the nothing-silent principle.
+///
+/// Nothing here ever deletes lock state; ``deleteKey(service:)`` destroys only the enclave key
+/// itself, and only from `FernletLockService.reset()`.
 ///
 /// The SE private key is a `kSecClassKey` item (token `kSecAttrTokenIDSecureEnclave`,
 /// `WhenUnlockedThisDeviceOnly` + `.privateKeyUsage`, permanent, tagged per keychain-service so
@@ -56,21 +74,68 @@ nonisolated enum SecureEnclaveContentKeyWrap {
             return nil
         }
         // Keep-old-until-verified: only hand back a blob the enclave demonstrably opens to the
-        // exact input. If verification fails, the caller keeps relying on the scrypt path.
+        // exact input. If verification fails, the caller keeps relying on the scrypt path — and,
+        // crucially, never reaches the point where it would delete that path.
         guard let roundTripped = unwrap(wrapped, service: service), roundTripped == contentKey else { return nil }
         return wrapped
     }
 
     /// Opens an ECIES-wrapped content-key blob against this service's SE key.
     ///
+    /// Fail-soft by design: every failure mode collapses to `nil`, which is what the additive
+    /// maintenance paths want (a wrap that will not open is repaired, never trusted). The
+    /// hard-bound recovery path must NOT use this — it cannot tell a destroyed enclave key from a
+    /// keychain that is merely unreadable right now; use ``unwrapResult(_:service:)`` there.
+    ///
     /// - Returns: The recovered content-key bytes, or `nil` when the enclave/key is unavailable
     ///   or the blob does not authenticate (tampered, or wrapped under a different SE key —
     ///   e.g. after an Erase All Content and Settings destroyed the original).
     static func unwrap(_ blob: Data, service: String) -> Data? {
-        guard let privateKey = loadKey(service: service),
-              SecKeyIsAlgorithmSupported(privateKey, .decrypt, algorithm) else { return nil }
+        guard case .recovered(let data) = unwrapResult(blob, service: service) else { return nil }
+        return data
+    }
+
+    /// The classified outcome of a hard-bound unwrap: which of the four states the enclave is in,
+    /// rather than the single `nil` ``unwrap(_:service:)`` collapses them to.
+    ///
+    /// Only ``keyAbsent`` and ``blobRejected`` are terminal (the content key really is gone);
+    /// ``unavailable(_:)`` is a transient the caller must offer to retry rather than answer with
+    /// a destructive reset.
+    enum UnwrapOutcome: Equatable {
+        /// The blob opened; carries the recovered content-key bytes.
+        case recovered(Data)
+        /// The enclave key does not exist (`errSecItemNotFound`) — destroyed by an Erase All
+        /// Content and Settings, a Secure-Enclave reset, or a restore onto other hardware.
+        case keyAbsent
+        /// The keychain refused to answer (`errSecInteractionNotAllowed`, `errSecNotAvailable`,
+        /// any other status), or no enclave exists at all. The key's fate is UNKNOWN.
+        case unavailable(OSStatus)
+        /// The key is present and readable, but it will not open this blob: the blob is tampered
+        /// with, or it was wrapped under a different (since-replaced) enclave key.
+        case blobRejected
+    }
+
+    /// Opens `blob` and classifies the failure, distinguishing a genuinely destroyed enclave key
+    /// from a keychain that could not be read at this instant.
+    static func unwrapResult(_ blob: Data, service: String) -> UnwrapOutcome {
+        guard isAvailable else { return .unavailable(errSecNotAvailable) }
+        let privateKey: SecKey
+        switch loadKeyResult(service: service) {
+        case .loaded(let key):
+            privateKey = key
+        case .absent:
+            return .keyAbsent
+        case .unreadable(let status):
+            return .unavailable(status)
+        }
+        guard SecKeyIsAlgorithmSupported(privateKey, .decrypt, algorithm) else {
+            return .unavailable(errSecUnimplemented)
+        }
         var error: Unmanaged<CFError>?
-        return SecKeyCreateDecryptedData(privateKey, algorithm, blob as CFData, &error) as Data?
+        guard let data = SecKeyCreateDecryptedData(privateKey, algorithm, blob as CFData, &error) as Data? else {
+            return .blobRejected
+        }
+        return .recovered(data)
     }
 
     /// Deletes this service's SE key. Called from `FernletLockService.reset()` — the wrapped
@@ -85,8 +150,29 @@ nonisolated enum SecureEnclaveContentKeyWrap {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// Loads this service's persisted SE key reference, or `nil` when none exists.
+    /// Loads this service's persisted SE key reference, or `nil` when none exists **or the read
+    /// failed** — the collapse ``loadKeyResult(service:)`` avoids.
     static func loadKey(service: String) -> SecKey? {
+        guard case .loaded(let key) = loadKeyResult(service: service) else { return nil }
+        return key
+    }
+
+    /// The three-way result of reading the enclave key, mirroring `KeychainItem.ReadResult` for
+    /// the `kSecClassKey` row that lives outside the generic-password helpers.
+    enum KeyLoadOutcome {
+        /// The key exists and was returned.
+        case loaded(SecKey)
+        /// No such key (`errSecItemNotFound`) — it was destroyed, or never created.
+        case absent
+        /// The read failed for any other reason; the key's existence is unknown.
+        case unreadable(OSStatus)
+    }
+
+    /// Loads this service's persisted SE key reference, propagating the failing `OSStatus` so a
+    /// caller can tell `errSecItemNotFound` (the key is gone) from every other status (the
+    /// keychain would not answer). A success that hands back a non-`SecKey` is reported as
+    /// unreadable (`errSecInternalError`) rather than as an absence.
+    static func loadKeyResult(service: String) -> KeyLoadOutcome {
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
@@ -95,10 +181,14 @@ nonisolated enum SecureEnclaveContentKeyWrap {
             kSecReturnRef as String: true,
             kSecUseDataProtectionKeychain as String: true
         ]
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let result, CFGetTypeID(result) == SecKeyGetTypeID() else { return nil }
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return .absent }
+        guard status == errSecSuccess else { return .unreadable(status) }
+        guard let result, CFGetTypeID(result) == SecKeyGetTypeID() else {
+            return .unreadable(errSecInternalError)
+        }
         // Type-checked via CFGetTypeID above; `as?` cannot dynamically verify CF types.
-        return (result as! SecKey)
+        return .loaded(result as! SecKey)
     }
 
     /// Loads the SE key, creating (permanent, enclave-resident, `.privateKeyUsage`-gated,

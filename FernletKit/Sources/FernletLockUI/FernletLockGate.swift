@@ -77,6 +77,11 @@ struct FernletLockGateModifier: ViewModifier {
     /// the rows but could not rebuild the sealed store file. Swallowing that (it used to be
     /// `try?`) would have promised a clean store the app did not deliver.
     @State private var showResetRebuildFailure = false
+    /// Presents the one-shot disclosure owed to an EXISTING install that just migrated to the hard
+    /// Secure-Enclave binding. Those users consented to "you lose the notes if you forget your
+    /// passcode" under an older build and silently acquired a strictly larger loss mode; the setup
+    /// sheet they would have read it in never appears again, so the gate says it once here.
+    @State private var showHardBindingNotice = false
     /// Suppresses the viewDisappeared re-lock during scene inactive/active transitions
     /// so Face ID presenting its system dialog doesn't cause a spurious re-lock loop.
     @State private var suppressRelock = false
@@ -136,6 +141,17 @@ struct FernletLockGateModifier: ViewModifier {
         } message: {
             Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
         }
+        .alert("Your passcode is now tied to this iPhone", isPresented: $showHardBindingNotice) {
+            Button("OK", role: .cancel) { lockService.acknowledgeHardBindingNotice() }
+        } message: {
+            Text("Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives.")
+        }
+        .onChange(of: lockService.state) { _, _ in
+            // The flip happens inside the unlock that just landed, so the state change is the
+            // first moment the flag can be true. Checked here (not only on appear) because the
+            // gate does not re-appear after an in-place unlock.
+            if lockService.hardBindingNoticePending { showHardBindingNotice = true }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .inactive:
@@ -186,6 +202,9 @@ struct FernletLockGateModifier: ViewModifier {
         guard active else { return }
         gateIsActive = true
         pendingRelock = false
+        // A migration disclosure owed from a previous launch (the app was killed before the alert
+        // was acknowledged) is still owed — the flag is keychain-backed for exactly that reason.
+        if lockService.hardBindingNoticePending { showHardBindingNotice = true }
         // Revoke — never inherit — an unlock taken out on a different locked surface. Doing this on
         // APPEAR is what makes the guarantee hold: the other surface's disappear re-lock may have
         // been suppressed (covering sheet, camera cover, scene transition) or never fired at all.

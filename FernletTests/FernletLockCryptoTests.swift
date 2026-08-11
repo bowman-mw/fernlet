@@ -261,16 +261,32 @@ struct FernletLockCryptoTests {
 
         #expect(service.contentKey(for: .privateHub) == nil)
         #expect(loadKeychainData(account: "com.fernlet.lock.biometricBypass", service: service.keychainService) == nil)
-        let wrappedContentKey = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
-        #expect(wrappedContentKey != originalContentKey)
+        // Whichever custody state this hardware lands in, the stored wrap must not BE the key:
+        // hard-bound (SE hardware) leaves only the enclave blob, legacy leaves the scrypt item.
+        if let wrappedContentKey = loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService) {
+            #expect(wrappedContentKey != originalContentKey)
+        } else {
+            let seWrapped = try #require(loadKeychainData(account: "com.fernlet.lock.seWrappedContentKey", service: service.keychainService),
+                                         "hard-bound (no scrypt item) requires the enclave wrap to exist")
+            #expect(seWrapped != originalContentKey)
+        }
         try? service.reset()
     }
 
     // MARK: Proves the stored verifier is the DIGEST of the derived key, not the derived (wrapping) key
     // itself — so a keychain reader cannot use it to unwrap the content key (verifier/wrapping-key split).
+    ///
+    /// Runs against a deliberately LEGACY service (enclave-wrap persistence refused) so the pin is
+    /// unconditional. On enclave hardware `configure()` is born hard-bound and deletes the scrypt
+    /// item, which would leave the two load-bearing assertions — the stored verifier must NOT
+    /// unwrap the persisted item, the raw derived key MUST — running only on SE-less hosts. The
+    /// at-rest FORMAT is unchanged by P4; only this fixture is (see
+    /// Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §9). The hard-bound state gets its own
+    /// pin in `hardBoundConfigureLeavesNoPasscodeDerivedRowThatOpensTheKey`, so both states are
+    /// pinned on every host instead of one state per host.
     @MainActor
     @Test func configuredVerifierIsDigestNotWrappingKey() async throws {
-        let service = freshService()
+        let service = freshService(persistEnclaveWrap: false)
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let salt = try #require(loadKeychainData(account: "com.fernlet.lock.salt", service: service.keychainService))
         let storedVerifier = try #require(loadKeychainData(account: "com.fernlet.lock.verifier", service: service.keychainService))
@@ -280,8 +296,10 @@ struct FernletLockCryptoTests {
         #expect(storedVerifier == Data(SHA256.hash(data: derivedKey)))
         #expect(storedVerifier != derivedKey)
 
+        // The persisted wrap is what this pins, in the state where a scrypt wrap exists at all.
+        let wrapped = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService),
+                                   "the forced-legacy fixture must have persisted the scrypt wrap")
         // The stored verifier must NOT unwrap the content key — that requires the raw derived key.
-        let wrapped = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
         #expect(throws: (any Error).self) {
             _ = try FernletLockCrypto.unwrapContentKey(wrapped, using: storedVerifier)
         }
@@ -291,12 +309,44 @@ struct FernletLockCryptoTests {
         try? service.reset()
     }
 
+    // MARK: Proves the complementary HARD-BOUND pin on enclave hardware: after the real
+    // `configure()` no passcode-derived row survives that opens the content key at all — the
+    // scrypt item is gone and only the enclave wrap remains. The SE-less branch asserts the
+    // opposite property (the install stays legacy and keeps its scrypt row), so between this test
+    // and `configuredVerifierIsDigestNotWrappingKey` both custody states are pinned on every host.
     @MainActor
-    private func freshService() -> FernletLockService {
+    @Test func hardBoundConfigureLeavesNoPasscodeDerivedRowThatOpensTheKey() async throws {
+        let service = freshService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        defer { try? service.reset() }
+        let scryptRow = loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService)
+        let enclaveRow = loadKeychainData(account: "com.fernlet.lock.seWrappedContentKey", service: service.keychainService)
+
+        if FernletLockService.isSecureEnclaveBindingAvailable {
+            #expect(scryptRow == nil, "configure() on enclave hardware must be born hard-bound")
+            #expect(enclaveRow != nil, "hard-bound requires the enclave wrap to exist")
+        } else {
+            #expect(scryptRow != nil, "SE-less hardware must stay legacy")
+            #expect(enclaveRow == nil)
+        }
+    }
+
+    /// A lock service on an isolated keychain slot. `persistEnclaveWrap: false` refuses the
+    /// enclave-wrap write (reporting success and dropping it, so `storeVerified`'s read-back fails
+    /// exactly as a hosed keychain would), which is the only way to hold enclave hardware in the
+    /// LEGACY state — `configure()` otherwise hard-binds and deletes the scrypt item the at-rest
+    /// pins are about.
+    @MainActor
+    private func freshService(persistEnclaveWrap: Bool = true) -> FernletLockService {
+        let refusingStore: ((Data, LockKeychainKey, String) -> OSStatus)? = persistEnclaveWrap ? nil : { data, key, service in
+            guard key != .seWrappedContentKey else { return errSecSuccess }
+            return KeychainItem.store(data, for: key, service: service)
+        }
         let service = FernletLockService(
             keychainService: "com.fernlet.lock.test.\(UUID().uuidString)",
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
-            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            keychainStore: refusingStore
         )
         try? service.reset()
         return service

@@ -62,6 +62,44 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
+    // MARK: Proves the P4 hard-bound custody state through the REAL configure() path: on enclave
+    // hardware the scrypt-wrapped item is GONE, so the only content-key-bearing row left is the
+    // Secure-Enclave wrap (plus the optional biometric bypass, which is off here) — and it is
+    // still WhenUnlockedThisDeviceOnly and non-synchronizable. On SE-less hardware the
+    // complementary property holds: the install stays legacy and keeps the scrypt row.
+    @MainActor
+    @Test func hardBoundStateLeavesOnlyTheEnclaveWrapBearingTheContentKey() async throws {
+        let service = "com.fernlet.lock.test.custody.hardbound.\(UUID().uuidString)"
+        defer {
+            KeychainItem.deleteAll(service: service)
+            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        }
+        let lockService = FernletLockService(
+            keychainService: service,
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
+        try await lockService.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+
+        // The three accounts that can ever carry the content key itself.
+        let contentKeyBearing: [LockKeychainKey] = [.wrappedContentKey, .seWrappedContentKey, .biometricBypass]
+        let present = contentKeyBearing.filter { KeychainItem.load(for: $0, service: service) != nil }
+
+        if SecureEnclaveContentKeyWrap.isAvailable {
+            #expect(present == [.seWrappedContentKey],
+                    "hard-bound: the enclave wrap must be the ONLY content-key-bearing row; found \(present.map(\.rawValue))")
+        } else {
+            #expect(present == [.wrappedContentKey],
+                    "SE-less hardware must stay legacy; found \(present.map(\.rawValue))")
+        }
+        for key in present {
+            let attrs = rowAttributes(account: key.rawValue, service: service)
+            #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
+                    "\(key.rawValue) must be WhenUnlockedThisDeviceOnly")
+            #expect(attrs?.synchronizable == false, "\(key.rawValue) must never sync")
+        }
+    }
+
     // MARK: Proves the no-lock sealing keys (journal + worry device keys) mint as
     // AfterFirstUnlockThisDeviceOnly, never synchronizable — via loadOrCreateSymmetricKey.
     @Test func deviceSealingKeysAreAfterFirstUnlockThisDeviceOnly() {

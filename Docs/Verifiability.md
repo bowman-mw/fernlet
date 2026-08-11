@@ -81,7 +81,8 @@ The sealed corpus (journal narratives, Worry Box notes, cycle narratives, intima
 protected by keys that never leave the device:
 
 - **Already bound (attribute-verified by `KeyCustodyBoundaryTests`):** every lock keychain item
-  including the wrapped content key (`WhenUnlockedThisDeviceOnly`), the biometric content-key
+  including the wrapped content key, in whichever custody state it exists
+  (`WhenUnlockedThisDeviceOnly`), the biometric content-key
   copy (`WhenPasscodeSetThisDeviceOnly` + `.biometryCurrentSet`), the no-lock device journal and
   worry keys, the pending-narrative buffer key, the proximity identity private keys, heart-drop
   prekeys and sidecar key, and the HealthKit/moderation/preferences ancillaries (all
@@ -91,10 +92,18 @@ protected by keys that never leave the device:
 - **Bound further by this change:** new sealed-column writes carry a per-install random ID as
   AEAD associated data (format v2, version-byte-prefixed), so the ciphertext itself — not just
   its keys — refuses to open on any other install. Legacy blobs still open (dual-open fallback)
-  and are progressively rebound as they are routinely re-sealed. Additionally, where a Secure
-  Enclave is present, the lock content key gains a second, non-exportable Secure-Enclave wrap
-  (verified by round-trip before it is ever preferred; the legacy scrypt wrap is kept intact —
-  removing it is an owner decision, §6).
+  and are progressively rebound as they are routinely re-sealed.
+- **Hard-bound to the Secure Enclave (§6.1, done):** where a Secure Enclave is present, the lock
+  content key is wrapped under a non-exportable enclave-resident key **and the scrypt-wrapped
+  copy is deleted** — after, and only after, a freshly re-read enclave wrap is proven to unwrap
+  to exactly that key (keep-old-until-verified; every failure path keeps the scrypt item, and
+  SE-less hardware keeps it forever). Custody is therefore a two-state machine discriminated by
+  the presence of `com.fernlet.lock.wrappedContentKey`: **present** = legacy (scrypt
+  authoritative), **absent** = hard-bound (the enclave wrap is the only recoverable copy). The
+  passcode still gates entry through the unchanged salt + verifier; what changes is that
+  possessing the passcode is no longer *sufficient* — the enclave must also be present. A fresh
+  install on enclave hardware is born hard-bound at setup; an existing install flips on its first
+  unlock under this build.
 - **The two deliberate exceptions**, each of which exists to serve the user, not the developer:
   the **media key** (`AfterFirstUnlock`, non-sync) rides the encrypted device backup so photos
   survive onto a replacement phone; the **backup-escrow key** is the *only* synchronizable key
@@ -102,7 +111,8 @@ protected by keys that never leave the device:
   purpose.
 
 **What this buys, concretely:** a bulk copy of the app's files plus a keychain dump is
-cryptographically worthless off the device. And a future app version that wanted to make sealed
+cryptographically worthless off the device — on enclave hardware, *even with the passcode*, which
+is what kills off-device PIN brute force (a 4-digit PIN through scrypt is ~10⁴ tries). And a future app version that wanted to make sealed
 data shareable or cloud-syncable could not do it with a quiet schema flag — it would have to add
 new key custody (fails `KeyCustodyBoundaryTests`' exact-set attribute and grep pins), change the
 at-rest format (fails the known-answer and format-pin tests), and ship an explicit re-encryption
@@ -125,9 +135,48 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   attributable deletion — not impossible.
 - **`ThisDeviceOnly` is an OS promise, not physics.** A jailbroken or forensically imaged device
   with the device passcode can yield those keychain items. Only Secure Enclave non-exportability
-  makes the stronger claim that the key never exists in extractable form — which is why the SE
-  wrap exists, and why completing it (deleting the legacy scrypt-wrapped item) is on the owner
-  list below rather than silently done: it trades away a recovery path.
+  makes the stronger claim that the key never exists in extractable form — which is what the
+  hard binding in §4 now buys on enclave hardware, and it comes with the three costs below.
+- **The hard binding costs a real recovery path: a same-device restore from an encrypted iOS
+  backup can no longer unlock sealed data with the passcode.** `ThisDeviceOnly` keychain items
+  restore to the *same* device, but Secure Enclave keys never restore anywhere — so an "Erase All
+  Content and Settings", a Secure-Enclave reset, or a restore onto replacement hardware destroys
+  the content key permanently. Escrow-backed payloads (cycle narratives, journal narratives,
+  intimacy logs, sensitive notes, each behind its own opt-in toggle) survive via the sealed iCloud
+  backup; **the Worry Box does not and is accepted to die on an Erase All** — "let it go" notes
+  are deliberately device-only. When this happens the app says so: a correct passcode surfaces
+  "Sealed data can no longer be opened on this device. Reset app lock to continue." rather than
+  silently failing to decrypt — and the reset it names is reachable from that very screen (the
+  unlock overlay grows its own card for this state, because a correct passcode never trips the
+  failed-attempt ladder that the app's other reset button hangs off). Three narrower properties
+  keep that message honest. A keychain that merely *would not answer* — the device auto-locked
+  during the scrypt derive, protected data unavailable — is a **different, retryable** error that
+  never mentions reset; only a provably absent or provably rejecting enclave key is terminal. The
+  two surfaces that never receive the content key (the progress-photo strip, which seals under its
+  own intact key, and Settings → App lock) still open on the verifier match, so the terminal state
+  degrades non-hub entry to a passcode check rather than bricking it. And while biometrics are
+  enabled the bypass copy below is a real recovery path: Face ID re-establishes the enclave wrap
+  from it, so the app offers that repair *before* it offers the destructive reset.
+- **With biometrics enabled, the strongest form of the claim does not hold.** Face ID / Touch ID
+  unlock keeps a second copy of the raw content key in its own keychain item
+  (`WhenPasscodeSetThisDeviceOnly` + `.biometryCurrentSet`) rather than inside the enclave. It
+  never leaves the device, iOS invalidates it when enrollment changes, and `reset()` destroys it —
+  but while it exists the content key lives behind a data-protection ACL, not enclave
+  non-exportability. **"The key never exists in extractable form except behind the Secure
+  Enclave" is exactly true only with biometrics off.** Routing that copy through the enclave too
+  is a tracked follow-up, not done here. The same copy is also, honestly, a **recovery path**: if
+  the enclave key dies while biometrics are on, a Face ID unlock still opens the corpus and
+  re-establishes the wrap, so a hard-bound install is not unconditionally lost — it is lost when
+  the enclave key dies *and* no bypass copy exists. The enclave never yields to it, though: an
+  openable enclave wrap outranks the bypass, and a bypass whose bytes the enclave contradicts is
+  deleted rather than honored (nothing unauthenticated may overwrite the authoritative wrap).
+- **The hard binding is an off-device guarantee, not an on-device one.** The enclave key is gated
+  on device unlock, not on the app passcode, so a forensic attacker working on the *unlocked
+  device itself* can ask the enclave to unwrap the content key without knowing the app PIN. For a
+  4-digit PIN that barrier was already worth ~nothing (10⁴ scrypt attempts); for an alphanumeric
+  app password it was real, and this trade removes it. Restoring it means SE-wrapping the
+  scrypt-sealed blob instead of the raw key (unlock would then need the enclave AND the passcode)
+  — recorded as an open owner sub-decision, not silently chosen.
 - **The escrow-sealed iCloud backup is, by design, exactly as strong as the user's Apple
   account.** It is openable on any device holding the user's iCloud Keychain — it can never be
   bound tighter without destroying its purpose. The per-generation-salt hardening (§6.4, done)
@@ -146,18 +195,32 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
 
 ## 6. Further hardening awaiting an owner decision
 
-Deliberately **not** done in this change, because each one trades away a recovery path or a
-documented product decision. Recorded so the trade is decided consciously, not by drift:
+Each one trades away a recovery path or a documented product decision, so each is recorded here
+and decided consciously rather than by drift. Items marked **DONE** were subsequently decided and
+shipped; the rest are still open.
 
-1. **Hard SE-binding of the lock content key** — delete the scrypt-wrapped legacy item once the
-   Secure-Enclave wrap verifies. Gain: the sealed corpus plus a full keychain dump become useless
-   off-device *even with the passcode* — kills off-device PIN brute force (a 4-digit PIN through
-   scrypt is ~10⁴ tries) and forces any future sharing feature into an explicit
-   decrypt-and-re-export migration. Cost: "Erase All Content and Settings" or any Secure Enclave
-   reset destroys the SE key, so a same-device restore from an encrypted backup could no longer
-   unlock sealed data with the passcode (today it can — `ThisDeviceOnly` items restore to the
-   *same* device). Escrow-backed payloads would survive; sealed types not covered by the backup
-   would be lost.
+1. **Hard SE-binding of the lock content key — DONE (2026-08-10, security-hardening Phase 4).**
+   The scrypt-wrapped legacy item is deleted once the Secure-Enclave wrap verifies. Gain
+   (realized): the sealed corpus plus a full keychain dump are useless off-device *even with the
+   passcode* — kills off-device PIN brute force (a 4-digit PIN through scrypt is ~10⁴ tries) and
+   forces any future sharing feature into an explicit decrypt-and-re-export migration. Cost
+   (accepted): "Erase All Content and Settings" or any Secure Enclave reset destroys the SE key,
+   so a same-device restore from an encrypted backup can no longer unlock sealed data with the
+   passcode (before this change it could — `ThisDeviceOnly` items restore to the *same* device).
+   Escrow-backed payloads survive; sealed types not covered by the backup are lost, and the app
+   says so explicitly (§5) instead of failing silently. How the transition avoids destroying data:
+   the deletion is **keep-old-until-verified** — the scrypt item goes only after a freshly re-read
+   enclave wrap has been proven to unwrap to exactly the authoritative key, and no error path ever
+   deletes. Two residuals stay open and are stated in §5: the biometric-bypass copy of the key is
+   not enclave-wrapped, and the enclave key is device-unlock gated rather than app-PIN gated, so
+   the guarantee is off-device rather than on-device. Four properties keep the terminal state from
+   being worse than the trade it was approved as, and each is pinned by a test in
+   `FernletTests/SecureEnclaveWrapTests`: the reset the error prescribes is reachable from the
+   unlock overlay itself; a transient keychain read failure is a separate retryable error that
+   never advises a reset; the two scopes that never receive the content key still unlock on the
+   verifier match (so Settings → App lock cannot be bricked); and while a biometric bypass copy
+   survives, the repair is offered before the destruction — with the enclave, never the bypass, as
+   the authority on what the key is.
    **Precondition partly satisfied (2026-08-10, security-hardening Phase 3):** journal narratives
    and intimacy logs are now first-class sealed-backup payload types (`journalNarratives`,
    `intimacyLogs`, launched directly on record format v2), each behind its own opt-in toggle, so
