@@ -105,12 +105,25 @@ protected by keys that never leave the device:
   install on enclave hardware is born hard-bound at setup; an existing install flips on its first
   unlock under this build.
 - **The two deliberate exceptions**, each of which exists to serve the user, not the developer:
-  the **media keys** (`AfterFirstUnlock`, non-sync) ride the encrypted device backup so photos
-  survive onto a replacement phone — since the Phase-5 split there are two of them, and only the
-  friend-wall row keeps that property permanently (the own-photos row is on its way to
-  device-bound, §6.3 item 3); the **backup-escrow key** is the *only* synchronizable key
+  the **friend-wall media key** (`AfterFirstUnlock`, non-sync) rides the encrypted device backup so
+  friends' shared photos survive onto a replacement phone — that is permanent, and it is now the
+  *only* media key with that property; the **backup-escrow key** is the *only* synchronizable key
   (iCloud Keychain E2EE) because cross-device restore of the opt-in sealed backup is its entire
   purpose.
+- **Bound by the Phase-5 media-key split (§6.3 item 3, done):** the user's OWN photos — meal,
+  recipe and gym-progress bytes plus the sealed progress index — moved to a second keychain row
+  (`…ownContentKey`) that is re-bound in place to `AfterFirstUnlockThisDeviceOnly` once, and only
+  once, two conditions hold: the eager re-seal pass has proven no own file is still under the
+  pre-split key, AND the user has a sanctioned cross-device route (the opt-in own-photo escrow
+  backup, or an explicit recorded consent that these photos will not restore to a new phone). The
+  flip is an in-place `SecItemUpdate` — a delete-then-add re-store would open a window in which no
+  own-photos key exists at all — and it never changes the key material, so no photo is stranded by
+  it. Afterwards the own read paths drop their pre-split dual-open fallback, which is what makes the
+  binding mean anything. Pinned by `KeyCustodyBoundaryTests.ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied`
+  and `FernletTests/OwnPhotoKeyBindingTests`. Honest limit: an encrypted device backup taken while
+  the row was still backup-restorable already carries the old key, so the binding protects backups
+  taken *after* the flip, and a user who takes neither route keeps the old, backup-restorable
+  custody rather than being bound without a recovery path.
 
 **What this buys, concretely:** a bulk copy of the app's files plus a keychain dump is
 cryptographically worthless off the device — on enclave hardware, *even with the passcode*, which
@@ -179,6 +192,22 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   app password it was real, and this trade removes it. Restoring it means SE-wrapping the
   scrypt-sealed blob instead of the raw key (unlock would then need the enclave AND the passcode)
   — recorded as an open owner sub-decision, not silently chosen.
+- **Device-binding your own photos costs you those photos on a phone swap, and it only protects
+  backups taken after the flip.** Once the own-photos key is bound (§6.3 item 3), meal, recipe and
+  gym-progress photos do not restore from a device backup onto a new or erased phone — the opt-in
+  own-photo escrow backup is the only route that brings them back, which is why binding requires
+  either that backup or an explicit confirmation that says so. And because an encrypted device
+  backup taken *before* the flip already contains the loose key, binding cannot retroactively
+  protect a copy someone already has. Until a user takes one of those two routes their own photos
+  stay under the pre-5c, backup-restorable custody: the hardening is opt-in because its cost is
+  theirs to accept. **Known gap, stated rather than hidden:** on a new phone restored from a device
+  backup, the sealed photo *files* come back while the bound key does not, and the escrow route's
+  per-corpus no-clobber gate is a file-PRESENCE check — so it currently reads those unopenable
+  bytes as "this corpus is in use" and skips the restore. Nothing is overwritten or lost beyond
+  what the binding already cost, but a user with the photo backup on does not get their photos back
+  automatically in that path yet. The fix (teach the gate to tell "not empty" from "holds only
+  bytes this install can never open", off the migration sweep's existing classification) is tracked
+  against `OwnPhotoBackupCoordinator`.
 - **The escrow-sealed iCloud backup is, by design, exactly as strong as the user's Apple
   account.** It is openable on any device holding the user's iCloud Keychain — it can never be
   bound tighter without destroying its purpose. The per-generation-salt hardening (§6.4, done)
@@ -244,13 +273,14 @@ shipped; the rest are still open.
 2. **The same hard-binding decision for the no-lock device journal/worry keys.** SE-wrapping them
    removes the erase-and-restore-same-device recovery those users currently have — and no-lock
    users are the least likely to have sealed backup enabled.
-3. **Device-binding the media key** (`ThisDeviceOnly` and/or SE-wrap). Directly reverses the
-   documented product decision in `PrivateMediaKeyStore.swift`: the photo corpus would no longer
+3. **Device-binding the media key — DONE (2026-08-11, security-hardening Phase 5).** (`ThisDeviceOnly`
+   for the user's OWN photos; the friend wall deliberately keeps the old custody.) Directly reverses
+   the documented product decision in `PrivateMediaKeyStore.swift` for own photos: they no longer
    survive a device-backup restore onto a new phone. Middle path worth pricing: bind the key AND
    add a deliberate export/import ceremony (or fold photos into the escrow-sealed backup) as the
    sanctioned cross-device route. Note: the "harden the photo store before gym progress pics"
    follow-up is gated on this decision.
-   **IN PROGRESS (2026-08-11, Phase 5 step 5a): custody is split, binding is not yet flipped.**
+   **STEP 5a (2026-08-11): custody is split, binding is not yet flipped.**
    The middle path above was chosen. There are now TWO media keys under one keychain service: the
    friend photo wall keeps the original backup-restorable row (`…contentKey`, `AfterFirstUnlock`,
    non-sync — that product decision is unchanged and permanent, because the wall's whole value is
@@ -288,8 +318,27 @@ shipped; the rest are still open.
    `SealedBackupGenerationStore` high-water mark on the manifest, plus a per-id content hash inside
    it. Pinned by `FernletTests/SealedPhotoBackupTests` and the byte-exact AAD v3 pin in
    `SealedBackupFormatPinTests`; the delete-all teardown is enforced by `PrivacyWipeCoverageTests`
-   (`deleteOwnPhotoEscrowBackups`). Still open for 5c: the binding flip itself and dropping the
-   dual-open fallback.
+   (`deleteOwnPhotoEscrowBackups`).
+   **UPDATE (2026-08-11, Phase 5 step 5c): the binding is flipped, and the fallback is gone with it.**
+   `…ownContentKey` is re-bound to `AfterFirstUnlockThisDeviceOnly` by `OwnPhotoKeyBinder`, gated on
+   `OwnPhotoMigrationLatch` **AND** a sanctioned cross-device route — the escrow photo backup above
+   being ON, or an explicit `OwnPhotoDeviceBindingConsent` recorded through Privacy & Data →
+   "Lock photos to this device", whose confirmation says in as many words that these photos will not
+   come back on a new or erased phone. Both halves are runtime facts about this device, which is why
+   the flip is a gate rather than the "one-line policy constant" the plan sketched: a build-time flip
+   would bind on devices satisfying neither condition, which is exactly the data-loss shape the gate
+   exists to prevent. Three mechanics carry the safety: the flip is an in-place `SecItemUpdate` (a
+   delete-then-add would open a window with no own-photos key on the device, and a crash inside it
+   destroys every own photo); "is it bound?" is read from the row's live `kSecAttrAccessible` rather
+   than a persisted flag (a flag rides the backup onto a phone the bound row never reached); and the
+   own read paths drop their pre-split `legacyKeyProvider` exactly when the row is bound —
+   `FernletStore` and `OwnPhotoBackupCoordinator` both, pinned as a biconditional. A user who takes
+   neither route is not bound and keeps the pre-5c custody: the hardening is opt-in *because* its
+   cost is the user's, not because it is unfinished. Honest limit: a device backup taken before the
+   flip already carries the loose key, so the binding protects backups taken after it. Pinned by
+   `FernletTests/OwnPhotoKeyBindingTests` (including "no own photo becomes unreadable across the
+   flip", end to end on the real keychain rows) and by `KeyCustodyBoundaryTests`
+   (`ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied`). Item 3 is now **closed**.
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
    **DONE (2026-08-10): the bounded hardening shipped as record format v2.** Every backup generation
    mints a 32-byte CSPRNG salt, stamped on *every* chunk of that generation (not just the head — the

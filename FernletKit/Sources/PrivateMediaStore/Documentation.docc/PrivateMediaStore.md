@@ -41,7 +41,7 @@ Phase 5 splits custody in two while leaving the friend wall byte-for-byte alone:
 | Role | Keychain account | Custody | Corpora |
 | --- | --- | --- | --- |
 | ``KeychainPrivateMediaKeyProvider/Role/friendWall`` | `…private-media.contentKey` (original) | `AfterFirstUnlock`, non-sync — **backup-restorable, permanently** | the friend photowall cache |
-| ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | `AfterFirstUnlock` today, **flips to `…ThisDeviceOnly` in step 5c** | meal, recipe, progress bytes + the progress index |
+| ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | minted `AfterFirstUnlock`, **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** once its gate holds (step 5c) | meal, recipe, progress bytes + the progress index |
 
 The wall keeps the original row precisely so nothing about it changes: no re-encryption, no
 migration, and the survives-delete-all / never-deleted-by-wipe properties hold verbatim. The
@@ -59,11 +59,46 @@ Three pieces carry own photos across that split, all in `OwnPhotoKeyMigration.sw
 - ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing is left under
   the old key. Both the 5c binding flip and the removal of the dual-open fallback are gated on it.
 
-Until the latch is set, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an
+Until the key is bound, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an
 injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under
 the own key on access. That fallback only ever trusts bytes that GCM-open under a key this app
 owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused
 exactly where it was before.
+
+### The binding gate (step 5c)
+
+``OwnPhotoKeyBinder`` decides whether the `ownPhotos` row may become device-bound, and performs the
+flip. It is a **runtime gate, not a build-time constant**, and that is the design rather than an
+unfinished version of one — both of its conditions are facts about this device at this moment:
+
+1. ``OwnPhotoMigrationLatch`` is set. Binding before it turns any straggler still sealed under the
+   pre-split key into permanently unreadable bytes, with no error anywhere.
+2. The user has a sanctioned cross-device route — the opt-in own-photo escrow backup is on, or
+   ``OwnPhotoDeviceBindingConsent`` is recorded (Privacy & Data → "Lock photos to this device").
+   Binding before it silently deletes their only path onto a replacement phone.
+
+``KeychainPrivateMediaKeyProvider/defaultDeviceBinding(for:)`` therefore stays backup-restorable for
+both roles: it is the class a row is *minted* under, and a build-time `true` would bind on devices
+failing either condition. The `deviceBound` mint mode is still what mints a *fresh* row bound, on a
+device that has already passed the gate.
+
+Two mechanics are load-bearing and easy to get wrong:
+
+- The flip is an **in-place `SecItemUpdate`**
+  (``KeychainPrivateMediaKeyProvider/bindOwnPhotoRowToThisDevice()``), never the module's usual
+  delete-then-add store. A delete-then-add leaves an interval with no own-photos key on the device,
+  and a crash or lock inside that interval destroys **every** own photo the user has.
+- "Is it bound?" is read from the row's real `kSecAttrAccessible`
+  (``OwnPhotoKeyBinder/isOwnPhotoKeyDeviceBound()``), never from a persisted flag. A cached flag
+  rides the device backup onto a new phone that the device-bound row itself never reached, so the
+  new device would drop its dual-open fallback on the strength of a belief that is false there.
+  Absent or unreadable answers "not bound", which keeps the fallback — the safe direction.
+
+Once bound, the app constructs the own stores with `legacyKeyProvider: nil` (`FernletStore` and
+`OwnPhotoBackupCoordinator` must agree, and a test pins the biconditional). That drop is what makes
+the binding mean anything. **Honest limit:** an encrypted device backup taken while the row was
+still backup-restorable already carries the old key, so the binding protects backups taken *after*
+the flip.
 
 ### The escrow seam (what makes device-binding survivable)
 
@@ -84,6 +119,10 @@ supplies only the local seam it needs, and each piece is shaped by a hazard:
   per-corpus no-clobber gate, deliberately **file presence**, not "no ids I can parse": a corpus
   holding bytes this build cannot name is still in use. An unlistable directory reads as NOT empty
   (fail closed → no restore). The progress corpus additionally requires its index to be absent.
+  **Known gap after step 5c** (tracked on `OwnPhotoBackupCoordinator`): a device-backup restore onto
+  a new phone brings the sealed files back without the bound key, so this gate sees a corpus of
+  permanently-unopenable bytes as "in use" and skips the escrow restore that would have recovered
+  them.
 - ``ProgressPhotoStore/backupIndexPayload()`` / ``ProgressPhotoStore/restoreIndexPayload(_:)`` — the
   timeline index travels with the bytes (inside the manifest), because body photos restored without
   their dates and captions render as an invisible timeline. Export answers **nil** for a
@@ -159,3 +198,9 @@ provider instance across isolation domains.
 - ``OwnPhotoKeyMigrator``
 - ``OwnPhotoKeyMigrationResult``
 - ``OwnPhotoMigrationLatch``
+
+### Own-photo device binding
+
+- ``OwnPhotoKeyBinder``
+- ``OwnPhotoKeyBindingOutcome``
+- ``OwnPhotoDeviceBindingConsent``

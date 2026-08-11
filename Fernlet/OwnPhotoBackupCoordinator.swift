@@ -25,6 +25,20 @@ protocol OwnPhotoBackupContext: AnyObject {
 ///   id, the progress index), so "is this device empty?" cannot be a whole-device check — it is a
 ///   per-corpus FILE-PRESENCE check (`isEmptyForRestore()` on each store), the same shape as the
 ///   sealed narratives' `isEmptyStoreForRestore`.
+///
+///   **KNOWN GAP, surfaced by step 5c and NOT fixed here (owner follow-up).** Once the own-photos
+///   key is device-bound, a device-backup restore onto a NEW phone brings the sealed photo FILES
+///   back but not the key, so every one of them is permanently unopenable — and because they are
+///   present, this gate reads the corpus as "not empty" and skips the escrow restore that was
+///   supposed to bring the photos back. The result is the worst combination: the user paid iCloud
+///   quota for a backup that then declines to restore. Nothing here is unsafe (no data is
+///   overwritten), but the route's headline promise is defeated in exactly the scenario it exists
+///   for. The fix belongs to this gate, not to the binder: distinguish "not empty" from "holds only
+///   bytes this install can never open" — cheaply, by having `OwnPhotoKeyMigrator`'s existing sweep
+///   (which already classifies every file) persist that verdict, rather than by decrypting the
+///   corpus on every launch — and let the restore proceed in the second case. Do **not** fix it by
+///   deleting the stranded files: `unopenable` also covers truncated files and the meal corpus's
+///   legitimate pre-sealing plaintext, which the read path still returns.
 /// - **Restore before re-upload, always.** A device that has not restored yet is empty for exactly
 ///   the reason the backup exists, so uploading from it would replace the cloud copy with an empty
 ///   manifest. An empty corpus therefore NEVER uploads; it only ever restores.
@@ -95,8 +109,13 @@ final class OwnPhotoBackupCoordinator {
         KeychainPrivateMediaKeyProvider(role: .ownPhotos)
     }
 
-    private func legacyKeyProvider() -> KeychainPrivateMediaKeyProvider {
-        KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
+    /// Nil once the own-photos row is device-bound (step 5c), matching `FernletStore` exactly — the
+    /// two wirings must agree, or a backup pass would read photos through a seam the app itself has
+    /// dropped. Asked of the keychain rather than a persisted flag, for the reason spelled out on
+    /// `OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()`.
+    private func legacyKeyProvider() -> KeychainPrivateMediaKeyProvider? {
+        guard !OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound() else { return nil }
+        return KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
     }
 
     private func mealStore(recipe: Bool) -> MealPhotoStore {

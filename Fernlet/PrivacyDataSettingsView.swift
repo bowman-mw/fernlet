@@ -8,6 +8,8 @@ import FernletDomainModel
 import HealthKitGateway
 import FernletUI
 import FernletLockUI
+// Step 5c's own-photo device-binding consent surface reads `OwnPhotoKeyBindingOutcome`.
+import PrivateMediaStore
 
 /// The slice of CloudKit the Privacy & Data screen needs: count what's in the account, and delete it.
 ///
@@ -122,6 +124,10 @@ struct PrivacyDataSettingsView: View {
     /// Set when turning the photo backup OFF failed to delete its iCloud records. The preference is
     /// left ON (so the records stay targetable) and the status banner explains why.
     @State private var ownPhotoBackupDisableFailed = false
+    /// Set when the user confirmed "lock photos to this device" but the keychain could not complete
+    /// the binding right then. Their consent IS recorded (it is a durable decision), so the copy
+    /// says the choice is saved and will finish — never a silent no-op button.
+    @State private var ownPhotoBindingDeferred = false
     /// Payloads whose "turn the backup off" CloudKit delete FAILED. Their preference is deliberately
     /// left ON (so the orphaned CKRecords stay targetable by a retry or by delete-all) and the status
     /// banner says so, instead of the failure being swallowed by an off-looking toggle.
@@ -505,9 +511,114 @@ struct PrivacyDataSettingsView: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+
+            ownPhotoDeviceBindingRow
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Security-hardening Phase 5, step 5c: the consent surface for **device-binding** the user's
+    /// own photos.
+    ///
+    /// Binding is the whole point of the split — a bound key makes a stolen container or a restored
+    /// device backup worthless — but it costs the user their photos on a phone swap, so Fernlet will
+    /// not do it silently. The switch above is one of the two things that unlocks it (it is the
+    /// sanctioned cross-device route, so a backed-up library binds automatically); this row is the
+    /// other, for users who want the binding without the iCloud cost and are willing to say so.
+    ///
+    /// Three honest states, and no fourth: already bound, still preparing (the eager re-seal pass
+    /// has not proven completion, so the gate would refuse), or offerable. A deferred bind — the
+    /// keychain was briefly unavailable — says so instead of leaving a button that looked like it
+    /// did nothing.
+    @ViewBuilder
+    private var ownPhotoDeviceBindingRow: some View {
+        if let store {
+            if store.ownPhotoKeyDeviceBound {
+                Text("These photos are locked to this device: their key never leaves it, so a copy of "
+                    + "your device backup can't open them. They won't restore onto a new phone "
+                    + (storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
+                        ? "from a device backup — the encrypted photo backup above is how they come back."
+                        : "at all. Turn on the encrypted photo backup above if you want them to survive a phone swap."))
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.ownPhotos.deviceBound")
+            } else if !store.ownPhotoKeyMigrationComplete {
+                Text("Fernlet is still moving your existing photos onto their own encryption key. "
+                    + "Locking them to this device becomes available once that finishes.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.ownPhotos.deviceBindingPreparing")
+            } else {
+                Button(role: .destructive) {
+                    presentOwnPhotoDeviceBindingConfirmation()
+                } label: {
+                    Label("Lock photos to this device", systemImage: "lock.iphone")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(.white)
+                .padding(.vertical, 11)
+                .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
+
+                Text(ownPhotoDeviceBindingExplanation)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+
+                if ownPhotoBindingDeferred {
+                    Text("Couldn't lock the photos to this device just now. Your choice is saved — "
+                        + "Fernlet will finish it the next time it can reach the keychain.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("privacy.ownPhotos.deviceBindingDeferred")
+                }
+            }
+        }
+    }
+
+    /// The trade, stated before the tap — and it differs by exactly one fact: whether the encrypted
+    /// photo backup is already covering the phone-swap case.
+    private var ownPhotoDeviceBindingExplanation: String {
+        if storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled {
+            return "Locks your meal, recipe and progress photos to a key that never leaves this device, "
+                + "so a copy of your device backup can't open them. Your encrypted photo backup still "
+                + "restores them onto a new phone."
+        }
+        return "Locks your meal, recipe and progress photos to a key that never leaves this device, so a "
+            + "copy of your device backup can't open them. Because the encrypted photo backup above is "
+            + "off, these photos then won't come back on a new or erased phone. This can't be undone."
+    }
+
+    private func presentOwnPhotoDeviceBindingConfirmation() {
+        let backedUp = storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Lock photos to this device?",
+            message: backedUp
+                ? "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
+                    + "this device. They'll come back on a new phone only through your encrypted photo "
+                    + "backup, never from a device backup. This can't be undone."
+                : "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
+                    + "this device. They will NOT restore onto a new or erased phone, and a device backup "
+                    + "won't bring them back. Turn on the encrypted photo backup first if you want them to "
+                    + "survive a phone swap. This can't be undone.",
+            confirmLabel: "Lock to this device",
+            auditEvent: "privacy.ownPhotos.deviceBindingConfirmed"
+        ) {
+            lockOwnPhotosToThisDevice()
+        }
+    }
+
+    private func lockOwnPhotosToThisDevice() {
+        guard let store else { return }
+        // Consent is recorded by the store even when the bind defers, so the flag below reports a
+        // transient keychain failure rather than re-asking a question the user already answered.
+        ownPhotoBindingDeferred = !store.lockOwnPhotosToThisDevice().isBound
     }
 
     /// The honest size disclosure for the own-photo backup. Fernlet puts no count cap on meal,

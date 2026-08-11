@@ -339,16 +339,33 @@ final class FernletStore {
     /// keychain row, so they share the key material and differ only in their private cache), and
     /// every one of them stays on this main-actor store — see `PrivateMediaKeyProviding`.
     /// `ownPhotoLegacyKeyProvider` is the PRE-SPLIT key, injected as the read-path dual-open
-    /// fallback for files `OwnPhotoKeyMigrator`'s eager pass has not re-sealed yet; step 5c drops
-    /// these arguments once the migration latch proves them unnecessary.
+    /// fallback for files `OwnPhotoKeyMigrator`'s eager pass has not re-sealed yet — and dropped
+    /// (nil) the moment the own key is device-bound, which is what makes that binding mean
+    /// anything (step 5c).
     nonisolated private static func ownPhotoKeyProvider() -> KeychainPrivateMediaKeyProvider {
         KeychainPrivateMediaKeyProvider(role: .ownPhotos)
     }
     /// The pre-split (now friend-wall) key, read-only: `mintsIfAbsent: false` so a fallback probe
     /// can never CREATE the wall's row — a fresh random key would open nothing and would install a
     /// row that later looks authoritative.
-    nonisolated private static func ownPhotoLegacyKeyProvider() -> KeychainPrivateMediaKeyProvider {
-        KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
+    ///
+    /// Nil once the own-photos row is device-bound. The question is asked of the KEYCHAIN, not of a
+    /// persisted flag, so a device restored from a backup taken before the flip (bound row absent,
+    /// loose row restored) correctly keeps its fallback. Safe by construction: the row can only be
+    /// bound after `OwnPhotoMigrationLatch` proved there is nothing left for the fallback to open.
+    ///
+    /// Internal rather than private purely so `OwnPhotoKeyBindingTests` can pin that biconditional
+    /// — "fallback present exactly when the key is not bound" is the property, and asserting it on
+    /// the real wiring beats re-deriving it in a test.
+    ///
+    /// Resolved once per store construction, so a binding that happens mid-session (the launch pass,
+    /// or the user's consent tap) leaves the fallback in place until the next launch. Deliberately
+    /// not re-resolved: the fallback can only ever open bytes sealed under a key this app owns, the
+    /// latch already proved there are none left, and rebuilding live store instances to shed a
+    /// no-op code path would be the riskier change.
+    nonisolated static func ownPhotoLegacyKeyProvider() -> KeychainPrivateMediaKeyProvider? {
+        guard !OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound() else { return nil }
+        return KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
     }
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
         directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
@@ -2642,9 +2659,22 @@ final class FernletStore {
 
     /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
     /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
+    ///
+    /// Switching it ON can newly satisfy the step-5c binding gate (it is the sanctioned cross-device
+    /// route), so the gate is re-evaluated here rather than left until the next launch — the photos
+    /// are covered from the moment the first pass commits. Turning it OFF never un-binds: consent to
+    /// device-binding is one-way, and a bound row whose backup was removed is still the custody the
+    /// user asked for.
     @discardableResult
     func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
-        await ownPhotoBackupCoordinator.setEnabled(enabled)
+        let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
+        if succeeded && enabled {
+            // The preference has not been written yet (the caller persists it on success), so ask
+            // the gate with the value we are about to commit rather than the stale stored one.
+            let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: true).bindIfEligible()
+            recordOwnPhotoKeyBindingOutcome(outcome)
+        }
+        return succeeded
     }
 
     /// Deletes every own-photo escrow record (all three corpora, bodies + manifests) and clears the
@@ -4676,7 +4706,7 @@ final class FernletStore {
         // until (and if) this attaches; a missing/purged asset just leaves us on base coverage.
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
-        migrateOwnPhotosToOwnKey()
+        migrateAndBindOwnPhotoKey()
     }
 
     /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media
@@ -4693,11 +4723,82 @@ final class FernletStore {
     /// `Sendable`, so the store's providers must not travel with it — and only `URL` values cross
     /// the boundary. Fully idempotent and cheap after completion: the latch short-circuits it, and
     /// even without the latch a migrated corpus costs one GCM open per file.
-    private func migrateOwnPhotosToOwnKey() {
+    ///
+    /// Step 5c hangs the binding evaluation off the same task, in this order and no other: the
+    /// re-seal pass must report completion BEFORE the gate is even consulted, because the latch it
+    /// sets is the proof that no own file is still readable only under the pre-split key. The gate
+    /// then refuses unless the user also has a cross-device route (escrow backup on, or recorded
+    /// consent), so a launch never silently trades away their phone-swap recovery.
+    private func migrateAndBindOwnPhotoKey() {
         let documentsDirectory = Self.photoDocumentsDirectory
-        Task.detached(priority: .utility) {
-            OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
+        // Read on the main actor and carried in as a Bool: `StoragePreferences` is the app's state,
+        // and only `Sendable` values may cross into the detached task.
+        let escrowBackupEnabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
+        Task.detached(priority: .utility) { [weak self] in
+            let complete = OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
+            let outcome = complete
+                ? OwnPhotoKeyBinder(escrowBackupEnabled: escrowBackupEnabled).bindIfEligible()
+                : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
+            await MainActor.run { self?.recordOwnPhotoKeyBindingOutcome(outcome) }
         }
+    }
+
+    /// Whether the user's own-photo key is bound to this device — read from the keychain row itself,
+    /// then held as observable state so Privacy & Data can reflect it without polling.
+    ///
+    /// Initialized at construction (one `SecItemCopyMatching`) rather than defaulted to false, so a
+    /// device that is already bound never renders the "lock them to this device" offer for the
+    /// instant before the launch pass runs.
+    private(set) var ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
+
+    /// Whether the eager own-photo re-seal pass has proven completion — the half of the binding gate
+    /// the user cannot influence. Observable so the settings screen can say "still preparing"
+    /// instead of offering a button that would refuse.
+    private(set) var ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+
+    /// Folds a binding evaluation back into the observable custody state.
+    ///
+    /// Both flags are re-read from their sources rather than inferred from `outcome`: the outcome
+    /// says what this evaluation did, the keychain and the latch say what is true.
+    private func recordOwnPhotoKeyBindingOutcome(_ outcome: OwnPhotoKeyBindingOutcome) {
+        ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+        ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
+        switch outcome {
+        case .bound:
+            FernletAuditLog.log("privateMedia.ownKeyDeviceBound")
+        case .rebindFailed(let status):
+            FernletAuditLog.log("privateMedia.ownKeyBindFailed", context: ["status": String(status)])
+        case .refusedMigrationIncomplete, .refusedNoRecoveryRoute, .deferredKeyUnavailable:
+            break
+        }
+    }
+
+    /// Re-evaluates the own-photo key binding gate — the seam for events that can newly satisfy it
+    /// (the escrow photo backup being switched on, a completed migration).
+    ///
+    /// A no-op unless both halves hold, and it never *widens* custody: an already-bound row stays
+    /// bound, and there is deliberately no un-bind path (see `OwnPhotoDeviceBindingConsent`).
+    @discardableResult
+    func bindOwnPhotoKeyIfEligible() -> OwnPhotoKeyBindingOutcome {
+        let enabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
+        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: enabled).bindIfEligible()
+        recordOwnPhotoKeyBindingOutcome(outcome)
+        return outcome
+    }
+
+    /// The user-initiated "lock my photos to this device" ceremony: records explicit consent that
+    /// own photos will not restore to a new phone without the escrow backup, then binds.
+    ///
+    /// Irreversible by design, which is why its only caller puts a WS-5 destructive confirmation in
+    /// front of it. Consent is recorded even if the bind then defers on a transient keychain
+    /// failure — the user's decision is durable; re-asking would be the wrong remedy.
+    @discardableResult
+    func lockOwnPhotosToThisDevice() -> OwnPhotoKeyBindingOutcome {
+        let enabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
+        FernletAuditLog.log("privateMedia.ownKeyBindingConsentRecorded")
+        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: enabled).recordConsentAndBind()
+        recordOwnPhotoKeyBindingOutcome(outcome)
+        return outcome
     }
 
     func flushPendingSnapshotSave() {

@@ -51,12 +51,20 @@ extension PrivateMediaKeyProviding {
 ///   existing row for the wall means **zero re-encryption** of the wall and preserves its
 ///   survives-delete-all / never-deleted-by-wipe properties verbatim.
 /// - ``Role/ownPhotos`` — account `com.fernlet.private-media.ownContentKey`, a NEW row for the
-///   user's own meal / recipe / progress (body) photos. Minted `AfterFirstUnlock` **for now** so
-///   nothing strands while `OwnPhotoKeyMigrator` re-seals the existing corpora; the flip to
-///   `AfterFirstUnlockThisDeviceOnly` is step 5c and is a ONE-LINE policy change in
-///   ``defaultDeviceBinding(for:)`` (the "flip, not flag-day" precedent set by
-///   `SecureEnclaveContentKeyWrap`). It is gated on ``OwnPhotoMigrationLatch`` — binding before
-///   every own file is re-sealed would silently turn stragglers into unreadable bytes.
+///   user's own meal / recipe / progress (body) photos. **Minted** backup-restorable and
+///   **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** by ``OwnPhotoKeyBinder`` once, and
+///   only once, its gate holds: ``OwnPhotoMigrationLatch`` proves no own file is still under the
+///   pre-split key, AND the user has a sanctioned cross-device route (the opt-in own-photo escrow
+///   backup, or a recorded ``OwnPhotoDeviceBindingConsent``). Binding before the first would turn
+///   stragglers into permanently unreadable bytes; binding before the second would silently delete
+///   the user's only path onto a replacement phone. Both are facts about this device at this
+///   moment, which is why the flip is a runtime gate and not the build-time constant below.
+///
+/// Once the row is bound, the own read paths stop carrying their dual-open legacy fallback
+/// (`MealPhotoStore` / `ProgressPhotoStore` are constructed with `legacyKeyProvider: nil`) — that
+/// is what makes the binding mean anything. The custody state is read from the row's real
+/// `kSecAttrAccessible` attribute, never from a persisted "we bound it" flag, because such a flag
+/// rides the device backup onto a phone the bound row never reached.
 ///
 /// ## Delete-all
 ///
@@ -100,19 +108,23 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     /// Own-photos key row (Phase 5 split).
     static let ownAccount = "com.fernlet.private-media.ownContentKey"
 
-    /// Mint-time binding policy per role — **the 5c flip point**.
+    /// Mint-time binding policy per role — what class a row is created under when it does not yet
+    /// exist. **Not** the authority on an existing row's custody: see ``OwnPhotoKeyBinder``.
     ///
     /// `true` mints `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (the key cannot leave this
     /// device, so a restored backup or a stolen container yields nothing); `false` mints the
-    /// backup-restorable `kSecAttrAccessibleAfterFirstUnlock`.
+    /// backup-restorable class.
     ///
     /// - `.friendWall` is `false` **permanently** — that is the documented product decision the
     ///   wall's cross-device readability rests on, pinned by `KeyCustodyBoundaryTests`.
-    /// - `.ownPhotos` is `false` **today** and flips to `true` in step 5c, once
-    ///   ``OwnPhotoMigrationLatch`` proves every own file is sealed under this key AND the escrow
-    ///   photo route (or explicit user consent) covers the phone-swap case. Changing it here is
-    ///   the whole flip: existing rows keep their minted class until re-minted, so the flip is
-    ///   forward-looking and must be paired with 5c's re-mint, never shipped alone.
+    /// - `.ownPhotos` is `false` too, and that is deliberate rather than unfinished. Step 5c's
+    ///   binding is *gated* on runtime state — the migration latch plus the user's cross-device
+    ///   route — so a build-time `true` here would bind the key on devices satisfying neither
+    ///   condition, which is precisely the data-loss shape the gate exists to prevent. The row is
+    ///   instead minted loose and re-bound in place by ``OwnPhotoKeyBinder/bindIfEligible()``,
+    ///   which passes `deviceBound: true` through ``init(role:deviceBound:mintsIfAbsent:)`` so a
+    ///   *fresh* row on an eligible device is born bound rather than minted loose and immediately
+    ///   updated.
     public static func defaultDeviceBinding(for role: Role) -> Bool {
         switch role {
         case .friendWall: return false
@@ -144,9 +156,11 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     ///   - role: Which key to vend. Defaults to ``Role/friendWall`` so the pre-split default
     ///     construction (`KeychainPrivateMediaKeyProvider()`) keeps reading the original row
     ///     byte-for-byte; own-photo stores pass ``Role/ownPhotos`` explicitly.
-    ///   - deviceBound: Mint-time binding override, for tests that need to exercise a binding
-    ///     class the shipping policy hasn't flipped to yet. Nil (the normal case) resolves to
-    ///     ``defaultDeviceBinding(for:)`` — keep the policy in that one place.
+    ///   - deviceBound: Mint-time binding override. Production's one caller is
+    ///     ``OwnPhotoKeyBinder/bindIfEligible()``, which passes `true` so a not-yet-existing
+    ///     own-photos row on an eligible device is minted device-bound rather than minted loose and
+    ///     immediately updated. Nil (every other caller) resolves to ``defaultDeviceBinding(for:)``
+    ///     — keep the mint policy in that one place.
     ///   - mintsIfAbsent: Pass false for a read-only probe/fallback provider that must never
     ///     create a row (see ``mintsIfAbsent``).
     public init(role: Role = .friendWall, deviceBound: Bool? = nil, mintsIfAbsent: Bool = true) {
