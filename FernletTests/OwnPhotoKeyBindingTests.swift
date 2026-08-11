@@ -89,7 +89,7 @@ struct OwnPhotoKeyBindingTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let before = ownRowAccessibility()
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults).bindIfEligible()
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
         #expect(outcome == .refusedMigrationIncomplete)
         #expect(ownRowAccessibility() == before, "a refused bind changed the row's custody anyway")
     }
@@ -103,7 +103,7 @@ struct OwnPhotoKeyBindingTests {
         OwnPhotoMigrationLatch(defaults: defaults).markComplete()
 
         let before = ownRowAccessibility()
-        let binder = OwnPhotoKeyBinder(escrowBackupEnabled: false, defaults: defaults)
+        let binder = OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults)
         #expect(!binder.hasCrossDeviceRoute)
         #expect(!binder.isEligible)
         #expect(binder.bindIfEligible() == .refusedNoRecoveryRoute)
@@ -117,12 +117,12 @@ struct OwnPhotoKeyBindingTests {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: false, defaults: defaults).recordConsentAndBind()
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults).recordConsentAndBind()
         #expect(outcome == .refusedMigrationIncomplete)
         #expect(OwnPhotoDeviceBindingConsent(defaults: defaults).isRecorded)
         // ...and the recorded consent is what makes the NEXT evaluation eligible.
         OwnPhotoMigrationLatch(defaults: defaults).markComplete()
-        #expect(OwnPhotoKeyBinder(escrowBackupEnabled: false, defaults: defaults).isEligible)
+        #expect(OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults).isEligible)
     }
 
     // MARK: - The gate's open directions
@@ -134,7 +134,7 @@ struct OwnPhotoKeyBindingTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         OwnPhotoMigrationLatch(defaults: defaults).markComplete()
 
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults).bindIfEligible()
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
         #expect(outcome == .bound)
         #expect(OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound())
         #expect(ownRowAccessibility() == deviceBoundClass)
@@ -147,7 +147,7 @@ struct OwnPhotoKeyBindingTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         OwnPhotoMigrationLatch(defaults: defaults).markComplete()
 
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: false, defaults: defaults).recordConsentAndBind()
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults).recordConsentAndBind()
         #expect(outcome == .bound)
         #expect(ownRowAccessibility() == deviceBoundClass)
     }
@@ -159,7 +159,7 @@ struct OwnPhotoKeyBindingTests {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         OwnPhotoMigrationLatch(defaults: defaults).markComplete()
-        let binder = OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults)
+        let binder = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults)
 
         #expect(binder.bindIfEligible() == .bound)
         let afterFirst = try #require(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
@@ -198,13 +198,13 @@ struct OwnPhotoKeyBindingTests {
         try sealed(indexPlaintext, under: legacyKey).write(to: indexURL)
 
         // Binding is refused while those files are still legacy — the latch has not been earned yet.
-        #expect(OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults).bindIfEligible()
+        #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
                 == .refusedMigrationIncomplete)
 
         // The eager pass earns it.
         #expect(OwnPhotoKeyMigrator.standard(documentsDirectory: root, defaults: defaults).run(),
                 "the migration did not reach a clean pass")
-        #expect(OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults).bindIfEligible() == .bound)
+        #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible() == .bound)
         #expect(ownRowAccessibility() == deviceBoundClass)
 
         // The key is the same key, in a stricter row — otherwise nothing below could open.

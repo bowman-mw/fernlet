@@ -58,6 +58,12 @@ Three pieces carry own photos across that split, all in `OwnPhotoKeyMigration.sw
   user never reopens under the backup-restorable key forever.
 - ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing is left under
   the old key. Both the 5c binding flip and the removal of the dual-open fallback are gated on it.
+  Fail-closed means all three ways a pass can fail to establish the property, and the third is the
+  one that looks benign: a file whose **bytes could not be read at all** is
+  ``OwnPhotoKeyMigrationResult/indeterminate``, never ``OwnPhotoKeyMigrationResult/unopenable``. Own
+  photo files are `.completeFileProtection` while both key rows are `AfterFirstUnlock` and cached in
+  memory, so a device that locks mid-pass fails every read while both providers keep vending keys —
+  and a pass that read nothing would otherwise be indistinguishable from a fully migrated corpus.
 
 Until the key is bound, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an
 injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under
@@ -73,9 +79,12 @@ unfinished version of one — both of its conditions are facts about this device
 
 1. ``OwnPhotoMigrationLatch`` is set. Binding before it turns any straggler still sealed under the
    pre-split key into permanently unreadable bytes, with no error anywhere.
-2. The user has a sanctioned cross-device route — the opt-in own-photo escrow backup is on, or
-   ``OwnPhotoDeviceBindingConsent`` is recorded (Privacy & Data → "Lock photos to this device").
-   Binding before it silently deletes their only path onto a replacement phone.
+2. The user has a sanctioned cross-device route — the own-photo escrow backup has actually
+   **committed** a copy (``OwnPhotoKeyBinder/init(escrowRouteCommitted:defaults:)`` takes evidence
+   that a manifest reached iCloud, never the bare preference: a switch flipped while offline or
+   signed out is intent, and binding is irreversible), or ``OwnPhotoDeviceBindingConsent`` is
+   recorded (Privacy & Data → "Lock photos to this device"). Binding before it silently deletes
+   their only path onto a replacement phone.
 
 ``KeychainPrivateMediaKeyProvider/defaultDeviceBinding(for:)`` therefore stays backup-restorable for
 both roles: it is the class a row is *minted* under, and a build-time `true` would bind on devices
@@ -119,10 +128,17 @@ supplies only the local seam it needs, and each piece is shaped by a hazard:
   per-corpus no-clobber gate, deliberately **file presence**, not "no ids I can parse": a corpus
   holding bytes this build cannot name is still in use. An unlistable directory reads as NOT empty
   (fail closed → no restore). The progress corpus additionally requires its index to be absent.
-  **Known gap after step 5c** (tracked on `OwnPhotoBackupCoordinator`): a device-backup restore onto
-  a new phone brings the sealed files back without the bound key, so this gate sees a corpus of
-  permanently-unopenable bytes as "in use" and skips the escrow restore that would have recovered
-  them.
+- ``MealPhotoStore/holdsOnlyUnopenableFiles()`` / ``ProgressPhotoStore/holdsOnlyUnopenableFiles()``
+  — the second half of that gate, and the answer to the case step 5c creates. A device-backup
+  restore onto a new phone brings the sealed files back without the bound key, so presence alone
+  reads a corpus of permanently-unopenable bytes as "in use" and declines the escrow restore that
+  exists for exactly that moment. This asks the other question, by **probing with early exit** (one
+  GCM open in the healthy case) rather than trusting a persisted verdict — a verdict lives in
+  `UserDefaults`, rides the device backup, and would therefore arrive on the new phone already
+  claiming "openable" about files whose key did not travel. It fails closed everywhere it cannot
+  establish an answer, and it counts the meal corpus's legitimate pre-sealing **plaintext** as
+  openable, because the read path still returns it — which is also why stranded files are never
+  deleted to resolve this.
 - ``ProgressPhotoStore/backupIndexPayload()`` / ``ProgressPhotoStore/restoreIndexPayload(_:)`` — the
   timeline index travels with the bytes (inside the manifest), because body photos restored without
   their dates and captions render as an invisible timeline. Export answers **nil** for a

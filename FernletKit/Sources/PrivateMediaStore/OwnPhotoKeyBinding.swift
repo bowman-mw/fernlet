@@ -95,8 +95,9 @@ public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
 ///
 /// 1. ``OwnPhotoMigrationLatch`` is set — every own file is proven to be sealed under the
 ///    own-photos key. Binding before that turns any straggler into permanently unreadable bytes.
-/// 2. The user has a sanctioned cross-device route: the opt-in own-photo escrow backup is ON, or
-///    ``OwnPhotoDeviceBindingConsent`` is recorded. Binding before that silently deletes their
+/// 2. The user has a sanctioned cross-device route: the opt-in own-photo escrow backup has
+///    actually **committed** a copy (not merely been switched on — see ``escrowRouteCommitted``),
+///    or ``OwnPhotoDeviceBindingConsent`` is recorded. Binding before that silently deletes their
 ///    photos' only path onto a replacement phone.
 ///
 /// A build-time `true` would bind on devices failing either condition. So the mint policy stays
@@ -122,28 +123,38 @@ public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
 /// Concurrency: a `nonisolated` value type over `UserDefaults` and the keychain; safe to evaluate
 /// from a background launch task, which is exactly where the migration hands off to it.
 public struct OwnPhotoKeyBinder {
-    /// Whether the opt-in own-photo escrow backup is switched on — supplied by the caller rather
-    /// than read here, because `StoragePreferences` is the app's concern and this module stays
-    /// preference-agnostic.
-    private let escrowBackupEnabled: Bool
+    /// Whether the own-photo escrow backup has actually **committed** a copy of this device's
+    /// photos — supplied by the caller rather than read here, because `StoragePreferences` and the
+    /// CloudKit transport are the app's concern and this module stays preference-agnostic.
+    ///
+    /// - Important: this is deliberately NOT "the preference is switched on". A preference is a
+    ///   statement of intent; binding is irreversible. A user who flips the switch while offline,
+    ///   signed out of iCloud, or over quota has a preference that reads ON and zero bytes in the
+    ///   cloud — binding on that would destroy the device-backup route without having built the
+    ///   replacement. Callers must pass evidence that a manifest write reached iCloud (or that
+    ///   there was nothing to commit because the user has no own photos at all); see
+    ///   `OwnPhotoEscrowCommitLedger` on the app side.
+    private let escrowRouteCommitted: Bool
     private let migrationLatch: OwnPhotoMigrationLatch
     private let consent: OwnPhotoDeviceBindingConsent
 
     /// Creates a gate evaluation.
     ///
     /// - Parameters:
-    ///   - escrowBackupEnabled: Whether the own-photo escrow backup preference is on.
+    ///   - escrowRouteCommitted: Whether the own-photo escrow backup has committed a copy of this
+    ///     device's photos — see ``escrowRouteCommitted``. Never merely the preference.
     ///   - defaults: Backing store for the migration latch and the consent record; tests inject an
     ///     isolated suite.
-    public init(escrowBackupEnabled: Bool, defaults: UserDefaults = .standard) {
-        self.escrowBackupEnabled = escrowBackupEnabled
+    public init(escrowRouteCommitted: Bool, defaults: UserDefaults = .standard) {
+        self.escrowRouteCommitted = escrowRouteCommitted
         self.migrationLatch = OwnPhotoMigrationLatch(defaults: defaults)
         self.consent = OwnPhotoDeviceBindingConsent(defaults: defaults)
     }
 
-    /// Whether the user has a sanctioned way to get these photos onto a replacement phone.
+    /// Whether the user has a sanctioned way to get these photos onto a replacement phone: a
+    /// committed escrow backup, or a recorded acceptance that there will not be one.
     public var hasCrossDeviceRoute: Bool {
-        escrowBackupEnabled || consent.isRecorded
+        escrowRouteCommitted || consent.isRecorded
     }
 
     /// Whether both halves of the gate hold right now. Used by the UI to decide whether the

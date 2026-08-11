@@ -114,8 +114,9 @@ protected by keys that never leave the device:
   recipe and gym-progress bytes plus the sealed progress index — moved to a second keychain row
   (`…ownContentKey`) that is re-bound in place to `AfterFirstUnlockThisDeviceOnly` once, and only
   once, two conditions hold: the eager re-seal pass has proven no own file is still under the
-  pre-split key, AND the user has a sanctioned cross-device route (the opt-in own-photo escrow
-  backup, or an explicit recorded consent that these photos will not restore to a new phone). The
+  pre-split key, AND the user has a sanctioned cross-device route — the own-photo escrow backup
+  having actually COMMITTED a copy (`OwnPhotoEscrowCommitLedger`, not merely the preference being
+  switched on), or an explicit recorded consent that these photos will not restore to a new phone. The
   flip is an in-place `SecItemUpdate` — a delete-then-add re-store would open a window in which no
   own-photos key exists at all — and it never changes the key material, so no photo is stranded by
   it. Afterwards the own read paths drop their pre-split dual-open fallback, which is what makes the
@@ -200,14 +201,24 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
   backup taken *before* the flip already contains the loose key, binding cannot retroactively
   protect a copy someone already has. Until a user takes one of those two routes their own photos
   stay under the pre-5c, backup-restorable custody: the hardening is opt-in because its cost is
-  theirs to accept. **Known gap, stated rather than hidden:** on a new phone restored from a device
-  backup, the sealed photo *files* come back while the bound key does not, and the escrow route's
-  per-corpus no-clobber gate is a file-PRESENCE check — so it currently reads those unopenable
-  bytes as "this corpus is in use" and skips the restore. Nothing is overwritten or lost beyond
-  what the binding already cost, but a user with the photo backup on does not get their photos back
-  automatically in that path yet. The fix (teach the gate to tell "not empty" from "holds only
-  bytes this install can never open", off the migration sweep's existing classification) is tracked
-  against `OwnPhotoBackupCoordinator`.
+  theirs to accept. The new phone *is* covered: the escrow route's per-corpus no-clobber gate asks
+  two questions, not one — is this corpus empty, **and** does it hold nothing this install can open
+  — so a device that got the sealed photo files back from a device backup without the bound key
+  restores from the escrow copy instead of reading those dead bytes as "this corpus is in use".
+  The stranded files are never deleted to achieve that (the same "opens under no key" bucket also
+  covers truncated files and the meal corpus's legitimate pre-sealing plaintext, which the read
+  path still returns); the restore simply writes the real photos back over their own ids. Pinned by
+  `SealedPhotoBackupTests.aCorpusOfUnopenableBytesIsRestoredIntoRatherThanReadAsInUse` and
+  `legacyPlaintextIsNotMistakenForStrandedBytes`.
+- **Binding follows a COMMITTED backup, never a switch.** The gate's second half is not "the
+  encrypted photo backup preference is on" — a preference records intent, and a user who flips it
+  while offline, signed out of iCloud, or over quota would otherwise have the device-backup route
+  taken away, irreversibly, without the replacement ever having been built. It is
+  `OwnPhotoEscrowCommitLedger`: a manifest write actually reached iCloud for every corpus that holds
+  photos (vacuously true for a device with no own photos, which has nothing to strand). Enabling the
+  backup reports failure when that did not happen, so the preference does not persist either, and
+  the failure is shown in Privacy & Data with a Retry rather than swallowed. Pinned by
+  `SealedPhotoBackupTests.enablingReportsFailureWhenNothingReachedICloud`.
 - **The escrow-sealed iCloud backup is, by design, exactly as strong as the user's Apple
   account.** It is openable on any device holding the user's iCloud Keychain — it can never be
   bound tighter without destroying its purpose. The per-generation-salt hardening (§6.4, done)
@@ -293,8 +304,14 @@ shipped; the rest are still open.
    re-seals the own corpora onto the own key, with a read-path dual-open fallback so nothing is
    unreadable in the meantime. The flip is gated on `OwnPhotoMigrationLatch` — the persisted proof
    that zero own files are still under the old key — AND on the sanctioned cross-device route
-   (escrow photo backup or explicit consent). Honest limit until the latch is set: an un-migrated
-   own photo is still openable under the backup-restorable friend key. Pinned by
+   (a COMMITTED escrow photo backup, or explicit consent). The latch is fail-closed in all three
+   ways a pass can fail to prove the property: the own key is unavailable, the legacy key is
+   unavailable, or a file's BYTES could not be read at all. That third one is subtle and is why it
+   is spelled out here — own photo files are `.completeFileProtection` while both key rows are
+   `AfterFirstUnlock` and cached in memory, so a device that locks mid-pass fails every read while
+   both providers keep vending keys; counting those as "opens under no key" would let a pass that
+   read nothing look identical to a fully migrated corpus. Honest limit until the latch is set: an
+   un-migrated own photo is still openable under the backup-restorable friend key. Pinned by
    `FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
    (`ownPhotoKeyIsASecondRowDistinctFromTheFriendWallKey` asserts the two rows really are two
    independent, non-synchronizable keys, so a "split" that vended the same bytes twice fails loudly;
@@ -313,9 +330,21 @@ shipped; the rest are still open.
    no count cap, so a large library really can cost 100–250 MB of the user's iCloud quota); turning it
    off runs the WS-5 destructive ceremony and deletes the records. Restore is gated per corpus by a
    FILE-PRESENCE emptiness check and always runs BEFORE any re-upload, so a device that has not
-   restored yet can never replace the cloud copy with an empty manifest. The progress corpus's sealed
+   restored yet can never replace the cloud copy with an empty manifest — with two deliberate
+   refinements, each closing a way the plain presence check gets the question wrong. A corpus that
+   holds files but nothing THIS install can open (the phone-swap case: sealed files back from a
+   device backup, bound key not) is restored into, exactly like an empty one. And a corpus this
+   device HAS uploaded to and has since emptied is empty because the user deleted their photos, so
+   it prunes its own ids from the manifest instead of restoring them back onto disk as orphans
+   nothing references. A partial restore records the ids it could not land
+   (`OwnPhotoRestoreRepairLedger`) and the next pass re-fetches exactly those, because the restore
+   itself is what closes the emptiness gate behind them. The progress corpus's sealed
    timeline index travels inside the (authenticated) manifest — bytes without dates and captions
-   would restore as an invisible timeline. Rollback is caught by a photo-namespaced
+   would restore as an invisible timeline — and it is committed only once at least one body has
+   landed, since writing it is itself what makes that corpus "not empty". A manifest that EXISTS but
+   cannot be read (dropped fetch, foreign escrow identity, corrupt bytes) is never replaced: it is
+   the sole authority on membership, and rewriting it from one device's ids would leave the other
+   device's bodies as permanently unnamed orphans. Rollback is caught by a photo-namespaced
    `SealedBackupGenerationStore` high-water mark on the manifest, plus a per-id content hash inside
    it. Pinned by `FernletTests/SealedPhotoBackupTests` and the byte-exact AAD v3 pin in
    `SealedBackupFormatPinTests`; the delete-all teardown is enforced by `PrivacyWipeCoverageTests`
@@ -323,7 +352,9 @@ shipped; the rest are still open.
    **UPDATE (2026-08-11, Phase 5 step 5c): the binding is flipped, and the fallback is gone with it.**
    `…ownContentKey` is re-bound to `AfterFirstUnlockThisDeviceOnly` by `OwnPhotoKeyBinder`, gated on
    `OwnPhotoMigrationLatch` **AND** a sanctioned cross-device route — the escrow photo backup above
-   being ON, or an explicit `OwnPhotoDeviceBindingConsent` recorded through Privacy & Data →
+   having actually committed a copy of this device's photos (a manifest write that reached iCloud;
+   the preference alone is intent, not a route, and binding is irreversible), or an explicit
+   `OwnPhotoDeviceBindingConsent` recorded through Privacy & Data →
    "Lock photos to this device", whose confirmation says in as many words that these photos will not
    come back on a new or erased phone. Both halves are runtime facts about this device, which is why
    the flip is a gate rather than the "one-line policy constant" the plan sketched: a build-time flip

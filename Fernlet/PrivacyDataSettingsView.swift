@@ -206,7 +206,8 @@ struct PrivacyDataSettingsView: View {
             Button("Cancel", role: .cancel) { pendingOwnPhotoBackupEnable = false }
             Button("Encrypt & back up") { applyOwnPhotoBackup(enabled: true) }
         } message: {
-            Text(Self.ownPhotoBackupSizeDisclosure + "\n\n" + sealedBackupDisclosure(for: nil))
+            Text(Self.ownPhotoBackupSizeDisclosure + "\n\n" + sealedBackupDisclosure(for: nil)
+                 + "\n\n" + Self.ownPhotoBackupBindingDisclosure)
         }
         .destructiveConfirmation($pendingDestructiveAction)
         // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
@@ -629,6 +630,16 @@ struct PrivacyDataSettingsView: View {
         + "so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB "
         + "or more for a big library. Only photos that changed are uploaded."
 
+    /// The one consequence of this switch that is NOT about iCloud, said before the tap rather than
+    /// only afterwards in `ownPhotoDeviceBindingRow`: once the first backup actually lands, these
+    /// photos' key is locked to this device, which is irreversible and changes how they come back on
+    /// a new phone. Deliberately phrased "once your photos are safely in the backup" because that is
+    /// exactly the gate — the binding follows a committed upload, never the switch alone.
+    static let ownPhotoBackupBindingDisclosure =
+        "Once your photos are safely in the backup, Fernlet locks their encryption key to this device, "
+        + "so a copy of your device backup can't open them. That can't be undone, and from then on this "
+        + "encrypted backup is how they come back on a new phone."
+
     /// True when an iCloud account is signed in on this device. A DEBUG launch override lets UI tests
     /// exercise the "another device has data" path without a real iCloud account (mirrors the
     /// `iCloudAvailabilityOverride` seam in `Persistence`).
@@ -690,9 +701,23 @@ struct PrivacyDataSettingsView: View {
             if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
                 || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
                 || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
-                || photoAttention != nil || ownPhotoBackupDisableFailed {
+                || photoAttention != nil || ownPhotoBackupDisableFailed
+                || store.ownPhotoBackupUploadFailed {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Encrypted backup status")
+
+                    // An UPLOAD failure, which the restore vocabulary above cannot express: a device
+                    // that has photos never takes the restore path at all, so without this line a
+                    // pass in which nothing reached iCloud is completely invisible — an ON switch, an
+                    // accepted size disclosure, and no backup.
+                    if store.ownPhotoBackupUploadFailed {
+                        Text("Couldn't upload your photos to your encrypted backup just now, so some or "
+                            + "all of them may not be in iCloud yet. We'll keep trying, or tap Retry.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosUploadFailed")
+                    }
 
                     if ownPhotoBackupDisableFailed {
                         Text("Couldn't delete your encrypted photo backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
@@ -795,8 +820,11 @@ struct PrivacyDataSettingsView: View {
                     // restore, and the same pass's follow-through then re-uploads and clears the deferral.
                     if attentionItems.contains(where: { $0.outcome.isRetryable })
                         // The photo route rides the same Retry: `restoreSealedBackupsIfNeeded` runs
-                        // its synchronize pass too, so one button covers both routes.
+                        // its synchronize pass too, so one button covers both routes — for a failed
+                        // restore, for the ids a partial restore left owed (the repair pass), and
+                        // for a failed upload.
                         || (photoAttention?.isRetryable ?? false)
+                        || store.ownPhotoBackupUploadFailed
                         || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
                         // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
                         // store records no retryable attention item, yet Retry IS the remedy —

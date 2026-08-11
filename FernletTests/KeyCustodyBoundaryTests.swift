@@ -182,7 +182,7 @@ struct KeyCustodyBoundaryTests {
 
         let before = KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey()
             .map { $0.withUnsafeBytes { Data($0) } }
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: true, defaults: defaults).bindIfEligible()
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
         #expect(outcome == .bound, "the own-photo key refused to bind with its gate satisfied: \(outcome)")
 
         let attrs = rowAttributes(account: "com.fernlet.private-media.ownContentKey",

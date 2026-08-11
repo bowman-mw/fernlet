@@ -133,13 +133,26 @@ public struct OwnPhotoKeyMigrationResult: Sendable, Equatable {
     public let resealed: Int
     /// Opened under the legacy key but could not be written back (disk error). Blocks the latch.
     public let resealFailures: Int
-    /// Opened under NEITHER key while the legacy key was available: truncated, corrupt, or (in the
-    /// meal corpus) a pre-sealing plaintext JPEG. Does **not** block the latch — no key custody
-    /// decision can make these bytes any more or less readable, and the read paths already resolve
-    /// them to nil (or, for legitimate legacy plaintext, re-seal them under the own key on access).
+    /// Read successfully and then opened under NEITHER key while the legacy key was available:
+    /// truncated, corrupt, or (in the meal corpus) a pre-sealing plaintext JPEG. Does **not** block
+    /// the latch — no key custody decision can make these bytes any more or less readable, and the
+    /// read paths already resolve them to nil (or, for legitimate legacy plaintext, re-seal them
+    /// under the own key on access).
+    ///
+    /// - Important: this bucket means "we READ the bytes and no key opens them". A file whose bytes
+    ///   could not be read at all is ``indeterminate``, never this — see ``indeterminate``.
     public let unopenable: Int
-    /// Could not be classified because the legacy key was unavailable, so "is this still sealed
-    /// under the old key?" has no answer. Blocks the latch — the fail-closed direction.
+    /// Could not be classified: the legacy key was unavailable, a directory could not be listed, or
+    /// the file's bytes could not be READ at all. Blocks the latch — the fail-closed direction.
+    ///
+    /// The read-failure case is the subtle one and it is why this bucket exists rather than a
+    /// second "unopenable" tally. Own-photo files are written `.completeFileProtection`
+    /// (`MediaAtRestCrypto.sealAndWrite`) while BOTH key rows are `AfterFirstUnlock` and cached in
+    /// memory — so once the device locks mid-pass, every `Data(contentsOf:)` fails while the keys
+    /// stay perfectly available. Scoring that as ``unopenable`` would let a pass that read nothing
+    /// at all look identical to a fully-migrated corpus and latch on it, after which binding drops
+    /// the dual-open fallback and every straggler becomes permanently unreadable. "I could not see
+    /// the bytes" is not "no key opens these bytes"; only the second is safe to ignore.
     public let indeterminate: Int
     /// The pass did nothing because the own-photos key itself was unavailable (locked or failing
     /// keychain). Blocks the latch.
@@ -301,9 +314,23 @@ public struct OwnPhotoKeyMigrator {
         var indeterminate = scan.unreadableDirectories
 
         for url in scan.urls {
-            guard let stored = try? Data(contentsOf: url), !stored.isEmpty else {
-                // Unreadable or empty file: nothing to migrate and nothing that can be lost by the
-                // key flip (it opens under no key today either).
+            let stored: Data
+            do {
+                stored = try Data(contentsOf: url)
+            } catch {
+                // Could NOT READ the bytes — which is a different fact from "read them and no key
+                // opens them", and the difference is load-bearing. Own-photo files are
+                // `.completeFileProtection` while both key rows are `AfterFirstUnlock` + cached, so
+                // a device that locks mid-pass fails every read while the keys stay available. If
+                // that scored as `unopenable` the pass would look clean, latch, and let the binder
+                // drop the dual-open fallback over files still sealed under the pre-split key. A
+                // read failure has no answer to "is this still under the old key?", so it is
+                // indeterminate — the same fail-closed direction as an unlistable directory.
+                indeterminate += 1
+                continue
+            }
+            guard !stored.isEmpty else {
+                // A genuinely empty file: no bytes to migrate, and nothing the key flip can cost.
                 unopenable += 1
                 continue
             }

@@ -2644,6 +2644,10 @@ final class FernletStore {
     /// library on the main actor.
     func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
         await sealedBackupCoordinator.restoreSealedBackupsIfNeeded(userInitiated: userInitiated)
+        // The photo route runs on its own opt-in and is deliberately NOT gated on `iCloudSyncEnabled`
+        // — see `OwnPhotoBackupCoordinator.synchronize`. Gating only the ambient pass gave a
+        // sync-off user exactly one upload attempt ever, with no retry from here and none from the
+        // banner's Retry button, while the key was device-bound on the strength of it.
         await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
     }
 
@@ -2652,9 +2656,22 @@ final class FernletStore {
     /// (WS-4). Nil until a pass has run in this session.
     private(set) var ownPhotoBackupStatus: SealedBackupRestoreOutcome?
 
+    /// Whether the last own-photo pass's UPLOAD leg failed — observable for the same WS-4 reason,
+    /// and separate from `ownPhotoBackupStatus` because that vocabulary is restore-phrased.
+    ///
+    /// A device that HAS photos never enters the restore branch, so without this an upload that
+    /// reached nothing publishes `.nothingToRestore` (`needsAttention == false`) and the banner
+    /// renders nothing at all — for the life of the install.
+    private(set) var ownPhotoBackupUploadFailed = false
+
     /// Records an own-photo backup pass's outcome (``OwnPhotoBackupContext``).
     func recordOwnPhotoBackupOutcome(_ outcome: SealedBackupRestoreOutcome) {
         ownPhotoBackupStatus = outcome
+    }
+
+    /// Records whether the own-photo backup's upload leg failed (``OwnPhotoBackupContext``).
+    func recordOwnPhotoBackupUploadFailed(_ failed: Bool) {
+        ownPhotoBackupUploadFailed = failed
     }
 
     /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
@@ -2665,14 +2682,23 @@ final class FernletStore {
     /// are covered from the moment the first pass commits. Turning it OFF never un-binds: consent to
     /// device-binding is one-way, and a bound row whose backup was removed is still the custody the
     /// user asked for.
+    ///
+    /// The gate is asked with the pass's COMMIT PROOF, never with the preference. "The switch is on"
+    /// is intent; "a manifest reached iCloud" is a route. Binding is irreversible, so it may only
+    /// follow the second — see `OwnPhotoEscrowCommitLedger`.
     @discardableResult
     func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
         let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
         if succeeded && enabled {
-            // The preference has not been written yet (the caller persists it on success), so ask
-            // the gate with the value we are about to commit rather than the stale stored one.
-            let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: true).bindIfEligible()
+            let outcome = OwnPhotoKeyBinder(
+                escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+            ).bindIfEligible()
             recordOwnPhotoKeyBindingOutcome(outcome)
+        }
+        if succeeded && !enabled {
+            // The route is gone, so a stale upload-failure banner would be reporting a problem the
+            // user has just resolved by removing the thing that had it.
+            recordOwnPhotoBackupUploadFailed(false)
         }
         return succeeded
     }
@@ -4731,13 +4757,15 @@ final class FernletStore {
     /// consent), so a launch never silently trades away their phone-swap recovery.
     private func migrateAndBindOwnPhotoKey() {
         let documentsDirectory = Self.photoDocumentsDirectory
-        // Read on the main actor and carried in as a Bool: `StoragePreferences` is the app's state,
-        // and only `Sendable` values may cross into the detached task.
-        let escrowBackupEnabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
+        // The COMMIT PROOF, not the preference. A launch that bound on the stored flag alone would
+        // re-decide, on every boot, that a switch someone once flipped is a cross-device route —
+        // including for a user whose every upload has failed since. Read on the main actor and
+        // carried in as a Bool, because only `Sendable` values may cross into the detached task.
+        let escrowRouteCommitted = OwnPhotoEscrowCommitLedger().isCommitted
         Task.detached(priority: .utility) { [weak self] in
             let complete = OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
             let outcome = complete
-                ? OwnPhotoKeyBinder(escrowBackupEnabled: escrowBackupEnabled).bindIfEligible()
+                ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
                 : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
             await MainActor.run { self?.recordOwnPhotoKeyBindingOutcome(outcome) }
         }
@@ -4780,8 +4808,9 @@ final class FernletStore {
     /// bound, and there is deliberately no un-bind path (see `OwnPhotoDeviceBindingConsent`).
     @discardableResult
     func bindOwnPhotoKeyIfEligible() -> OwnPhotoKeyBindingOutcome {
-        let enabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: enabled).bindIfEligible()
+        let outcome = OwnPhotoKeyBinder(
+            escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+        ).bindIfEligible()
         recordOwnPhotoKeyBindingOutcome(outcome)
         return outcome
     }
@@ -4794,9 +4823,10 @@ final class FernletStore {
     /// failure — the user's decision is durable; re-asking would be the wrong remedy.
     @discardableResult
     func lockOwnPhotosToThisDevice() -> OwnPhotoKeyBindingOutcome {
-        let enabled = StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled
         FernletAuditLog.log("privateMedia.ownKeyBindingConsentRecorded")
-        let outcome = OwnPhotoKeyBinder(escrowBackupEnabled: enabled).recordConsentAndBind()
+        let outcome = OwnPhotoKeyBinder(
+            escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+        ).recordConsentAndBind()
         recordOwnPhotoKeyBindingOutcome(outcome)
         return outcome
     }

@@ -199,17 +199,31 @@ public struct ProgressPhotoStore {
         }
     }
 
-    /// Writes a restored timeline index, refusing if this device already has one.
+    /// Writes a restored timeline index, refusing if this device already has a LIVE one.
     ///
     /// The refusal is the store-level half of the escrow restore's no-clobber gate: the caller
     /// checks ``isEmptyForRestore()`` before restoring, and this re-checks at the write point, so a
     /// restore that raced a local capture can never overwrite the user's own timeline. Fail-closed
     /// on an undecodable payload too — bytes that are not a valid index are refused, never persisted.
     ///
+    /// A present-but-**undecodable** index is the one case that is written over, and only when a key
+    /// is actually available. Those are dead bytes, not a timeline: the phone-swap case leaves an
+    /// index sealed under a key that did not travel to this device, and refusing there would restore
+    /// every body photo into a corpus that can never render them. The key check is what keeps the
+    /// two apart — an unavailable key ALSO resolves `.undecodable`, and overwriting then would
+    /// destroy a perfectly good timeline that is merely locked right now.
+    ///
     /// - Returns: whether the index was written (false = refused or the seal/write failed).
     @discardableResult
     public func restoreIndexPayload(_ payload: Data) -> Bool {
-        guard case .absent = readIndex() else { return false }
+        switch readIndex() {
+        case .absent:
+            break
+        case .records:
+            return false
+        case .undecodable:
+            guard keyProvider.mediaKey() != nil else { return false }
+        }
         guard let records = try? decoder.decode([ProgressPhotoRecord].self, from: payload) else { return false }
         return persist(records)
     }
@@ -237,6 +251,30 @@ public struct ProgressPhotoStore {
         let indexAbsent: Bool
         if case .absent = readIndex() { indexAbsent = true } else { indexAbsent = false }
         return indexAbsent && photoStore.isEmptyForRestore()
+    }
+
+    /// Whether this corpus holds files but **nothing this install can open** — see
+    /// ``MealPhotoStore/holdsOnlyUnopenableFiles()`` for why the escrow restore needs this question
+    /// answered separately from ``isEmptyForRestore()``.
+    ///
+    /// The timeline index decides it first, because the index is the user-visible corpus: an index
+    /// that OPENS means this device's timeline is live, whatever the bytes look like, so the answer
+    /// is no. An index that is present but undecodable (the device-backup-onto-a-new-phone case:
+    /// sealed under a key that did not travel) is itself one of the dead files, so the bytes decide
+    /// — and a corpus with no bytes left is then dead index and nothing else.
+    public func holdsOnlyUnopenableFiles() -> Bool {
+        // No key ⇒ nothing here can be classified at all, and "I cannot look" must never read as
+        // "it is dead". Checked up front because an unavailable key also makes a perfectly good
+        // index resolve `.undecodable`.
+        guard keyProvider.mediaKey() != nil else { return false }
+        switch readIndex() {
+        case .records:
+            return false
+        case .absent:
+            return photoStore.holdsOnlyUnopenableFiles()
+        case .undecodable:
+            return photoStore.isEmptyForRestore() || photoStore.holdsOnlyUnopenableFiles()
+        }
     }
 
     // MARK: - Caption hygiene

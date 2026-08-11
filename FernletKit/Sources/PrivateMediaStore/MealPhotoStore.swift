@@ -202,6 +202,58 @@ public struct MealPhotoStore {
         }
     }
 
+    /// Whether this corpus holds files but **not one of them can be opened by this install** — the
+    /// second half of the escrow restore's no-clobber gate.
+    ///
+    /// ``isEmptyForRestore()`` alone cannot distinguish "in use" from "full of bytes that are dead
+    /// to this install", and the difference is exactly the phone-swap case the escrow backup exists
+    /// for: a device backup restored onto a NEW phone brings the sealed photo files back but not the
+    /// device-bound own-photos key, so every file is permanently unopenable — and a pure
+    /// file-presence gate reads that as "this corpus is in use" and declines the one restore that
+    /// would bring the photos back.
+    ///
+    /// **Answered by probing, not by a persisted verdict, and that is deliberate.** A verdict
+    /// written by the migration sweep lives in `UserDefaults`, which rides the device backup — so on
+    /// the new phone it would arrive already saying "openable" about files whose key did not come
+    /// with it, i.e. it would be confidently wrong in precisely the scenario it was meant to
+    /// answer. The probe cannot go stale. It is also cheap where it runs often: it **stops at the
+    /// first file that opens**, so a healthy corpus costs one GCM open per pass. Only a corpus that
+    /// really is entirely dead reads all of it — once, and immediately before a restore that
+    /// downloads the whole corpus anyway.
+    ///
+    /// Fails **closed** in every uncertain direction (returns false ⇒ no restore): an empty corpus,
+    /// an unlistable directory, an unavailable key, or a file whose bytes cannot be READ (a locked
+    /// container answers "I cannot see it", never "it is dead"). A zero-byte file is skipped rather
+    /// than counted either way — it holds nothing a restore could clobber.
+    ///
+    /// "Openable" means openable by any path this store's READ actually uses: the own key, the
+    /// dual-open legacy key, and — only where the corpus legitimately has one
+    /// (``allowsLegacyPlaintextUpgrade``) — a pre-sealing plaintext JPEG. That last clause is why
+    /// this is not simply the migration pass's `unopenable` tally: legacy plaintext scores
+    /// unopenable there and is still returned to the user here.
+    public func holdsOnlyUnopenableFiles() -> Bool {
+        guard keyProvider.mediaKey() != nil else { return false }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return false }
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return false }
+        var sawFile = false
+        for url in contents {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
+            sawFile = true
+            guard let stored = try? Data(contentsOf: url) else { return false }
+            guard !stored.isEmpty else { continue }
+            if keyProvider.gcmOpen(stored) != nil { return false }
+            if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored) != nil { return false }
+            if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) { return false }
+        }
+        return sawFile
+    }
+
     /// Whether a sealed file exists on disk for `id` — an existence check ONLY: no read, no decrypt, no
     /// key, no plaintext ever touched. `imageData` returns nil both when the bytes never synced to this
     /// device (no file) AND when a file is here but can't be opened (corrupt / wrong key); this lets a

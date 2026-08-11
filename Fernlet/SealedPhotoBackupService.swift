@@ -277,11 +277,25 @@ final class SealedPhotoBackupService {
         photo: (UUID) throws -> Data?
     ) async throws -> SealedPhotoUploadSummary {
         var summary = SealedPhotoUploadSummary()
-        // Best-effort: a manifest we cannot open (never written, foreign, corrupt) simply means
-        // "nothing known to skip" — we re-upload everything rather than refuse. Only an OPENED
-        // manifest may raise the high-water mark, because only then has AES-GCM vouched for its
-        // generation.
-        let existing = try? await openManifest(corpus: corpus)
+        // A manifest that was NEVER WRITTEN is nil and means exactly what it says: nothing is
+        // committed, so nothing is known to skip and nothing needs carrying forward.
+        //
+        // A manifest that EXISTS but could not be READ — a transport failure on the fetch, a foreign
+        // escrow identity, corrupt bytes — is a different fact, and conflating the two is a
+        // data-loss path. The union below is what protects the user's OTHER device's photos, and it
+        // iterates the entries of the manifest we just opened; with `existing == nil` it carries
+        // nothing forward, so this pass would commit a manifest naming only THIS device's ids while
+        // the other device's bodies stay in iCloud as permanently unnamed orphans (restore iterates
+        // the manifest, and nothing can re-adopt an unnamed record). The same care is already taken
+        // one level down for a photo whose LOCAL bytes cannot be read — "an unreadable local file
+        // must never delete a good cloud copy" — and it applies with far more force to the file that
+        // lists them all. So we throw: a corpus whose manifest cannot be read is already
+        // unrestorable, which means refusing to write costs nothing and preserves everything, while
+        // the caller turns the throw into a visible, retryable status.
+        //
+        // Only an OPENED manifest may raise the high-water mark, because only then has AES-GCM
+        // vouched for its generation.
+        let existing = try await openManifest(corpus: corpus)
         if let existing {
             generationStore.recordAcceptedPhoto(existing.generation, for: corpus)
         }
@@ -381,7 +395,10 @@ final class SealedPhotoBackupService {
         corpus: SealedPhotoCorpus,
         sidecar: Data? = nil
     ) async throws {
-        let existing = try? await openManifest(corpus: corpus)
+        // Same rule as `reconcile`: absent means nothing committed, unreadable means we must not
+        // rewrite the list — the entries carried forward below are the only thing naming the user's
+        // other committed photos.
+        let existing = try await openManifest(corpus: corpus)
         if let existing {
             generationStore.recordAcceptedPhoto(existing.generation, for: corpus)
         }
@@ -412,7 +429,9 @@ final class SealedPhotoBackupService {
     /// entry is gone the photo is logically removed even if the record delete fails and leaves an
     /// ignored orphan behind. A no-op when there is no manifest to edit.
     func deletePhoto(id: UUID, corpus: SealedPhotoCorpus, sidecar: Data? = nil) async throws {
-        guard let existing = try? await openManifest(corpus: corpus) else { return }
+        // Absent ⇒ nothing to edit (a no-op). Unreadable ⇒ throw rather than rewrite a list we
+        // cannot see, for the reason spelled out on `reconcile`.
+        guard let existing = try await openManifest(corpus: corpus) else { return }
         generationStore.recordAcceptedPhoto(existing.generation, for: corpus)
         let entries = existing.manifest.entries.filter { $0.id != id }
         let generation = generationStore.mintNextPhoto(for: corpus)
@@ -446,11 +465,17 @@ final class SealedPhotoBackupService {
     /// ``SealedPhotoRestoreSummary/failed``, never the whole set. `write` returns whether the bytes
     /// reached the local store; a refusal counts as a failed photo.
     ///
+    /// - Parameter limitedTo: When non-nil, only manifest entries whose id is in this set are
+    ///   fetched — the REPAIR pass for a previous restore's failures. The whole point of the repair
+    ///   is that it runs against a corpus that is no longer empty, so it must not re-download (or
+    ///   re-write) the photos that already landed. Entries outside the set are neither restored nor
+    ///   counted as failed; they are simply not this pass's business. Nil restores everything.
     /// - Returns: nil when the corpus has no manifest at all (nothing was ever committed).
     /// - Throws: `SealedBackupError.staleGeneration` on rollback, `.keyAgreementIdentityMismatch`
     ///   when the manifest is not ours, `.malformedRecord` when it is ours but corrupt.
     func restore(
         corpus: SealedPhotoCorpus,
+        limitedTo: Set<UUID>? = nil,
         write: (UUID, Data) -> Bool
     ) async throws -> SealedPhotoRestoreSummary? {
         guard let opened = try await openManifest(corpus: corpus) else { return nil }
@@ -467,6 +492,7 @@ final class SealedPhotoBackupService {
 
         var summary = SealedPhotoRestoreSummary(sidecar: opened.manifest.sidecar)
         for entry in opened.manifest.entries {
+            if let limitedTo, !limitedTo.contains(entry.id) { continue }
             guard let record = try? await cloudDataService.sealedPhoto(corpus: corpus, slot: .photo(entry.id)),
                   let plaintext = try? SealedPhotoCrypto.open(record, identityService: identityService),
                   Self.contentHash(plaintext) == entry.contentHash,

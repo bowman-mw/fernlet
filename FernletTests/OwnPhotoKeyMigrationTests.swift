@@ -287,6 +287,64 @@ struct OwnPhotoKeyMigrationTests {
         #expect(!OwnPhotoMigrationLatch(defaults: defaults).isComplete)
     }
 
+    // MARK: The third way a pass can fail to answer, and the one that used to slip through: the
+    // KEYS are fine but the file's BYTES cannot be read. Own-photo files are written
+    // `.completeFileProtection` while both keychain rows are `AfterFirstUnlock` and cached in
+    // memory, so a device that locks mid-pass fails every read while both providers keep vending
+    // keys. Scored as "unopenable" (which does not block the latch) that pass looks exactly like a
+    // fully-migrated corpus: examined == N, resealed == 0, indeterminate == 0 → clean → latched,
+    // after which binding drops the dual-open fallback and every straggler becomes permanently
+    // unreadable with no error anywhere. It must be indeterminate, which blocks.
+    @Test func anUnreadableFileIsIndeterminateNotUnopenable() throws {
+        let root = try makeDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let legacyKey = SymmetricKey(size: .bits256)
+        let ownKey = SymmetricKey(size: .bits256)
+        let seeded = try seedLegacyCorpus(root: root, key: legacyKey)
+
+        // Deny read on every seeded file — the closest a test can get to a Complete-class file
+        // whose protected data is unavailable. Permissions are restored before the directory is
+        // torn down so the cleanup can still remove them.
+        for url in seeded.keys {
+            try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: url.path)
+        }
+        defer {
+            for url in seeded.keys {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+            }
+        }
+
+        let subject = migrator(
+            root: root,
+            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
+            legacyKey: InMemoryPrivateMediaKeyProvider(key: legacyKey),
+            defaults: defaults
+        )
+        let result = subject.performPass()
+        #expect(result.examined == seeded.count)
+        #expect(result.indeterminate == seeded.count,
+                "a file whose bytes could not be read was scored as 'no key opens it'")
+        #expect(result.unopenable == 0)
+        #expect(!result.isClean, "a pass that read nothing at all claimed to prove the corpus migrated")
+        #expect(!subject.run())
+        #expect(!OwnPhotoMigrationLatch(defaults: defaults).isComplete,
+                "the latch was set over files still sealed under the pre-split key")
+
+        // ...and once the bytes are readable again, the same corpus migrates and latches normally,
+        // so the fail-closed direction costs nothing but a retry.
+        for url in seeded.keys {
+            try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        }
+        #expect(subject.run())
+        #expect(OwnPhotoMigrationLatch(defaults: defaults).isComplete)
+        for (url, plaintext) in seeded {
+            #expect(opens(url, under: ownKey) == plaintext)
+        }
+    }
+
     // MARK: And the same for the own key: a locked/failing keychain aborts the pass rather than
     // "finding" a clean corpus it never actually inspected.
     @Test func unavailableOwnKeyAbortsWithoutLatching() throws {
