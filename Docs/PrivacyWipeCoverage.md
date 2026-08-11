@@ -66,7 +66,8 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | --- | --- | --- |
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
 | Sealed iCloud backups (all payload types — sensitive notes, period, **journal narratives**, **intimacy logs**) | CloudKit private DB | `setSealedBackupEnabled` |
-| Sealed-backup rollback high-water mark | `SealedBackupGenerationStore` (UserDefaults, device-local) | `generationStore.reset` (the call site is two lines — construct, then `.reset()` — so the token is the variable's spelling; the type name never appears on the calling line) |
+| Sealed-backup rollback high-water mark (chunked payloads **and** the own-photo corpora) | `SealedBackupGenerationStore` (UserDefaults, device-local) | `generationStore.reset` (the call site is two lines — construct, then `.reset()` — so the token is the variable's spelling; the type name never appears on the calling line. `reset()` walks BOTH `SealedBackupPayloadType.allCases` and `SealedPhotoCorpus.allCases`) |
+| Own-photo escrow backup — every sealed photo body **and** its corpus manifest, for meal / recipe / progress | CloudKit private DB (`SealedPhotoRecord`) | `deleteOwnPhotoEscrowBackups` (runs BEFORE the preference reset that would gate it off, and needs no escrow key — deletion is by record name, so it works while locked) |
 | Kept cloud copy | CloudKit | `cloudCopyDeleteHook` |
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
 | Intimacy logs (sealed rows) | Private stores | `intimacyDataDeleteHook` |
@@ -154,6 +155,20 @@ repository purge takes it.)
   non-silently on next enable, so nothing is stranded.
 
 ## Audit trail
+
+- **2026-08-11 — security-hardening P5 (own-photo escrow route, step 5b).** A new opt-in backup was
+  added: one sealed CloudKit record per own photo (`SealedPhotoRecord`, names
+  `sealed-photo.<corpus>.<photoId>`) plus a sealed manifest per corpus. It is deliberately NOT a
+  `SealedBackupPayloadType` case — delete-all and the settings toggles iterate `allCases` and would
+  route photos through the chunked-blob path — so it gets its OWN cleared-by row and its own token
+  (`deleteOwnPhotoEscrowBackups`) rather than riding the "Sealed iCloud backups" row. Two more
+  consequences, neither needing a new token: `SealedBackupGenerationStore.reset()` now also clears
+  the photo-namespaced high-water marks (same `generationStore.reset` call site), and
+  `StoragePreferences.hasSealedBackup` ORs in `sealedBackupOwnPhotosEnabled`, so the delete dialog
+  may truthfully claim to remove the iCloud copy of a user who only turned the photo backup on. The
+  LOCAL photo stores were already wiped (the three `…PhotoStore.deleteAll` rows) and are unchanged;
+  the own-photo KEY row stays a documented deliberate exception, per the owner decision recorded in
+  that table.
 
 - **2026-08-10 — security-hardening P3 (backup coverage).** Two sealed-backup payload types were
   added (`journalNarratives`, `intimacyLogs`). The cleared-by table's "Sealed iCloud backups" row

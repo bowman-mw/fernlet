@@ -65,6 +65,31 @@ the own key on access. That fallback only ever trusts bytes that GCM-open under 
 owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused
 exactly where it was before.
 
+### The escrow seam (what makes device-binding survivable)
+
+Device-binding the own key would otherwise mean "your photos die with the phone", so step 5b added
+an opt-in **own-photo escrow backup** in the app target (`SealedPhotoBackupService` +
+`OwnPhotoBackupCoordinator`): one AES-GCM-sealed CloudKit record per photo id under the user's
+backup-escrow key, plus a sealed per-corpus manifest written last as the commit marker. This module
+supplies only the local seam it needs, and each piece is shaped by a hazard:
+
+- ``MealPhotoStore/storedPhotoIDs()`` — the corpus has no index of its own (ownership lives in
+  `Meal.photoID` / the recipe id), so the directory IS the id set an upload must enumerate.
+- ``MealPhotoStore/restoreSealedPhoto(_:forID:)`` (and ``ProgressPhotoStore/restoreSealedPhoto(_:forID:)``)
+  — seals restored bytes **as-is**, skipping normalization. A second lossy re-encode would change
+  the SHA-256 the manifest committed, and every later backup would then see the whole restored
+  corpus as changed and re-upload it forever. Only ever hand it bytes that already authenticated
+  under an escrow-sealed record.
+- ``MealPhotoStore/isEmptyForRestore()`` / ``ProgressPhotoStore/isEmptyForRestore()`` — the
+  per-corpus no-clobber gate, deliberately **file presence**, not "no ids I can parse": a corpus
+  holding bytes this build cannot name is still in use. An unlistable directory reads as NOT empty
+  (fail closed → no restore). The progress corpus additionally requires its index to be absent.
+- ``ProgressPhotoStore/backupIndexPayload()`` / ``ProgressPhotoStore/restoreIndexPayload(_:)`` — the
+  timeline index travels with the bytes (inside the manifest), because body photos restored without
+  their dates and captions render as an invisible timeline. Export answers **nil** for a
+  present-but-unreadable index so the caller skips the corpus rather than uploading "you have no
+  photos" over a good copy; import refuses when an index already exists.
+
 ### Position relative to the S3 wall
 
 In `FernletKit/Package.swift` this target depends only on `FernletFoundation` and
@@ -91,6 +116,10 @@ Every store here fails **closed**, and changes must preserve that:
 - **A present-but-unreadable index is never clobbered.** ``ProgressPhotoStore`` mutations refuse
   to rewrite an index they cannot decode, since overwriting would silently drop a still-sealed
   timeline and permanently orphan its photo files.
+- **Restored bytes are authenticated bytes.** ``MealPhotoStore/restoreSealedPhoto(_:forID:)`` is a
+  restore seam, not a general write path: it skips normalization, so the only thing standing between
+  it and laundering is the caller's obligation to pass bytes that opened from an escrow-sealed
+  record whose manifest content hash matched. The image-bounds check it makes is a backstop.
 - **Delete-all coverage.** Meal, recipe, and progress photos are wiped by "delete everything";
   the friend photowall deliberately survives it (friends' photos are the friends' gift, removed
   one at a time) — which is why

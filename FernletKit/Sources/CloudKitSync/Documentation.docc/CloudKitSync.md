@@ -12,7 +12,9 @@ construction. That omission is a hard build error, not a convention — the buil
 `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (see `Scripts/spm-wall-check.sh`), so a forbidden
 `import PrivateHealthStore` fails to compile. Where sync must *touch* sealed data it does so only
 opaquely: sealed Core Data entity names appear as string literals (for deletion sweeps), and sealed
-backups travel as ciphertext-only ``SealedBackupRecord`` envelopes whose crypto lives app-side.
+backups travel as ciphertext-only ``SealedBackupRecord`` envelopes whose crypto lives app-side, and
+the user's own photos as ciphertext-only ``SealedPhotoRecord`` envelopes (one per photo id, plus a
+sealed per-corpus manifest) — this module moves the bytes and never holds a key that opens them.
 
 The stack has three tiers. At the bottom, ``PersistenceController`` owns the
 `NSPersistentCloudKitContainer`, built from a **programmatic, cloud-safe-only model** (aggregate
@@ -95,6 +97,18 @@ invalidation up to the store layer.
 - ``SealedBackupRecord``
 - ``SealedBackupPayloadType``
 - ``SealedBackupError``
+
+### Own-photo escrow route
+
+One record per photo id (`sealed-photo.<corpus>.<photoId>`) plus a sealed manifest written last as
+the commit marker. A **separate namespace** from ``SealedBackupPayloadType`` on purpose: delete-all
+and the settings toggles iterate that type's `allCases`, and photos must not be routed through the
+chunked path, which rewrites its whole set on every change.
+
+- ``SealedPhotoCorpus``
+- ``SealedPhotoSlot``
+- ``SealedPhotoManifest``
+- ``SealedPhotoRecord``
 
 ### Heart drops (public database)
 

@@ -180,6 +180,65 @@ public struct ProgressPhotoStore {
         return photosCleared && indexCleared
     }
 
+    // MARK: - Own-photo escrow seam (Phase 5, step 5b)
+
+    /// The timeline index encoded for the own-photo escrow backup, or **nil when the index is
+    /// present but unreadable**.
+    ///
+    /// The nil is load-bearing, not an error channel: body photos restored without their dates and
+    /// captions render as an invisible timeline, so the index travels with them (as the manifest's
+    /// sidecar). Returning an empty array for an unreadable index would upload "you have no progress
+    /// photos" over a good cloud copy — the same clobber the sealed-narrative exports refuse — so
+    /// unreadable answers nil and the caller skips the corpus. An ABSENT index answers an encoded
+    /// empty array, which is the honest "nothing logged yet".
+    public func backupIndexPayload() -> Data? {
+        switch readIndex() {
+        case .absent: return try? encoder.encode([ProgressPhotoRecord]())
+        case .records(let records): return try? encoder.encode(records)
+        case .undecodable: return nil
+        }
+    }
+
+    /// Writes a restored timeline index, refusing if this device already has one.
+    ///
+    /// The refusal is the store-level half of the escrow restore's no-clobber gate: the caller
+    /// checks ``isEmptyForRestore()`` before restoring, and this re-checks at the write point, so a
+    /// restore that raced a local capture can never overwrite the user's own timeline. Fail-closed
+    /// on an undecodable payload too — bytes that are not a valid index are refused, never persisted.
+    ///
+    /// - Returns: whether the index was written (false = refused or the seal/write failed).
+    @discardableResult
+    public func restoreIndexPayload(_ payload: Data) -> Bool {
+        guard case .absent = readIndex() else { return false }
+        guard let records = try? decoder.decode([ProgressPhotoRecord].self, from: payload) else { return false }
+        return persist(records)
+    }
+
+    /// Seals ALREADY-NORMALIZED restored bytes under `id` in the inner photo store — see
+    /// ``MealPhotoStore/restoreSealedPhoto(_:forID:)`` for why the normalization pass is skipped.
+    @discardableResult
+    public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
+        photoStore.restoreSealedPhoto(normalizedJPEG, forID: id)
+    }
+
+    /// The photo ids on disk in the inner store. Backups drive from ``records()`` (the index is the
+    /// user-visible timeline); this exists so the emptiness gate and any orphan accounting can see
+    /// the bytes themselves.
+    public func storedPhotoIDs() -> [UUID] {
+        photoStore.storedPhotoIDs()
+    }
+
+    /// Whether this corpus holds nothing at all — **no index file and no photo bytes**.
+    ///
+    /// Both halves are required: an index-only corpus (photos deleted, timeline kept) and a
+    /// bytes-only corpus (index lost) are each "in use", and restoring over either would clobber or
+    /// duplicate. Mirrors the per-payload emptiness gates on the sealed-narrative restores.
+    public func isEmptyForRestore() -> Bool {
+        let indexAbsent: Bool
+        if case .absent = readIndex() { indexAbsent = true } else { indexAbsent = false }
+        return indexAbsent && photoStore.isEmptyForRestore()
+    }
+
     // MARK: - Caption hygiene
 
     /// Trims a caption and collapses an empty one to nil, so blank notes don't render as empty strings.

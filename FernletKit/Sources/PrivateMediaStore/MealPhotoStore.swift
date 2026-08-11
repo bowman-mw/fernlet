@@ -144,6 +144,64 @@ public struct MealPhotoStore {
         return nil
     }
 
+    /// Writes ALREADY-NORMALIZED photo bytes under `id`, sealing them as-is — the escrow-restore
+    /// seam (security-hardening Phase 5, step 5b).
+    ///
+    /// Deliberately skips ``normalizedJPEG(from:)``, unlike ``save(_:forID:)``: the bytes being
+    /// restored were normalized once before they were uploaded, so re-encoding them here would be a
+    /// second lossy JPEG pass AND would change their SHA-256 — which is the hash the sealed manifest
+    /// committed, so every subsequent backup would see the whole restored corpus as "changed" and
+    /// re-upload it forever.
+    ///
+    /// - Important: bytes reaching this method must already have been authenticated — in production
+    ///   that means opened from an escrow-sealed record whose manifest entry's content hash matched.
+    ///   It is NOT a general write path and must never be handed unauthenticated input; the
+    ///   image-bounds check below is a cheap backstop, not the authorization.
+    /// - Returns: whether the sealed bytes reached disk (false on non-image input, absurd
+    ///   dimensions, no key, or a write failure — fail-closed, nothing written).
+    @discardableResult public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
+        guard PrivateMediaStore.isWithinSafePixelBounds(normalizedJPEG) else { return false }
+        return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id))
+    }
+
+    /// The ids this store currently holds files for, parsed from the flat `<uuid>.jpg` file names.
+    ///
+    /// The corpus has no index of its own (ownership lives in `Meal.photoID` / the recipe id), so
+    /// the directory IS the id set — which is exactly what an own-photo escrow upload has to
+    /// enumerate. Non-recursive; unparseable names are skipped rather than guessed at.
+    public func storedPhotoIDs() -> [UUID] {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        )) ?? []
+        return contents.compactMap { url in
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { return nil }
+            return UUID(uuidString: url.deletingPathExtension().lastPathComponent)
+        }
+    }
+
+    /// Whether this corpus holds **no file at all** — the FILE-PRESENCE half of the escrow restore's
+    /// per-corpus no-clobber gate.
+    ///
+    /// Deliberately not "no parseable id": any regular file counts, so a corpus holding bytes this
+    /// build cannot name still reads as non-empty and is never restored over. A missing directory is
+    /// empty; an unlistable one is NOT (fails closed → no restore), because an unknown number of
+    /// files is not the same as none.
+    public func isEmptyForRestore() -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return true }
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return false }
+        return !contents.contains { url in
+            (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        }
+    }
+
     /// Whether a sealed file exists on disk for `id` — an existence check ONLY: no read, no decrypt, no
     /// key, no plaintext ever touched. `imageData` returns nil both when the bytes never synced to this
     /// device (no file) AND when a file is here but can't be opened (corrupt / wrong key); this lets a

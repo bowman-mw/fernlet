@@ -330,6 +330,108 @@ struct SealedBackupFormatPinTests {
         }
     }
 
+    // MARK: THE OWN-PHOTO ROUTE'S AAD v3, pinned byte-for-byte on the v2 SALTED escrow key (Phase 5,
+    // step 5b). Same method as the v1/v2 pins above: seal through the production path, then open the
+    // record independently with the pinned key and an AAD constructed by hand here. Drift in either
+    // the layout or the derivation would strand every own photo already uploaded — and, unlike the
+    // chunked payloads, those are the user's ONLY off-device copy once the own-photos key is
+    // device-bound (step 5c).
+    @Test func sealedPhotoAADv3ByteLayoutIsPinnedOnTheV2SaltedKey() throws {
+        let (identity, service) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+
+        let plaintext = Data("normalized jpeg bytes".utf8)
+        let updatedAt = Date(timeIntervalSince1970: 1_700_000_000.75)  // fractional → floored
+        let generation: Int64 = 12
+        let photoID = UUID(uuidString: "6C7B4B62-1E1C-4C6E-9E44-27C2AB19B3D1")!
+        let record = try SealedPhotoCrypto.seal(
+            plaintext,
+            corpus: .progress,
+            slot: .photo(photoID),
+            identityService: identity,
+            updatedAt: updatedAt,
+            generation: generation,
+            keySalt: knownKeySalt
+        )
+
+        // Independent AAD construction — this IS the pinned v3 layout. Do not derive it from the
+        // production helper; the point is that two implementations agree.
+        var aad = Data("fernlet.sealed-photo.aad.v3".utf8) + Data([0])
+        aad += Data("progress".utf8) + Data([0])
+        aad += record.signingPublicKey + Data([0])
+        aad += Data("6C7B4B62-1E1C-4C6E-9E44-27C2AB19B3D1".utf8) + Data([0])
+        aad += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        aad += withUnsafeBytes(of: UInt64(bitPattern: Int64(1_700_000_000)).bigEndian) { Data($0) }
+
+        let pinnedV2Key = SymmetricKey(data: Data(hexEncoded: pinnedSealedBackupKeyV2Hex))
+        let box = try AES.GCM.SealedBox(
+            nonce: AES.GCM.Nonce(data: record.nonce),
+            ciphertext: record.ciphertext,
+            tag: record.tag
+        )
+        #expect(try AES.GCM.open(box, using: pinnedV2Key, authenticating: aad) == plaintext,
+                "the sealed-photo AAD v3 layout or the v2 escrow derivation drifted — uploaded own photos would stop restoring")
+
+        // Record format is 2 (the salted escrow derivation), and the salt travels or nothing reopens.
+        #expect(record.formatVersion == 2)
+        #expect(record.keySalt == knownKeySalt)
+        #expect(record.keyAgreementPublicKey == identity.localBackupEscrowPublicKey)
+        #expect(try SealedPhotoCrypto.open(record, identityService: identity) == plaintext)
+
+        // The manifest slot is a DIFFERENT AAD, so a body cannot be served as the commit marker.
+        var aadAsManifest = Data("fernlet.sealed-photo.aad.v3".utf8) + Data([0])
+        aadAsManifest += Data("progress".utf8) + Data([0])
+        aadAsManifest += record.signingPublicKey + Data([0])
+        aadAsManifest += Data("manifest".utf8) + Data([0])
+        aadAsManifest += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        aadAsManifest += withUnsafeBytes(of: UInt64(bitPattern: Int64(1_700_000_000)).bigEndian) { Data($0) }
+        #expect((try? AES.GCM.open(box, using: pinnedV2Key, authenticating: aadAsManifest)) == nil)
+
+        // And the two routes are domain-separated even though they share one key: the chunked AAD
+        // (v2, different tag) cannot open a photo record.
+        var chunkedAAD = Data("fernlet.sealed-backup.aad.v2".utf8) + Data([0])
+        chunkedAAD += Data("periodData".utf8) + Data([0])
+        chunkedAAD += record.signingPublicKey + Data([0])
+        chunkedAAD += Data("0/1".utf8) + Data([0])
+        chunkedAAD += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        chunkedAAD += withUnsafeBytes(of: UInt64(bitPattern: Int64(1_700_000_000)).bigEndian) { Data($0) }
+        #expect((try? AES.GCM.open(box, using: pinnedV2Key, authenticating: chunkedAAD)) == nil)
+    }
+
+    // MARK: The own-photo corpus raw values and the manifest sentinel are at-rest format too — they
+    // key the CloudKit record names AND are bound into the AAD, so a rename orphans every uploaded
+    // photo. Spelled out literally so that rename is a failing diff here.
+    @Test func sealedPhotoCorpusRawValuesAndManifestSentinelArePinned() throws {
+        #expect(Set(SealedPhotoCorpus.allCases.map(\.rawValue)) == ["meal", "recipe", "progress"])
+        #expect(SealedPhotoSlot.manifestSuffix == "manifest")
+
+        let id = UUID()
+        #expect(SealedPhotoSlot.photo(id).recordNameSuffix == id.uuidString)
+        #expect(SealedPhotoSlot(recordNameSuffix: "manifest") == .manifest)
+        #expect(SealedPhotoSlot(recordNameSuffix: id.uuidString) == .photo(id))
+        // Anything else is unrecognized rather than guessed at — including the sentinel's own
+        // near-misses, which is what keeps a body from ever being routed as the commit marker.
+        #expect(SealedPhotoSlot(recordNameSuffix: "Manifest") == nil)
+        #expect(SealedPhotoSlot(recordNameSuffix: "manifest.1") == nil)
+        #expect(SealedPhotoSlot(recordNameSuffix: "") == nil)
+
+        let (identity, service) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: service) }
+        for corpus in SealedPhotoCorpus.allCases {
+            let plaintext = Data("payload for \(corpus.rawValue)".utf8)
+            let record = try SealedPhotoCrypto.seal(
+                plaintext,
+                corpus: corpus,
+                slot: .manifest,
+                identityService: identity,
+                generation: 5,
+                keySalt: knownKeySalt
+            )
+            #expect(try SealedPhotoCrypto.open(record, identityService: identity) == plaintext,
+                    "\(corpus.rawValue) failed to round-trip")
+        }
+    }
+
     // MARK: The payload type is AUTHENTICATED, so a chunk cannot be replayed as a different payload —
     // the property that keeps four separate backups from becoming one interchangeable pool. Proved by
     // relabelling a sealed journal record as intimacy and watching the open fail.

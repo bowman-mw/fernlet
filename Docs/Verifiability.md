@@ -268,6 +268,28 @@ shipped; the rest are still open.
    `FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
    (`ownPhotoKeyIsASecondRowWithItsOwnBindingPolicy` asserts the row against the *current* shipping
    policy, so flipping the policy without re-minting fails loudly).
+   **UPDATE (2026-08-11, Phase 5 step 5b): the sanctioned cross-device route now exists.** Own photos
+   have an **opt-in, per-photo escrow backup** — one AES-GCM-sealed CloudKit record per photo id
+   (`sealed-photo.<corpus>.<photoId>`, record type `SealedPhotoRecord`) plus a sealed per-corpus
+   manifest written LAST as the commit marker, all derived on the same v2 salted escrow key as item 4
+   and domain-separated from it by a v3 AAD layout (`fernlet.sealed-photo.aad.v3`, binding corpus +
+   signing key + slot + generation + timestamp). Deliberately NOT a `SealedBackupPayloadType` case:
+   delete-all and the settings toggles iterate `allCases`, and photos must not be routed through the
+   chunked path, which rewrites its whole set on every change. What that buys the user: adding one
+   photo uploads one record plus a small manifest, deleting one drops an entry, and a phone swap
+   restores from the manifest — so binding the own key in 5c no longer means "your photos die with
+   the phone". Off by default; the enable dialog carries an honest size disclosure (own corpora have
+   no count cap, so a large library really can cost 100–250 MB of the user's iCloud quota); turning it
+   off runs the WS-5 destructive ceremony and deletes the records. Restore is gated per corpus by a
+   FILE-PRESENCE emptiness check and always runs BEFORE any re-upload, so a device that has not
+   restored yet can never replace the cloud copy with an empty manifest. The progress corpus's sealed
+   timeline index travels inside the (authenticated) manifest — bytes without dates and captions
+   would restore as an invisible timeline. Rollback is caught by a photo-namespaced
+   `SealedBackupGenerationStore` high-water mark on the manifest, plus a per-id content hash inside
+   it. Pinned by `FernletTests/SealedPhotoBackupTests` and the byte-exact AAD v3 pin in
+   `SealedBackupFormatPinTests`; the delete-all teardown is enforced by `PrivacyWipeCoverageTests`
+   (`deleteOwnPhotoEscrowBackups`). Still open for 5c: the binding flip itself and dropping the
+   dual-open fallback.
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
    **DONE (2026-08-10): the bounded hardening shipped as record format v2.** Every backup generation
    mints a 32-byte CSPRNG salt, stamped on *every* chunk of that generation (not just the head — the

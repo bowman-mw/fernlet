@@ -77,15 +77,67 @@ struct SealedBackupGenerationStore {
         defaults.set(Int(generation), forKey: Self.key(for: payloadType))
     }
 
-    /// Clears every payload type's mark. Wired into the delete-all path: leaving a stale high-water
-    /// mark behind would make a legitimate post-wipe restore look like a rollback attack.
+    /// Clears every payload type's mark — chunked payloads AND the own-photo corpora. Wired into
+    /// the delete-all path: leaving a stale high-water mark behind would make a legitimate
+    /// post-wipe restore look like a rollback attack.
+    ///
+    /// Driven off both `allCases` sets so a payload type or a photo corpus added later cannot leave
+    /// a mark this wipe forgets.
     mutating func reset() {
         for payloadType in SealedBackupPayloadType.allCases {
             defaults.removeObject(forKey: Self.key(for: payloadType))
+        }
+        resetPhotoNamespace()
+    }
+
+    /// Clears only the own-photo corpora's marks. Split out so tearing down the photo route (the
+    /// "turn it off" ceremony) does not also forget the chunked payloads' history, which is still
+    /// live at that moment — while "delete everything" calls ``reset()`` and gets both.
+    mutating func resetPhotoNamespace() {
+        for corpus in SealedPhotoCorpus.allCases {
+            defaults.removeObject(forKey: Self.photoKey(for: corpus))
         }
     }
 
     private static func key(for payloadType: SealedBackupPayloadType) -> String {
         "fernlet.sealedBackup.generation.\(payloadType.rawValue)"
+    }
+
+    // MARK: - Own-photo escrow namespace (Phase 5, step 5b)
+
+    /// The highest MANIFEST generation written or accepted for an own-photo corpus; `0` when none.
+    ///
+    /// A separate key namespace from the chunked payloads, not a shared counter: the two routes have
+    /// independent write histories, and sharing one counter would make a photo upload look like a
+    /// rollback of the period backup (and vice versa).
+    ///
+    /// Only the MANIFEST's generation is tracked. Individual photo records legitimately keep older
+    /// generations — that is exactly what makes an incremental add incremental — and their integrity
+    /// is carried by the content hashes inside the authenticated manifest instead.
+    func lastSeenPhoto(for corpus: SealedPhotoCorpus) -> Int64 {
+        Int64(defaults.integer(forKey: Self.photoKey(for: corpus)))
+    }
+
+    /// Mints the next own-photo generation for a write and persists it immediately — the same
+    /// fail-safe direction as ``mintNext(for:)`` (burning a number is harmless; reusing one is not).
+    mutating func mintNextPhoto(for corpus: SealedPhotoCorpus) -> Int64 {
+        let next = lastSeenPhoto(for: corpus) + 1
+        defaults.set(Int(next), forKey: Self.photoKey(for: corpus))
+        return next
+    }
+
+    /// Raises the own-photo high-water mark after a manifest has AUTHENTICATED a generation.
+    ///
+    /// Called from two places, both after AES-GCM has spoken: a restore that accepted a manifest,
+    /// and an upload that opened the existing cloud manifest before minting (without which a second
+    /// device would write a generation below what the cloud already holds, and its own next restore
+    /// would reject the backup it just wrote).
+    mutating func recordAcceptedPhoto(_ generation: Int64, for corpus: SealedPhotoCorpus) {
+        guard generation > lastSeenPhoto(for: corpus) else { return }
+        defaults.set(Int(generation), forKey: Self.photoKey(for: corpus))
+    }
+
+    private static func photoKey(for corpus: SealedPhotoCorpus) -> String {
+        "fernlet.sealedPhoto.generation.\(corpus.rawValue)"
     }
 }

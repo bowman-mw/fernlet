@@ -46,6 +46,16 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// Separate from ``sealedBackupPeriodEnabled`` for the same reason the surfaces are separately
     /// hideable: someone may want their cycle history recoverable and their intimacy notes not.
     public var sealedBackupIntimacyEnabled: Bool
+    /// Whether the user's OWN photos (meal, recipe and gym-progress pictures plus the sealed
+    /// progress index) are backed up to iCloud through the per-photo escrow route
+    /// (security-hardening Phase 5, step 5b).
+    ///
+    /// ONE flag for all three corpora on purpose: they are internal record namespaces, not three
+    /// consent questions — "back up my photos" is a single decision the user makes about their own
+    /// pictures. Off by default like every other sealed-backup flag, and the enable dialog carries
+    /// the honest size disclosure (own corpora have no count cap, so a heavy user's backup can reach
+    /// hundreds of megabytes of their iCloud quota).
+    public var sealedBackupOwnPhotosEnabled: Bool
     /// Set when the sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key —
     /// the escrow adopt (or a re-seal) ran while period tracking was hidden, so the cloud chunk is
     /// still sealed to the replaced key. Persisted (not session-only) so the promised remedy —
@@ -87,6 +97,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled: Bool = false,
         sealedBackupJournalEnabled: Bool = false,
         sealedBackupIntimacyEnabled: Bool = false,
+        sealedBackupOwnPhotosEnabled: Bool = false,
         sealedBackupPeriodReuploadDeferred: Bool = false,
         sealedBackupJournalReuploadDeferred: Bool = false,
         sealedBackupIntimacyReuploadDeferred: Bool = false,
@@ -101,6 +112,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.sealedBackupPeriodEnabled = sealedBackupPeriodEnabled
         self.sealedBackupJournalEnabled = sealedBackupJournalEnabled
         self.sealedBackupIntimacyEnabled = sealedBackupIntimacyEnabled
+        self.sealedBackupOwnPhotosEnabled = sealedBackupOwnPhotosEnabled
         self.sealedBackupPeriodReuploadDeferred = sealedBackupPeriodReuploadDeferred
         self.sealedBackupJournalReuploadDeferred = sealedBackupJournalReuploadDeferred
         self.sealedBackupIntimacyReuploadDeferred = sealedBackupIntimacyReuploadDeferred
@@ -127,6 +139,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodEnabled) ?? false
         sealedBackupJournalEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalEnabled) ?? false
         sealedBackupIntimacyEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyEnabled) ?? false
+        sealedBackupOwnPhotosEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupOwnPhotosEnabled) ?? false
         sealedBackupPeriodReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodReuploadDeferred) ?? false
         sealedBackupJournalReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalReuploadDeferred) ?? false
         sealedBackupIntimacyReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyReuploadDeferred) ?? false
@@ -154,14 +167,17 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
 
     /// Whether a sealed (encrypted) backup of the sensitive stores may be sitting in iCloud.
     ///
-    /// - Important: EVERY sealed-backup payload flag must be OR'd in here. This is what the delete
-    ///   dialog reads to decide whether it may truthfully claim to remove an iCloud copy; a payload
-    ///   missing from this expression is a backup "delete everything" would leave behind.
+    /// - Important: EVERY sealed-backup flag must be OR'd in here — the four chunked payload types
+    ///   AND the own-photo escrow route, which is its own record namespace rather than a
+    ///   `SealedBackupPayloadType` case. This is what the delete dialog reads to decide whether it
+    ///   may truthfully claim to remove an iCloud copy; a flag missing from this expression is a
+    ///   backup "delete everything" would leave behind.
     public var hasSealedBackup: Bool {
         sealedBackupSensitiveNotesEnabled
             || sealedBackupPeriodEnabled
             || sealedBackupJournalEnabled
             || sealedBackupIntimacyEnabled
+            || sealedBackupOwnPhotosEnabled
     }
 
     /// Copies every sealed-backup ENABLE flag from `other`, leaving everything else untouched.
@@ -181,6 +197,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled = other.sealedBackupPeriodEnabled
         sealedBackupJournalEnabled = other.sealedBackupJournalEnabled
         sealedBackupIntimacyEnabled = other.sealedBackupIntimacyEnabled
+        sealedBackupOwnPhotosEnabled = other.sealedBackupOwnPhotosEnabled
     }
 
     /// Default per-capability map: every HealthKit capability disabled.

@@ -115,6 +115,13 @@ struct PrivacyDataSettingsView: View {
     @State private var didSeedUITestPreferences = false
     @State private var showTrainerShare = false
     @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
+    /// The own-photo escrow backup's enable confirmation. Its own flag rather than a case on
+    /// `pendingSealedBackupEnable`, because the photo route is deliberately NOT a
+    /// `SealedBackupPayloadType` (see `SealedPhotoCorpus`).
+    @State private var pendingOwnPhotoBackupEnable = false
+    /// Set when turning the photo backup OFF failed to delete its iCloud records. The preference is
+    /// left ON (so the records stay targetable) and the status banner explains why.
+    @State private var ownPhotoBackupDisableFailed = false
     /// Payloads whose "turn the backup off" CloudKit delete FAILED. Their preference is deliberately
     /// left ON (so the orphaned CKRecords stay targetable by a retry or by delete-all) and the status
     /// banner says so, instead of the failure being swallowed by an off-looking toggle.
@@ -188,6 +195,12 @@ struct PrivacyDataSettingsView: View {
             }
         } message: {
             Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
+        }
+        .alert("Back up your photos?", isPresented: $pendingOwnPhotoBackupEnable) {
+            Button("Cancel", role: .cancel) { pendingOwnPhotoBackupEnable = false }
+            Button("Encrypt & back up") { applyOwnPhotoBackup(enabled: true) }
+        } message: {
+            Text(Self.ownPhotoBackupSizeDisclosure + "\n\n" + sealedBackupDisclosure(for: nil))
         }
         .destructiveConfirmation($pendingDestructiveAction)
         // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
@@ -479,10 +492,31 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+
+            // ONE switch for all three own-photo corpora (meal, recipe, gym progress). They are
+            // internal record namespaces, not three consent questions — "back up my photos" is a
+            // single decision about the user's own pictures — and the size disclosure below is
+            // attached to the switch rather than buried in the confirm dialog, because photos are
+            // the one backup whose cost the user pays in iCloud storage.
+            Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
+                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+                .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
+            Text(Self.ownPhotoBackupSizeDisclosure)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
+
+    /// The honest size disclosure for the own-photo backup. Fernlet puts no count cap on meal,
+    /// recipe or progress photos, so a heavy user's library really can run to hundreds of megabytes
+    /// — and it is the USER's iCloud quota, not the developer's. Said plainly next to the switch.
+    static let ownPhotoBackupSizeDisclosure =
+        "Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, "
+        + "so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB "
+        + "or more for a big library. Only photos that changed are uploaded."
 
     /// True when an iCloud account is signed in on this device. A DEBUG launch override lets UI tests
     /// exercise the "another device has data" path without a real iCloud account (mirrors the
@@ -541,11 +575,31 @@ struct PrivacyDataSettingsView: View {
                     guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
                     return SealedBackupAttention(payload: payload, outcome: outcome)
                 }
+            let photoAttention = store.ownPhotoBackupStatus.flatMap { $0.needsAttention ? $0 : nil }
             if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
                 || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
-                || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty {
+                || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
+                || photoAttention != nil || ownPhotoBackupDisableFailed {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Encrypted backup status")
+
+                    if ownPhotoBackupDisableFailed {
+                        Text("Couldn't delete your encrypted photo backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosDisableFailed")
+                    }
+
+                    // The photo route reuses the same outcome vocabulary as the payload backups, so
+                    // it reads the same — only the noun differs.
+                    if let photoAttention {
+                        Text(restoreStatusMessage(photoAttention, noun: "photo"))
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosStatus")
+                    }
 
                     // A failed disable-delete. The pref stayed ON deliberately (see applySealedBackup),
                     // so the remedy is the toggle the user already has — say so rather than leaving an
@@ -629,6 +683,9 @@ struct PrivacyDataSettingsView: View {
                     // records nothing), yet the remedy IS a retry — `userInitiated` takes the targeted
                     // restore, and the same pass's follow-through then re-uploads and clears the deferral.
                     if attentionItems.contains(where: { $0.outcome.isRetryable })
+                        // The photo route rides the same Retry: `restoreSealedBackupsIfNeeded` runs
+                        // its synchronize pass too, so one button covers both routes.
+                        || (photoAttention?.isRetryable ?? false)
                         || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
                         // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
                         // store records no retryable attention item, yet Retry IS the remedy —
@@ -656,7 +713,12 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, payload: SealedBackupPayloadType) -> String {
-        let noun = payload.displayNoun
+        restoreStatusMessage(outcome, noun: payload.displayNoun)
+    }
+
+    /// The same copy, keyed by a bare noun so the own-photo route — which is not a
+    /// `SealedBackupPayloadType` — reads identically to the payload backups.
+    private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, noun: String) -> String {
         switch outcome {
         case .deferredKeyNotSynced:
             return "Couldn't restore your \(noun) backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
@@ -1005,6 +1067,61 @@ struct PrivacyDataSettingsView: View {
             get: { storagePreferencesStore.preferences.sealedBackupIntimacyEnabled },
             set: { newValue in handleSealedBackupToggle(.intimacyLogs, enabled: newValue) }
         )
+    }
+
+    /// The own-photo escrow backup switch. Enabling asks for informed consent (the same
+    /// "nothing leaves the device unencrypted" dialog the other payloads use, plus the size
+    /// disclosure); disabling routes through the WS-5 destructive ceremony, because turning it off
+    /// DELETES the photo backup from iCloud.
+    private var ownPhotoBackupBinding: Binding<Bool> {
+        Binding(
+            get: { storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled },
+            set: { newValue in handleOwnPhotoBackupToggle(enabled: newValue) }
+        )
+    }
+
+    private func handleOwnPhotoBackupToggle(enabled: Bool) {
+        FernletAuditLog.log(
+            "privacy.sealedBackup.changed",
+            context: ["payload": "ownPhotos", "enabled": enabled ? "true" : "false"]
+        )
+        if enabled {
+            pendingOwnPhotoBackupEnable = true
+        } else {
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Turn off encrypted photo backup?",
+                message: "This permanently deletes your encrypted meal, recipe and progress photo backup "
+                    + "from iCloud. If you lose or replace this device, those photos can't be recovered. "
+                    + "Turn off anyway?",
+                confirmLabel: "Turn off",
+                auditEvent: "privacy.sealedBackup.disableConfirmed.ownPhotos"
+            ) {
+                applyOwnPhotoBackup(enabled: false)
+            }
+        }
+    }
+
+    private func applyOwnPhotoBackup(enabled: Bool) {
+        guard let store else {
+            // No store (UI-test harness): just reflect the preference.
+            storagePreferencesStore.update { $0.sealedBackupOwnPhotosEnabled = enabled }
+            return
+        }
+        Task {
+            let ok = await store.setOwnPhotoBackupEnabled(enabled)
+            await MainActor.run {
+                if ok {
+                    storagePreferencesStore.update { $0.sealedBackupOwnPhotosEnabled = enabled }
+                    ownPhotoBackupDisableFailed = false
+                } else if !enabled {
+                    // Same rule as the payload toggles: a failed delete keeps the preference ON so
+                    // the surviving records stay targetable by a retry (and by "delete everything"),
+                    // and the banner says so instead of the failure hiding behind an off switch.
+                    ownPhotoBackupDisableFailed = true
+                    FernletAuditLog.log("privacy.sealedBackup.disableFailed", context: ["payload": "ownPhotos"])
+                }
+            }
+        }
     }
 
     private func handleSealedBackupToggle(_ payload: SealedBackupPayloadType, enabled: Bool) {

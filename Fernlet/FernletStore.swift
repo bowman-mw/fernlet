@@ -306,6 +306,13 @@ final class FernletStore {
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
+    /// The opt-in own-photo escrow backup (security-hardening Phase 5, step 5b) — the sanctioned
+    /// cross-device route for meal / recipe / progress photos once their key is device-bound.
+    /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
+    @ObservationIgnored private lazy var ownPhotoBackupCoordinator = OwnPhotoBackupCoordinator(
+        host: self,
+        documentsDirectory: Self.photoDocumentsDirectory
+    )
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
@@ -2610,9 +2617,42 @@ final class FernletStore {
 
     /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
     /// passes `userInitiated: true` so the period half can use the targeted restore).
-    /// Delegates to `SealedBackupCoordinator`.
+    /// Delegates to `SealedBackupCoordinator`, then to `OwnPhotoBackupCoordinator` for the own-photo
+    /// escrow route — one launch/adopt seam for both, so the photo route is retried by the same
+    /// banner button and the same launch pass as everything else. Both are no-ops unless their own
+    /// preference is on.
+    ///
+    /// `userInitiated` also makes the photo pass a FULL one (every photo's bytes read and hashed);
+    /// the ambient launch pass compares id sets only, so launching never decrypts a whole photo
+    /// library on the main actor.
     func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
         await sealedBackupCoordinator.restoreSealedBackupsIfNeeded(userInitiated: userInitiated)
+        await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
+    }
+
+    /// Whether the own-photo escrow backup is on, and its last pass's outcome — observable so the
+    /// Privacy & Data banner can surface a deferred/failed photo restore instead of swallowing it
+    /// (WS-4). Nil until a pass has run in this session.
+    private(set) var ownPhotoBackupStatus: SealedBackupRestoreOutcome?
+
+    /// Records an own-photo backup pass's outcome (``OwnPhotoBackupContext``).
+    func recordOwnPhotoBackupOutcome(_ outcome: SealedBackupRestoreOutcome) {
+        ownPhotoBackupStatus = outcome
+    }
+
+    /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
+    /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
+    @discardableResult
+    func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
+        await ownPhotoBackupCoordinator.setEnabled(enabled)
+    }
+
+    /// Deletes every own-photo escrow record (all three corpora, bodies + manifests) and clears the
+    /// photo generation namespace — the "delete everything" leg for the photo route
+    /// (Docs/PrivacyWipeCoverage.md). Returns whether every corpus cleared.
+    @discardableResult
+    func deleteOwnPhotoEscrowBackups() async -> Bool {
+        await ownPhotoBackupCoordinator.tearDownForDeleteAll()
     }
 
     /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
@@ -4129,6 +4169,22 @@ final class FernletStore {
                 }
             }
         }
+        // 2a. The own-photo escrow backup (Phase 5, step 5b) — a SEPARATE record namespace from the
+        // chunked payloads above, deliberately: it is not a `SealedBackupPayloadType`, so the
+        // `allCases` loop cannot reach it and it needs its own leg here. Like that loop this runs
+        // BEFORE the preference reset that would gate it off, and before the local photo stores are
+        // emptied further down — the records are addressed by corpus name, but the ENABLE flag is
+        // what tells this funnel there is anything in iCloud to delete. Deletion is by record name,
+        // so it needs no escrow key and works while the app is locked.
+        if preferences.sealedBackupOwnPhotosEnabled {
+            if await !deleteOwnPhotoEscrowBackups() {
+                sealedBackupDeleteFailed = true
+                if !outcome.incompleteStores.contains("your encrypted iCloud backup") {
+                    outcome.incompleteStores.append("your encrypted iCloud backup")
+                }
+            }
+        }
+
         // Every re-upload deferral points at a backup this wipe just deleted — and the local data
         // behind it is about to go too, so the promised re-upload can never happen again either way.
         // Clear them all (observable + persisted) with the backups. Driven off `allCases` so a payload
@@ -4992,6 +5048,11 @@ extension FernletStore: ProximityTrustPolicy {}
 extension FernletStore: WorkoutPlanningContext {}
 
 extension FernletStore: MealResolutionContext {}
+
+/// The own-photo escrow route's callback seam. The single member
+/// (`recordOwnPhotoBackupOutcome(_:)`) lives beside the sealed-backup status writers above, so both
+/// routes publish their non-silent status through the same store.
+extension FernletStore: OwnPhotoBackupContext {}
 
 extension FernletStore: SealedBackupContext {
     /// Narrow read of the (private) journal content key for sealed period-data backup. This is the

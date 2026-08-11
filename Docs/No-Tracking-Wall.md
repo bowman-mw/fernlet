@@ -166,7 +166,7 @@ was produced by grepping every URL literal and every networking API in the tree,
 
 | Service | Where | What leaves the device |
 |---|---|---|
-| **CloudKit — private database** | `CloudKitSync/CloudKitDataService.swift:243`, container `iCloud.MBO.Fernlet` | The user's own encrypted snapshot, in the user's own iCloud account. Off unless the user enables sync. Apple operates the storage; the developer has no read access to a private database. |
+| **CloudKit — private database** | `CloudKitSync/CloudKitDataService.swift:243`, container `iCloud.MBO.Fernlet` | The user's own encrypted snapshot, in the user's own iCloud account. Off unless the user enables sync. Apple operates the storage; the developer has no read access to a private database. Record types today: the mirrored day/blob types, `SealedBackupRecord` (the chunked sealed payloads) and — since security-hardening Phase 5 — `SealedPhotoRecord`, the opt-in own-photo escrow route (one AES-GCM-sealed photo per record plus a sealed per-corpus manifest). Same container, same endpoint, no new host: a new record TYPE is not a new destination, so the allowlist in §3 is unchanged. |
 | **CloudKit — public database** | `CloudKitSync/HeartDropCloudTransport.swift:54` | The heart dead-drop only: a rotating pseudonymous day tag plus a sealed (ChaChaPoly) payload. See §6 for the honest caveat about this one. |
 | **WeatherKit** | `AppServices/WeatherKitService.swift:233` | A coarse location, to Apple, only when weather-aware prompts are enabled. |
 | **APNs / App Store** | `aps-environment` entitlement; the platform | Standard OS-level traffic. No payload of ours. |
