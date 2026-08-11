@@ -296,8 +296,9 @@ shipped; the rest are still open.
    (escrow photo backup or explicit consent). Honest limit until the latch is set: an un-migrated
    own photo is still openable under the backup-restorable friend key. Pinned by
    `FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
-   (`ownPhotoKeyIsASecondRowWithItsOwnBindingPolicy` asserts the row against the *current* shipping
-   policy, so flipping the policy without re-minting fails loudly).
+   (`ownPhotoKeyIsASecondRowDistinctFromTheFriendWallKey` asserts the two rows really are two
+   independent, non-synchronizable keys, so a "split" that vended the same bytes twice fails loudly;
+   the row's accessibility class is asserted by the step-5c test named below).
    **UPDATE (2026-08-11, Phase 5 step 5b): the sanctioned cross-device route now exists.** Own photos
    have an **opt-in, per-photo escrow backup** — one AES-GCM-sealed CloudKit record per photo id
    (`sealed-photo.<corpus>.<photoId>`, record type `SealedPhotoRecord`) plus a sealed per-corpus
