@@ -93,8 +93,13 @@ must be promoted in the CloudKit console before the build that writes it ships.
 | Record type | Field | Added | Why |
 | --- | --- | --- | --- |
 | `HeartDrop` | `tag` (queryable), `payload` (bytes) | 2026-07-25 | Offline away-hearts dead-drop. |
-| `SealedBackupRecord` | `generation` (Int64) | 2026-08-09 | Sealed-backup rollback defense (code review finding 14). It is bound into the GCM AAD and required on decode, so **a Production container without this field cannot restore any backup at all** — promote it before shipping. |
-| `SealedBackupRecord` | `formatVersion` (Int64), `keySalt` (bytes) | 2026-08-10 | Record format v2 — the per-generation escrow HKDF salt (`Verifiability.md` §6.4). Every new write stamps `formatVersion = 2` plus a 32-byte `keySalt`; **the salt is the only way to re-derive that generation's key, so a Production container that silently drops it makes those backups permanently unopenable.** Both fields must exist in Production **before** the build that writes v2 ships. Reads are unaffected either way: a record lacking both fields decodes as v1. |
+| `SealedBackupRecord` | `generation` (Int64) | 2026-08-09 | **Promoted to Production 2026-08-11 (owner-confirmed).** Sealed-backup rollback defense (code review finding 14). It is bound into the GCM AAD and required on decode, so **a Production container without this field cannot restore any backup at all** — promote it before shipping. |
+| `SealedBackupRecord` | `formatVersion` (Int64), `keySalt` (bytes) | 2026-08-10 | **Promoted to Production 2026-08-11 (owner-confirmed).** Record format v2 — the per-generation escrow HKDF salt (`Verifiability.md` §6.4). Every new write stamps `formatVersion = 2` plus a 32-byte `keySalt`; **the salt is the only way to re-derive that generation's key, so a Production container that silently drops it makes those backups permanently unopenable.** Both fields must exist in Production **before** the build that writes v2 ships. Reads are unaffected either way: a record lacking both fields decodes as v1. |
+
+The 2026-08-11 deploy was batched (the console promotes the whole Development diff), so the
+`HeartDrop` fields above may have ridden along **if** they existed in Development at deploy time —
+verify in the console (Production ▸ Schema ▸ Record Types ▸ `HeartDrop`) before shipping a
+dead-drop-writing build; do not assume.
 
 **Owner action, not a code step.** `SealedBackupRecord` is a hand-rolled `CKRecord` type (not a Core
 Data mirrored `CD_*` entity), so the Development schema picks the two v2 fields up automatically on the
