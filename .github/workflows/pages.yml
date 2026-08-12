@@ -66,6 +66,7 @@ jobs:
           requires your fresh, affirmative consent
           verifiability statement
           Docs/Verifiability.md
+          Manual plan exchange
           MARKERS
 
       # The no-tracking wall applies to the website too: nothing may load from another origin.

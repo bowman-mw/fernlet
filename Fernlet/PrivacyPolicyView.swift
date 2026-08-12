@@ -14,9 +14,12 @@
 //  sealed store — unrecoverable off-device without the opt-in encrypted backup; default
 //  device-backup exclusion of local data files; duress PIN with decoy / silent-wipe /
 //  recovery-lock responses; journal text removed from the plaintext-sync claim; no-backdoor
-//  statement; intimacy age gate corrected to 16+ to match the shipped gate). Any material change
-//  to the policy must update the effective date below AND in Docs/Privacy-Policy.md AND
-//  Site/privacy/index.html, and be surfaced in the app per the policy's own terms.
+//  statement; intimacy age gate corrected to 16+ to match the shipped gate); revised 2026-08-12
+//  again (manual plan exchange: the opt-in clipboard export of a training summary to an outside
+//  assistant — the one place a user can deliberately hand their data to an AI Fernlet has no
+//  relationship with). Any material change to the policy must update the effective date below AND
+//  in Docs/Privacy-Policy.md AND Site/privacy/index.html, and be surfaced in the app per the
+//  policy's own terms.
 //
 
 import SwiftUI
@@ -89,6 +92,8 @@ struct PrivacyPolicyView: View {
 
     ## Artificial intelligence
     Fernlet's AI features run on your device using Apple's on-device models. Your journal text, memories, health data, photos, period data, and friend data are not sent to any external AI service. Some optional convenience features may look up non-personal reference data from public sources (for example, the nutrition facts for a packaged product), sending only the minimal query needed and never your identity or sensitive information. Fernlet does not generate mental-health diagnoses and filters clinical language out of anything it stores.
+    **Copying a training summary for an outside assistant (off by default).** There is one place where you can deliberately take your data to an AI service Fernlet has no relationship with. If you turn on *Manual plan exchange* in Settings, "Share with a trainer" on the Move tab gains a button that copies a training summary — your workouts, macro targets and recent meals, equipment, and the muscles and movements you avoid — to your clipboard as plain text, so you can paste it into an assistant of your choosing and paste the workout plan it writes back into Fernlet.
+    This is off unless you switch it on, and Fernlet still sends nothing anywhere: the copying and the pasting are both actions you take. But once you paste that text into another app, that app has it, under its own privacy policy and not ours — Fernlet cannot reach it or take it back. The summary never includes your journal, period or cycle data, intimate data, photos, friends, location, or your private keys. A plan you paste back is shown to you day by day, and checked against the muscles and movements you avoid, before anything is added to your week.
 
     ## What we do not do
     - We do not sell, rent, or trade your personal data.

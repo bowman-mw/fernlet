@@ -19,15 +19,22 @@ struct PrivacyPolicyParityTests {
         "Site/privacy/index.html"
     ]
 
-    /// Substance markers every copy must contain: the perpetual-promise clauses plus the
-    /// verifiability pointer added 2026-08-09. Chosen as exact phrases that survive each
-    /// format's markup (Swift string literal, Markdown, HTML).
+    /// Substance markers every copy must contain: the perpetual-promise clauses, the
+    /// verifiability pointer added 2026-08-09, and the manual-plan-exchange disclosure added
+    /// 2026-08-12. Chosen as exact phrases that survive each format's markup (Swift string
+    /// literal, Markdown, HTML).
+    ///
+    /// The plan-exchange marker is here because that disclosure is the only one describing data
+    /// the user can hand to a third party — it landed in the canonical document alone and sat
+    /// out of sync in the other two copies until it was caught, which is exactly the drift this
+    /// suite exists to prevent.
     private static let substanceMarkers = [
         "never retroactively repurposed",
         "The no-collection guarantee does not expire",
         "requires your fresh, affirmative consent",
         "verifiability statement",
-        "Docs/Verifiability.md"
+        "Docs/Verifiability.md",
+        "Manual plan exchange"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

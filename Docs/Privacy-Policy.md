@@ -5,7 +5,9 @@
      (opt-in encrypted photo backup; §4 backup-category list), and 2026-08-12 (2026-08-10/11
      security-hardening round: hard SE-binding of the sealed store, default device-backup
      exclusion, duress PIN, journal text removed from the plaintext-sync list, no-backdoor
-     statement; intimacy age gate corrected to 16+ to match the shipped gate). Before
+     statement; intimacy age gate corrected to 16+ to match the shipped gate), and again
+     2026-08-12 (§7 manual plan exchange: the opt-in clipboard export of a training summary to an
+     outside assistant). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
