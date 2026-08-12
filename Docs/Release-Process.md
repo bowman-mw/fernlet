@@ -18,9 +18,10 @@ On `main`, enable branch protection with:
    `SealedBackupFormatPinTests` — so a cross-wall import, tracking, key-custody, or at-rest-format
    regression cannot merge green. (Everything else in `FernletTests`, `FernletLockCryptoTests`
    included, is gated by the per-release full-suite run in §2, not per-merge.) The workflow needs
-   a macOS runner with **Xcode 26 or newer** (it selects the newest Xcode 26+ on the image and
-   fails loudly if there is none); `IPHONEOS_DEPLOYMENT_TARGET` must stay at the claimed floor,
-   26.0, because a deployment target above the runner's SDK is a hard build error.
+   a macOS runner carrying the **iOS 26.5 SDK or newer** (`runs-on: macos-26`), because the app
+   uses API introduced in that SDK; it selects the newest Xcode 26+ on the image and fails fast
+   when a floor is unmet. `IPHONEOS_DEPLOYMENT_TARGET` must stay at the claimed floor, 26.0,
+   because a deployment target above the runner's SDK is a hard build error.
 2. **Require review from Code Owners.** [`.github/CODEOWNERS`](../.github/CODEOWNERS) lists
    exactly the wall-load-bearing paths (the boundary tests, wall scripts and hooks, the CI
    workflow, the privacy documents, `FernletKit/Package.swift`, and the `PrivacyInfo.xcprivacy`

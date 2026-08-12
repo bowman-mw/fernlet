@@ -51,10 +51,11 @@ code (§2a).
   push touches wall-relevant files; bypass a single push with `SKIP_S3_WALL_CHECK=1 git push`.
 - CI runs `.github/workflows/s3-wall.yml` on push/PR to `main` — the enforcement self-test plus the
   grep-wall. Make it a **required status check** in branch protection. The workflow needs a macOS
-  runner with **Xcode 26 or newer** — the job selects the newest Xcode 26+ on the image and fails
-  loudly if there is none, rather than pinning a minor version (pinning 26.5 silently fell back to
-  Xcode 16.4 and broke every run). Keep `IPHONEOS_DEPLOYMENT_TARGET` at the claimed floor, 26.0: a
-  deployment target above the runner's SDK is a hard build error.
+  runner carrying the **iOS 26.5 SDK or newer** (`runs-on: macos-26`; macos-15 tops out at the
+  26.3 SDK). The job selects the newest Xcode 26+ on the image and fails fast if either floor —
+  Swift tools 6.2 or the 26.5 SDK — is unmet, rather than pinning a minor version (pinning 26.5
+  silently fell back to Xcode 16.4 and broke every run). Keep `IPHONEOS_DEPLOYMENT_TARGET` at the
+  claimed floor, 26.0: a deployment target above the runner's SDK is a hard build error.
 - `Scripts/spm-wall-selftest.sh` is the automated negative test: it plants a forbidden
   `import PrivateHealthStore` in the walled `AIProviders` target, asserts the build fails with
   `is missing a dependency on`, reverts, and re-confirms the clean tree passes. Run it after any change

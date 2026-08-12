@@ -6,14 +6,17 @@
 # not reach the synthesized SwiftPM targets from the pbxproj). This workflow runs that check on
 # every push/PR so a forbidden cross-wall `import` can never land green.
 #
-# RUNNER REQUIREMENT: macOS with **any Xcode 26 or newer** — FernletKit/Package.swift is
-# swift-tools-version 6.2 and the app builds against the iOS 26 SDK, so an older toolchain cannot
-# even resolve the package. The job picks the newest Xcode 26+ on the image and FAILS LOUDLY if
-# there is none; it does not pin a specific minor version. (It used to pin 26.5, which no hosted
-# image had — so it fell back to Xcode 16.4 and every run died at package resolution with an error
-# that looked like a wall failure.) If hosted images ever regress below Xcode 26, point `runs-on`
-# at a self-hosted label instead. The pre-push hook (Scripts/install-git-hooks.sh) is the
-# always-available, no-CI complement.
+# RUNNER REQUIREMENT: macOS with an **iOS 26.5 SDK or newer** (any Xcode that ships one). Two
+# separate floors are in play and both are checked below, in seconds, rather than surfacing as a
+# confusing build failure minutes in:
+#   * Swift tools 6.2 — FernletKit/Package.swift's tools version. An older toolchain cannot even
+#     resolve the package ("using Swift tools version 6.2.0 but the installed version is 6.1.0").
+#   * the iOS 26.5 SDK — the app uses API introduced there (AgeRangeService.AgeRangeDeclaration
+#     .confirmed, in Fernlet/AgeAssuranceRequest.swift).
+# The job selects the NEWEST Xcode 26+ on the image rather than pinning a minor version; pinning
+# 26.5 is how this workflow silently fell back to Xcode 16.4 and failed on every run. If hosted
+# images ever fall behind the SDK floor again, point `runs-on` at a self-hosted label. The
+# pre-push hook (Scripts/install-git-hooks.sh) is the always-available, no-CI complement.
 #
 # Keep IPHONEOS_DEPLOYMENT_TARGET at the floor the product actually claims (26.0). A deployment
 # target above the runner's SDK is a hard build error, so raising it to the latest point release
@@ -37,8 +40,10 @@ concurrency:
 jobs:
   s3-wall:
     name: Compiler wall + grep-wall
-    # Swap for a self-hosted label if hosted images ever regress below Xcode 26 (see header).
-    runs-on: macos-15
+    # macos-26, not macos-15: the macos-15 image tops out at Xcode 26.3 / the iOS 26.3 SDK, which
+    # is too old to compile this app (see the SDK floor check below). macos-26 carries Xcode
+    # 26.4.1 through 26.6. Swap for a self-hosted label if hosted images ever fall behind again.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +76,19 @@ jobs:
           echo "DEVELOPER_DIR=$best_dir" >> "$GITHUB_ENV"
           DEVELOPER_DIR="$best_dir" xcodebuild -version
           DEVELOPER_DIR="$best_dir" swift --version
+
+          # The Xcode version is not the real requirement — the iOS SDK it ships is. The app uses
+          # API that only exists from the 26.5 SDK on (AgeRangeService.AgeRangeDeclaration
+          # .confirmed, in Fernlet/AgeAssuranceRequest.swift), so an older SDK fails three minutes
+          # in with "has no member 'confirmed'", which looks nothing like a toolchain problem.
+          # Fail here instead, in seconds, saying exactly what is missing.
+          required_sdk="26.5"
+          sdk="$(DEVELOPER_DIR="$best_dir" xcodebuild -version -sdk iphonesimulator SDKVersion | head -1)"
+          echo "iOS Simulator SDK: $sdk (require >= $required_sdk)"
+          if [ "$(printf '%s\n%s\n' "$required_sdk" "$sdk" | sort -V | head -1)" != "$required_sdk" ]; then
+            echo "::error::iOS SDK $sdk is older than the required $required_sdk. Fernlet uses API added in the $required_sdk SDK (AgeRangeService.AgeRangeDeclaration.confirmed). Use a runner image with a newer Xcode, or a self-hosted runner."
+            exit 1
+          fi
 
       # iPhone 17 is what the docs and the pre-push hook use, so prefer it — but fall back to the
       # newest available iPhone rather than failing over a device-name change in the image.
