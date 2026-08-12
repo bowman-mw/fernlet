@@ -33,7 +33,7 @@ footer nav a{margin-right:1.1rem}
 <body>
 <main>
 <h1>Fernlet Privacy Policy</h1>
-<p><strong>Effective date:</strong> August 11, 2026 <strong>Developer:</strong> Michael Bowman Olay <strong>Contact:</strong> fernletapp@gmail.com</p>
+<p><strong>Effective date:</strong> August 12, 2026 <strong>Developer:</strong> Michael Bowman Olay <strong>Contact:</strong> fernletapp@gmail.com</p>
 <hr>
 <h2>The short version</h2>
 <p>Fernlet is a private, gentle self-care companion. It is built <strong>privacy-first, on-device by design</strong>. We — the developer — do not run servers that collect your health data, we do not sell or share your data, we do not use advertising or third-party analytics or tracking, and we never do face recognition. Most of what you log never leaves your phone. The parts that can be backed up go to <strong>your own</strong> iCloud account, not to us, and the most sensitive parts are encrypted on your device first so that not even Apple can read them.</p>
@@ -43,17 +43,14 @@ footer nav a{margin-right:1.1rem}
 <p>Fernlet has no backend that we operate. Your data lives in three places, all under your control:</p>
 <ul>
 <li><strong>On your device</strong> — the default home for nearly everything you log.</li>
-<li><strong>Your personal iCloud account</strong> — if you turn on iCloud sync and/or encrypted backup. This is</li>
-<p>Apple's infrastructure tied to your Apple ID, not ours. We never receive a copy.</p>
-<li><strong>Directly between phones, in person</strong> — for the optional friend features, which work over a</li>
-<p>short-range peer-to-peer connection when two people are physically near each other.</p>
+<li><strong>Your personal iCloud account</strong> — if you turn on iCloud sync and/or encrypted backup. This is Apple's infrastructure tied to your Apple ID, not ours. We never receive a copy.</li>
+<li><strong>Directly between phones, in person</strong> — for the optional friend features, which work over a short-range peer-to-peer connection when two people are physically near each other.</li>
 </ul>
 <p>We, Michael Bowman Olay, do not receive, store, or have access to your health information, journal entries, photos, memories, cycle data, friend list, or location.</p>
 <h2>2. What Fernlet stores on your device</h2>
 <p>Almost everything, including:</p>
 <ul>
-<li><strong>Health &amp; activity you log:</strong> meals and their nutrition, workouts, hydration, hygiene, sleep,</li>
-<p>and your daily wellbeing score.</p>
+<li><strong>Health &amp; activity you log:</strong> meals and their nutrition, workouts, hydration, hygiene, sleep, and your daily wellbeing score.</li>
 <li><strong>Journal entries</strong> and the gentle reflections derived from them.</li>
 <li><strong>Memories</strong> — short notes Fernlet keeps so it can respond to you thoughtfully over time.</li>
 <li><strong>Your companion's appearance, wardrobe, coins, and milestones.</strong></li>
@@ -61,25 +58,25 @@ footer nav a{margin-right:1.1rem}
 <li><strong>Photos</strong> you add to your private album.</li>
 <li><strong>App settings and preferences.</strong></li>
 </ul>
-<p>Sensitive categories — <strong>period/cycle data, sensitive memories, journal text, and any intimate-activity notes</strong> — are stored in an <strong>encrypted, sealed store</strong> on your device. These sealed categories are walled off inside the app so that on-device AI and any networking code cannot read the raw data.</p>
+<p>Sensitive categories — <strong>period/cycle data, sensitive memories, journal text, Worry Box notes, and any intimate-activity notes</strong> — are stored in an <strong>encrypted, sealed store</strong> on your device. These sealed categories are walled off inside the app so that on-device AI and any networking code cannot read the raw data.</p>
+<p>The key that opens the sealed store is locked to <strong>this device's security hardware</strong> (the Secure Enclave). That means sealed data cannot be recovered on any other device — or on this device after it has been erased, reset, or replaced — from any device backup, <strong>even with your correct app passcode</strong>. The only way sealed data can follow you to a new phone is the opt-in encrypted sealed backup described in Section 4. If the sealed store can no longer be opened on this device, the app tells you so plainly instead of failing silently.</p>
+<p>Separately, your phone's own <strong>device backup</strong> (iCloud Backup or a computer backup): for new installs, Fernlet's local data files — the sealed store and your local history database — are <strong>excluded from device backups by default</strong>. If you were already using Fernlet before this default existed, the app asks you once, plainly, which you prefer. You can change this at any time with the "Include local data in iOS backup" toggle in Settings → Privacy &amp; Data. That toggle does not cover photo files (see Section 5).</p>
 <h2>3. HealthKit (Apple Health)</h2>
 <p>With your permission, Fernlet <strong>reads</strong> the following from Apple Health to reflect your day: heart rate, active energy, sleep analysis, step count, and workouts. Fernlet <strong>writes</strong> only the workouts you log (so they count toward your Apple activity rings). Fernlet <strong>never</strong> writes period, mood, journal, hydration, or hygiene data to Apple Health.</p>
 <p>Health data accessed through HealthKit is used only on your device to compute your companion's state and your derived trends. It is <strong>never</strong> used for advertising, never sold, and never shared with us or any third party. Deleting Fernlet does not delete samples Fernlet wrote to Apple Health — remove those in the Health app if you wish.</p>
 <h2>4. iCloud sync and encrypted backup (optional, you choose)</h2>
 <p>During setup you choose whether to keep your data <strong>only on this device</strong> or <strong>sync it to iCloud</strong>.</p>
 <ul>
-<li><strong>iCloud sync (optional):</strong> If enabled, your core app data (meals, workouts, journal entries,</li>
-<p>hydration, hygiene, sleep, scores, settings, derived signals, and core memories) is synced to <strong>your own iCloud private database</strong> using Apple's CloudKit. This is associated with your Apple ID under Apple's standard privacy model. We cannot see it. You can turn this off or delete the cloud copy at any time in Settings → Privacy &amp; Data. Deleting the cloud copy never deletes your local copy or your Apple Health history.</p>
-<li><strong>Encrypted sealed backup (separate, off by default):</strong> You may separately opt in to back up</li>
-<p><strong>sensitive memories</strong>, <strong>period data</strong>, <strong>journal entries</strong>, <strong>intimate logs</strong> and/or <strong>your own photos</strong> (see §5). Before this data leaves your device it is encrypted with a key derived from your device identity key (AES-256-GCM). Apple stores only unreadable ciphertext. Because the key lives in your iCloud Keychain, <strong>if you permanently lose access to your iCloud Keychain on all your devices, this encrypted data cannot be recovered.</strong> You are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in because of the sensitivity of that information.</p>
+<li><strong>iCloud sync (optional):</strong> If enabled, your core app data (meals, workouts, hydration, hygiene, sleep, scores, settings, derived signals, and core memories) is synced to <strong>your own iCloud private database</strong> using Apple's CloudKit. Journal <strong>text</strong> is not part of this sync: the days and structure of your journal sync, but the words you wrote are sealed on your device and leave it only as ciphertext, through the opt-in encrypted backup below. This is associated with your Apple ID under Apple's standard privacy model. We cannot see it. You can turn this off or delete the cloud copy at any time in Settings → Privacy &amp; Data. Deleting the cloud copy never deletes your local copy or your Apple Health history.</li>
+<li><strong>Encrypted sealed backup (separate, off by default):</strong> You may separately opt in to back up <strong>sensitive memories</strong>, <strong>period data</strong>, <strong>journal entries</strong>, <strong>intimate logs</strong> and/or <strong>your own photos</strong> (see §5). Before this data leaves your device it is encrypted with a key derived from a dedicated backup key (AES-256-GCM). Apple stores only unreadable ciphertext. Because the key lives in your iCloud Keychain, <strong>if you permanently lose access to your iCloud Keychain on all your devices, this encrypted data cannot be recovered.</strong> You are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in because of the sensitivity of that information. Because the sealed store's key is locked to this device's security hardware (Section 2), this opt-in backup is the <strong>only</strong> way the sealed categories can be recovered on another or an erased device — without it, sealed data is unrecoverable off this device, full stop. The journal, period-data and intimate-log parts of this backup require Fernlet's app lock: without one, those categories cannot be backed up at all (sensitive memories still can be). And notes you let go of in the <strong>Worry Box</strong> are deliberately excluded from every backup — they exist only on this device and do not survive a device erase.</li>
 </ul>
 <h2>5. Photos</h2>
-<p>Photos are stored <strong>encrypted in the app's private storage</strong> and are <strong>never</strong> sent to any AI or server, and never analyzed. <strong>By default they are also never uploaded to CloudKit</strong> — they leave your phone only inside your standard iCloud <strong>device backup</strong>, through the app container (the same way other app files are), unless you exclude Fernlet from device backup.</p>
-<p>There is exactly <strong>one exception, and it is off unless you turn it on.</strong> If you switch on "Sealed backup for your photos" in Settings → Privacy &amp; Data, your <strong>own</strong> meal, recipe and gym-progress photos are backed up to <strong>your own iCloud private database</strong>. Each photo is encrypted on your device before it leaves (AES-256-GCM, under a key derived from your device identity key), so Apple stores only unreadable ciphertext — and it is still never sent to us and never sent to any AI. Photos <strong>friends have shared with you</strong> are never part of that backup.</p>
-<p>Once that backup has actually stored your photos, Fernlet <strong>locks their encryption key to this device</strong>, so a copy of your device backup can no longer open them. That is permanent, and from then on the encrypted photo backup is the route by which those photos come back on a new phone. You are told this before you turn the backup on, and there is a separate, clearly-warned way to lock them to this device <em>without</em> the backup if you prefer the protection to the recovery.</p>
+<p>Photos are stored <strong>encrypted in the app's private storage</strong> and are <strong>never</strong> sent to any AI or server, and never analyzed. <strong>By default they are also never uploaded to CloudKit</strong> — they leave your phone only inside your standard iCloud <strong>device backup</strong>, through the app container (the same way other app files are), unless you turn Fernlet off in your device's iCloud Backup settings. Note that the app's own "Include local data in iOS backup" toggle (Section 2) does <strong>not</strong> cover photo files — only that system-level switch removes photos from device backups.</p>
+<p>There is exactly <strong>one exception, and it is off unless you turn it on.</strong> If you switch on "Sealed backup for your photos" in Settings → Privacy &amp; Data, your <strong>own</strong> meal, recipe and gym-progress photos are backed up to <strong>your own iCloud private database</strong>. Each photo is encrypted on your device before it leaves (AES-256-GCM, under a key derived from the same dedicated backup key), so Apple stores only unreadable ciphertext — and it is still never sent to us and never sent to any AI. Photos <strong>friends have shared with you</strong> are never part of that backup.</p>
+<p>Once that backup has actually stored your photos, Fernlet <strong>locks their encryption key to this device</strong>, so future device backups can no longer open them. The lock protects only backups made <em>after</em> you turn it on — a device backup made <em>before</em> still carries a working copy of the key. The lock is permanent, and from then on the encrypted photo backup is the route by which those photos come back on a new phone. You are told this before you turn the backup on, and there is a separate, clearly-warned way to lock them to this device <em>without</em> the backup if you prefer the protection to the recovery.</p>
 <p>You may explicitly export an individual photo to your system Photos library with a "Save to Photos" action — that is a one-time export you initiate, not automatic sync. Fernlet does <strong>no face recognition</strong> and no automated photo analysis of your photos.</p>
 <h2>6. Identity keys and friend features (in-person only)</h2>
-<p>To support optional in-person friend features, Fernlet generates a cryptographic identity for your device on first launch. The keys are stored in your Keychain (and your iCloud Keychain, so they can follow you to a new device). Your <strong>public key</strong> is the only persistent identifier shared with friends; your private keys never leave your device.</p>
+<p>To support optional in-person friend features, Fernlet generates a cryptographic identity for your device on first launch. The keys are stored in your device's Keychain and never sync to iCloud Keychain — a new phone starts with a fresh identity, and you re-add friends in person. Your <strong>public key</strong> is the only persistent identifier shared with friends; your private keys never leave your device.</p>
 <p>The friend features work <strong>only when two people are physically near each other</strong>, over a short-range, encrypted, peer-to-peer connection — there is no friend server and no remote friend activity. When you add a friend in person, your devices exchange your display names, public keys, avatar appearances, and a <strong>fuzzy</strong> wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends <strong>never</strong> see your numeric score, your goals, your cycle information, or any raw health data. You can send "hearts," share recipes, and share custom companion clothing with nearby friends. All of this stays device-to-device.</p>
 <p>Optional coarse (approximate) location may be used only for gentle weather-based prompts and, if you choose, to tag an in-person group activity. Location is never tracked over time and never attached to your identity for us.</p>
 <h2>7. Artificial intelligence</h2>
@@ -94,6 +91,7 @@ footer nav a{margin-right:1.1rem}
 <li>We do <strong>not</strong> perform face recognition or biometric identification of people in your photos.</li>
 <li>We do <strong>not</strong> operate a server that collects your health or journal data.</li>
 <li>We do <strong>not</strong> require an account or a login to use the app.</li>
+<li>We do <strong>not</strong> hold a master key or any recovery backdoor. We cannot bypass or remove your app lock for you, and we cannot recover your sealed data — nobody can, not us, not Apple, not any future owner of the app. The only recovery route is the encrypted sealed backup you may opt into (Section 4).</li>
 </ul>
 <h2>9. User-generated content and safety</h2>
 <p>If you create custom companion clothing and share it with friends in person, that content is governed by our in-app rules against objectionable content. You can <strong>report</strong> and <strong>block</strong> content and the people who share it; reporting hides the content on your device and blocks that person, and Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer, moderation actions take effect on-device. The full content rules are shown in the app, and use of the app is governed by Apple's standard Licensed Application End User License Agreement.</p>
@@ -101,18 +99,27 @@ footer nav a{margin-right:1.1rem}
 <p>In Settings you can:</p>
 <ul>
 <li>Choose local-only storage or iCloud sync, and change it any time.</li>
-<li>Turn encrypted sealed backup on or off per category.</li>
-<li><strong>Export your data</strong> as a file you can save or share (this export excludes the encrypted sealed</li>
-<p>categories described in Section 2 to protect them).</p>
+<li>Turn encrypted sealed backup on or off per category, including "Sealed backup for your photos" (Section 5).</li>
+<li>Lock your photos' encryption key to this device <em>without</em> any backup, if you prefer the protection to the recovery (clearly warned; permanent).</li>
+<li>Choose whether Fernlet's local data files are included in your device backup ("Include local data in iOS backup" — excluded by default for new installs; see Section 2).</li>
+<li>Set an optional <strong>duress PIN</strong>: a second app passcode with one response you choose — open a <strong>decoy</strong> view with sensitive content hidden (nothing is destroyed), perform a <strong>silent wipe</strong>, or trigger a <strong>recovery lock</strong> (both described in Section 12). Entering it looks exactly like a normal unlock — nothing on the screen, in the unlock's timing, or in the app's activity log gives away that a duress PIN is configured.</li>
+<li><strong>Reset app lock</strong> — permanently destroys every key that can open the sealed categories on this device (a crypto-erase): the sealed data on this phone becomes unreadable for good. A cloud copy in the opt-in encrypted sealed backup (Section 4), if you enabled it, is separate and survives a lock reset — turn that backup off to delete it.</li>
+<li><strong>Export your data</strong> as a file you can save or share (this export excludes the encrypted sealed categories described in Section 2 to protect them).</li>
 <li>Delete your iCloud copy.</li>
 <li>Delete your data.</li>
 <li>Manage or wipe the memories Fernlet keeps.</li>
 </ul>
 <p>Depending on where you live, you may have additional rights (such as access, correction, deletion, or portability). Because we do not hold your data on our own servers, you exercise these rights directly in the app; contact us at fernletapp@gmail.com with any questions.</p>
 <h2>11. Children</h2>
-<p>Fernlet is not directed to children under 13. Intimate-tracking features are gated to users who indicate they are 18 or older and are hidden and off by default.</p>
+<p>Fernlet is not directed to children under 13. Intimate-tracking features are gated to users who indicate they are 16 or older and are hidden and off by default.</p>
 <h2>12. Data retention</h2>
 <p>Data is retained on your device until you delete it or delete the app. iCloud copies are retained in your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no copy to retain or delete.</p>
+<p>If you configured a duress PIN (Section 10), its responses have specific retention consequences:</p>
+<ul>
+<li><strong>Decoy</strong> destroys nothing. It opens a view with sensitive content hidden; all your data is retained.</li>
+<li><strong>Silent wipe</strong> immediately destroys every key that can open sealed data on this device — an instant, irreversible <strong>crypto-erasure</strong> — and then deletes the remaining local data, your iCloud copies, and the samples Fernlet wrote to Apple Health, on a best-effort basis. Encrypted backup data or in-transit "hearts" stored off the device may persist briefly, but they are unopenable ciphertext, and they are removed when the purge completes or when they age out on their own.</li>
+<li><strong>Recovery lock</strong> is <strong>not</strong> deletion. It destroys this device's unlock keys, so everything sealed stays on the phone as unreadable ciphertext — a lock-out, not an erase. The data can be recovered only in person, through a mutual QR ceremony with a second device <strong>you</strong> previously enrolled as your own recovery device. There is no cloud or remote route, and the recovery device is always your own — never us, never a third party.</li>
+</ul>
 <h2>13. Changes to this policy — and the promises that cannot change</h2>
 <p>If we make material changes, we will update the effective date above and surface the change in the app.</p>
 <p>Some of this policy is <strong>permanent</strong>. The following commitments are perpetual: they bind this version of Fernlet, every future version, and any future owner or maintainer of the app:</p>

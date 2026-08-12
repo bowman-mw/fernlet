@@ -36,10 +36,16 @@ Prototype implementation status as of 2026-05-28:
 - Recipe unit selection uses a fixed picker (`g`, `oz`, `cup`, `tbsp`, `tsp`, `each`, `serving`). USDA `foodPortions` gram weights are used for mass/volume conversion when available; generic conversions are fallback only.
 - Recipes are create/edit capable, searchable by recipe name and ingredient names/categories, and support optional notes.
 - Recipe export is implemented through the iOS share sheet as readable text plus an embedded `fernlet.recipe` JSON payload for future import support. Import is not implemented yet.
-- App lock is implemented: passcode and biometric gates (`FernletLockService`) with scrypt key derivation, monotonic anchor, and reboot detection. Period tracker with sealed menstrual narrative (ChaChaPoly per-column storage, HKDF column keys) is implemented.
-- **App lock unlocks are per-surface, not global.** One passcode, but an unlock is granted to exactly one `FernletLockScope` — `.privateHub` (Private tab: journal, cycle, intimacy, Worry Box), `.progressPhotos` (the gym photo strip under Move and its photo detail), or `.appLockSettings` (Settings → App lock). A gated surface reveals only for its own scope and, on appear, calls `revokeUnlockOutside(_:)` to revoke (not inherit) an unlock held by another surface — so the guarantee does not depend on the departing screen's `onDisappear` re-lock, which sheets, the camera's full-screen cover and scene transitions legitimately suppress. `contentKey(for:)` is the decrypt seam: the sealed-content key is released only to `.privateHub`, and a non-hub unlock does not keep it resident at all (progress photos are sealed under `PrivateMediaKeyStore`'s own key; App-lock settings re-derive from the entered passcode). A lock that is not open for the hub also drops already-decrypted cycle state (`PeriodTrackerStore.scrubCycleState()`), because `prediction` feeds the Home tab's ungated cycle-outlook card.
+- App lock is implemented: passcode and biometric gates (`FernletLockService`) with a scrypt-derived salt + verifier as the entry gate, monotonic anchor, and reboot detection. Since the 2026-08-10/11 security-hardening round, scrypt is the entry gate and the SE-less legacy custody only — on Secure-Enclave hardware the content key is hard-bound to the enclave and the scrypt-wrapped copy is deleted (Section 2, "App-lock content-key custody"). Period tracker with sealed menstrual narrative (ChaChaPoly per-column storage, HKDF column keys) is implemented.
+- **App lock unlocks are per-surface, not global.** One passcode, but an unlock is granted to exactly one `FernletLockScope` — `.privateHub` (Private tab: journal, cycle, intimacy, Worry Box), `.progressPhotos` (the gym photo strip under Move and its photo detail), or `.appLockSettings` (Settings → App lock). A gated surface reveals only for its own scope and, on appear, calls `revokeUnlockOutside(_:)` to revoke (not inherit) an unlock held by another surface — so the guarantee does not depend on the departing screen's `onDisappear` re-lock, which sheets, the camera's full-screen cover and scene transitions legitimately suppress. `contentKey(for:)` is the decrypt seam: the sealed-content key is released only to `.privateHub`, and a non-hub unlock does not keep it resident at all (progress photos are sealed under the own-photos media-key row — `…ownContentKey`, a second key distinct from the friend-wall key since the Phase 5 media-key split — which is never released to any lock scope; App-lock settings open on the verifier match alone, holding no key). A lock that is not open for the hub also drops already-decrypted cycle state (`PeriodTrackerStore.scrubCycleState()`), because `prediction` feeds the Home tab's ungated cycle-outlook card.
 - **Enabling an encrypted paged backup defers rather than fails.** Period, journal and intimacy payloads are all sealed under the `.privateHub` content key, but their toggles live in Privacy & Data, reached from the Home tab — where the hub is always re-locked. So `setSealedBackupEnabled(true, …)` treats every "cannot seal right now" as a deferral: a locked content key, a hidden surface, rows the key cannot open, and a local store that is still empty because this device has not restored yet. The preference sticks, a per-payload flag (`sealedBackupPeriodReuploadDeferred` / `…JournalReuploadDeferred` / `…IntimacyReuploadDeferred`) is set and surfaced by the Privacy & Data status banner, and the upload runs at the next `.privateHub` unlock, the next un-hide, or the next launch — each of which re-checks `mayReuploadFromLocalStore` first, so a deferral can never discharge into an empty export that replaces the cloud copy. Disabling never takes this path; it deletes the cloud chunk set and needs no content key.
 - **Every paged payload has a compensating targeted restore.** The launch restore pass is fresh-install-only, and the day blob syncs down within minutes of a reinstall, so on an in-use device that pass can only answer `.skippedStoreNotEmpty` — silent and terminal. `restorePeriodBackupTargeted` / `restoreJournalBackupTargeted` / `restoreIntimacyBackupTargeted` drop ONLY the whole-device freshness gate (`.payloadStoreOnly`), keeping the per-payload store-empty check and the one-way divergence latch, and are driven by the explicit user moments: the Retry button, the `.privateHub` unlock, and un-hiding cycle/intimacy tracking. The launch pass also PINS its whole-device freshness verdict once, before any arm runs: the journal arm rebuilds day skeletons, which would otherwise make the device read as "in use" to every arm after it.
+- **The app-lock content key is hard-bound to the Secure Enclave, and biometrics require one passcode unlock first (2026-08-10/11, security-hardening P4 `9f9af1b` + P0b `f5c1f13`).** On enclave hardware the content key is wrapped under a non-exportable enclave-resident key and the scrypt-wrapped copy is deleted after a verified round-trip (keep-old-until-verified; SE-less hardware keeps scrypt custody forever). Sealed data is unrecoverable off-device without the opt-in escrow backup — stated plainly in Section 2. Biometric unlock is refused until one passcode unlock succeeds in the current process (`isBiometricUnlockAvailable`, fail-closed at the service guard).
+- **The media key is split, and the user's own photos have an opt-in escrow backup plus device binding (2026-08-11, security-hardening P5 `9388aec`).** The friend photo wall keeps backup-restorable custody by design; own photos (meal, recipe, gym-progress + sealed progress index) moved to the `…ownContentKey` row, gain an opt-in per-photo encrypted CloudKit backup (`SealedPhotoRecord`), and are re-bound to `AfterFirstUnlockThisDeviceOnly` once the migration latch is set AND a committed escrow backup or explicit consent exists (Sections 11 and 19).
+- **Device backups exclude the sealed store by default for fresh installs (2026-08-11, security-hardening P6 `4a853d4`).** Existing installs are never silently flipped — they get a one-time honest trade-off prompt (Section 19).
+- **A duress PIN with three configurable responses ships (2026-08-11, security-hardening P7 `d43bbce`).** Decoy, silent wipe, or recovery-lock; entry is indistinguishable from a normal unlock attempt (Section 2). The feature's existence is public; whether a given user configured one is not.
+- **Deletion semantics are tiered and audited (2026-08-10, security-hardening P1a `aaa4aac` + P1b `500cf5d`).** "Reset app lock" is fully honest crypto-erasure; "Delete everything" is bounded-honest and must never be called crypto-erasure; `Docs/PrivacyWipeCoverage.md` is the enforced ledger (Section 19, "Deleting Everything").
+- **Capture friction covers six Private-tab surfaces (2026-08-11, security-hardening P8 `2e6cadb`).** Friction against casual self-sharing, never a security control — described only in honest-limits voice (Section 15; Verifiability §5).
 - Mesh networking Phase 1 through group-encryption hardening are implemented: `MeshMultipeerSession`, `MeshNetworkManager`, admission tokens, open/closed mode, block model, `MeshAdmissionPromptSheet`, and `FriendListView` all exist. The legacy `MeshLobbyView` has been removed; the active flow is the single-Join `ConnectView` / `DisposableCameraView` surface.
 - **Life-tab redesign (workstreams B + C) is implemented:** The Connect surface uses a single **Join** button; peers are committed via a 15 cm / 0.8 s UWB proximity gate (manual confirm fallback on non-UWB). One committed peer = pairwise; two or more = mesh (auto-promoted in place). In session, `ConnectView` shows `DisposableCameraView`: small live viewfinder, 27-shot film counter, shutter gated behind a thumbwheel wind gesture, photos hidden until "Develop" triggers the existing review-and-save flow (`FriendPhotoReviewSheet`).
 - Foundation Models is wired for meal-candidate selection (`FoundationFoodSelection`), overnight day summaries, and thought bubbles. No third-party or OHTTP AI path exists yet; all AI is on-device.
@@ -106,18 +112,49 @@ Keychain storage:
 - Store CryptoKit raw key bytes as `kSecClassGenericPassword` items.
 - Service: `com.fernlet.identity`.
 - Accounts: `primary-ed25519`, `primary-x25519`.
-- Accessible after first unlock.
-- Synchronizable enabled for iCloud Keychain.
+- Accessibility: `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. The `ThisDeviceOnly` half is load-bearing and pinned by `KeyCustodyBoundaryTests`.
+- Identity keypairs are **non-synchronizable** — they never enter iCloud Keychain. A new device signed into the same Apple ID does not inherit the proximity identity; friends see a stranger until re-pairing in person.
+- A separate, dedicated **backup-escrow X25519 key** is the ONLY synchronizable keychain item in the app (iCloud Keychain E2EE), because cross-device restore of the opt-in encrypted sealed backup is its entire purpose (`IdentityService.localBackupEscrowPublicKey`). Verifiability §4 records it as the one sanctioned synchronizable exception, and `KeyCustodyBoundaryTests` pins the sanctioned sites.
 
-> **Decision needed (identity key sync):** The specification states identity keys are synchronizable, but the current implementation stores them with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — device-local, not synchronizable. This means the sealed-backup iCloud Keychain recovery story does not hold on a new device. Choose: (a) make identity keys synchronizable to match the spec's recovery design, or (b) change the spec to "device-local keys; recovery via the deferred recovery-code mechanism only." Document the chosen direction before enabling encrypted backup in production.
+> **Decision resolved 2026-08-11 (security-hardening round):** the question this block used to pose — the spec said identity keys are synchronizable while the implementation stored them `ThisDeviceOnly`; choose (a) make identity keys synchronizable to match the spec's recovery design, or (b) device-local keys with recovery via the deferred recovery-code mechanism only — is answered as **(b), plus a third element the decision text did not anticipate**: recovery is carried by the dedicated synchronizable backup-escrow key above, not by a recovery code and never by the identity keys. A new device signed into the same Apple ID recovers the escrow-sealed backups via iCloud Keychain but does NOT inherit the proximity identity. The sealed-backup recovery story holds via the escrow key, not the identity keys.
 
-Secure Enclave is not used because Secure Enclave does not support Curve25519 keys.
+Secure Enclave is not used for the **identity keys**, because Secure Enclave does not support Curve25519 keys. It **is** used for app-lock content-key custody, below.
+
+### App-lock content-key custody
+
+> **Decided 2026-08-11 (owner GO, security-hardening Phase 4, merge `9f9af1b`; Verifiability §6.1):** the app-lock content key is hard-bound to the Secure Enclave, and the scrypt fallback custody is deleted where an enclave exists.
+
+Custody is a **two-state machine**:
+
+- **Hard-bound (Secure-Enclave hardware):** the content key is wrapped under a non-exportable, enclave-resident key, and the scrypt-wrapped copy is **deleted** — after, and only after, a freshly re-read enclave wrap is proven to unwrap to exactly the authoritative key (**keep-old-until-verified**; every failure path keeps the scrypt item). A fresh install on enclave hardware is born hard-bound at setup; an existing install flips on its first unlock.
+- **Legacy (SE-less hardware):** the scrypt-wrapped copy is kept forever and remains authoritative.
+
+The passcode still gates entry through the unchanged scrypt salt + verifier. What changed is that possessing the passcode is no longer *sufficient* off-device: **sealed data (journal, cycle, intimacy, Worry Box) is unrecoverable off this device without the opt-in escrow backup.** "Erase All Content and Settings", a Secure-Enclave reset, or a restore onto replacement hardware permanently destroys the content key. Escrow-backed payloads survive for users who opted into the encrypted sealed backup (Section 19); **the Worry Box is accepted to die** ("let it go" notes are deliberately device-only); and no-lock installs are not covered by the backup at all.
+
+When the enclave key is dead, the app says so instead of failing silently: a correct passcode surfaces "Sealed data can no longer be opened on this device. Reset app lock to continue.", with the reset reachable from that very screen. A transient keychain failure is a separate, retryable error that never advises a reset. The two scopes that never receive the content key (the progress-photo strip and Settings → App lock) still open on the verifier match. And while biometrics are enabled, Face ID can repair the enclave wrap from the biometric bypass copy — that repair is offered *before* the destructive reset.
+
+**PIN-before-biometrics (security-hardening Phase 0b, merge `f5c1f13`):** biometric unlock is refused until one passcode unlock (or the initial configure) succeeds in the current process — fail-closed at the service guard, with the biometric button and auto-prompt both gated on the single `isBiometricUnlockAvailable` policy. After an app relaunch, Face ID/Touch ID alone will not open locked surfaces; the passcode must be entered once first. This is load-bearing for duress: PIN-first plus the duress-session flag are jointly what keep biometrics from walking around a decoy session.
+
+**Owner-accepted residuals (recorded, not hidden; Verifiability §5):** the enclave wraps the RAW key, and the enclave key is device-unlock gated rather than app-PIN gated — so the guarantee is **off-device, not on-device**; and the biometric bypass copy of the content key is a data-protection ACL keychain item (`WhenPasscodeSetThisDeviceOnly` + `.biometryCurrentSet`), not enclave-wrapped.
+
+### Duress PIN
+
+> **Decided 2026-08-11 (owner-locked, security-hardening Phase 7, merge `d43bbce`; per-path honesty table in `Docs/PrivacyWipeCoverage.md`):** one duress PIN, one chosen response. The feature's existence is publicly describable; whether a given user configured one is not.
+
+Entry is **indistinguishable** from an ordinary unlock attempt: the duress check runs before the reset/cooldown guards, uses its own salt with an unconditional dummy derivation (constant work shape), records no failed attempt, and logs under a benign audit label. The three configurable responses:
+
+- **Decoy:** a non-destructive keyless unlock riding the hide machinery. Persists nothing; biometrics are suppressed for the whole duress session.
+- **Silent wipe:** sub-second synchronous destruction of every key that opens a sealed byte — including the Secure-Enclave key, the biometric bypass copy, and the private-media keys — then a throwaway lock re-minted under the same PIN and a best-effort purge of rows and cloud copies. This is the ONE path that destroys the app lock itself.
+- **Recovery-lock:** local unlock keys destroyed but the corpus kept, recoverable only in person via QR mutual-auth from the user's enrolled second device (the custodian). The journal/Worry Box device fallback keys and the media keys deliberately survive — nothing in the recovery blob can give them back. **Honest description: a deliberate lock-out, never an erase** — "this phone can no longer open it, and neither can anyone holding this phone." The enrollment is retired (an armed recovery-lock is rewritten to decoy) if the device identity rotates, e.g. by "Delete everything".
+
+Setup lives behind Settings → App lock; custodian enrollment is an in-person ceremony with a second device (Section 15).
 
 Sealed store encryption key derivation:
-- When encrypted sealed store backup is enabled, derive a symmetric key from the X25519 private key using HKDF-SHA256 with a fixed `com.fernlet.sealed-backup` info label.
+- When an encrypted sealed backup payload is enabled, derive a 256-bit symmetric key from the dedicated **backup-escrow X25519 private key** (never the proximity/identity X25519, which is per-device and must not bind backups) using HKDF-SHA256.
+- **Record format v2 (all new writes; security-hardening Phase 2, merge `2faf53e`; Verifiability §6.4):** every backup generation mints a 32-byte CSPRNG salt, stamped on every chunk of the generation (the head is written last as the commit marker) and mixed into the HKDF under the versioned info string `com.fernlet.sealed-backup.v2`. This bounds an escrow-key compromise to one derived key per generation instead of one key for every backup ever written. v1 records keep opening byte-identically under the legacy static derivation (empty salt, fixed info `com.fernlet.sealed-backup`); decode is fail-closed — v2 requires exactly 32 salt bytes, and mixed-format or mixed-salt chunk sets are rejected.
 - Encrypt sealed backup payloads with AES-GCM (256-bit key, random 96-bit nonce per payload).
-- The X25519 private key is already in iCloud Keychain with `kSecAttrSynchronizable` enabled. On any device the user signs into with the same Apple ID and Keychain access, the derived key is automatically available.
-- Key recovery: the iCloud Keychain sync is the primary recovery mechanism. If iCloud Keychain is unavailable on a new device, encrypted sealed data cannot be decrypted. The user must be informed of this at the time they enable encrypted backup. A formal recovery code mechanism is deferred to a production hardening phase.
+- The backup-escrow private key syncs via iCloud Keychain (E2EE). On any device the user signs into with the same Apple ID and Keychain access, the derived keys are available. The identity keys never sync.
+- Key recovery: iCloud Keychain sync of the backup-escrow key is the primary recovery mechanism. If iCloud Keychain is unavailable on a new device, encrypted sealed data cannot be decrypted. The user must be informed of this at the time they enable encrypted backup. A formal recovery code mechanism is deferred to a production hardening phase.
 
 Trust model:
 - Trust on first use for friend public keys.
@@ -130,7 +167,7 @@ Trust model:
 
 Storage zones:
 1. Device encrypted local store: most app data. Synced to CloudKit private database (opt-in, default on).
-2. Device-sealed store: period data, sensitive memory, and photo bytes. AI/cloud modules cannot import raw types. Sealed types may be backed up to CloudKit as client-side AES-GCM encrypted blobs (see Section 19); period data backup is a separate hard opt-in. Once Phase S2 is complete, journal text/emotions and local intimacy notes also join this sealed store. Sealed Core Data entities must be in a **non-CloudKit-mirrored** store configuration; period date metadata (dateKey, createdAt) must not appear in the CloudKit-synced store.
+2. Device-sealed store: period data, sensitive memory, journal narratives, intimacy logs, Worry Box notes, and photo bytes. AI/cloud modules cannot import raw types. Sealed types may be backed up to CloudKit as client-side AES-GCM encrypted blobs (see Section 19); every sealed-backup payload is opt-in and off by default, and period data backup is a separate hard opt-in. Journal text/emotions and local intimacy notes are sealed-store types today and, since security-hardening Phase 3 (merge `4ed7437`), first-class opt-in backup payloads. Sealed Core Data entities must be in a **non-CloudKit-mirrored** store configuration; period date metadata (dateKey, createdAt) must not appear in the CloudKit-synced store. The sealed `FernletPrivate` store file is **excluded from iOS/iCloud device backups by default for fresh installs**; existing installs get a one-time choice, never a silent flip (security-hardening Phase 6, merge `4a853d4`; Verifiability §6.6; Section 19).
 3. Cloud minimal store: friend links, fuzzy state, ephemeral hearts, activity rosters.
 4. Transient inference context: exists only during Foundation Models or Core ML calls.
 5. Bundled read-only reference store: production target remains a compact USDA FoodData Central reference store plus curated entries for major restaurant chains. Current prototype ships a reduced JSON resource generated from Foundation Foods April 2026, SR Legacy April 2018, and a curated Branded Foods April 2026 subset (`USDAFoodItems.json`, 13,104 foods; 13,078 include at least one micronutrient and 12,302 include USDA portion or serving gram weights). This resource is never written to by the app; user-added/manual `FoodItem` records go into local app storage. Lookup checks the local food table seeded from the bundle plus user-added records.
@@ -627,7 +664,7 @@ Purpose: photos of real moments, not curation.
 
 Rules:
 - Photos are stored in `PrivateMediaStore` with encryption.
-- Photos are never sent to AI or cloud.
+- Photos are never sent to AI; they reach the cloud only via the opt-in encrypted photo backup (Section 19), where Apple sees only ciphertext.
 - No face recognition.
 - People tags come from handshake metadata or manual tagging.
 - Hard cap of 1000 photos, warning at 900, FIFO eviction at 1000.
@@ -636,7 +673,12 @@ Sources:
 - One photo per participant during active handshake.
 - One photo per journal entry; camera first, library behind extra tap.
 
-Photos stay in `PrivateMediaStore` by default and are not synced to iCloud Photos. They are included in standard iCloud device backup through the app container. A user may explicitly save an individual photo to their system Photos library via a "Save to Photos" action; this is an intentional one-way export, not automatic sync. `NSPhotoLibraryAddUsageDescription` covers this write.
+Photos stay in `PrivateMediaStore` by default and are not synced to iCloud Photos. Custody is split into two keys under `com.fernlet.private-media` (security-hardening Phase 5, merge `9388aec`; Verifiability §6.3):
+
+- The **friend photo wall** keeps backup-restorable custody permanently — a deliberate product decision, unchanged, because the wall's whole value is surviving onto a replacement phone. Friend photos remain included in standard iCloud device backup through the app container.
+- The user's **own photos** — meal, recipe, and gym-progress bytes plus the sealed progress index — live under a second key row (`…ownContentKey`) that is re-bound in place (`SecItemUpdate`) to `AfterFirstUnlockThisDeviceOnly` once, and only once, the eager re-seal migration latch is set AND a sanctioned cross-device route exists: a COMMITTED opt-in escrow photo backup (`OwnPhotoEscrowCommitLedger` — a manifest write that actually reached iCloud, not merely the preference) or an explicit recorded "Lock photos to this device" consent (Section 15). **Once bound, own photos do not restore from a device backup onto a new or erased phone**; the opt-in encrypted photo backup (Section 19) is the sanctioned cross-device route, and the consent's confirmation says exactly that. Binding protects only backups taken after the flip, and a user who takes neither route keeps the old backup-restorable custody — the hardening is opt-in because its cost is theirs.
+
+A user may explicitly save an individual photo to their system Photos library via a "Save to Photos" action; this is an intentional one-way export, not automatic sync. `NSPhotoLibraryAddUsageDescription` covers this write.
 
 Memory-aware exclusion:
 - Sensitive Memory can hold `photoSurfacingExclusion` facts.
@@ -804,6 +846,21 @@ Tapping any day in the Journal calendar heatmap opens a modal sheet for that day
 - Once generated, `daySummaryText` is stored on the day's record and not regenerated unless that day's logged data changes (new meal, workout edit, etc.).
 - If Foundation Models is unavailable, the summary slot stays empty; no fallback text is substituted.
 
+### Privacy & Data and App-lock Surfaces (2026-08-10/11 hardening round)
+
+Settings → Privacy & Data grows three surfaces from the security-hardening round:
+- **Encrypted photo backup toggle** (opt-in, default off; Section 19). The enable dialog carries an honest size disclosure — a large library can cost 100–250 MB of the user's iCloud quota. Enabling reports failure (and does not persist the preference) when nothing actually reached iCloud, surfaced here with a Retry. Disabling runs the destructive teardown ceremony.
+- **"Lock photos to this device"** — the explicit-consent route for own-photo device binding (Section 11). Its confirmation says in as many words that these photos will not come back on a new or erased phone.
+- **The one-time backup-exclusion prompt** for existing installs (Section 19): fresh installs adopt the excluded default silently; an existing install is asked once at launch, either answer is recorded, and the prompt never returns. The manual toggle remains for later changes.
+
+Settings → App lock hosts **duress PIN setup** — choose the PIN and one of the three responses (decoy, silent wipe, recovery-lock; Section 2) — and **custodian enrollment** for the recovery-lock response: an in-person QR mutual-auth ceremony with the user's own second device.
+
+### Capture Friction on the Private Tab
+
+> **Friction, never a security control.** This feature lives in Verifiability's honest-limits register (§5), never beside the mechanical guarantees, and must never be described as protecting the sealed corpus. It does not prevent a screenshot — the image already exists in Photos when the reaction fires — nor a photograph of the screen. It is aimed at the user's own impulsive self-sharing, not at an attacker.
+
+Exactly six Private-tab surfaces — the hub root, inner to the lock gate, plus the five sensitive sheet types — draw an opaque cover while the screen is being recorded or mirrored and while the scene is inactive (app-switcher snapshots), and react to a screenshot with a brief blur and a once-per-session nudge (`captureProtected(surface:)`; security-hardening Phase 8, merge `2e6cadb`; spec `Docs/Design-Capture-Protection-2026-08-10.md`). Always-on, no toggle. The Home cycle-outlook card is deliberately capturable. Still owed before ship: the manual device matrix, plus the surfaced-but-not-built follow-up surfaces (`lookingBackCard`, the First Aid worry composer, `redactForSnapshot` consolidation).
+
 ## 16. Privacy Architecture and Data Flow
 
 On-device (always):
@@ -813,21 +870,25 @@ On-device (always):
   so syncing it would carry one account's status onto a device signed in as someone else and put a minor's
   status on the wire.
 - Period entries, predictions, trends.
-- Photos (stored in `PrivateMediaStore`; included in standard iCloud device backup through app container).
+- Photos (stored in `PrivateMediaStore` under two keys since the Phase 5 media-key split: the friend wall stays device-backup-restorable by design; the user's own photos stop restoring from device backup once the own-photos key is device-bound — the opt-in encrypted photo backup is their cross-device route, Sections 11 and 19).
+- The app-lock content key: Secure-Enclave-bound where hardware allows (Section 2). Sealed data is unrecoverable off-device without the opt-in escrow backup.
+- The sealed `FernletPrivate` store file is excluded from iOS/iCloud device backups by default for fresh installs; existing installs get a one-time choice (Section 19).
 - On-device AI inferences.
 - Scoring.
 - Meals, workouts, customization, creations.
 
 iCloud Keychain:
-- Identity keypairs (Ed25519, X25519). Synchronizable; used as the key recovery path for encrypted sealed backup.
+- The dedicated **backup-escrow X25519 key ONLY** — the app's one synchronizable keychain item. It is the key recovery path for the encrypted sealed backup and the encrypted photo backup (Section 2; Verifiability §4).
+- Identity keypairs (Ed25519, X25519) are device-local and non-synchronizable (`…ThisDeviceOnly`). A new device recovers escrow-sealed backups but not the proximity identity — friends see a stranger until re-pairing in person.
 
 CloudKit private database (opt-in, default on for core data):
-- Core device data: meals, workouts, journal entries, hydration, hygiene, sleep records, scoring snapshots, settings, derived signals, core memories. Synced to the user's CloudKit private database. Apple sees this data in its standard CloudKit privacy model.
+- Core device data: meals, workouts, journal entries (day/structure skeletons only — narrative text is a sealed-store type and never rides this sync; see the sealed-backup bullet below), hydration, hygiene, sleep records, scoring snapshots, settings, derived signals, core memories. Synced to the user's CloudKit private database. Apple sees this data in its standard CloudKit privacy model.
 - Encrypted sealed backup (separate opt-in per type, default off): sealed store types (sensitive memory, period data, journal narratives, intimacy logs — the last two added 2026-08-10, reversing the earlier "intimacy not in backup" call; Worry Box stays out by design) encrypted client-side with AES-GCM before upload. Apple sees only ciphertext. See Section 19 for architecture.
 - Period data encrypted backup is a hard opt-in with a dedicated warning modal explaining that period data will leave the device in encrypted form, and that losing iCloud Keychain access on all devices makes this data permanently unrecoverable. Default off.
 - Sensitive memory encrypted backup: opt-in, default off. Same key derivation and unrecoverability disclosure.
-- Photos: never uploaded to CloudKit. Included in standard iCloud device backup through the app container only.
+- Photos: uploaded to CloudKit only via the opt-in encrypted photo backup (`SealedPhotoRecord` + sealed per-corpus manifest, ciphertext only — Section 19), off by default. Device backups carry the friend wall by design; own photos stop restoring from device backup once the own-photos key is device-bound (Section 11).
 - Friend and activity metadata: public-key-keyed records only, no health content.
+- Deletion: "Delete everything" is bounded-honest (no live ciphertext; residue is key-bound); only "Reset app lock" and the duress silent wipe may claim crypto-erasure; the duress recovery-lock is a lock-out, not an erase. The contract and its deliberate survivors: Section 19 "Deleting Everything" and `Docs/PrivacyWipeCoverage.md`.
 
 HealthKit:
 - Workout samples written with consent.
@@ -868,10 +929,10 @@ App privacy labels:
 - Data Used to Track You: None.
 - Data Linked to You: Health and Fitness (meals, workouts, sleep, hydration, hygiene — synced to user's own CloudKit private database), User Content (journal entries — synced to user's own CloudKit private database).
 
-> **Label review needed after Phase S2:** If Phase S2 seals journal text and excludes it from plaintext CloudKit sync, the "User Content (journal entries — synced to CloudKit)" label must be revised. Review labels with legal before shipping.
+> **Label review needed (widened 2026-08-11, security-hardening round):** journal text IS now sealed and excluded from plaintext CloudKit sync, so the "User Content (journal entries — synced to CloudKit)" label as originally written is stale. The opt-in client-side-encrypted uploads now cover journal narratives, intimacy logs, sensitive memory, period data, AND photos (Phases 3 and 5) — one review item covers them all: the privacy-label classification for every opt-in client-side-encrypted payload type must be reviewed with legal before shipping. The in-app privacy-policy text and nutrition labels were already corrected for the photo upload in Phase 5. **Ship blocker:** `SealedPhotoRecord` (queryable) is still owed a Production CloudKit schema promotion (`Docs/CloudKit-Schema-Deploy.md`) before any build ships with the photo-backup toggle reachable.
 - Data Not Linked to You: Diagnostics.
 
-Note: CloudKit private database sync means health and journal data is associated with the user's Apple ID in Apple's infrastructure, changing the "Not Linked to You" classification for those types. Encrypted sealed backup (period data, sensitive memory) may be considered separately — review with legal before shipping.
+Note: CloudKit private database sync means health and journal data is associated with the user's Apple ID in Apple's infrastructure, changing the "Not Linked to You" classification for those types. Encrypted sealed backup (period data, sensitive memory, journal narratives, intimacy logs) and the encrypted photo backup may be considered separately — review with legal before shipping.
 
 Usage descriptions required:
 - `NSNearbyInteractionUsageDescription`.
@@ -909,6 +970,7 @@ Core device types are synced to the user's CloudKit private database using `NSPe
 - Sync is opt-in, chosen at onboarding. The user can change it in Settings → Privacy & Data.
 - `PersistenceController` is initialised with the user's persisted `StoragePreferences` at first access, so CloudKit is enabled or disabled from the first container load — there is no window where the wrong configuration is active.
 - `FernletApp` subscribes to `StoragePreferencesStore` changes. When `iCloudSyncEnabled` or `localBackupExcludedFromiOSBackup` changes, `PersistenceController.reload(with:)` is triggered automatically. This is a safety net for programmatic updates; the Privacy & Data screen also triggers reload directly before updating preferences.
+- **Default-on device-backup exclusion for the sealed store (security-hardening Phase 6, merge `4a853d4`; Verifiability §6.6):** fresh installs default to excluding the sealed `FernletPrivate` store file from iOS/iCloud device backups, with the choice latched silently. Existing installs are never silently flipped — they get a one-time honest trade-off prompt at launch, gated by the tri-state `StoragePreferences.backupExclusionChoiceMade` plus three OR'd prior-use signals: the device-local `FernletPriorUseMarker`, the legacy onboarding key, and the presence of the preferences keychain blob (the reinstall signal). The gate classifies over the live keychain blob and fails closed when it is unreadable. What exclusion removes from backups is only plaintext metadata — which days have entries, HealthKit linkage — because the ciphertext was already unreadable off-device after the Phase 4 hard SE-binding; the recovery cost is near zero because escrow-backed payloads restore via the opt-in encrypted backup. The legacy JSON day blob honors the same preference; the manual toggle remains.
 - Conflict resolution: last-write-wins by `modifiedAt` timestamp for most types. Journal entries are append-only; conflicts produce both entries and let the user dismiss the duplicate.
 - CloudKit schema versioning must be managed carefully; additive-only changes are preferred to avoid migration requirements.
 - The `DerivedSignal` and `DaySummaryText` types are excluded from CloudKit sync by default — they are computed values that can be regenerated locally and their sync is not worth the quota or merge complexity.
@@ -919,6 +981,19 @@ Deleting iCloud data (the "Delete iCloud data" action in Privacy & Data) removes
 
 This asymmetry is intentional: iCloud deletion is about removing the cloud copy, not destroying the user's health history.
 
+### Deleting Everything
+
+> **Decided 2026-08-10 (security-hardening Phases 1a `aaa4aac` + 1b `500cf5d`):** deletion honesty is tiered, and each path may claim only its tier. `Docs/PrivacyWipeCoverage.md` is the enforced ledger — every persistence surface is either wiped by "Delete everything" or a documented deliberate exception, pinned mechanically by `PrivacyWipeCoverageTests`.
+
+The sealed-store delete is a two-step keyless contract: row-delete, then a full store-file rebuild (sqlite + `-wal`/`-shm` + the `_SUPPORT` external-blob directory destroyed and re-added), removing logical residue. The tiers:
+
+- **"Reset app lock" is FULLY honest crypto-erasure:** it sweeps every content key — including the Secure-Enclave wrap and the journal/Worry Box device fallback keys — plus the store rebuild.
+- **"Delete everything" is BOUNDED-honest:** rows gone, file rebuilt, but the lock keys are kept by design so that losing data never silently un-locks the app. Its dialog and any public copy must use the bounded wording — "no live ciphertext; residue is key-bound" — and must never call it crypto-erasure.
+- **The duress silent wipe is fully honest for the keys** (including the media keys), with rows and cloud copies purged best-effort afterwards.
+- **The duress recovery-lock is not an erase at all** — a deliberate lock-out, recoverable in person from the enrolled custodian device (Section 2).
+
+Documented deliberate survivors of "Delete everything", each justified in the ledger, include: the app-lock keychain, the friend photo wall and both private-media keys (the friend-wall row AND the own-photos row, plus the own-photo binding consent), the moderation self-ban, the install-binding ID, the HealthKit anchor cursors, the locked-note buffer key (a flagged owner call), the sealed-store divergence latches, and the prior-use marker. The ledger's deliberate-exceptions table is the complete, enforced set.
+
 ### Encrypted Sealed Backup
 
 The encrypted sealed backup path covers Sensitive Memory, period data, **journal narratives**, and **intimacy logs**. Each is controlled by a separate opt-in toggle in Settings → Privacy → Backup.
@@ -928,12 +1003,15 @@ The encrypted sealed backup path covers Sensitive Memory, period data, **journal
 > **The Worry Box stays OUT, by design.** "Let it go" notes are deliberately device-only: they are not mirrored into the synced blob and are not part of any backup payload, so they die on a device reset. That is the accepted property, not an oversight.
 >
 > **No-lock installs are not covered.** The backup pages the lock content key; with no lock configured, journal (and Worry) rows are sealed under a device-bound Keychain key the backup coordinator deliberately cannot see, so those users cannot enable journal/period/intimacy sealed backup at all.
+>
+> **One further named honest limit (Phase 3 review; Verifiability §6.1, third gap):** on a lock-configured device, journal rows sealed under the pre-lock DEVICE key — written before the lock existed, outside the migration window — are not exportable. The export REFUSES rather than shipping a chunk set that silently omits them, and audits the shortfall (`sealedBackup.journalPartialExport`). A user with pre-lock journal entries may see the journal backup refuse until a full re-key pass exists — a named honest limit, not a bug.
 
 Encryption model:
-- Derive a 256-bit symmetric key from the user's X25519 private key using HKDF-SHA256, info label `com.fernlet.sealed-backup`.
+- Derive a 256-bit symmetric key from the dedicated **backup-escrow X25519 private key** (Section 2 — never the identity X25519, which is device-local) using HKDF-SHA256.
+- **Record format v2 (all new writes; security-hardening Phase 2, merge `2faf53e`; Verifiability §6.4):** each backup generation mints a 32-byte CSPRNG salt, stamped on every chunk (the head is written last as the commit marker) and mixed into the HKDF under the versioned info string `com.fernlet.sealed-backup.v2` — bounding an escrow-key compromise to one generation per derived key instead of every backup ever written, an honesty upgrade to the "exactly as strong as your Apple account" disclosure. v1 records keep opening byte-identically under the legacy static derivation (empty salt, fixed info `com.fernlet.sealed-backup`); decode is fail-closed — v2 requires exactly 32 salt bytes, and mixed chunk sets are rejected.
 - Encrypt each backup payload with AES-GCM: 256-bit key, 96-bit random nonce, authenticated with the payload type and user public key as additional data.
-- Store the encrypted blob as a CloudKit `CKAsset` on a `SealedBackupRecord` keyed by the user's Ed25519 public key and payload type.
-- Apple sees only ciphertext. The decryption key never leaves the device except via iCloud Keychain sync.
+- Store the encrypted blob as a CloudKit `CKAsset` on a `SealedBackupRecord` keyed by the user's Ed25519 public key and payload type, carrying `generation` (Int64, the rollback high-water defense), `formatVersion` (Int64), and `keySalt` (bytes) — promoted to the Production CloudKit schema 2026-08-11, owner-confirmed (`Docs/CloudKit-Schema-Deploy.md`).
+- Apple sees only ciphertext. The escrow decryption key never leaves the device except via iCloud Keychain sync; the identity keys never sync at all.
 
 Opt-in UX:
 - Each sealed type (Sensitive Memory, period data, journal narratives, intimacy logs) has its own toggle.
@@ -941,13 +1019,26 @@ Opt-in UX:
 - Period data toggle is a hard opt-in with additional context about the political sensitivity of period data leaving a device in any form, even encrypted. The intimacy toggle carries the equivalent sensitivity line, and the journal toggle states that journal text is uploaded only in encrypted form.
 
 Key recovery:
-- Primary recovery path: iCloud Keychain sync carries the X25519 private key to new devices automatically.
+- Primary recovery path: iCloud Keychain sync carries the dedicated backup-escrow X25519 private key to new devices automatically. The identity X25519 never syncs — a new device recovers the backups, not the proximity identity (Section 2).
 - Fallback: if iCloud Keychain is unavailable, encrypted sealed data is unrecoverable. This is disclosed at toggle-on time.
 - A formal recovery code mechanism (generate mnemonic → escrow encrypted key blob) is deferred to a production hardening phase.
 
+### Encrypted Photo Backup
+
+> **Decided 2026-08-11 (owner-locked, security-hardening Phase 5 step 5b, merge `9388aec`; Verifiability §6.3):** the user's own photos gain an opt-in, per-photo escrow backup — the sanctioned cross-device route that makes own-photo device binding (Section 11) survivable across a phone swap. Off by default, like every backup in the app.
+
+Mechanism:
+- One AES-GCM-sealed CloudKit record per photo id (record type `SealedPhotoRecord`, names `sealed-photo.<corpus>.<photoId>`) plus a sealed per-corpus manifest written LAST as the commit marker. Sealed on the same v2 salted escrow key as the chunked sealed backup, domain-separated from it by a v3 AAD layout.
+- Deliberately NOT a `SealedBackupPayloadType` case: photos must not ride the chunked rewrite-everything path — adding one photo uploads one record plus a small manifest.
+- Restore is gated per corpus by a file-presence emptiness check that also treats "holds only bytes this install cannot open" as restorable (the phone-swap case), and prunes rather than restores a corpus this device itself emptied. Partial restores are recorded and repaired; an existing manifest that cannot be read is never replaced.
+- Disabling runs the destructive teardown ceremony and deletes the records. Enabling reports failure — and does not persist the preference — when nothing actually reached iCloud, surfaced with a Retry in Privacy & Data (Section 15).
+- The enable dialog carries an honest size disclosure: a large library can cost 100–250 MB of the user's iCloud quota. Apple sees only ciphertext.
+
+> **Owner action still pending (ship blocker):** promote `SealedPhotoRecord` (queryable) to the Production CloudKit schema (`Docs/CloudKit-Schema-Deploy.md`) before shipping with this toggle reachable. Also recorded in Section 18.
+
 ### Photos
 
-Photos are not synced to CloudKit. They are stored in `PrivateMediaStore` inside the app container and included in standard iCloud device backup automatically. An explicit "Save to Photos" action lets the user export an individual photo to their system Photos library at their discretion.
+Photos reach CloudKit only through the opt-in Encrypted Photo Backup above; there is no plaintext photo sync. They are stored in `PrivateMediaStore` inside the app container. Device-backup behavior follows the Phase 5 custody split (Section 11): friend-wall photos remain restorable from standard iCloud device backup by design, while the user's own photos stop restoring from device backup once the own-photos key is device-bound — the encrypted photo backup or the explicit "Lock photos to this device" consent is the required precursor to that binding. An explicit "Save to Photos" action lets the user export an individual photo to their system Photos library at their discretion.
 
 ## Prototype Guardrails
 
