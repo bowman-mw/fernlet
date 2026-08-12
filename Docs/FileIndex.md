@@ -440,6 +440,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropOutbox.swift` | Persisted sender-side queue for offline drops plus the durable receive dedup — two sidecars beside `HeartLedger.json`, deliberately outside the synced snapshot. |
 | `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/ProtectedSidecar.swift` | The `ProtectedSidecar` state machine (absent / deferred / corrupt / loaded) and `SidecarSeal`. Fixes the class of data loss where any read failure read as "no data" and the next persist overwrote the real file. |
 | `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropSidecarKey.swift` | Keychain-backed ChaChaPoly seal for the heart-drop sidecars at rest — the plaintext versions were a timestamped log of who the user sent affection to. One-way plaintext→sealed migration. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropStorageScope.swift` | The storage identity of one device's heart-drop state — sidecar directory + the keychain service holding the seal key and prekey blob. One value because `wipeForDeleteAll()` destroys both, so isolating either alone isolates nothing. |
 | `Fernlet/Fernlet/VerifyQRViews.swift` | `QRCodeRenderer` plus the verify-QR display/scan sheets — renders this device's signed `fernlet://verify` URL for the ceremony above. |
 
 ## Private Media Stores

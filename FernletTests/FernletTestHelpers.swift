@@ -52,13 +52,35 @@ func uniquePhotoDirectory() -> URL {
 }
 
 /// A fresh, never-shared root for ONE test store's proximity sidecars — the friend photo-wall cache
-/// and its preferences. The production root (`Application Support/Fernlet`) is process-wide, and the
-/// wall's index is re-saved whole on every `deletePhoto` / `deleteAllSessionPhotos`, so without this
-/// a manager built in one suite reads and overwrites the album of every concurrently-live one.
-/// See `ProximityHost.proximitySupportDirectory`.
+/// and its preferences, the heart ledger, and the three sealed heart-drop sidecars. The production
+/// root (`Application Support/Fernlet`) is process-wide, so without this a manager built in one
+/// suite reads and overwrites the album of every concurrently-live one (the wall's index is re-saved
+/// whole on every `deletePhoto` / `deleteAllSessionPhotos`), and any wiping test deletes the queued
+/// hearts and received-heart ledger of every other live store.
+///
+/// The heart-drop sidecars need `uniqueHeartDropKeychainService()` as well — this root alone leaves
+/// their seal key shared. The heart LEDGER is unsealed, so for it this root is the whole fix.
+/// See `ProximityHost.proximitySupportDirectory` and `HeartDropStorageScope`.
 func uniqueProximityDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent("fernlet.tests.proximity.\(UUID().uuidString)", isDirectory: true)
+}
+
+/// A fresh, never-shared keychain service for ONE test store's heart-drop material — the prekey
+/// private halves and the key that seals its outbox / peer-bundle / dedup sidecars.
+///
+/// The other half of `uniqueProximityDirectory()` for the heart-drop stores, and it is not optional:
+/// `FernletStore.deleteAllData` calls `heartDropService.wipeForDeleteAll()`, which deletes the WHOLE
+/// keychain service. A store given its own directory but the production service would still have its
+/// sealed sidecars orphaned by any concurrently-running wipe — the outbox then quarantines the file
+/// it can no longer open and latches `dataLossOccurred`, which is worse than losing it. See
+/// `HeartDropStorageScope`.
+///
+/// Shaped `com.fernlet.heartdrop.test.<uuid>` to match the suite-fixture convention
+/// `PrivacyWipeCoverageTests.keychainServiceLiterals` skips (`.test.`), so per-test services never
+/// read as new undocumented app services.
+func uniqueHeartDropKeychainService() -> String {
+    "com.fernlet.heartdrop.test.\(UUID().uuidString)"
 }
 
 /// Creates a FernletStore backed by an in-memory Core Data stack.
@@ -68,21 +90,26 @@ func uniqueProximityDirectory() -> URL {
 /// tests), so tests stay deterministic — pass the specific USDA items a test needs.
 ///
 /// `photoDocumentsDirectory` defaults to a fresh `uniquePhotoDirectory()`; pass an explicit one only
-/// to give two stores a SHARED photo corpus (e.g. simulating a relaunch over the same photos).
+/// to give two stores a SHARED photo corpus (e.g. simulating a relaunch over the same photos). The
+/// same holds for `proximitySupportDirectory` + `heartDropKeychainService`, which have to be passed
+/// TOGETHER to share heart state — the sidecars are sealed, so a second store needs the same file
+/// root AND the same key to read what the first one wrote.
 @MainActor
 func makeTestStore(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
     cookingRunDirectory: URL? = nil,
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
-    proximitySupportDirectory: URL = uniqueProximityDirectory()
+    proximitySupportDirectory: URL = uniqueProximityDirectory(),
+    heartDropKeychainService: String = uniqueHeartDropKeychainService()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
         bundledFoodItems: bundledFoodItems,
         cookingRunDirectory: cookingRunDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
-        proximitySupportDirectory: proximitySupportDirectory
+        proximitySupportDirectory: proximitySupportDirectory,
+        heartDropKeychainService: heartDropKeychainService
     ).store
 }
 
@@ -100,6 +127,7 @@ func makeTestStoreWithRepositories(
     cookingRunDirectory: URL? = nil,
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
+    heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -142,8 +170,12 @@ func makeTestStoreWithRepositories(
         cookingRunDirectory: cookingRunDirectory,
         // Own-photo corpora in a per-store temp root — see `uniquePhotoDirectory()`.
         photoDocumentsDirectory: photoDocumentsDirectory,
-        // Friend photo wall likewise — see `uniqueProximityDirectory()`.
-        proximitySupportDirectory: proximitySupportDirectory
+        // Friend photo wall + the heart ledger and heart-drop sidecars likewise — see
+        // `uniqueProximityDirectory()`.
+        proximitySupportDirectory: proximitySupportDirectory,
+        // The heart-drop sidecars' OTHER half: they are sealed, and the wipe deletes keys by
+        // service — see `uniqueHeartDropKeychainService()`.
+        heartDropKeychainService: heartDropKeychainService
     )
     return (store, repository, journalNarrativeRepository)
 }
@@ -154,14 +186,17 @@ func makeTestStoreWithRepositories(
 /// prior session, then edited after it aged out of the in-memory sealed-id set" path (F1 regression).
 ///
 /// The photo corpus is NOT shared by default — pass the first store's `photoDocumentsDirectory` when
-/// a test needs its photos to survive into the simulated relaunch.
+/// a test needs its photos to survive into the simulated relaunch. Nor is the heart state: pass the
+/// first store's `proximitySupportDirectory` AND `heartDropKeychainService` (both, or the relaunch
+/// finds a sealed sidecar it has no key for) when the hearts have to survive too.
 @MainActor
 func makeStoreSharingStores(
     date: Date = .now,
     repository: CoreDataFernletRepository,
     narratives: JournalNarrativeRepository,
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
-    proximitySupportDirectory: URL = uniqueProximityDirectory()
+    proximitySupportDirectory: URL = uniqueProximityDirectory(),
+    heartDropKeychainService: String = uniqueHeartDropKeychainService()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -183,7 +218,8 @@ func makeStoreSharingStores(
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
         photoDocumentsDirectory: photoDocumentsDirectory,
-        proximitySupportDirectory: proximitySupportDirectory
+        proximitySupportDirectory: proximitySupportDirectory,
+        heartDropKeychainService: heartDropKeychainService
     )
 }
 

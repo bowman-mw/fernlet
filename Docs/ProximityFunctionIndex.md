@@ -656,7 +656,15 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 
 | Function | What It Does |
 | --- | --- |
-| `SidecarSeal.production()` / `make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration; protection class stays `.completeFileProtection`. |
+| `HeartDropSidecarSeal.make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration; protection class stays `.completeFileProtection`. Every caller states its service (via `HeartDropStorageScope`); there is deliberately no argument-less production variant. |
+
+### `HeartDropStorageScope.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropStorageScope(directory:keychainService:)` | One device's heart-drop storage identity. Both halves together because `HeartDropService.wipeForDeleteAll()` destroys both — files on a private root sealed by a shared key survive another store's wipe as ciphertext nothing can open. |
+| `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
+| `HeartDropOutbox.fileURL(in:)` / `HeartDropDedupStore.fileURL(in:)` / `HeartDropPeerBundleCache.fileURL(in:)` / `ProximityHeartLedger.fileURL(in:)` | One definition per sidecar of its file name inside a root, so the production default and a scoped root can never disagree. |
 
 ## UI Diagnostics
 

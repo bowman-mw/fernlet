@@ -19,8 +19,10 @@
 // The state is now derived from (consent flag, outbox), and a wipe-time strand is latched.
 //
 // The store tests drive a real `FernletStore` with a mock transport injected into its live
-// `heartDropService`, so they exercise the actual wiring rather than a re-implementation of it. That
-// service uses the app's own sidecar files, so each test starts by purging to a clean slate.
+// `heartDropService`, so they exercise the actual wiring rather than a re-implementation of it.
+// Each test's stores share ONE per-test heart-drop scope (see `heartDropDirectory` /
+// `heartDropKeychainService` below) rather than the app's process-wide sidecars — the wiring under
+// test includes `deleteAllData`, whose wipe used to reach every concurrently-running suite's hearts.
 
 import Foundation
 import Testing
@@ -72,11 +74,41 @@ struct HeartDropAppWiringTests {
         }
     }
 
-    private func makeStore(_ name: String) -> FernletStore {
-        FernletStore(repository: LocalFernletRepository(
-            fileURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(name)-\(UUID().uuidString).json")
-        ), photoDocumentsDirectory: uniquePhotoDirectory())
+    /// THIS test's heart-drop scope — the sidecar root and the keychain service holding the key
+    /// those sidecars are sealed with. Swift Testing builds a fresh suite value per test, so every
+    /// test gets its own pair, and the two stores a relaunch test builds share it for free (which is
+    /// exactly what "the same on-disk outbox, a new process" means).
+    ///
+    /// Both halves, not just the directory: `deleteAllData` runs `wipeForDeleteAll()`, which deletes
+    /// the whole keychain service — so on the production service a wipe in any concurrently-running
+    /// suite would destroy the key these sidecars are sealed under and leave them quarantined. See
+    /// `uniqueHeartDropKeychainService()`.
+    private let heartDropDirectory = uniqueProximityDirectory()
+    private let heartDropKeychainService = uniqueHeartDropKeychainService()
+
+    /// A store on this test's heart-drop scope. `proximityDirectory`/`keychainService` override it
+    /// only for the isolation test, which needs a store standing in for a DIFFERENT suite.
+    private func makeStore(
+        _ name: String,
+        proximityDirectory: URL? = nil,
+        keychainService: String? = nil
+    ) -> FernletStore {
+        FernletStore(
+            repository: LocalFernletRepository(
+                fileURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("\(name)-\(UUID().uuidString).json")
+            ),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: proximityDirectory ?? heartDropDirectory,
+            heartDropKeychainService: keychainService ?? heartDropKeychainService
+        )
+    }
+
+    /// Removes this test's scoped seal key + prekey blob. A struct suite has no teardown hook, so
+    /// the tests that mint keychain material call it from the same `defer` that cleans up the
+    /// friend identity they minted — otherwise every run leaves two more rows behind.
+    private func cleanUpHeartDropKeychain() {
+        KeychainItem.deleteAll(service: heartDropKeychainService)
     }
 
     private func makeFriendIdentity() throws -> (ProximityTrustedPeerRecord, String) {
@@ -137,8 +169,9 @@ struct HeartDropAppWiringTests {
         store: FernletStore,
         transport: MockDropTransport
     ) async throws -> (friend: ProximityTrustedPeerRecord, keychainService: String) {
-        // The store's service uses the app's real sidecar files, so a previous run's entries would
-        // otherwise be swept into this test's counts.
+        // Kept from when the store's service wrote to the app's real sidecar files and a previous
+        // run's entries could be swept into this test's counts. Harmless now that the scope is
+        // per-test, and it still pins that a queue-after-purge starts from a genuinely empty outbox.
         _ = await store.heartDropService.purgeDeadDrop()
         store.setHeartsAwayDelivery(true)
         let (friend, keychainService) = try makeFriendIdentity()
@@ -160,7 +193,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         store.setHeartsAwayDelivery(false)
 
@@ -178,7 +211,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.deleteAttempts = 0
         transport.failDeletes = true
@@ -204,12 +237,16 @@ struct HeartDropAppWiringTests {
     /// this device's sealed records sat on the public database until they aged out, with the user
     /// reading "off" as "removed". The outbox sidecar survives the kill, which is what makes the
     /// state derivable; a second `FernletStore` over that same sidecar is what a relaunch looks like.
+    ///
+    /// Both stores come from `makeStore`, so they share this test's heart-drop scope — the shared
+    /// sidecar IS the fixture here, and it has to be the same file AND the same seal key, or the
+    /// "relaunch" would find an outbox it cannot open rather than one it can read.
     @Test func aPurgeOwedFromAPreviousLaunchIsRediscoveredAndRetried() async throws {
         let firstLaunch = makeStore("heartdrop-relaunch-1")
         let transport = MockDropTransport()
         firstLaunch.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: firstLaunch, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.deleteAttempts = 0
         transport.failDeletes = true
@@ -242,7 +279,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         store.settings.heartsAwayDelivery = false // arrived by snapshot sync, not by this device
         #expect(store.heartsAwayPurgePending)
@@ -261,7 +298,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.failDeletes = true
         transport.deleteYields = true
@@ -284,7 +321,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.deleteAttempts = 0
         #expect(store.settings.heartsAwayDelivery, "precondition: the feature is on with a record out there")
@@ -305,10 +342,11 @@ struct HeartDropAppWiringTests {
     /// has the feature turned back ON, which would delete records they still expect to be delivered.
     @Test func theRetrySeamIsInertWhenNothingIsOutstanding() async throws {
         let store = makeStore("heartdrop-retry-inert")
+        defer { cleanUpHeartDropKeychain() }
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
-        // Clean slate first: the service's outbox is the app's real sidecar, so a leftover entry
-        // from another test would make the "no delete was attempted" assertion meaningless.
+        // Clean slate first. The sidecar is this test's own now, so nothing can be left in it — but
+        // the purge also exercises the empty case, which is the state this test is about.
         _ = await store.heartDropService.purgeDeadDrop()
         transport.deleteAttempts = 0
 
@@ -330,7 +368,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.deleteAttempts = 0
         transport.failDeletes = true
@@ -355,7 +393,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
@@ -372,7 +410,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.failDeletes = true
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
@@ -391,7 +429,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         transport.failDeletes = true
         let first = await store.deleteAllData(includingHealthKitSamples: false)
@@ -415,7 +453,7 @@ struct HeartDropAppWiringTests {
         let transport = MockDropTransport()
         store.heartDropService.transport = transport
         let (_, keychainService) = try await queueOneDeliveredHeart(store: store, transport: transport)
-        defer { KeychainItem.deleteAll(service: keychainService) }
+        defer { KeychainItem.deleteAll(service: keychainService); cleanUpHeartDropKeychain() }
 
         let first = await store.deleteAllData(includingHealthKitSamples: false)
         let second = await store.deleteAllData(includingHealthKitSamples: false)
@@ -423,6 +461,76 @@ struct HeartDropAppWiringTests {
         #expect(!first.incompleteStores.contains("hearts parked in iCloud"))
         #expect(!second.incompleteStores.contains("hearts parked in iCloud"))
         #expect(transport.records.isEmpty)
+    }
+
+    // MARK: - Storage isolation
+
+    /// The behavioral half of the per-store heart-drop scope. "Delete everything" is a real funnel
+    /// with a process-wide blast radius: `wipeForDeleteAll()` removes the outbox / peer-bundle /
+    /// dedup files AND, through `HeartPrekeyStore.wipeForDeleteAll()`, every row under the
+    /// heart-drop keychain service — which is where the key those files are SEALED with lives. On
+    /// the shipped scope all of that is one directory and one service, so under the test runner
+    /// (XCTest and Swift Testing suites run in parallel inside ONE process) a wipe here landed in
+    /// the middle of whichever suite happened to be running beside it. Third member of the family
+    /// fixed for the own-photo corpora (329ceb4) and the friend photo wall (ff7dadb) — NOT the last:
+    /// `ModerationLedger`, `FriendStateCache` and `ClosenessLedger` are still built with no
+    /// `fileURL:` (so on `JSONSidecarFile`'s fixed `Application Support/Fernlet` path) and `resetAll`
+    /// calls `clearAll()` on all three. Latent rather than live today — no suite reads them across
+    /// another's wipe — but the same shape, and unsealed, so they need a root and no keychain half.
+    ///
+    /// The shape mirrors those: `mine` and `theirs` are two live stores on different scopes, and the
+    /// wipe runs on `theirs`. `relaunched` — a THIRD store, on `mine`'s scope, built after the wipe —
+    /// is what makes the assertions mean something. Without it the test would pass just as happily
+    /// if the sidecars stopped persisting at all, and it is the only reader that proves BOTH halves
+    /// of the scope survived: the file is still on disk, and the key it is sealed with still opens
+    /// it. Reverting the directory half, the keychain half, or the ledger's `fileURL:` each fails it.
+    @Test func aDeleteAllInAnotherStoreLeavesThisOnesHeartDropStateIntact() async throws {
+        let mine = makeStore("heartdrop-isolation-mine")
+        defer { cleanUpHeartDropKeychain() }
+        let theirDirectory = uniqueProximityDirectory()
+        let theirKeychainService = uniqueHeartDropKeychainService()
+        let theirs = makeStore(
+            "heartdrop-isolation-theirs",
+            proximityDirectory: theirDirectory,
+            keychainService: theirKeychainService
+        )
+        defer { KeychainItem.deleteAll(service: theirKeychainService) }
+        let (friend, friendKeychainService) = try makeFriendIdentity()
+        defer { KeychainItem.deleteAll(service: friendKeychainService) }
+
+        // One sealed outbox entry and one received heart on EACH store. The transport is replaced
+        // with an UNAVAILABLE mock, deliberately: the store's own builder always installs a real
+        // `HeartDropCloudTransport`, and `queueHeart` schedules a sync immediately — so on a host
+        // whose simulator happens to be signed in to iCloud the heart could upload, and
+        // `pendingCount` (which counts un-uploaded entries) would drop to 0 for a reason that has
+        // nothing to do with isolation. `accountAvailable() == false` makes "the heart stays
+        // queued" true by construction instead of by environment.
+        for store in [mine, theirs] {
+            let offline = MockDropTransport()
+            offline.available = false
+            store.heartDropService.transport = offline
+            store.setHeartsAwayDelivery(true)
+            #expect(store.heartDropService.queueHeart(to: friend) == .queued)
+            #expect(store.heartLedger.recordReceivedHeart(
+                id: UUID(), senderDisplayName: "Rowan Fields", senderFingerprint: friend.fingerprint))
+        }
+
+        // The other suite's "delete everything".
+        _ = await theirs.deleteAllData(includingHealthKitSamples: false)
+
+        // Its own state really is gone — otherwise the assertions below would pass against a wipe
+        // that had quietly stopped wiping.
+        #expect(theirs.heartDropService.pendingCount(for: friend) == 0)
+        #expect(theirs.heartLedger.receivedHearts.isEmpty)
+
+        // And ours is untouched, read back through a fresh store on our scope.
+        #expect(mine.heartDropService.pendingCount(for: friend) == 1,
+                "another store's delete-all emptied this store's live outbox")
+        let relaunched = makeStore("heartdrop-isolation-relaunch")
+        #expect(relaunched.heartDropService.pendingCount(for: friend) == 1,
+                "the queued heart did not survive on disk — the sidecar file was deleted by the other store's wipe, or the key sealing it was")
+        #expect(relaunched.heartLedger.receivedHearts.count == 1,
+                "the received-heart ledger did not survive the other store's wipe")
     }
 
     // MARK: - Nothing-silent copy

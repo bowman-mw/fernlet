@@ -33,13 +33,17 @@ struct DeleteAllDataTests {
             .appendingPathComponent("\(name)-\(UUID().uuidString).json")
     }
 
-    /// A live store over its own repository file AND its own own-photo root. Both have to be
-    /// per-store: these tests wipe, and the photo corpora are shared on-disk state — a store left on
-    /// the process-wide root deletes the photos of every concurrently-running suite.
+    /// A live store over its own repository file, its own own-photo root, and its own heart-drop
+    /// scope. All of it has to be per-store: these tests wipe, and every one of those is shared
+    /// on-disk (or, for the heart-drop seal key, keychain) state — a store left on the process-wide
+    /// roots deletes the photos, the queued hearts and the heart ledger of every concurrently
+    /// running suite, and takes the key sealing their sidecars with it.
     private func makeStore(_ name: String) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)),
-            photoDocumentsDirectory: uniquePhotoDirectory()
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory(),
+            heartDropKeychainService: uniqueHeartDropKeychainService()
         )
     }
 
@@ -196,7 +200,9 @@ struct DeleteAllDataTests {
         repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
-        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory(),
+                                 proximitySupportDirectory: uniqueProximityDirectory(),
+                                 heartDropKeychainService: uniqueHeartDropKeychainService())
         await store.deleteAllData(includingHealthKitSamples: false)
 
         // A fresh repository over the same file is the next launch.
@@ -213,7 +219,9 @@ struct DeleteAllDataTests {
     @Test func noPendingSaveResurrectsDataAfterTheWipe() async throws {
         let url = temporaryDatabaseURL("delete-all-debounce")
         let repository = LocalFernletRepository(fileURL: url)
-        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory(),
+                                 proximitySupportDirectory: uniqueProximityDirectory(),
+                                 heartDropKeychainService: uniqueHeartDropKeychainService())
         store.addBottle()   // schedules a debounced save
         await store.deleteAllData(includingHealthKitSamples: false)
 
@@ -243,7 +251,9 @@ struct DeleteAllDataTests {
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
     /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
     @Test func outcomeReportsAStoreThatFailedToDelete() async {
-        let store = FernletStore(repository: FailingPurgeRepository(), photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: FailingPurgeRepository(), photoDocumentsDirectory: uniquePhotoDirectory(),
+                                 proximitySupportDirectory: uniqueProximityDirectory(),
+                                 heartDropKeychainService: uniqueHeartDropKeychainService())
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!outcome.isComplete)

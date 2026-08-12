@@ -236,7 +236,12 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
-    @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
+    ///
+    /// On THIS store's proximity root rather than the process-wide one: `resetAll` calls
+    /// `clearAll()`, which removes the sidecar file, so a shared path lets any wiping test delete
+    /// the received hearts of every concurrently-live store.
+    @ObservationIgnored private(set) lazy var heartLedger =
+        ProximityHeartLedger(fileURL: ProximityHeartLedger.fileURL(in: proximitySupportRoot))
     /// Device-local moderation reports (never synced). Feeds item-hiding + the escalation/ban.
     @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
     /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
@@ -288,7 +293,12 @@ final class FernletStore {
                 }
             },
             localDayKey: { FernletDate.dayKey(for: $0) },
-            displayName: { [weak self] in self?.proximityDisplayName ?? "" }
+            displayName: { [weak self] in self?.proximityDisplayName ?? "" },
+            // Files AND seal key on this store's own scope: `wipeForDeleteAll` destroys both, so
+            // under the parallel test runner one store's "delete everything" would otherwise empty
+            // every other live store's outbox and delete the key their sidecars are sealed with.
+            // Production resolves to the unchanged Application Support paths + `com.fernlet.heartdrop`.
+            storage: heartDropStorage
         )
         service.transport = HeartDropCloudTransport()
         return service
@@ -372,6 +382,21 @@ final class FernletStore {
     /// off the own-photo one. Production always resolves to `Application Support/Fernlet`, the path
     /// the cache has always used; nothing shipped is migrated.
     @ObservationIgnored nonisolated let proximitySupportRoot: URL
+    /// Keychain service for THIS store's heart-drop material — the prekey private halves and the key
+    /// that seals the three heart-drop sidecars, which live under one service by design so a
+    /// delete-all takes them together (see `HeartDropSidecarSeal`).
+    ///
+    /// Injectable for the same reason `proximitySupportRoot` is, and it has to move WITH that root:
+    /// `heartDropService.wipeForDeleteAll()` deletes the whole service, so a store whose files were
+    /// isolated but whose key was not would still have its sealed sidecars rendered unopenable — and
+    /// quarantined — by any other live store's wipe. Production always resolves to the unchanged
+    /// `com.fernlet.heartdrop`.
+    @ObservationIgnored nonisolated let heartDropKeychainService: String
+    /// The two halves above as the one value ProximityKit takes, so the heart-drop stores this store
+    /// builds can never end up half-isolated.
+    @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
+        HeartDropStorageScope(directory: proximitySupportRoot, keychainService: heartDropKeychainService)
+    }
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
     /// stores below. Separate keychain row from the friend photo wall's, which stays on the
     /// original backup-restorable key inside `MeshNetworkManager`.
@@ -545,11 +570,12 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
+        self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
@@ -652,9 +678,11 @@ final class FernletStore {
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
-        // Launch path: always the real container roots (only tests redirect them).
+        // Launch path: always the real container roots and the real keychain service (only tests
+        // redirect them).
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = ProximitySupportLayout.defaultDirectory
+        self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService

@@ -321,8 +321,11 @@ struct AgeGateWiringTests {
             sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
             photoDocumentsDirectory: uniquePhotoDirectory(),
             // These tests reach `store.meshNetworkManager`, which loads (and can re-save) the friend
-            // photo-wall index — process-wide unless pinned. See `uniqueProximityDirectory()`.
-            proximitySupportDirectory: uniqueProximityDirectory()
+            // photo-wall index — process-wide unless pinned. See `uniqueProximityDirectory()`. The
+            // same root now carries the heart ledger and the heart-drop sidecars, whose seal key
+            // needs the second argument — the reset case calls `resetAll()`.
+            proximitySupportDirectory: uniqueProximityDirectory(),
+            heartDropKeychainService: uniqueHeartDropKeychainService()
         )
     }
 
