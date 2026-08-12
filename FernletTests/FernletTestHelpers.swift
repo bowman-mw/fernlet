@@ -51,6 +51,16 @@ func uniquePhotoDirectory() -> URL {
         .appendingPathComponent("fernlet.tests.photos.\(UUID().uuidString)", isDirectory: true)
 }
 
+/// A fresh, never-shared root for ONE test store's proximity sidecars — the friend photo-wall cache
+/// and its preferences. The production root (`Application Support/Fernlet`) is process-wide, and the
+/// wall's index is re-saved whole on every `deletePhoto` / `deleteAllSessionPhotos`, so without this
+/// a manager built in one suite reads and overwrites the album of every concurrently-live one.
+/// See `ProximityHost.proximitySupportDirectory`.
+func uniqueProximityDirectory() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("fernlet.tests.proximity.\(UUID().uuidString)", isDirectory: true)
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///
@@ -64,13 +74,15 @@ func makeTestStore(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
     cookingRunDirectory: URL? = nil,
-    photoDocumentsDirectory: URL = uniquePhotoDirectory()
+    photoDocumentsDirectory: URL = uniquePhotoDirectory(),
+    proximitySupportDirectory: URL = uniqueProximityDirectory()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
         bundledFoodItems: bundledFoodItems,
         cookingRunDirectory: cookingRunDirectory,
-        photoDocumentsDirectory: photoDocumentsDirectory
+        photoDocumentsDirectory: photoDocumentsDirectory,
+        proximitySupportDirectory: proximitySupportDirectory
     ).store
 }
 
@@ -87,6 +99,7 @@ func makeTestStoreWithRepositories(
     bundledFoodItems: [FoodItem] = [],
     cookingRunDirectory: URL? = nil,
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
+    proximitySupportDirectory: URL = uniqueProximityDirectory(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -128,7 +141,9 @@ func makeTestStoreWithRepositories(
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
         cookingRunDirectory: cookingRunDirectory,
         // Own-photo corpora in a per-store temp root — see `uniquePhotoDirectory()`.
-        photoDocumentsDirectory: photoDocumentsDirectory
+        photoDocumentsDirectory: photoDocumentsDirectory,
+        // Friend photo wall likewise — see `uniqueProximityDirectory()`.
+        proximitySupportDirectory: proximitySupportDirectory
     )
     return (store, repository, journalNarrativeRepository)
 }
@@ -145,7 +160,8 @@ func makeStoreSharingStores(
     date: Date = .now,
     repository: CoreDataFernletRepository,
     narratives: JournalNarrativeRepository,
-    photoDocumentsDirectory: URL = uniquePhotoDirectory()
+    photoDocumentsDirectory: URL = uniquePhotoDirectory(),
+    proximitySupportDirectory: URL = uniqueProximityDirectory()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -166,7 +182,8 @@ func makeStoreSharingStores(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
-        photoDocumentsDirectory: photoDocumentsDirectory
+        photoDocumentsDirectory: photoDocumentsDirectory,
+        proximitySupportDirectory: proximitySupportDirectory
     )
 }
 

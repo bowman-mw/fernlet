@@ -362,6 +362,16 @@ final class FernletStore {
     /// race, not a theoretical one. Injectable so each test store gets its own temp root, mirroring
     /// the `cookingRunDirectory` and `webImageAttemptDefaults` seams.
     @ObservationIgnored nonisolated let photoDocumentsDirectory: URL
+    /// THIS store's proximity-sidecar root — the friend photo-wall cache + its preferences, built by
+    /// `MeshNetworkManager` off `ProximityHost.proximitySupportDirectory` (which the adapter forwards
+    /// here). Per-instance for exactly the reason `photoDocumentsDirectory` is: the wall's index is a
+    /// whole-file re-save, so a process-wide path lets one live manager overwrite another's album.
+    ///
+    /// Note this is the OTHER side of the Phase-5 media-key split — the wall stays on the
+    /// backup-restorable `friendWall` key — so it deliberately gets its own root rather than hanging
+    /// off the own-photo one. Production always resolves to `Application Support/Fernlet`, the path
+    /// the cache has always used; nothing shipped is migrated.
+    @ObservationIgnored nonisolated let proximitySupportRoot: URL
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
     /// stores below. Separate keychain row from the friend photo wall's, which stays on the
     /// original backup-restorable key inside `MeshNetworkManager`.
@@ -535,10 +545,11 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
+        self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
@@ -641,8 +652,9 @@ final class FernletStore {
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
-        // Launch path: always the real container root (only tests redirect it).
+        // Launch path: always the real container roots (only tests redirect them).
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
+        self.proximitySupportRoot = ProximitySupportLayout.defaultDirectory
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService

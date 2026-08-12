@@ -219,6 +219,48 @@ struct MeshNetworkManagerTests {
         #expect(manager.sessionPhotos.isEmpty)
     }
 
+    /// The friend photo wall follows its store's `proximitySupportDirectory`, not the process.
+    ///
+    /// The wall's index is re-saved WHOLE on every keep/delete and re-read by every manager at init,
+    /// so while the root was a hardcoded `Application Support/Fernlet` path a manager built in one
+    /// suite inherited — and then overwrote — the album of every concurrently-live one. (The
+    /// `existingAlbumIDs` subset assertions in the two tests above are the scar tissue from that:
+    /// they had to tolerate photos this suite never took.) This is the same defect as the own-photo
+    /// corpora one root over, and it is pinned the same way.
+    ///
+    /// The third store is the half that makes this a real test: without it, deleting the wall's
+    /// persistence entirely would still pass.
+    @Test func theFriendPhotoWallIsIsolatedPerStoreRoot() throws {
+        let sharedRoot = uniqueProximityDirectory()
+        let storeA = makeTestStore(proximitySupportDirectory: sharedRoot)
+        let storeB = makeTestStore()
+        let storeC = makeTestStore(proximitySupportDirectory: sharedRoot)
+
+        try withExtendedLifetime((storeA, storeB, storeC)) {
+            let managerA = MeshNetworkManager(store: storeA)
+            managerA.currentMesh = makeTestMesh()
+            managerA.addPhoto(makeTinyJPEG())
+            let keptID = try #require(managerA.sessionPhotos.first?.id)
+            managerA.finishSessionPhotos(keeping: [keptID])
+            #expect(managerA.meshPhotos.contains(where: { $0.id == keptID }))
+
+            // A store on its OWN root sees nothing of A's wall.
+            let managerB = MeshNetworkManager(store: storeB)
+            #expect(
+                managerB.meshPhotos.isEmpty,
+                "a store on its own proximity root must start with an empty wall, not another store's album"
+            )
+
+            // ...but one on the SAME root does — so the isolation above is the root doing the work,
+            // not the wall having quietly stopped persisting.
+            let managerC = MeshNetworkManager(store: storeC)
+            #expect(
+                managerC.meshPhotos.contains(where: { $0.id == keptID }),
+                "a store sharing the proximity root must still load the wall persisted under it"
+            )
+        }
+    }
+
     @Test func finishSessionPhotosKeepsOnlySelectedCurrentRollPhotos() throws {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeTestMesh()

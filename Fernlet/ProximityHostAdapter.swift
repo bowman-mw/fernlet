@@ -15,4 +15,8 @@ extension FernletStore: ProximityHost {
     /// drop on this (mesh redesign Phase 4b). Overrides the protocol's `true` default.
     var allowNearbyHearts: Bool { settings.allowNearbyHearts }
     var heartsAwayDeliveryEnabled: Bool { settings.heartsAwayDelivery }
+    /// This store's own proximity-sidecar root, so the friend photo wall is isolated per store the
+    /// same way the own-photo corpora are. Production resolves to the unchanged
+    /// `Application Support/Fernlet`; only tests redirect it. Overrides the protocol's default.
+    var proximitySupportDirectory: URL { proximitySupportRoot }
 }

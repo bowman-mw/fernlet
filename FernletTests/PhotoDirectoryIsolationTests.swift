@@ -51,6 +51,47 @@ struct PhotoDirectoryIsolationTests {
         #expect(scanned > 20, "the FernletStore construction scan found only \(scanned) sites — scanner broken?")
     }
 
+    /// The friend photo wall is the same hazard one media key over: `MeshNetworkManager` loads
+    /// `MeshPhotoCache.json` at init and re-saves the WHOLE index on `deletePhoto` /
+    /// `deleteAllSessionPhotos`, so on a process-wide root one manager silently inherits — and then
+    /// overwrites — another suite's album.
+    ///
+    /// The root now rides `ProximityHost.proximitySupportDirectory`, so a manager built from a
+    /// helper-made store is isolated for free. What still needs walling is the other half: a file
+    /// that reaches a mesh manager while building its store DIRECTLY gets the production root back,
+    /// and the damage lands in whichever suite happens to be running beside it.
+    @Test func everyMeshTouchingStoreConstructionPinsItsOwnProximityDirectory() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            // Only files that actually build or reach a mesh manager can trip the race; a store that
+            // never touches `meshNetworkManager` never builds the wall (the property is `lazy`).
+            guard source.contains("meshNetworkManager") || source.contains("MeshNetworkManager(") else { continue }
+            for arguments in Self.storeConstructionArguments(in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("proximitySupportDirectory"),
+                    """
+                    \(file.lastPathComponent) reaches a MeshNetworkManager but constructs FernletStore \
+                    without `proximitySupportDirectory:`, so its friend photo wall lives on the \
+                    process-wide root and races every concurrently-live manager. Pass \
+                    `proximitySupportDirectory: uniqueProximityDirectory()`, or build the store \
+                    through makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
+                    """
+                )
+            }
+        }
+
+        // Unlike the sweep above this one legitimately covers few sites (mesh tests use the helpers),
+        // so assert only that the scanner still resolves the tree — not a site count.
+        #expect(files.count > 20, "the mesh-touching scan saw only \(files.count) test files — scanner broken?")
+    }
+
     /// The argument list of every `FernletStore(...)` construction in `source`, paren-matched so a
     /// nested call (`LocalFernletRepository(fileURL:)`) or a multi-line call is captured whole.
     /// String literals are skipped so a paren inside one can't unbalance the scan.

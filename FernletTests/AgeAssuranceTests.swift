@@ -319,7 +319,10 @@ struct AgeGateWiringTests {
                     .appendingPathComponent("\(name)-\(UUID().uuidString).json")
             ),
             sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
-            photoDocumentsDirectory: uniquePhotoDirectory()
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            // These tests reach `store.meshNetworkManager`, which loads (and can re-save) the friend
+            // photo-wall index — process-wide unless pinned. See `uniqueProximityDirectory()`.
+            proximitySupportDirectory: uniqueProximityDirectory()
         )
     }
 
