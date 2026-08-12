@@ -243,7 +243,12 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var heartLedger =
         ProximityHeartLedger(fileURL: ProximityHeartLedger.fileURL(in: proximitySupportRoot))
     /// Device-local moderation reports (never synced). Feeds item-hiding + the escalation/ban.
-    @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
+    ///
+    /// On THIS store's proximity root: `resetAll` calls `clearAll()`, which removes the sidecar, so a
+    /// process-wide path lets any wiping test delete who-reported-whom for every concurrently-live
+    /// store. Unsealed, so the root is the whole fix — no keychain half, unlike the heart sidecars.
+    @ObservationIgnored private(set) lazy var moderationLedger =
+        ModerationLedger(fileURL: ModerationLedger.fileURL(in: proximitySupportRoot))
     /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
     /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
     @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
@@ -274,10 +279,19 @@ final class FernletStore {
     /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
-    @ObservationIgnored private(set) lazy var friendStateCache = FriendStateCache()
+    ///
+    /// Per-instance root like the ledgers around it, and this one has the widest wipe reach of the
+    /// three: besides `resetAll`, turning the fuzzy-state share OFF clears it (`setSharesFuzzyState`),
+    /// so an ordinary settings toggle in one test — not just a wipe — used to empty every other live
+    /// store's cache.
+    @ObservationIgnored private(set) lazy var friendStateCache =
+        FriendStateCache(fileURL: FriendStateCache.fileURL(in: proximitySupportRoot))
     /// Device-local closeness signal (in-person interaction counts) + close-slot assignment (Phase 5).
     /// Never synced — closeness is a private, per-device view.
-    @ObservationIgnored private(set) lazy var closenessLedger = ClosenessLedger()
+    ///
+    /// Per-instance root for the same reason as the two above: `resetAll` clears it.
+    @ObservationIgnored private(set) lazy var closenessLedger =
+        ClosenessLedger(fileURL: ClosenessLedger.fileURL(in: proximitySupportRoot))
     /// Offline "away" hearts via the CloudKit public-DB dead-drop (bitchat adoptions Increment 3).
     /// All crypto lives on the ProximityKit side; `HeartDropCloudTransport` (CloudKitSync) ferries
     /// only rotating day tags + sealed blobs — the S3 wall seam is `HeartDropTransporting` in

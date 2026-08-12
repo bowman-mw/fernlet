@@ -21,6 +21,30 @@ struct PhotoDirectoryIsolationTests {
     /// This file names the constructor in its own scanner literals, so exclude it from the sweep.
     private static let excludedFiles: Set<String> = ["PhotoDirectoryIsolationTests.swift"]
 
+    /// Anything that can reach state rooted at `proximitySupportDirectory` — the properties
+    /// themselves, the managers whose builders touch them, the derived reads, and the two wipe
+    /// funnels that clear the lot.
+    ///
+    /// Deliberately over-broad. A missing trigger is a silent false NEGATIVE that lands in another
+    /// suite; a spurious one only asks a file for an argument it could pass anyway.
+    private static let proximityRootedTriggers = [
+        // Managers — build the photo wall, the activity ledger, and (via their builders) the ledger.
+        "meshNetworkManager", "MeshNetworkManager(", "presenceManager",
+        // Heart state on the same root.
+        "heartLedger", "heartDropService", "heartGlow", "pendingHeartBubble", "queueHeart", "heartsAway",
+        // The three JSONSidecarFile stores.
+        "moderationLedger", "friendStateCache", "closenessLedger",
+        // The funnels that clear every one of the above.
+        "deleteAllData", "resetAll(",
+    ]
+
+    /// The subset of the above that reaches the SEALED heart-drop sidecars, i.e. the only state on
+    /// this root whose isolation also needs a keychain service. The ledger is deliberately absent:
+    /// it is unsealed, so the directory alone is its whole fix.
+    private static let sealedHeartTriggers = [
+        "heartDropService", "queueHeart", "heartsAway", "deleteAllData",
+    ]
+
     @Test func everyDirectStoreConstructionInTestsPinsItsOwnPhotoDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         // Recursive: subdirectories (Mocks/, and anything added later) are covered too.
@@ -58,9 +82,22 @@ struct PhotoDirectoryIsolationTests {
     ///
     /// The root now rides `ProximityHost.proximitySupportDirectory`, so a manager built from a
     /// helper-made store is isolated for free. What still needs walling is the other half: a file
-    /// that reaches a mesh manager while building its store DIRECTLY gets the production root back,
+    /// that reaches proximity state while building its store DIRECTLY gets the production root back,
     /// and the damage lands in whichever suite happens to be running beside it.
-    @Test func everyMeshTouchingStoreConstructionPinsItsOwnProximityDirectory() throws {
+    ///
+    /// The wall covers the WHOLE root, not just the photo wall. Everything below hangs off it, and
+    /// each one is destroyed by some wipe:
+    ///
+    /// | sidecar | cleared by |
+    /// | --- | --- |
+    /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per manager |
+    /// | `HeartLedger.json` | `resetAll` |
+    /// | `HeartDropOutbox/Dedup/PeerBundles.json` | `deleteAllData` (plus their seal key — see the next wall) |
+    /// | `ModerationLedger.json` | `resetAll` |
+    /// | `FriendStateCache.json` | `resetAll`, **and** turning fuzzy-state sharing off |
+    /// | `ClosenessLedger.json` | `resetAll` |
+    /// | `ActivityLedger.json` | `resetAll`, via `meshNetworkManager.activities` |
+    @Test func everyProximityTouchingStoreConstructionPinsItsOwnProximityDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
         let files = (enumerator?.allObjects as? [URL] ?? [])
@@ -69,17 +106,17 @@ struct PhotoDirectoryIsolationTests {
         var scanned = 0
         for file in files.sorted(by: { $0.path < $1.path }) {
             let source = try String(contentsOf: file, encoding: .utf8)
-            // Only files that actually build or reach a mesh manager can trip the race; a store that
-            // never touches `meshNetworkManager` never builds the wall (the property is `lazy`).
-            guard source.contains("meshNetworkManager") || source.contains("MeshNetworkManager(") else { continue }
+            // Every store on that root is `lazy`, so a file reaching none of these builds nothing and
+            // cannot join the race.
+            guard Self.proximityRootedTriggers.contains(where: { source.contains($0) }) else { continue }
             for arguments in Self.storeConstructionArguments(in: source) {
                 scanned += 1
                 #expect(
                     arguments.contains("proximitySupportDirectory"),
                     """
-                    \(file.lastPathComponent) reaches a MeshNetworkManager but constructs FernletStore \
-                    without `proximitySupportDirectory:`, so its friend photo wall lives on the \
-                    process-wide root and races every concurrently-live manager. Pass \
+                    \(file.lastPathComponent) reaches state rooted at the proximity-sidecar directory \
+                    but constructs FernletStore without `proximitySupportDirectory:`, so that state \
+                    lives on the process-wide root and races every concurrently-live store. Pass \
                     `proximitySupportDirectory: uniqueProximityDirectory()`, or build the store \
                     through makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
                     """
@@ -87,21 +124,22 @@ struct PhotoDirectoryIsolationTests {
             }
         }
 
-        // Unlike the sweep above this one legitimately covers few sites (mesh tests use the helpers),
-        // so assert only that the scanner still resolves the tree — not a site count.
-        #expect(files.count > 20, "the mesh-touching scan saw only \(files.count) test files — scanner broken?")
+        // A real site floor now that this covers the whole root rather than just mesh-touching files
+        // (the old mesh-only scan could only assert the tree resolved). Well under this means the
+        // paren-matcher broke or a trigger was dropped, not that the codebase got tidier.
+        #expect(scanned > 10, "the proximity-rooted store-construction scan found only \(scanned) sites — scanner broken?")
     }
 
-    /// The heart-drop sidecars are the same hazard again, with a keychain half the other two do not
-    /// have. `deleteAllData` calls `heartDropService.wipeForDeleteAll()`, which deletes the outbox,
+    /// The sealed heart-drop sidecars need a SECOND half the rest of the root does not: their key.
+    /// `deleteAllData` calls `heartDropService.wipeForDeleteAll()`, which deletes the outbox,
     /// peer-bundle and dedup files AND every row under the heart-drop keychain service — where the
-    /// key those files are SEALED with lives — while `resetAll` removes the heart ledger's sidecar.
+    /// key sealing those files lives.
     ///
-    /// So isolation takes BOTH arguments, and the directory alone is worse than neither: files on a
-    /// private root sealed by a shared key survive another suite's wipe as ciphertext nothing can
-    /// open, which the outbox quarantines and latches as sticky data loss. `makeTestStore` and
-    /// friends pass the pair; this wall covers the direct constructions, where the omission compiles
-    /// and the damage lands in somebody else's suite.
+    /// This wall checks only that half; the directory half is the wall above, whose trigger list is a
+    /// strict superset (every token here appears there), so a file reaching sealed heart state is
+    /// asked for both arguments by exactly one wall each. Passing only the directory is worse than
+    /// passing neither: files on a private root sealed by a shared key survive another suite's wipe
+    /// as ciphertext nothing can open, which the outbox quarantines and latches as sticky data loss.
     @Test func everyHeartTouchingStoreConstructionPinsItsOwnHeartDropScope() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
@@ -111,33 +149,17 @@ struct PhotoDirectoryIsolationTests {
         var scanned = 0
         for file in files.sorted(by: { $0.path < $1.path }) {
             let source = try String(contentsOf: file, encoding: .utf8)
-            // Everything that can BUILD this store's heart state, directly or transitively. Both
-            // stored properties are `lazy`, so a store reaching none of these never constructs a
-            // sidecar and never joins the race — but "reaching" is not only naming them: the wipe
-            // funnels get there (`deleteAllData` → `resetAll` → `heartLedger.clearAll()`), and so do
-            // the two managers, whose builders read `heartLedger` (`PresenceManager(store:ledger:)`,
-            // and `manager.heartLedger = heartLedger` in the mesh builder), as do the Home-surface
-            // reads derived from it. Missing one of those is a silent false NEGATIVE, so the list is
-            // deliberately over-broad — a spurious hit only demands an argument the file could pass
-            // anyway.
-            let reachesHeartState = [
-                "heartDropService", "heartLedger", "deleteAllData", "resetAll(",
-                "presenceManager", "meshNetworkManager", "heartGlow", "pendingHeartBubble",
-                "queueHeart", "heartsAway",
-            ].contains { source.contains($0) }
-            guard reachesHeartState else { continue }
+            guard Self.sealedHeartTriggers.contains(where: { source.contains($0) }) else { continue }
             for arguments in Self.storeConstructionArguments(in: source) {
                 scanned += 1
                 #expect(
-                    arguments.contains("proximitySupportDirectory")
-                        && arguments.contains("heartDropKeychainService"),
+                    arguments.contains("heartDropKeychainService"),
                     """
-                    \(file.lastPathComponent) reaches this store's heart-drop state but constructs \
-                    FernletStore without BOTH `proximitySupportDirectory:` and \
-                    `heartDropKeychainService:`, so its outbox / dedup / peer-bundle sidecars, its \
-                    heart ledger, or the key sealing them stay on the process-wide scope that every \
-                    concurrent delete-all wipes. Pass `proximitySupportDirectory: \
-                    uniqueProximityDirectory()` and `heartDropKeychainService: \
+                    \(file.lastPathComponent) reaches the SEALED heart-drop sidecars but constructs \
+                    FernletStore without `heartDropKeychainService:`, so the key sealing its outbox / \
+                    dedup / peer-bundle files stays on the process-wide `com.fernlet.heartdrop` \
+                    service that every concurrent delete-all deletes by service — leaving this \
+                    store's files unopenable and quarantined. Pass `heartDropKeychainService: \
                     uniqueHeartDropKeychainService()`, or build the store through \
                     makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
                     """
@@ -145,10 +167,9 @@ struct PhotoDirectoryIsolationTests {
             }
         }
 
-        // A real site floor, unlike the mesh scan above — the wipe suites construct stores directly
-        // in bulk (14 sites today). Well under that count means the paren-matcher broke or the test
-        // root moved, not that the codebase got tidier.
-        #expect(scanned > 10, "the heart-state store-construction scan found only \(scanned) sites — scanner broken?")
+        // A real site floor: the wipe suites construct stores directly in bulk. Well under this means
+        // the paren-matcher broke or the test root moved, not that the codebase got tidier.
+        #expect(scanned > 10, "the sealed-heart store-construction scan found only \(scanned) sites — scanner broken?")
     }
 
     /// The comment stripper is what stops all three walls above from being satisfied by prose, so it

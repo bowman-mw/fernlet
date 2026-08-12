@@ -533,6 +533,57 @@ struct HeartDropAppWiringTests {
                 "the received-heart ledger did not survive the other store's wipe")
     }
 
+    /// The rest of the proximity root, closed out after the heart state: moderation reports, the
+    /// friend fuzzy-state cache, the closeness signal and the group-activity ledger all hung off
+    /// `JSONSidecarFile`'s fixed `Application Support/Fernlet` path while `resetAll` calls
+    /// `clearAll()` on every one of them — so one store's "Reset everything" deleted all four for
+    /// every concurrently-live store.
+    ///
+    /// These were LATENT where the heart sidecars were live: same shape, but no suite read them
+    /// across another's wipe, so nothing was failing yet. This test is what makes them stay fixed —
+    /// it is the first reader, and without it the isolation is unenforced by anything but the
+    /// grep-wall. All four are unsealed, so a root is the whole fix and there is no keychain half.
+    ///
+    /// Same three-store shape as the heart test above: `theirs` wipes, `mine` must not notice, and
+    /// `relaunched` (built on `mine`'s root AFTER the wipe) is what proves the state was really on
+    /// disk rather than merely still in memory.
+    @Test func aResetInAnotherStoreLeavesThisOnesProximitySidecarsIntact() throws {
+        let mine = makeStore("proximity-isolation-mine")
+        let theirs = makeStore(
+            "proximity-isolation-theirs",
+            proximityDirectory: uniqueProximityDirectory(),
+            keychainService: uniqueHeartDropKeychainService()
+        )
+        let hash = Data([0xAB, 0xCD])
+
+        for store in [mine, theirs] {
+            store.moderationLedger.recordLocalReport(
+                reporterSigningPublicKey: Data([1]), reporterFingerprint: "me",
+                subjectSigningPublicKey: Data([2]), itemID: UUID(), contentHash: hash, reason: "offensive")
+            store.friendStateCache.record(
+                fingerprint: "abcd1234", fuzzyState: .struggling, appearance: .standard)
+            store.closenessLedger.recordSession(fingerprint: "abcd1234")
+        }
+
+        // The other suite's "Reset everything" — the funnel that clears all four.
+        _ = theirs.resetAll()
+
+        // Its own state really is gone, so the assertions below cannot pass against a reset that
+        // quietly stopped resetting.
+        #expect(!theirs.moderationLedger.isLocallyReported(contentHash: hash, reporterFingerprint: "me"))
+        #expect(theirs.friendStateCache.state(for: "abcd1234") == nil)
+        #expect(theirs.closenessLedger.closeness(fingerprint: "abcd1234") == 0)
+
+        // Ours is untouched, and still on disk — read back through a fresh store on our root.
+        let relaunched = makeStore("proximity-isolation-relaunch")
+        #expect(relaunched.moderationLedger.isLocallyReported(contentHash: hash, reporterFingerprint: "me"),
+                "another store's reset deleted this store's moderation ledger")
+        #expect(relaunched.friendStateCache.state(for: "abcd1234") != nil,
+                "another store's reset deleted this store's friend-state cache")
+        #expect(relaunched.closenessLedger.closeness(fingerprint: "abcd1234") > 0,
+                "another store's reset deleted this store's closeness ledger")
+    }
+
     // MARK: - Nothing-silent copy
 
     /// Every delivery problem maps to a sentence on both surfaces. A nil return here is the bug the
