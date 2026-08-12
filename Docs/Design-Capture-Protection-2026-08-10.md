@@ -396,11 +396,18 @@ real triggers is testing the fake.
 
 **The seam that makes it testable anyway.** Because `CaptureProtectionState` is injected rather than
 self-discovered, a test can construct one, flip `isCaptured` / fire a pulse, and assert on rendered
-output. That injectability is a design requirement, not an afterthought.
+output. That injectability is a design requirement, not an afterthought — and it extends to the
+**`NotificationCenter` the two observers attach to** (`init(…, notificationCenter:)`, defaulting to
+`.default`, the only center UIKit really posts on). Both triggers are process-global and Swift
+Testing runs separate suites in parallel (`.serialized` orders tests only *within* a suite), so a
+test posting a screenshot to `.default` bumps every other test's live state: that is exactly how
+`frontmostSurfaceClaimsThePulseNudge` came to see two pulses against its one claimed nudge
+(2026-08-12). Every test constructs its state on a private `NotificationCenter()` and posts there;
+`stateObservesOnlyItsInjectedCenter` pins it.
 
 | Layer | Test | Asserts |
 |---|---|---|
-| Unit (Swift Testing) | Construct `CaptureProtectionState`, post `UIApplication.userDidTakeScreenshotNotification` / a synthetic capture change on the main actor | The observable's state transitions, the MainActor hop, and observer removal in `deinit` (no retain cycle) |
+| Unit (Swift Testing) | Construct `CaptureProtectionState` **on a private `NotificationCenter`**, post `UIApplication.userDidTakeScreenshotNotification` / a synthetic capture change to it on the main actor | The observable's state transitions, the MainActor hop, observer removal in `deinit` (no retain cycle), and that a post to any other center is ignored |
 | View-level | Host each of the six roots with an injected state, toggle it | Cover renders when captured; clears when not; frontmost gating suppresses the pulse when `selectedTab != .personal` |
 | UI (XCUITest) | A `FERNLET_UI_TEST_FORCE_CAPTURE` flag following `Fernlet/UITestSupport.swift:31`/`:37`/`:42` with `#else` no-op stubs at `:69-71` | The cover appears over each of the six surfaces and carries its accessibility label |
 | UI regression guard | Existing `ScreenAppearanceUITests` (screenshots the private hub and the logging sheets via `FernletUITests/UXScreenProbe.swift:185`, under `FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK=1`, `UITestSupport.swift:37`) | **Nothing goes blank.** A `scenePhase != .active` cover or a screenshot-triggered blur firing during those runs empties the appearance gallery and fails its "nothing is blank" assertions. This is the most likely way this feature breaks CI. |

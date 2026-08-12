@@ -16,6 +16,15 @@
 //
 // Polling follows the wall-clock-deadline + minimum-poll-floor discipline: the notification
 // handlers hop through Task { @MainActor }, so state lands a runloop turn after the post.
+//
+// EVERY state built here is given its OWN NotificationCenter (`isolatedCenter()`), and the trigger
+// notifications are posted to that center — never `.default`. Both triggers are process-global,
+// and `.serialized` orders tests only WITHIN one suite: this file declares three top-level suites,
+// which Swift Testing runs in parallel with each other, so a screenshot post from a sibling suite
+// used to bump an unrelated test's `screenshotPulse` (2026-08-12: nudgePulse 1 != screenshotPulse 2
+// in `frontmostSurfaceClaimsThePulseNudge`). The injected center is what makes a pulse count belong
+// to one test: never post a trigger to `.default` here. The single exception is
+// `stateObservesOnlyItsInjectedCenter`, which posts there to assert that it reaches nothing.
 
 import Foundation
 import SwiftUI
@@ -25,19 +34,38 @@ import FernletUI
 import FernletLock
 import FernletLockUI
 
-/// Waits (deadline + 50 ms poll floor) for a main-actor condition to become true; returns the
-/// final read so callers can `#expect` on it.
+/// A private `NotificationCenter` for one test's ``CaptureProtectionState``, so the process-global
+/// screenshot / captured-change posts made by concurrently-running suites (and by the system) can
+/// never reach it. See the file header.
+@MainActor
+private func isolatedCenter() -> NotificationCenter {
+    NotificationCenter()
+}
+
+/// Waits for a main-actor condition to become true; returns the final read so callers can
+/// `#expect` on it.
+///
+/// Gives up only once the deadline has passed AND `minimumPolls` observations have really been
+/// made. Both halves are load-earned: a wall-clock deadline alone measures elapsed time, not
+/// scheduling actually received, and these tests are `@MainActor` — in a loaded full-suite run the
+/// process can be starved of the main actor for seconds at a stretch while `Date()` keeps
+/// advancing, so a pure deadline expires having genuinely *looked* only two or three times
+/// (observed 2026-08-12: a poll that takes 0.214 s in isolation burned 2.001 s and gave up). The
+/// pair still terminates — `polls` only climbs and every turn sleeps.
 @MainActor
 private func pollUntil(
     timeout: TimeInterval = 5,
+    minimumPolls: Int = 40,
     _ condition: @MainActor () -> Bool
 ) async -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
+    var polls = 0
+    while true {
         if condition() { return true }
+        polls += 1
+        if polls >= minimumPolls, Date() >= deadline { return false }
         try? await Task.sleep(for: .milliseconds(50))
     }
-    return condition()
 }
 
 /// Mutable flag box so a test can steer the injected per-screen capture read after the state
@@ -67,21 +95,46 @@ struct CaptureProtectionStateTests {
     /// per post, landing after the documented nonisolated-block → MainActor hop.
     @MainActor
     @Test func screenshotNotificationBumpsThePulse() async throws {
-        let state = CaptureProtectionState()
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(notificationCenter: center)
         #expect(state.screenshotPulse == 0)
 
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
         #expect(await pollUntil { state.screenshotPulse == 1 })
 
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
         #expect(await pollUntil { state.screenshotPulse == 2 })
+    }
+
+    /// The state observes ONLY the center it was handed. This is the regression pin for the
+    /// 2026-08-12 cross-suite pulse bleed: this file's three top-level suites run in PARALLEL with
+    /// each other (`.serialized` orders tests only within a suite), so while every state observed
+    /// the process-global `.default` center, a screenshot post from a sibling suite bumped an
+    /// unrelated test's ``CaptureProtectionState/screenshotPulse`` — `frontmostSurfaceClaimsThePulseNudge`
+    /// saw two pulses against its one claimed nudge. Deliberately the ONE place that posts a
+    /// trigger to `.default`, precisely to assert it reaches nothing here (the unit-test host app's
+    /// own production state, which does observe `.default`, is the only listener and asserts
+    /// nothing).
+    @MainActor
+    @Test func stateObservesOnlyItsInjectedCenter() async throws {
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(notificationCenter: center)
+
+        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(state.screenshotPulse == 0,
+                "A post to a different center must not bump this state's pulse")
+
+        // ...and the injected center is genuinely wired.
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        #expect(await pollUntil { state.screenshotPulse == 1 })
     }
 
     /// The nudge is once per session, but every surface reacting to the SAME pulse shares it
     /// (the hub under a sheet and the sheet agree); later pulses claim nothing.
     @MainActor
     @Test func nudgeClaimIsOncePerSessionAndSharedWithinOnePulse() async throws {
-        let state = CaptureProtectionState()
+        let state = CaptureProtectionState(notificationCenter: isolatedCenter())
         #expect(state.nudgePulse == nil)
 
         #expect(state.claimNudge(for: 1))
@@ -99,7 +152,11 @@ struct CaptureProtectionStateTests {
     @MainActor
     @Test func captureChangeReReadsTheRegisteredScreens() async throws {
         let flag = CaptureFlagBox()
-        let state = CaptureProtectionState(readScreenIsCaptured: { _ in flag.value })
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(
+            readScreenIsCaptured: { _ in flag.value },
+            notificationCenter: center
+        )
         let windowScene = try #require(
             UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
             "Expected an active window scene in the unit-test host"
@@ -111,12 +168,12 @@ struct CaptureProtectionStateTests {
         #expect(!state.isCaptured)
 
         flag.value = true
-        NotificationCenter.default.post(name: UIScreen.capturedDidChangeNotification, object: nil)
+        center.post(name: UIScreen.capturedDidChangeNotification, object: nil)
         #expect(await pollUntil { state.isCaptured(on: screen) })
         #expect(state.isCaptured)
 
         flag.value = false
-        NotificationCenter.default.post(name: UIScreen.capturedDidChangeNotification, object: nil)
+        center.post(name: UIScreen.capturedDidChangeNotification, object: nil)
         #expect(await pollUntil { !state.isCaptured(on: screen) })
         #expect(!state.isCaptured)
     }
@@ -127,7 +184,10 @@ struct CaptureProtectionStateTests {
     @Test func registeringAScreenReadsCaptureStateImmediately() async throws {
         let flag = CaptureFlagBox()
         flag.value = true
-        let state = CaptureProtectionState(readScreenIsCaptured: { _ in flag.value })
+        let state = CaptureProtectionState(
+            readScreenIsCaptured: { _ in flag.value },
+            notificationCenter: isolatedCenter()
+        )
         let windowScene = try #require(
             UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
             "Expected an active window scene in the unit-test host"
@@ -141,7 +201,7 @@ struct CaptureProtectionStateTests {
     /// (pre-resolution) screen — regardless of registration, and clears cleanly.
     @MainActor
     @Test func overrideForcesTheVerdictRegardlessOfScreens() async throws {
-        let state = CaptureProtectionState(captureOverride: true)
+        let state = CaptureProtectionState(captureOverride: true, notificationCenter: isolatedCenter())
         #expect(state.isCaptured)
         #expect(state.isCaptured(on: nil))
 
@@ -164,7 +224,10 @@ struct CaptureProtectionStateTests {
     @Test func preResolutionFallbackConsultsLiveScenesWhenNothingIsRegistered() async throws {
         let flag = CaptureFlagBox()
         flag.value = true
-        let state = CaptureProtectionState(readScreenIsCaptured: { _ in flag.value })
+        let state = CaptureProtectionState(
+            readScreenIsCaptured: { _ in flag.value },
+            notificationCenter: isolatedCenter()
+        )
         _ = try #require(
             UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
             "Expected an active window scene in the unit-test host"
@@ -187,7 +250,8 @@ struct CaptureProtectionStateTests {
     @Test func firstNudgeClaimPostsExactlyOneVoiceOverAnnouncement() async throws {
         let recorder = AnnouncementRecorder()
         let state = CaptureProtectionState(
-            postAccessibilityAnnouncement: { recorder.announcements.append($0) }
+            postAccessibilityAnnouncement: { recorder.announcements.append($0) },
+            notificationCenter: isolatedCenter()
         )
 
         #expect(state.claimNudge(for: 1))
@@ -206,17 +270,20 @@ struct CaptureProtectionStateTests {
     /// cycle) and its observer bag unregisters, so a later post reaches nothing and cannot crash.
     @MainActor
     @Test func releaseTearsDownObserversWithoutARetainCycle() async throws {
+        // The center outlives the state, so the post below reaches the center the (now removed)
+        // observers were registered on — a post to `.default` would prove nothing here.
+        let center = isolatedCenter()
         weak var weakState: CaptureProtectionState?
         autoreleasepool {
-            var state: CaptureProtectionState? = CaptureProtectionState()
+            var state: CaptureProtectionState? = CaptureProtectionState(notificationCenter: center)
             weakState = state
             state = nil
         }
         #expect(weakState == nil, "The notification observers must not retain the state")
 
         // Post after teardown: the removed observers must not fire into a dead object.
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
-        NotificationCenter.default.post(name: UIScreen.capturedDidChangeNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIScreen.capturedDidChangeNotification, object: nil)
         try? await Task.sleep(for: .milliseconds(100))
         #expect(weakState == nil)
     }
@@ -283,7 +350,7 @@ struct CaptureProtectionViewTests {
     /// injected state reports captured, and the content returns the moment it stops.
     @MainActor
     @Test func coverRendersWhileCapturedAndClearsWhenNot() async throws {
-        let state = CaptureProtectionState(captureOverride: true)
+        let state = CaptureProtectionState(captureOverride: true, notificationCenter: isolatedCenter())
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -312,7 +379,7 @@ struct CaptureProtectionViewTests {
     /// background lock covers only the hub (2026-08-11 empirical check).
     @MainActor
     @Test func resignActiveScenePhasePaintsTheSnapshotCover() async throws {
-        let state = CaptureProtectionState(captureOverride: false)
+        let state = CaptureProtectionState(captureOverride: false, notificationCenter: isolatedCenter())
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -334,7 +401,7 @@ struct CaptureProtectionViewTests {
     /// hatch mirrors `.fernletLockGate(active:)`.
     @MainActor
     @Test func inactiveModifierPassesContentThrough() async throws {
-        let state = CaptureProtectionState(captureOverride: true)
+        let state = CaptureProtectionState(captureOverride: true, notificationCenter: isolatedCenter())
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -357,7 +424,8 @@ struct CaptureProtectionViewTests {
     /// screenshot pulse, so the session's one nudge is never spent invisibly.
     @MainActor
     @Test func backgroundedSurfaceDoesNotClaimThePulseNudge() async throws {
-        let state = CaptureProtectionState()
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(notificationCenter: center)
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -371,7 +439,7 @@ struct CaptureProtectionViewTests {
         }
         try await Task.sleep(for: .milliseconds(150))
 
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
         #expect(await pollUntil { state.screenshotPulse == 1 })
         // Give a (wrongly) reacting modifier ample time to claim, then assert none did.
         try await Task.sleep(for: .milliseconds(400))
@@ -382,7 +450,8 @@ struct CaptureProtectionViewTests {
     /// and claims the once-per-session nudge.
     @MainActor
     @Test func frontmostSurfaceClaimsThePulseNudge() async throws {
-        let state = CaptureProtectionState()
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(notificationCenter: center)
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -396,7 +465,7 @@ struct CaptureProtectionViewTests {
         }
         try await Task.sleep(for: .milliseconds(150))
 
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
         #expect(await pollUntil { state.nudgePulse != nil },
                 "A frontmost surface must react to the pulse and claim the nudge")
         #expect(state.nudgePulse == state.screenshotPulse)
@@ -408,7 +477,8 @@ struct CaptureProtectionViewTests {
     /// the once-per-session nudge.
     @MainActor
     @Test func coveredSurfaceDoesNotClaimThePulseNudge() async throws {
-        let state = CaptureProtectionState(captureOverride: true)
+        let center = isolatedCenter()
+        let state = CaptureProtectionState(captureOverride: true, notificationCenter: center)
         let window = try makeWindow(
             Color(red: 1, green: 0, blue: 0)
                 .ignoresSafeArea()
@@ -422,7 +492,7 @@ struct CaptureProtectionViewTests {
         }
         try await Task.sleep(for: .milliseconds(150))
 
-        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        center.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
         #expect(await pollUntil { state.screenshotPulse == 1 })
         // Give a (wrongly) reacting modifier ample time to claim, then assert none did.
         try await Task.sleep(for: .milliseconds(400))
@@ -436,7 +506,7 @@ struct CaptureProtectionViewTests {
     /// flips true.
     @MainActor
     @Test func coverArrivalResignsTheKeyboard() async throws {
-        let state = CaptureProtectionState(captureOverride: false)
+        let state = CaptureProtectionState(captureOverride: false, notificationCenter: isolatedCenter())
         let textField = UITextField()
         let window = try makeWindow(
             TextFieldHost(textField: textField)

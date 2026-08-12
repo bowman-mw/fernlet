@@ -53,6 +53,11 @@ import UIKit
 ///   retain the state, so an owner releasing it fully tears it down.
 /// - Registration keeps only weak screen references and prunes dead ones on every refresh, so a
 ///   closed scene cannot pin a stale "captured" verdict.
+/// - The `NotificationCenter` both observers attach to is injectable (production: `.default`,
+///   where UIKit actually posts). Tests MUST pass a private center: the two trigger notifications
+///   are process-global, `.serialized` orders tests only *within* one suite, and a screenshot post
+///   from a concurrently-running sibling suite would otherwise bump an unrelated test's
+///   ``screenshotPulse``.
 @MainActor
 @Observable
 public final class CaptureProtectionState {
@@ -104,12 +109,12 @@ public final class CaptureProtectionState {
     /// Weak boxes of every screen a `captureProtected` probe has registered, keyed by
     /// `ObjectIdentifier`. Weak so a dismissed scene's screen dies naturally; pruned on refresh.
     @ObservationIgnored private var registeredScreens: [ObjectIdentifier: WeakScreenBox] = [:]
-    /// Holds the two `NotificationCenter` observer tokens and removes them when this state is
-    /// released. A nonisolated bag rather than a stored array because this module builds in
-    /// Swift 6 language mode, where a `@MainActor` class's nonisolated `deinit` may not touch a
-    /// non-Sendable stored property — the bag's own (unisolated) `deinit` does the removal
-    /// instead, running as part of this object's teardown.
-    @ObservationIgnored private let observerBag = NotificationObserverBag()
+    /// Holds the two `NotificationCenter` observer tokens and removes them from the center they
+    /// were registered on when this state is released. A nonisolated bag rather than a stored
+    /// array because this module builds in Swift 6 language mode, where a `@MainActor` class's
+    /// nonisolated `deinit` may not touch a non-Sendable stored property — the bag's own
+    /// (unisolated) `deinit` does the removal instead, running as part of this object's teardown.
+    @ObservationIgnored private let observerBag: NotificationObserverBag
     /// Reads one screen's captured flag — `{ $0.isCaptured }` in production, injectable so unit
     /// tests can simulate a capture transition (posting `capturedDidChangeNotification` then
     /// asserting the re-read), which real automation cannot trigger.
@@ -130,17 +135,24 @@ public final class CaptureProtectionState {
     ///   - postAccessibilityAnnouncement: Test seam for the VoiceOver nudge announcement; nil
     ///     (production) resolves to posting `AccessibilityNotification.Announcement` in the
     ///     init body.
+    ///   - notificationCenter: The center both trigger observers attach to. Defaults to
+    ///     `.default`, which is the only center UIKit posts the real notifications on, so
+    ///     production must never pass anything else. A test that posts either trigger MUST pass a
+    ///     private `NotificationCenter()`: the notifications are process-global, so a post from a
+    ///     test running concurrently in another suite would otherwise land in this state.
     public init(
         captureOverride: Bool? = nil,
         readScreenIsCaptured: (@MainActor (UIScreen) -> Bool)? = nil,
-        postAccessibilityAnnouncement: (@MainActor (String) -> Void)? = nil
+        postAccessibilityAnnouncement: (@MainActor (String) -> Void)? = nil,
+        notificationCenter: NotificationCenter = .default
     ) {
         self.captureOverride = captureOverride
         self.readScreenIsCaptured = readScreenIsCaptured ?? { $0.isCaptured }
         self.postAccessibilityAnnouncement = postAccessibilityAnnouncement
             ?? { AccessibilityNotification.Announcement($0).post() }
+        self.observerBag = NotificationObserverBag(center: notificationCenter)
         // The blocks run nonisolated under Swift 6 — never touch state directly; hop first.
-        observerBag.hold(NotificationCenter.default.addObserver(
+        observerBag.hold(notificationCenter.addObserver(
             forName: UIApplication.userDidTakeScreenshotNotification,
             object: nil,
             queue: nil
@@ -149,7 +161,7 @@ public final class CaptureProtectionState {
         })
         // `object: nil`, and every post re-reads OUR registered screens rather than trusting the
         // notification's subject — per-screen state, one observer.
-        observerBag.hold(NotificationCenter.default.addObserver(
+        observerBag.hold(notificationCenter.addObserver(
             forName: UIScreen.capturedDidChangeNotification,
             object: nil,
             queue: nil
@@ -243,8 +255,17 @@ public final class CaptureProtectionState {
 /// `NotificationCenter.removeObserver` is thread-safe; the tokens are only ever appended from
 /// the owner's main-actor init, so there is no concurrent mutation.
 private nonisolated final class NotificationObserverBag {
+    /// The center the held tokens were registered on — removal must target the SAME center the
+    /// observer was added to, so this is carried rather than assumed to be `.default` (tests
+    /// inject a private center).
+    private let center: NotificationCenter
     /// The held observer tokens, removed on deallocation.
     private var tokens: [NSObjectProtocol] = []
+
+    /// Creates a bag that will unregister its tokens from `center`.
+    init(center: NotificationCenter) {
+        self.center = center
+    }
 
     /// Takes ownership of one observer token for the lifetime of the bag.
     func hold(_ token: NSObjectProtocol) {
@@ -253,7 +274,7 @@ private nonisolated final class NotificationObserverBag {
 
     deinit {
         for token in tokens {
-            NotificationCenter.default.removeObserver(token)
+            center.removeObserver(token)
         }
     }
 }
