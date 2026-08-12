@@ -45,6 +45,37 @@ struct PhotoDirectoryIsolationTests {
         "heartDropService", "queueHeart", "heartsAway", "deleteAllData",
     ]
 
+    /// Anything reaching the shared app-group directory `<group.MBO.Fernlet>/FernletWidgets/` — the
+    /// guided-run and cooking-run state files, the inbound widget-action queue, the widget snapshot.
+    ///
+    /// Case matters (`String.contains`): "guidedRun" alone does NOT match `startGuidedRun`, hence the
+    /// explicit spellings.
+    private static let appGroupRootedTriggers = [
+        // Guided run — GuidedWorkoutRunState.json
+        "guidedRunState", "startGuidedRun", "clearGuidedRun", "abandonGuidedRun",
+        "reconcileGuidedRunFromAppGroup", "guidedMarkSetDone", "guidedSkipRest",
+        "guidedSessionForResume", "activeGuidedRunBlockingStart", "GuidedWorkoutRunState",
+        // Cooking run — CookingRunState.json
+        "cookingRunState", "startCookingRun", "endCookingRun", "cookingAdvanceStep",
+        "cookingGoBack", "cookingStartTimer", "cookingClearTimer",
+        "reconcileCookingRunFromAppGroup", "CookingRunStateStore", "cookingRunAdvancedByIntent",
+        // Widget bridge — PendingWidgetActions.json + WidgetSnapshot.json
+        "pendingWidgetActionQueue", "PendingWidgetActionQueue(", "processPendingWidgetActions",
+        "activateWidgetBridge", "PendingWidgetAction(", "widgetSnapshotMirror",
+        "WidgetSnapshotMirror(", "WidgetSnapshotFileStore(", "WidgetBridgeFiles",
+        // The funnels: `resetAll` clears both run files, `deleteAllData` also clears the queue.
+        "deleteAllData", "resetAll(",
+    ]
+
+    /// Anything reaching the device-local AI-call counter. Its identity is a defaults SUITE, and
+    /// `deleteAllData` is its ONLY wipe — `resetAll()` does not touch it, which is why this list is
+    /// not simply the app-group one.
+    private static let aiQuotaTriggers = [
+        "aiCallQuotaStore", "effectiveAIStatus", "aiGate",
+        "AICallQuota", "currentQuota", "recordCall",
+        "deleteAllData",
+    ]
+
     @Test func everyDirectStoreConstructionInTestsPinsItsOwnPhotoDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         // Recursive: subdirectories (Mocks/, and anything added later) are covered too.
@@ -170,6 +201,77 @@ struct PhotoDirectoryIsolationTests {
         // A real site floor: the wipe suites construct stores directly in bulk. Well under this means
         // the paren-matcher broke or the test root moved, not that the codebase got tidier.
         #expect(scanned > 10, "the sealed-heart store-construction scan found only \(scanned) sites — scanner broken?")
+    }
+
+    /// The app-group container is the same hazard on a different mount point, and it is the one that
+    /// was demonstrably LIVE rather than latent: `resetAll` clears `GuidedWorkoutRunState.json` and
+    /// `CookingRunState.json`, `deleteAllData` also clears `PendingWidgetActions.json`, while
+    /// `GuidedWorkoutRunStoreTests` reads the guided file through a real store — so a wipe in
+    /// `DeleteAllDataTests` landed in the middle of it.
+    ///
+    /// One argument covers all four files because they are genuine co-tenants of one directory: a
+    /// relaunch sees the whole container, so isolating them together is what a real relaunch models.
+    @Test func everyAppGroupTouchingStoreConstructionPinsItsOwnAppGroupDirectory() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            guard Self.appGroupRootedTriggers.contains(where: { source.contains($0) }) else { continue }
+            for arguments in Self.storeConstructionArguments(in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("appGroupDirectory"),
+                    """
+                    \(file.lastPathComponent) reaches the shared app-group container but constructs \
+                    FernletStore without `appGroupDirectory:`, so its guided/cooking run state and \
+                    widget queue live in the real container that every concurrent wipe clears. Pass \
+                    `appGroupDirectory: uniqueAppGroupDirectory()`, or build the store through \
+                    makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
+                    """
+                )
+            }
+        }
+        #expect(scanned > 10, "the app-group store-construction scan found only \(scanned) sites — scanner broken?")
+    }
+
+    /// The AI-call counter, whose identity is a UserDefaults SUITE rather than a path — the same
+    /// lesson the heart-drop seal key taught, one axis over. `deleteAllData` calls
+    /// `aiCallQuotaStore.reset()`, so on `.standard` one store's wipe zeroes every other live
+    /// store's quota.
+    ///
+    /// Its trigger set is deliberately NOT the app-group one: `resetAll()` does not touch the
+    /// counter, so files that only reset would be asked for an argument they do not need.
+    @Test func everyAIQuotaTouchingStoreConstructionPinsItsOwnQuotaDefaults() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            guard Self.aiQuotaTriggers.contains(where: { source.contains($0) }) else { continue }
+            for arguments in Self.storeConstructionArguments(in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("aiQuotaDefaults"),
+                    """
+                    \(file.lastPathComponent) reaches the device-local AI-call counter but constructs \
+                    FernletStore without `aiQuotaDefaults:`, so its quota lives in `.standard` — which \
+                    every concurrent delete-all resets. Pass `aiQuotaDefaults: \
+                    uniqueAIQuotaDefaults()`, or build the store through \
+                    makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
+                    """
+                )
+            }
+        }
+        // Floor set below the measured 11: a `> 10` floor here would go red the first time a wipe
+        // test is deleted, for reasons that have nothing to do with isolation.
+        #expect(scanned > 8, "the AI-quota store-construction scan found only \(scanned) sites — scanner broken?")
     }
 
     /// The comment stripper is what stops all three walls above from being satisfied by prose, so it

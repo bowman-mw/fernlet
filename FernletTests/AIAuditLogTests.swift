@@ -316,9 +316,11 @@ struct AIAuditLogTests {
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("export-db")),
             aiAuditLogStore: sink,
+            appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: uniqueProximityDirectory(),
-            heartDropKeychainService: uniqueHeartDropKeychainService()
+            heartDropKeychainService: uniqueHeartDropKeychainService(),
+            aiQuotaDefaults: uniqueAIQuotaDefaults()
         )
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         let json = String(decoding: try enc.encode(store.buildDataExport()), as: UTF8.self).lowercased()
@@ -339,11 +341,40 @@ struct AIAuditLogTests {
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("wipe-db")),
             aiAuditLogStore: sink,
+            appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: uniqueProximityDirectory(),
-            heartDropKeychainService: uniqueHeartDropKeychainService()
+            heartDropKeychainService: uniqueHeartDropKeychainService(),
+            aiQuotaDefaults: uniqueAIQuotaDefaults()
         )
         await store.deleteAllData(includingHealthKitSamples: false)
         #expect(sink.load().isEmpty, "delete-all left the AI audit log on disk")
+    }
+
+    /// The survival twin, for the OTHER device-local AI sidecar on this funnel: the daily call
+    /// counter. Its identity is a UserDefaults SUITE rather than a path — the same lesson the
+    /// heart-drop seal key taught, one axis over — and `deleteAllData` calls `reset()` on it, so on
+    /// `.standard` one store's wipe zeroed the quota of every concurrently-live store.
+    ///
+    /// The third store matters more than usual here: without it the test also passes when
+    /// `UserDefaults(suiteName:)` failed to open and every read silently returned 0.
+    @Test func aDeleteAllInAnotherStoreLeavesThisOnesAICallQuotaIntact() async {
+        let mineDefaults = uniqueAIQuotaDefaults()
+        let mine = makeTestStore(aiQuotaDefaults: mineDefaults)
+        let theirs = makeTestStore()   // its own helper-defaulted suite
+
+        mine.aiCallQuotaStore.recordCall()
+        mine.aiCallQuotaStore.recordCall()
+        theirs.aiCallQuotaStore.recordCall()
+
+        await theirs.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(theirs.aiCallQuotaStore.currentQuota().effectiveCount() == 0,
+                "precondition: the other store's wipe did not reset its own quota")
+        #expect(mine.aiCallQuotaStore.currentQuota().effectiveCount() == 2,
+                "another store's delete-all zeroed this store's AI-call quota")
+        let relaunched = makeTestStore(aiQuotaDefaults: mineDefaults)
+        #expect(relaunched.aiCallQuotaStore.currentQuota().effectiveCount() == 2,
+                "the quota did not survive in its own defaults suite")
     }
 }

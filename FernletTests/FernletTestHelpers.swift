@@ -83,6 +83,32 @@ func uniqueHeartDropKeychainService() -> String {
     "com.fernlet.heartdrop.test.\(UUID().uuidString)"
 }
 
+/// A fresh, never-shared app-group root for ONE test store — the guided-run and cooking-run state
+/// files, the inbound widget-action queue, and the widget snapshot, which are all co-tenants of the
+/// real `<group.MBO.Fernlet>/FernletWidgets/` directory.
+///
+/// `resetAll` clears both run files and `deleteAllData` clears the queue, so on the production
+/// container any wiping test destroyed them for every concurrently-live store. That one was LIVE,
+/// not theoretical: `GuidedWorkoutRunStoreTests` drives the guided file through `makeTestStore()`
+/// while `DeleteAllDataTests` writes and wipes it.
+///
+/// Pass the SAME directory to two stores when a test deliberately simulates a relaunch over the same
+/// in-flight run — that is what `GuidedWorkoutRunStoreTests` and `CookingRunStoreTests` do.
+func uniqueAppGroupDirectory() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("fernlet.tests.appgroup.\(UUID().uuidString)", isDirectory: true)
+}
+
+/// A fresh throwaway defaults suite for ONE test store's device-local AI-call counter.
+///
+/// The counter's identity is a UserDefaults SUITE, not a path, and `deleteAllData` resets it — so on
+/// `.standard` one store's wipe zeroes every other live store's quota. A unique KEY on `.standard`
+/// would work too but would litter the app's real domain permanently, and `PrivacyWipeCoverageTests`
+/// has no discovery wall for defaults keys, so that litter would be invisible.
+func uniqueAIQuotaDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.aiQuota.\(UUID().uuidString)") ?? .standard
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///
@@ -98,18 +124,20 @@ func uniqueHeartDropKeychainService() -> String {
 func makeTestStore(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
-    cookingRunDirectory: URL? = nil,
+    appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
-    heartDropKeychainService: String = uniqueHeartDropKeychainService()
+    heartDropKeychainService: String = uniqueHeartDropKeychainService(),
+    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
         bundledFoodItems: bundledFoodItems,
-        cookingRunDirectory: cookingRunDirectory,
+        appGroupDirectory: appGroupDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
-        heartDropKeychainService: heartDropKeychainService
+        heartDropKeychainService: heartDropKeychainService,
+        aiQuotaDefaults: aiQuotaDefaults
     ).store
 }
 
@@ -124,10 +152,11 @@ func makeTestStore(
 func makeTestStoreWithRepositories(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
-    cookingRunDirectory: URL? = nil,
+    appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
+    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -167,7 +196,9 @@ func makeTestStoreWithRepositories(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
-        cookingRunDirectory: cookingRunDirectory,
+        // Guided/cooking run state, the widget queue and the widget snapshot — see
+        // `uniqueAppGroupDirectory()`.
+        appGroupDirectory: appGroupDirectory,
         // Own-photo corpora in a per-store temp root — see `uniquePhotoDirectory()`.
         photoDocumentsDirectory: photoDocumentsDirectory,
         // Friend photo wall + the heart ledger and heart-drop sidecars likewise — see
@@ -175,7 +206,9 @@ func makeTestStoreWithRepositories(
         proximitySupportDirectory: proximitySupportDirectory,
         // The heart-drop sidecars' OTHER half: they are sealed, and the wipe deletes keys by
         // service — see `uniqueHeartDropKeychainService()`.
-        heartDropKeychainService: heartDropKeychainService
+        heartDropKeychainService: heartDropKeychainService,
+        // The AI-call counter's identity is a defaults SUITE — see `uniqueAIQuotaDefaults()`.
+        aiQuotaDefaults: aiQuotaDefaults
     )
     return (store, repository, journalNarrativeRepository)
 }
@@ -196,7 +229,9 @@ func makeStoreSharingStores(
     narratives: JournalNarrativeRepository,
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
-    heartDropKeychainService: String = uniqueHeartDropKeychainService()
+    heartDropKeychainService: String = uniqueHeartDropKeychainService(),
+    appGroupDirectory: URL = uniqueAppGroupDirectory(),
+    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -217,9 +252,11 @@ func makeStoreSharingStores(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
+        appGroupDirectory: appGroupDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
-        heartDropKeychainService: heartDropKeychainService
+        heartDropKeychainService: heartDropKeychainService,
+        aiQuotaDefaults: aiQuotaDefaults
     )
 }
 

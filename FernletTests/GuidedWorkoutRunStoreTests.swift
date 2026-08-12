@@ -7,11 +7,25 @@ import FernletDomainModel
 /// gate (the Move-root card), starting a run (per-exercise rest baked in + mirrored to the app group),
 /// the mark-set-done → finish → log path (deduped), and the manual editor's session replacement.
 ///
-/// Serialized: each test stands up a real `FernletStore`, and the guided run mirrors to a process-wide
-/// app-group file — running in parallel would race that file. Each test clears it first.
+/// Serialized: each test stands up a real `FernletStore`, which reaches process-global state the
+/// app-group seam does not cover — the `Activity<…>` registries behind `GuidedWorkoutActivityBridge`,
+/// `WorkoutExerciseCatalog`, and `NotificationCenter.default`. It is NO LONGER about the run file:
+/// that used to be one process-wide app-group path, raced by every concurrent `resetAll`, and is now
+/// per-test (below). The `store.clearGuidedRun()` calls each test opens with are the scar tissue from
+/// that era — kept because they are harmless and one of them is asserted, not because they are needed.
 @MainActor
 @Suite(.serialized)
 struct GuidedWorkoutRunStoreTests {
+
+    /// THIS test's app-group root. Swift Testing builds a fresh suite value per test, so every store a
+    /// single test creates shares one directory — which is exactly what the two relaunch tests below
+    /// need, since the surviving run file IS their fixture — while no other suite can reach it.
+    private let appGroupDirectory = uniqueAppGroupDirectory()
+
+    /// A store on this test's app-group root. Everything else stays defaulted (and therefore isolated).
+    private func makeStore() -> FernletStore {
+        makeTestStore(appGroupDirectory: appGroupDirectory)
+    }
 
     private func session(_ name: String, _ exercises: [PrescribedExercise]) -> WorkoutProgram.SessionSuggestion {
         WorkoutProgram.SessionSuggestion(
@@ -31,7 +45,7 @@ struct GuidedWorkoutRunStoreTests {
     // MARK: Approval gate
 
     @Test func planIsNotApprovedUntilApproved() {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         commitPlan(store, session("Push", [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)]))
         // Committing (Suggest) does not approve — the card stays hidden until the user approves.
@@ -46,7 +60,7 @@ struct GuidedWorkoutRunStoreTests {
     // MARK: Start a run
 
     @Test func startGuidedRunBakesPerExerciseRestAndMirrors() throws {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         let s = session("Push", [
             PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true),
@@ -67,7 +81,7 @@ struct GuidedWorkoutRunStoreTests {
     // MARK: Mark set done → finish → log (deduped)
 
     @Test func finishingAGuidedRunLogsOnceAndClears() {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         // One 1-set exercise so a single "done" finishes the workout.
         let s = session("Quick", [PrescribedExercise(name: "Bench Press", sets: 1, reps: "5", role: .main, fromCatalog: true)])
@@ -93,7 +107,7 @@ struct GuidedWorkoutRunStoreTests {
     // MARK: Editor
 
     @Test func updateGuidedSessionReplacesExercisesWhileNothingLogged() throws {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         let s = session("Upper", [
             PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true),
@@ -118,7 +132,7 @@ struct GuidedWorkoutRunStoreTests {
     }
 
     @Test func updateGuidedSessionRefusedAfterASessionIsLogged() {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         let s = session("Upper", [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)])
         commitPlan(store, s)
@@ -133,7 +147,7 @@ struct GuidedWorkoutRunStoreTests {
     // MARK: Resume after relaunch (the run survives; the in-memory plan does not)
 
     @Test func aRecentRunIsAdoptedByAFreshStoreAndResumable() {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         let s = session("Push", [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)])
         commitPlan(store, s)
@@ -141,7 +155,7 @@ struct GuidedWorkoutRunStoreTests {
         store.guidedMarkSetDone()   // resting on set 2 — active, freshly touched
 
         // Simulate a relaunch: a fresh store (no committed plan in memory) reconciles from the group.
-        let relaunched = makeTestStore()
+        let relaunched = makeStore()
         relaunched.reconcileGuidedRunFromAppGroup()
         #expect(relaunched.guidedRunState?.sessionID == s.id)   // adopted, not discarded
         #expect(relaunched.currentGuidedWorkoutPlan == nil)     // plan is session-scoped — gone
@@ -157,7 +171,7 @@ struct GuidedWorkoutRunStoreTests {
     /// mints a NEW session, and taps Start. That must not silently discard the run already in progress —
     /// the store refuses until the Ready screen has confirmed the replacement.
     @Test func startingADifferentSessionCannotClobberALiveRunWithoutConfirmation() throws {
-        let store = makeTestStore()
+        let store = makeStore()
         store.clearGuidedRun()
         let inProgress = session("Legs", [PrescribedExercise(name: "Squat", sets: 3, reps: "5", role: .main, fromCatalog: true)])
         commitPlan(store, inProgress)
@@ -176,7 +190,7 @@ struct GuidedWorkoutRunStoreTests {
         #expect(store.guidedRunState?.currentSet == progressed.currentSet)
         #expect(store.guidedRunState?.isResting == true)
         // …and so is the app-group mirror the Live Activity advances (a fresh store adopts the old run).
-        let relaunched = makeTestStore()
+        let relaunched = makeStore()
         relaunched.reconcileGuidedRunFromAppGroup()
         #expect(relaunched.guidedRunState?.sessionID == inProgress.id)
 

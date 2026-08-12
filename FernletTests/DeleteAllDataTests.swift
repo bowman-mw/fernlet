@@ -41,10 +41,62 @@ struct DeleteAllDataTests {
     private func makeStore(_ name: String) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)),
+            appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: uniqueProximityDirectory(),
-            heartDropKeychainService: uniqueHeartDropKeychainService()
+            heartDropKeychainService: uniqueHeartDropKeychainService(),
+            aiQuotaDefaults: uniqueAIQuotaDefaults()
         )
+    }
+
+    /// The survival twin of `guidedRunInFlightDoesNotSurviveTheWipe`: the wipe must reach THIS
+    /// store's app-group state and no one else's.
+    ///
+    /// All four co-tenants of `<group.MBO.Fernlet>/FernletWidgets/` were on one process-wide path
+    /// while `resetAll` cleared the two run files and `deleteAllData` also cleared the widget queue —
+    /// and unlike the earlier rounds this one was demonstrably LIVE: `GuidedWorkoutRunStoreTests`
+    /// reads the guided file through a real store, so a wipe here landed in the middle of it.
+    ///
+    /// Every assertion goes through the FILE, never the in-memory mirror. `mine.guidedRunState`
+    /// survives B's wipe even with the bug present — only a reconcile re-reads the container, which
+    /// is the thing that was actually shared.
+    @Test func aDeleteAllInAnotherStoreLeavesThisOnesAppGroupStateIntact() async throws {
+        let mineDirectory = uniqueAppGroupDirectory()
+        let mine = makeTestStore(appGroupDirectory: mineDirectory)
+        let theirs = makeTestStore()   // its own helper-defaulted app-group root
+
+        let session = WorkoutProgram.SessionSuggestion(
+            title: "Push", timeLabel: "", kind: .strength,
+            exercises: [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)],
+            suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
+        )
+        mine.startGuidedRun(session)
+        mine.pendingWidgetActionQueue.append(PendingWidgetAction(
+            id: UUID(), dateKey: mine.todayKey,
+            action: PendingWidgetAction.waterPlusOne, createdAt: Date()
+        ))
+        #expect(mine.guidedRunState != nil, "precondition: the guided run did not start")
+
+        // The other suite's "delete everything" — reaches resetAll's run-file clears AND the queue.
+        theirs.startGuidedRun(session)
+        await theirs.deleteAllData(includingHealthKitSamples: false)
+
+        // Its own state really is gone, so the assertions below cannot pass against a wipe that
+        // quietly stopped wiping.
+        theirs.reconcileGuidedRunFromAppGroup()
+        #expect(theirs.guidedRunState == nil, "precondition: the other store's wipe did not clear its own run")
+
+        // Ours survived — asserted through the container, and again through a THIRD store built on
+        // our root after the wipe, so the test cannot pass by writing having silently stopped.
+        mine.reconcileGuidedRunFromAppGroup()
+        #expect(mine.guidedRunState?.sessionID == session.id,
+                "another store's delete-all cleared this store's guided-run file")
+        let relaunched = makeTestStore(appGroupDirectory: mineDirectory)
+        relaunched.reconcileGuidedRunFromAppGroup()
+        #expect(relaunched.guidedRunState?.sessionID == session.id,
+                "the guided run did not survive on disk — the other store's wipe reached our container")
+        #expect(!relaunched.pendingWidgetActionQueue.claimAll().isEmpty,
+                "another store's delete-all drained this store's widget-action queue")
     }
 
     /// A snapshot with one day of real content.
@@ -200,9 +252,11 @@ struct DeleteAllDataTests {
         repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
-        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory(),
+        let store = FernletStore(repository: repository, appGroupDirectory: uniqueAppGroupDirectory(),
+                                 photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
-                                 heartDropKeychainService: uniqueHeartDropKeychainService())
+                                 heartDropKeychainService: uniqueHeartDropKeychainService(),
+                                 aiQuotaDefaults: uniqueAIQuotaDefaults())
         await store.deleteAllData(includingHealthKitSamples: false)
 
         // A fresh repository over the same file is the next launch.
@@ -219,9 +273,11 @@ struct DeleteAllDataTests {
     @Test func noPendingSaveResurrectsDataAfterTheWipe() async throws {
         let url = temporaryDatabaseURL("delete-all-debounce")
         let repository = LocalFernletRepository(fileURL: url)
-        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory(),
+        let store = FernletStore(repository: repository, appGroupDirectory: uniqueAppGroupDirectory(),
+                                 photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
-                                 heartDropKeychainService: uniqueHeartDropKeychainService())
+                                 heartDropKeychainService: uniqueHeartDropKeychainService(),
+                                 aiQuotaDefaults: uniqueAIQuotaDefaults())
         store.addBottle()   // schedules a debounced save
         await store.deleteAllData(includingHealthKitSamples: false)
 
@@ -251,9 +307,11 @@ struct DeleteAllDataTests {
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
     /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
     @Test func outcomeReportsAStoreThatFailedToDelete() async {
-        let store = FernletStore(repository: FailingPurgeRepository(), photoDocumentsDirectory: uniquePhotoDirectory(),
+        let store = FernletStore(repository: FailingPurgeRepository(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
-                                 heartDropKeychainService: uniqueHeartDropKeychainService())
+                                 heartDropKeychainService: uniqueHeartDropKeychainService(),
+                                 aiQuotaDefaults: uniqueAIQuotaDefaults())
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!outcome.isComplete)
@@ -452,7 +510,9 @@ struct DeleteAllDataTests {
     /// re-uploads the resurrected day to iCloud. It is a live writer like the widget queue and the recipe
     /// inbox, so the funnel must stop it.
     ///
-    /// Process-wide app-group file (like the guided-run suite): clear it first, keep the suite serialized.
+    /// The app-group file is per-store now, so the opening `clearGuidedRun()` is redundant — kept
+    /// because removing setup is not what this commit is for. The suite stays serialized for the
+    /// process-global ActivityKit registries, which no seam covers.
     @Test func guidedRunInFlightDoesNotSurviveTheWipe() async {
         let store = makeTestStore()
         store.clearGuidedRun()

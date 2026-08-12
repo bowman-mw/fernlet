@@ -251,7 +251,8 @@ final class FernletStore {
         ModerationLedger(fileURL: ModerationLedger.fileURL(in: proximitySupportRoot))
     /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
     /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
-    @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
+    @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore =
+        UserDefaultsAICallQuotaStore(defaults: aiQuotaDefaults)
     /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
     /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
     /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
@@ -384,7 +385,7 @@ final class FernletStore {
     /// store that wipes destroys the photos of every other live store. Under the test runner —
     /// XCTest and Swift Testing suites run in parallel in ONE process — that is a live cross-suite
     /// race, not a theoretical one. Injectable so each test store gets its own temp root, mirroring
-    /// the `cookingRunDirectory` and `webImageAttemptDefaults` seams.
+    /// the `appGroupDirectory` and `webImageAttemptDefaults` seams.
     @ObservationIgnored nonisolated let photoDocumentsDirectory: URL
     /// THIS store's proximity-sidecar root — the friend photo-wall cache + its preferences, built by
     /// `MeshNetworkManager` off `ProximityHost.proximitySupportDirectory` (which the adapter forwards
@@ -406,6 +407,24 @@ final class FernletStore {
     /// quarantined — by any other live store's wipe. Production always resolves to the unchanged
     /// `com.fernlet.heartdrop`.
     @ObservationIgnored nonisolated let heartDropKeychainService: String
+    /// THIS store's app-group root — the shared `<group.MBO.Fernlet>/FernletWidgets/` directory
+    /// holding the guided-run and cooking-run state files, the inbound widget-action queue and the
+    /// widget snapshot. NIL means the real container, which is what production always passes.
+    ///
+    /// One seam for all four because they are genuine co-tenants of ONE directory: a test that wants
+    /// a simulated relaunch to see its in-flight run should see its queued widget taps too, which is
+    /// what a real relaunch does. `resetAll` clears the two run files and `deleteAllData` clears the
+    /// queue, so on the process-wide container any wiping test destroyed all of it for every
+    /// concurrently-live store — and `GuidedWorkoutRunStoreTests` reads that very file.
+    @ObservationIgnored nonisolated let appGroupDirectory: URL?
+    /// Defaults suite backing THIS store's device-local AI-call counter. `.standard` in production.
+    ///
+    /// The identity here is a UserDefaults SUITE, not a path — the same lesson the heart-drop seal
+    /// key taught, one axis over. `deleteAllData` calls `aiCallQuotaStore.reset()`, so on `.standard`
+    /// one store's wipe zeroes the counter of every other live store. Deliberately NOT folded into
+    /// `sensitiveVisibilityDefaults`: that suite is shared with `AgeAssuranceStore` because both are
+    /// sensitive-surface state, and a daily AI-call count is neither.
+    @ObservationIgnored nonisolated let aiQuotaDefaults: UserDefaults
     /// The two halves above as the one value ProximityKit takes, so the heart-drop stores this store
     /// builds can never end up half-isolated.
     @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
@@ -496,7 +515,8 @@ final class FernletStore {
     /// its own mirror). Publishes the benign snapshot after every persisted save.
     @ObservationIgnored var widgetSnapshotMirror: WidgetSnapshotMirror?
     /// Inbound queue of widget App-Intent actions (injectable directory for tests).
-    @ObservationIgnored var pendingWidgetActionQueue = PendingWidgetActionQueue()
+    @ObservationIgnored lazy var pendingWidgetActionQueue =
+        PendingWidgetActionQueue(directory: appGroupDirectory)
     @ObservationIgnored private var isProcessingPendingWidgetActions = false
     /// Inbound queue of recipes shared in from the share extension (injectable file URL for tests).
     /// One instance shared by the drain and by "delete everything", so a wipe can't miss a queue the
@@ -584,20 +604,17 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
+        self.appGroupDirectory = appGroupDirectory
+        self.aiQuotaDefaults = aiQuotaDefaults
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
-        // Test seam: redirect the shared cooking-run app-group file to a per-test temp dir so a parallel
-        // suite's file wipe can't race a cooking test's read (mirrors GuidedWorkoutRunStateStore(directory:)).
-        if let cookingRunDirectory {
-            self.cookingRunStateStore = CookingRunStateStore(directory: cookingRunDirectory)
-        }
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -697,6 +714,11 @@ final class FernletStore {
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
+        // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
+        // value here: the widget extension is a separate process with no seam, so an app that
+        // resolved elsewhere would strand every widget tap in a file nothing drains.
+        self.appGroupDirectory = nil
+        self.aiQuotaDefaults = .standard
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService
@@ -3312,7 +3334,10 @@ final class FernletStore {
     /// so the guided sheet and card reflect every transition, whether it came from the in-app buttons
     /// or the Lock Screen. Session-scoped; never part of the synced blob.
     private(set) var guidedRunState: GuidedWorkoutRunState?
-    @ObservationIgnored private let guidedRunStateStore = GuidedWorkoutRunStateStore()
+    /// On THIS store's app-group root. `resetAll` clears this file and `GuidedWorkoutRunStoreTests`
+    /// reads it, so the process-wide container was a live cross-suite race, not a latent one.
+    @ObservationIgnored private lazy var guidedRunStateStore =
+        GuidedWorkoutRunStateStore(directory: appGroupDirectory)
     /// Serializes Live Activity update/end calls so two rapid transitions can't land out of order.
     @ObservationIgnored private var activitySyncTask: Task<Void, Never>?
 
@@ -3533,11 +3558,11 @@ final class FernletStore {
     /// resume card reflect every transition, whether it came from the in-app buttons or the Live
     /// Activity. Session-scoped; never part of the synced blob. Directly mirrors `guidedRunState`.
     private(set) var cookingRunState: CookingRunState?
-    // `var` (not `let`) so a test can point the app-group cooking file at a per-test temp directory via
-    // the `cookingRunDirectory:` init override, mirroring the `GuidedWorkoutRunStateStore(directory:)`
-    // seam. Production leaves this at the default (the real app-group container). Isolating the file per
-    // test stops a parallel suite's `deleteAllData`/cooking-wipe from racing the shared real file.
-    @ObservationIgnored private var cookingRunStateStore = CookingRunStateStore()
+    // On the shared `appGroupDirectory` seam with its guided twin and the widget queue. Production
+    // leaves it nil (the real app-group container); isolating it per test stops a parallel suite's
+    // `deleteAllData`/cooking-wipe from racing the file this store is reading.
+    @ObservationIgnored private lazy var cookingRunStateStore =
+        CookingRunStateStore(directory: appGroupDirectory)
     /// Observer token for `.cookingRunAdvancedByIntent` — registered once in `activateWidgetBridge`. A
     /// cooking App Intent (Live Activity / Siri) runs in this process but mutates only the app-group file;
     /// this brings the in-memory walker into step the moment the file is written, so an in-app "Next"
@@ -4783,7 +4808,7 @@ final class FernletStore {
     /// widget queued while the app was closed, and publishes the initial snapshot.
     func activateWidgetBridge() {
         if widgetSnapshotMirror == nil {
-            widgetSnapshotMirror = WidgetSnapshotMirror()
+            widgetSnapshotMirror = WidgetSnapshotMirror(directory: appGroupDirectory)
         }
         // Reconcile the cooking walker the instant an in-process App Intent (Live Activity "Next" / Siri)
         // writes the advanced run, instead of only on the next scenePhase `.active`. Registered once.

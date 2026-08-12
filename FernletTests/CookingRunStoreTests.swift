@@ -26,7 +26,7 @@ struct CookingRunStoreTests {
         .appendingPathComponent("CookingRunTests-\(UUID().uuidString)", isDirectory: true)
 
     private func makeStore() -> FernletStore {
-        makeTestStore(cookingRunDirectory: cookingDir)
+        makeTestStore(appGroupDirectory: cookingDir)
     }
 
     private func clearSharedRun() {
