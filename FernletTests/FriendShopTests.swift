@@ -232,7 +232,8 @@ struct FriendShopTests {
             // Same in-memory controller as the coin ledger: falling back to MilestoneLedgerRepository()
             // (PersistenceController.shared) leaks milestone rows accumulated by other suites into this
             // fixture's reconcile, minting order-dependent extra coins.
-            milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller)
+            milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
     }
 }

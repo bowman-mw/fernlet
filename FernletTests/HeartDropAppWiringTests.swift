@@ -76,7 +76,7 @@ struct HeartDropAppWiringTests {
         FernletStore(repository: LocalFernletRepository(
             fileURL: FileManager.default.temporaryDirectory
                 .appendingPathComponent("\(name)-\(UUID().uuidString).json")
-        ))
+        ), photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     private func makeFriendIdentity() throws -> (ProximityTrustedPeerRecord, String) {

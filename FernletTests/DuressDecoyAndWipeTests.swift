@@ -42,7 +42,7 @@ struct DuressDecoyVisibilityTests {
     private func makeStore(_ name: String) -> FernletStore {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(name)-\(UUID().uuidString).json")
-        return FernletStore(repository: LocalFernletRepository(fileURL: url))
+        return FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     /// Puts the device-local age record above the 16+ intimacy gate, so the intimacy assertions are

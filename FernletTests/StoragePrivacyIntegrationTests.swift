@@ -134,7 +134,7 @@ struct StoragePrivacyIntegrationTests {
             controller: controller,
             legacyRepository: LocalFernletRepository(fileURL: legacyURL)
         )
-        let store = FernletStore(date: Date(), repository: repo)
+        let store = FernletStore(date: Date(), repository: repo, photoDocumentsDirectory: uniquePhotoDirectory())
         store.addMeal(from: "avocado toast", type: .breakfast)
         store.flushPendingSnapshotSave()
 
@@ -145,7 +145,8 @@ struct StoragePrivacyIntegrationTests {
             repository: CoreDataFernletRepository(
                 controller: controller,
                 legacyRepository: LocalFernletRepository(fileURL: legacyURL)
-            )
+            ),
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         #expect(reloaded.day.meals.contains { $0.name.localizedCaseInsensitiveContains("avocado") })
     }

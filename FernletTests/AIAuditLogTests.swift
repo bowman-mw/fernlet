@@ -315,7 +315,8 @@ struct AIAuditLogTests {
         sink.save([entry(payloadKind: "recipe.extract", outcome: .schemaFailed)])
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("export-db")),
-            aiAuditLogStore: sink
+            aiAuditLogStore: sink,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         let json = String(decoding: try enc.encode(store.buildDataExport()), as: UTF8.self).lowercased()
@@ -335,7 +336,8 @@ struct AIAuditLogTests {
 
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("wipe-db")),
-            aiAuditLogStore: sink
+            aiAuditLogStore: sink,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         await store.deleteAllData(includingHealthKitSamples: false)
         #expect(sink.load().isEmpty, "delete-all left the AI audit log on disk")

@@ -330,7 +330,7 @@ final class FernletStore {
     /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
     @ObservationIgnored private lazy var ownPhotoBackupCoordinator = OwnPhotoBackupCoordinator(
         host: self,
-        documentsDirectory: Self.photoDocumentsDirectory
+        documentsDirectory: photoDocumentsDirectory
     )
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
@@ -344,12 +344,24 @@ final class FernletStore {
     /// held so its ODR access isn't reclaimed for the app session. See BrandedCatalogResourceLoader.
     @ObservationIgnored private let brandedCatalogLoader = BrandedCatalogResourceLoader()
     @ObservationIgnored private var isReloadingFromRepository = false
-    /// The app container's Documents directory — the root of every own-photo corpus below and the
-    /// input to the own-photo key migration. Falls back to the temporary directory only if the
+    /// The app container's Documents directory — the production root of every own-photo corpus below
+    /// and the input to the own-photo key migration. Falls back to the temporary directory only if the
     /// container is unreachable (the historical behavior of each store's inline expression).
-    nonisolated static let photoDocumentsDirectory: URL =
+    nonisolated static let defaultPhotoDocumentsDirectory: URL =
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
+
+    /// THIS store's own-photo root — the directory the three own-photo corpora, the escrow backup
+    /// coordinator and the key migrator all hang off. Production always resolves it to
+    /// `defaultPhotoDocumentsDirectory`.
+    ///
+    /// Per-instance rather than static because it is shared *mutable on-disk state*: `resetAll` and
+    /// `deleteAllData` call `deleteAll()` on all three corpora, so with one process-wide directory any
+    /// store that wipes destroys the photos of every other live store. Under the test runner —
+    /// XCTest and Swift Testing suites run in parallel in ONE process — that is a live cross-suite
+    /// race, not a theoretical one. Injectable so each test store gets its own temp root, mirroring
+    /// the `cookingRunDirectory` and `webImageAttemptDefaults` seams.
+    @ObservationIgnored nonisolated let photoDocumentsDirectory: URL
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
     /// stores below. Separate keychain row from the friend photo wall's, which stays on the
     /// original backup-restorable key inside `MeshNetworkManager`.
@@ -386,15 +398,17 @@ final class FernletStore {
         guard !OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound() else { return nil }
         return KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
     }
-    @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
-        directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+    /// Lazy (rather than an inline initializer) so it can hang off the per-instance
+    /// `photoDocumentsDirectory` — see that property for why the root is not static.
+    @ObservationIgnored private lazy var mealPhotoStore = MealPhotoStore(
+        directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: photoDocumentsDirectory),
         keyProvider: FernletStore.ownPhotoKeyProvider(),
         legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// The user's gym progress-photo timeline (#11). Body photos, so it seals the bytes AND the dated
     /// index; reuses the same hardened media path as meal photos, in its own directory.
-    @ObservationIgnored private let progressPhotoStore = ProgressPhotoStore(
-        directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+    @ObservationIgnored private lazy var progressPhotoStore = ProgressPhotoStore(
+        directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: photoDocumentsDirectory),
         keyProvider: FernletStore.ownPhotoKeyProvider(),
         legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
@@ -402,8 +416,8 @@ final class FernletStore {
     /// which always wins — or, since the 2026-08-09 owner decision (reversing the 2026-07-16
     /// "no external image fetch" tester decision), a web-imported recipe's page picture, downloaded
     /// once by a user-present path and sealed through the same normalize-and-encrypt pipeline.
-    @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
-        directory: OwnPhotoCorpusLayout.recipePhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+    @ObservationIgnored private lazy var recipePhotoStore = MealPhotoStore(
+        directory: OwnPhotoCorpusLayout.recipePhotosDirectory(in: photoDocumentsDirectory),
         keyProvider: FernletStore.ownPhotoKeyProvider(),
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
         allowsLegacyPlaintextUpgrade: false,
@@ -521,7 +535,10 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil) {
+        // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
+        // all read it, and the migration kicks off at the end of this initializer.
+        self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
@@ -624,6 +641,8 @@ final class FernletStore {
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
+        // Launch path: always the real container root (only tests redirect it).
+        self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService
@@ -4843,7 +4862,7 @@ final class FernletStore {
     /// then refuses unless the user also has a cross-device route (escrow backup on, or recorded
     /// consent), so a launch never silently trades away their phone-swap recovery.
     private func migrateAndBindOwnPhotoKey() {
-        let documentsDirectory = Self.photoDocumentsDirectory
+        let documentsDirectory = photoDocumentsDirectory
         // The COMMIT PROOF, not the preference. A launch that bound on the stored flag alone would
         // re-decide, on every boot, that a switch someone once flipped is a cross-device route —
         // including for a user whose every upload has failed since. Read on the main actor and

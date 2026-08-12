@@ -137,7 +137,7 @@ struct HealthKitScoringTests {
 
     @MainActor
     @Test func storeScoreBreakdownConsumesHealthContext() {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryURL("hk-scoring")))
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryURL("hk-scoring")), photoDocumentsDirectory: uniquePhotoDirectory())
         let baseDay = FernletDay(
             date: "2026-06-20",
             meals: [],
@@ -163,7 +163,7 @@ struct HealthKitScoringTests {
 
     @MainActor
     @Test func dailyHealthScoreRetainsHealthContextForAudit() {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryURL("hk-audit")))
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryURL("hk-audit")), photoDocumentsDirectory: uniquePhotoDirectory())
         var day = FernletDay(date: "2026-06-21", meals: [], workouts: [], journals: [], sleep: nil)
         day.healthContext = HealthDailyContext(
             activity: HealthActivitySummary(steps: 8_000, activeEnergyKilocalories: 300, exerciseMinutes: 20),

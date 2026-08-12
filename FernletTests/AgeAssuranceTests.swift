@@ -318,7 +318,8 @@ struct AgeGateWiringTests {
                 fileURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent("\(name)-\(UUID().uuidString).json")
             ),
-            sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard
+            sensitiveVisibilityDefaults: UserDefaults(suiteName: "\(name)-\(UUID().uuidString)") ?? .standard,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
     }
 

@@ -34,14 +34,44 @@ extension FernletRepository {
     }
 }
 
+/// A fresh, unshared own-photo root for one test store.
+///
+/// EVERY `FernletStore` built in the test process needs its own: the three own-photo corpora (meal,
+/// recipe, progress) live under this directory, and `resetAll` / `deleteAllData` / the duress wipe
+/// call `deleteAll()` on all three. XCTest and Swift Testing suites run in parallel in a single
+/// process, so a store left on the shared container root has its photos deleted out from under it
+/// the moment ANY concurrently-running test wipes — which is exactly how
+/// `RecipeReimportTests.failedReimportLeavesTheRecipeUntouched` failed under the full suite while
+/// passing in isolation.
+///
+/// Not created on disk here: the photo stores create their own directories on first write, and an
+/// unwritten test store should leave nothing behind.
+func uniquePhotoDirectory() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("fernlet.tests.photos.\(UUID().uuidString)", isDirectory: true)
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///
 /// `bundledFoodItems` seeds an in-memory food catalog (the SQLite-backed bundle is not loaded in
 /// tests), so tests stay deterministic — pass the specific USDA items a test needs.
+///
+/// `photoDocumentsDirectory` defaults to a fresh `uniquePhotoDirectory()`; pass an explicit one only
+/// to give two stores a SHARED photo corpus (e.g. simulating a relaunch over the same photos).
 @MainActor
-func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = [], cookingRunDirectory: URL? = nil) -> FernletStore {
-    makeTestStoreWithRepositories(date: date, bundledFoodItems: bundledFoodItems, cookingRunDirectory: cookingRunDirectory).store
+func makeTestStore(
+    date: Date = .now,
+    bundledFoodItems: [FoodItem] = [],
+    cookingRunDirectory: URL? = nil,
+    photoDocumentsDirectory: URL = uniquePhotoDirectory()
+) -> FernletStore {
+    makeTestStoreWithRepositories(
+        date: date,
+        bundledFoodItems: bundledFoodItems,
+        cookingRunDirectory: cookingRunDirectory,
+        photoDocumentsDirectory: photoDocumentsDirectory
+    ).store
 }
 
 /// Like `makeTestStore`, but also returns the backing days repository and the in-memory journal
@@ -56,6 +86,7 @@ func makeTestStoreWithRepositories(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
     cookingRunDirectory: URL? = nil,
+    photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -95,7 +126,9 @@ func makeTestStoreWithRepositories(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
-        cookingRunDirectory: cookingRunDirectory
+        cookingRunDirectory: cookingRunDirectory,
+        // Own-photo corpora in a per-store temp root — see `uniquePhotoDirectory()`.
+        photoDocumentsDirectory: photoDocumentsDirectory
     )
     return (store, repository, journalNarrativeRepository)
 }
@@ -104,11 +137,15 @@ func makeTestStoreWithRepositories(
 /// EXISTING days repository + sealed narrative store, simulating a brand-new app session that
 /// reads/writes the same persisted blob and sealed store. Used to reproduce the "entry sealed in a
 /// prior session, then edited after it aged out of the in-memory sealed-id set" path (F1 regression).
+///
+/// The photo corpus is NOT shared by default — pass the first store's `photoDocumentsDirectory` when
+/// a test needs its photos to survive into the simulated relaunch.
 @MainActor
 func makeStoreSharingStores(
     date: Date = .now,
     repository: CoreDataFernletRepository,
-    narratives: JournalNarrativeRepository
+    narratives: JournalNarrativeRepository,
+    photoDocumentsDirectory: URL = uniquePhotoDirectory()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -128,7 +165,8 @@ func makeStoreSharingStores(
         coinLedgerRepository: CoinLedgerRepository(controller: throwawayController),
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
-        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))
+        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
+        photoDocumentsDirectory: photoDocumentsDirectory
     )
 }
 

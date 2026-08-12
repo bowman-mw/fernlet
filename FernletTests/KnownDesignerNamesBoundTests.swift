@@ -95,7 +95,8 @@ struct KnownDesignerNamesBoundTests {
             customItemRepository: CustomItemRepository(controller: controller),
             coinLedgerRepository: CoinLedgerRepository(controller: controller),
             // Hermetic: never fall back to MilestoneLedgerRepository() on PersistenceController.shared.
-            milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller)
+            milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
     }
 }

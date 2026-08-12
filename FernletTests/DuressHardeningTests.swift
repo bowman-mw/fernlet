@@ -447,7 +447,7 @@ struct DuressDecoyProgressPhotoTests {
     private func makeStore() -> FernletStore {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("duress-photos-\(UUID().uuidString).json")
-        return FernletStore(repository: LocalFernletRepository(fileURL: url))
+        return FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     private func sampleJPEG() -> Data {

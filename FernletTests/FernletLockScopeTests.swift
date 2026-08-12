@@ -298,7 +298,7 @@ struct FernletLockScopeTests {
     @Test func healthCapabilitiesStayClosedWhenAnotherSurfaceHoldsTheUnlock() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lock-scope-caps-\(UUID().uuidString).json")
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: url))
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
         store.ageAssurance.applyDetermination(
             lowerBound: AgeGate.intimacy.minimumAge,
             upperBound: nil,

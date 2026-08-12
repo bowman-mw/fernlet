@@ -33,6 +33,16 @@ struct DeleteAllDataTests {
             .appendingPathComponent("\(name)-\(UUID().uuidString).json")
     }
 
+    /// A live store over its own repository file AND its own own-photo root. Both have to be
+    /// per-store: these tests wipe, and the photo corpora are shared on-disk state — a store left on
+    /// the process-wide root deletes the photos of every concurrently-running suite.
+    private func makeStore(_ name: String) -> FernletStore {
+        FernletStore(
+            repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)),
+            photoDocumentsDirectory: uniquePhotoDirectory()
+        )
+    }
+
     /// A snapshot with one day of real content.
     private func snapshot(todayKey: String, bottles: Int) -> FernletSnapshot {
         var day = FernletDay(date: todayKey)
@@ -96,7 +106,7 @@ struct DeleteAllDataTests {
     /// `deleteAllData` must reach the sealed stores it does not own, via the hooks. Without them the
     /// funnel would silently skip the app's most sensitive data.
     @Test func deleteAllDataInvokesEverySealedStoreHook() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hooks")))
+        let store = makeStore("delete-all-hooks")
         var called: Set<String> = []
         var worryCallCount = 0
         store.periodDataDeleteHook = { called.insert("period"); return true }
@@ -122,7 +132,7 @@ struct DeleteAllDataTests {
     /// (the app lock survives a wipe), so this must be its own step. Without it, "delete everything"
     /// quietly means "delete until the next unlock".
     @Test func pendingNarrativeBufferIsPurgedSoLockedNotesCannotComeBack() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-buffer")))
+        let store = makeStore("delete-all-buffer")
         var purged = false
         store.pendingNarrativeBufferPurgeHook = { purged = true; return true }
 
@@ -135,7 +145,7 @@ struct DeleteAllDataTests {
     /// app and the dialog promises it is gone — silently swallowing the failure is the exact defect the
     /// funnel exists to end.
     @Test func outcomeReportsASealedStoreThatFailedToDelete() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-sealed-fail")))
+        let store = makeStore("delete-all-sealed-fail")
         store.journalDataDeleteHook = { false }
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
@@ -146,7 +156,7 @@ struct DeleteAllDataTests {
 
     /// HealthKit deletion is the user's explicit choice at delete time, so it must NOT fire unless asked.
     @Test func healthKitSamplesAreOnlyDeletedWhenRequested() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-off")))
+        let store = makeStore("delete-all-hk-off")
         var healthDeleted = false
         store.healthKitSampleDeleteHook = { healthDeleted = true; return .complete }
 
@@ -160,7 +170,7 @@ struct DeleteAllDataTests {
     /// Deliberate survivors. If one of these starts getting wiped, the confirm dialog's disclosure
     /// becomes a lie — and for the moderation ban, a wipe would become a way to undo a block.
     @Test func deleteAllDataClearsTheDayButKeepsDeliberateSurvivors() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-survivors")))
+        let store = makeStore("delete-all-survivors")
         store.addBottle()
         #expect(store.day.bottleCount > 0)
 
@@ -186,7 +196,7 @@ struct DeleteAllDataTests {
         repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
-        let store = FernletStore(repository: repository)
+        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
         await store.deleteAllData(includingHealthKitSamples: false)
 
         // A fresh repository over the same file is the next launch.
@@ -203,7 +213,7 @@ struct DeleteAllDataTests {
     @Test func noPendingSaveResurrectsDataAfterTheWipe() async throws {
         let url = temporaryDatabaseURL("delete-all-debounce")
         let repository = LocalFernletRepository(fileURL: url)
-        let store = FernletStore(repository: repository)
+        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
         store.addBottle()   // schedules a debounced save
         await store.deleteAllData(includingHealthKitSamples: false)
 
@@ -223,7 +233,7 @@ struct DeleteAllDataTests {
         queue.save([SharedRecipeImportRecord(url: URL(string: "https://example.com/soup")!)])
         #expect(!queue.records().isEmpty, "precondition: the seeded queue row did not land")
 
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-recipe-store")))
+        let store = makeStore("delete-all-recipe-store")
         store.sharedRecipeImportQueue = queue
         await store.deleteAllData(includingHealthKitSamples: false)
 
@@ -233,7 +243,7 @@ struct DeleteAllDataTests {
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
     /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
     @Test func outcomeReportsAStoreThatFailedToDelete() async {
-        let store = FernletStore(repository: FailingPurgeRepository())
+        let store = FernletStore(repository: FailingPurgeRepository(), photoDocumentsDirectory: uniquePhotoDirectory())
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!outcome.isComplete)
@@ -245,7 +255,7 @@ struct DeleteAllDataTests {
     /// under storage pressure — so a user who exported and then deleted everything could otherwise be left
     /// with a full plaintext copy on disk after a dialog that told them it was gone.
     @Test func exportedDataFileIsSweptByTheWipe() async throws {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-export")))
+        let store = makeStore("delete-all-export")
         // Wire the sealed hooks so the wipe is otherwise complete (an unwired hook now reports failure);
         // this test asserts the export sweep specifically keeps a clean wipe complete.
         wireSucceedingSealedHooks(store)
@@ -267,7 +277,7 @@ struct DeleteAllDataTests {
         try Data("{}".utf8).write(to: legacyURL, options: [.atomic, .completeFileProtection])
         #expect(FileManager.default.fileExists(atPath: legacyURL.path), "precondition: the legacy file was not written")
 
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-legacy-export")))
+        let store = makeStore("delete-all-legacy-export")
         await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext export survived the wipe")
@@ -277,7 +287,7 @@ struct DeleteAllDataTests {
     /// injury notes, sickness days, wellbeing scores in the clear — and it writes into the same exports
     /// directory precisely so the wipe covers it by construction rather than by anyone remembering it.
     @Test func trainerExportFileIsSweptByTheWipe() async throws {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-trainer-export")))
+        let store = makeStore("delete-all-trainer-export")
         // Wire the sealed hooks so the wipe is otherwise complete (an unwired hook now reports failure);
         // this test asserts the export sweep specifically keeps a clean wipe complete.
         wireSucceedingSealedHooks(store)
@@ -300,7 +310,7 @@ struct DeleteAllDataTests {
         try Data("{}".utf8).write(to: legacyURL, options: [.atomic, .completeFileProtection])
         #expect(FileManager.default.fileExists(atPath: legacyURL.path), "precondition: the legacy file was not written")
 
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-legacy-trainer-export")))
+        let store = makeStore("delete-all-legacy-trainer-export")
         await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext trainer export survived the wipe")
@@ -308,7 +318,7 @@ struct DeleteAllDataTests {
 
     /// A clean wipe reports success, so the caller can dismiss rather than cry wolf.
     @Test func outcomeIsCompleteWhenEveryStoreClears() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-clean")))
+        let store = makeStore("delete-all-clean")
         // A nil sealed hook now counts as a failure (an unwired funnel can't claim it cleared a store it
         // never called), so a "clean wipe" must supply them all.
         wireSucceedingSealedHooks(store)
@@ -323,7 +333,7 @@ struct DeleteAllDataTests {
     /// success, so an unwired funnel would quietly miss the app's most sensitive rows and still report a
     /// complete wipe. Here the journal hook is left nil while the rest succeed.
     @Test func outcomeReportsAnUnwiredSealedHookAsIncomplete() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-nil-hook")))
+        let store = makeStore("delete-all-nil-hook")
         store.periodDataDeleteHook = { true }
         store.intimacyDataDeleteHook = { true }
         store.pendingNarrativeBufferPurgeHook = { true }
@@ -339,7 +349,7 @@ struct DeleteAllDataTests {
     /// a wipe the dialog called complete could leave Fernlet's Apple Health samples behind. Now it returns
     /// an outcome, and `.failed` must surface.
     @Test func outcomeReportsWhenHealthKitDeleteFails() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-fail")))
+        let store = makeStore("delete-all-hk-fail")
         wireSucceedingSealedHooks(store)
         store.healthKitSampleDeleteHook = { .failed }
 
@@ -355,7 +365,7 @@ struct DeleteAllDataTests {
     /// failure this funnel exists to end). The outcome must be incomplete with the actionable label,
     /// not the generic one that would invite a doomed retry.
     @Test func outcomeReportsRevokedHealthAccessWithTheActionableLabel() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-revoked")))
+        let store = makeStore("delete-all-hk-revoked")
         wireSucceedingSealedHooks(store)
         store.healthKitSampleDeleteHook = { .accessRevoked }
 
@@ -373,7 +383,7 @@ struct DeleteAllDataTests {
     /// unwired) purge was swallowed while the dialog promised "Worry Box notes" by name. A false must
     /// surface like every other sealed hook.
     @Test func outcomeReportsAWorryBoxPurgeThatFailed() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-worry-fail")))
+        let store = makeStore("delete-all-worry-fail")
         wireSucceedingSealedHooks(store)
         store.worryBoxResetHook = { false }
 
@@ -386,7 +396,7 @@ struct DeleteAllDataTests {
     /// A NIL (unwired) Worry Box hook is a failure, not a silent skip — same rule as the other sealed
     /// hooks: an unwired funnel can't claim it cleared a store it never called.
     @Test func outcomeReportsAnUnwiredWorryBoxHookAsIncomplete() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-worry-nil")))
+        let store = makeStore("delete-all-worry-nil")
         wireSucceedingSealedHooks(store)
         store.worryBoxResetHook = nil
 
@@ -399,7 +409,7 @@ struct DeleteAllDataTests {
     /// The storage-preferences reset was the last nil-silent hook in the funnel: an unwired run left
     /// Health grants and backup flags as they were while the wipe reported complete.
     @Test func outcomeReportsAnUnwiredStoragePreferencesHookAsIncomplete() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-prefs-nil")))
+        let store = makeStore("delete-all-prefs-nil")
         wireSucceedingSealedHooks(store)
         store.storagePreferencesResetHook = nil
 
@@ -413,7 +423,7 @@ struct DeleteAllDataTests {
     /// locked-note buffer both purge "your cycle notes". Both failing must still list it ONCE, or the
     /// failure alert reads "…and your cycle notes and your cycle notes".
     @Test func incompleteStoresAreDeduplicated() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-dedupe")))
+        let store = makeStore("delete-all-dedupe")
         store.periodDataDeleteHook = { false }            // names "your cycle notes"
         store.intimacyDataDeleteHook = { true }
         store.journalDataDeleteHook = { true }
@@ -461,7 +471,7 @@ struct DeleteAllDataTests {
     /// cancel it; `applyRestoredChunks`' cancellation check then stops the write
     /// (`applyRefusesToWriteInsideACancelledTask` in SealedBackupRestoreTests covers that half).
     @Test func deleteAllCancelsTheInFlightPeriodBackupSettle() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-settle")))
+        let store = makeStore("delete-all-settle")
         let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
         store.periodBackupSettleTask = inFlight
 
@@ -474,7 +484,7 @@ struct DeleteAllDataTests {
     /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
     /// re-insert intimate logs into the just-emptied store.
     @Test func deleteAllCancelsTheInFlightIntimacyBackupSettle() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-intimacy-settle")))
+        let store = makeStore("delete-all-intimacy-settle")
         let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
         store.intimacyBackupSettleTask = inFlight
 
@@ -487,7 +497,7 @@ struct DeleteAllDataTests {
     /// that is going with it), so none may survive as an obligation the app will keep surfacing — and
     /// keep retrying — against records that no longer exist.
     @Test func deleteAllClearsEveryPayloadsReuploadDeferral() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-deferrals")))
+        let store = makeStore("delete-all-deferrals")
         wireSucceedingSealedHooks(store)
         var persisted: [SealedBackupPayloadType: Bool] = [:]
         store.sealedBackupDeferralPersistHook = { deferred, payload in persisted[payload] = deferred }
@@ -524,7 +534,7 @@ struct DeleteAllDataTests {
     /// store" — the rows are gone, but the file they lived in could not be re-created, so the
     /// residue promise is the one the wipe could not keep.
     @Test func outcomeReportsASealedStoreRebuildThatFailed() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-rebuild-fail")))
+        let store = makeStore("delete-all-rebuild-fail")
         wireSucceedingSealedHooks(store)
         store.sealedStoreRebuildHook = { false }
 
@@ -538,7 +548,7 @@ struct DeleteAllDataTests {
     /// which delegates to `resetAll()`, does not run it twice (the same one-invocation contract the
     /// Worry Box purge has).
     @Test func theSealedStoreIsRebuiltExactlyOncePerWipe() async {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-rebuild-once")))
+        let store = makeStore("delete-all-rebuild-once")
         var rebuildCount = 0
         wireSucceedingSealedHooks(store)
         store.sealedStoreRebuildHook = { rebuildCount += 1; return true }
@@ -652,7 +662,7 @@ struct DeleteAllDataTests {
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
 
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-locked")))
+        let store = makeStore("delete-all-locked")
         store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository(controller: controller, defaults: defaults).deleteAll()) != nil }
         store.intimacyDataDeleteHook = { (try? IntimacyLogRepository(controller: controller).deleteAll()) != nil }
         store.journalDataDeleteHook = { (try? JournalNarrativeRepository(controller: controller).deleteAll()) != nil }

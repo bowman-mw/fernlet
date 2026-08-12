@@ -617,7 +617,7 @@ struct PrivacyWipeMediaKeySurvivalTests {
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("wipe-media-key-\(UUID().uuidString).json")
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: url))
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
         await store.deleteAllData(includingHealthKitSamples: false)
 
         // A FRESH provider holds no cached key, so this is the next launch reading the keychain —
@@ -652,7 +652,7 @@ struct PrivacyWipeAttemptMemoryRemovalTests {
     @Test func deleteAllClearsTheRecipeWebImageAttemptMemory() async {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("wipe-attempt-memory-\(UUID().uuidString).json")
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: url))
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
         // Isolate the sidecar from the shared `.standard` suite (the injection seam exists for
         // exactly this — see `webImageAttemptDefaults`); record + wipe still share ONE instance,
         // which is the contract the manifest token documents.

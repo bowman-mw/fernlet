@@ -289,7 +289,7 @@ struct WorkoutRecoveryTests {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("WorkoutRecoveryTests-\(UUID().uuidString)")
             .appendingPathExtension("json")
-        return FernletStore(repository: LocalFernletRepository(fileURL: url), healthKitService: healthKitService)
+        return FernletStore(repository: LocalFernletRepository(fileURL: url), healthKitService: healthKitService, photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     private func waitFor(_ condition: @MainActor () -> Bool) async {

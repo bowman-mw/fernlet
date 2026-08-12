@@ -56,7 +56,7 @@ struct FernletPersistenceTests {
         )
         let activePrivate = privateController ?? PrivatePersistenceController(inMemory: true)
         let jnr = JournalNarrativeRepository(controller: activePrivate)
-        return FernletStore(date: testDate, repository: repo, journalNarrativeRepository: jnr)
+        return FernletStore(date: testDate, repository: repo, journalNarrativeRepository: jnr, photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     // MARK: - Test 1
@@ -122,7 +122,7 @@ struct FernletPersistenceTests {
     @MainActor
     @Test func test_batchPersistence_singleSaveCycle() async {
         let spy = SpyFernletRepository()
-        let store = FernletStore(date: testDate, repository: spy)
+        let store = FernletStore(date: testDate, repository: spy, photoDocumentsDirectory: uniquePhotoDirectory())
         await Task.yield()  // drain any save Task from seedBundledFoodItems
         let savesBefore = spy.saveCount
 

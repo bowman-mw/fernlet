@@ -18,7 +18,7 @@ import PrivateStoreCore
 struct SensitiveSurfaceGateTests {
 
     private func makeStore(_ name: String) -> FernletStore {
-        FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)))
+        FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)), photoDocumentsDirectory: uniquePhotoDirectory())
     }
 
     private func temporaryDatabaseURL(_ name: String) -> URL {
@@ -349,7 +349,8 @@ struct SensitiveSurfaceGateTests {
         // 1. This device explicitly hides BOTH surfaces — the setters write the device-local marker.
         let store1 = FernletStore(
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-keydrop-src")),
-            sensitiveVisibilityDefaults: defaults
+            sensitiveVisibilityDefaults: defaults,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         seedAgeMeetingIntimacyGate(store1)
         store1.setPeriodTrackingVisible(false)
@@ -364,7 +365,8 @@ struct SensitiveSurfaceGateTests {
         // 3. A fresh store on the SAME device (same sidecar) loads the key-dropped blob.
         let store2 = FernletStore(
             repository: LocalFernletRepository(fileURL: syncedURL),
-            sensitiveVisibilityDefaults: defaults
+            sensitiveVisibilityDefaults: defaults,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         seedAgeMeetingIntimacyGate(store2)
 
@@ -424,7 +426,7 @@ struct SensitiveSurfaceGateTests {
         // Fresh install: no record yet — the repository serves the synthesized default database.
         let remote = RemoteSwappableRepository(
             current: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-freshpull-empty")))
-        let store = FernletStore(repository: remote, sensitiveVisibilityDefaults: defaults)
+        let store = FernletStore(repository: remote, sensitiveVisibilityDefaults: defaults, photoDocumentsDirectory: uniquePhotoDirectory())
         #expect(store.settings.periodTrackingVisible == nil)
         // Flush the init-scheduled save NOW so the reload below (which flushes pending saves before
         // loading, as the real path does) can't clobber the just-arrived blob with pristine state.
@@ -469,7 +471,8 @@ struct SensitiveSurfaceGateTests {
         let url = temporaryDatabaseURL("gate-freshsave")
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: url),
-            sensitiveVisibilityDefaults: defaults
+            sensitiveVisibilityDefaults: defaults,
+            photoDocumentsDirectory: uniquePhotoDirectory()
         )
         // Any benign first-session mutation (init also schedules one for the designer-id mint).
         store.setCompanionName("Fern")
