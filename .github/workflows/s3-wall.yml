@@ -6,10 +6,18 @@
 # not reach the synthesized SwiftPM targets from the pbxproj). This workflow runs that check on
 # every push/PR so a forbidden cross-wall `import` can never land green.
 #
-# RUNNER REQUIREMENT: needs macOS + Xcode 26.5 + an iOS 26 simulator. If GitHub-hosted runners do
-# not yet provide Xcode 26.5 / iOS 26, change `runs-on` below to a self-hosted runner label that
-# does (e.g. `[self-hosted, macos, xcode-26.5]`). The pre-push hook (Scripts/install-git-hooks.sh)
-# is the always-available, no-CI complement.
+# RUNNER REQUIREMENT: macOS with **any Xcode 26 or newer** — FernletKit/Package.swift is
+# swift-tools-version 6.2 and the app builds against the iOS 26 SDK, so an older toolchain cannot
+# even resolve the package. The job picks the newest Xcode 26+ on the image and FAILS LOUDLY if
+# there is none; it does not pin a specific minor version. (It used to pin 26.5, which no hosted
+# image had — so it fell back to Xcode 16.4 and every run died at package resolution with an error
+# that looked like a wall failure.) If hosted images ever regress below Xcode 26, point `runs-on`
+# at a self-hosted label instead. The pre-push hook (Scripts/install-git-hooks.sh) is the
+# always-available, no-CI complement.
+#
+# Keep IPHONEOS_DEPLOYMENT_TARGET at the floor the product actually claims (26.0). A deployment
+# target above the runner's SDK is a hard build error, so raising it to the latest point release
+# silently makes this workflow unrunnable on hosted images.
 #
 # Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
 
@@ -29,23 +37,60 @@ concurrency:
 jobs:
   s3-wall:
     name: Compiler wall + grep-wall
-    # Swap for a self-hosted label if hosted runners lack Xcode 26.5 / iOS 26 (see header).
+    # Swap for a self-hosted label if hosted images ever regress below Xcode 26 (see header).
     runs-on: macos-15
-    env:
-      FERNLET_DESTINATION: "platform=iOS Simulator,name=iPhone 17"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 26.5
+      # Picks the newest Xcode 26+ and exports it for every later step. Deliberately a *floor*,
+      # not a pin: the exact minor version does not matter, being able to read Swift tools 6.2
+      # and the iOS 26 SDK does. Missing toolchain = hard failure, never a silent fallback.
+      - name: Select the newest Xcode 26+
         run: |
           set -euo pipefail
-          if [ -d /Applications/Xcode_26.5.app ]; then
-            sudo xcode-select -s /Applications/Xcode_26.5.app
-          else
-            echo "::warning::Xcode_26.5.app not found; using the runner default. Available Xcodes:"
+          shopt -s nullglob
+          best_version=""; best_dir=""
+          for app in /Applications/Xcode*.app; do
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+              "$app/Contents/Info.plist" 2>/dev/null)" || continue
+            [ -n "$version" ] || continue
+            major="${version%%.*}"
+            case "$major" in ''|*[!0-9]*) continue ;; esac
+            [ "$major" -ge 26 ] || continue
+            if [ -z "$best_version" ] || \
+               [ "$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+              best_version="$version"; best_dir="$app/Contents/Developer"
+            fi
+          done
+          if [ -z "$best_dir" ]; then
+            echo "::error::No Xcode 26 or newer on this runner. FernletKit needs Swift tools 6.2+ and the iOS 26 SDK."
             ls -d /Applications/Xcode*.app || true
+            exit 1
           fi
-          xcodebuild -version
+          echo "Selected Xcode $best_version ($best_dir)"
+          echo "DEVELOPER_DIR=$best_dir" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$best_dir" xcodebuild -version
+          DEVELOPER_DIR="$best_dir" swift --version
+
+      # iPhone 17 is what the docs and the pre-push hook use, so prefer it — but fall back to the
+      # newest available iPhone rather than failing over a device-name change in the image.
+      - name: Resolve a simulator destination
+        run: |
+          set -euo pipefail
+          name="iPhone 17"
+          if ! xcrun simctl list devices available | grep -qE "^ *${name} \("; then
+            fallback="$(xcrun simctl list devices available \
+              | sed -n 's/^ *\(iPhone [^(]*\) (.*/\1/p' | sed 's/ *$//' | sort -V | tail -1)"
+            if [ -z "$fallback" ]; then
+              echo "::error::No iPhone simulator available on this runner."
+              xcrun simctl list devices available || true
+              exit 1
+            fi
+            echo "::warning::${name} not available; falling back to ${fallback}."
+            name="$fallback"
+          fi
+          echo "Using simulator: $name"
+          echo "FERNLET_DESTINATION=platform=iOS Simulator,name=$name" >> "$GITHUB_ENV"
 
       - name: Enforcement self-test (prove the wall is load-bearing) + clean-tree check
         run: Scripts/spm-wall-selftest.sh
