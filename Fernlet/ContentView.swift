@@ -164,6 +164,16 @@ struct ContentView: View {
                 // persisted, so at launch this is only ever a mirror of `false` — it is here for
                 // the invariant, not for a case that exists today).
                 store.duressSessionActive = lockService.isDuressSessionActive
+                // Retire a duress-recovery enrollment this device's identity has outlived, before
+                // anything can arm or fire the response over it. Cheap (two keychain reads and a
+                // comparison when an enrollment exists, one when it does not) and idempotent; the
+                // delete-all funnel fires the same reconcile in-line via `identityRotatedHook`, and
+                // this is the backstop for a rotation from any other route — including a wipe whose
+                // process died before the hook ran.
+                DuressRecoveryCoordinator(
+                    identity: IdentityService(),
+                    lockService: lockService
+                ).reconcileEnrollmentWithLocalIdentity()
                 // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
                 // on every cold launch, so wiring this later would let one full decrypt + HealthKit
                 // read through before the gate existed.
@@ -804,6 +814,18 @@ struct ContentView: View {
         // caller that never asks: a duress wipe has no dialog to ask on.
         lockService.duressPurgeHook = { [store] in
             Task { _ = await store.deleteAllData(includingHealthKitSamples: true) }
+        }
+        // The other half of the duress-recovery custody story, and the one that is NOT a duress path
+        // at all: "Delete everything" regenerates this device's proximity identity while deliberately
+        // keeping the app lock, and the recovery blob is sealed with the OLD identity key mixed into
+        // its derivation. Reconciling here retires an enrollment the wipe just made unopenable, so
+        // `DuressMode.recoveryLock` can neither stay armed nor be re-armed over it. Runs at launch
+        // too (see the `.task` below), which covers a rotation from any other route.
+        store.identityRotatedHook = { [lockService] in
+            DuressRecoveryCoordinator(
+                identity: IdentityService(),
+                lockService: lockService
+            ).reconcileEnrollmentWithLocalIdentity()
         }
         // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone with
         // sync off. `deleteAllCloudKitData` opens its own connection (no live sync session needed) and the

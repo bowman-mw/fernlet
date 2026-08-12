@@ -33,7 +33,8 @@ private func freshScopedService() -> FernletLockService {
     let service = FernletLockService(
         keychainService: "com.fernlet.lock.scopetest.\(UUID().uuidString)",
         // reset() sweeps the sealed-content device keys too; keep that off the real service.
-        sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+        mediaKeychainServices: ["com.fernlet.private-media.test.\(UUID().uuidString)"]
     )
     try? service.reset()
     return service
@@ -67,6 +68,7 @@ struct FernletLockScopeTests {
         let service = FernletLockService(
             keychainService: keychainService,
             sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            mediaKeychainServices: ["com.fernlet.private-media.test.\(UUID().uuidString)"],
             biometricBypassLoader: { _, _ in bypassKey }
         )
         defer { try? service.reset() }

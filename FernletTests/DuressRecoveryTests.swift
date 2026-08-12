@@ -111,7 +111,8 @@ private final class RecoveryFixture {
         try await service.enrollRecoveryCustodian(
             passcode: passcode,
             signingPublicKey: custodianIdentity.localSigningPublicKey,
-            keyAgreementPublicKey: custodianKeyAgreement
+            keyAgreementPublicKey: custodianKeyAgreement,
+            ownKeyAgreementPublicKey: primary.localKeyAgreementPublicKey
         ) { contentKey in
             try primary.seal(contentKey, to: custodianKeyAgreement, format: .wire2)
         }
@@ -233,7 +234,8 @@ struct DuressRecoveryEnrollmentTests {
             try await fixture.service.enrollRecoveryCustodian(
                 passcode: "123456",
                 signingPublicKey: Data(repeating: 0x11, count: 31),
-                keyAgreementPublicKey: Data(repeating: 0x22, count: 32)
+                keyAgreementPublicKey: Data(repeating: 0x22, count: 32),
+                ownKeyAgreementPublicKey: Data(repeating: 0x33, count: 32)
             ) { $0 }
             Issue.record("a malformed custodian signing key was accepted")
         } catch FernletLockError.invalidCredential(let message) {
@@ -259,7 +261,7 @@ struct DuressRecoveryEnrollmentTests {
         #expect(fixture.service.hasRecoveryCustodian)
 
         // Change the response first, and the removal goes through.
-        fixture.service.removeDuress()
+        try fixture.service.removeDuress()
         try fixture.service.removeRecoveryCustodian()
         #expect(!fixture.service.hasRecoveryCustodian)
         #expect(fixture.service.custodianRecoveryBlob == nil)
@@ -425,6 +427,63 @@ struct DuressRecoveryLockTriggerTests {
         #expect(relaunched.custodianRecoveryBlob != nil)
         // …and the blob still opens to the ORIGINAL key, not the one the new lock just minted.
         #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+        // Which is exactly why the enrollment is now marked SUPERSEDED: the route back to the
+        // pre-lock corpus survives, but the blob cannot open a byte written under this new lock.
+        #expect(relaunched.hasSupersededRecoveryBlob)
+    }
+
+    /// The other half of the state above. `hasRecoveryCustodian` proves three rows exist, so on its
+    /// own it would let the user arm `.recoveryLock` again over a blob that hands back the
+    /// SUPERSEDED key — the response would destroy the live key and the ceremony would report
+    /// success while orphaning everything written under the interim lock.
+    @Test func aSupersededRecoveryBlobMayNotBeArmedAgain() async throws {
+        let fixture = try await triggeredFixture()
+        defer { fixture.cleanup() }
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        #expect(relaunched.hasSupersededRecoveryBlob)
+
+        do {
+            try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock)
+            Issue.record("a superseded recovery blob was armed again")
+        } catch FernletLockError.invalidCredential(let message) {
+            #expect(message == FernletLockService.recoveryCustodianSupersededMessage)
+        }
+        #expect(!relaunched.hasDuressConfigured)
+        // The non-destructive responses are unaffected — the refusal is about this one pairing.
+        try await relaunched.configureDuress(pin: "654321", mode: .decoy)
+        #expect(relaunched.configuredDuressMode == .decoy)
+        // …and the setup screen withholds the option for the same reason, with a reason to show.
+        let availability = DuressSetupAvailability(lockService: relaunched)
+        #expect(availability.hasRecoveryCustodian)
+        #expect(availability.hasSupersededRecoveryBlob)
+        #expect(!availability.isSelectable(.recoveryLock))
+        #expect(availability.unavailableReason(for: .recoveryLock)?.contains("before this app lock") == true)
+    }
+
+    /// The way out: enrolling the custodian again re-seals to the LIVE content key, so the mark
+    /// clears and the response becomes armable.
+    @Test func reEnrollingClearsTheSupersededMark() async throws {
+        let fixture = try await triggeredFixture()
+        defer { fixture.cleanup() }
+        let relaunched = fixture.harness.makeService()
+        try await relaunched.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        #expect(relaunched.hasSupersededRecoveryBlob)
+
+        let custodianKeyAgreement = fixture.custodianIdentity.localKeyAgreementPublicKey
+        let primary = fixture.primaryIdentity
+        try await relaunched.enrollRecoveryCustodian(
+            passcode: "999999",
+            signingPublicKey: fixture.custodianIdentity.localSigningPublicKey,
+            keyAgreementPublicKey: custodianKeyAgreement,
+            ownKeyAgreementPublicKey: primary.localKeyAgreementPublicKey
+        ) { contentKey in
+            try primary.seal(contentKey, to: custodianKeyAgreement, format: .wire2)
+        }
+
+        #expect(!relaunched.hasSupersededRecoveryBlob)
+        try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock)
+        #expect(relaunched.configuredDuressMode == .recoveryLock)
     }
 
     /// An ordinary re-configure on a device that is NOT awaiting recovery still sweeps the material:
@@ -815,6 +874,52 @@ struct DuressRecoveryCeremonyTests {
         #expect(pair.fixture.service.isAwaitingCustodianRecovery)
     }
 
+    /// The new passcode is format-checked BEFORE the ceremony round is spent.
+    ///
+    /// `reestablishLocalUnlock` validates it too, but it used to do so after `completeRecovery` had
+    /// already cleared `pendingRound` (and after the custodian had consumed its pending request), so
+    /// a five-digit "6-digit PIN" or an empty field threw into a dead end: the re-shown step could
+    /// only raise `.noRoundInProgress`, and both phones had to redo every QR hop. Refusing first
+    /// keeps the retry the error invites actually usable.
+    @Test func aMalformedNewPasscodeIsRefusedBeforeTheCeremonyRoundIsSpent() async throws {
+        let pair = try await recoveryLockedPair()
+        defer { pair.cleanup() }
+        let primaryKA = pair.fixture.primaryIdentity.localKeyAgreementPublicKey
+
+        let response = try runVerificationRound(pair) { try pair.primary.beginRecovery(scannedURL: $0) }
+        let sealedRequest = try pair.primary.makeRecoveryRequest(
+            response: response,
+            senderSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey
+        )
+        _ = try pair.custodian.openRecoveryRequest(sealedRequest, from: primaryKA)
+        let sealedReply = try pair.custodian.answerPendingRecoveryRequest(.returnKey)
+
+        // A PIN that is not six digits — the one input the human types, with no client-side length
+        // gate on the field.
+        do {
+            _ = try await pair.primary.completeRecovery(
+                sealedReply: sealedReply,
+                credential: .pin6("22222"),
+                grantingScope: .privateHub
+            )
+            Issue.record("a malformed new passcode completed a recovery")
+        } catch FernletLockError.invalidCredential {
+            // Expected — and, crucially, raised before the round was spent.
+        }
+        #expect(pair.fixture.service.isAwaitingCustodianRecovery)
+
+        // The round survived, so the SAME sealed reply completes the recovery on the retry the error
+        // invites — no second trip through the QR hops on either phone.
+        let outcome = try await pair.primary.completeRecovery(
+            sealedReply: sealedReply,
+            credential: .pin6("222222"),
+            grantingScope: .privateHub
+        )
+        #expect(outcome == .unlockReestablished)
+        let key = try #require(pair.fixture.service.contentKey(for: .privateHub))
+        #expect(key.withUnsafeBytes { Data($0) } == pair.fixture.contentKey)
+    }
+
     /// A `destroy` answer is REPORTED, never acted on here: destroying the corpus is an explicit,
     /// user-visible act of the app's own funnel, not something a message from another phone performs.
     @Test func aDestroyAnswerIsReportedWithoutOpeningTheBlobOrTouchingTheLock() async throws {
@@ -934,5 +1039,95 @@ private final class RecoveryAuditCapture {
     func anyEventNameContains(_ needle: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return events.contains { $0.event.localizedCaseInsensitiveContains(needle) }
+    }
+}
+
+// MARK: - The enrollment's OTHER dependency: this device's own proximity identity
+
+/// The recovery blob is sealed with THIS device's long-term key-agreement key mixed into the
+/// derivation and the AEAD's additional data, and the custodian opens it with the live,
+/// ceremony-proven sender key. So the enrollment silently dies the moment this device's identity
+/// rotates — and "Delete everything" rotates it while deliberately KEEPING the app lock, the content
+/// key and the recovery rows.
+///
+/// Nothing in `FernletLock` can see that happen (it has no ProximityKit edge, by design), which is
+/// why the enrollment records the owner key and the app-side coordinator does the comparing. Without
+/// this reconcile the phone would keep `DuressMode.recoveryLock` armed over a blob no device on earth
+/// can open: firing it destroys every local unlock key for a ceremony that can only end in
+/// "this phone can't open that request" — the unannounced permanent lock-out the mode's fail-closed
+/// guard exists to prevent.
+@MainActor
+@Suite(.serialized)
+struct DuressRecoveryIdentityRotationTests {
+
+    @Test func rotatingThisDevicesIdentityRetiresTheEnrollmentAndDisarmsTheResponse() async throws {
+        let fixture = try await RecoveryFixture()
+        defer { fixture.cleanup() }
+        try await fixture.enrollCustodian()
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        #expect(fixture.service.hasRecoveryCustodian)
+        #expect(fixture.service.enrolledRecoveryOwnerKeyAgreementPublicKey
+                == fixture.primaryIdentity.localKeyAgreementPublicKey)
+
+        // What `FernletStore.deleteAllData` does to the identity, and only that: the lock keychain,
+        // the content key and the recovery rows all survive it.
+        try fixture.primaryIdentity.wipe()
+        try fixture.primaryIdentity.ensureProvisioned()
+        #expect(fixture.service.hasRecoveryCustodian, "precondition: the wipe leaves the lock rows alone")
+
+        let coordinator = DuressRecoveryCoordinator(
+            identity: fixture.primaryIdentity,
+            lockService: fixture.service
+        )
+        #expect(coordinator.reconcileEnrollmentWithLocalIdentity())
+
+        // The dead enrollment is gone…
+        #expect(!fixture.service.hasRecoveryCustodian)
+        #expect(fixture.service.custodianRecoveryBlob == nil)
+        #expect(recoveryRow(.recoveryOwnerKeyAgreementPublicKey, fixture.harness) == nil)
+        // …and the armed response degraded to the NON-destructive decoy rather than staying a
+        // promise the device can no longer keep.
+        #expect(fixture.service.configuredDuressMode == .decoy)
+
+        // Which is what the coerced user actually gets: a decoy, with the real key untouched.
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
+        #expect(fixture.service.isDuressSessionActive)
+        #expect(recoveryRow(.verifier, fixture.harness) != nil, "the local unlock keys must survive")
+        _ = try await fixture.service.unlock(passcode: "123456", for: .privateHub)
+        let recovered = try #require(fixture.service.contentKey(for: .privateHub))
+        #expect(recovered.withUnsafeBytes { Data($0) } == fixture.contentKey)
+    }
+
+    @Test func anUnchangedIdentityLeavesTheEnrollmentAlone() async throws {
+        let fixture = try await RecoveryFixture()
+        defer { fixture.cleanup() }
+        try await fixture.enrollCustodian()
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+
+        let coordinator = DuressRecoveryCoordinator(
+            identity: fixture.primaryIdentity,
+            lockService: fixture.service
+        )
+        #expect(!coordinator.reconcileEnrollmentWithLocalIdentity())
+        #expect(!coordinator.reconcileEnrollmentWithLocalIdentity(), "idempotent")
+
+        #expect(fixture.service.hasRecoveryCustodian)
+        #expect(fixture.service.configuredDuressMode == .recoveryLock)
+        #expect(try fixture.custodianOpensTheBlob() == fixture.contentKey)
+    }
+
+    /// A device with no enrollment has nothing to reconcile, and a reconcile must never be the
+    /// reason an enrollment disappears on a read that simply failed.
+    @Test func reconcileIsANoOpWithoutAnEnrollment() async throws {
+        let fixture = try await RecoveryFixture()
+        defer { fixture.cleanup() }
+
+        let coordinator = DuressRecoveryCoordinator(
+            identity: fixture.primaryIdentity,
+            lockService: fixture.service
+        )
+        #expect(!coordinator.reconcileEnrollmentWithLocalIdentity())
+        #expect(!fixture.service.hasRecoveryCustodian)
     }
 }

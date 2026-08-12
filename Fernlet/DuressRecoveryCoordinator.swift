@@ -248,6 +248,16 @@ struct PendingRecoveryRequestSummary: Equatable, Sendable {
 /// (P7 step 9) compose it without this type knowing what a radio is — and so the whole ceremony is
 /// unit-testable by running two coordinators against each other.
 ///
+/// **Audit names here are deliberately the NEUTRAL `mesh.verifyQR.*` family, not a `duressRecovery.*`
+/// one.** `FernletAuditLog` sends the event NAME to the unified log with `.auto` privacy, where it
+/// survives into a sysdiagnose — which is exactly why `FernletLockService.configureDuress` and
+/// `enrollRecoveryCustodian` emit nothing at all: "this device enrolled a recovery custodian" is a
+/// near-synonym for "this device has a duress PIN", the single fact the feature depends on hiding.
+/// A ceremony that logged `duressRecovery.challengeSent` on the PROTECTED phone would hand that fact
+/// straight back. These lines are structurally the same in-person QR mutual auth the mesh already
+/// performs, so they log under the same names and the trail stays just as useful for debugging while
+/// disclosing nothing.
+///
 /// `@MainActor`, like `IdentityService` and `FernletLockService`, both of which it holds directly.
 @MainActor
 final class DuressRecoveryCoordinator {
@@ -312,7 +322,7 @@ final class DuressRecoveryCoordinator {
         activeDisplay = nil
         lastProvenRound = nil
         pendingRequest = nil
-        FernletAuditLog.log("duressRecovery.displayCleared")
+        FernletAuditLog.log("mesh.verifyQR.displayCleared")
     }
 
     /// Answers a sealed challenge quoting the QR currently on screen.
@@ -331,19 +341,19 @@ final class DuressRecoveryCoordinator {
         senderKeyAgreementPublicKey: Data
     ) -> VerifyResponsePayload? {
         guard let active = activeDisplay, active.nonce == payload.qrNonce else {
-            FernletAuditLog.log("duressRecovery.staleChallengeDropped")
+            FernletAuditLog.log("mesh.verifyQR.staleChallengeDropped")
             return nil
         }
         // `abs` so a backwards clock jump cannot resurrect an expired display.
         guard abs(now().timeIntervalSince(active.issuedAt)) <= ProximityVerifyQR.freshnessWindow else {
             activeDisplay = nil
-            FernletAuditLog.log("duressRecovery.expiredChallengeDropped")
+            FernletAuditLog.log("mesh.verifyQR.expiredChallengeDropped")
             return nil
         }
         guard ProximityVerifySignature.isWellFormedChallenge(
             payload, scannerKeyAgreementPublicKey: senderKeyAgreementPublicKey
         ) else {
-            FernletAuditLog.log("duressRecovery.malformedChallengeDropped")
+            FernletAuditLog.log("mesh.verifyQR.malformedChallengeDropped")
             return nil
         }
         let message = ProximityVerifySignature.message(
@@ -352,14 +362,14 @@ final class DuressRecoveryCoordinator {
             qrNonce: payload.qrNonce
         )
         guard let signature = try? identity.sign(message) else {
-            FernletAuditLog.log("duressRecovery.signFailed")
+            FernletAuditLog.log("mesh.verifyQR.signFailed")
             return nil
         }
         lastProvenRound = (
             challengeNonce: payload.challengeNonce,
             scannerKeyAgreementPublicKey: senderKeyAgreementPublicKey
         )
-        FernletAuditLog.log("duressRecovery.responded")
+        FernletAuditLog.log("mesh.verifyQR.responded")
         return VerifyResponsePayload(challengeNonce: payload.challengeNonce, signature: signature)
     }
 
@@ -376,7 +386,7 @@ final class DuressRecoveryCoordinator {
         try ensureIdentity()
         guard let payload = ProximityVerifyQR.parse(scannedURL),
               ProximityVerifyQR.isValid(payload, at: now()) else {
-            FernletAuditLog.log("duressRecovery.invalidScanned")
+            FernletAuditLog.log("mesh.verifyQR.invalidScanned")
             throw DuressRecoveryError.invalidQRCode
         }
         // A device cannot be its own custodian: `recoveryLock` destroys this device's unlock keys,
@@ -385,7 +395,7 @@ final class DuressRecoveryCoordinator {
         // copy of the content key sitting on the coerced phone.
         guard payload.signingPublicKey != identity.localSigningPublicKey,
               payload.keyAgreementPublicKey != identity.localKeyAgreementPublicKey else {
-            FernletAuditLog.log("duressRecovery.selfEnrollmentRefused")
+            FernletAuditLog.log("mesh.verifyQR.selfPeerRefused")
             throw DuressRecoveryError.selfEnrollmentRefused
         }
         return openRound(with: payload)
@@ -413,10 +423,45 @@ final class DuressRecoveryCoordinator {
         try await lockService.enrollRecoveryCustodian(
             passcode: passcode,
             signingPublicKey: round.peerSigningPublicKey,
-            keyAgreementPublicKey: custodianKeyAgreementPublicKey
+            keyAgreementPublicKey: custodianKeyAgreementPublicKey,
+            // THIS device's sender key, recorded with the enrollment. `seal` binds the blob to it
+            // (HKDF `sharedInfo` + AEAD additional data) and the custodian opens with the live,
+            // ceremony-proven sender key — so the blob dies the moment this identity rotates, which
+            // an ordinary "Delete everything" does. Recording it is what lets
+            // `reconcileEnrollmentWithLocalIdentity()` notice and retire the dead enrollment.
+            ownKeyAgreementPublicKey: identity.localKeyAgreementPublicKey
         ) { contentKey in
             try identity.seal(contentKey, to: custodianKeyAgreementPublicKey, format: .wire2)
         }
+    }
+
+    /// Retires a recovery enrollment that this device's proximity identity has outlived.
+    ///
+    /// **Call this at launch and after anything that can rotate the identity** — chiefly the
+    /// "Delete everything" funnel, which wipes `com.fernlet.identity` while deliberately keeping the
+    /// app-lock keychain, the content key, and these recovery rows. After that rotation the sealed
+    /// blob is openable by nobody: the custodian opens it with the sender's LIVE key-agreement key,
+    /// and the key it was sealed under no longer exists anywhere. Left alone, the lock would keep
+    /// `DuressMode.recoveryLock` armed over it and firing it would destroy every local unlock key
+    /// for a ceremony that can only end in `recoveryBlobUnreadable` — a permanent, unannounced
+    /// lock-out out of an ordinary in-app action.
+    ///
+    /// The comparison lives HERE, not in `FernletLock`, for the same reason the ceremony does: that
+    /// module has no ProximityKit edge, so it stores the enrollment-time public key and this side
+    /// supplies the live one.
+    ///
+    /// Conservative in the only direction that matters: an unprovisioned or unreadable identity
+    /// retires NOTHING (an enrollment is never thrown away on a failed read), and a matching key is
+    /// a no-op.
+    ///
+    /// - Returns: `true` when an enrollment was retired.
+    @discardableResult
+    func reconcileEnrollmentWithLocalIdentity() -> Bool {
+        guard let enrolledOwnerKey = lockService.enrolledRecoveryOwnerKeyAgreementPublicKey else { return false }
+        guard (try? identity.ensureProvisioned()) != nil else { return false }
+        let liveOwnerKey = identity.localKeyAgreementPublicKey
+        guard !liveOwnerKey.isEmpty, liveOwnerKey != enrolledOwnerKey else { return false }
+        return lockService.invalidateRecoveryCustodianForRotatedIdentity()
     }
 
     // MARK: - Scanner side: recovery (the primary device)
@@ -436,12 +481,12 @@ final class DuressRecoveryCoordinator {
         }
         guard let payload = ProximityVerifyQR.parse(scannedURL),
               ProximityVerifyQR.isValid(payload, at: now()) else {
-            FernletAuditLog.log("duressRecovery.invalidScanned")
+            FernletAuditLog.log("mesh.verifyQR.invalidScanned")
             throw DuressRecoveryError.invalidQRCode
         }
         guard payload.signingPublicKey == enrolledSigning,
               payload.keyAgreementPublicKey == enrolledKeyAgreement else {
-            FernletAuditLog.log("duressRecovery.qrPeerMismatch")
+            FernletAuditLog.log("mesh.verifyQR.qrPeerMismatch")
             throw DuressRecoveryError.notTheEnrolledCustodian
         }
         return openRound(with: payload)
@@ -483,7 +528,7 @@ final class DuressRecoveryCoordinator {
               let sealed = try? identity.seal(encoded, to: round.peerKeyAgreementPublicKey, format: .wire2) else {
             throw DuressRecoveryError.cryptoFailed
         }
-        FernletAuditLog.log("duressRecovery.requestSent")
+        FernletAuditLog.log("mesh.verifyQR.sealedPayloadSent")
         return sealed
     }
 
@@ -508,6 +553,14 @@ final class DuressRecoveryCoordinator {
               let enrolledKeyAgreement = lockService.enrolledCustodianKeyAgreementPublicKey else {
             throw DuressRecoveryError.noRecoveryMaterial
         }
+        // Format-check the NEW credential here, before the round is spent. `reestablishLocalUnlock`
+        // validates it too — but it does so after this method has cleared `pendingRound` and after
+        // the custodian has already consumed its `pendingRequest`, so a five-digit "4-digit PIN" or
+        // an empty field used to throw into a dead end: the re-shown step could only raise
+        // `.noRoundInProgress`, and both phones had to redo every QR hop. Refusing before anything
+        // is consumed keeps this method's own invariant — every refusal happens before anything
+        // durable — true for the one input the human types.
+        try credential.validate()
         // Opened from the ENROLLED key, not from the round's — they are equal by `beginRecovery`'s
         // gate, and naming the enrolled one here makes that a property of the code rather than of
         // the call order.
@@ -518,7 +571,7 @@ final class DuressRecoveryCoordinator {
               let reply = try? JSONDecoder().decode(DuressRecoveryReply.self, from: plaintext),
               reply.version == 1,
               reply.challengeNonce == round.challengeNonce else {
-            FernletAuditLog.log("duressRecovery.malformedReplyDropped")
+            FernletAuditLog.log("mesh.verifyQR.malformedReplyDropped")
             throw DuressRecoveryError.malformedPayload
         }
         let transcript = DuressRecoveryTranscript.reply(
@@ -530,13 +583,13 @@ final class DuressRecoveryCoordinator {
             contentKey: reply.contentKey
         )
         guard IdentityService.verify(reply.signature, of: transcript, by: enrolledSigning) else {
-            FernletAuditLog.log("duressRecovery.badReplySignature")
+            FernletAuditLog.log("mesh.verifyQR.badReplySignature")
             throw DuressRecoveryError.signatureRejected
         }
         pendingRound = nil
         switch reply.decision {
         case .destroy:
-            FernletAuditLog.log("duressRecovery.destructionRequested")
+            FernletAuditLog.log("mesh.verifyQR.peerDeclined")
             return .destructionRequested
         case .returnKey:
             try await lockService.reestablishLocalUnlock(
@@ -571,7 +624,7 @@ final class DuressRecoveryCoordinator {
         // service for a blob someone else is holding.
         guard let proven = lastProvenRound,
               proven.scannerKeyAgreementPublicKey == senderKeyAgreementPublicKey else {
-            FernletAuditLog.log("duressRecovery.unboundRequestDropped")
+            FernletAuditLog.log("mesh.verifyQR.unboundPayloadDropped")
             throw DuressRecoveryError.noRoundInProgress
         }
         guard let plaintext = try? identity.open(sealed, from: senderKeyAgreementPublicKey, format: .wire2),
@@ -584,7 +637,7 @@ final class DuressRecoveryCoordinator {
                   signingPublicKey: request.requesterSigningPublicKey,
                   keyAgreementPublicKey: request.requesterKeyAgreementPublicKey
               ) else {
-            FernletAuditLog.log("duressRecovery.malformedRequestDropped")
+            FernletAuditLog.log("mesh.verifyQR.malformedPayloadDropped")
             throw DuressRecoveryError.malformedPayload
         }
         let transcript = DuressRecoveryTranscript.request(
@@ -596,7 +649,7 @@ final class DuressRecoveryCoordinator {
             recoveryBlob: request.recoveryBlob
         )
         guard IdentityService.verify(request.signature, of: transcript, by: request.requesterSigningPublicKey) else {
-            FernletAuditLog.log("duressRecovery.badRequestSignature")
+            FernletAuditLog.log("mesh.verifyQR.badPayloadSignature")
             throw DuressRecoveryError.signatureRejected
         }
         pendingRequest = (request: request, senderKeyAgreementPublicKey: senderKeyAgreementPublicKey)
@@ -624,7 +677,7 @@ final class DuressRecoveryCoordinator {
                 from: recipientKeyAgreementPublicKey,
                 format: .wire2
             ), !opened.isEmpty else {
-                FernletAuditLog.log("duressRecovery.blobUnreadable")
+                FernletAuditLog.log("mesh.verifyQR.sealedPayloadUnreadable")
                 throw DuressRecoveryError.recoveryBlobUnreadable
             }
             contentKey = opened
@@ -651,7 +704,7 @@ final class DuressRecoveryCoordinator {
               let sealed = try? identity.seal(encoded, to: recipientKeyAgreementPublicKey, format: .wire2) else {
             throw DuressRecoveryError.cryptoFailed
         }
-        FernletAuditLog.log("duressRecovery.replySent", context: ["decision": "\(decision.rawValue)"])
+        FernletAuditLog.log("mesh.verifyQR.sealedReplySent", context: ["decision": "\(decision.rawValue)"])
         return sealed
     }
 
@@ -678,7 +731,7 @@ final class DuressRecoveryCoordinator {
             peerSigningPublicKey: payload.signingPublicKey,
             peerKeyAgreementPublicKey: payload.keyAgreementPublicKey
         )
-        FernletAuditLog.log("duressRecovery.challengeSent")
+        FernletAuditLog.log("mesh.verifyQR.challengeSent")
         return VerifyChallengePayload(qrNonce: payload.nonce, challengeNonce: challengeNonce)
     }
 
@@ -695,7 +748,7 @@ final class DuressRecoveryCoordinator {
         guard let round = pendingRound else { throw DuressRecoveryError.noRoundInProgress }
         guard response.challengeNonce == round.challengeNonce,
               senderSigningPublicKey == round.peerSigningPublicKey else {
-            FernletAuditLog.log("duressRecovery.unexpectedResponseDropped")
+            FernletAuditLog.log("mesh.verifyQR.unexpectedResponseDropped")
             throw DuressRecoveryError.challengeResponseRejected
         }
         let message = ProximityVerifySignature.message(
@@ -705,10 +758,10 @@ final class DuressRecoveryCoordinator {
         )
         guard IdentityService.verify(response.signature, of: message, by: round.peerSigningPublicKey) else {
             pendingRound = nil
-            FernletAuditLog.log("duressRecovery.badResponseSignature")
+            FernletAuditLog.log("mesh.verifyQR.badResponseSignature")
             throw DuressRecoveryError.challengeResponseRejected
         }
-        FernletAuditLog.log("duressRecovery.proven")
+        FernletAuditLog.log("mesh.verifyQR.proven")
         return round
     }
 

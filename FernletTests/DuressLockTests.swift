@@ -180,7 +180,7 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.configureDuress(pin: "654321", mode: .decoy)
-        service.removeDuress()
+        try service.removeDuress()
 
         #expect(!service.hasDuressConfigured)
         #expect(duressRow(.duressVerifier, harness) == nil)

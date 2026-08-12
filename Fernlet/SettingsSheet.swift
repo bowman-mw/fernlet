@@ -2014,11 +2014,19 @@ struct AppLockSettingsView: View {
     ///   moment. On a phone that never fired a duress response the row is harmless: the ceremony
     ///   re-installs the same content key under a new passcode, and it sits behind the
     ///   `.appLockSettings` gate either way.
+    ///
+    /// **The whole section fails closed during a duress session.** `FernletLockService.handleDuress`
+    /// refuses to grant `.appLockSettings` to a duress PIN, so a decoy should never be looking at
+    /// this card — but this is the screen that would otherwise let whoever is holding the phone read
+    /// that a duress code exists, change it, remove it, enrol a recovery device of their own
+    /// choosing, or reset the lock. It renders what a phone with no app lock and no custodian
+    /// renders instead, which is also what an un-configured device shows, so hiding it discloses
+    /// nothing on its own.
     private var duressCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Duress & recovery")
 
-            if lockService.state != .notConfigured {
+            if lockService.state != .notConfigured && !lockService.isDuressSessionActive {
                 Button {
                     showDuressSetup = true
                 } label: {
@@ -2029,7 +2037,7 @@ struct AppLockSettingsView: View {
                 FernletRowDivider()
             }
 
-            if lockService.hasRecoveryCustodian {
+            if lockService.hasRecoveryCustodian && !lockService.isDuressSessionActive {
                 Button {
                     showRecoveryReturn = true
                 } label: {

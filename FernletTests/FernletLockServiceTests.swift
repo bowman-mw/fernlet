@@ -701,6 +701,10 @@ final class LockTestHarness {
     /// suite destroy the simulator's REAL journal/Worry Box device keys, taking any sealed rows
     /// another test just wrote with them.
     let sealedContentKeyServiceID = "com.fernlet.journal.test.\(UUID().uuidString)"
+    /// The scoped stand-in for `PrivateMediaKeyStore.service`, which the duress WIPE now sweeps.
+    /// Injected for exactly the reason the two above are: an unscoped harness would have every
+    /// duress-wipe test destroy the simulator's REAL progress-photo / friend-wall media keys.
+    let mediaKeychainServiceID = "com.fernlet.private-media.test.\(UUID().uuidString)"
     let clock = FakeDateProvider(now: Date(timeIntervalSinceReferenceDate: 1_000_000))
     let uptime = MockUptimeProvider(systemUptime: 100_000)
     let crypto = FakeLockCryptoProvider()
@@ -712,6 +716,7 @@ final class LockTestHarness {
         FernletLockService(
             keychainService: serviceID,
             sealedContentKeyServices: [sealedContentKeyServiceID],
+            mediaKeychainServices: [mediaKeychainServiceID],
             dateProvider: clock,
             uptimeProvider: uptime,
             cryptoProvider: crypto,
@@ -723,6 +728,7 @@ final class LockTestHarness {
     func cleanup() {
         KeychainItem.deleteAll(service: serviceID)
         KeychainItem.deleteAll(service: sealedContentKeyServiceID)
+        KeychainItem.deleteAll(service: mediaKeychainServiceID)
         try? PendingNarrativeBuffer().purge()
     }
 }
@@ -765,7 +771,13 @@ final class FakeLockCryptoProvider: FernletLockCryptoProviding {
         return Data(repeating: saltCounter, count: FernletLockCrypto.saltLength)
     }
 
+    /// How many derivations have been asked for. Real scrypt is the whole cost of an unlock, so this
+    /// is the stand-in for its latency: `DuressUnlockLatencyTests` asserts a duress entry costs the
+    /// same number as a benign one, which is the timing side-channel the balancing derivation closes.
+    private(set) var deriveVerifierCallCount = 0
+
     func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data {
+        deriveVerifierCallCount += 1
         let material = Data("verifier:\(passcode):".utf8) + salt
         return SHA256.hash(data: material).withUnsafeBytes { Data($0) }
     }

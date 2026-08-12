@@ -130,13 +130,33 @@ protected by keys that never leave the device:
   sealed corpus — the salt/verifier pair, the scrypt-wrapped and enclave-wrapped content keys, **the
   Secure-Enclave key itself**, **the biometric bypass copy** (the one that would otherwise let a
   coercer walk around the wipe with Face ID), the duress and recovery rows, and the journal /
-  Worry Box device fallback keys — is deleted synchronously when the duress PIN is entered on a
-  device configured for `DuressMode.silentWipe`. That is the whole of the sub-second crypto-erase:
+  Worry Box device fallback keys, **and the private-media keys under `com.fernlet.private-media`**
+  (the own-photo key that seals progress/body photos, meal and recipe photos and the sealed progress
+  index, plus the friend-wall key) — is deleted synchronously when the duress PIN is entered on a
+  device configured for `DuressMode.silentWipe`. The media sweep is a Phase-7 review fix and it is
+  load-bearing to the sentence: those photos are sealed under a key the app lock never holds and the
+  ordinary delete funnel deliberately keeps, so before it the "no surviving key" claim was false for
+  the body-photo corpus until the asynchronous purge caught up. That is the whole of the sub-second
+  crypto-erase:
   what remains on disk, in a sealed iCloud backup, or in a heart-drop dead-drop is ciphertext with
   no surviving key anywhere. A throwaway empty lock is re-minted under the same PIN afterwards, so
   the device is a normal, empty install rather than an obvious one. This is the ONE seam that
   destroys `com.fernlet.lock` — "Delete everything" still keeps it (see
   [`PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md)) and cannot reach this path.
+
+- **The recovery blob's second dependency, and how it is policed (Phase 7 review fix):** the blob is
+  sealed with THIS device's long-term X25519 key-agreement key mixed into the key derivation and the
+  AEAD's additional data, and the custodian opens it with the live, ceremony-proven sender key — so
+  the enrollment dies the moment this device's proximity identity rotates, which an ordinary
+  "Delete everything" does while deliberately keeping the app lock and the enrollment rows. The
+  enrollment therefore records the owner's key-agreement public key beside the custodian's, and
+  `DuressRecoveryCoordinator.reconcileEnrollmentWithLocalIdentity()` (run at launch and in-line from
+  the delete funnel) retires an enrollment whose owner key no longer matches, rewriting an armed
+  `.recoveryLock` to the non-destructive `.decoy`. A row-presence check could not see this: it
+  proves three rows exist, not that they can still be turned back into a key. The same distinction
+  drives the superseded-blob mark — a device that sets up a new app lock after a recovery-lock fired
+  keeps the blob (it is the only route back to the pre-lock corpus) but may not re-arm
+  `.recoveryLock` over it, because the blob now seals a key the lock no longer uses.
 
 - **Destroyed on the duress RECOVERY-LOCK (Phase 7):** the same local keys as the wipe — salt/verifier, both wrapped content keys, **the Secure-Enclave key**, **the biometric bypass**, the biometric-enabled flag and the duress rows — with two deliberate survivors. The recovery blob and the enrolled custodian's public keys stay, because they are the entire point: the corpus is not erased, it is locked out of reach of this phone and recoverable in person from the user's own second device. And the journal / Worry Box device fallback keys stay, because nothing in the recovery blob can give them back — destroying them would be unrecoverable loss on the one response built to be recoverable, and the rows they seal were never protected by the app lock in the first place. The return ceremony ends at `reestablishLocalUnlock`, which verifies the recovered key against a device-local, domain-separated digest of the key the blob seals and REFUSES anything else, so a wrong answer is a named error rather than a silent, permanent re-lock around bytes that open nothing.
 

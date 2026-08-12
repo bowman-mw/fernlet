@@ -5,9 +5,18 @@
 //
 // It lives under Settings → App lock, which is a `.appLockSettings` surface the user must already
 // have unlocked with the REAL passcode — biometrics can never be the first factor after launch
-// (PIN-before-biometrics) and are suppressed outright during a duress session. So every call this
+// (PIN-before-biometrics), they are suppressed outright during a duress session, and the duress path
+// REFUSES to grant `.appLockSettings` at all (`FernletLockService.handleDuress`). So every call this
 // screen makes is real-PIN-gated by construction rather than by a re-prompt of its own, which is
 // exactly why `FernletLockService.configureDuress(pin:mode:)` takes no `current:` argument.
+//
+// That premise used to be an assumption, and it was false: a decoy session granted whatever scope
+// the duress code was typed on, including this one, which put "a duress code is set, and here is the
+// armed response" two taps from a coercer — along with the buttons to change it, remove it, enrol a
+// recovery device of their choosing, and reset the lock. Two layers now hold it up instead of one:
+// the service refuses the scope AND refuses every duress mutator while `isDuressSessionActive`, and
+// `DuressSetupAvailability` fails closed on the same flag, so a session that somehow reached this
+// screen renders exactly what a phone with no duress code renders.
 //
 // THE COPY ON THIS SCREEN IS PART OF THE FEATURE. Two of the three responses destroy something, and
 // one of those two is irreversible. A user who arms a response they misunderstood has not been given
@@ -40,32 +49,63 @@ struct DuressSetupAvailability: Equatable {
     /// Whether the user's own second device is enrolled as a recovery custodian — all three rows,
     /// not just the two public keys (see `FernletLockService.hasRecoveryCustodian`).
     let hasRecoveryCustodian: Bool
+    /// Whether that enrolled device's sealed blob holds a SUPERSEDED content key — the state a
+    /// recovery-locked phone lands in when its user sets up a new app lock before reaching their
+    /// custodian (`FernletLockService.hasSupersededRecoveryBlob`).
+    let hasSupersededRecoveryBlob: Bool
+    /// Whether a duress session is in force right now.
+    ///
+    /// When true every other field is reported as an UNCONFIGURED device, which is the point: this
+    /// screen is the one place that would otherwise say out loud "a duress code exists and here is
+    /// what it does".
+    let isDuressSessionActive: Bool
 
     /// Builds the snapshot from the live service.
+    ///
+    /// **Fails closed on a duress session.** `FernletLockService.handleDuress` refuses to grant
+    /// `.appLockSettings` to a duress PIN, so this screen should be unreachable during a decoy — but
+    /// "should be unreachable" is not a property the single most disclosing screen in the app may
+    /// rest on. If one ever did reach here it renders exactly what a phone with no duress code
+    /// renders, and the service refuses every mutator behind it.
     @MainActor
     init(lockService: FernletLockService) {
+        let duressSession = lockService.isDuressSessionActive
         self.init(
-            hasDuressConfigured: lockService.hasDuressConfigured,
-            configuredMode: lockService.configuredDuressMode,
-            hasRecoveryCustodian: lockService.hasRecoveryCustodian
+            hasDuressConfigured: duressSession ? false : lockService.hasDuressConfigured,
+            configuredMode: duressSession ? nil : lockService.configuredDuressMode,
+            hasRecoveryCustodian: duressSession ? false : lockService.hasRecoveryCustodian,
+            hasSupersededRecoveryBlob: duressSession ? false : lockService.hasSupersededRecoveryBlob,
+            isDuressSessionActive: duressSession
         )
     }
 
     /// Memberwise entry point for tests and previews.
-    init(hasDuressConfigured: Bool, configuredMode: DuressMode?, hasRecoveryCustodian: Bool) {
+    init(
+        hasDuressConfigured: Bool,
+        configuredMode: DuressMode?,
+        hasRecoveryCustodian: Bool,
+        hasSupersededRecoveryBlob: Bool = false,
+        isDuressSessionActive: Bool = false
+    ) {
         self.hasDuressConfigured = hasDuressConfigured
         self.configuredMode = configuredMode
         self.hasRecoveryCustodian = hasRecoveryCustodian
+        self.hasSupersededRecoveryBlob = hasSupersededRecoveryBlob
+        self.isDuressSessionActive = isDuressSessionActive
     }
 
     /// Whether `mode` may be chosen right now.
     ///
-    /// Only ``DuressMode/recoveryLock`` is ever withheld, and only for the one reason that matters:
-    /// arming it destroys every local unlock key, so without an enrolled custodian it is an
-    /// unannounced permanent lock-out rather than a response. `FernletLockService.configureDuress`
-    /// refuses the same pairing — this is the UI half of that refusal, not a substitute for it.
+    /// Only ``DuressMode/recoveryLock`` is ever withheld, and only for reasons that would make it an
+    /// unannounced permanent lock-out rather than a response: no enrolled custodian at all, or an
+    /// enrolled custodian holding a SUPERSEDED key — one that opens the corpus from before this app
+    /// lock but nothing written under it, so firing the response would destroy the live key and the
+    /// ceremony would hand back the wrong one. `FernletLockService.configureDuress` refuses both
+    /// pairings — this is the UI half of that refusal, not a substitute for it.
     func isSelectable(_ mode: DuressMode) -> Bool {
-        mode != .recoveryLock || hasRecoveryCustodian
+        guard !isDuressSessionActive else { return false }
+        guard mode == .recoveryLock else { return true }
+        return hasRecoveryCustodian && !hasSupersededRecoveryBlob
     }
 
     /// The one-line explanation shown under a response the user cannot pick yet, or nil when it is
@@ -73,6 +113,10 @@ struct DuressSetupAvailability: Equatable {
     /// dead end this screen cannot afford.
     func unavailableReason(for mode: DuressMode) -> String? {
         guard !isSelectable(mode) else { return nil }
+        guard !isDuressSessionActive else { return nil }
+        if hasSupersededRecoveryBlob {
+            return "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
+        }
         return "Set up a recovery device below before choosing this."
     }
 
@@ -263,9 +307,16 @@ struct DuressPINSetupView: View {
             titleVisibility: .visible
         ) {
             Button("Remove duress code", role: .destructive) {
-                lockService.removeDuress()
-                errorMessage = nil
-                selectedMode = .decoy
+                // The service refuses this during a duress session (a coercer who worked out that a
+                // duress code exists must not be able to delete it), so surface its refusal rather
+                // than a copy of it.
+                do {
+                    try lockService.removeDuress()
+                    errorMessage = nil
+                    selectedMode = .decoy
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
@@ -421,6 +472,24 @@ struct DuressPINSetupView: View {
                     Spacer()
                 }
                 .accessibilityIdentifier("duress.recovery.enrolled")
+
+                if availability.hasSupersededRecoveryBlob {
+                    // The route back to everything from BEFORE this app lock still works — that is
+                    // why the enrollment was kept — but the key it holds cannot open a word written
+                    // since. Said out loud here because the recovery lock is refused over it, and a
+                    // greyed-out option whose reason lives on another card is a dead end.
+                    Text("This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("duress.recovery.superseded")
+
+                    Button("Set up this device again") { showRecoveryEnrollment = true }
+                        .buttonStyle(.plain)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .accessibilityIdentifier("duress.recovery.reenroll")
+                }
 
                 if availability.canRemoveRecoveryCustodian {
                     Button(role: .destructive) {

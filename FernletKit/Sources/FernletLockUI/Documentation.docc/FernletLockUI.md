@@ -90,6 +90,27 @@ item still holds the REAL content key in the non-destructive decoy — that supp
 closes); and the flag deliberately survives `lock(reason:)`, so re-locking during a decoy does not
 hand the biometric side-door back.
 
+**The entry surface stays live through a lockout, and that is a duress requirement rather than a
+layout choice.** The service compares the duress verifier *before* the `requiresReset` and cooldown
+guards precisely because lockout is when coercion is likeliest — a property that is worth nothing if
+the screen has swapped its pad for a countdown card, which is exactly what ``FernletLockView`` used
+to do. The cooldown and reset-required cards now render ABOVE `inputSection` rather than in place of
+it, so a duress code can always be typed. Nothing about the ladder weakens: a non-duress entry during
+a cooldown still refuses with `cooldownActive` (the guards below the compare are untouched), the real
+verifier is never even derived while a cooldown is in force, and the attempts-remaining line and the
+biometric button both stay hidden — biometrics may never step around a cooldown. The app-side setup
+copy tells the user in so many words that the code works while Fernlet is counting down, so this is
+also the difference between honest copy and a promise the UI breaks.
+
+**A duress code can never open Settings → App lock.** `FernletLockService` refuses to grant the
+`.appLockSettings` scope on the duress path: the response still fires, then the unlock is refused
+with the ordinary `invalidPasscode` error, so ``FernletLockView`` shows what a mistype shows and no
+attempt is recorded. That refusal is what makes `configureDuress(pin:mode:)`'s "real-PIN-gated by
+construction" premise TRUE — without it, the duress code opened the one screen that says a duress
+code exists, names the armed response, and offers to change it, remove it, enrol a recovery device,
+or reset the lock. The gate modifier needs no duress awareness of its own; it asks the service
+whether the scope is unlocked, and for a duress entry the answer is simply no.
+
 The decoy's second invariant belongs to the app rather than to this module, and is stated here
 because a future gate could break it: **the decoy must persist nothing and delete nothing.** It rides
 the existing sensitive-visibility machinery through an in-memory flag mirrored into

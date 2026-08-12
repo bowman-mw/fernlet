@@ -69,7 +69,8 @@ private final class DuressSetupFixture {
         try await service.enrollRecoveryCustodian(
             passcode: passcode,
             signingPublicKey: custodianIdentity.localSigningPublicKey,
-            keyAgreementPublicKey: custodianKeyAgreement
+            keyAgreementPublicKey: custodianKeyAgreement,
+            ownKeyAgreementPublicKey: primary.localKeyAgreementPublicKey
         ) { contentKey in
             try primary.seal(contentKey, to: custodianKeyAgreement, format: .wire2)
         }
@@ -235,7 +236,7 @@ struct DuressSetupSurfacingTests {
         try await service.configureDuress(pin: "654321", mode: .decoy)
         #expect(service.configuredDuressMode == .decoy)
 
-        service.removeDuress()
+        try service.removeDuress()
         #expect(!service.hasDuressConfigured)
         #expect(service.configuredDuressMode == nil)
 
