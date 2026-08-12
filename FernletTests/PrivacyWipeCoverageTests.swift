@@ -99,6 +99,12 @@ struct PrivacyWipeCoverageTests {
         "aiAuditLogStore.clear",
         // Keychain identity + at-rest keys (the Increment 1 gap fixes)
         "wipeIdentityForDeleteAll",
+        // The consequence of the row above, and the reason it is a separate token: rotating the
+        // proximity identity makes a duress recovery blob unopenable by ANY device, while this
+        // funnel deliberately keeps the app lock, the content key and the enrollment rows. Without
+        // the reconcile the phone keeps `DuressMode.recoveryLock` armed over a dead blob, and firing
+        // it destroys every local unlock key for a ceremony that can only fail.
+        "identityRotatedHook",
         "deviceJournalKey",
         "deviceWorryKey",
         "invalidateEncryptionKeyCache",

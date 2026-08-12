@@ -568,14 +568,23 @@ public struct FernletLockView: View {
                 // Input
                 if contentKeyUnrecoverableCount >= 2 {
                     // Checked FIRST: this state is not a failed attempt (requiresReset is false and
-                    // stays false), so nothing else in this switch would ever surface it — and the
+                    // stays false), so nothing else in this branch would ever surface it — and the
                     // reset it prescribes has to be reachable from the very screen that prescribes it.
                     contentKeyUnrecoverableCard
-                } else if lockService.requiresReset {
-                    resetRequiredCard
-                } else if isInputDisabled {
-                    cooldownCard
                 } else {
+                    // The lockout cards ACCOMPANY the entry surface; they no longer replace it.
+                    // `FernletLockService.unlock` runs the duress compare before the `requiresReset`
+                    // and cooldown guards precisely because lockout is when coercion is likeliest —
+                    // and that property is unreachable if the pad the duress code is typed on has
+                    // been swapped out for a countdown. A non-duress entry still refuses exactly as
+                    // before (the guards below the compare are untouched) and still costs no attempt,
+                    // so nothing here weakens the ladder: the real verifier is never even derived
+                    // while a cooldown is in force.
+                    if lockService.requiresReset {
+                        resetRequiredCard
+                    } else if isInputDisabled {
+                        cooldownCard
+                    }
                     inputSection
                 }
 
@@ -889,8 +898,10 @@ public struct FernletLockView: View {
 
     // MARK: Helpers
 
-    /// True while a future cooldown deadline is in force, replacing the input section with
-    /// the countdown card and hiding the biometric button.
+    /// True while a future cooldown deadline is in force: the countdown card is shown ABOVE the
+    /// entry surface (never instead of it — the duress code must stay typeable during a lockout),
+    /// the attempts-remaining line is suppressed, and the biometric button is hidden, since
+    /// biometrics may never step around a cooldown.
     private var isInputDisabled: Bool {
         if case .locked(let deadline) = lockService.state, let d = deadline, d > .now {
             return true

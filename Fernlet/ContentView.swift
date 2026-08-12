@@ -102,6 +102,11 @@ struct ContentView: View {
             }
             .onChange(of: lockService.state) { _, newState in
                 store.lockState = newState
+                // The decoy's app half (P7): a duress unlock arrives as an ordinary `.unlocked`
+                // transition, so this is where the store learns the difference. Mirroring the flag
+                // rather than branching per view is the point — the sensitive-visibility getters
+                // AND it in, and the whole existing hide machinery follows from there.
+                store.duressSessionActive = lockService.isDuressSessionActive
                 Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
                 applySealedJournalActivation(for: newState)
                 worryBoxService.updateActivation(
@@ -143,8 +148,32 @@ struct ContentView: View {
                 if !visibility.period { store.periodScrubHook?() }
                 store.scrubHiddenHealthContext()
             }
+            // The duress flag needs its OWN observer, not just the lock-state one above: the duress
+            // branches of `changeCredential` and `setBiometricEnabled` fire while the user is
+            // already standing on an unlocked App-lock settings screen, so they set `state` to the
+            // value it already holds and `.onChange(of: lockService.state)` never runs. Watching the
+            // flag directly covers every way it can flip, including the real-passcode unlock that
+            // clears it.
+            .onChange(of: lockService.isDuressSessionActive) { _, active in
+                store.duressSessionActive = active
+            }
             .task {
                 periodStore.attachLockService(lockService)
+                // Before the visibility closures below are wired and before the first scrub, so no
+                // load can observe a stale `false` (the flag is process-lifetime and never
+                // persisted, so at launch this is only ever a mirror of `false` — it is here for
+                // the invariant, not for a case that exists today).
+                store.duressSessionActive = lockService.isDuressSessionActive
+                // Retire a duress-recovery enrollment this device's identity has outlived, before
+                // anything can arm or fire the response over it. Cheap (two keychain reads and a
+                // comparison when an enrollment exists, one when it does not) and idempotent; the
+                // delete-all funnel fires the same reconcile in-line via `identityRotatedHook`, and
+                // this is the backstop for a rotation from any other route — including a wipe whose
+                // process died before the hook ran.
+                DuressRecoveryCoordinator(
+                    identity: IdentityService(),
+                    lockService: lockService
+                ).reconcileEnrollmentWithLocalIdentity()
                 // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
                 // on every cold launch, so wiring this later would let one full decrypt + HealthKit
                 // read through before the gate existed.
@@ -772,6 +801,31 @@ struct ContentView: View {
         }
         store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
             await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
+        }
+        // The duress WIPE's durable half (P7). The crypto-erase already happened inside the lock
+        // service before this runs, so this is cleanup, not the guarantee — it drops the sealed rows,
+        // the day blob and the cloud copies through the ONE audited deletion funnel rather than
+        // growing a second one. Fire-and-forget: nothing waits on it, and a failure leaves a device
+        // whose data is unopenable rather than a device that is still readable.
+        //
+        // `includingHealthKitSamples: true` deliberately. The cycle and intimate-activity SAMPLES
+        // live in HealthKit, outside everything the content key seals — leaving them would hand a
+        // coercer the Health app with the exact data the wipe exists to remove. This is the one
+        // caller that never asks: a duress wipe has no dialog to ask on.
+        lockService.duressPurgeHook = { [store] in
+            Task { _ = await store.deleteAllData(includingHealthKitSamples: true) }
+        }
+        // The other half of the duress-recovery custody story, and the one that is NOT a duress path
+        // at all: "Delete everything" regenerates this device's proximity identity while deliberately
+        // keeping the app lock, and the recovery blob is sealed with the OLD identity key mixed into
+        // its derivation. Reconciling here retires an enrollment the wipe just made unopenable, so
+        // `DuressMode.recoveryLock` can neither stay armed nor be re-armed over it. Runs at launch
+        // too (see the `.task` below), which covers a rotation from any other route.
+        store.identityRotatedHook = { [lockService] in
+            DuressRecoveryCoordinator(
+                identity: IdentityService(),
+                lockService: lockService
+            ).reconcileEnrollmentWithLocalIdentity()
         }
         // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone with
         // sync off. `deleteAllCloudKitData` opens its own connection (no live sync session needed) and the

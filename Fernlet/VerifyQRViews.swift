@@ -96,13 +96,19 @@ struct VerifyQRDisplaySheet: View {
 struct VerifyQRScanSheet: View {
     /// Called with the scanned URL; the caller runs `beginQRVerification` and reports back.
     let onScanned: (URL) -> Void
+    /// Sheet heading. Defaulted to the friend-verification wording so the original call sites are
+    /// unchanged; the duress recovery ceremony (P7) passes its own, because "their code" names a
+    /// friend and that ceremony is between two phones the same person owns.
+    var title: String = "Scan their code"
+    /// The line under the viewfinder, defaulted for the same reason.
+    var prompt: String = "Point at the code on your friend's screen."
     @Environment(\.dismiss) private var dismiss
     @State private var handedOff = false
     @State private var scannerUnavailable = false
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("Scan their code")
+            Text(title)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             if scannerUnavailable {
@@ -127,7 +133,7 @@ struct VerifyQRScanSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .frame(maxHeight: 380)
                 .accessibilityIdentifier("friends.verifyQR.scanner")
-                Text("Point at the code on your friend's screen.")
+                Text(prompt)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             }

@@ -45,7 +45,8 @@ import AIContext
 /// - Sensitive-surface gating is DERIVED (`isPeriodTrackingVisible` /
 ///   `isIntimacyTrackingVisible`) and fail-closed; hiding must also scrub resident plaintext
 ///   (`periodScrubHook`, `scrubHiddenHealthContext`), and the device-local resolution sidecar
-///   protects the choice from mixed-version peers.
+///   protects the choice from mixed-version peers. The duress decoy (``duressSessionActive``)
+///   rides that same derivation and must stay purely in-memory — it never writes a preference.
 /// - "Delete everything" (`deleteAllData`) is a single ordered funnel: writers stopped first,
 ///   sealed rows dropped WITHOUT decrypting, then the sealed store FILE destroyed and re-created
 ///   (`sealedStoreRebuildHook`, keyless) so the row-delete's `-wal`/freelist residue goes too;
@@ -148,6 +149,24 @@ final class FernletStore {
     }
     var photowallSeeds: [PhotowallSeed] = []
     var lockState: FernletLockState = .notConfigured
+    /// Mirror of `FernletLockService.isDuressSessionActive`: true while the app is showing the
+    /// DECOY because the duress PIN was entered (Phase 7).
+    ///
+    /// Wired in `ContentView` — from the launch `.task`, from the lock-state observer, and from its
+    /// own `.onChange` on the service flag (the duress branches of `changeCredential` /
+    /// `setBiometricEnabled` can flip it without any lock-state transition to observe).
+    ///
+    /// **In-memory ONLY, and that is the invariant.** Nothing writes it to `settings`, to the
+    /// snapshot, or to a sidecar. `isPeriodTrackingVisible` / `isIntimacyTrackingVisible` AND-in
+    /// `!duressSessionActive`, which rides the existing hide machinery — the
+    /// `.onChange(of: sensitiveSurfaceVisibility)` scrub drops resident cycle state and the bridge
+    /// trends, `PrivateHubSection` hides the sections, and `allowedHealthCapabilities` stops the
+    /// HealthKit reads — so the decoy is complete and, when the real passcode clears the flag,
+    /// completely reversible. Persisting the forced-hidden value instead (writing
+    /// `settings.periodTrackingVisible = false`) would turn a reversible decoy into silent data
+    /// hiding, and would reach the sealed-backup toggles that DELETE the iCloud backup. Gate on this
+    /// flag; never on a setter.
+    var duressSessionActive = false
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
     /// their FIRST friend and presence was never offered before). Observable, memory-only —
     /// the persistent never-re-prompt marker is `settings.hasPromptedForPresence`.
@@ -738,15 +757,23 @@ final class FernletStore {
     ///
     /// This is a HARD gate — see `PeriodTrackerStore.isVisible`. Callers must not treat it as a
     /// display hint.
+    ///
+    /// A duress session (``duressSessionActive``) forces it shut regardless of the preference — the
+    /// decoy's cycle half. Read-only and in-memory: the stored preference is untouched, so the
+    /// surfaces come straight back when the real passcode clears the flag.
     var isPeriodTrackingVisible: Bool {
-        settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
+        guard !duressSessionActive else { return false }
+        return settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
     }
 
     /// Whether intimate-activity surfaces are visible. Age is a separate, non-overridable floor —
     /// an adult who hides the feature and an under-18 user are both invisible, but for different
     /// reasons, and the UI must say the right one (see `intimacyHiddenReason`).
+    ///
+    /// A duress session forces it shut too, on the same terms as `isPeriodTrackingVisible`.
     var isIntimacyTrackingVisible: Bool {
-        isIntimateLoggingAllowed && settings.intimacyTrackingVisible
+        guard !duressSessionActive else { return false }
+        return isIntimateLoggingAllowed && settings.intimacyTrackingVisible
     }
 
     /// The gate value for filtering navigation surfaces. Display-only — never persist a list filtered
@@ -2015,21 +2042,36 @@ final class FernletStore {
     /// The progress-photo timeline, newest first. Reads the sealed store on demand (the Move tab caches
     /// the result in view state and refreshes after a mutation, like `loadDays`), so there is no observed
     /// copy of these body-photo records held in app state.
+    ///
+    /// **The decoy's photo half.** Progress photos are sealed under `PrivateMediaKeyStore`'s OWN key,
+    /// not the lock's content key, so the keyless decoy does not hide them by construction the way it
+    /// hides journal and Worry Box rows — and a duress unlock entered on the photo strip's own gate
+    /// satisfies `.progressPhotos`. Gating HERE, at the read seam that answers "what photos exist",
+    /// is what makes the empty Fernlet actually empty of body photos; a check in the timeline view
+    /// would be a display hint that the detail sheet, the widget, or the next surface could miss.
+    /// Read-only and in-memory: not one byte is deleted or re-sealed, so the real passcode brings the
+    /// whole strip straight back.
     func progressPhotoRecords() -> [ProgressPhotoRecord] {
-        progressPhotoStore.records()
+        guard !duressSessionActive else { return [] }
+        return progressPhotoStore.records()
     }
 
+    /// The sealed bytes for one progress photo — the decrypt seam, so it carries the same duress gate
+    /// as `progressPhotoRecords()` rather than trusting every caller to have filtered first.
     func progressPhotoData(for id: UUID) -> Data? {
-        progressPhotoStore.imageData(for: id)
+        guard !duressSessionActive else { return nil }
+        return progressPhotoStore.imageData(for: id)
     }
 
     func updateProgressPhotoCaption(id: UUID, caption: String?) {
+        guard !duressSessionActive else { return }
         progressPhotoStore.updateCaption(id: id, caption: caption)
     }
 
     /// Edits a progress photo's capture date (the manual editor in the detail view). Backs onto the same
     /// fail-closed sealed-index rewrite as the caption edit.
     func updateProgressPhotoCapturedAt(id: UUID, date: Date) {
+        guard !duressSessionActive else { return }
         progressPhotoStore.updateCapturedAt(id: id, date: date)
     }
 
@@ -2042,7 +2084,11 @@ final class FernletStore {
         progressPhotoStore.add(data, capturedAt: capturedAt)
     }
 
+    /// Deletes one progress photo. Inert during a duress session for the decoy's reversibility
+    /// invariant: the strip renders empty there, so any delete reaching this far is somebody acting
+    /// on photos they cannot see — and the decoy must destroy nothing.
     func deleteProgressPhoto(id: UUID) {
+        guard !duressSessionActive else { return }
         progressPhotoStore.delete(id: id)
     }
 
@@ -4131,6 +4177,20 @@ final class FernletStore {
     /// flags) as they were.
     @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Bool)?
 
+    /// Fired immediately after `deleteAllData` rotates this device's proximity identity, so anything
+    /// bound to the OLD identity key can be reconciled.
+    ///
+    /// Exists for one binding today, and it is a data-loss one: the duress recovery blob is sealed
+    /// with this device's long-term key-agreement key mixed into the derivation, and the custodian
+    /// opens it with the live one. "Delete everything" deliberately KEEPS the app lock (and with it
+    /// the enrollment rows and the content key), so without this the phone would go on offering — and
+    /// firing — `DuressMode.recoveryLock` over a blob that can never be opened again. Wired in
+    /// `ContentView` to `DuressRecoveryCoordinator.reconcileEnrollmentWithLocalIdentity()`.
+    ///
+    /// Returns nothing and reports no incomplete store: a missed reconcile costs a stale enrollment
+    /// the launch-time reconcile will catch, never a byte of the user's data.
+    @ObservationIgnored var identityRotatedHook: (() -> Void)?
+
     /// Persists a per-payload re-upload deferral into `StoragePreferences` so the obligation survives
     /// relaunch. A hook (like `storagePreferencesResetHook`) because the preferences store is
     /// app-scoped: writing through a second `StoragePreferencesStore` instance would leave the app's
@@ -4418,6 +4478,13 @@ final class FernletStore {
         } catch {
             outcome.incompleteStores.append("your nearby-friends identity")
         }
+        // The identity this wipe just rotated is the SENDER key a duress recovery blob is sealed
+        // under (`FernletLockService` keeps `com.fernlet.lock` through a delete-all by design, so the
+        // enrollment outlives the key that makes it openable). Unreconciled, the lock would keep
+        // `DuressMode.recoveryLock` armed over a blob no device on earth can open — firing it would
+        // destroy every local unlock key for a ceremony that can only fail. Fired whether or not the
+        // wipe above threw: a partial identity wipe rotates the key just as thoroughly.
+        identityRotatedHook?()
         // Away-hearts dead-drop (Increment 3). The REMOTE purge has to run BEFORE the local wipe:
         // the sealed records this device uploaded to the CloudKit public database are addressable
         // only by the record names held in the outbox, and recipients cannot delete a sender's
