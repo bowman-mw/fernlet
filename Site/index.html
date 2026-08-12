@@ -3,70 +3,387 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Fernlet — a gentle self-care companion</title>
 <meta name="description" content="Fernlet is a privacy-first self-care companion for iPhone. A little creature reflects your day — food, movement, sleep, journaling — and everything stays on your device.">
 <meta property="og:title" content="Fernlet">
 <meta property="og:description" content="A gentle, privacy-first self-care companion for iPhone. Everything stays on your device.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fernlet.com/">
-<style>
-:root{
-  --bg:#F5EFDF; --box:#FBF7EE; --ink:#3D2E1E; --soft:#61707A; --moss:#5E844D;
-}
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#1C1E1B; --box:#282A26; --ink:#F1EDE3; --soft:#BAC0C2; --moss:#7FB069; }
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:var(--bg); color:var(--ink);
-  font-family:ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
-  line-height:1.6; font-size:1.06rem;
-}
-main{max-width:40rem; margin:0 auto; padding:4.5rem 1.4rem 3rem}
-h1{font-size:2.6rem; margin:0 0 .4rem; letter-spacing:-.01em}
-.tagline{font-style:italic; color:var(--soft); margin:0 0 2.2rem; font-size:1.15rem}
-p{margin:0 0 1.1rem}
-.card{
-  background:var(--box); border-radius:18px; padding:1.3rem 1.4rem; margin:1.6rem 0;
-  box-shadow:0 2px 8px rgba(61,46,30,.06), 0 6px 24px rgba(61,46,30,.04);
-}
-.card h2{font-size:1.05rem; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); margin:0 0 .6rem; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:600}
-a{color:var(--moss); text-decoration-thickness:1px; text-underline-offset:2px}
-footer{margin-top:3.4rem; padding-top:1.2rem; border-top:1px solid rgba(125,125,125,.25); color:var(--soft); font-size:.92rem}
-footer nav a{margin-right:1.1rem}
-.leaf{color:var(--moss)}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<nav id="nav">
+  <a class="brand" href="#top">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+    <span class="wordmark">Fernlet</span>
+  </a>
+  <div class="navlinks">
+    <a href="#companion">The companion</a>
+    <a href="#mesh">Friend mesh</a>
+    <a href="#period">Period</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#faq">FAQ</a>
+    <a class="btn btn-moss" href="privacy/index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Privacy policy
+    </a>
+  </div>
+</nav>
+
 <main>
-  <h1><span class="leaf">&#10047;</span> Fernlet</h1>
-  <p class="tagline">A gentle self-care companion — a tamagotchi of yourself.</p>
 
-  <p>Fernlet is an iPhone app where a little companion creature reflects how you're caring for
-  yourself — food, movement, sleep, journaling, rest. No streaks to lose, no optimization
-  pressure. Gentle, consistent care.</p>
-
-  <div class="card">
-    <h2>Privacy first, by construction</h2>
-    <p>Fernlet has no accounts, no ads, no tracking, and no servers of ours. What you log lives on
-    your phone; optional backup goes to <em>your own</em> iCloud, encrypted so not even Apple can
-    read the sensitive parts. Friend features work only in person, phone-to-phone.
-    The full story is in the <a href="/privacy/">privacy policy</a>.</p>
+<section id="top" class="hero wrap">
+  <div class="hero-copy">
+    <div class="pill"><span class="dot"></span> iPhone · free · Coming to the App Store</div>
+    <h1>A tamagotchi<br>of yourself.</h1>
+    <p class="lede">A small creature lives in your phone and quietly reflects how you've been treating yourself.</p>
+    <p class="sub">No streaks. No calorie targets. No servers anybody operates. Consistent-enough care beats perfect care.</p>
+    <div class="row">
+      <div class="btn btn-bark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.54c.01-2.06 1.68-3.05 1.75-3.1-.96-1.4-2.45-1.6-2.98-1.62-1.27-.13-2.48.74-3.13.74-.65 0-1.64-.72-2.7-.7-1.39.02-2.67.81-3.38 2.05-1.44 2.5-.37 6.2 1.03 8.23.69.99 1.5 2.09 2.57 2.05 1.03-.04 1.42-.67 2.67-.67 1.24 0 1.6.67 2.68.65 1.11-.02 1.83-1.01 2.51-2 .78-1.14 1.1-2.24 1.12-2.3-.02-.01-2.15-.83-2.14-3.33ZM15.1 6.36c.56-.68.94-1.63.84-2.58-.83.04-1.85.56-2.43 1.24-.52.6-.98 1.57-.86 2.5.93.07 1.88-.48 2.45-1.16Z"/></svg>
+        <span>Coming to the App Store</span>
+      </div>
+      <a class="btn btn-ghost" href="https://github.com/bowman-mw/fernlet">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-1.05-.01-1.9-2.78.62-3.37-1.2-3.37-1.2-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.35 9.35 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.35 4.79-4.58 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.14 10.14 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+        Read the source
+      </a>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Coming to the App&nbsp;Store</h2>
-    <p>Fernlet is in development and will be free. Questions or thoughts —
-    <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>.</p>
+  <div class="hero-art">
+    <div class="room">
+      <div class="room-wall">
+        <div class="window">
+          <svg width="84" height="102" viewBox="0 0 62 76"><rect width="62" height="76" fill="#9B7C4E"/><rect x="3" y="3" width="26" height="32" fill="#B8D4E8"/><rect x="33" y="3" width="26" height="32" fill="#C4DCF0"/><rect x="3" y="39" width="26" height="32" fill="#C4DCF0"/><rect x="33" y="39" width="26" height="32" fill="#B8D4E8"/><rect x="6" y="6" width="9" height="7" fill="rgba(255,255,255,.38)"/><rect x="36" y="6" width="9" height="7" fill="rgba(255,255,255,.38)"/></svg>
+        </div>
+        <svg class="string" viewBox="0 0 520 300" preserveAspectRatio="none"><path d="M 18,74 C 160,102 360,102 502,74" stroke="#8B6840" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="18" cy="74" r="5" fill="#5A3E20"/><circle cx="502" cy="74" r="5" fill="#5A3E20"/></svg>
+        <figure class="polaroid" style="top:88px;left:34px;--r:-2deg;--d:6s"><div class="photo" style="background:var(--journal-good)"></div><figcaption>park walk</figcaption></figure>
+        <figure class="polaroid" style="top:96px;left:156px;--r:2deg;--d:7.2s"><div class="photo" style="background:var(--journal-bright)"></div><figcaption>sunday lunch</figcaption></figure>
+        <figure class="polaroid" style="top:92px;left:282px;--r:-1.5deg;--d:6.6s"><div class="photo" style="background:var(--journal-quiet)"></div><figcaption>morning</figcaption></figure>
+      </div>
+      <div class="room-floor">
+        <div class="plant">
+          <svg width="54" height="78" viewBox="0 0 36 52"><rect x="10" y="38" width="16" height="12" fill="#9B6E3C"/><rect x="8" y="36" width="20" height="4" fill="#B8844A"/><rect x="16" y="22" width="4" height="18" fill="#5A7A52"/><rect x="4" y="24" width="12" height="6" fill="#6B9E62"/><rect x="20" y="20" width="12" height="6" fill="#8AAD7E"/><rect x="12" y="10" width="12" height="14" fill="#6B9E62"/><rect x="14" y="8" width="8" height="4" fill="#8AAD7E"/></svg>
+        </div>
+        <div class="bubble" id="bubble"><p>Slept a little better last night.</p><span class="tail"></span></div>
+        <div class="stage">
+          <div class="hearts" id="hearts" aria-hidden="true"></div>
+          <button class="pet" id="pet" type="button" aria-label="Poke the companion">
+            <svg width="128" height="128" viewBox="0 0 128 128" class="creature">
+              <circle cx="64" cy="64" r="56" class="body"/>
+              <ellipse cx="50" cy="46" rx="17" ry="11" fill="rgba(255,255,255,.16)"/>
+              <g class="eye"><ellipse cx="46" cy="56" rx="8.5" ry="8.5" class="sclera"/><circle cx="47.5" cy="57.5" r="4.2" fill="#3D2E1E"/><circle cx="49.8" cy="55" r="1.6" fill="rgba(255,255,255,.85)"/></g>
+              <g class="eye eye2"><ellipse cx="82" cy="56" rx="8.5" ry="8.5" class="sclera"/><circle cx="83.5" cy="57.5" r="4.2" fill="#3D2E1E"/><circle cx="85.8" cy="55" r="1.6" fill="rgba(255,255,255,.85)"/></g>
+              <rect x="52" y="76" width="24" height="9" rx="5" class="mouth" fill="rgba(255,255,255,.72)"/>
+            </svg>
+          </button>
+          <div class="statechip"><span class="dot statedot"></span><span id="statelabel">Thriving</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="statepicker">
+      <span class="ital">poke the companion, or set its day:</span>
+      <div class="chips" id="statechips">
+        <button type="button" data-state="thriving" class="on">Thriving</button>
+        <button type="button" data-state="okay">Okay</button>
+        <button type="button" data-state="tired">Tired</button>
+        <button type="button" data-state="sick">Sick</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="card refusals">
+    <div class="refusals-copy">
+      <h2>What Fernlet refuses to do</h2>
+      <p class="muted">Every one of these was possible. Each was left out on purpose — the app is audited against its own axioms.</p>
+    </div>
+    <ul class="refuse-grid">
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Streaks</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Calorie targets</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Weight goals</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Leaderboards</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Ads or trackers</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Accounts and logins</li>
+    </ul>
+  </div>
+</section>
+
+<section id="companion" class="wrap split">
+  <div class="phone-col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>9:41</span><span class="sb-icons">
+        <svg width="16" height="11" viewBox="0 0 16 12"><rect y="4" width="3" height="8" rx="1" fill="#3D2E1E" opacity=".4"/><rect x="4.5" y="2.5" width="3" height="9.5" rx="1" fill="#3D2E1E" opacity=".6"/><rect x="9" y=".5" width="3" height="11.5" rx="1" fill="#3D2E1E"/><rect x="13.5" y="3" width="2" height="7" rx=".5" fill="#3D2E1E" opacity=".3"/></svg>
+        <svg width="23" height="11" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3" stroke="#3D2E1E" stroke-opacity=".35" fill="none"/><rect x="2" y="2" width="15" height="8" rx="2" fill="#3D2E1E"/></svg>
+      </span></div>
+
+      <div class="screen" data-screen="home">
+        <div class="mini-room">
+          <figure class="polaroid sm" style="top:74px;left:18px;--r:-2deg;--d:6s"><div class="photo" style="background:var(--journal-good)"></div></figure>
+          <figure class="polaroid sm" style="top:82px;left:96px;--r:2deg;--d:7s"><div class="photo" style="background:var(--journal-bright)"></div></figure>
+          <figure class="polaroid sm" style="top:76px;left:176px;--r:-1deg;--d:6.4s"><div class="photo" style="background:var(--journal-quiet)"></div></figure>
+          <div class="mini-floor"></div>
+          <div class="mini-bubble"><p>Slept a little better last night.</p></div>
+          <div class="mini-pet">
+            <svg width="86" height="86" viewBox="0 0 128 128" class="creature">
+              <circle cx="64" cy="64" r="56" class="body"/>
+              <ellipse cx="50" cy="46" rx="17" ry="11" fill="rgba(255,255,255,.16)"/>
+              <ellipse cx="46" cy="56" rx="8.5" ry="8.5" class="sclera"/><circle cx="47.5" cy="57.5" r="4.2" fill="#3D2E1E"/>
+              <ellipse cx="82" cy="56" rx="8.5" ry="8.5" class="sclera"/><circle cx="83.5" cy="57.5" r="4.2" fill="#3D2E1E"/>
+              <rect x="52" y="76" width="24" height="9" rx="5" class="mouth" fill="rgba(255,255,255,.72)"/>
+            </svg>
+            <div class="mini-badge" id="minilabel">Thriving</div>
+          </div>
+        </div>
+        <div class="screen-body">
+          <div class="minicard">
+            <div class="minicard-head"><span class="h">Today</span><span class="t">Sunday, August 9</span></div>
+            <div class="healthbar">
+              <div class="segs" id="segs"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+              <div class="bonus"><i></i><i></i></div>
+            </div>
+            <p class="tiny ital">no percentage, no grade — just how the day is going</p>
+          </div>
+          <div class="label">Quick log</div>
+          <div class="quicklog">
+            <div><span style="background:var(--color-lichen)"></span>Meal</div>
+            <div><span style="background:#BBD4E2"></span>Water</div>
+            <div><span style="background:var(--color-fern)"></span>Move</div>
+            <div><span style="background:#E3D6BE"></span>Hygiene</div>
+            <div><span style="background:#EDD87A"></span>Journal</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="journal" hidden>
+        <div class="screen-pad">
+          <div class="screen-title">Journal</div>
+          <div class="screen-sub">A small record of being.</div>
+          <div class="minicard">
+            <div class="h">August</div>
+            <div class="heatmap" id="heatmap"><i style="background:#A8C89C"></i><i style="background:#EDD87A"></i><i></i><i style="background:#B8B0A4"></i><i style="background:#A8C89C"></i><i style="background:#94AEBF"></i><i style="background:#EDD87A"></i><i></i><i style="background:#A8C89C"></i><i style="background:#A08898"></i><i style="background:#A8C89C"></i><i style="background:#EDD87A"></i><i style="background:#B8B0A4"></i><i></i><i style="background:#A8C89C"></i><i style="background:#94AEBF"></i><i style="background:#C88070"></i><i style="background:#A8C89C"></i><i style="background:#EDD87A"></i><i style="background:#A8C89C"></i><i style="background:#B8B0A4"></i><i></i><i style="background:#94AEBF"></i><i style="background:#A8C89C"></i><i style="background:#EDD87A"></i><i style="background:#A8C89C"></i><i style="background:#A08898"></i><i style="background:#A8C89C"></i><i style="background:#A8C89C"></i><i></i><i></i></div>
+            <div class="legend">
+              <span><i style="background:#EDD87A"></i>Bright</span><span><i style="background:#A8C89C"></i>Good</span>
+              <span><i style="background:#B8B0A4"></i>Neutral</span><span><i style="background:#94AEBF"></i>Quiet</span>
+              <span><i style="background:#A08898"></i>Tired</span><span><i style="background:#C88070"></i>Hard</span>
+            </div>
+          </div>
+          <div class="entrybox">How was today?</div>
+          <p class="tiny ital">Up to 100 words, one colour tag. Sealed on the device — the AI can read your reflection, never the raw entry.</p>
+        </div>
+      </div>
+
+      <div class="screen" data-screen="food" hidden>
+        <div class="screen-pad">
+          <div class="screen-title">Food</div>
+          <div class="screen-sub">Eating enough, eating well.</div>
+          <div class="minicard">
+            <div class="label">Macros today</div>
+            <div class="rings">
+              <div class="ring"><svg width="70" height="70" viewBox="0 0 68 68"><circle cx="34" cy="34" r="26" fill="none" stroke="rgba(61,46,30,.1)" stroke-width="8"/><circle cx="34" cy="34" r="26" fill="none" stroke="#5A7A52" stroke-width="8" stroke-linecap="round" stroke-dasharray="78.4 85.0" stroke-dashoffset="41" transform="rotate(-90 34 34)"/><text x="34" y="38" text-anchor="middle">72g</text></svg><b>Protein</b><i>of 150g</i></div>
+              <div class="ring"><svg width="70" height="70" viewBox="0 0 68 68"><circle cx="34" cy="34" r="26" fill="none" stroke="rgba(61,46,30,.1)" stroke-width="8"/><circle cx="34" cy="34" r="26" fill="none" stroke="#D4A843" stroke-width="8" stroke-linecap="round" stroke-dasharray="76.8 86.6" stroke-dashoffset="41" transform="rotate(-90 34 34)"/><text x="34" y="38" text-anchor="middle">94g</text></svg><b>Carbs</b><i>of 200g</i></div>
+              <div class="ring"><svg width="70" height="70" viewBox="0 0 68 68"><circle cx="34" cy="34" r="26" fill="none" stroke="rgba(61,46,30,.1)" stroke-width="8"/><circle cx="34" cy="34" r="26" fill="none" stroke="#C0674A" stroke-width="8" stroke-linecap="round" stroke-dasharray="85.5 77.9" stroke-dashoffset="41" transform="rotate(-90 34 34)"/><text x="34" y="38" text-anchor="middle">34g</text></svg><b>Fat</b><i>of 65g</i></div>
+            </div>
+          </div>
+          <div class="meals">
+            <div class="meal"><div><b>Oat bowl with berries</b><i>8:30 am · P 12g · C 54g · F 8g</i></div><span></span></div>
+            <div class="meal"><div><b>Greek yogurt + almonds</b><i>11:00 am · P 18g · C 12g · F 14g</i></div><span></span></div>
+            <div class="meal"><div><b>Chicken + roasted veg</b><i>1:30 pm · P 42g · C 28g · F 12g</i></div><span></span></div>
+          </div>
+          <p class="tiny ital">Three rings. There is no fourth ring, because there is no calorie target.</p>
+        </div>
+      </div>
+    </div>
+    <div class="tabs" id="screentabs">
+      <button type="button" data-tab="home" class="on">Home</button>
+      <button type="button" data-tab="journal">Journal</button>
+      <button type="button" data-tab="food">Food</button>
+    </div>
   </div>
 
-  <footer>
-    <nav>
-      <a href="/privacy/">Privacy policy</a>
-      <a href="/support/">Support</a>
-    </nav>
-    <p>&copy; 2026 Michael Bowman Olay. This site sets no cookies and loads nothing from anywhere else.</p>
-  </footer>
+  <div class="split-copy">
+    <div class="eyebrow">The companion</div>
+    <h2>It reacts. It never punishes.</h2>
+    <p class="lede">Your companion reads a rolling 24-hour window of how you've cared for yourself — food, movement, sleep, water, rest — and simply looks how the day has gone. Thriving, okay, tired. That's the whole feedback loop.</p>
+    <div class="stack">
+      <div class="feature"><span class="swatch" style="--c:#5A7A52"></span><div><h3>A rolling 24 hours</h3><p>Not a calendar day you can fail by midnight. The window moves with you, so care counts whenever you manage it.</p></div></div>
+      <div class="feature"><span class="swatch" style="--c:#D4A843"></span><div><h3>A bar, not a number</h3><p>The health bar is a segmented strip with goldenrod bonus segments for warmth from friends. No percentage is ever shown.</p></div></div>
+      <div class="feature"><span class="swatch" style="--c:#8AAD7E"></span><div><h3>It speaks in observations</h3><p>"Slept a little better last night." Never a nudge about what you skipped — silence is the response to absence.</p></div></div>
+      <div class="feature"><span class="swatch" style="--c:#C0674A"></span><div><h3>Gentlest when life is hardest</h3><p>Tell it you are sick and the scoring softens. A hard journal day still counts as showing up.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="mesh" class="band">
+  <div class="wrap">
+    <div class="intro">
+      <div class="eyebrow">The friend mesh</div>
+      <h2>You can only make a friend in person.</h2>
+      <p class="lede">There is no friend server to hack, no follow button, no discovery feed. Two phones hold still 15&nbsp;cm apart for the better part of a second, and that's the handshake. Everything after that travels device-to-device.</p>
+    </div>
+    <div class="mesh-split">
+      <div class="card mesh-demo">
+        <div class="mesh-stage" id="meshstage">
+          <div class="dwell" id="dwell">
+            <svg width="76" height="76" viewBox="0 0 76 76"><circle cx="38" cy="38" r="30" fill="none" stroke="rgba(90,122,82,.18)" stroke-width="4"/><circle id="dwellarc" cx="38" cy="38" r="30" fill="none" stroke="#5A7A52" stroke-width="4" stroke-linecap="round" stroke-dasharray="189" stroke-dashoffset="189" transform="rotate(-90 38 38)"/></svg>
+            <div class="dwell-txt"><b>15 cm</b><i>0.8 s</i></div>
+          </div>
+          <div class="phones" id="phones">
+            <div class="mini" data-slot="l"><div class="mini-body"><svg width="40" height="40" viewBox="0 0 128 128" class="creature"><circle cx="64" cy="64" r="56" fill="#6B9E62"/><ellipse cx="46" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="47.5" cy="57.5" r="4.4" fill="#3D2E1E"/><ellipse cx="82" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="83.5" cy="57.5" r="4.4" fill="#3D2E1E"/><rect x="52" y="78" width="24" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/></svg><b>Maya</b><em class="vibe vibe-green">thriving</em></div></div>
+            <div class="mini" data-slot="c"><div class="mini-body"><svg width="40" height="40" viewBox="0 0 128 128" class="creature"><circle cx="64" cy="64" r="56" fill="#8AAD7E"/><ellipse cx="46" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="47.5" cy="57.5" r="4.4" fill="#3D2E1E"/><ellipse cx="82" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="83.5" cy="57.5" r="4.4" fill="#3D2E1E"/><rect x="52" y="78" width="24" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/></svg><b>you</b><em class="vibe vibe-amber">okay</em></div></div>
+            <div class="mini" data-slot="r"><div class="mini-body"><svg width="40" height="40" viewBox="0 0 128 128" class="creature"><circle cx="64" cy="64" r="56" fill="#C9964A"/><ellipse cx="46" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="47.5" cy="57.5" r="4.4" fill="#3D2E1E"/><ellipse cx="82" cy="56" rx="9" ry="9" fill="rgba(255,255,255,.94)"/><circle cx="83.5" cy="57.5" r="4.4" fill="#3D2E1E"/><rect x="52" y="78" width="24" height="7" rx="3.5" fill="rgba(255,255,255,.72)"/></svg><b>Jordan</b><em class="vibe vibe-amber">okay</em></div></div>
+          </div>
+          <div class="links" id="links"><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="rail"></i><i class="d1"></i><i class="d2"></i><i class="d3"></i></div>
+        </div>
+        <div class="mesh-foot">
+          <p id="meshstatus">Three phones in one room. Nothing is connected, nothing is advertising.</p>
+          <button type="button" class="btn btn-moss" id="meshbtn">Bring them together</button>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="step"><span>1</span><div><h3>Stand next to each other</h3><p>Both of you tap Join. The phones find each other over a local, encrypted peer-to-peer link — no internet, no lobby to browse.</p></div></div>
+        <div class="step"><span>2</span><div><h3>Touch phones and hold</h3><p>Precise ranging measures the real distance. A friend is only committed after 15 cm for about 0.8 seconds. Phones never brought that close never connect.</p></div></div>
+        <div class="step"><span>3</span><div><h3>Keys, not accounts</h3><p>You exchange display names, public keys, companion looks and a fuzzy vibe. Your private keys never leave your device.</p></div></div>
+        <div class="step"><span>4</span><div><h3>It fades when you leave</h3><p>A session is ephemeral — hearts, recipes and hand-drawn clothing pass directly between phones, and there is nothing left on a server to delete.</p></div></div>
+        <div class="note-lichen"><p>Friends see a fuzzy vibe — thriving, okay, struggling. Never a score, never a goal, never a number, never your cycle. Your friend list stays small on purpose: 8 people.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="period" class="wrap">
+  <div class="intro">
+    <div class="eyebrow">Period tracking</div>
+    <h2>The most protected thing in the app. On purpose.</h2>
+    <p class="lede">Cycle tracking lives in its own sealed module. Not a setting, not a privacy mode — a wall in the source code that the AI and the networking layer cannot reach across. If someone ever wired them together by accident, the app would fail to build rather than ship.</p>
+  </div>
+  <div class="mesh-split">
+    <div class="card cycle-card">
+      <div class="cycle-head"><span class="h2ish">Your cycle</span><span class="sealed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>sealed store</span></div>
+      <div class="cycle-dial" id="cycledial"><i class="flow" style="left:50.00%;top:8.00%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:59.35%;top:9.05%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:68.22%;top:12.16%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:76.19%;top:17.16%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:82.84%;top:23.81%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i style="left:87.84%;top:31.78%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:90.95%;top:40.65%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:92.00%;top:50.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:90.95%;top:59.35%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:87.84%;top:68.22%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:82.84%;top:76.19%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:76.19%;top:82.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:68.22%;top:87.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="today" style="left:59.35%;top:90.95%;width:20px;height:20px;margin:-10px 0 0 -10px"></i><i style="left:50.00%;top:92.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:40.65%;top:90.95%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:31.78%;top:87.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:23.81%;top:82.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:17.16%;top:76.19%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:12.16%;top:68.22%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:9.05%;top:59.35%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:8.00%;top:50.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:9.05%;top:40.65%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:12.16%;top:31.78%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:17.16%;top:23.81%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:23.81%;top:17.16%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:31.78%;top:12.16%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:40.65%;top:9.05%;width:12px;height:12px;margin:-6px 0 0 -6px"></i>
+        <div class="cycle-mid"><b>Day 14</b><i>mid-cycle</i><em>next window around the 24th</em></div>
+      </div>
+      <div class="cycle-legend"><span><i class="c-flow"></i>logged flow</span><span><i class="c-pred"></i>predicted</span><span><i class="c-today"></i>today</span></div>
+      <div class="cycle-note"><p class="ital">Your period might be starting soon.</p><p class="tiny">predicted on your phone — the prediction never leaves it either</p></div>
+      <div class="toggle-row">
+        <div><b>Include in encrypted backup</b><i id="backupstate">off by default</i></div>
+        <button type="button" class="switch" id="backupswitch" role="switch" aria-checked="false" aria-label="Include period data in encrypted backup"><span></span></button>
+      </div>
+      <p class="backup-note" id="backupnote">Cycle data never leaves the phone unless you deliberately turn this on — a separate, clearly-warned opt-in, not part of ordinary iCloud sync.</p>
+    </div>
+    <div class="stack">
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never touches the AI</h3><p>On-device models cannot import the sealed store. No summaries, no suggestions, no reflections built from your cycle.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never written to Apple Health</h3><p>Fernlet reads sleep, steps and workouts from Health. It writes back only workouts — never period, mood, journal, hydration or hygiene.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never in ordinary sync</h3><p>It is excluded from iCloud sync and from your data export, so a shared laptop or a file you send someone can't carry it out with everything else.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never visible to friends</h3><p>In-person friends see a fuzzy vibe and a companion. There is no field in the handshake that could carry cycle information.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Enforced by the build, not by trust</h3><p>A pre-merge script compiles the app with cross-wall imports promoted to errors. The wall is a compile-time fact, not a policy paragraph.</p></div></div>
+      <div class="note-lichen"><p>Intimate-activity notes sit in the same sealed store, are gated to 16+, and are hidden and off until you go looking for them.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" class="wrap">
+  <div class="mesh-split top">
+    <div class="split-copy">
+      <div class="eyebrow">Privacy by architecture</div>
+      <h2>Not a promise in a policy. A wall in the build.</h2>
+      <p class="lede">Period data, journal text, sensitive memories and intimate notes live in a sealed, encrypted store. The AI code and the networking code physically cannot import it — a build script compiles the app with cross-wall imports promoted to errors, so a violation fails the build rather than shipping.</p>
+      <p class="lede">The developer runs no server. There is nothing to breach, subpoena, or sell — because there is no copy.</p>
+      <a class="btn btn-moss" href="privacy/index.html">Read the whole policy
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+    </div>
+    <div class="card phonediag">
+      <div class="label">Inside one phone</div>
+      <div class="diagbox">
+        <div class="dbox"><b>Everyday store</b><i>meals, movement, water, sleep, hygiene, the companion</i></div>
+        <div class="dbox sealedbox"><b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Sealed store</b><i>cycle, journal text, sensitive memories — encrypted, walled off at the module boundary</i></div>
+        <div class="drow">
+          <div class="dbox sm"><b>On-device AI</b><i>reads the everyday store only</i></div>
+          <div class="dbox sm"><b>Networking</b><i>no health payloads, ever</i></div>
+        </div>
+      </div>
+      <div class="divider"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2l20 20"/><path d="M5.8 11.6a10 10 0 0 1 3.4-2.2"/><path d="M10.7 5.1A16 16 0 0 1 22 9"/><path d="M2 9a16 16 0 0 1 3.6-2.6"/><path d="M8.5 15.1a6 6 0 0 1 2-1.1"/><path d="M12 20h.01"/></svg></div>
+      <p class="ital center muted">Nothing above this line is ours. Optional backup goes to your own iCloud, sealed categories encrypted first.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>Zero</b><p>servers the developer operates. No backend means no copy of you to leak.</p></div>
+    <div class="fact"><b>Your</b><p>iCloud, not ours — and sealed categories are encrypted before they leave the phone.</p></div>
+    <div class="fact"><b>On-device</b><p>AI. Journal text, memories, health, photos and cycle data are never sent to an AI service.</p></div>
+    <div class="fact"><b>Forever</b><p>commitments: data logged under this policy can never be retroactively repurposed.</p></div>
+  </div>
+</section>
+
+<section id="faq" class="band">
+  <div class="wrap narrow">
+    <h2>Questions people actually ask</h2>
+    <div class="faq">
+      <details open><summary>Is it free?</summary><p>Yes. Fernlet is in development and will be free, with no subscription and no ads. There is no business model that needs your data, because there is no business model that touches your data.</p></details>
+      <details><summary>Do I need an account?</summary><p>No. There is no sign-up, no login, no email, no password. The app works the moment you open it.</p></details>
+      <details><summary>What happens if I miss a day?</summary><p>That day scores lower. That is all. There are no streaks to break, and every unlock you have earned is cumulative and can never be taken back.</p></details>
+      <details><summary>Does it count calories?</summary><p>Never. You get macro goals — protein, carbs, fat — and nothing else. No calorie ring, no weight target, no body-composition anything.</p></details>
+      <details><summary>Can my friends see my numbers?</summary><p>No. Friends exchange display names, companion appearances and a fuzzy vibe — thriving, okay, struggling. Your score, goals, cycle data and raw health data never leave your phone.</p></details>
+      <details><summary>What if I lose my phone?</summary><p>If you turned on iCloud sync, your core data restores from your own iCloud. The sealed categories — cycle data, journal text, sensitive memories, intimate logs, your own photos — are a different story: their key is locked to this phone's Secure Enclave, so no device backup can bring them back on a new phone. The optional encrypted sealed backup is the only route, and it is encrypted with a key in your iCloud Keychain: if you lose access to that Keychain everywhere, that data is gone for good. That is the trade the encryption buys, and the app says so before you enable it.</p></details>
+      <details><summary>Which iPhones does it need?</summary><p>iOS 26 or later; iPhone 15 Pro or newer for the full on-device AI features. The 15 cm friend handshake needs a phone with precise ranging — on other phones you confirm on screen instead.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap" class="wrap">
+  <div class="rm-head">
+    <h2>The plan, roughly</h2>
+    <p class="ital muted">Built by one person, in the open. Intentions, not promises — and nothing here changes the privacy commitments.</p>
+  </div>
+  <div class="rm-grid">
+    <div class="card rm"><div class="rm-phase"><i style="background:#5A7A52"></i>Being built now</div><ul><li>Meal logging overhaul + barcode scanning</li><li>Cooking mode with live activities</li><li>Disposable-camera photowall</li><li>Friend-mesh photo sharing</li></ul></div>
+    <div class="card rm"><div class="rm-phase"><i style="background:#D4A843"></i>Next</div><ul><li>Creation Studio clothing sharing</li><li>Widgets and lock-screen glances</li><li>Localization</li><li>Sealed-backup recovery flows</li></ul></div>
+    <div class="card rm"><div class="rm-phase"><i style="background:#8AAD7E"></i>Later</div><ul><li>Trainer and group sessions</li><li>Multi-device without iCloud</li><li>First-aid reference</li><li>Whatever the axioms survive</li></ul></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="darkcard">
+    <div class="dc-copy">
+      <h2>Don't take my word for it. Watch the traffic.</h2>
+      <p>The source, the specs, and the network-egress inventory are public. Point a proxy at the app and check that the list is the whole list — that standing invitation is part of how the privacy claims are meant to be judged.</p>
+      <div class="row">
+        <a class="btn btn-cream" href="https://github.com/bowman-mw/fernlet">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-1.05-.01-1.9-2.78.62-3.37-1.2-3.37-1.2-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.35 9.35 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.35 4.79-4.58 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.14 10.14 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          bowman-mw/fernlet
+        </a>
+        <a class="btn btn-outline" href="mailto:fernletapp@gmail.com">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>
+          fernletapp@gmail.com
+        </a>
+      </div>
+    </div>
+    <div class="dc-side">
+      <div class="dbox dark"><b>Built with</b><i>Swift &amp; SwiftUI · HealthKit · Apple Foundation Models on device · MultipeerConnectivity + NearbyInteraction · CloudKit private database</i></div>
+      <div class="dbox dark"><b>Needs</b><i>iOS 26 or later. iPhone 15 Pro and newer for the full on-device AI features; the 15&nbsp;cm handshake needs a phone with precise ranging, with an on-screen confirm as fallback.</i></div>
+    </div>
+  </div>
+</section>
+
 </main>
+
+<footer>
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+      <span class="wordmark sm">Fernlet</span>
+      <span class="tiny">© 2026 Michael Bowman Olay</span>
+    </div>
+    <nav class="foot-nav"><a href="privacy/index.html">Privacy policy</a><a href="support/index.html">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+    <p class="ital muted foot-note">No cookies, no analytics, no tracking on this site. Fernlet is a self-care companion, not a medical device — if you are in crisis, contact your local emergency services, or in the US call or text 988.</p>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
 </body>
 </html>

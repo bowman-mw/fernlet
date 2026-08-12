@@ -1,13 +1,33 @@
 # Cloudflare Pages header rules (https://developers.cloudflare.com/pages/configuration/headers/)
 
-# Baseline security headers for every page. The CSP forbids all external loads —
-# the site is deliberately self-contained (no JS, no cookies, no third-party requests).
+# Baseline security headers for every page. The CSP still forbids all EXTERNAL loads —
+# every stylesheet, script and font is served from this origin. No third-party requests,
+# no cookies, no analytics.
+#
+# Changed from the original policy (which was `default-src 'none'; style-src 'unsafe-inline'`):
+#   style-src  'self'  — the site now uses /style.css instead of a per-page <style> block
+#              plus 'unsafe-inline' — REQUIRED, and not a loosening of the external-load ban:
+#              the pages position polaroids, cycle-dial dots and rings with inline `style=""`
+#              attributes, which `style-src 'self'` alone blocks (the layout silently collapses).
+#              There is no user-generated content on this site for an injection to ride in on.
+#   script-src 'self'  — /app.js adds progressive-enhancement interactions only; every page
+#                        renders completely with JavaScript disabled. Deliberately NOT
+#                        'unsafe-inline': there are no inline <script> blocks or on* handlers.
+#   font-src   'self'  — the design-system fonts are self-hosted in /fonts/
+#
+# GitHub Pages ignores this file entirely (it is a Cloudflare/Netlify feature), so the same CSP
+# is repeated as a <meta http-equiv="Content-Security-Policy"> in every page. Keep the two in
+# sync. The meta form cannot carry HSTS, X-Frame-Options or frame-ancestors — only this file can.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
-  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Long-cache the immutable assets. Bump the filename (not the header) when they change.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
 
 # The AASA file (added at coach P0) must be served as JSON with no caching games.
 # This rule is inert until the file exists — keep it so universal links work on day one.

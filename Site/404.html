@@ -3,27 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Not found — Fernlet</title>
-<style>
-:root{ --bg:#F5EFDF; --ink:#3D2E1E; --soft:#61707A; --moss:#5E844D; }
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#1C1E1B; --ink:#F1EDE3; --soft:#BAC0C2; --moss:#7FB069; }
-}
-body{
-  margin:0; background:var(--bg); color:var(--ink); min-height:100vh;
-  display:grid; place-items:center; text-align:center;
-  font-family:ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
-}
-h1{font-size:2rem; margin:0 0 .4rem}
-p{color:var(--soft); margin:0 0 1.2rem}
-a{color:var(--moss)}
-</style>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div>
-  <h1>&#10047; Nothing grows here</h1>
-  <p>That page doesn't exist.</p>
-  <a href="/">Back home</a>
-</div>
+
+<nav id="nav">
+  <a class="brand" href="/">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+    <span class="wordmark">Fernlet</span>
+  </a>
+  <div class="navlinks"><a href="/privacy/">Privacy policy</a><a href="/support/">Support</a></div>
+</nav>
+
+<header class="policy-head" style="text-align:center;padding-bottom:clamp(48px,6vw,90px)">
+  <div style="display:flex;justify-content:center;margin-bottom:26px">
+    <svg width="128" height="128" viewBox="0 0 128 128" class="creature" style="--state:#8B7B9E">
+      <circle cx="64" cy="64" r="56" class="body"/>
+      <ellipse cx="50" cy="46" rx="17" ry="11" fill="rgba(255,255,255,.16)"/>
+      <ellipse cx="46" cy="56" rx="8.5" ry="5" class="sclera"/><circle cx="47.5" cy="57.5" r="4.2" fill="#3D2E1E"/>
+      <ellipse cx="82" cy="56" rx="8.5" ry="5" class="sclera"/><circle cx="83.5" cy="57.5" r="4.2" fill="#3D2E1E"/>
+      <rect x="52" y="76" width="24" height="4" rx="2" fill="rgba(255,255,255,.72)"/>
+    </svg>
+  </div>
+  <h1 style="max-width:none">Nothing here.</h1>
+  <p class="lede" style="max-width:44ch;margin:0 auto 28px">This page wandered off, or never existed. That's okay — no streaks were broken.</p>
+  <div class="row" style="justify-content:center">
+    <a class="btn btn-moss" href="/">Back to the app</a>
+    <a class="btn btn-ghost" href="/support/">Get in touch</a>
+  </div>
+</header>
+
+<footer>
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+      <span class="wordmark sm">Fernlet</span>
+      <span class="tiny">© 2026 Michael Bowman Olay</span>
+    </div>
+    <nav class="foot-nav"><a href="/">Home</a><a href="/privacy/">Privacy policy</a><a href="/support/">Support</a></nav>
+  </div>
+</footer>
+
 </body>
 </html>

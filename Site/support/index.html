@@ -3,70 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Support — Fernlet</title>
-<meta name="description" content="Get help with Fernlet, the privacy-first self-care companion.">
-<style>
-:root{
-  --bg:#F5EFDF; --box:#FBF7EE; --ink:#3D2E1E; --soft:#61707A; --moss:#5E844D;
-}
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#1C1E1B; --box:#282A26; --ink:#F1EDE3; --soft:#BAC0C2; --moss:#7FB069; }
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:var(--bg); color:var(--ink);
-  font-family:ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
-  line-height:1.6; font-size:1.06rem;
-}
-main{max-width:40rem; margin:0 auto; padding:3.5rem 1.4rem 3rem}
-h1{font-size:2rem; margin:0 0 1.4rem}
-h2{font-size:1.05rem; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); margin:1.8rem 0 .5rem; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:600}
-p, li{margin:0 0 1rem}
-ul{padding-left:1.2rem}
-a{color:var(--moss); text-decoration-thickness:1px; text-underline-offset:2px}
-.card{
-  background:var(--box); border-radius:18px; padding:1.3rem 1.4rem; margin:1.4rem 0;
-  box-shadow:0 2px 8px rgba(61,46,30,.06), 0 6px 24px rgba(61,46,30,.04);
-}
-footer{margin-top:3rem; padding-top:1.2rem; border-top:1px solid rgba(125,125,125,.25); color:var(--soft); font-size:.92rem}
-footer nav a{margin-right:1.1rem}
-</style>
+<meta name="description" content="Support and contact for Fernlet, a privacy-first self-care companion for iPhone.">
+<meta property="og:title" content="Fernlet — support">
+<meta property="og:description" content="Questions, bugs, and privacy findings — get in touch.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fernlet.com/support/">
+<link rel="stylesheet" href="../style.css">
 </head>
 <body>
-<main>
-  <h1>Fernlet support</h1>
 
-  <div class="card">
-    <p>Write to <a href="mailto:fernletapp@gmail.com"><strong>fernletapp@gmail.com</strong></a> —
-    a real person reads every message.</p>
+<nav id="nav">
+  <a class="brand" href="../index.html">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+    <span class="wordmark">Fernlet</span>
+  </a>
+  <div class="navlinks">
+    <a href="../privacy/index.html">Privacy policy</a>
+    <a href="../index.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Back to the app
+    </a>
   </div>
+</nav>
 
-  <h2>Helpful things to include</h2>
-  <ul>
-    <li>What you were doing, and what you expected to happen instead.</li>
-    <li>Your iPhone model and iOS version (Settings &rarr; General &rarr; About).</li>
-    <li>A screenshot, if the issue is visible.</li>
-  </ul>
+<header class="policy-head">
+  <div class="eyebrow">Support</div>
+  <h1>Something not working?</h1>
+  <p class="lede" style="max-width:56ch">Fernlet is made by one person. There is no support queue and no ticket number — email goes straight to me, and I read all of it.</p>
+</header>
 
-  <h2>A note on your data</h2>
-  <p>Fernlet has no accounts and we hold none of your data, so there is no data we can look up,
-  recover, or delete for you — your information lives on your device and, if you choose, in your
-  own iCloud. Export, deletion, and backup controls are in the app under
-  Settings&nbsp;&rarr;&nbsp;Privacy&nbsp;&amp;&nbsp;Data. Details in the
-  <a href="/privacy/">privacy policy</a>.</p>
+<div class="policy-body">
+  <main class="policy" style="max-width:70ch">
+    <div class="summary-card">
+      <h2 id="contact">Get in touch</h2>
+      <p><a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a></p>
+      <p>Useful things to include: your iPhone model, your iOS version, and what you were doing when it went wrong. Screenshots help. Please don't send health data, journal text, or anything from your sealed store — I don't need it, and I'd rather not have it.</p>
+    </div>
 
-  <h2>If you're in crisis</h2>
-  <p>Fernlet is a self-care companion, not a medical service. If you are in crisis, please contact
-  your local emergency services — or, in the US and Canada, call or text
-  <strong>988</strong> (Suicide &amp; Crisis Lifeline).</p>
+    <section>
+      <h2>Common questions</h2>
+      <ul>
+        <li><strong>I lost my phone.</strong> If you turned on iCloud sync, your core data restores from your own iCloud when you reinstall. The sealed categories — cycle data, journal text, sensitive memories, intimate logs, your own photos — are keyed to the old phone's Secure Enclave, so a device backup cannot bring them back. The optional encrypted sealed backup is the only route, and its key lives in your iCloud Keychain; if you've lost access to that Keychain on every device, that data is unrecoverable.</li>
+        <li><strong>Friend adding isn't working.</strong> Both phones need Bluetooth and local network access allowed, and need to be held about 15 cm apart for roughly a second. On phones without precise ranging you confirm on screen instead.</li>
+        <li><strong>I want my data out.</strong> Settings → Privacy &amp; Data → Export. The export deliberately excludes the sealed categories so a file you share can't carry them.</li>
+        <li><strong>I want it all gone.</strong> Same screen: delete your iCloud copy, delete your local data, or just delete the app. Nothing of yours sits on a server I run, because there isn't one.</li>
+      </ul>
+      <p>The <a href="../index.html#faq">FAQ on the home page</a> covers the rest, and the <a href="../privacy/index.html">privacy policy</a> is the long version of where everything lives.</p>
+    </section>
 
-  <footer>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/privacy/">Privacy policy</a>
-    </nav>
-    <p>&copy; 2026 Michael Bowman Olay. This site sets no cookies and loads nothing from anywhere else.</p>
-  </footer>
-</main>
+    <section>
+      <h2>Reporting a privacy problem</h2>
+      <p>If you find a hole in the privacy claims — traffic that isn't in the published egress inventory, a cross-wall data path, anything that contradicts the policy — that is the most valuable thing you can send me. Email the same address with "privacy" in the subject and I'll prioritise it over everything else.</p>
+    </section>
+
+    <div class="disclaimer">
+      <p>Fernlet is a wellness and self-care companion, not a medical device. It does not provide medical advice, diagnosis, or treatment. If you are in crisis, contact your local emergency services or, in the US, call or text 988 (the Suicide &amp; Crisis Lifeline).</p>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+      <span class="wordmark sm">Fernlet</span>
+      <span class="tiny">© 2026 Michael Bowman Olay</span>
+    </div>
+    <nav class="foot-nav"><a href="../index.html">Home</a><a href="../privacy/index.html">Privacy policy</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+  </div>
+</footer>
+
+<script src="../app.js" defer></script>
 </body>
 </html>

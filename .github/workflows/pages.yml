@@ -1,0 +1,96 @@
+# Publishes the static site in `Site/` to GitHub Pages.
+#
+# The site is plain HTML/CSS/JS with no build step — this workflow just uploads the folder.
+#
+# ONE-TIME SETUP (owner, in the GitHub UI): Settings → Pages → Build and deployment →
+# Source: **GitHub Actions**. Without that, this workflow's deploy step fails with a
+# "Pages site not found" style error. To serve it at fernlet.com instead of
+# bowman-mw.github.io/fernlet, add the custom domain there too (it writes a `CNAME` file) and
+# point DNS at GitHub — see Site/README.md, which also covers the Cloudflare Pages alternative.
+#
+# NOTE ON HEADERS: GitHub Pages ignores `Site/_headers` (that file is a Cloudflare/Netlify
+# feature). The CSP is therefore also declared as a <meta http-equiv> in every page, so the
+# "no external requests" guarantee holds on either host. HSTS/X-Frame-Options cannot be set
+# from a meta tag; if those matter, deploy on Cloudflare Pages instead.
+
+name: Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "Site/**"
+      - ".github/workflows/pages.yml"
+  # Lets the owner republish without a Site/ change (e.g. after enabling Pages).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; never cancel a run that is mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Check + upload Site/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cheap, Xcode-free half of FernletTests/PrivacyPolicyParityTests: the hosted policy is
+      # the App Store Connect Privacy Policy URL, so it must never go live behind the canonical
+      # document. The full three-copy test still runs in the app test suite.
+      - name: Hosted privacy policy is in sync with Docs/Privacy-Policy.md
+        run: |
+          set -euo pipefail
+          date="$(sed -n 's/.*effectiveDate = "\([^"]*\)".*/\1/p' Fernlet/PrivacyPolicyView.swift | head -1)"
+          if [ -z "$date" ]; then
+            echo "::error::could not read effectiveDate from Fernlet/PrivacyPolicyView.swift"
+            exit 1
+          fi
+          echo "Effective date: $date"
+          for f in Docs/Privacy-Policy.md Site/privacy/index.html; do
+            grep -qF "$date" "$f" || { echo "::error file=$f::missing effective date $date"; exit 1; }
+          done
+          while IFS= read -r marker; do
+            [ -n "$marker" ] || continue
+            grep -qF "$marker" Site/privacy/index.html \
+              || { echo "::error file=Site/privacy/index.html::missing clause: $marker"; exit 1; }
+          done <<'MARKERS'
+          never retroactively repurposed
+          The no-collection guarantee does not expire
+          requires your fresh, affirmative consent
+          verifiability statement
+          Docs/Verifiability.md
+          MARKERS
+
+      # The no-tracking wall applies to the website too: nothing may load from another origin.
+      - name: No third-party assets in the site
+        run: |
+          set -euo pipefail
+          if grep -rnE '(src|href)="https?://' Site --include='*.html' \
+               | grep -vE 'href="https://(github\.com/bowman-mw/fernlet|fernlet\.com)'; then
+            echo "::error::a page references an off-origin asset — the site must be self-contained"
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: Site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
