@@ -20,6 +20,7 @@ requests. Fonts, styles and script are all served from this origin.
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
 | `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
 | `app.js` | Progressive-enhancement interactions. Optional by construction. |
+| `assets/` | The brand mark and the favicons. `fernlet-mark-header.svg` is the nav/footer logo; `fernlet-mark-header-dark.svg` is the same mark with the bark-brown branch recoloured to pale sage (`#C8DBC2`, the app's own dark-icon treatment) because the brown vanishes on the dark ground — the pages pick between them with `<picture media="(prefers-color-scheme:dark)">`. `favicon.svg` is the tab icon, with `favicon-32.png` / `favicon-16.png` as the raster fallback and `apple-touch-icon.png` (180px) for iOS home screens. All five come from the app icon set, so the tab, the header and the App Store icon are the same mark. |
 | `fonts/` | Self-hosted woff2 files — see [`fonts/README.md`](fonts/README.md) for what to drop in. |
 | `_headers` | Cloudflare/Netlify header rules: security baseline + font caching + the `application/json` content-type rule for the future AASA file. **Ignored by GitHub Pages** (see below). |
 | `.nojekyll` | Stops any Jekyll processing, so `_headers` and future `_`-prefixed paths publish verbatim. |
@@ -83,7 +84,7 @@ Pages: `Strict-Transport-Security` (Pages sends its own HSTS when *Enforce HTTPS
 `X-Frame-Options` (the CSP's `frame-ancestors` is meta-ignored too), and `X-Content-Type-Options`.
 If those matter, use Cloudflare Pages below.
 
-Note also that `404.html` links with absolute paths (`/style.css`, `/privacy/`), which is correct at
+Note also that `404.html` links with absolute paths (`/style.css`, `/assets/…`, `/privacy/`), which is correct at
 a domain root but **wrong under a project sub-path** like `bowman-mw.github.io/fernlet/`. Either use
 the custom domain, or make those links relative before relying on the 404 page there.
 
