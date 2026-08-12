@@ -18,10 +18,21 @@ struct JournalView: View {
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
+    /// The injected capture-friction state, read here only to RE-INJECT into the sheets this
+    /// view presents (``JournalEntryEditorSheet``, and the DEBUG-only ``DayEditSheet``
+    /// presenter) — the explicit per-presentation-site convention, because a missing
+    /// environment object in a sheet is a runtime crash, not a compile error.
+    @Environment(CaptureProtectionState.self) private var captureProtection
     @State private var path = NavigationPath()
     @State private var displayedMonth: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     @State private var editingJournal: JournalEntryEditTarget?
+    #if DEBUG
+    /// DEBUG-only: presents ``DayEditSheet`` directly under `FERNLET_UI_TEST_OPEN_DAY_EDIT=1` —
+    /// the capture-protection UI test cannot reach it by navigation while the forced Tier-2
+    /// cover blocks hits on the hub beneath it. Never set outside that hook.
+    @State private var uiTestDayEditPresented = false
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -103,8 +114,35 @@ struct JournalView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                .environment(captureProtection)
+        }
+        #if DEBUG
+        .task { presentUITestJournalSheetsIfRequested() }
+        .sheet(isPresented: $uiTestDayEditPresented) {
+            DayEditSheet(store: store, dateKey: store.todayKey, initialDay: store.day)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+                .environment(captureProtection)
+        }
+        #endif
+    }
+
+    #if DEBUG
+    /// DEBUG-only capture-protection UI-test presenters (see `UITestSupport`): auto-opens
+    /// ``JournalEntryEditorSheet`` (with today's first entry, or a synthetic one so the hook
+    /// never depends on seeding) or ``DayEditSheet`` for today. Both sheets are otherwise only
+    /// reachable by taps the forced Tier-2 cover deliberately blocks. No-ops without the flags.
+    private func presentUITestJournalSheetsIfRequested() {
+        if UITestSupport.shouldOpenJournalEditor {
+            let entry = store.day.journals.first
+                ?? JournalEntry(text: "Capture-protection UI-test entry", tag: .neutral)
+            editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey)
+        } else if UITestSupport.shouldOpenDayEditSheet {
+            uiTestDayEditPresented = true
         }
     }
+    #endif
 }
 
 // MARK: - Journal Sheet
@@ -183,6 +221,10 @@ struct JournalSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // Capture FRICTION (never a security control), attached at the sheet TYPE so every
+        // presenter — the hub, Home's quick-log tile, the notification tap, the App Intent — is
+        // covered by this one edit. A presented sheet is frontmost by construction.
+        .captureProtected(surface: "journalSheet")
     }
 
     /// A dismissible "inspiration" chip: today's prompt from the static library (deterministic
@@ -513,6 +555,9 @@ struct JournalEntryEditorSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // Capture FRICTION (never a security control), attached at the sheet TYPE so both
+        // presenters (JournalView's entry rows and DayDetailView's) are covered by one edit.
+        .captureProtected(surface: "journalEditor")
     }
 
     private func updateText(_ newValue: String) {
@@ -802,6 +847,11 @@ struct JournalRow: View {
 struct DayDetailView: View {
     var store: FernletStore
     var dateKey: String
+    /// The injected capture-friction state, read here only to RE-INJECT into the two sheets this
+    /// view presents (``DayEditSheet``, ``JournalEntryEditorSheet``) — the explicit
+    /// per-presentation-site convention; a missing environment object in a sheet is a runtime
+    /// crash, not a compile error.
+    @Environment(CaptureProtectionState.self) private var captureProtection
     @State private var day: FernletDay
     @State private var showEditSheet = false
     @State private var editingJournal: JournalEntryEditTarget?
@@ -941,12 +991,14 @@ struct DayDetailView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                .environment(captureProtection)
         }
         .sheet(item: $editingJournal, onDismiss: refresh) { target in
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                .environment(captureProtection)
         }
     }
 
@@ -1448,6 +1500,9 @@ struct DayEditSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // Capture FRICTION (never a security control): a past day's edit sheet can hold that
+        // day's journal text, so it is one of the six in-scope surfaces.
+        .captureProtected(surface: "dayEdit")
     }
 
     private func togglePersonalCareTask(_ task: PersonalCareTask) {

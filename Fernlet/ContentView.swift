@@ -49,6 +49,12 @@ struct ContentView: View {
     @State private var worryBoxService = WorryBoxService()
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
+    /// The injected capture-friction state (screenshot pulse + capture cover; friction, never a
+    /// security control). Read here only to RE-INJECT it into the sheet cases that host protected
+    /// surfaces (`.journal`, `.logPeriod`, `.logIntimacy`), matching the explicit per-sheet
+    /// environment convention used for `lockService` — a missing environment object in a sheet is
+    /// a runtime crash, not a compile error.
+    @Environment(CaptureProtectionState.self) private var captureProtection
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
@@ -449,6 +455,19 @@ struct ContentView: View {
         pagedTabs
     }
 
+    /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
+    /// (Settings, Trends, First Aid, the logging sheets, …), the connection inspector, or an
+    /// incoming recipe-share review. Composed into the Private hub's capture-friction
+    /// `isFrontmost` — the hub stays alive beneath a root sheet, so a screenshot taken while an
+    /// unprotected sheet covers the Personal tab must not spend the once-per-session nudge on a
+    /// banner nobody can see. The recipe-share slot presents only while `activeSheet` is nil, so
+    /// checking the pending queue directly covers it in both states.
+    private var rootSheetIsCoveringTabs: Bool {
+        activeSheet != nil
+            || store.showConnectionInspector
+            || store.recipeShareManager.pendingRecipeShares.first != nil
+    }
+
     private var pagedTabs: some View {
         TabView(selection: $selectedTab) {
             HomeView(
@@ -468,7 +487,12 @@ struct ContentView: View {
                 .tag(FernletTab.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
+            // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
+            // its capture-friction pulse must not fire (and spend the once-per-session nudge
+            // invisibly) while an unprotected sheet — Settings, Trends, First Aid from a
+            // notification tap, an incoming recipe share — fully covers the Personal tab. The
+            // protected sheets claim the nudge themselves, visibly, via their own attachments.
+            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs)
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -576,6 +600,7 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                .environment(captureProtection)
         case .quickExercise:
             QuickExerciseSheet(store: store)
                 .uxScreenAnchor("sheet.quickExercise")
@@ -652,6 +677,7 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(lockService)
+                .environment(captureProtection)
         case .logIntimacy:
             LogIntimacySheet(intimacyStore: intimacyStore)
                 .uxScreenAnchor("sheet.logIntimacy")
@@ -660,6 +686,7 @@ struct ContentView: View {
                 .presentationCornerRadius(20)
                 .environment(lockService)
                 .environment(storagePreferencesStore)
+                .environment(captureProtection)
         case .editRecipe(let recipe):
             RecipeSheet(store: store, recipe: recipe)
                 .uxScreenAnchor("sheet.editRecipe")

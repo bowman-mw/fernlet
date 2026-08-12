@@ -204,6 +204,9 @@ struct LogPeriodSheet: View {
                 await authorization.request(.cycleTracking)
             }
         }
+        // Capture FRICTION (never a security control), attached at the sheet TYPE so both
+        // presenters (the Cycle page and Home's quick-log tile) are covered by one edit.
+        .captureProtected(surface: "logPeriod")
     }
 
     private func periodToggle(_ title: String, isOn: Binding<Bool>) -> some View {

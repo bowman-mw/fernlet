@@ -37,6 +37,15 @@ import FernletUI
 struct FernletApp: App {
     @State private var lockService = FernletLockService()
     @State private var storagePreferencesStore = StoragePreferencesStore()
+    /// App-lifetime owner of the capture-friction triggers (screenshot pulse + capture cover)
+    /// behind `captureProtected(surface:)` on the Private-tab surfaces. Injected below in
+    /// `readyContent(store:)` and re-injected per sheet case in `ContentView`, never
+    /// self-discovered — the injection IS the test seam, since neither real trigger can be
+    /// driven from automation. `FERNLET_UI_TEST_FORCE_CAPTURE=1` forces the Tier-2 cover for the
+    /// capture-protection UI tests (DEBUG-only; the flag is a hard-coded no-op in release).
+    @State private var captureProtection = CaptureProtectionState(
+        captureOverride: UITestSupport.forceCaptureCover ? true : nil
+    )
     @State private var loader = FernletStoreLoader()
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
     @State private var didScheduleStartupCloudSync = false
@@ -246,6 +255,7 @@ struct FernletApp: App {
                 ContentView(store: store)
                     .environment(lockService)
                     .environment(storagePreferencesStore)
+                    .environment(captureProtection)
             } else {
                 OnboardingCoordinator(
                     store: store,

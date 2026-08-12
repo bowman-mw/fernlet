@@ -109,6 +109,9 @@ struct LogIntimacySheet: View {
             }
         }
         .background(Color.parchment)
+        // Capture FRICTION (never a security control), attached at the sheet TYPE — presented
+        // from the root router, so protection engages regardless of the tab beneath it.
+        .captureProtected(surface: "logIntimacy")
     }
 
     private var writesToHealthKit: Bool {
