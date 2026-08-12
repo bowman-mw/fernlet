@@ -74,9 +74,14 @@ public final class CaptureProtectionState {
 
     /// The single pulse token that carries the once-per-session nudge, or nil while no protected
     /// surface has reacted to any pulse yet. Set by the FIRST ``claimNudge(for:)`` call — i.e.
-    /// by a screenshot taken while a protected surface was actually frontmost. A screenshot on
-    /// Home/Food/Move/Social claims nothing, so the session's one nudge is never silently spent
-    /// on a screen that showed no nudge.
+    /// by a screenshot taken while a protected surface was actually frontmost AND unoccluded.
+    /// The invariant is that the session's one nudge is never silently spent on a screen that
+    /// showed no nudge, and THREE gates uphold it: a screenshot on Home/Food/Move/Social claims
+    /// nothing (the modifier's `isFrontmost`); one taken while a surface's own Tier-2 cover is
+    /// up claims nothing (the modifier skips the reaction — the screenshot captured the cover,
+    /// and the banner would draw invisibly beneath it); and one taken on the LOCKED Private hub
+    /// or under a covering root sheet claims nothing (the hub's call sites AND the lock-gate
+    /// occlusion and the root-sheet slots into `isFrontmost`).
     public private(set) var nudgePulse: Int? = nil
 
     /// Test/UI-test override for the capture verdict: non-nil forces every
@@ -86,11 +91,13 @@ public final class CaptureProtectionState {
     /// the cover under test. Never set outside DEBUG hooks or tests.
     public var captureOverride: Bool? = nil
 
-    /// Aggregate capture verdict: the override when one is set, otherwise "any registered screen
-    /// is captured". Views that know their own screen should prefer ``isCaptured(on:)`` — this
-    /// aggregate exists for pre-resolution frames (a probe that has not landed in a window yet)
-    /// and for tests, and it deliberately fails toward covering during that brief window.
-    public var isCaptured: Bool { captureOverride ?? !capturedScreenIDs.isEmpty }
+    /// Aggregate capture verdict: the override when one is set, otherwise the same conservative
+    /// any-screen answer as ``isCaptured(on:)`` with a nil screen — registered captures first,
+    /// then a live read of every connected window scene's screen, so the verdict fails toward
+    /// covering even before the FIRST surface has registered. Views that know their own screen
+    /// should prefer ``isCaptured(on:)``; this aggregate exists for pre-resolution frames (a
+    /// probe that has not landed in a window yet) and for tests.
+    public var isCaptured: Bool { isCaptured(on: nil) }
 
     // MARK: Internals
 
@@ -107,6 +114,10 @@ public final class CaptureProtectionState {
     /// tests can simulate a capture transition (posting `capturedDidChangeNotification` then
     /// asserting the re-read), which real automation cannot trigger.
     @ObservationIgnored private let readScreenIsCaptured: @MainActor (UIScreen) -> Bool
+    /// Posts the once-per-session nudge copy as a VoiceOver announcement — production posts
+    /// `AccessibilityNotification.Announcement`; injectable so a unit test can record what was
+    /// (and was not) announced, which the real accessibility system never reports back.
+    @ObservationIgnored private let postAccessibilityAnnouncement: @MainActor (String) -> Void
 
     /// Creates the state and installs both notification observers once.
     ///
@@ -116,12 +127,18 @@ public final class CaptureProtectionState {
     ///   - readScreenIsCaptured: Test seam for the per-screen captured read; nil (production)
     ///     resolves to `{ $0.isCaptured }` in the init body — deliberately not a default-argument
     ///     value, since `UIScreen.isCaptured` is main-actor state.
+    ///   - postAccessibilityAnnouncement: Test seam for the VoiceOver nudge announcement; nil
+    ///     (production) resolves to posting `AccessibilityNotification.Announcement` in the
+    ///     init body.
     public init(
         captureOverride: Bool? = nil,
-        readScreenIsCaptured: (@MainActor (UIScreen) -> Bool)? = nil
+        readScreenIsCaptured: (@MainActor (UIScreen) -> Bool)? = nil,
+        postAccessibilityAnnouncement: (@MainActor (String) -> Void)? = nil
     ) {
         self.captureOverride = captureOverride
         self.readScreenIsCaptured = readScreenIsCaptured ?? { $0.isCaptured }
+        self.postAccessibilityAnnouncement = postAccessibilityAnnouncement
+            ?? { AccessibilityNotification.Announcement($0).post() }
         // The blocks run nonisolated under Swift 6 — never touch state directly; hop first.
         observerBag.hold(NotificationCenter.default.addObserver(
             forName: UIApplication.userDidTakeScreenshotNotification,
@@ -153,25 +170,34 @@ public final class CaptureProtectionState {
     }
 
     /// The capture verdict for one surface's own screen: the override when set; the per-screen
-    /// answer when the probe has resolved; the conservative aggregate (``isCaptured``) while the
-    /// screen is still unknown, so the pre-resolution frame of a surface mounted mid-recording
-    /// is covered rather than leaked.
+    /// answer when the probe has resolved; the conservative any-screen fallback
+    /// (``anyKnownScreenIsCaptured()``) while the screen is still unknown. The fallback
+    /// consults the LIVE connected window scenes as well as the registry, because before the
+    /// first protected surface has ever registered (the outer paged `TabView` instantiates its
+    /// pages lazily, so a fresh launch that never visited the Private tab has an empty
+    /// registry) the registry alone answers false — and the first surface mounted during an
+    /// already-running recording would draw its pre-resolution frames uncovered.
     public func isCaptured(on screen: UIScreen?) -> Bool {
         if let captureOverride { return captureOverride }
-        guard let screen else { return !capturedScreenIDs.isEmpty }
+        guard let screen else { return anyKnownScreenIsCaptured() }
         return capturedScreenIDs.contains(ObjectIdentifier(screen))
     }
 
     // MARK: Nudge bookkeeping
 
-    /// Claims the once-per-session nudge for a reacting surface. The FIRST claim wins the session:
-    /// every surface reacting to that same pulse also shows the nudge (the hub under a sheet and
-    /// the sheet itself blur together and agree), every later pulse shows none. Because only a
-    /// frontmost, scene-active modifier calls this, a screenshot taken on an unprotected tab
-    /// never consumes the session's nudge.
+    /// Claims the once-per-session nudge for a reacting surface. The FIRST claim wins the
+    /// session — and posts ``CaptureNudgeCopy/spokenAnnouncement`` as a VoiceOver announcement
+    /// exactly once, so the friction is perceivable without the visual channel (the banner is a
+    /// non-modal overlay VoiceOver never moves focus to on its own, and the blur is purely
+    /// visual). Every surface reacting to that same pulse also shows the banner (the hub under
+    /// a protected sheet and the sheet itself blur together and agree) without re-announcing;
+    /// every later pulse shows none. Because only a frontmost, scene-active, UNOCCLUDED
+    /// modifier calls this (see ``nudgePulse`` for the three gates), the session's nudge is
+    /// never consumed invisibly.
     public func claimNudge(for pulse: Int) -> Bool {
         if let nudgePulse { return nudgePulse == pulse }
         nudgePulse = pulse
+        postAccessibilityAnnouncement(CaptureNudgeCopy.spokenAnnouncement)
         return true
     }
 
@@ -191,6 +217,22 @@ public final class CaptureProtectionState {
             guard let screen = box.screen, readScreenIsCaptured(screen) else { return nil }
             return id
         })
+    }
+
+    /// Conservative pre-resolution aggregate: any registered screen currently captured, or —
+    /// because the registry can be legitimately empty before the first probe lands — any
+    /// connected window scene's screen reporting capture through the injected per-screen read.
+    /// The `connectedScenes` enumeration is deliberate here and ONLY here: the design brief
+    /// bans it for per-view attribution (it cannot tell which window a view is in), but this is
+    /// the opposite question — "is ANY screen captured?" — asked exactly while a view's own
+    /// screen is unknown, where over-covering is the correct failure direction.
+    private func anyKnownScreenIsCaptured() -> Bool {
+        if !capturedScreenIDs.isEmpty { return true }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let screen = (scene as? UIWindowScene)?.screen else { continue }
+            if readScreenIsCaptured(screen) { return true }
+        }
+        return false
     }
 }
 
@@ -225,6 +267,23 @@ private final class WeakScreenBox {
     init(_ screen: UIScreen) { self.screen = screen }
 }
 
+// MARK: - Nudge copy
+
+/// The Tier-1 nudge copy, shared by the visual banner and the VoiceOver announcement so the
+/// non-visual channel always carries exactly the meaning the visual one does — a VoiceOver user
+/// receives no other Tier-1 signal, since the blur is purely visual and the banner is a
+/// non-modal overlay that auto-dismisses. Per the design brief's copy rules, this must never
+/// imply the screenshot was blocked, degraded, or logged: it was none of those, and nothing
+/// about it leaves the device.
+public enum CaptureNudgeCopy {
+    /// The banner's bolded first line.
+    public static let headline = "This is your private data — it stays safest on your device."
+    /// The banner's quieter second line.
+    public static let detail = "A screenshot leaves Fernlet's protection behind."
+    /// The single spoken form: both lines, in reading order.
+    public static var spokenAnnouncement: String { "\(headline) \(detail)" }
+}
+
 // MARK: - View modifier
 
 /// The capture-friction view modifier behind `captureProtected(surface:active:isFrontmost:)` —
@@ -241,12 +300,16 @@ private final class WeakScreenBox {
 ///   timeline already recorded the lesson that a partial cover leaves captions legible in the
 ///   snapshot. The covered content is `accessibilityHidden`, and the cover carries its own
 ///   label, so VoiceOver reading order matches what is visible.
-/// - **Tier-1 pulse** on a screenshot taken while this surface is frontmost and scene-active: a
-///   ~2 s blur + desaturation of the content (the user knows what they just did; the point is a
-///   beat of hesitation, not alarm), plus a calm once-per-session nudge banner claimed through
-///   ``CaptureProtectionState/claimNudge(for:)``. The nudge copy must never imply the screenshot
-///   was blocked, degraded, or logged — it was none of those, and nothing about it leaves the
-///   device.
+/// - **Tier-1 pulse** on a screenshot taken while this surface is frontmost, scene-active, and
+///   NOT under its own Tier-2 cover: a ~2 s blur + desaturation of the content (the user knows
+///   what they just did; the point is a beat of hesitation, not alarm), plus a calm
+///   once-per-session nudge banner claimed through
+///   ``CaptureProtectionState/claimNudge(for:)`` and spoken once via a VoiceOver announcement.
+///   The nudge copy (``CaptureNudgeCopy``) must never imply the screenshot was blocked,
+///   degraded, or logged — it was none of those, and nothing about it leaves the device. The
+///   cover's arrival also resigns keyboard focus in the surface's own window, because the
+///   system keyboard renders in a separate window above the cover and its QuickType bar echoes
+///   the text being typed.
 ///
 /// Lifecycle traps accounted for:
 /// - **Frontmost gating renders from state, never `.onAppear`/`.onDisappear`** — page-style
@@ -272,9 +335,14 @@ public struct CaptureProtectedModifier: ViewModifier {
     /// neither trigger fires under automation (verified 2026-08-11 — `app.screenshot()` posts no
     /// notification), so protection stays active everywhere in DEBUG too.
     let active: Bool
-    /// Whether this surface is the visible top-level page. Gates ONLY the Tier-1 pulse — the
-    /// Tier-2 cover renders from state regardless, so a recording started elsewhere is already
-    /// covering an offscreen hub page when the user swipes to it.
+    /// Whether this surface is the visible, UNOCCLUDED top-level page. Gates ONLY the Tier-1
+    /// pulse — the Tier-2 cover renders from state regardless, so a recording started elsewhere
+    /// is already covering an offscreen hub page when the user swipes to it. Call sites must
+    /// compose every opaque occluder they know about into this flag (the hub ANDs
+    /// `selectedTab == .personal`, the lock-gate overlay via `FernletLockGateOcclusion`, and
+    /// the root-sheet slots): a pulse reacted to beneath an occluder would spend the
+    /// once-per-session nudge on a banner nobody can see. The modifier handles the one occluder
+    /// it can see itself — its own Tier-2 cover — in the pulse guard.
     let isFrontmost: Bool
 
     /// The injected trigger state; missing injection is a runtime crash by design, matching the
@@ -286,9 +354,17 @@ public struct CaptureProtectedModifier: ViewModifier {
     /// nudge text — not the blur's arrival — carries the meaning.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The `UIScreen` this surface actually renders on, reported by ``CaptureScreenProbe``;
-    /// nil until the probe lands in a window (during which the conservative aggregate answers).
+    /// The `UIScreen` this surface actually renders on, derived from ``CaptureScreenProbe``'s
+    /// window report; nil until the probe lands (during which the conservative aggregate
+    /// answers).
     @State private var hostScreen: UIScreen?
+    /// The `UIWindow` this surface renders in, reported by ``CaptureScreenProbe``; nil until
+    /// the probe lands, and nil again once the view leaves the hierarchy (so a dismissed window
+    /// is never retained). Held so the cover's arrival can `endEditing` OUR OWN window — the
+    /// system keyboard lives in its own window ABOVE the app's, so it stays in recordings and
+    /// snapshots even while the opaque cover is up, and its QuickType bar echoes the text being
+    /// typed.
+    @State private var hostWindow: UIWindow?
     /// True while the Tier-1 blur is up (~2 s after a screenshot on this frontmost surface).
     @State private var isPulsing = false
     /// True while the once-per-session nudge banner is showing (~6 s, auto-fades).
@@ -298,14 +374,23 @@ public struct CaptureProtectedModifier: ViewModifier {
     /// Auto-clear task for the nudge banner; cancelled and replaced on every new claim.
     @State private var nudgeClearTask: Task<Void, Never>?
 
+    /// Whether the Tier-2 opaque cover is up: protection enforced, and (the surface's own
+    /// screen is captured OR the scene is not `.active`). A computed property rather than a
+    /// body-local so `onChange(of:)` can watch its transitions for the keyboard resignation and
+    /// the pulse guard can consult it.
+    private var covered: Bool {
+        active && (captureProtection.isCaptured(on: hostScreen) || scenePhase != .active)
+    }
+
     public func body(content: Content) -> some View {
-        let covered = active && (captureProtection.isCaptured(on: hostScreen) || scenePhase != .active)
         ZStack {
             content
                 .blur(radius: isPulsing ? 24 : 0)
                 .saturation(isPulsing ? 0.4 : 1)
                 .accessibilityHidden(covered)
-                .background(CaptureScreenProbe { screen in
+                .background(CaptureScreenProbe { window in
+                    hostWindow = window
+                    let screen = window?.windowScene?.screen
                     hostScreen = screen
                     if let screen { captureProtection.registerScreen(screen) }
                 })
@@ -320,8 +405,23 @@ public struct CaptureProtectedModifier: ViewModifier {
                     .zIndex(50)
             }
         }
+        .onChange(of: covered) { _, isCovered in
+            // The cover blocks touches on OUR content, but the system keyboard lives in its own
+            // window above this one: it stays visible in recordings, mirroring, and app-switcher
+            // snapshots over the opaque cover, keeps accepting taps, and its QuickType bar
+            // echoes the sensitive text being typed. Resign focus the moment the cover arrives
+            // so the recording contains the panel — not the content, and not the content's
+            // keyboard either. The `scenePhase != .active` path rides the same transition,
+            // keeping the keyboard out of switcher snapshots too.
+            guard isCovered else { return }
+            hostWindow?.endEditing(true)
+        }
         .onChange(of: captureProtection.screenshotPulse) { _, pulse in
-            guard active, isFrontmost, scenePhase == .active else { return }
+            // `!covered`: while the Tier-2 cover is up the screenshot captured the COVER, not
+            // the content, and the nudge banner would render invisibly beneath the opaque cover
+            // (zIndex 40 under 50) — reacting would silently spend the once-per-session nudge.
+            // Skip the whole reaction; the pulse still bumps for surfaces that ARE visible.
+            guard active, isFrontmost, scenePhase == .active, !covered else { return }
             reactToScreenshot(pulse)
         }
     }
@@ -404,18 +504,18 @@ public struct CaptureProtectedModifier: ViewModifier {
     }
 
     /// The Tier-1 once-per-session nudge: a small calm card in the voice of the app's existing
-    /// per-surface privacy copy. It must never imply the screenshot was blocked, degraded, or
-    /// logged (it was none of those, and nothing leaves the device). Not hit-testable, so it can
+    /// per-surface privacy copy, its lines shared with the VoiceOver announcement through
+    /// ``CaptureNudgeCopy`` (see that type for the copy rules). Not hit-testable, so it can
     /// never eat a save-bar tap; it fades on its own.
     private var nudgeBanner: some View {
         VStack {
             Spacer()
             VStack(alignment: .leading, spacing: 4) {
-                Text("This is your private data — it stays safest on your device.")
+                Text(CaptureNudgeCopy.headline)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
-                Text("A screenshot leaves Fernlet's protection behind.")
+                Text(CaptureNudgeCopy.detail)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -434,15 +534,17 @@ public struct CaptureProtectedModifier: ViewModifier {
 
 // MARK: - Window-scene probe
 
-/// An invisible, non-interactive `UIViewRepresentable` that reports the `UIScreen` of the view's
-/// **own window scene** upward once it lands in a window (`didMoveToWindow`). This — not
-/// `UIScreen.main` (deprecated, and wrong under Stage Manager / Split View) and not
-/// `UIApplication.shared.connectedScenes` (cannot tell which window a view is in) — is how a
-/// `captureProtected` surface learns which screen's `isCaptured` flag governs it. The callback is
-/// deferred one hop so state never mutates mid-view-update.
+/// An invisible, non-interactive `UIViewRepresentable` that reports the view's **own window**
+/// upward once it lands in one (`didMoveToWindow`). The modifier derives the window scene's
+/// `UIScreen` from it — this, not `UIScreen.main` (deprecated, and wrong under Stage Manager /
+/// Split View) and not `UIApplication.shared.connectedScenes` (cannot tell which window a view
+/// is in), is how a `captureProtected` surface learns which screen's `isCaptured` flag governs
+/// it — and keeps the window itself so the cover's arrival can resign keyboard focus in the
+/// window that owns the focused field. The callback is deferred one hop so state never mutates
+/// mid-view-update.
 private struct CaptureScreenProbe: UIViewRepresentable {
-    /// Receives the resolved screen (nil when the view left the window hierarchy).
-    var onResolve: (UIScreen?) -> Void
+    /// Receives the resolved window (nil when the view left the window hierarchy).
+    var onResolve: (UIWindow?) -> Void
 
     /// Builds the zero-frame probe view.
     func makeUIView(context: Context) -> ProbeView {
@@ -456,14 +558,14 @@ private struct CaptureScreenProbe: UIViewRepresentable {
     }
 
     /// The backing `UIView`: invisible, untouchable, and only alive to override
-    /// `didMoveToWindow` — the earliest moment a view can honestly answer "which screen am I
-    /// on?".
+    /// `didMoveToWindow` — the earliest moment a view can honestly answer "which window (and
+    /// therefore which screen) am I in?".
     final class ProbeView: UIView {
         /// Forwarded to on every window move; kept current by `updateUIView`.
-        var onResolve: (UIScreen?) -> Void
+        var onResolve: (UIWindow?) -> Void
 
         /// Creates the probe with its initial callback; the view never draws or hit-tests.
-        init(onResolve: @escaping (UIScreen?) -> Void) {
+        init(onResolve: @escaping (UIWindow?) -> Void) {
             self.onResolve = onResolve
             super.init(frame: .zero)
             isUserInteractionEnabled = false
@@ -477,13 +579,13 @@ private struct CaptureScreenProbe: UIViewRepresentable {
             fatalError("CaptureScreenProbe.ProbeView does not support NSCoder")
         }
 
-        /// Reports the (possibly nil) screen of the window scene the view just joined or left,
-        /// deferred one main-actor hop so SwiftUI state is never mutated during a view update.
+        /// Reports the (possibly nil) window the view just joined or left, deferred one
+        /// main-actor hop so SwiftUI state is never mutated during a view update.
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            let screen = window?.windowScene?.screen
+            let window = self.window
             let callback = onResolve
-            Task { @MainActor in callback(screen) }
+            Task { @MainActor in callback(window) }
         }
     }
 }
@@ -507,10 +609,12 @@ public extension View {
     ///     accessibility identifier suffix (`capture.cover.<surface>`). No default — a protected
     ///     surface names itself.
     ///   - active: Whether protection is enforced; `false` passes content through unmodified.
-    ///   - isFrontmost: Whether this surface is the visible page — gates only the Tier-1
-    ///     screenshot pulse (pass `selectedTab == .personal` for the hub; leave `true` for
-    ///     sheets, which are frontmost by construction). The Tier-2 cover ignores it and renders
-    ///     from state.
+    ///   - isFrontmost: Whether this surface is the visible, UNOCCLUDED page — gates only the
+    ///     Tier-1 screenshot pulse (the hub passes `selectedTab == .personal` ANDed with "no
+    ///     lock-gate overlay" and "no covering root sheet"; leave `true` for sheets, which are
+    ///     frontmost by construction). The Tier-2 cover ignores it and renders from state. The
+    ///     modifier additionally skips the pulse on its own while its Tier-2 cover is up, so
+    ///     the once-per-session nudge is never spent beneath an occluder.
     /// - Returns: The content wrapped in the capture-friction overlay stack.
     func captureProtected(
         surface: String,

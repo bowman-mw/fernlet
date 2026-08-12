@@ -182,13 +182,16 @@ struct FernletLockGateModifier: ViewModifier {
 
     /// Configured, but not unlocked FOR THIS SCOPE — an unlock held by another locked surface reads
     /// as locked here, which is the whole point. Drives the unlock overlay (with or without a
-    /// cooldown deadline).
+    /// cooldown deadline). `isLocked || isNotConfigured` must stay in step with
+    /// ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)``, the pure mirror other
+    /// surfaces consult.
     private var isLocked: Bool {
         guard !isNotConfigured else { return false }
         return !lockService.isUnlocked(for: scope)
     }
 
-    /// True while no passcode has been configured, which drives the setup CTA overlay.
+    /// True while no passcode has been configured, which drives the setup CTA overlay. Mirrored
+    /// by ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)`` — keep them in step.
     private var isNotConfigured: Bool {
         lockService.state == .notConfigured
     }
@@ -287,6 +290,39 @@ struct FernletLockGateModifier: ViewModifier {
                 Spacer()
             }
         }
+    }
+}
+
+// MARK: - Gate occlusion (for capture friction)
+
+/// The one pure decision other surfaces need from the lock gate: whether
+/// `fernletLockGate(scope:active:)` is currently painting an opaque overlay — the unlock screen
+/// or the not-configured setup CTA, both full-bleed parchment at `zIndex(100)` — over its
+/// content.
+///
+/// Exists for capture-FRICTION composition: `PrivateHubView` ANDs `!overlayIsUp(...)` into its
+/// `captureProtected(surface:isFrontmost:)` flag, so a screenshot of the LOCKED hub — where the
+/// once-per-session nudge banner would render invisibly beneath the gate's overlay — never
+/// spends the session's nudge. Kept HERE, next to ``FernletLockGateModifier``, because it must
+/// mirror the modifier's own overlay conditions (`isLocked` / `isNotConfigured`) exactly; a
+/// change to either must change the other, and `CaptureOcclusionGatingTests` pins the truth
+/// table.
+public enum FernletLockGateOcclusion {
+    /// True while a gate for `scope` would overlay its content: the gate is enforced, and
+    /// either no credential is configured (the setup CTA covers) or the unlock in force is not
+    /// this scope's (the unlock screen covers — including while a DIFFERENT scope holds the
+    /// unlock, which reads as locked here).
+    ///
+    /// - Parameters:
+    ///   - active: The gate's `active` flag; an inactive gate (e.g. the UI-test bypass) never
+    ///     overlays.
+    ///   - state: The lock service's current ``FernletLockState``.
+    ///   - scope: The gated surface, matched against the unlock in force.
+    /// - Returns: Whether the gate's opaque overlay is above the content right now.
+    public static func overlayIsUp(active: Bool, state: FernletLockState, scope: FernletLockScope) -> Bool {
+        guard active else { return false }
+        if case .notConfigured = state { return true }
+        return !state.isUnlocked(for: scope)
     }
 }
 

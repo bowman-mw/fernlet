@@ -271,7 +271,7 @@ Aligned with [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §6; stated here witho
 - **Screen-capture friction exists and is only friction.** The Private-tab surfaces (the hub and
   the five sensitive sheets) draw an opaque cover while the screen is being recorded or mirrored
   and while the scene is inactive (app-switcher snapshots), and react to a screenshot with a brief
-  blur and a one-time nudge (`captureProtected(surface:)`,
+  blur and a once-per-session nudge (`captureProtected(surface:)`,
   `Docs/Design-Capture-Protection-2026-08-10.md`). None of that prevents a screenshot — the image
   already exists in Photos when the reaction fires — or a photograph of the screen, and it is
   aimed at the user's own impulsive self-sharing, never at an attacker. It does not belong in

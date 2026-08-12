@@ -54,15 +54,33 @@ struct PrivateHubView: View {
     @Binding var section: PrivateHubSection
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
-    /// Whether the Personal tab is the visible page of the outer paged `TabView` (the parent
-    /// passes `selectedTab == .personal`). Gates ONLY the capture-friction screenshot pulse:
-    /// page-style `TabView`s keep offscreen children alive, so without this a screenshot taken
-    /// on Home would blur and nudge a hub nobody is looking at. Rendered from state, never
+    /// Whether the Personal tab is the visible, uncovered page of the outer paged `TabView`
+    /// (the parent passes `selectedTab == .personal` ANDed with "no root-presented sheet is
+    /// covering the tab pages"). Gates ONLY the capture-friction screenshot pulse: page-style
+    /// `TabView`s keep offscreen children alive, so without this a screenshot taken on Home —
+    /// or beneath a covering root sheet — would blur, nudge, and CLAIM the once-per-session
+    /// nudge for a hub nobody is looking at. The body further ANDs in the lock-gate occlusion
+    /// before handing the flag to the capture modifier. Rendered from state, never
     /// `.onAppear`/`.onDisappear` (documented unreliable on page TabViews). Defaults to true.
     var isFrontmost: Bool = true
+    /// The environment-injected lock service, read here (not only inside the gate modifier) so
+    /// the capture-friction attachment below can know whether the gate's opaque overlay is up:
+    /// a screenshot of the LOCKED (or not-yet-configured) hub must never spend the
+    /// once-per-session nudge on a banner drawn invisibly beneath that overlay.
+    @Environment(FernletLockService.self) private var lockService
 
     var body: some View {
         let visibleSections = PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility)
+        // Whether the lock gate attached below is painting its opaque overlay (unlock screen or
+        // setup CTA) over the hub. The capture modifier is deliberately INNER to the gate, so
+        // without this a screenshot of the locked hub would still react — and spend the
+        // session's one nudge — beneath an overlay nobody can see through. Uses the same
+        // `active` flag as the gate attachment so the UI-test bypass stays consistent.
+        let lockOverlayUp = FernletLockGateOcclusion.overlayIsUp(
+            active: !UITestSupport.bypassPrivateLockGate,
+            state: lockService.state,
+            scope: .privateHub
+        )
 
         TabView(selection: clampedSection(visibleSections)) {
             JournalView(store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
@@ -89,7 +107,10 @@ struct PrivateHubView: View {
         // the passcode field or the Face-ID chrome during the documented inactive→active bounce.
         // Stays active under the lock-gate bypass flag: neither trigger fires under automation,
         // and the FERNLET_UI_TEST_FORCE_CAPTURE tests need the cover WITH the gate bypassed.
-        .captureProtected(surface: "privateHub", isFrontmost: isFrontmost)
+        // `!lockOverlayUp`: being inner to the gate also means the modifier stays alive while
+        // the gate's opaque overlay covers it, so the pulse must be additionally gated on the
+        // hub content actually being visible.
+        .captureProtected(surface: "privateHub", isFrontmost: isFrontmost && !lockOverlayUp)
         // UX appearance tests can bypass the gate overlay to review the Journal/Cycle screens
         // without configuring a passcode. Release builds: always gated.
         // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo

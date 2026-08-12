@@ -34,7 +34,12 @@ app's passcode-change settings) use instead of the system keyboard. Tying them t
 `fernletLockGate(scope:active:shouldLockOnDisappear:)` extension on `View` — overlays
 ``FernletLockView`` over gated content while the service is locked *for that gate's scope*,
 offers ``FernletLockSetupView`` when no lock is configured yet, and re-locks with
-`lock(reason: .viewDisappeared)` when the gated screen genuinely departs.
+`lock(reason: .viewDisappeared)` when the gated screen genuinely departs. One small pure helper
+rides alongside the gate: ``FernletLockGateOcclusion`` answers "is the gate's opaque overlay
+above the content right now?" for other surfaces to compose — its consumer is the Private hub's
+capture-friction attachment, which sits *inner* to the gate and must not react to a screenshot
+taken while the gate's overlay hides it. The helper mirrors the modifier's own overlay
+conditions exactly and must change with them.
 
 **Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
 ``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``

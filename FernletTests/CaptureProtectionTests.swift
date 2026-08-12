@@ -9,6 +9,10 @@
 // construct a state, post the real notifications / flip the override, and assert transitions
 // and rendering. The cover-over-each-real-surface half lives in
 // FernletUITests/CaptureProtectionUITests (FERNLET_UI_TEST_FORCE_CAPTURE).
+// CaptureOcclusionGatingTests additionally pins FernletLockGateOcclusion (FernletLockUI), the
+// pure lock-overlay decision PrivateHubView composes into the hub's isFrontmost. NOT unit-
+// testable here (no seam): the PrivateHubView/ContentView WIRING of that composition, which
+// needs a live store + lock service and real sheet presentation.
 //
 // Polling follows the wall-clock-deadline + minimum-poll-floor discipline: the notification
 // handlers hop through Task { @MainActor }, so state lands a runloop turn after the post.
@@ -18,6 +22,8 @@ import SwiftUI
 import Testing
 import UIKit
 import FernletUI
+import FernletLock
+import FernletLockUI
 
 /// Waits (deadline + 50 ms poll floor) for a main-actor condition to become true; returns the
 /// final read so callers can `#expect` on it.
@@ -40,6 +46,14 @@ private func pollUntil(
 private final class CaptureFlagBox {
     /// The value the injected `readScreenIsCaptured` closure reports.
     var value = false
+}
+
+/// Records every string the state posts through its injectable VoiceOver-announcement seam —
+/// the real accessibility system never reports back what was (or was not) announced.
+@MainActor
+private final class AnnouncementRecorder {
+    /// Announcements in posting order.
+    var announcements: [String] = []
 }
 
 /// Unit tests for ``CaptureProtectionState``: pulse transitions off the real screenshot
@@ -136,8 +150,56 @@ struct CaptureProtectionStateTests {
         #expect(!state.isCaptured(on: nil))
 
         state.captureOverride = nil
-        // No screens registered: the aggregate falls back to "nothing captured".
+        // No screens registered: the aggregate falls back to the live connected-scene read
+        // (the unit-test host's screen is not captured).
         #expect(!state.isCaptured)
+    }
+
+    /// Pre-resolution conservatism with NOTHING registered: before the first probe ever lands
+    /// (a fresh launch that never visited the Private tab has an empty registry), the nil-screen
+    /// verdict must still fail toward covering by reading the connected window scenes' screens
+    /// live — otherwise the first protected surface mounted during an already-running recording
+    /// draws its pre-resolution frames uncovered.
+    @MainActor
+    @Test func preResolutionFallbackConsultsLiveScenesWhenNothingIsRegistered() async throws {
+        let flag = CaptureFlagBox()
+        flag.value = true
+        let state = CaptureProtectionState(readScreenIsCaptured: { _ in flag.value })
+        _ = try #require(
+            UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+            "Expected an active window scene in the unit-test host"
+        )
+
+        // Nothing registered, "recording" running: covered, not leaked.
+        #expect(state.isCaptured(on: nil))
+        #expect(state.isCaptured)
+
+        flag.value = false
+        #expect(!state.isCaptured(on: nil))
+        #expect(!state.isCaptured)
+    }
+
+    /// The first nudge claim posts the nudge copy as a VoiceOver announcement exactly once —
+    /// the only Tier-1 signal a VoiceOver user gets (the blur is purely visual and the banner
+    /// is a non-modal overlay VoiceOver never moves to on its own). A second surface sharing
+    /// the same pulse shows the banner without double-speaking; a later pulse announces nothing.
+    @MainActor
+    @Test func firstNudgeClaimPostsExactlyOneVoiceOverAnnouncement() async throws {
+        let recorder = AnnouncementRecorder()
+        let state = CaptureProtectionState(
+            postAccessibilityAnnouncement: { recorder.announcements.append($0) }
+        )
+
+        #expect(state.claimNudge(for: 1))
+        #expect(recorder.announcements == [CaptureNudgeCopy.spokenAnnouncement])
+
+        // Same pulse, second surface (hub + sheet agree): banner yes, re-announcement no.
+        #expect(state.claimNudge(for: 1))
+        #expect(recorder.announcements.count == 1)
+
+        // Later pulse: no claim, no announcement.
+        #expect(!state.claimNudge(for: 2))
+        #expect(recorder.announcements.count == 1)
     }
 
     /// Releasing the state deallocates it (the `[weak self]` observer captures create no retain
@@ -338,5 +400,112 @@ struct CaptureProtectionViewTests {
         #expect(await pollUntil { state.nudgePulse != nil },
                 "A frontmost surface must react to the pulse and claim the nudge")
         #expect(state.nudgePulse == state.screenshotPulse)
+    }
+
+    /// Occlusion gating: a surface whose OWN Tier-2 cover is up (active recording) must not
+    /// react to a screenshot pulse — the screenshot captured the cover, and the nudge banner
+    /// would render invisibly beneath it (zIndex 40 under the cover's 50), silently spending
+    /// the once-per-session nudge.
+    @MainActor
+    @Test func coveredSurfaceDoesNotClaimThePulseNudge() async throws {
+        let state = CaptureProtectionState(captureOverride: true)
+        let window = try makeWindow(
+            Color(red: 1, green: 0, blue: 0)
+                .ignoresSafeArea()
+                .captureProtected(surface: "viewTest", isFrontmost: true)
+                .environment(state)
+                .environment(\.scenePhase, ScenePhase.active)
+        )
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        try await Task.sleep(for: .milliseconds(150))
+
+        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        #expect(await pollUntil { state.screenshotPulse == 1 })
+        // Give a (wrongly) reacting modifier ample time to claim, then assert none did.
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(state.nudgePulse == nil,
+                "A covered surface must not consume the session nudge beneath its own cover")
+    }
+
+    /// The cover's arrival resigns keyboard focus in the surface's own window: the system
+    /// keyboard lives in its own window ABOVE the opaque cover, so it stays in recordings and
+    /// snapshots (QuickType echoing the typed text) unless focus is dropped when `covered`
+    /// flips true.
+    @MainActor
+    @Test func coverArrivalResignsTheKeyboard() async throws {
+        let state = CaptureProtectionState(captureOverride: false)
+        let textField = UITextField()
+        let window = try makeWindow(
+            TextFieldHost(textField: textField)
+                .captureProtected(surface: "viewTest")
+                .environment(state)
+                .environment(\.scenePhase, ScenePhase.active)
+        )
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        try await Task.sleep(for: .milliseconds(150))
+
+        textField.becomeFirstResponder()
+        #expect(await pollUntil { textField.isFirstResponder },
+                "Precondition: the hosted field must take keyboard focus")
+
+        state.captureOverride = true
+        #expect(await pollUntil { !textField.isFirstResponder },
+                "The Tier-2 cover's arrival must resign the focused field")
+    }
+}
+
+/// Hosts a caller-owned plain `UITextField` so a test can drive and observe first-responder
+/// status directly (SwiftUI's `FocusState` offers no such seam from outside the view).
+private struct TextFieldHost: UIViewRepresentable {
+    /// The field under test, owned by the test so it can poll `isFirstResponder`.
+    let textField: UITextField
+
+    /// Returns the caller's field as the represented view.
+    func makeUIView(context: Context) -> UITextField { textField }
+
+    /// No-op: the field's state is driven by the test, not by SwiftUI updates.
+    func updateUIView(_ uiView: UITextField, context: Context) {}
+}
+
+/// Truth table for ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)`` — the pure
+/// decision `PrivateHubView` ANDs into its `captureProtected(surface:isFrontmost:)` flag so a
+/// screenshot of the LOCKED (or not-yet-configured) hub can never spend the once-per-session
+/// nudge beneath the gate's opaque `zIndex(100)` overlay. Must mirror
+/// `FernletLockGateModifier`'s own `isLocked` / `isNotConfigured` overlay conditions exactly.
+@Suite(.serialized)
+struct CaptureOcclusionGatingTests {
+
+    /// Every reachable combination of gate activity, lock state, and unlock scope.
+    @MainActor
+    @Test func overlayTruthTableMirrorsTheGate() async throws {
+        // Inactive gate (the UI-test bypass): never occludes, whatever the lock state.
+        #expect(!FernletLockGateOcclusion.overlayIsUp(
+            active: false, state: .notConfigured, scope: .privateHub))
+        #expect(!FernletLockGateOcclusion.overlayIsUp(
+            active: false, state: .locked(cooldownDeadline: nil), scope: .privateHub))
+
+        // Not configured: the setup CTA overlay covers the hub.
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .notConfigured, scope: .privateHub))
+
+        // Locked, with and without a brute-force cooldown: the unlock overlay covers.
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .locked(cooldownDeadline: nil), scope: .privateHub))
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .locked(cooldownDeadline: .distantFuture), scope: .privateHub))
+
+        // Unlocked FOR THIS scope: the hub content is revealed.
+        #expect(!FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .unlocked(scope: .privateHub), scope: .privateHub))
+
+        // Unlocked for a DIFFERENT scope reads as locked here — the overlay is up.
+        #expect(FernletLockGateOcclusion.overlayIsUp(
+            active: true, state: .unlocked(scope: .appLockSettings), scope: .privateHub))
     }
 }
