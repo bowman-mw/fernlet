@@ -62,7 +62,7 @@ public enum WorkoutAdjustmentCandidateBuilder {
         location: WorkoutLocation,
         profile: WorkoutProfile,
         limit: Int = 28,
-        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.baseExercises
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> [WorkoutAdjustmentCandidate] {
         let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
         guard feasible.isEmpty == false else { return [] }

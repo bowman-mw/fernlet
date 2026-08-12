@@ -8,6 +8,56 @@ features and the new **Fernlet Coach** app.
 **Decided 2026-07-19:** the primary remote coach↔trainee connection is the **hybrid iMessage +
 CloudKit dead-drop** design (§3.3–3.4). Decisions D1, D2, and D3 are resolved accordingly.
 
+> ✅ **SHIPPED 2026-08-12 — the manual exchange (the first slice of P0/P1).** The information
+> exchange now exists end to end with the **clipboard as the transport**: "Share with a trainer"
+> (relocated from Settings → Privacy & Data onto the **Move tab**) copies a training summary plus an
+> instruction preamble, and a plan pasted back is review-gated into dated `PlannedWorkout` rows
+> tagged `WorkoutPlanSource.coach`. Off by default behind `settings.coachExchangeEnabled`.
+>
+> What this deliberately builds *properly* rather than as a throwaway, so the Coach app only has to
+> change the pipe:
+> - **`CoachPlan v1` (§3.5) is real** — implemented in `FernletDomainModel/CoachPlan.swift`, bounded
+>   and fail-closed, with the spec's schema plus one addition (below).
+> - **The review gate (§F3 steps 2-4) is real** — `CoachPlanReviewView`: safety pass against
+>   `WorkoutProfile` with per-exercise strikes, the D4 collision prompt, provenance stamped into the
+>   row text, and a `TrainerAuditEvent` on import.
+> - **The export bundle is the same `TrainerExportBundle`** the shipped `TrainerExportPayload` wire
+>   seam already carries, extended with macro targets, training setup, and a per-exercise
+>   progression rollup — so §F6's "share in person" gets those sections for free.
+>
+> **Editing an existing plan (owner addition, same day) — a partial down-payment on F5/§3.4's
+> `trainerPlanDelta`.** The scenario is "I plan my month, then a coach adjusts or replaces it", so the
+> exchange is two-way at the *row* level, not just the plan level:
+> - The export now carries **upcoming planned workouts with their real `PlannedWorkout.id`s** (a
+>   forward-looking window, `plannedDaysAhead`, defaulting to 35 days — one more than `maxDays`). A
+>   coach cannot adjust a plan they cannot see, so this was a prerequisite, not a nicety.
+> - `CoachPlan.edits: [CoachPlanEdit]` targets those ids with `adjust` | `replace` | `delete`. `adjust`
+>   is a partial patch (nil fields keep their current value); `replace` must supply a full exercise
+>   list; `delete` removes the planned row.
+> - **What an edit can never reach:** anything LOGGED (only `plannedWorkouts` are searched), a target
+>   that no longer exists (the user completed or deleted it — the message tells them to copy a fresh
+>   summary), or a day before today. All three are blocking, never silently skipped.
+> - An `edits`-only plan is valid — "adjust what I have" is a complete hand-off with no new days.
+> - Edited exercises go through the **same** `WorkoutSafetyFilter` pass as new days, and the review
+>   screen shows a before/after per change (accept-all, per the owner's call; the per-exercise safety
+>   strikes remain, because those are safety rather than preference).
+>
+> This is deliberately NOT the full delta protocol of §3.4/F5: there is no `planID` + base-plan-hash
+> binding, no diff-against-a-known-base, and no silent-arrival path. Targeting is by row id, which is
+> enough for the manual channel and maps cleanly onto a signed delta later.
+>
+> **One schema addition beyond §3.5:** `CoachPlan.newExercises` (`CoachExerciseDefinition`), because
+> the manual path sends **no exercise catalog** to the plan's author — so an author can name any
+> exercise and must define it. Metadata (muscles + equipment + movement pattern) is **required, not
+> optional**: those are exactly `WorkoutSafetyFilter`'s inputs, and defaulting any of them would let
+> an imported exercise slip past a user's avoid list. Accepted definitions join a persisted custom
+> catalog (`FernletSettings.customExercises` → `WorkoutExerciseCatalog`), cleared by "delete
+> everything".
+>
+> **What this is NOT:** there is no signature, no pairing, no coach identity, and no trust basis on
+> this path — a pasted plan is unauthenticated by construction and the UI says so. Everything in
+> §3.1-§3.4 (originClass, the coach vault, App Attest, the link/dead-drop pipes) remains unbuilt.
+
 ---
 
 ## 1. Product summary
@@ -331,6 +381,10 @@ waits for review. Deltas to unknown or superseded plans fail closed.
   consent surface. New: a **"Share in person"** transport next to the file `ShareLink` — sends
   `TrainerExportPayload` over the proximity coach channel, sealed to the paired coach key,
   originClass-checked. The "coming soon" footer becomes real.
+- *As of 2026-08-12* that screen lives on the **Move tab** and is already two-way (clipboard out,
+  paste back). Adding the mesh transport is a third button beside the existing two, not a new
+  screen — and the bundle it sends already carries the targets / equipment / progression sections
+  the coach dashboard (C6) wants.
 - **Live session mode (later phase):** with the per-coach toggle on and the coach physically
   present (active proximity session), stream `workoutLiveUpdate` (current exercise/set/rest from
   `GuidedWorkoutRunState`) so the coach's device mirrors the run. Session-scoped, never stored on

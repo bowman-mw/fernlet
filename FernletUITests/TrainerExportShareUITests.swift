@@ -10,9 +10,11 @@ import XCTest
 // pins both halves: the identifier still resolves to a hittable control, and finishing the share
 // actually runs the cleanup seam (the screen falls back to "Prepare summary").
 //
-// The dedicated `FERNLET_UI_TEST_OPEN_PRIVACY_DATA` hook can't be used here — it renders Privacy &
-// Data with NO store (deliberately, to skip the launch pipeline), and the trainer card only renders
-// when a store is present. So this drives the real route: Settings sheet → Privacy & Data.
+// The route is the MOVE TAB, not Settings: the trainer screen moved there on 2026-08-12 when it
+// gained its import half (a plan coming back belongs beside the plans). This suite drives the real
+// route rather than a launch hook, so it also pins that relocation — if the card ever drifts back
+// into Settings, or off Move, these tests fail rather than silently testing a screen nobody can
+// reach.
 
 final class TrainerExportShareUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -56,35 +58,22 @@ final class TrainerExportShareUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Settings sheet → Privacy & Data → trainer sheet → "Prepare summary", leaving the screen on the
-    /// prepared state with `trainer.share` on-screen.
+    /// Move tab → trainer sheet → "Prepare summary", leaving the screen on the prepared state with
+    /// `trainer.share` on-screen.
     @MainActor
     private func launchToPreparedTrainerSummary() -> XCUIApplication {
-        // `FERNLET_UI_TEST_PRIVACY_SERVICES` gates the lock-configured override, so both are needed to
-        // land on the privacy controls rather than the app-lock interstitial.
-        let app = UXTestApp.launch(openSheet: "settings", extraEnvironment: [
-            "FERNLET_UI_TEST_PRIVACY_SERVICES": "1",
-            "FERNLET_UI_TEST_LOCK_CONFIGURED": "1",
-            "FERNLET_UI_TEST_PRIVACY_AUTH": "1",
-        ])
+        let app = UXTestApp.launch()
 
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 12), "Settings sheet did not open")
-        let privacyRow = scrollTo(app.buttons["Privacy & Data"], in: app)
-        XCTAssertTrue(privacyRow.isHittable, "the Privacy & Data row is not reachable")
-        privacyRow.tap()
+        let move = app.buttons["Move"].firstMatch
+        XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move tab")
+        move.tap()
 
-        XCTAssertTrue(app.navigationBars["Privacy & Data"].waitForExistence(timeout: 8), "Privacy & Data did not open")
-        let verify = element("privacy.verify", in: app)
-        if verify.waitForExistence(timeout: 2) { verify.tap() }
-
-        // By LABEL, not by `privacy.trainerShare`: the privacy-controls container carries its own
-        // `.accessibilityIdentifier`, which overrides every child's — the same reason this screen's
-        // existing suite reaches its toggles by label.
-        let openTrainer = app.buttons
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "Share with a trainer"))
-            .firstMatch
-        XCTAssertTrue(openTrainer.waitForExistence(timeout: 5), "the trainer-share card never rendered")
-        XCTAssertTrue(scrollTo(openTrainer, in: app).isHittable, "the trainer-share card is not reachable")
+        // The "Share" header pill, which replaced "Suggest" on 2026-08-12. In the header, so it
+        // needs no scrolling — but keep the id-based lookup: the label is deliberately short and
+        // could plausibly be reworded.
+        let openTrainer = element("move.trainerShare", in: app)
+        XCTAssertTrue(openTrainer.waitForExistence(timeout: 10), "the Share pill never rendered in the Move header")
+        XCTAssertTrue(openTrainer.isHittable, "the Share pill is not tappable")
         openTrainer.tap()
 
         let prepare = element("trainer.prepare", in: app)

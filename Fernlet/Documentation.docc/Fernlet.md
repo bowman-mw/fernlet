@@ -30,7 +30,7 @@ The entire eating surface. ``FoodView`` is the tab root (today's meals by type, 
 
 ### Movement & Workouts
 
-The Move tab end to end: ``MoveView`` hosts a week-strip workout calendar over per-day plan/log drill-ins, manual logging (full ``WorkoutSheet``, quick-exercise fast path, plan-ahead ``WorkoutPlanSheet``), and the deterministic suggestion engine ``WorkoutPlanningService`` — split recommendation and weekday-rotated day plans filtered by equipment and injuries, with an optional on-device-AI natural-language adjustment that degrades to the unchanged plan. A committed day plan flows into the guided runner (``GuidedWorkoutSheet``), whose run state lives on ``FernletStore`` mirrored into the app group so the Lock Screen Live Activity buttons (``WorkoutLiveActivityController``, which — like its cooking counterpart — requests its activity through the shared ``LiveActivityStarter``) advance the same run, and ``GuidedWorkoutAvailability``/``GuidedWorkoutCardState`` reconcile "already logged" across relaunches. Durable context comes from ``WorkoutSetupSheet`` (split, frequency, experience, injuries) and ``WorkoutLocationSetupView`` with its granular equipment checklist rendered from hand-drawn SVG glyphs (``EquipmentIconLibrary``); ``GoalPresetCards`` surfaces the paired nutrition+training consequences of each goal. ``WorkoutTombstoneStore`` is the small persisted ring that stops a removed workout's in-flight Apple Health copy from resurrecting as an unremovable import. ``ProgressPhotoSection`` gives a sealed, lock-gated, snapshot-redacted body-photo timeline, and ``TrainerExportView`` builds the fail-closed allowlisted trainer/nutritionist bundle — sensitive categories strictly opt-in, sealed data with no representation in the DTO at all.
+The Move tab end to end: ``MoveView`` hosts a week-strip workout calendar over per-day plan/log drill-ins, manual logging (full ``WorkoutSheet``, quick-exercise fast path, plan-ahead ``WorkoutPlanSheet``), and the deterministic suggestion engine ``WorkoutPlanningService`` — split recommendation and weekday-rotated day plans filtered by equipment and injuries, with an optional on-device-AI natural-language adjustment that degrades to the unchanged plan. A committed day plan flows into the guided runner (``GuidedWorkoutSheet``), whose run state lives on ``FernletStore`` mirrored into the app group so the Lock Screen Live Activity buttons (``WorkoutLiveActivityController``, which — like its cooking counterpart — requests its activity through the shared ``LiveActivityStarter``) advance the same run, and ``GuidedWorkoutAvailability``/``GuidedWorkoutCardState`` reconcile "already logged" across relaunches. Durable context comes from ``WorkoutSetupSheet`` (split, frequency, experience, injuries) and ``WorkoutLocationSetupView`` with its granular equipment checklist rendered from hand-drawn SVG glyphs (``EquipmentIconLibrary``); ``GoalPresetCards`` surfaces the paired nutrition+training consequences of each goal. ``WorkoutTombstoneStore`` is the small persisted ring that stops a removed workout's in-flight Apple Health copy from resurrecting as an unremovable import. ``ProgressPhotoSection`` gives a sealed, lock-gated, snapshot-redacted body-photo timeline, and ``TrainerExportView`` — reached from the Move tab's header "Share" pill, which replaced "Suggest" (that moved into ``WorkoutPlanSheet``, gated to a new plan for today because the suggestion flow is today-scoped) — builds the fail-closed allowlisted trainer/nutritionist bundle: sensitive categories strictly opt-in, sealed data with no representation in the DTO at all. Behind `settings.coachExchangeEnabled` that screen is also the manual **coach exchange**: ``CoachExportPromptBuilder`` puts the windowed bundle plus a schema preamble on the clipboard, and a plan pasted back through ``CoachPlanPasteSheet`` is decoded by ``CoachPlanImporter`` and gated by ``CoachPlanReviewView`` — safety-checked against the user's avoid lists, per-exercise strikes, collision choice — before it becomes dated coach-tagged `PlannedWorkout` rows — or, via ``ResolvedCoachPlanEdit``, before it rewrites or removes workouts already on the calendar, targeted by the row ids the export echoes and shown as a before/after summary (an edit can never reach a logged workout, a missing one, or a past day). The plan is unsigned by construction on this path, so the review screen IS the security boundary; the eventual Coach app changes the transport under it, not the gate.
 
 ### Proximity, Social & Companion Customization
 
@@ -125,7 +125,19 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``ProgressPhotoDetailView``
 - ``TrainerExportBundle``
 - ``TrainerExportOptions``
+- ``TrainerExportWindow``
 - ``TrainerExportView``
+- ``ExerciseLineParser``
+- ``CoachExportPromptBuilder``
+- ``CoachPlanImporter``
+- ``CoachPlanImportReview``
+- ``ResolvedCoachPlanEdit``
+- ``CoachPlanSafetyFlag``
+- ``CoachPlanImportResult``
+- ``CoachPlanCollisionPolicy``
+- ``CoachPlanImportFailure``
+- ``CoachPlanPasteSheet``
+- ``CoachPlanReviewView``
 - ``GoalPresetCards``
 - ``EquipmentIconLibrary``
 

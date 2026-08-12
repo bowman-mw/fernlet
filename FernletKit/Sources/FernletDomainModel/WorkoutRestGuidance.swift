@@ -133,7 +133,7 @@ public nonisolated enum WorkoutRestGuidance {
         forExerciseNamed name: String,
         role: SlotRole,
         goal: GoalType,
-        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.baseExercises
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> Int {
         let pattern = movementPattern(forExerciseNamed: name, catalog: catalog)
         return restSeconds(demand: demand(role: role, movementPattern: pattern), goal: goal)
@@ -142,7 +142,7 @@ public nonisolated enum WorkoutRestGuidance {
     /// Look up an exercise's movement pattern by name (case-insensitive exact match), or nil.
     public static func movementPattern(
         forExerciseNamed name: String,
-        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.baseExercises
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> MovementPattern? {
         let needle = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return nil }

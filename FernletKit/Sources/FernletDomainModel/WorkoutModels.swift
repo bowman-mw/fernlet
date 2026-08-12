@@ -268,6 +268,18 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
 
     public var workoutType: WorkoutType { split.workoutType }
 
+    /// The prescription as individual lines, mirroring ``Workout/exerciseLines``.
+    ///
+    /// The two types store the same free-text shape, so anything that reads one line-by-line (the
+    /// trainer export's planned-workout projection, the coach-plan change diff) can read both the
+    /// same way instead of re-splitting the string at each call site.
+    public var exerciseLines: [String] {
+        exercises
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     public var completedWorkout: Workout {
         Workout(
             name: name,
@@ -898,6 +910,62 @@ public nonisolated enum WorkoutExerciseCatalog {
     // through ExerciseTarget; the array is built once and never mutated.
     nonisolated(unsafe) public static let baseExercises: [ExerciseTarget] = loadBaseExercises()
 
+    // MARK: - Custom exercises
+
+    /// The user's own exercises, registered from `FernletSettings.customExercises` (the coach-plan
+    /// importer is the first writer). Guarded by `customLock` rather than left `nonisolated(unsafe)`
+    /// alone: unlike `baseExercises` this one genuinely mutates at runtime — on settings load, and
+    /// again every time a plan introduces an exercise — while the catalog is read from the planning
+    /// engine, the picker, and rest guidance.
+    nonisolated(unsafe) private static var custom: [ExerciseTarget] = []
+    nonisolated(unsafe) private static let customLock = NSLock()
+
+    /// Replaces the registered custom exercises. Call on settings load and after any change, so the
+    /// catalog and `FernletSettings.customExercises` never disagree.
+    ///
+    /// Replace-not-append is deliberate: it makes "delete everything" (and a settings restore that
+    /// drops a custom exercise) actually take effect here instead of leaving a stale entry alive in
+    /// the picker until relaunch.
+    public static func registerCustomExercises(_ exercises: [ExerciseTarget]) {
+        customLock.lock()
+        defer { customLock.unlock() }
+        custom = exercises
+    }
+
+    /// The registered custom exercises.
+    public static var customExercises: [ExerciseTarget] {
+        customLock.lock()
+        defer { customLock.unlock() }
+        return custom
+    }
+
+    /// Every exercise the app knows: the bundled catalog plus the user's own.
+    ///
+    /// This — not `baseExercises` — is what the planning engine, safety filter, rest guidance, and
+    /// picker consume, so an imported exercise is a first-class citizen everywhere. A custom entry
+    /// whose name collides with a bundled one is dropped: the bundled metadata is curated, and
+    /// silently shadowing it would let a pasted plan redefine what "Bench press" targets.
+    public static var allExercises: [ExerciseTarget] {
+        let base = baseExercises
+        let baseNames = Set(base.map { normalizedName($0.name) })
+        return base + customExercises.filter { !baseNames.contains(normalizedName($0.name)) }
+    }
+
+    /// Case- and whitespace-insensitive comparison key for exercise names, so "Bench Press" and
+    /// "bench  press" are one exercise rather than two.
+    public static func normalizedName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
+    /// Looks up an exercise by name across the bundled and custom catalogs.
+    public static func exercise(named name: String) -> ExerciseTarget? {
+        let key = normalizedName(name)
+        return allExercises.first { normalizedName($0.name) == key }
+    }
+
     public static func inferredCategory(for workout: Workout) -> WorkoutType {
         inferredCategory(for: "\(workout.name)\n\(workout.exercises)")
     }
@@ -905,7 +973,7 @@ public nonisolated enum WorkoutExerciseCatalog {
     public static func inferredCategory(for text: String) -> WorkoutType {
         let lowercasedText = text.lowercased()
         var scores: [WorkoutType: Int] = [.upper: 0, .lower: 0, .fullBody: 0, .cardio: 0]
-        for exercise in baseExercises {
+        for exercise in allExercises {
             let tokens = exercise.name.lowercased().split(separator: " ").map(String.init)
             if tokens.allSatisfy({ lowercasedText.contains($0) }) || lowercasedText.contains(exercise.name.lowercased()) {
                 scores[exercise.category, default: 0] += 2
@@ -929,7 +997,7 @@ public nonisolated enum WorkoutExerciseCatalog {
 
     public static func targetSummary(for workout: Workout) -> String {
         let text = "\(workout.name)\n\(workout.exercises)".lowercased()
-        let muscles = baseExercises
+        let muscles = allExercises
             .filter { target in
                 let name = target.name.lowercased()
                 return text.contains(name) || name.split(separator: " ").allSatisfy { text.contains($0) }
@@ -943,9 +1011,9 @@ public nonisolated enum WorkoutExerciseCatalog {
 
     public static func search(_ query: String) -> [ExerciseTarget] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return baseExercises }
+        guard !trimmed.isEmpty else { return allExercises }
         let normalized = trimmed.lowercased()
-        return baseExercises.filter { exercise in
+        return allExercises.filter { exercise in
             exercise.name.lowercased().contains(normalized)
                 || exercise.category.rawValue.lowercased().contains(normalized)
                 || exercise.muscles.contains { $0.lowercased().contains(normalized) }

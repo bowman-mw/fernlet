@@ -24,6 +24,10 @@ struct MoveView: View {
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     @State private var showingLocations = false
+    // The trainer / coach handoff screen. It lives here rather than in Settings → Privacy & Data
+    // because it is now two-way — a plan comes back through it — and a plan belongs next to the
+    // plans, not next to the data-export controls.
+    @State private var showingTrainerShare = false
     @State private var progressPhotos: [ProgressPhotoRecord] = []
     // Surfaced when a progress-photo capture couldn't be sealed to disk (fail-closed store returned nil):
     // the photo would otherwise vanish silently. A clear per-capture alert, never a silent drop.
@@ -104,7 +108,13 @@ struct MoveView: View {
                         Spacer()
                         HStack(spacing: 10) {
                             HeaderActionButton(title: "Log") { activeSheet = .workout }
-                            HeaderActionButton(title: "Suggest") { activeSheet = .workoutSuggestion }
+                            // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
+                            // beside planning one, not in the tab header. The header slot it freed
+                            // goes to the trainer/coach handoff, which is the tab's other top-level
+                            // action and previously sat in a card halfway down the scroll.
+                            HeaderActionButton(title: "Share") { showingTrainerShare = true }
+                                .accessibilityIdentifier("move.trainerShare")
+                                .accessibilityLabel("Share with a trainer")
                         }
                     }
                     .padding(.top, 4)
@@ -237,6 +247,17 @@ struct MoveView: View {
         }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+        .sheet(isPresented: $showingTrainerShare, onDismiss: {
+            // An imported plan writes planned workouts straight into day records, which the
+            // calendar and "Today's movement" read from the `allDays` snapshot — refresh or the
+            // new days stay invisible until some other mutation happens to bump it.
+            refreshAllDays()
+        }) {
+            TrainerExportView(store: store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -2755,6 +2776,9 @@ struct WorkoutPlanSheet: View {
     @State private var selectedActivityType: WorkoutActivityType?
     @State private var logMode: WorkoutMode
     @State private var showDiscardConfirm = false
+    /// Presents ``WorkoutSuggestionSheet`` — the flow that used to sit behind the Move header's
+    /// "Suggest" pill. It lives here now because asking for a workout belongs beside planning one.
+    @State private var showingSuggestion = false
     private let previousWeekPlan: PlannedWorkout?
     /// A shallow snapshot of the seeded field values, so `isDirty` can tell an untouched sheet (whether
     /// blank-new or opened on an existing plan) from one the user has changed. Row edits fold into
@@ -2850,6 +2874,18 @@ struct WorkoutPlanSheet: View {
         return aggregatedMuscleGroups
     }
 
+    /// Whether to offer the suggestion flow on this sheet.
+    ///
+    /// Gated to a NEW plan for TODAY, and both halves are load-bearing rather than tidiness:
+    /// ``WorkoutSuggestionSheet`` is today-scoped by construction (it reads
+    /// `currentGuidedWorkoutPlan`, `recommendedWorkoutIntensity`, and today's logged guided names),
+    /// so offering it while planning next Tuesday would generate and commit a plan for the wrong
+    /// day — silently. And offering it mid-edit of an existing plan invites a suggestion that has no
+    /// relationship to the row being edited.
+    private var showsSuggestEntry: Bool {
+        editingPlan == nil && dateKey == store.todayKey
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SheetCancelBar { attemptCancel() }
@@ -2896,6 +2932,33 @@ struct WorkoutPlanSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
+                    }
+
+                    if showsSuggestEntry {
+                        Button {
+                            showingSuggestion = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "wand.and.stars")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(Color.moss)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Suggest a workout")
+                                        .font(.fernlet(.label))
+                                        .foregroundStyle(Color.bark)
+                                    Text("Built from your split, equipment, and limits")
+                                        .font(.fernlet(.labelSmall))
+                                        .foregroundStyle(Color.slate)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .padding(12)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("plan.suggest")
                     }
 
                     SheetField("Split") {
@@ -3031,6 +3094,16 @@ struct WorkoutPlanSheet: View {
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        .sheet(isPresented: $showingSuggestion) {
+            // Presented from THIS sheet rather than routed through the tab's `activeSheet` slot:
+            // that route would have to dismiss the plan sheet first, throwing away a part-filled
+            // plan. The suggestion flow commits its own plan and closes itself, so on return the
+            // user is back on the plan they were writing.
+            WorkoutSuggestionSheet(store: store)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
         .onChange(of: logMode) { _, _ in
             draft.clear()
         }

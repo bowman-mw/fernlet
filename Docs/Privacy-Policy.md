@@ -177,6 +177,23 @@ your identity, health data, or any sensitive information.
 Fernlet does not use AI to generate mental-health diagnoses or clinical labels, and it filters such
 language out of anything it stores.
 
+**Copying a training summary for an outside assistant (off by default).** There is one place where
+you can deliberately take your data to an AI service Fernlet has no relationship with. If you turn
+on **Manual plan exchange** in Settings, "Share with a trainer" on the Move tab gains a button that
+copies a training summary — your workouts, macro targets and recent meals, equipment, the
+muscles and movements you avoid, and the workouts you've already planned for the coming weeks —
+to your clipboard as plain text, so you can paste it into an assistant of your choosing and
+paste the workout plan it writes back into Fernlet.
+
+This is off unless you switch it on, and Fernlet still sends nothing anywhere: the copying and the
+pasting are both actions you take. But once you paste that text into another app, that app has it,
+under its own privacy policy and not ours — Fernlet cannot reach it or take it back. The summary
+never includes your journal, period or cycle data, intimate data, photos, friends, location, or
+your private keys. A plan you paste back is shown to you day by day, and checked against the
+muscles and movements you avoid, before anything is added to your week. A plan can also change
+or remove workouts you had already planned; you see every such change, before and after, before
+accepting it. Nothing you have already logged is ever altered.
+
 ## 8. What we do NOT do
 
 - We do **not** sell, rent, or trade your personal data.

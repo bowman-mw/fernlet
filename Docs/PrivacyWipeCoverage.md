@@ -86,6 +86,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Session temp messages | Memory (SessionMessageStore) | `sessionMessages.clear` |
 | Presence radio + discovery state | PresenceManager | `presenceManager.stop` |
 | Diary + connection session logs | Snapshot | `resetDiary` |
+| Custom exercise catalog (imported from a coach plan) — the persisted rows AND the process-global registry the picker / safety filter / planning engine read. Two surfaces, one row: `resetDiary` clears `settings.customExercises`, but `WorkoutExerciseCatalog`'s registry is process-global, so without the re-publish a deleted exercise stays live and searchable until the app is relaunched | Snapshot (`settings.customExercises`) + `WorkoutExerciseCatalog` (in-process) | `syncCustomExerciseCatalog` |
 | Saved recipes (per-row) | Core Data/CloudKit | `savedRecipeService.reset` |
 | Custom items + clothing designs (per-row) | Core Data/CloudKit | `customItemService.reset` |
 | Coin ledger (per-row) | Core Data/CloudKit | `coinLedgerService.reset` |

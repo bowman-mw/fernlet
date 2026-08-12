@@ -90,6 +90,12 @@ struct PrivacyWipeCoverageTests {
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
+        // The custom exercise catalog (imported from a coach plan). Its own token even though
+        // `resetDiary` already clears `settings.customExercises`, because `WorkoutExerciseCatalog` is
+        // a PROCESS-GLOBAL registry: without the re-publish a deleted exercise stays live in the
+        // picker, the safety filter and the planning engine until the app is relaunched — a wipe the
+        // user can still see the results of.
+        "syncCustomExerciseCatalog",
         "ageAssurance.clear",
         "repository.purgeAllPersistedData",
         // Widget / AI runtime

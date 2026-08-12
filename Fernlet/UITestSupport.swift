@@ -46,6 +46,16 @@ enum UITestSupport {
     /// `FernletStore.seedDemoContent` on every seeded launch.
     static var hideIntimacySurface: Bool { env["FERNLET_UI_TEST_HIDE_INTIMACY"] == "1" }
 
+    /// `FERNLET_UI_TEST_COACH_EXCHANGE=1` — seed the demo persona with the manual coach exchange
+    /// switched on, so the appearance gallery and the trainer-share suite can reach the
+    /// copy-for-an-AI and paste-a-plan cards.
+    ///
+    /// A hook rather than a UI tap because the toggle lives in Settings while the surface it reveals
+    /// lives on the Move tab: driving Settings first would make every coach-screen test depend on
+    /// the settings screen's layout. Consumed by `FernletStore.seedDemoContent` on every seeded
+    /// launch, so a relaunch without it puts the gate back.
+    static var enableCoachExchange: Bool { env["FERNLET_UI_TEST_COACH_EXCHANGE"] == "1" }
+
     /// `FERNLET_UI_TEST_OPEN_SHEET=<FernletSheet.id>` — present a sheet directly on
     /// launch (e.g. "workout", "settings", "trends"). Generalizes the older
     /// `FERNLET_UI_TEST_OPEN_SETTINGS=1` hook, which is still honored for back-compat.

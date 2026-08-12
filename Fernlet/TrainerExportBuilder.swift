@@ -17,6 +17,7 @@
 
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 import FernletScoring
 
 // MARK: - What the user chose to include
@@ -34,6 +35,54 @@ struct TrainerExportOptions: Equatable {
     static let coreOnly = TrainerExportOptions()
 }
 
+// MARK: - How much history to include
+
+/// How far back each section of the export reaches.
+///
+/// The file/AirDrop path and the future coach-mesh transport use ``unlimited`` — the shipped
+/// behaviour, where a trainer receives the user's whole logged history. The clipboard path uses
+/// ``coachHandoff``, because that text has to fit in a chat box and, past a point, more history buys
+/// worse programming rather than better: eight weeks of full session detail plus a six-month
+/// per-exercise rollup carries the progression signal at a fraction of the size.
+///
+/// `nil` on a field means no limit. Windows are counted in `yyyy-MM-dd` day keys against the export
+/// date, so a gap in logging doesn't stretch the window.
+struct TrainerExportWindow: Equatable {
+    var workoutDays: Int?
+    var nutritionDays: Int?
+    var exerciseHistoryDays: Int?
+    /// How far FORWARD to carry already-planned workouts, in days from today.
+    ///
+    /// The three windows above all reach backwards; this one is the only forward-looking field, and
+    /// it exists because a coach cannot adjust a plan they cannot see. Defaults to 35 days — one
+    /// more than the 30-day `CoachPlanLimits.maxDays`, so a full-length plan the user already
+    /// accepted is visible end to end.
+    var plannedDaysAhead: Int? = 35
+
+    /// Everything ever logged — what the file export and the coach mesh send.
+    static let unlimited = TrainerExportWindow(workoutDays: nil, nutritionDays: nil,
+                                               exerciseHistoryDays: nil, plannedDaysAhead: nil)
+
+    /// The clipboard window: 8 weeks of sessions, 2 weeks of day-by-day nutrition, 6 months of
+    /// rollup, and 5 weeks of upcoming plans to adjust.
+    static let coachHandoff = TrainerExportWindow(workoutDays: 56, nutritionDays: 14,
+                                                  exerciseHistoryDays: 183, plannedDaysAhead: 35)
+
+    /// The earliest day key still inside `days`, or nil when unlimited.
+    func earliestKey(_ days: Int?, from today: Date) -> String? {
+        guard let days else { return nil }
+        guard let start = Calendar.current.date(byAdding: .day, value: -(days - 1), to: today) else { return nil }
+        return FernletDate.dayKey(for: start)
+    }
+
+    /// The latest day key still inside the forward planned window, or nil when unlimited.
+    func latestPlannedKey(from today: Date) -> String? {
+        guard let plannedDaysAhead else { return nil }
+        guard let end = Calendar.current.date(byAdding: .day, value: plannedDaysAhead, to: today) else { return nil }
+        return FernletDate.dayKey(for: end)
+    }
+}
+
 // MARK: - Export DTO (curated, allowlisted projections)
 
 /// The curated trainer/nutritionist export: a human-readable about block, the training-safety
@@ -49,6 +98,24 @@ struct TrainerExportOptions: Equatable {
 struct TrainerExportBundle: Codable, Equatable {
     var about: About
     var profile: TrainingProfile
+    /// The macro targets in effect, and whether each was set by the user or derived by Fernlet.
+    ///
+    /// Always included: the as-logged totals in `days` are meaningless to a coach without knowing
+    /// what they were aimed at — "2100 kcal" is compliance or a deficit depending entirely on this.
+    var targets: NutritionTargetsExport?
+    /// Where the user trains and with what, plus the split they're following.
+    ///
+    /// Always included for the same reason as the avoid-lists: without it a plan can prescribe
+    /// equipment the user doesn't have, which is the single most common way an outside plan is
+    /// unusable on arrival.
+    var trainingSetup: TrainingSetup?
+    /// Per-exercise progression, rolled up from the logged free-text lines.
+    var exerciseHistory: [ExerciseHistoryEntry]?
+    /// How many logged exercise lines couldn't be parsed into sets/reps for `exerciseHistory`.
+    ///
+    /// Reported rather than swallowed: a rollup that silently covers half the log reads as a
+    /// complete picture and would have a coach programming from a fiction.
+    var unparsedExerciseLines: Int?
     var days: [DayExport]
 
     /// The self-describing preamble of the export: when it was prepared, and the human-readable
@@ -89,6 +156,12 @@ struct TrainerExportBundle: Codable, Equatable {
     struct DayExport: Codable, Equatable {
         var day: String
         var workouts: [WorkoutExport]?
+        /// Workouts already PLANNED for this day and not yet done — what a coach adjusts.
+        ///
+        /// Distinct from `workouts`, which is what actually happened. Only these carry an `id`,
+        /// because only these can be targeted by an imported plan's edits; a logged workout is a
+        /// record of the past and is never rewritten by an import.
+        var plannedWorkouts: [PlannedWorkoutExport]?
         var nutrition: NutritionSummary?
         // Opt-in only.
         var hydration: Hydration?
@@ -132,6 +205,24 @@ struct TrainerExportBundle: Codable, Equatable {
         var perceivedEffortRPE: Double?
         var notes: String?
         var completedAt: Date
+    }
+
+    /// One workout the user has PLANNED but not yet done.
+    ///
+    /// `id` is the load-bearing field: it is the handle an imported plan uses to say "replace this
+    /// one" / "adjust this one" / "remove this one" (`CoachPlanEdit.targetID`). It is the row's real
+    /// `PlannedWorkout.id` — an opaque UUID that means nothing off this device, and echoing it is
+    /// what makes targeting survive a rename or two workouts sharing a day.
+    struct PlannedWorkoutExport: Codable, Equatable {
+        var id: UUID
+        var name: String
+        var split: String
+        /// Who planned it — `user` or `coach` — so a coach can tell their own prior work from the
+        /// user's.
+        var source: String
+        var exercises: [String]?
+        var notes: String?
+        var durationMinutes: Int?
     }
 
     /// One day's nutrition, summed from the per-meal SNAPSHOTS the user logged.
@@ -180,6 +271,56 @@ struct TrainerExportBundle: Codable, Equatable {
         var quality: String
         var note: String?
     }
+
+    /// The daily macro targets in effect, with each one flagged user-set or Fernlet-derived.
+    ///
+    /// The `…IsUserSet` flags matter to whoever reads this: a derived target is Fernlet's arithmetic
+    /// from goal + profile + activity and is fair game to change, whereas a user-set one is a
+    /// deliberate choice that shouldn't be silently overridden.
+    struct NutritionTargetsExport: Codable, Equatable {
+        var calories: Int
+        var proteinGrams: Int
+        var carbsGrams: Int
+        var fatGrams: Int
+        var caloriesIsUserSet: Bool
+        var proteinIsUserSet: Bool
+        var fatIsUserSet: Bool
+    }
+
+    /// Where and how the user trains: their active location's equipment and the split they follow.
+    ///
+    /// `ownedEquipment` is the granular user-facing gear list; it maps down onto the coarse
+    /// ``Equipment`` capabilities the planning engine and safety filter reason about.
+    struct TrainingSetup: Codable, Equatable {
+        var locationName: String
+        var ownedEquipment: [String]
+        var splitName: String?
+        var splitIsUserChosen: Bool
+        var trainingDaysPerWeek: Int?
+    }
+
+    /// One exercise's history, rolled up across the window: how often, how recently, how heavy.
+    ///
+    /// Parsed from the logged free-text lines, so every field past `name`/`sessions` is optional —
+    /// a line that never stated a weight yields no weight, and saying so is more useful than
+    /// inventing one. `estimatedOneRepMax` is Epley (`w × (1 + reps/30)`), rounded to one decimal,
+    /// and is only present when a weight AND a numeric rep count were both parsed.
+    struct ExerciseHistoryEntry: Codable, Equatable {
+        var name: String
+        /// Days on which this exercise appeared — the frequency signal, not the set count.
+        var sessions: Int
+        var totalSets: Int
+        var firstLogged: String
+        var lastLogged: String
+        var lastSets: Int?
+        var lastReps: String?
+        var lastWeight: Double?
+        var bestWeight: Double?
+        var bestWeightReps: Int?
+        var estimatedOneRepMax: Double?
+        /// "lb" or "kg" as written in the logged lines, or nil when they never said.
+        var weightUnit: String?
+    }
 }
 
 // MARK: - Builder
@@ -187,12 +328,43 @@ struct TrainerExportBundle: Codable, Equatable {
 extension FernletStore {
     /// Assembles the curated trainer bundle from live in-memory state. Excludes sealed/sensitive data by
     /// construction (see the file header). `options` gate the opt-in categories only.
-    func buildTrainerExport(options: TrainerExportOptions) -> TrainerExportBundle {
+    ///
+    /// - Parameter window: how far back each section reaches. Defaults to ``TrainerExportWindow/unlimited``
+    ///   so the shipped file/mesh export keeps sending the full history; the clipboard coach handoff
+    ///   passes ``TrainerExportWindow/coachHandoff``.
+    func buildTrainerExport(options: TrainerExportOptions,
+                            window: TrainerExportWindow = .unlimited) -> TrainerExportBundle {
         let scoresByDay = Dictionary(dailyScores.map { ($0.dateKey, $0) }, uniquingKeysWith: { a, _ in a })
 
-        let dayExports: [TrainerExportBundle.DayExport] = loadDays().values
-            .sorted { $0.date > $1.date }   // newest first
-            .compactMap { Self.projectTrainerDay($0, score: scoresByDay[$0.date], target: hydrationTargetBottles, options: options) }
+        let today = Date()
+        let workoutFloor = window.earliestKey(window.workoutDays, from: today)
+        let nutritionFloor = window.earliestKey(window.nutritionDays, from: today)
+        let historyFloor = window.earliestKey(window.exerciseHistoryDays, from: today)
+
+        let allDays = loadDays().values.sorted { $0.date > $1.date }   // newest first
+        let todayDayKey = todayKey
+        let plannedCeiling = window.latestPlannedKey(from: today)
+
+        // Each section gets its own floor, so a day inside the workout window but outside the
+        // nutrition window contributes its sessions and no meals — rather than the day being dropped
+        // whole, which would silently shorten the workout history to the nutrition window.
+        let dayExports: [TrainerExportBundle.DayExport] = allDays.compactMap { day in
+            // Planned workouts reach FORWARD from today, unlike every other section. A past day's
+            // leftover plan is not something a coach can adjust, so it is deliberately not sent.
+            let includePlanned = day.date >= todayDayKey
+                && (plannedCeiling.map { day.date <= $0 } ?? true)
+            return Self.projectTrainerDay(
+                day,
+                score: scoresByDay[day.date],
+                target: hydrationTargetBottles,
+                options: options,
+                includeWorkouts: workoutFloor.map { day.date >= $0 } ?? true,
+                includeNutrition: nutritionFloor.map { day.date >= $0 } ?? true,
+                includePlanned: includePlanned)
+        }
+
+        let rollup = Self.rollUpExerciseHistory(
+            days: allDays.filter { day in historyFloor.map { day.date >= $0 } ?? true })
 
         let wp = settings.workoutProfile
         let profile = TrainerExportBundle.TrainingProfile(
@@ -206,6 +378,10 @@ extension FernletStore {
 
         var includes = ["Your workouts over time (names, sets/reps/weights as logged, duration, effort)",
                         "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)",
+                        "Your daily calorie and macro targets",
+                        "Where you train, the equipment you have, and the split you follow",
+                        "How each exercise has progressed (frequency, recent and best sets)",
+                        "Workouts you've already planned for the coming weeks, so they can be adjusted",
                         "Training-safety context (injury notes, avoided muscles and movements)"]
         if options.includeGoal { includes.append("Your goal type") }
         if options.includeHydration { includes.append("Daily hydration") }
@@ -223,7 +399,46 @@ extension FernletStore {
                 "Recipe ingredient lists and your private cryptographic keys",
             ])
 
-        return TrainerExportBundle(about: about, profile: profile, days: dayExports)
+        return TrainerExportBundle(
+            about: about,
+            profile: profile,
+            targets: projectedTargets(),
+            trainingSetup: projectedTrainingSetup(),
+            exerciseHistory: rollup.entries.isEmpty ? nil : rollup.entries,
+            unparsedExerciseLines: rollup.unparsedLines > 0 ? rollup.unparsedLines : nil,
+            days: dayExports)
+    }
+
+    /// The macro targets in effect, flagged user-set or derived.
+    private func projectedTargets() -> TrainerExportBundle.NutritionTargetsExport {
+        let applied = nutritionTargets
+        return .init(
+            calories: applied.calories,
+            proteinGrams: applied.protein,
+            carbsGrams: applied.carbs,
+            fatGrams: applied.fat,
+            caloriesIsUserSet: settings.calorieTargetOverride != nil,
+            proteinIsUserSet: settings.proteinTargetOverride != nil,
+            fatIsUserSet: settings.fatTargetOverride != nil)
+    }
+
+    /// The active location's equipment plus the split in effect.
+    ///
+    /// `splitIsUserChosen` distinguishes a split the user picked from the one Fernlet recommended —
+    /// the same "deliberate choice vs. our arithmetic" distinction the target flags carry.
+    private func projectedTrainingSetup() -> TrainerExportBundle.TrainingSetup {
+        let location = settings.activeWorkoutLocation
+        let chosenID = settings.workoutProfile.selectedSplitID
+        let split = chosenID.flatMap { id in WorkoutSplitCatalog.all.first { $0.id == id } }
+            ?? recommendedSplits().first
+            ?? WorkoutSplitCatalog.fallback
+        let days = settings.workoutProfile.trainingDaysPerWeek
+        return .init(
+            locationName: location.name,
+            ownedEquipment: location.ownedEquipment.map(\.displayName).sorted(),
+            splitName: split.name,
+            splitIsUserChosen: chosenID != nil,
+            trainingDaysPerWeek: days > 0 ? days : nil)
     }
 
     /// Encodes the bundle to pretty, stable JSON bytes (for the reviewable preview and the future sealed
@@ -256,16 +471,35 @@ extension FernletStore {
     /// Projects one day, or nil if it has no trainer-relevant content (a day with only journal/other
     /// excluded data produces nothing).
     private static func projectTrainerDay(_ day: FernletDay, score: DailyHealthScore?, target: Int,
-                                          options: TrainerExportOptions) -> TrainerExportBundle.DayExport? {
-        let workouts = day.workouts.map { w in
+                                          options: TrainerExportOptions,
+                                          includeWorkouts: Bool = true,
+                                          includeNutrition: Bool = true,
+                                          includePlanned: Bool = true) -> TrainerExportBundle.DayExport? {
+        // A day outside EVERY window is dropped whole. Without this the opt-in extras (hydration,
+        // sleep, sickness, wellbeing) would keep emitting rows for days whose workouts and meals
+        // were both windowed out — leaving the clipboard blob effectively unbounded whenever any
+        // optional toggle is on, which is exactly what the window exists to prevent.
+        guard includeWorkouts || includeNutrition || includePlanned else { return nil }
+
+        let workouts = includeWorkouts ? day.workouts.map { w in
             TrainerExportBundle.WorkoutExport(
                 name: w.name, type: w.type.rawValue, mode: w.mode.rawValue, intensity: w.intensity.rawValue,
                 muscleGroups: w.muscleGroups.isEmpty ? nil : w.muscleGroups.map(\.rawValue).sorted(),
                 exercises: w.exerciseLines.isEmpty ? nil : w.exerciseLines,
                 durationMinutes: w.duration, distanceMiles: w.distanceMiles, activeEnergyKcal: w.activeEnergyKcal,
                 perceivedEffortRPE: w.rpe, notes: w.notes.isEmpty ? nil : w.notes, completedAt: w.completedAt)
-        }
-        let nutrition = projectNutrition(day.meals)
+        } : []
+        let planned: [TrainerExportBundle.PlannedWorkoutExport] = includePlanned ? day.plannedWorkouts.map { p in
+            TrainerExportBundle.PlannedWorkoutExport(
+                id: p.id,
+                name: p.name,
+                split: p.split.title,
+                source: p.source.rawValue,
+                exercises: p.exerciseLines.isEmpty ? nil : p.exerciseLines,
+                notes: p.notes.isEmpty ? nil : p.notes,
+                durationMinutes: p.duration)
+        } : []
+        let nutrition = includeNutrition ? projectNutrition(day.meals) : nil
 
         let hydration: TrainerExportBundle.DayExport.Hydration? =
             (options.includeHydration && day.bottleCount > 0) ? .init(bottles: day.bottleCount, targetBottles: target) : nil
@@ -283,12 +517,14 @@ extension FernletStore {
         } : nil
 
         // Drop days with nothing a trainer would see.
-        if workouts.isEmpty, nutrition == nil, hydration == nil, sleep == nil, wasSick == nil, wellbeing == nil {
+        if workouts.isEmpty, planned.isEmpty, nutrition == nil, hydration == nil, sleep == nil,
+           wasSick == nil, wellbeing == nil {
             return nil
         }
         return TrainerExportBundle.DayExport(
             day: day.date,
             workouts: workouts.isEmpty ? nil : workouts,
+            plannedWorkouts: planned.isEmpty ? nil : planned,
             nutrition: nutrition,
             hydration: hydration, sleep: sleep, wasSick: wasSick, wellbeing: wellbeing)
     }
@@ -318,5 +554,174 @@ extension FernletStore {
         let values = meals.compactMap { $0.micronutrientSnapshot[keyPath: key] }
         guard !values.isEmpty else { return nil }
         return (values.reduce(0, +) * 100).rounded() / 100
+    }
+
+    // MARK: - Per-exercise progression rollup
+
+    /// Rolls every logged exercise line in `days` up into one entry per exercise.
+    ///
+    /// This is the section a coach actually programs progression from: what you do, how often, and
+    /// what you last moved. It reads the SAME free-text lines the workout rows already carry
+    /// (`Workout.exerciseLines`) rather than any new storage, which is why it must be honest about
+    /// what it couldn't read — `unparsedLines` counts every line that yielded no sets/reps, and the
+    /// caller surfaces it in the export.
+    static func rollUpExerciseHistory(days: [FernletDay]) -> (entries: [TrainerExportBundle.ExerciseHistoryEntry],
+                                                              unparsedLines: Int) {
+        /// Mutable accumulator; converted to the immutable export entry once every day is folded in.
+        struct Accumulator {
+            var name: String
+            var dayKeys: Set<String> = []
+            var totalSets = 0
+            var firstLogged: String
+            var lastLogged: String
+            var lastSets: Int?
+            var lastReps: String?
+            var lastWeight: Double?
+            var bestWeight: Double?
+            var bestWeightReps: Int?
+            var weightUnit: String?
+        }
+
+        var byExercise: [String: Accumulator] = [:]
+        var unparsed = 0
+
+        // Oldest first, so "last" genuinely means the most recent day rather than whichever day the
+        // dictionary happened to yield last.
+        for day in days.sorted(by: { $0.date < $1.date }) {
+            for workout in day.workouts {
+                for line in workout.exerciseLines {
+                    guard let parsed = ExerciseLineParser.parse(line) else {
+                        unparsed += 1
+                        continue
+                    }
+                    let key = WorkoutExerciseCatalog.normalizedName(parsed.name)
+                    guard !key.isEmpty else {
+                        unparsed += 1
+                        continue
+                    }
+                    var entry = byExercise[key] ?? Accumulator(
+                        name: parsed.name, firstLogged: day.date, lastLogged: day.date)
+                    entry.dayKeys.insert(day.date)
+                    entry.totalSets += parsed.sets ?? 0
+                    entry.lastLogged = day.date
+                    entry.lastSets = parsed.sets
+                    entry.lastReps = parsed.reps
+                    entry.lastWeight = parsed.weight ?? entry.lastWeight
+                    if let weight = parsed.weight, weight > (entry.bestWeight ?? 0) {
+                        entry.bestWeight = weight
+                        entry.bestWeightReps = parsed.repsCount
+                    }
+                    entry.weightUnit = entry.weightUnit ?? parsed.weightUnit
+                    byExercise[key] = entry
+                }
+            }
+        }
+
+        let entries = byExercise.values
+            // Most-recently-trained first, then by frequency — the order a coach reads in.
+            .sorted { ($0.lastLogged, $0.dayKeys.count) > ($1.lastLogged, $1.dayKeys.count) }
+            .map { acc -> TrainerExportBundle.ExerciseHistoryEntry in
+                var oneRepMax: Double?
+                if let weight = acc.bestWeight, let reps = acc.bestWeightReps, reps > 0 {
+                    // Epley. Meaningless past ~12 reps, so don't publish an estimate there rather
+                    // than publishing a number a coach might load off.
+                    if reps <= 12 {
+                        oneRepMax = ((weight * (1 + Double(reps) / 30)) * 10).rounded() / 10
+                    }
+                }
+                return .init(
+                    name: acc.name,
+                    sessions: acc.dayKeys.count,
+                    totalSets: acc.totalSets,
+                    firstLogged: acc.firstLogged,
+                    lastLogged: acc.lastLogged,
+                    lastSets: acc.lastSets,
+                    lastReps: acc.lastReps,
+                    lastWeight: acc.lastWeight,
+                    bestWeight: acc.bestWeight,
+                    bestWeightReps: acc.bestWeightReps,
+                    estimatedOneRepMax: oneRepMax,
+                    weightUnit: acc.weightUnit)
+            }
+        return (entries, unparsed)
+    }
+}
+
+// MARK: - Exercise line parsing
+
+/// Reads one logged exercise line back into its parts.
+///
+/// The lines are free text — the guided runner writes `"Bench press - 3 x 8"`, but a hand-logged
+/// line is whatever the user typed (`"Squat 5x5 @225lb"`, `"Incline DB press — 3x10"`). The parser
+/// is therefore deliberately forgiving about separators and units, and deliberately strict about
+/// what counts as a match: **no sets × reps pattern, no parse**. Returning a name-only "result"
+/// would fold conditioning descriptions ("20 min row") into the strength rollup as zero-set
+/// exercises, which is worse than honestly counting them as unparsed.
+enum ExerciseLineParser {
+
+    /// One parsed line: the exercise, its prescription, and the load if it stated one.
+    struct Parsed: Equatable {
+        var name: String
+        var sets: Int?
+        /// The rep text exactly as written, so "8-10" and "AMRAP" survive the round trip.
+        var reps: String?
+        /// The numeric rep count when `reps` is a plain number — the only form an Epley estimate
+        /// can use.
+        var repsCount: Int?
+        var weight: Double?
+        var weightUnit: String?
+    }
+
+    /// `3 x 8`, `3x8`, `3 × 8` — the sets × reps core every parseable line has.
+    private static let setsReps = /(\d{1,2})\s*[xX×]\s*(\d{1,3}(?:\s*-\s*\d{1,3})?)/
+
+    /// A trailing load, which must announce itself either with `@` (`@ 135`) or with a unit
+    /// (`135 lb`, `60kg`).
+    ///
+    /// A bare trailing number is NOT accepted, and that restraint is the point: real logged lines
+    /// end in things like `, 2 min rest`, and every line this app's own guided runner writes for a
+    /// coach-planned exercise ends in a guidance suffix — `Bench press - 3 x 8 (RPE 7)`. Matching a
+    /// bare number would read that 7 as a 7 lb bench press and quietly corrupt the progression
+    /// rollup a coach programs from. Losing the load on `Squat 5x5 225` is the cheaper mistake.
+    private static let load = /(?:@\s*(\d{1,4}(?:\.\d{1,2})?)\s*(lbs?|kgs?|kilos?)?|(\d{1,4}(?:\.\d{1,2})?)\s*(lbs?|kgs?|kilos?))\b/
+
+    /// Removes parenthesised segments, which carry cues (`(RPE 7)`, `(2s pause)`) rather than load.
+    private static func strippingParentheticals(_ text: String) -> String {
+        text.replacing(/\([^)]*\)/, with: " ")
+    }
+
+    static func parse(_ rawLine: String) -> Parsed? {
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return nil }
+        guard let match = line.firstMatch(of: setsReps) else { return nil }
+
+        // Everything before the sets × reps is the name, minus any trailing separator.
+        let name = String(line[line.startIndex..<match.range.lowerBound])
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -–—:,\t"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+
+        let sets = Int(match.output.1)
+        let repsText = String(match.output.2).replacingOccurrences(of: " ", with: "")
+        let repsCount = Int(repsText)
+
+        // Look for the load only AFTER the sets × reps, so "3 x 8" can't have its own digits read
+        // back as a weight, and with cue parentheticals removed first.
+        var weight: Double?
+        var unit: String?
+        let tail = strippingParentheticals(String(line[match.range.upperBound...]))
+        if let loadMatch = tail.firstMatch(of: load) {
+            // The alternation gives two capture pairs — the `@`-prefixed form and the unit-suffixed
+            // form — and exactly one of them is populated per match.
+            let value = loadMatch.output.1 ?? loadMatch.output.3
+            let rawUnit = loadMatch.output.2 ?? loadMatch.output.4
+            weight = value.flatMap { Double($0) }
+            if let rawUnit {
+                unit = rawUnit.lowercased().hasPrefix("k") ? "kg" : "lb"
+            }
+        }
+
+        return Parsed(name: name, sets: sets, reps: repsText.isEmpty ? nil : repsText,
+                      repsCount: repsCount, weight: weight, weightUnit: unit)
     }
 }

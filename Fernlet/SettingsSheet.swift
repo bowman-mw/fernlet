@@ -1281,6 +1281,24 @@ struct SettingsSheet: View {
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+            SectionLabel("Coach")
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Manual plan exchange", isOn: $store.settings.coachExchangeEnabled)
+                Text("Adds two things to \"Share with a trainer\" on the Move tab: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                // Said plainly and unprompted. A pasted plan carries no signature, so the review
+                // screen is the only thing standing between it and the user's week — and the copy
+                // step puts plaintext health data into another app's hands by design.
+                Text("Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
             SectionLabel("Body signals")
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Notice body tension", isOn: stressAwarenessBinding)

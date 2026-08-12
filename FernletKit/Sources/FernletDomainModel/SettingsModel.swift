@@ -191,6 +191,23 @@ public nonisolated struct FernletSettings: Codable {
     /// Times each catalog exercise has been completed from a suggested session — drives week-to-week
     /// progression (reps/sets climb as the exercise is repeated).
     public var workoutProgression: [String: Int] = [:]
+    /// Exercises the user has added beyond the bundled catalog — currently only via an imported
+    /// coach plan, which must supply each one's muscles, equipment, and movement pattern.
+    ///
+    /// Mirrored into ``WorkoutExerciseCatalog/registerCustomExercises(_:)`` on load and after every
+    /// change; that registry is what the planning engine, safety filter, and picker read. Kept here
+    /// (rather than in a sealed store) because an exercise name carries no sensitive meaning, and
+    /// living in the synced settings blob means it reaches the user's other devices and is cleared
+    /// by a settings wipe like every other preference.
+    public var customExercises: [ExerciseTarget] = []
+    /// Opt-in gate for the manual coach exchange — the clipboard export and the paste-a-plan-back
+    /// import on the Move tab.
+    ///
+    /// Off by default and deliberately so: until the Fernlet Coach app ships, importing a plan means
+    /// ingesting UNSIGNED JSON from wherever the user pasted it. The review gate is the real
+    /// defence, but keeping the surface off by default means the default install has no
+    /// unverified-plan ingestion path at all.
+    public var coachExchangeEnabled: Bool = false
 
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
@@ -363,6 +380,8 @@ public nonisolated struct FernletSettings: Codable {
         workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
+        customExercises = try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? []
+        coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
 
         // Generic unknown-key parking (see `parkedUnknownKeys`): capture every remaining top-level key
         // this build doesn't know, with its raw JSON value, so a re-encode here round-trips a newer
@@ -405,7 +424,8 @@ public nonisolated struct FernletSettings: Codable {
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
-             workoutLocations, activeWorkoutLocationID, workoutProgression
+             workoutLocations, activeWorkoutLocationID, workoutProgression,
+             customExercises, coachExchangeEnabled
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -470,6 +490,8 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(workoutLocations, forKey: .workoutLocations)
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)
+        try container.encode(customExercises, forKey: .customExercises)
+        try container.encode(coachExchangeEnabled, forKey: .coachExchangeEnabled)
 
         // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
         // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard

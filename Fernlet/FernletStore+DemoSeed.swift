@@ -61,6 +61,10 @@ extension FernletStore {
         // read — ContentView's value-keyed scrub handles any mid-session flip.
         settings.periodTrackingVisible = !UITestSupport.hidePeriodSurface
         settings.intimacyTrackingVisible = !UITestSupport.hideIntimacySurface
+        // Applied on EVERY seeded launch like the two above (not inside the day-scoped guard below),
+        // so a relaunch that drops the flag puts the coach gate back off rather than leaving it on
+        // from an earlier run.
+        settings.coachExchangeEnabled = UITestSupport.enableCoachExchange
 
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 

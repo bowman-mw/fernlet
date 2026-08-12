@@ -595,6 +595,7 @@ final class FernletStore {
         // Apply the one-time period-visibility migration + the mixed-version fail-closed guard against the
         // just-loaded settings, BEFORE any UI reads `isPeriodTrackingVisible` or a save can persist.
         reconcileSensitiveSurfaceVisibility()
+        syncCustomExerciseCatalog()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -657,6 +658,7 @@ final class FernletStore {
         self.diary.isAdultVerified = { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
         self.diary.ensureLocalDesignerID()
         reconcileSensitiveSurfaceVisibility()
+        syncCustomExerciseCatalog()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -968,6 +970,18 @@ final class FernletStore {
         if result.settingsChanged {
             snapshotSaveCoordinator.schedule()
         }
+    }
+
+    /// Publishes `settings.customExercises` into ``WorkoutExerciseCatalog``, the registry the planning
+    /// engine, safety filter, rest guidance, and exercise picker all read.
+    ///
+    /// Called wherever settings become live — both inits and `apply(_:)` for a remote sync — because
+    /// the registry is process-global while the settings blob is per-load. Missing the `apply(_:)`
+    /// site would leave a device that synced a new exercise from another device unable to see it
+    /// until relaunch; missing it after a wipe would leave a deleted exercise alive in the picker.
+    /// Registration REPLACES rather than merges, so both directions hold.
+    func syncCustomExerciseCatalog() {
+        WorkoutExerciseCatalog.registerCustomExercises(settings.customExercises)
     }
 
     /// Drops any hidden dimension left resident in the day's health context. Called on load as well as
@@ -4580,6 +4594,12 @@ final class FernletStore {
             diary.resetDiary()
             connectionSessionLogs = []
         }
+        // `resetDiary()` cleared `settings.customExercises` in the blob, but ``WorkoutExerciseCatalog``
+        // is a PROCESS-GLOBAL registry — without this re-publish, exercises imported from a coach plan
+        // stay live in the picker, the safety filter, and the planning engine until the app is
+        // relaunched, which is exactly the "deleted but still there" state this funnel exists to
+        // prevent. Registration replaces, so this empties it.
+        syncCustomExerciseCatalog()
         if !savedRecipeService.reset() { incompleteStores.append("your saved recipes") }
         if !customItemService.reset() { incompleteStores.append("your custom items") }
         // Clears all earn/spend rows and appends a reset-boundary marker. The next `reconcileCoinLedger()`
@@ -4945,6 +4965,7 @@ final class FernletStore {
         // keys — reconcile immediately, before any read or the derived-signals rebuild below, so a mixed-
         // version sync can't re-open a hidden period/intimacy surface.
         reconcileSensitiveSurfaceVisibility()
+        syncCustomExerciseCatalog()
         connectionSessionLogs = snapshot.connectionSessionLogs
         aiRetryQueueService.apply(snapshot.retryQueue)
         proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)

@@ -194,6 +194,43 @@ non-exhaustive switches and ship corrupted binaries.
 - ``PrescribedExercise``
 - ``WorkoutRestGuidance``
 
+### Coach plans
+
+The `CoachPlan v1` wire schema (Fernlet Coach spec §3.5): a 1-30 day plan authored OUTSIDE Fernlet
+and ingested through a review gate. Transport-agnostic — today it arrives via the manual clipboard
+exchange, later over the signed `fernlet-coach` mesh — so nothing here knows which pipe it came
+down.
+
+Two invariants make this safe to hand untrusted bytes. **Everything is bounded**: `CoachPlanLimits`
+caps are enforced during decode, before values are retained. **Enum-valued fields never park an
+unknown token** the way persisted types do — freeze/park is the compatibility story for a newer
+*Fernlet build*'s bytes, not for a plan author's typo, so ``CoachPlanTokens`` matches against an
+allowlist and an unmatched token fails. That strictness is load-bearing for
+``CoachExerciseDefinition``, whose muscles, equipment, and movement pattern are exactly the inputs
+``WorkoutSafetyFilter`` needs: defaulting any of them would let an imported exercise slip past a
+user's avoid list.
+
+The `edits` half is what makes "a coach adjusts my month" possible rather than only "a coach
+hands me a new block": `days` proposes new workouts, while ``CoachPlanEdit`` rewrites or removes
+ones already on the calendar, targeted by the `PlannedWorkout.id` the trainer export echoes.
+Targeting by id rather than day+name is what survives a rename and stays unambiguous when a day
+holds two workouts with the same name. An edit can only ever reach a PLANNED row that is still
+ahead of today — never a logged workout, which is the guarantee that an import cannot rewrite
+what actually happened.
+
+- ``CoachPlan``
+- ``CoachPlanDay``
+- ``CoachSession``
+- ``CoachExercise``
+- ``CoachExerciseDefinition``
+- ``CoachPlanEdit``
+- ``CoachPlanEditAction``
+- ``CoachPlanStartPolicy``
+- ``CoachPlanTokens``
+- ``CoachPlanLimits``
+- ``CoachPlanIssue``
+- ``CoachPlanDecodeError``
+
 ### Companion and appearance
 
 - ``CompanionState``

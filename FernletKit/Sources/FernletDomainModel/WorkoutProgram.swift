@@ -435,7 +435,7 @@ public nonisolated struct WorkoutSlotSpec {
 ///
 /// Cardio/mobility sessions render their conditioning descriptor directly; the others are filled
 /// from the catalog via slots.
-public nonisolated enum SessionKind: String {
+public nonisolated enum SessionKind: String, CaseIterable {
     case strength
     case fullBody
     case cardio
@@ -1058,7 +1058,7 @@ public nonisolated enum WorkoutProgram {
         split: TrainingSplit,
         rotationIndex: Int,
         progression: [String: Int] = [:],
-        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.baseExercises
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
         let dayCount = max(split.days.count, 1)
         let day = split.days[((rotationIndex % dayCount) + dayCount) % dayCount]
