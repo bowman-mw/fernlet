@@ -54,6 +54,12 @@ struct PrivateHubView: View {
     @Binding var section: PrivateHubSection
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
+    /// Whether the Personal tab is the visible page of the outer paged `TabView` (the parent
+    /// passes `selectedTab == .personal`). Gates ONLY the capture-friction screenshot pulse:
+    /// page-style `TabView`s keep offscreen children alive, so without this a screenshot taken
+    /// on Home would blur and nudge a hub nobody is looking at. Rendered from state, never
+    /// `.onAppear`/`.onDisappear` (documented unreliable on page TabViews). Defaults to true.
+    var isFrontmost: Bool = true
 
     var body: some View {
         let visibleSections = PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility)
@@ -76,6 +82,14 @@ struct PrivateHubView: View {
             ) { $0.rawValue }
         }
         .background(Color.parchment)
+        // Capture FRICTION (never a security control) over the whole hub — the three pages and
+        // their pushed details share this one presentation host, so one attachment covers them
+        // all; the five sensitive sheets present in their own contexts and attach at their own
+        // bodies. Deliberately INNER to `.fernletLockGate` so the capture cover can never occlude
+        // the passcode field or the Face-ID chrome during the documented inactive→active bounce.
+        // Stays active under the lock-gate bypass flag: neither trigger fires under automation,
+        // and the FERNLET_UI_TEST_FORCE_CAPTURE tests need the cover WITH the gate bypassed.
+        .captureProtected(surface: "privateHub", isFrontmost: isFrontmost)
         // UX appearance tests can bypass the gate overlay to review the Journal/Cycle screens
         // without configuring a passcode. Release builds: always gated.
         // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo

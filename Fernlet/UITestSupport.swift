@@ -60,6 +60,27 @@ enum UITestSupport {
     /// synthesize; this hook lets the item-creation flow (slot picker → Wardrobe → studio) be driven.
     static var shouldOpenCustomize: Bool { env["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] == "1" }
 
+    /// `FERNLET_UI_TEST_FORCE_CAPTURE=1` — construct the app's `CaptureProtectionState` with its
+    /// capture override forced true, so the Tier-2 capture cover renders over every protected
+    /// surface. The only automation path to the cover: real capture (`UIScreen.isCaptured`) and
+    /// real screenshots cannot be driven from XCUITest (verified 2026-08-11 — `app.screenshot()`
+    /// posts no `userDidTakeScreenshotNotification`). Consumed by `FernletApp`. Friction-feature
+    /// hook only; forcing the cover grants nothing and unseals nothing.
+    static var forceCaptureCover: Bool { env["FERNLET_UI_TEST_FORCE_CAPTURE"] == "1" }
+
+    /// `FERNLET_UI_TEST_OPEN_JOURNAL_EDITOR=1` — auto-present `JournalEntryEditorSheet` from the
+    /// hub's `JournalView` with a synthetic entry. The editor is only reachable by tapping an
+    /// existing entry, which the capture-protection UI test cannot do while the forced Tier-2
+    /// cover (`FERNLET_UI_TEST_FORCE_CAPTURE`) blocks hits on the hub beneath it. Consumed by
+    /// `JournalView`.
+    static var shouldOpenJournalEditor: Bool { env["FERNLET_UI_TEST_OPEN_JOURNAL_EDITOR"] == "1" }
+
+    /// `FERNLET_UI_TEST_OPEN_DAY_EDIT=1` — auto-present `DayEditSheet` for today from the hub's
+    /// `JournalView`. The sheet is only reachable by pushing `DayDetailView` from the journal
+    /// calendar and tapping "Edit day", both blocked by the forced Tier-2 cover during the
+    /// capture-protection UI tests. Consumed by `JournalView` (DEBUG-only presenter).
+    static var shouldOpenDayEditSheet: Bool { env["FERNLET_UI_TEST_OPEN_DAY_EDIT"] == "1" }
+
     /// `FERNLET_UI_TEST_SEED_STUDIO_CANVAS=1` — open the Creation Studio's editor with a pre-painted
     /// canvas. XCUITest can't drive the custom zoomable canvas's paint gesture, and "Next" stays disabled
     /// while the canvas is blank, so without this the naming / shop-listing confirmation step (and its
@@ -89,6 +110,9 @@ enum UITestSupport {
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
     static var initialSheet: FernletSheet? { nil }
+    static var forceCaptureCover: Bool { false }
+    static var shouldOpenJournalEditor: Bool { false }
+    static var shouldOpenDayEditSheet: Bool { false }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
     static var isTestHarnessActive: Bool { false }

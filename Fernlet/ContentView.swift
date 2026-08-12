@@ -49,6 +49,12 @@ struct ContentView: View {
     @State private var worryBoxService = WorryBoxService()
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
+    /// The injected capture-friction state (screenshot pulse + capture cover; friction, never a
+    /// security control). Read here only to RE-INJECT it into the sheet cases that host protected
+    /// surfaces (`.journal`, `.logPeriod`, `.logIntimacy`), matching the explicit per-sheet
+    /// environment convention used for `lockService` — a missing environment object in a sheet is
+    /// a runtime crash, not a compile error.
+    @Environment(CaptureProtectionState.self) private var captureProtection
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
@@ -468,7 +474,7 @@ struct ContentView: View {
                 .tag(FernletTab.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
+            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isFrontmost: selectedTab == .personal)
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -576,6 +582,7 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                .environment(captureProtection)
         case .quickExercise:
             QuickExerciseSheet(store: store)
                 .uxScreenAnchor("sheet.quickExercise")
@@ -652,6 +659,7 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(lockService)
+                .environment(captureProtection)
         case .logIntimacy:
             LogIntimacySheet(intimacyStore: intimacyStore)
                 .uxScreenAnchor("sheet.logIntimacy")
@@ -660,6 +668,7 @@ struct ContentView: View {
                 .presentationCornerRadius(20)
                 .environment(lockService)
                 .environment(storagePreferencesStore)
+                .environment(captureProtection)
         case .editRecipe(let recipe):
             RecipeSheet(store: store, recipe: recipe)
                 .uxScreenAnchor("sheet.editRecipe")
