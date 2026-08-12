@@ -18,7 +18,7 @@ requests. Fonts, styles and script are all served from this origin.
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
-| `style.css` | The whole site's styling. Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans). |
+| `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
 | `app.js` | Progressive-enhancement interactions. Optional by construction. |
 | `fonts/` | Self-hosted woff2 files — see [`fonts/README.md`](fonts/README.md) for what to drop in. |
 | `_headers` | Cloudflare/Netlify header rules: security baseline + font caching + the `application/json` content-type rule for the future AASA file. **Ignored by GitHub Pages** (see below). |
@@ -45,6 +45,12 @@ effective date in all three.
 2. **Swap in real screenshots.** The phone mock on the landing page is a faithful HTML
    recreation of the Home / Journal / Food screens, not a capture. Once there are simulator
    shots worth showing, replace it (and give the photowall real polaroids).
+
+When editing `style.css`, remember the dark theme at the bottom of the file. Anything hard-coded
+as `rgba(61,46,30,…)` — a hairline, a sunken fill, a track — is invisible on the dark ground, so
+use the `--hair` / `--hair-2` / `--hair-3` / `--sunken` / `--track` tokens instead. The hero room,
+the phone mock and the mesh demo's little phones deliberately stay light in dark mode: they are
+illustrations of lit objects, and they re-declare the light tokens locally rather than flipping.
 
 ## Deploying — GitHub Pages (the wired-up path)
 
