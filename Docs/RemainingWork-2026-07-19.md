@@ -1,6 +1,6 @@
 # Remaining Work — 2026-07-19
 
-**Supersedes** [RemainingWork-2026-06-23.md](Completed%20Implemtations/RemainingWork-2026-06-23.md).
+**Supersedes** `RemainingWork-2026-06-23.md`.
 Compiled from a two-track code audit of `main` on 2026-07-19 (doc-tracker reconciliation + a
 source-level sweep for stubs, dead seams, and stale copy). Everything shipped was verified in code,
 not taken from doc status lines. The **Fernlet Coach** track is specified separately in
@@ -14,7 +14,7 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
 ## 1. App Store submission
 
 - ✅ **Privacy policy finalized 2026-07-19** — contact `fernletapp@gmail.com`, effective date set,
-  draft banners removed, doc + in-app copy (`Fernlet/PrivacyPolicyView.swift`) in sync.
+  draft banners removed, doc + in-app copy (`App/Fernlet/PrivacyPolicyView.swift`) in sync.
 - ✅ **LICENSE added 2026-07-19** — Apache-2.0, repo root (also unblocks coach-spec decision D5).
 - ✅ **Internal-docs bundle leak fixed 2026-07-19** — 15 planning docs (including the full security
   code review and the period/intimacy plans) were in the app target's Resources phase and shipped
@@ -55,28 +55,28 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
 
 ## 2. User-visible defects (fix next)
 
-1. **Settings → Move claims a shipped feature doesn't exist.** `Fernlet/SettingsSheet.swift:678`
+1. **Settings → Move claims a shipped feature doesn't exist.** `App/Fernlet/SettingsSheet.swift:678`
    shows "Available after Apple Fitness integration lands (M2)" beside a dead, disabled
    `Button("Request access") {}` (`:684`, `.disabled` at `:691`) — but the workout→Health write path
    is fully wired (`FernletStore.swift:1731` → `HealthSyncCoordinator.swift:59` →
    `WorkoutHealthKitSync.swift:69` → `HealthKitService.swift:715`). Replace with live status + a
    real request/consent control.
-2. **Mesh admission requests can never surface.** `Fernlet/MeshAdmissionPromptSheet.swift` has zero
+2. **Mesh admission requests can never surface.** `App/Fernlet/MeshAdmissionPromptSheet.swift` has zero
    call sites while the manager raises pending admissions (`MeshNetworkManager.swift:66,1683`).
    Wire the sheet (or delete it and the pending-admission path deliberately).
 3. **No contextual HealthKit first-use request** — authorization is reachable only via the Settings
    toggle; Move/Home never prompt in context.
 4. **Hearts copy promises a future** — "Hearts travel in person for now" at
-   `Fernlet/FriendListView.swift:430` and `ProximityKit/Presence/PresenceManager.swift:508,518`.
+   `App/Fernlet/FriendListView.swift:430` and `ProximityKit/Presence/PresenceManager.swift:508,518`.
    Either build remote send-heart (decided design: CloudKit E2EE dead-drop hybrid) or drop "for now."
-5. **Crisis nudge trigger missing.** The 988 card exists (`Fernlet/FirstAidView.swift:181-189`) but
-   the spec'd `moodTrend == declining` nudge has no trigger — `Fernlet/AmbientCards.swift:165`
+5. **Crisis nudge trigger missing.** The 988 card exists (`App/Fernlet/FirstAidView.swift:181-189`) but
+   the spec'd `moodTrend == declining` nudge has no trigger — `App/Fernlet/AmbientCards.swift:165`
    reads the trend and routes only to breathe/worry-box. Needs an explicit ship-or-cut decision.
-6. **Day Detail drift vs spec** — still a NavigationStack push (`Fernlet/JournalView.swift:83-84`)
+6. **Day Detail drift vs spec** — still a NavigationStack push (`App/Fernlet/JournalView.swift:83-84`)
    with old empty-day copy (`:793`); spec wants a modal, split Log food / Log workout actions, and
    a narrower editing scope.
 7. **Friend avatars are a static leaf glyph** — `FriendProfilePlaceholder`
-   (`Fernlet/ConnectView.swift:794`, used `:648`); every photo-wall post header looks identical.
+   (`App/Fernlet/ConnectView.swift:794`, used `:648`); every photo-wall post header looks identical.
 
 ## 3. Product decisions — RESOLVED 2026-07-19 (owner decision round)
 
@@ -94,7 +94,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
    **Note (2026-08-09):** neither host is contacted today — USDA data ships bundled offline and the
    only host the app itself chooses is DuckDuckGo (product search, same opt-in). Shipping this item
    therefore ADDS two outbound destinations and must update the allowlist in
-   `FernletTests/NoTrackingBoundaryTests` plus [No-Tracking-Wall.md](No-Tracking-Wall.md) in the same
+   `Tests/FernletTests/NoTrackingBoundaryTests` plus [No-Tracking-Wall.md](No-Tracking-Wall.md) in the same
    commit, or CI fails. That is the wall working as intended, not an obstacle.
 4. **Mesh admission prompt: WIRE `MeshAdmissionPromptSheet`** (don't delete the path).
 5. **Hearts copy: keep "for now"** — remote send-heart ships when the CloudKit dead-drop
@@ -127,7 +127,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
 - **Background App Refresh** — zero `BGTaskScheduler` references.
 - **Two-device sync integration tests** (claims currently untested).
 - **Live micronutrients in recipe builder** — backend exists
-  (`FernletStore.micronutrientTotals(for:)`, `Fernlet/FernletStore.swift:2833`), no UI binding.
+  (`FernletStore.micronutrientTotals(for:)`, `App/Fernlet/FernletStore.swift:2833`), no UI binding.
 - **Ingredient variant dedup + brand-disclosure grouping** (labels shipped, grouping didn't).
 - **Manual people-tagging UI** for photos; **photo-surfacing exclusion** (blocked on deferred
   Sensitive Memory store).
@@ -138,7 +138,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   importer shipped; the chain-restaurant importer extension and dynamic product-image discovery from
   [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) were not re-audited item-by-item.
 - ✅ **Send-heart remote delivery SHIPPED 2026-07-25** (bitchat adoptions Increment 3, branch
-  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md)):
+  `claude/bitchat-adoptions`, `Plan-Bitchat-Adoptions-2026-07-25.md`):
   CloudKit public-DB E2EE dead-drop + proximity hybrid, with one-time-prekey forward secrecy and
   day-rotating HMAC tags; opt-in `heartsAwayDelivery` (default OFF). The same round also landed
   wire2 sealed-payload compress+pad framing, the enforced privacy-wipe coverage checklist
@@ -147,7 +147,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   `payload` bytes) from the CloudKit Development schema to Production in the console — dev
   auto-creates it on first save; production will not.
 - **BLE wake-on-proximity presence** — deferred by decision 2026-07-25; design sketch in
-  [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
+  `Plan-Bitchat-Adoptions-2026-07-25.md` §E (tags/envelopes
   kept transport-agnostic for it); revisit with the Android/cross-platform transport work.
 - **Cloud cascading-trust for large group activities** — deferred by scope from the social plan.
 
@@ -156,7 +156,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
 - ✅ **FernletUI + FernletLockUI carved 2026-07-19** — design system (theme/fonts/tokens/primitives/
   ModelColors) and the lock views are package targets; ProximityKit gained `UI/` with the two
   app-free movers (KeepFriendsPromptSheet, FriendPhotoReviewSheet); nav enums stayed app-side in
-  `Fernlet/FernletNavigation.swift`. Wall check + full suite green (1499/1500; the one failure is
+  `App/Fernlet/FernletNavigation.swift`. Wall check + full suite green (1499/1500; the one failure is
   the pre-existing `ProximityCoordinatorTests.timeoutInDiscoveringMovesToEndedTimeout` load flake,
   3/3 green in isolation). The remaining 5 Proximity UI files stay app-side because they hold
   `FernletStore` refs — they move with a future §5d store inversion, not a UI carve.
@@ -170,7 +170,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   `DerivedSignalFactory`-in-LocalPersistence deviation.
 - ✅ Dead `GoalsCard` deleted; ✅ stale `FernletFoundation`/`Package.swift` headers fixed;
   ✅ goals copy reworded to the permanent privacy stance; ✅ root-level
-  `DisposableCameraView.swift`/`CompanionVectorAssets.swift` relocated into `Fernlet/` (explicit
+  `DisposableCameraView.swift`/`CompanionVectorAssets.swift` relocated into `App/Fernlet/` (explicit
   pbxproj refs removed). All 2026-07-19.
 - **New watch item:** `ProximityCoordinatorTests.timeoutInDiscoveringMovesToEndedTimeout` is a
   load-sensitive flake under full-suite parallelism (same class as the fixed reload test).
@@ -284,7 +284,7 @@ here now, so the archived docs are not load-bearing.
   this tracker.
 - [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) — partially shipped; not
   re-audited item-by-item (see §4).
-- [Fernlet-Review-and-Plan-Updates.md](Completed%20Implemtations/Fernlet-Review-and-Plan-Updates.md) — historical 2026-05-28
+- `Fernlet-Review-and-Plan-Updates.md` — historical 2026-05-28
   review; its SEC-1/2/3 findings were fixed by the later security-hardening work.
 - Function indexes ([StoreRepositoryFunctionIndex.md](StoreRepositoryFunctionIndex.md),
   [ProximityFunctionIndex.md](ProximityFunctionIndex.md)) — **refreshed 2026-08-09** with the

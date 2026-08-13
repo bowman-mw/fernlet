@@ -2,7 +2,7 @@
 
 **Contract:** every persistence surface in the app appears in exactly one of the two tables below —
 either it is cleared by "Delete everything" (`FernletStore.deleteAllData`), or it is a documented
-deliberate exception. `FernletTests/PrivacyWipeCoverageTests.swift` enforces the first table
+deliberate exception. `Tests/FernletTests/PrivacyWipeCoverageTests.swift` enforces the first table
 mechanically, in both directions: it scans the wipe path for one token per row, so removing a wipe
 call (or adding a store without wiring + documenting it) fails the suite — and every row's token
 must appear in the test's manifest (`everyDocumentedWipeRowIsEnforcedByTheManifest`), so a

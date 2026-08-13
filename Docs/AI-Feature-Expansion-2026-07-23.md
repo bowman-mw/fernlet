@@ -23,8 +23,8 @@ through / marked in place.
 Five findings that invalidate the assumptions this work started from. Read these first — three of
 the seven features are cheaper than expected and two are considerably more expensive.
 
-1. **Photo → recipe already ships end to end.** [FoodView.swift:1583](../Fernlet/FoodView.swift)
-   `identifyMealPhoto(_:)` → [MealPhotoRecognizer.swift:34](../Fernlet/MealPhotoRecognizer.swift) →
+1. **Photo → recipe already ships end to end.** [FoodView.swift:1583](../App/Fernlet/FoodView.swift)
+   `identifyMealPhoto(_:)` → [MealPhotoRecognizer.swift:34](../App/Fernlet/MealPhotoRecognizer.swift) →
    prefill + `MealReviewContext(resolution:photo:)` → review sheet → `saveMealPhoto` /
    `attachMealPhoto`. There is no wall problem: the dish name is produced on-device and handed to
    the existing text-only `MealDecompositionPayload`. The work is recognition quality, servings
@@ -35,7 +35,7 @@ the seven features are cheaper than expected and two are considerably more expen
    gaps are persisted as derived signals on 7- and 14-day windows, they already move the companion
    score via `FernletScoring.micronutrientModifier`
    ([Scoring.swift:365](../FernletKit/Sources/FernletScoring/Scoring.swift)), and an ambient card
-   already ships at [AmbientCards.swift:408](../Fernlet/AmbientCards.swift). It just never names a
+   already ships at [AmbientCards.swift:408](../App/Fernlet/AmbientCards.swift). It just never names a
    food. **Do not build a gap detector.**
 
 3. **The spec already specifies two of these features, with delivery mechanisms.**
@@ -55,7 +55,7 @@ the seven features are cheaper than expected and two are considerably more expen
 5. **The AI retry queue silently destroys any non-meal retry.**
    `AIAnalysisRetryRecord.payloadType` is a free `String` and `AIRetryQueueService`'s own comment
    invites `workout`/`recipe`/`daily-summary` kinds — but the only consumer,
-   `FernletStore.retryOldestMeal()` ([FernletStore.swift:2967](../Fernlet/FernletStore.swift)),
+   `FernletStore.retryOldestMeal()` ([FernletStore.swift:2967](../App/Fernlet/FernletStore.swift)),
    takes `retryQueue.first` with **no** `payloadType` filter, looks up `record.sourceId` in that
    day's meals, and on the inevitable miss calls `clear(id:)`. The first non-meal AI feature that
    enqueues a retry loses it. Fix before shipping any second AI feature.
@@ -143,14 +143,14 @@ STEP 0 modifies a **walled module** (`CloudKitSync`), so a wall check is require
 
 | Stage | Where | Behavior |
 | --- | --- | --- |
-| Capture | [PhotoCaptureControl.swift:25](../Fernlet/PhotoCaptureControl.swift) | Camera-first; `onCameraCapture(UIImage)`, `onLibraryPick(UIImage)`, `onLibraryPickData((Data, Date?))`. EXIF capture-date read at `:106`. |
-| Entry point | [FoodView.swift:1583](../Fernlet/FoodView.swift) | `identifyMealPhoto(_:)` → `MealPhotoRecognizer().identify` at `:1588` |
-| Recognition | [MealPhotoRecognizer.swift:34](../Fernlet/MealPhotoRecognizer.swift) | Gates on `aiStatus != .off`, classifies, composes text, calls `host.resolveMeals` |
+| Capture | [PhotoCaptureControl.swift:25](../App/Fernlet/PhotoCaptureControl.swift) | Camera-first; `onCameraCapture(UIImage)`, `onLibraryPick(UIImage)`, `onLibraryPickData((Data, Date?))`. EXIF capture-date read at `:106`. |
+| Entry point | [FoodView.swift:1583](../App/Fernlet/FoodView.swift) | `identifyMealPhoto(_:)` → `MealPhotoRecognizer().identify` at `:1588` |
+| Recognition | [MealPhotoRecognizer.swift:34](../App/Fernlet/MealPhotoRecognizer.swift) | Gates on `aiStatus != .off`, classifies, composes text, calls `host.resolveMeals` |
 | Classifier | [FoodImageClassifier.swift:28](../FernletKit/Sources/AppServices/FoodImageClassifier.swift) | `VisionFoodImageClassifier` — Vision `VNClassifyImageRequest`, Apple's general ~1300-class taxonomy on a detached Task |
 | Filter | [FoodImageClassifier.swift:68](../FernletKit/Sources/AppServices/FoodImageClassifier.swift) | `FoodImageTaxonomy`: `confidenceFloor = 0.3`, `maxLabels = 3`, **226** unique single-word tokens (`:109-150`), top ≤3 joined by `" and "` |
-| Resolution | [MealResolutionService.swift:78](../Fernlet/MealResolutionService.swift) | 5-tier cascade, `plausibilityGated` at `:220` |
-| Review | [FoodView.swift:1595](../Fernlet/FoodView.swift) | Prefills the description field, sets `MealReviewContext(resolution:photo:)` |
-| Attach | [FoodView.swift:1571](../Fernlet/FoodView.swift) | `attachPhoto` → `saveMealPhoto` → `attachMealPhoto`; sheet deliberately does **not** dismiss on seal failure (`:1342-1344`) |
+| Resolution | [MealResolutionService.swift:78](../App/Fernlet/MealResolutionService.swift) | 5-tier cascade, `plausibilityGated` at `:220` |
+| Review | [FoodView.swift:1595](../App/Fernlet/FoodView.swift) | Prefills the description field, sets `MealReviewContext(resolution:photo:)` |
+| Attach | [FoodView.swift:1571](../App/Fernlet/FoodView.swift) | `attachPhoto` → `saveMealPhoto` → `attachMealPhoto`; sheet deliberately does **not** dismiss on seal failure (`:1342-1344`) |
 
 The resolution cascade, in order: (1) AI dish decomposition, (2) AI candidate-constrained selection,
 (3) `DishTemplateLexicon` deterministic, (4) deterministic candidate plan, (5) keyword heuristic
@@ -159,7 +159,7 @@ The resolution cascade, in order: (1) AI dish decomposition, (2) AI candidate-co
 check. **Any new tier must route through this or it bypasses the only guard that caught the
 "2 burger patties → 81,688 kcal" class of bug.**
 
-Tier 1 is [FoundationDishDecomposition.swift:14](../Fernlet/FoundationDishDecomposition.swift). Its
+Tier 1 is [FoundationDishDecomposition.swift:14](../App/Fernlet/FoundationDishDecomposition.swift). Its
 `@Generable` schema is `{name, mealType, components[{ingredient, preparation, grams, confidence,
 explicitlyStated}], overallConfidence}` — **the model emits ingredient names and grams, never
 macros.** `MealDecompositionResolver.resolve` (`:100`) binds each component with
@@ -171,12 +171,12 @@ sanity-checks density. This is already the ladder's invariant, shipped.
 ### 2.2 The four real gaps
 
 **(a) The decomposition tier throws away the recipe it just built.**
-[MealResolutionService.swift:93](../Fernlet/MealResolutionService.swift) returns
+[MealResolutionService.swift:93](../App/Fernlet/MealResolutionService.swift) returns
 `createdRecipes: []`. But `MealDecompositionResolver` computes
 `deduped: [(FoodSelectionIngredient, FoodItem)]` at
-[FoundationDishDecomposition.swift:139](../Fernlet/FoundationDishDecomposition.swift) — with
+[FoundationDishDecomposition.swift:139](../App/Fernlet/FoundationDishDecomposition.swift) — with
 quantities in grams and `unit = RecipeUnit.gram` — which is structurally identical to what
-`MealBuilder.createRecipe` ([MealBuilder.swift:127](../Fernlet/MealBuilder.swift)) consumes. The
+`MealBuilder.createRecipe` ([MealBuilder.swift:127](../App/Fernlet/MealBuilder.swift)) consumes. The
 dish name is there too: `decomposition.name` already flows through at `:167-169`. **Wiring the
 decomposition tier into `createRecipe` is a handful of lines, not a new binder.** This is the
 single highest-value change in the whole document.
@@ -192,7 +192,7 @@ single highest-value change in the whole document.
 **(b) Recognition is a general scene classifier plus a word list.** `VNClassifyImageRequest` returns
 taxonomy labels ("banana", "pizza", "laptop"), not dishes. Anything outside the 226-token list is
 invisible. Note the survey's own error, corrected: `pad thai` and `pho` *are* shipped — not in
-`foodTokens`, but as two of the 29 entries in [DishTemplates.json](../Fernlet/DishTemplates.json)
+`foodTokens`, but as two of the 29 entries in [DishTemplates.json](../App/Fernlet/DishTemplates.json)
 (a dict `{version, dishes}`, each dish carrying aliases, `isComposite`, `unit`, `defaultCount`, and
 components with `search` / `gramsPerUnit` / `preparation`). Those templates are also the *only*
 thing bounding model-emitted grams before the loose `1...1500` clamp.
@@ -202,7 +202,7 @@ Options, cheapest first: (i) extend `foodTokens` and `DishTemplates.json` — me
 — text-only, no wall change; (iii) send the image to a multimodal model — see §2.4.
 
 **(c) No servings estimation from a plate.** `MealBuilder.createRecipe` hardcodes `servings: 1`
-([MealBuilder.swift:141](../Fernlet/MealBuilder.swift)). `RecipeWebImporter.parseServings` (`:345`)
+([MealBuilder.swift:141](../App/Fernlet/MealBuilder.swift)). `RecipeWebImporter.parseServings` (`:345`)
 is JSON-LD-derived and `ExtractedRecipe.importedRecipe` hardcodes `servings: 1` at `:684`;
 `NutritionLabelScanner` surfaces `servingsPerContainer`. So serving *parsing* exists in two places
 and serving *estimation* exists nowhere. A plate photo is one serving of the plated dish but N
@@ -267,10 +267,10 @@ Not required for F1, but scope it honestly before anyone proposes it:
 ### 2.5 Bugs found in passing
 
 - **Double JPEG encode.** `FernletStore.saveMealPhoto` does `image.jpegData(compressionQuality:
-  0.82)` at [FernletStore.swift:1577](../Fernlet/FernletStore.swift), then `MealPhotoStore.save`
+  0.82)` at [FernletStore.swift:1577](../App/Fernlet/FernletStore.swift), then `MealPhotoStore.save`
   runs `normalizedJPEG` which re-encodes at q0.8. A full-resolution encode plus generation loss, on
   the iPhone-11 memory floor.
-- **The meal sheet decodes when it doesn't have to.** [FoodView.swift:1221](../Fernlet/FoodView.swift)
+- **The meal sheet decodes when it doesn't have to.** [FoodView.swift:1221](../App/Fernlet/FoodView.swift)
   holds `@State mealPhoto: UIImage?` full-resolution for the whole sheet session, because `MealSheet`
   uses `onLibraryPick` rather than `onLibraryPickData`. The recipe surface already uses the byte path
   (`:2805`, `:2820`). A 48 MP library pick decodes to ~190 MB. **Fix this as part of F1: switch the
@@ -299,10 +299,10 @@ screen, which §582 forbids.
 | Coverage gate | `micronutrientDataCoverageRatio`, `NutritionModels.swift:674` | counts a meal only if `populatedFieldCount >= 5` |
 | Scoring | `FernletScoring.micronutrientModifier`, [Scoring.swift:365](../FernletKit/Sources/FernletScoring/Scoring.swift) | gaps ≥7 days: `max(count * -0.015, -0.05)`; covered: `min(count * 0.01, +0.03)` |
 | Dedup | `dedupedNutrientGaps` `:341` + `preferNutrientGap` `:355` | dedupe by key, prefer `.gap`, then longer window |
-| Ambient card | [AmbientCards.swift:408](../Fernlet/AmbientCards.swift) | gate at `:442`; copy at `:417`: *"⟨Name⟩ has been a little low lately."* |
-| Second UI | [HomeView.swift:1640-1652](../Fernlet/HomeView.swift) | per-nutrient gap/covered rows, `prefix(4)` |
+| Ambient card | [AmbientCards.swift:408](../App/Fernlet/AmbientCards.swift) | gate at `:442`; copy at `:417`: *"⟨Name⟩ has been a little low lately."* |
+| Second UI | [HomeView.swift:1640-1652](../App/Fernlet/HomeView.swift) | per-nutrient gap/covered rows, `prefix(4)` |
 | Suppression | `nutrientBubbleDismissedUntil`, [DiaryStore.swift:847](../FernletKit/Sources/DiaryStore/DiaryStore.swift) | per-nutrient-key 14-day suppression, persisted, tolerant decode |
-| Accept/dismiss precedent | [GentleOffers.swift](../Fernlet/GentleOffers.swift) + `AmbientCards.swift:125-180` | full offer engine; reuses the nutrient map under a reserved key (`DiaryStore.swift:859-880`) |
+| Accept/dismiss precedent | [GentleOffers.swift](../App/Fernlet/GentleOffers.swift) + `AmbientCards.swift:125-180` | full offer engine; reuses the nutrient map under a reserved key (`DiaryStore.swift:859-880`) |
 
 **Spec line 618 already mandates naming sources.** The shipped card is the spec's feature, minus its
 payload.
@@ -389,7 +389,7 @@ base catalog trivial. `SQLiteBundledFoodSource` already has the per-source tunin
 ### 3.5 Bug found in passing
 
 The ambient card does **not** use the dedup helper. `FernletScoring.dedupedNutrientGaps` is used for
-scoring ([FernletStore.swift:436](../Fernlet/FernletStore.swift)) but `AmbientCards.activeNutrientGap`
+scoring ([FernletStore.swift:436](../App/Fernlet/FernletStore.swift)) but `AmbientCards.activeNutrientGap`
 does a raw `.flatMap(\.nutrientGaps).filter{...}.first` at `:440-443`, so the 7-day and 14-day
 signals for the same nutrient are not deduped at the card. Also, the shipped gate accepts
 `windowDays >= 7` while spec line 618 says 14 — the card fires on the looser window.
@@ -448,7 +448,7 @@ anyway. What grew is the front end: a weekly planner for choosing the recipes (�
 ### 4.1 The unifier already exists
 
 `DataExportBuilder.recipeIngredientLines(_:nameByFoodID:)`
-([DataExportBuilder.swift:369](../Fernlet/DataExportBuilder.swift)) already takes *any*
+([DataExportBuilder.swift:369](../App/Fernlet/DataExportBuilder.swift)) already takes *any*
 `RecipeDefinition` and returns `[String]`, collapsing both recipe shapes — it returns
 `webImport.ingredientLines` for web imports and resolves structured ingredients for manual ones.
 That is the whole share-sheet feature's core, shipped.
@@ -528,13 +528,13 @@ that iOS 17+ Reminders grocery lists auto-categorize items by aisle, which would
 ### 5.1 Scaling
 
 `servings` is only ever a **divisor** at display and log time — `mealFromRecipe` sets
-`divisor = max(recipe.servings, 1)` ([MealBuilder.swift:57](../Fernlet/MealBuilder.swift)) and the
+`divisor = max(recipe.servings, 1)` ([MealBuilder.swift:57](../App/Fernlet/MealBuilder.swift)) and the
 same division repeats at `FoodView.swift:877`. The servings Stepper (`FoodView.swift:761`, range
 1...24) changes the divisor **without touching ingredient quantities**. Nothing multiplies a
 `RecipeDefinition`'s quantities.
 
 A working proportional scaler does exist, just not on recipes: `MealComponentCorrectionInput`
-([FoodView.swift:2213-2246](../Fernlet/FoodView.swift)) stores `baseQuantity`/`baseMacros`/
+([FoodView.swift:2213-2246](../App/Fernlet/FoodView.swift)) stores `baseQuantity`/`baseMacros`/
 `baseMicronutrients` and rescales. That is the math to lift.
 
 Two things make scaling safe: `Meal` has **no** `recipeId` back-reference
@@ -586,20 +586,20 @@ engine inside `AIProviders` or `FoodCatalog` can never call back into it.
 ### 6.1 The runner is directly copyable
 
 Everything needed already exists and is battle-tested: `GuidedWorkoutRunState`
-([FernletWidgets/GuidedWorkoutRunState.swift:24](../FernletWidgets/GuidedWorkoutRunState.swift)) as a
+([App/FernletWidgets/GuidedWorkoutRunState.swift:24](../App/FernletWidgets/GuidedWorkoutRunState.swift)) as a
 flat Codable value type in the app group; `GuidedWorkoutRunStateStore` with an **injectable
 directory** (falls back to app-group container, then `NSTemporaryDirectory()`) making it unit-testable;
-`reconcileGuidedRunFromAppGroup()` ([FernletStore.swift:2681](../Fernlet/FernletStore.swift)) as the
+`reconcileGuidedRunFromAppGroup()` ([FernletStore.swift:2681](../App/Fernlet/FernletStore.swift)) as the
 whole resume-after-kill story, clearing the file *before* logging so a lost log beats a duplicate;
 `syncActivity(_:)` (`:2547`) serializing Live Activity ops; the root-level resume card pattern at
-[MoveView.swift:92](../Fernlet/MoveView.swift); and `Text(timerInterval:countsDown:)`
-([GuidedWorkout.swift:252](../Fernlet/GuidedWorkout.swift)) as a zero-tick countdown the system
+[MoveView.swift:92](../App/Fernlet/MoveView.swift); and `Text(timerInterval:countsDown:)`
+([GuidedWorkout.swift:252](../App/Fernlet/GuidedWorkout.swift)) as a zero-tick countdown the system
 renders both in-app and in the widget.
 
-`NSSupportsLiveActivities` is already true ([Info.plist:26](../Fernlet/Info.plist)) and
+`NSSupportsLiveActivities` is already true ([Info.plist:26](../App/Fernlet/Info.plist)) and
 `group.MBO.Fernlet` is in both entitlements files, so no plist work is needed for a second activity
 type. Shared files need adding by name to the `PBXFileSystemSynchronizedBuildFileExceptionSet` at
-`project.pbxproj:118-122`. Anything dropped in `FernletWidgets/` is automatically grep-walled
+`project.pbxproj:118-122`. Anything dropped in `App/FernletWidgets/` is automatically grep-walled
 (`S3BoundaryTests.swift:27`).
 
 Two closer analogues also ship: `GroundingView.swift:66` is a multi-step walker with per-step
@@ -643,11 +643,11 @@ saved/web recipes go into Core Data `SavedRecipeRecord`, which is the STEP 0 mig
   A cooking screen that sleeps mid-recipe is a bad experience.
 - **One timer at a time.** The run state expresses a single `restStartedAt`/`restEndsAt` pair.
   Cooking regularly needs several named concurrent timers.
-- **No launch point.** `RecipeDetailView.actionsRow` ([FoodView.swift:2956](../Fernlet/FoodView.swift))
+- **No launch point.** `RecipeDetailView.actionsRow` ([FoodView.swift:2956](../App/Fernlet/FoodView.swift))
   has exactly Log / Edit / Share, and four call sites construct `RecipeDetailView`.
 - **No wire format for steps.** `SharedRecipePayload` (`NutritionModels.swift:1310`) pins
   `version: Int = 1` and `RecipeShareCodec.proximityPayload` carries an explicit *"keeping wire
-  compatibility with peers running older builds"* comment ([RecipeShareCodec.swift:49](../Fernlet/RecipeShareCodec.swift)).
+  compatibility with peers running older builds"* comment ([RecipeShareCodec.swift:49](../App/Fernlet/RecipeShareCodec.swift)).
   A recipe with steps shared to an older peer must degrade to a recipe without steps, not fail to
   decode.
 
@@ -665,7 +665,7 @@ day-key parameter, which is the anchoring a long cooking session needs.
 
 **Opens with mise en place.** Before step one, a screen lists every ingredient and amount — scaled
 by the F4 transform when the cook chose a different yield. This reuses `RecipeDetailView`'s
-per-serving math (`totals` / `perServing`, [FoodView.swift:2699/:2712](../Fernlet/FoodView.swift))
+per-serving math (`totals` / `perServing`, [FoodView.swift:2699/:2712](../App/Fernlet/FoodView.swift))
 and gives the web-import population (no structured ingredients until STEP 0) graceful degradation:
 their free-text lines render as-is.
 
@@ -714,7 +714,7 @@ in the codebase — the only match is `HealthKitService.recentWorkouts(since:)`,
 **RPE is per-session, optional, and absent on every automated path.** `Workout.rpe: Double?` is one
 value for a whole workout, written from exactly two manual sheets. Activity-mode workouts use a
 different field entirely — `effort: Int?` (1–10) — with `rpe` forced nil
-([MoveView.swift:623](../Fernlet/MoveView.swift)). And RPE **cannot be corrected after logging**:
+([MoveView.swift:623](../App/Fernlet/MoveView.swift)). And RPE **cannot be corrected after logging**:
 the edit sheet exposes only name/intensity/duration/notes (`FernletStore.swift:1817`).
 
 ### 7.2 Why the write is expensive
@@ -740,7 +740,7 @@ wired into `deleteAllData`.
   parser existed; that was its most damaging error.)
 - `WorkoutRestGuidance` — the shape a load-progression table should mirror: research-backed,
   per-exercise, overridable, clamped.
-- `WorkoutPlanningService` ([Fernlet/WorkoutPlanningService.swift:12](../Fernlet/WorkoutPlanningService.swift))
+- `WorkoutPlanningService` ([App/Fernlet/WorkoutPlanningService.swift:12](../App/Fernlet/WorkoutPlanningService.swift))
   — the established place to add an AI workout feature; app target, imports `AIProviders`,
   `AIContext`, `FernletFoundation`, `HealthKitGateway`, reads store state through a narrow protocol.
   Note `adjustWorkoutDayPlan` only handles `.strength`/`.fullBody`/`.sport` (`:96`).
@@ -796,7 +796,7 @@ maps HRV/RHR/sleep to 0…1 and returns nil unless RHR or HRV is present.
 - **The implemented signal vocabulary diverges from the spec's** across all five signals
   (`building`/`steady`/`deloading` vs `progressing`/`plateau`/`regressing`, etc.).
 - **Splits never schedule rest days.** `rotationIndex` is `Calendar.current.component(.weekday,
-  from: Date())` ([WorkoutPlanningService.swift:72](../Fernlet/WorkoutPlanningService.swift)), so a
+  from: Date())` ([WorkoutPlanningService.swift:72](../App/Fernlet/WorkoutPlanningService.swift)), so a
   3-day split maps weekdays 1…7 onto indices 1,2,0,1,2,0,1 — the user is offered a session every
   calendar day.
 - **`intensityReadiness` is never sent to any model**, contrary to spec §6a.
@@ -895,7 +895,7 @@ design over a nutrient index.**
   > outcome — no user values); ring-capped and cleared by the next wipe. Left as accepted.
 - **Wire compatibility.** Three features want to add recipe fields; none mentioned the mesh. See §6.3.
 - **The 14-day window's per-save cost — corrected 2026-07-24.** `rebuildDerivedSignals()`
-  ([FernletStore.swift:3344](../Fernlet/FernletStore.swift)) is
+  ([FernletStore.swift:3344](../App/Fernlet/FernletStore.swift)) is
   `derivedSignalsService.rebuild(allDays: loadDays(), todayKey:)`, called from
   `handleAfterSnapshotSave` (`:3353`). ~~It costs a full-history disk read on every save.~~ It does
   **not** re-read history from disk on every save: the default CoreData backend serves a **warm memo
@@ -905,7 +905,7 @@ design over a nutrient index.**
   per-save sort and the post-merge re-decode) before widening it**, not a disk read that is already
   engineered away.
 - **The share extension is a fifth recipe write path** crossing a process boundary
-  (`FernletShareExtension/SharedRecipeImportQueueWriter.swift` → app-group queue → drained on launch
+  (`App/FernletShareExtension/SharedRecipeImportQueueWriter.swift` → app-group queue → drained on launch
   and foreground). Any recipe-shape change must cover it.
 
 ---

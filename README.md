@@ -45,13 +45,13 @@ a forbidden cross-wall `import` is a **compile error**, not a code-review note. 
 [`Scripts/spm-wall-check.sh`](Scripts/spm-wall-check.sh) (building with
 `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`), proven by
 [`Scripts/spm-wall-selftest.sh`](Scripts/spm-wall-selftest.sh), backstopped by the
-`FernletTests/S3BoundaryTests` grep-wall, and run in CI by
+`Tests/FernletTests/S3BoundaryTests` grep-wall, and run in CI by
 [`.github/workflows/s3-wall.yml`](.github/workflows/s3-wall.yml).
 
 **The no-tracking wall — an exact allowlist of outbound destinations.** No advertising, attribution
 or analytics SDK anywhere, and every network destination is enumerated in
 [`Docs/No-Tracking-Wall.md`](Docs/No-Tracking-Wall.md). Adding an endpoint or an SPM dependency
-fails `FernletTests/NoTrackingBoundaryTests` until it is deliberately allowlisted **and** documented
+fails `Tests/FernletTests/NoTrackingBoundaryTests` until it is deliberately allowlisted **and** documented
 in the same commit. All outbound fetching goes through `WebScrapingKit`'s `EphemeralWebSession` — a
 private-tab `URLSession` with no cookie jar, cache, or credential store; `URLSession.shared` is
 banned outright in shipping code.
@@ -68,15 +68,17 @@ at the app and check that the published egress list is the whole list.
 
 | Path | What lives there |
 | --- | --- |
-| [`Fernlet/`](Fernlet) | The app target — composition root, `FernletStore`, and the tab surfaces. |
+| [`App/Fernlet/`](App/Fernlet) | The app target — composition root, `FernletStore`, and the tab surfaces. |
 | [`FernletKit/`](FernletKit) | Local SPM package: 24 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, `ProximityKit`, UI kits, services). |
-| [`FernletWidgets/`](FernletWidgets), [`FernletShareExtension/`](FernletShareExtension) | Widget and recipe-share extension targets. |
-| [`FernletTests/`](FernletTests), [`FernletUITests/`](FernletUITests) | Unit tests (including the grep-walls) and UI tests. |
+| [`App/FernletWidgets/`](App/FernletWidgets), [`App/FernletShareExtension/`](App/FernletShareExtension) | Widget and recipe-share extension targets. |
+| [`Tests/FernletTests/`](Tests/FernletTests), [`Tests/FernletUITests/`](Tests/FernletUITests) | Unit tests (including the grep-walls) and UI tests. |
 | [`Site/`](Site) | The whole public web presence — static files only. See [`Site/README.md`](Site/README.md). |
-| [`Docs/`](Docs) | Spec, privacy policy, the wall documents, file/function indexes, and shipped implementation plans. |
+| [`Docs/`](Docs) | Spec, privacy policy, the wall documents, and the file/function indexes. |
 | [`Scripts/`](Scripts) | Wall checks, git hooks, doc-coverage scan, release checksum. |
 
-Start with [`CLAUDE.md`](CLAUDE.md) for the architecture in one page, then the DocC landing page for
+Start with [`Docs/FernletSpecificationV3.md`](Docs/FernletSpecificationV3.md) for the product and
+architecture in one document and [`Docs/FileIndex.md`](Docs/FileIndex.md) for a map of every source
+file, then the DocC landing page for
 whichever module you are touching (`FernletKit/Sources/<Module>/Documentation.docc/<Module>.md`) —
 every type in the codebase carries a `///` doc comment, and
 [`Scripts/doc-coverage-scan.py`](Scripts/doc-coverage-scan.py) keeps it that way.
@@ -84,11 +86,11 @@ every type in the codebase carries a `///` doc comment, and
 ## Build and test
 
 ```bash
-xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 ```bash
-xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
+xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
 ```
 
 The full suite takes several minutes; run it in batches by suite when iterating. Before pushing,
@@ -109,8 +111,8 @@ the security headers GitHub Pages cannot.
 
 `Site/privacy/index.html` is a generated copy of [`Docs/Privacy-Policy.md`](Docs/Privacy-Policy.md).
 That document is the source of truth, and the same text is pinned in three places — the document,
-the in-app view (`Fernlet/PrivacyPolicyView.swift`), and the hosted page. They are held in sync by
-`FernletTests/PrivacyPolicyParityTests` and re-checked in the Pages workflow before every deploy.
+the in-app view (`App/Fernlet/PrivacyPolicyView.swift`), and the hosted page. They are held in sync by
+`Tests/FernletTests/PrivacyPolicyParityTests` and re-checked in the Pages workflow before every deploy.
 
 ## Found a privacy hole?
 

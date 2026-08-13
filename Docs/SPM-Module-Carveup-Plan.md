@@ -1,9 +1,9 @@
 # SPM Module Carve-Up Plan
 
 **Status:** Proposed. Serves two goals with one set of cuts: the **S3 compile-time privacy walls**
-and the **cross-platform shared core** (see [RemainingWork-2026-06-23.md §2](Completed%20Implemtations/RemainingWork-2026-06-23.md)
+and the **cross-platform shared core** (see `RemainingWork-2026-06-23.md §2`
 for S3, and the canonical-signing prerequisite in
-[Canonical-Signing-Encoding-Fix.md](Completed%20Implemtations/Canonical-Signing-Encoding-Fix.md)).
+`Canonical-Signing-Encoding-Fix.md`).
 **Scope:** structure + sequencing of the package split. The Proximity *internal* refactor is
 explicitly **out of scope** — Proximity is treated here as one black-box module boundary.
 
@@ -14,7 +14,7 @@ explicitly **out of scope** — Proximity is treated here as one black-box modul
 Carve the single-target app into **one local Swift package (`FernletKit`) with ~21 library
 targets**. The package's `dependencies:` graph *is* the S3 wall: a target can `import` only the
 targets it declares, so a forbidden import (AI code reaching a sealed type) becomes a **compile
-error**, replacing the grep-based [`S3BoundaryTests.swift`](../FernletTests/S3BoundaryTests.swift).
+error**, replacing the grep-based [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).
 
 The same cut delivers the Android shared core for free — the portable, Foundation/`swift-crypto`-only
 **lower half of the graph is exactly the cross-platform core**; the Apple-bound upper half is the
@@ -28,7 +28,7 @@ platform boundary and the privacy boundary). `Package.swift` itself is trivial b
 
 ## 2. Target module graph (layered DAG)
 
-One package `FernletKit/` (sibling of `Fernlet/`, **not** inside the synced folder root). Layers are
+One package `FernletKit/` (sibling of `App/Fernlet/`, **not** inside the synced folder root). Layers are
 numbered; **edges only point to strictly lower layers** — no peer or upward edges. Portability:
 `[C]` shared-core (Foundation/`swift-crypto` only → compiles on Android), `[S]` platform-shim
 (Apple-bound → needs a native Android impl behind a seam protocol), `[U]` ui-app (SwiftUI →
@@ -227,7 +227,7 @@ FernletStore` while the store lazily constructs them.
    sealed import now fails to compile. Same for `CloudKitSync`.
 9. **Extract remaining shims** — `HealthKitGateway`, `FernletLock` (re-declare `CryptoSwift` first),
    `AppServices`, and `ProximityKit` as one target (outward edges only; internals untouched).
-10. **Delete [`S3BoundaryTests.swift`](../FernletTests/S3BoundaryTests.swift).** The DAG enforces the
+10. **Delete [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).** The DAG enforces the
     wall for all code. Optionally keep one deliberately-failing negative-compile fixture in CI as a
     tripwire. Add per-target `.testTarget`s; move pure logic tests there (they also run on Linux as
     the cross-platform gate); keep CoreData/HealthKit integration in the host-app `FernletTests`.
@@ -246,7 +246,7 @@ FernletStore` while the store lazily constructs them.
   errors (the same class as the recent "MainActor-isolated init in nonisolated default argument" fix).
   Set `defaultIsolation(MainActor.self)` in each affected target's `swiftSettings` **up front**.
 - **Synced folder groups:** the project uses `PBXFileSystemSynchronizedRootGroup` (files added by
-  dropping into `Fernlet/`, no pbxproj surgery). Hazard: Xcode does **not** auto-exclude a subfolder
+  dropping into `App/Fernlet/`, no pbxproj surgery). Hazard: Xcode does **not** auto-exclude a subfolder
   you move into the package — physically move files out of the synced root, don't leave duplicates.
 - **Resources:** `FoodCatalog.sqlite` (and `DishTemplates.json`/`WorkoutExercises.json`) must move to
   the owning target's `resources:` and switch to `Bundle.module`. Keep `AppIcon`/`AccentColor` in the
@@ -333,7 +333,7 @@ git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c
 
 ### Gotchas the next session would otherwise rediscover
 - **There is a SECOND grep-wall beyond `S3BoundaryTests`.**
-  `FernletTests/PeriodTrackerTests.menstrualFlowCountReferenceIsRestrictedToAllowedFiles` keeps its own
+  `Tests/FernletTests/PeriodTrackerTests.menstrualFlowCountReferenceIsRestrictedToAllowedFiles` keeps its own
   hardcoded file allowlist (it scans for `menstrualFlowEventCount`). Splitting `Models.swift` broke it;
   it was updated `Models.swift` → `WellbeingModels.swift` (where `HealthCycleContext` now lives). Any
   further file split/rename touching that symbol must update this allowlist too.
@@ -372,7 +372,7 @@ git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c
   `FernletPersistence` is extracted, this strip (journal text + `healthContext.cycle/intimate` +
   `DailyHealthScore.periodPhase`) must travel WITH `FernletSnapshot` (see §8).
 - **pbxproj wiring for a LOCAL package** (objectVersion 77 / Xcode 16+): `FernletKit` is a sibling of the
-  synced `Fernlet/` (NOT inside it); `relativePath = FernletKit`. Needs: `XCLocalSwiftPackageReference`,
+  synced `App/Fernlet/` (NOT inside it); `relativePath = FernletKit`. Needs: `XCLocalSwiftPackageReference`,
   add to project `packageReferences`, an `XCSwiftPackageProductDependency` (**no `package =` line** for a
   local product), add to the app target's `packageProductDependencies`, and a `PBXBuildFile` in the app's
   `PBXFrameworksBuildPhase`. App target id `6869C2E12FB8D39D0098A0F3`, its Frameworks phase
@@ -384,7 +384,7 @@ git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c
   gate on the **exit code** + `** TEST (BUILD|EXECUTE) SUCCEEDED **`. (A red SealedBackup build slipped
   through this way and was `--amend`ed green.)
 - **Full `FernletTests` ≈ 7 min**; some suites dominate (e.g. `FernletLockTests` ~8s/test). Batch by
-  suite (`-only-testing:FernletTests/<Suite>`) — build the test target once, then `test-without-building`
+  suite (`-only-testing:Tests/FernletTests/<Suite>`) — build the test target once, then `test-without-building`
   per batch.
 - Live UI verify needs the **computer-use MCP**; `idb` is not installed and Accessibility (osascript)
   is denied, so `simctl` screenshots are the only no-MCP option. App launches clean to onboarding and to
@@ -516,7 +516,7 @@ step-9 boundary. The umbrella `FernletKit` product now has **21 targets**.
   (The other 19 targets stay Swift 6.)
 - **Cache-cleaner seam (HealthKitGateway):** the concrete `CoreDataHealthKitCacheCleaner` needs
   CloudKitSync's `PersistenceController` + LocalPersistence's `LocalFernletDatabase`, which the gateway
-  must not depend on, so it STAYS in the app (`Fernlet/CoreDataHealthKitCacheCleaner.swift`) and is
+  must not depend on, so it STAYS in the app (`App/Fernlet/CoreDataHealthKitCacheCleaner.swift`) and is
   injected via `HealthKitService.defaultCacheClearer` (no-op default in the gateway), set in
   `FernletApp.init()` before any HealthKitService is built. The `HealthKitCacheClearing` protocol moved
   to the gateway (public).
@@ -543,8 +543,8 @@ The step-9 boundary FULL suite (batches A–E) surfaced THREE failures, all PRE-
 sessions (the prior handoffs' "ALL-GREEN" was at a commit before these were broken; the full suite was
 not re-run at `3da080c`). `git diff 3da080c..HEAD` proves step 9 touched none of the relevant code paths:
 - `PeriodPredictionUITests.predictionPathDoesNotReferenceAICode` / `...DoesNotWritePredictionsToHealthKit`
-  read source via `#filePath` with hardcoded paths to `Fernlet/CyclePredictionEngine.swift` +
-  `Fernlet/PeriodTrackerStore.swift`, which moved to `FernletKit/Sources/PrivateHealthStore/` in **step 6**.
+  read source via `#filePath` with hardcoded paths to `App/Fernlet/CyclePredictionEngine.swift` +
+  `App/Fernlet/PeriodTrackerStore.swift`, which moved to `FernletKit/Sources/PrivateHealthStore/` in **step 6**.
   **FIXED** in `9cc94b0` (paths updated; no assertion changed) — both pass.
 - `FernletPersistenceTests.test_reload_updatesReloadingState` is a **load-sensitive FLAKY** observation
   race: `withObservationTracking`'s single-shot `onChange` schedules a `Task { @MainActor in … }` that
@@ -555,7 +555,7 @@ not re-run at `3da080c`). `git diff 3da080c..HEAD` proves step 9 touched none of
   retry annotation in a follow-up. **All other suites green.**
 
 ### Hardcoded-source-path tests to track across future moves (now FOUR)
-`S3BoundaryTests` (walks both Fernlet/ AND FernletKit/Sources, robust), `PeriodTrackerTests.menstrualFlow
+`S3BoundaryTests` (walks both App/Fernlet/ AND FernletKit/Sources, robust), `PeriodTrackerTests.menstrualFlow
 CountReferenceIsRestrictedToAllowedFiles` (allowlist), the two FernletLock `#filePath` tests
 (FernletLockServiceTests/FernletLockCryptoTests), and now `PeriodPredictionUITests.runGitGrep`. Any file
 move/rename of the symbols they scan must update their hardcoded paths/allowlists.
@@ -596,7 +596,7 @@ move/rename of the symbols they scan must update their hardcoded paths/allowlist
    EmptyState extracted from HomeView, ModelColors) and `FernletLockUI` (FernletLockSetupView /
    FernletLockView / FernletNumericPad / fernletLockGate) are package targets; ProximityKit gained
    `UI/` with the two app-free movers (KeepFriendsPromptSheet, FriendPhotoReviewSheet + saver).
-   App-navigation enums (FernletTab/FernletSheet) stayed app-side in `Fernlet/FernletNavigation.swift`
+   App-navigation enums (FernletTab/FernletSheet) stayed app-side in `App/Fernlet/FernletNavigation.swift`
    per §5c. **The remaining 5 Proximity UI files stay in the app by necessity, not by blocker:**
    ConnectionInspector + the two inspector views + both recipe-share sheets hold `FernletStore`
    references — they move only when a `ProximityHost`-style store inversion happens (§5d), which is

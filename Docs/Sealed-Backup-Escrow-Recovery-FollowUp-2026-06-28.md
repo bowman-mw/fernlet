@@ -245,15 +245,15 @@ one.
   ThisDeviceOnly; `loadBackupEscrowKeyForOpen()` (never mints); **WS-3**
   `reconcileBackupEscrowKey()` (adopt / promote-on-later-launch / conflict) +
   `adoptSyncedBackupEscrowKey()`.
-- `Fernlet/SealedBackupCoordinator.swift` — **WS-4** `SealedBackupRestoreOutcome`
+- `App/Fernlet/SealedBackupCoordinator.swift` — **WS-4** `SealedBackupRestoreOutcome`
   (restored / nothingToRestore / skippedStoreNotEmpty / deferredKeyNotSynced /
   deferredLocked / deferredTransient / notRecognized); split classification; escrow
   reconcile at launch; conflict re-link (`adoptSyncedEscrowAndReupload`).
-- `Fernlet/FernletStore.swift` — observable `sealedBackupRestoreStatus` /
+- `App/Fernlet/FernletStore.swift` — observable `sealedBackupRestoreStatus` /
   `sealedBackupEscrowConflict`; `SealedBackupContext` recording callbacks.
-- `Fernlet/DestructiveConfirmation.swift` (new) — reusable helper + `.destructiveConfirmation`
+- `App/Fernlet/DestructiveConfirmation.swift` (new) — reusable helper + `.destructiveConfirmation`
   modifier (mutation only runs on confirm).
-- `Fernlet/PrivacyDataSettingsView.swift` — **WS-5** warnings on turn-OFF sealed backup,
+- `App/Fernlet/PrivacyDataSettingsView.swift` — **WS-5** warnings on turn-OFF sealed backup,
   exclude-from-iOS-backup, HealthKit-master disable; enriched iCloud-delete copy; **WS-3/WS-4**
   status banner with Retry + "Use my other device's key".
 
@@ -325,7 +325,7 @@ keys now land on different content-addressed accounts and **coexist** rather tha
     bytes coalesce to one candidate (no false conflict, zero-config recovery preserved). The legacy
     account itself is still never *written*.
   - `sealedBackupKeyCandidates()`: every escrow AES key the device holds (adopted first), for try-all-keys open.
-- `Fernlet/SealedBackupService.swift` — `SealedBackupCrypto.open` now tries every candidate key
+- `App/Fernlet/SealedBackupService.swift` — `SealedBackupCrypto.open` now tries every candidate key
   (decrypt-first; the tag remains only an error-classification hint), so a record sealed under a
   *surviving-but-not-adopted* key (an unresolved conflict) still restores with no manual step.
 

@@ -88,7 +88,7 @@ sync row-by-row.
   `equipCustomItem`, `unequipCustomSlot`, `setCustomItemShareable`, `localDesignerID`, `isSelfDesigned(_)`,
   `designerDisplayName(for:)`.
 
-### UI — `Fernlet/`
+### UI — `App/Fernlet/`
 - `CustomItemRendering.swift` — `ItemTextureRenderer` (texture → cached `CGImage`), `CustomItemThumbnail`,
   `Color(itemHex:)`.
 - `CompanionVectorAssets.swift` — `CompanionView` gained `equippedItems` param + `CompanionCustomItemLayer`
@@ -97,7 +97,7 @@ sync row-by-row.
   reprojection on edit).
 - `WardrobeView.swift` — the closet (equip/edit/delete/list-for-sale); entry via a link in
   `CompanionCustomizationSheet` (HomeView).
-- Tests: `FernletTests/CustomItemModelTests.swift` (8 tests).
+- Tests: `Tests/FernletTests/CustomItemModelTests.swift` (8 tests).
 
 ### Increment-1 review fixes already applied (don't re-introduce)
 External-binary-storage removed; background-flush of `customItemService`; eager `localDesignerID` mint
@@ -115,8 +115,8 @@ companion z-order; bounds-guarded editor canvas + slot-sized `editorPixels`; coo
 | Versioned P2P payload (Codable, sealed/signed) | `RecipeSharePayloads.swift`, `PayloadType` enum | ProximityKit/Wire, FernletDomainModel |
 | Send/receive lifecycle, rate-limit, diagnostics | `ProximityRecipeShareManager.swift` | ProximityKit/RecipeSharing |
 | Ed25519 sign + ChaCha20 seal, `senderDisplayName` | `FernletIdentityEnvelope.swift`, `IdentityService` | ProximityKit |
-| Domain↔wire codec | `RecipeShareCodec.swift` | Fernlet/ |
-| Review/commit sheet | `ProximityRecipeShareReviewSheet.swift`, `FriendPhotoReviewSheet.swift` | Fernlet/Proximity |
+| Domain↔wire codec | `RecipeShareCodec.swift` | App/Fernlet/ |
+| Review/commit sheet | `ProximityRecipeShareReviewSheet.swift`, `FriendPhotoReviewSheet.swift` | App/Fernlet/Proximity |
 | Grid picker + shareable filter | `PhotowallPhotoSelector`, `FriendPhotoReviewSheet` LazyVGrid | LaunchPreparationService / Proximity |
 | Text classifier (see caveat) | `DiagnosticLanguage.contains(_:)` | FernletDomainModel/DiagnosticLanguage.swift |
 | Active-day source | `DailyHealthScore.dateKey` history | WellbeingModels.swift |
@@ -150,7 +150,7 @@ Increment 3). Self-contained; ships a visible wallet but no shop yet.
    non-streak copy. [WardrobeView.swift]
 
 ### Definition of done
-- Build green; `xcodebuild ... -only-testing:FernletTests/CustomItemModelTests` + a new
+- Build green; `xcodebuild ... -only-testing:Tests/FernletTests/CustomItemModelTests` + a new
   `CoinEconomyTests` green: balance derives correctly, never negative, `spendCoins` debits and refuses
   when short, accrual is idempotent across repeated reads, legacy settings decode with `coinsSpent == 0`.
 - Manual: balance visible in Wardrobe; increments as logged days accumulate.
@@ -175,7 +175,7 @@ Build in sub-steps; each compiles. Mirror the recipe-share pipeline throughout.
   stable. Mirror `RecipeSharePayloads.swift`.
 - Register the new types in `FernletIdentityEnvelope.sealingRequiredTypes` so they're sealed.
 
-### 3b. Codec — `Fernlet/ClothingShareCodec.swift` (new), mirror `RecipeShareCodec.swift`
+### 3b. Codec — `App/Fernlet/ClothingShareCodec.swift` (new), mirror `RecipeShareCodec.swift`
 Domain `CustomizationItem` ↔ wire payload. **Sanitize on receive** via `ItemGridTexture.sanitized()`
 (clamp dims, coerce bad indices) before storing — never trust wire bytes.
 
@@ -190,7 +190,7 @@ On receiving a catalog/item, call `store.diary.setKnownDesignerName(id: payload.
 payload.senderDisplayName)` so future "designed by …" resolves. (The identity handshake already carries
 `senderDisplayName`; the clothing payload carries the matching `localDesignerID`.)
 
-### 3e. Shop UI — `Fernlet/FriendShopView.swift` (new)
+### 3e. Shop UI — `App/Fernlet/FriendShopView.swift` (new)
 - Reuse the `PhotowallPhotoSelector` / `FriendPhotoReviewSheet` LazyVGrid + `CustomItemThumbnail` pattern.
 - Show the connected friend's **shareable** items (their broadcast catalog), each with name, price, and
   "designed by &lt;friend&gt;".
@@ -251,13 +251,13 @@ xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulato
 
 # Test a suite (batch by suite; full run ~7 min)
 xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:FernletTests/<SuiteName>
+  -only-testing:Tests/FernletTests/<SuiteName>
 
 # S3 module-wall check (run if you touch module deps / add wire types)
 Scripts/spm-wall-check.sh
 ```
 
-- New Swift files in `Fernlet/` and `FernletKit/Sources/<module>/` are auto-included (synced folder groups
+- New Swift files in `App/Fernlet/` and `FernletKit/Sources/<module>/` are auto-included (synced folder groups
   / SPM) — no pbxproj surgery.
 - Tests use **Swift Testing** (`import Testing`, `@Test`, `#expect`), `@MainActor` for store/service tests.
 - Keep clothing/coin/shop types **out of `Private*` modules** (S3 wall) — they belong in

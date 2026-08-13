@@ -9,7 +9,7 @@
      2026-08-12 (§7 manual plan exchange: the opt-in clipboard export of a training summary to an
      outside assistant). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
-     (2) keep it in sync with the in-app copy in Fernlet/PrivacyPolicyView.swift (Settings →
+     (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 

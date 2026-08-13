@@ -47,9 +47,9 @@ jobs:
       - name: Hosted privacy policy is in sync with Docs/Privacy-Policy.md
         run: |
           set -euo pipefail
-          date="$(sed -n 's/.*effectiveDate = "\([^"]*\)".*/\1/p' Fernlet/PrivacyPolicyView.swift | head -1)"
+          date="$(sed -n 's/.*effectiveDate = "\([^"]*\)".*/\1/p' App/Fernlet/PrivacyPolicyView.swift | head -1)"
           if [ -z "$date" ]; then
-            echo "::error::could not read effectiveDate from Fernlet/PrivacyPolicyView.swift"
+            echo "::error::could not read effectiveDate from App/Fernlet/PrivacyPolicyView.swift"
             exit 1
           fi
           echo "Effective date: $date"

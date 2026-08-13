@@ -324,7 +324,7 @@ honest* ("key destroyed").
 
 **Files.** `PrivateStoreCore/PrivatePersistenceController.swift` (keyless `rebuildStore()`; fix
 `purgeEncryptedEntities` doc), `PrivateStoreCore/PrivateRowPlumbing.swift` (residue-honesty doc if
-touched), `PrivateStoreCore/Documentation.docc/PrivateStoreCore.md`, `Fernlet/FernletStore.swift` (wire
+touched), `PrivateStoreCore/Documentation.docc/PrivateStoreCore.md`, `App/Fernlet/FernletStore.swift` (wire
 rebuild into `deleteAllData`/`resetAll` after the sealed purge), `Docs/PrivacyWipeCoverage.md`
 (honesty language), a behavioral test file (`DeleteAllDataTests.swift` or `PrivacyWipeCoverageTests.swift`).
 
@@ -451,8 +451,8 @@ production schema** (dev auto-adds on first save; see `CloudKit-Schema-Deploy.md
 and emits v2 for all new writes. (6) Format pin + docs (below).
 
 **Files.** `ProximityKit/Identity/IdentityService.swift`, `CloudKitSync/SealedBackupRecord.swift`,
-`CloudKitSync/CloudKitDataService.swift`, `Fernlet/SealedBackupService.swift`,
-`FernletTests/SealedBackupFormatPinTests.swift`, `Docs/Verifiability.md`, `Docs/CloudKit-Schema-Deploy.md`.
+`CloudKitSync/CloudKitDataService.swift`, `App/Fernlet/SealedBackupService.swift`,
+`Tests/FernletTests/SealedBackupFormatPinTests.swift`, `Docs/Verifiability.md`, `Docs/CloudKit-Schema-Deploy.md`.
 
 **Tests.** Keep the v1 key KAT + v1 AAD-layout end-to-end; **add** a v2 key KAT (HKDF `plantedEscrowRaw`,
 salt = known 32B, info `"com.fernlet.sealed-backup.v2"`), a v2 AAD+key end-to-end asserting
@@ -624,9 +624,9 @@ guards + restore-first ordering are the defense; carry both into every step.
 **Files.** `CloudKitSync/SealedBackupRecord.swift` (enum cases),
 `FernletFoundation/StoragePreferences.swift`, `PrivateMemoryStore/JournalNarrativeRepository.swift`,
 `PrivateHealthStore/IntimacyLogRepository.swift`, `PrivateHealthStore/IntimacyLogStore.swift`,
-`Fernlet/SealedBackupCoordinator.swift`, `Fernlet/SealedBackupGenerationStore.swift`,
-`Fernlet/FernletStore.swift`, `Fernlet/ContentView.swift`, `Fernlet/PrivacyDataSettingsView.swift`,
-`FernletTests/SealedBackupRollbackTests.swift`, `Docs/Verifiability.md`, `Docs/PrivacyWipeCoverage.md`,
+`App/Fernlet/SealedBackupCoordinator.swift`, `App/Fernlet/SealedBackupGenerationStore.swift`,
+`App/Fernlet/FernletStore.swift`, `App/Fernlet/ContentView.swift`, `App/Fernlet/PrivacyDataSettingsView.swift`,
+`Tests/FernletTests/SealedBackupRollbackTests.swift`, `Docs/Verifiability.md`, `Docs/PrivacyWipeCoverage.md`,
 and the intimacy-in-backup standing decision doc.
 
 **Tests.** Per new payload: seal → restore into an empty store returns entries under v2; restore into a
@@ -739,8 +739,8 @@ Worry Box dies on Erase-All), `KeyCustodyBoundaryTests`, `SecureEnclaveWrapTests
 
 **Files.** `FernletLock/FernletLockService.swift`, `FernletLock/SecureEnclaveContentKeyWrap.swift`,
 `FernletLock/Documentation.docc/FernletLock.md`, `Docs/Verifiability.md`,
-`FernletTests/KeyCustodyBoundaryTests.swift`, `FernletTests/SecureEnclaveWrapTests.swift`,
-`FernletTests/DeleteAllDataTests.swift` (or `PrivacyWipeCoverageTests.swift`).
+`Tests/FernletTests/KeyCustodyBoundaryTests.swift`, `Tests/FernletTests/SecureEnclaveWrapTests.swift`,
+`Tests/FernletTests/DeleteAllDataTests.swift` (or `PrivacyWipeCoverageTests.swift`).
 
 **Tests.** After configure + first unlock on SE hardware, `wrappedContentKey` is DELETED and a second
 unlock still recovers the SAME key via SE only. SE-less branch: `wrappedContentKey` RETAINED, unlock
@@ -889,10 +889,10 @@ comment, `Verifiability.md` §6.3 + §4.
 
 **Files.** `PrivateMediaStore/PrivateMediaKeyStore.swift`, `PrivateMediaStore/MediaAtRestCrypto.swift`,
 `PrivateMediaStore/MealPhotoStore.swift`, `PrivateMediaStore/ProgressPhotoStore.swift`,
-`PrivateMediaStore/PrivateMediaStore.swift`, `Fernlet/FernletStore.swift`,
-`ProximityKit/Mesh/MeshNetworkManager.swift:294`, `Fernlet/SealedBackupService.swift`,
+`PrivateMediaStore/PrivateMediaStore.swift`, `App/Fernlet/FernletStore.swift`,
+`ProximityKit/Mesh/MeshNetworkManager.swift:294`, `App/Fernlet/SealedBackupService.swift`,
 `CloudKitSync/SealedBackupRecord.swift`, `CloudKitSync/CloudKitDataService.swift`,
-`Fernlet/SealedBackupGenerationStore.swift`, `Fernlet/PrivacyDataSettingsView.swift`,
+`App/Fernlet/SealedBackupGenerationStore.swift`, `App/Fernlet/PrivacyDataSettingsView.swift`,
 `FernletFoundation/StoragePreferences.swift` (per-corpus escrow-enabled pref if chosen),
 `FernletLock/SecureEnclaveContentKeyWrap.swift` + `Package.swift` (ONLY if SE-wrap chosen — DAG/wall
 change), `KeyCustodyBoundaryTests.swift`, `PrivateMediaStoreTests.swift`, `MealPhotoStoreTests.swift`,
@@ -963,7 +963,7 @@ scoped-lock API, the hide machinery, and the QR/mesh/X25519 stack.
 
 **Current state (verified).** No existing duress/decoy/panic scaffolding (grep clean) — greenfield.
 `FernletLockService` is `@MainActor @Observable`, created once per process as
-`@State private var lockService = FernletLockService()` (`Fernlet/FernletApp.swift:33`), so any in-memory
+`@State private var lockService = FernletLockService()` (`App/Fernlet/FernletApp.swift:33`), so any in-memory
 non-persisted property is process-lifetime and resets on relaunch. `unlock()`
 (`FernletLockService.swift:800-834`) refuses on `requiresReset` (:801) and `activeCooldownDeadline()` (:802)
 BEFORE any scrypt derivation, then derives once, calls `verifierMatch` (:1030), and on `.none` calls
@@ -1103,14 +1103,14 @@ update the `FernletLock` and `FernletLockUI` DocC pages. (11) full regression su
 
 **Files.** `FernletLock/FernletLockService.swift`, `FernletLock/SecureEnclaveContentKeyWrap.swift`,
 `FernletLockUI/FernletLockView.swift`, `FernletLockUI/FernletLockGate.swift`,
-`FernletFoundation/FernletLockError.swift`, `Fernlet/FernletApp.swift`, `Fernlet/ContentView.swift`,
-`Fernlet/FernletStore.swift`, `Fernlet/SettingsSheet.swift`, `Fernlet/VerifyQRViews.swift` (reuse the QR
-ceremony UI patterns), **`Fernlet/DuressRecoveryCoordinator.swift` (NEW)**,
-**`Fernlet/DuressPINSetupView.swift` (NEW)**, `ProximityKit/Identity/IdentityService.swift` (read-only
+`FernletFoundation/FernletLockError.swift`, `App/Fernlet/FernletApp.swift`, `App/Fernlet/ContentView.swift`,
+`App/Fernlet/FernletStore.swift`, `App/Fernlet/SettingsSheet.swift`, `App/Fernlet/VerifyQRViews.swift` (reuse the QR
+ceremony UI patterns), **`App/Fernlet/DuressRecoveryCoordinator.swift` (NEW)**,
+**`App/Fernlet/DuressPINSetupView.swift` (NEW)**, `ProximityKit/Identity/IdentityService.swift` (read-only
 reuse), `ProximityKit/Wire/ProximityVerification.swift` (read-only reuse), `Docs/PrivacyWipeCoverage.md`,
 `Docs/Verifiability.md`, `FernletLock/Documentation.docc/FernletLock.md`,
 `FernletLockUI/Documentation.docc/FernletLockUI.md`, `FernletLockServiceTests.swift`,
-`FernletLockTests.swift`, **`FernletTests/DuressLockTests.swift` (NEW)**.
+`FernletLockTests.swift`, **`Tests/FernletTests/DuressLockTests.swift` (NEW)**.
 
 **Tests.** Duress verifier own-salt survives passcode change (configure real + duress; `changeCredential`;
 duress still triggers, real path still unwraps the same key — mirror `biometricBypassSurvivesPasscodeChange`
@@ -1228,7 +1228,7 @@ touches are listed.
   the intended cases (check counts / the "TEST EXECUTE SUCCEEDED" banner), not a naïve grep of the log.
 - **Wall gates before merge on any phase touching a wall file:** `Scripts/spm-wall-check.sh` +
   `Scripts/spm-wall-selftest.sh` (any `Package.swift` DAG change — relevant only if #3 chooses the
-  SE-wrap-K_own option); `FernletTests/S3BoundaryTests`; `FernletTests/NoTrackingBoundaryTests` (confirm
+  SE-wrap-K_own option); `Tests/FernletTests/S3BoundaryTests`; `Tests/FernletTests/NoTrackingBoundaryTests` (confirm
   green — **no phase in this track introduces a new outbound destination**; recovery-lock is in-person mesh
   only); the doc-coverage baseline (`Scripts/doc-coverage-scan.py`) for the touched DocC pages and
   load-bearing doc comments.

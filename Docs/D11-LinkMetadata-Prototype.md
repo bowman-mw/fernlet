@@ -6,7 +6,7 @@ when Coach hands a plan link to the share sheet with custom `LPLinkMetadata`
 Messages fetch the page and use the page's own metadata? Apple only documents the custom metadata
 styling the *share-sheet header*, so this needs a real-device test.
 
-Harness: [Fernlet/LinkMetadataPrototypeView.swift](../Fernlet/LinkMetadataPrototypeView.swift)
+Harness: [App/Fernlet/LinkMetadataPrototypeView.swift](../App/Fernlet/LinkMetadataPrototypeView.swift)
 (DEBUG-only, not wired into any screen, delete after D11 is decided). The test URLs use
 placeholder domains — `example.com` (plain stable title, no OG image), `apple.com` (rich OG
 tags, like our future `/plan` pages), and the RFC 2606-reserved `.invalid` TLD (guaranteed

@@ -5,7 +5,7 @@ The zero-dependency substrate under Fernlet's two web importers: the shared HTML
 ## Overview
 
 Fernlet fetches web pages in exactly two places — the product/nutrition importer in the app target
-(`Fernlet/FoodProductWebImporter.swift`) and the recipe importer in the walled `AIProviders` module
+(`App/Fernlet/FoodProductWebImporter.swift`) and the recipe importer in the walled `AIProviders` module
 (`FernletKit/Sources/AIProviders/RecipeWebImporter.swift`). Both scrape schema.org JSON-LD out of a
 page, both flatten a page to plain text for on-device extraction, and both had grown their own copy
 of the same regex, entity-decoding, and JSON-LD-walking helpers. WebScrapingKit is where that shared
@@ -79,7 +79,7 @@ content-type checks, and body caps all stay in the importers, because they diffe
 **Position relative to the walls.** On the S3 wall: Layer 0, no dependencies, imported by
 `AIProviders` and by the app target through the `FernletKit` umbrella product. On the no-tracking
 wall: `EphemeralWebSession.swift` is one of the three files permitted to hold an HTTP client, and
-`FernletTests/NoTrackingBoundaryTests` asserts that no shipping file uses `URLSession.shared` or a
+`Tests/FernletTests/NoTrackingBoundaryTests` asserts that no shipping file uses `URLSession.shared` or a
 `.default` configuration, that any `URLSession(configuration:)` is the ephemeral one, and that both
 importers route through this type. See `Docs/No-Tracking-Wall.md` §2a.
 

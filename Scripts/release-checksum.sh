@@ -95,6 +95,7 @@ if [ "$SKIP_ARCHIVE" -eq 0 ]; then
   mkdir -p "$OUT_DIR"
   echo "archiving Fernlet (Release) → $ARCHIVE_PATH ..."
   xcodebuild archive \
+    -project App/Fernlet.xcodeproj \
     -scheme Fernlet \
     -destination 'generic/platform=iOS' \
     -archivePath "$ARCHIVE_PATH" \

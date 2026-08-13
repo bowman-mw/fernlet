@@ -1,7 +1,7 @@
 # The No-Tracking Wall
 
 **Status:** Enforced. Mechanical enforcement lives in
-[`FernletTests/NoTrackingBoundaryTests.swift`](../FernletTests/NoTrackingBoundaryTests.swift); this
+[`Tests/FernletTests/NoTrackingBoundaryTests.swift`](../Tests/FernletTests/NoTrackingBoundaryTests.swift); this
 document is the human half — what the guarantee actually says, what a machine checks, what only a
 human can check, and what a contributor does when they legitimately need a new network destination.
 
@@ -41,7 +41,7 @@ They should get a red CI run that explains it.
 ## 2. What is enforced mechanically
 
 All of it is in one test file, in the house style of
-[`S3BoundaryTests`](../FernletTests/S3BoundaryTests.swift): inputs are **discovered** from the file
+[`S3BoundaryTests`](../Tests/FernletTests/S3BoundaryTests.swift): inputs are **discovered** from the file
 system (so new files are covered automatically), every scan carries a **hard floor** (so a moved root
 fails loudly instead of passing over zero files), and every pure matcher has a **planted-violation
 fixture** (so the matcher cannot rot into always-returning-nothing).
@@ -109,7 +109,7 @@ and `everyOutboundFetchUsesTheEphemeralPrivateTabSession` fails if any row is de
 redirect handling, content-type checks, and body caps stay with each importer, because they differ on
 purpose. The product importer spoofs a Safari User-Agent (retailer bot-walls serve nothing otherwise),
 checks the raw `Content-Type` header, and **throws** on an oversized body. The recipe importer
-identifies itself honestly as `Fernlet/1.0`, checks `httpResponse.mimeType`, **truncates** at the cap,
+identifies itself honestly as `App/Fernlet/1.0`, checks `httpResponse.mimeType`, **truncates** at the cap,
 and attaches a per-task `RedirectValidator` delegate that re-runs its SSRF guard on every redirect hop.
 That delegate is a *task* delegate, so it works identically on the custom session — the SSRF guards
 were not touched by this change.
@@ -122,7 +122,7 @@ on the default store would move the tracking channel rather than close it. The r
 written *now*, while the answer is "there are none": the first `WKWebView` to appear must use
 `WKWebsiteDataStore.nonPersistent()` and must edit this document.
 
-**`SFSafariViewController` is the one exception, and it is honest about being one.** `Fernlet/FoodView.swift`
+**`SFSafariViewController` is the one exception, and it is honest about being one.** `App/Fernlet/FoodView.swift`
 presents one — the "view the source page" affordance on the product-import review sheet, opening the
 page the user is already looking at. It is **not** a surface this app can make ephemeral: it runs out
 of process against Safari's own storage, which the app can neither read nor write nor configure (there
@@ -140,10 +140,10 @@ a breach, and a listed host the code no longer uses is a stale claim that must b
 
 | Host | Why it exists |
 |---|---|
-| `html.duckduckgo.com` | **The only host the app itself chooses to contact.** DuckDuckGo's no-JS HTML search endpoint, used by the packaged/branded food lookup. It receives the typed product query ("costco chicken melts nutrition facts") and nothing else: no account, no identifier, no cookies, no health data. Behind the **off-by-default** `webNutritionLookupEnabled` toggle (`SettingsModel.swift:66`), with the egress spelled out in the Settings copy. Call site: `Fernlet/FoodProductWebImporter.swift:65`. |
-| `duckduckgo.com` | **Not fetched.** Used only as the relative-URL base that unwraps `uddg=` redirect links out of that search page's HTML, so the real product page is opened directly rather than through DuckDuckGo's redirector. `Fernlet/FoodProductWebImporter.swift:109`. |
-| `example.com` | RFC 2606 reserved documentation domain. Appears as UI **placeholder text** in the product-import field (`Fernlet/FoodView.swift`) and as fixture URLs in the DEBUG-only LinkPresentation prototype. Never a live destination. |
-| `www.apple.com` | Apple-operated. A DEBUG-only fixture in `Fernlet/LinkMetadataPrototypeView.swift` — the D11 test matrix needs one real page with rich Open Graph tags. |
+| `html.duckduckgo.com` | **The only host the app itself chooses to contact.** DuckDuckGo's no-JS HTML search endpoint, used by the packaged/branded food lookup. It receives the typed product query ("costco chicken melts nutrition facts") and nothing else: no account, no identifier, no cookies, no health data. Behind the **off-by-default** `webNutritionLookupEnabled` toggle (`SettingsModel.swift:66`), with the egress spelled out in the Settings copy. Call site: `App/Fernlet/FoodProductWebImporter.swift:65`. |
+| `duckduckgo.com` | **Not fetched.** Used only as the relative-URL base that unwraps `uddg=` redirect links out of that search page's HTML, so the real product page is opened directly rather than through DuckDuckGo's redirector. `App/Fernlet/FoodProductWebImporter.swift:109`. |
+| `example.com` | RFC 2606 reserved documentation domain. Appears as UI **placeholder text** in the product-import field (`App/Fernlet/FoodView.swift`) and as fixture URLs in the DEBUG-only LinkPresentation prototype. Never a live destination. |
+| `www.apple.com` | Apple-operated. A DEBUG-only fixture in `App/Fernlet/LinkMetadataPrototypeView.swift` — the D11 test matrix needs one real page with rich Open Graph tags. |
 | `fernlet-prototype.invalid` | RFC 2606 `.invalid` TLD, guaranteed never to resolve. The DEBUG-only "unfetchable domain" row of the same prototype. |
 
 > The last three rows are scaffolding, not product. `LinkMetadataPrototypeView.swift` is marked for
@@ -179,9 +179,9 @@ contents of — with the single documented exception in §6.
 | Path | Where | Notes |
 |---|---|---|
 | Recipe web import | `AIProviders/RecipeWebImporter.swift` (`fetchHTML`) | Fetches the URL the user pasted or shared into the app. HTTPS-only, SSRF-guarded on the initial URL *and* every redirect hop (`isSafePublicHTTPSURL`), 3 MB and 15 s bounded. |
-| Recipe image download | `AIProviders/RecipeWebImporter.swift` (`downloadImage`), called only from `Fernlet/FernletStore.swift` (`fetchRecipeWebImageIfNeeded`) | One GET for the recipe page's own main food picture (a host the *page* named — JSON-LD `image` / `og:image`), which becomes the recipe's default photo, sealed through the private media store. **Owner decision 2026-08-09, consciously reversing the 2026-07-16 "no external image fetch" tester decision.** Runs on USER-PRESENT paths only — the foreground paste-a-URL import, the first open of a recipe's detail, and the post-"Re-import from source" refresh — never the share-extension background queue drain. **One attempt per device, suppression syncs**: each device gets one automatic attempt (device-local `RecipeWebImageAttemptMemory` sidecar, re-armed only by the explicit re-import; cancellation by navigating away does not spend it), while deleting the photo — or the user already having their own — sets the synced `webImageSuppressed`, pinning the recipe photo-less on every device. Same guard rigor as the page fetch: SSRF-checked on the initial URL and every redirect hop (IP literals canonicalized, so decimal/hex/octal/IPv4-mapped spellings classify like their dotted form), an image MIME requirement (`image/*`, or a generic octet-stream declaration whose bytes must pass a magic-number image sniff — mislabeled image CDNs work, HTML error pages fail), 15 s timeout, 10 MB streaming cap that aborts oversize. Proximity recipe shares carry a downscaled copy of the picture *in the sealed payload*, so a receiving device performs **no** web fetch. |
-| Product page import | `Fernlet/FoodProductWebImporter.swift` (`fetchHTML`, `fetchImage`) | Fetches the product page the user chose (or the page the allowlisted search returned), plus candidate nutrition-label images for OCR. `fetchImage` routes through `RecipeWebImporter.downloadImage` (2026-08-09), so images now get the full SSRF/redirect/MIME guard, 12 MB streaming cap. |
-| Source-link connection pre-warm | `Fernlet/FoodView.swift` (`SourceLinkPrewarmModifier`) | `SFSafariViewController.prewarmConnections(to:)` on the recipe detail page and the saved-recipe notes sheet: the recipe's own https source host is now contacted **on detail-appear** — a DNS lookup + TLS handshake for the eventual Safari presentation, no HTTP request, no page load (**owner decision 2026-08-09**: pre-warm only, no snapshot, no `WKWebView`; `SFSafariViewController` stays the opening surface). The token is invalidated on disappear. Like the Safari presentation itself (§2a exception), this runs out of process and outside the private-tab session; it reveals only "a Fernlet user who saved this recipe opened its page" to a host the user already chose by importing from it. Repeat imports of an already-saved URL now skip the network entirely (normalized source-URL match), so this pre-warm is paired with strictly *less* re-fetching, not more. |
+| Recipe image download | `AIProviders/RecipeWebImporter.swift` (`downloadImage`), called only from `App/Fernlet/FernletStore.swift` (`fetchRecipeWebImageIfNeeded`) | One GET for the recipe page's own main food picture (a host the *page* named — JSON-LD `image` / `og:image`), which becomes the recipe's default photo, sealed through the private media store. **Owner decision 2026-08-09, consciously reversing the 2026-07-16 "no external image fetch" tester decision.** Runs on USER-PRESENT paths only — the foreground paste-a-URL import, the first open of a recipe's detail, and the post-"Re-import from source" refresh — never the share-extension background queue drain. **One attempt per device, suppression syncs**: each device gets one automatic attempt (device-local `RecipeWebImageAttemptMemory` sidecar, re-armed only by the explicit re-import; cancellation by navigating away does not spend it), while deleting the photo — or the user already having their own — sets the synced `webImageSuppressed`, pinning the recipe photo-less on every device. Same guard rigor as the page fetch: SSRF-checked on the initial URL and every redirect hop (IP literals canonicalized, so decimal/hex/octal/IPv4-mapped spellings classify like their dotted form), an image MIME requirement (`image/*`, or a generic octet-stream declaration whose bytes must pass a magic-number image sniff — mislabeled image CDNs work, HTML error pages fail), 15 s timeout, 10 MB streaming cap that aborts oversize. Proximity recipe shares carry a downscaled copy of the picture *in the sealed payload*, so a receiving device performs **no** web fetch. |
+| Product page import | `App/Fernlet/FoodProductWebImporter.swift` (`fetchHTML`, `fetchImage`) | Fetches the product page the user chose (or the page the allowlisted search returned), plus candidate nutrition-label images for OCR. `fetchImage` routes through `RecipeWebImporter.downloadImage` (2026-08-09), so images now get the full SSRF/redirect/MIME guard, 12 MB streaming cap. |
+| Source-link connection pre-warm | `App/Fernlet/FoodView.swift` (`SourceLinkPrewarmModifier`) | `SFSafariViewController.prewarmConnections(to:)` on the recipe detail page and the saved-recipe notes sheet: the recipe's own https source host is now contacted **on detail-appear** — a DNS lookup + TLS handshake for the eventual Safari presentation, no HTTP request, no page load (**owner decision 2026-08-09**: pre-warm only, no snapshot, no `WKWebView`; `SFSafariViewController` stays the opening surface). The token is invalidated on disappear. Like the Safari presentation itself (§2a exception), this runs out of process and outside the private-tab session; it reveals only "a Fernlet user who saved this recipe opened its page" to a host the user already chose by importing from it. Repeat imports of an already-saved URL now skip the network entirely (normalized source-URL match), so this pre-warm is paired with strictly *less* re-fetching, not more. |
 
 These are the feature working as designed. The wall deliberately does not police them, but it *does*
 police where such a fetch may live (§2, `onlyThePinnedWebImportersMayHoldAnHTTPClient`) and how it
@@ -191,7 +191,7 @@ carries from one user-supplied URL to the next).
 ### 4c. Local-only, never leaves the room
 
 MultipeerConnectivity + NearbyInteraction (`ProximityKit/Transport/`, `ProximityKit/Ranging/`) over
-the `_fernlet-*` Bonjour service types declared in `Fernlet/Info.plist`. Link-local peer-to-peer with
+the `_fernlet-*` Bonjour service types declared in `App/Fernlet/Info.plist`. Link-local peer-to-peer with
 signed/sealed envelopes; no server is involved at any point.
 
 ---
@@ -261,7 +261,7 @@ A privacy claim that overstates itself is worse than none. Specifically:
   correlate by IP. A user who needs network-layer unlinkability needs a VPN or Private Relay; this
   guarantee is about Fernlet not being the one doing the linking.
 - **`SFSafariViewController` is outside the private-tab guarantee.** The one in-app browser
-  presentation (`Fernlet/FoodView.swift`) runs out of process against Safari's own storage. The app
+  presentation (`App/Fernlet/FoodView.swift`) runs out of process against Safari's own storage. The app
   cannot read it, cannot write it, and cannot make it ephemeral — there is no API. The wall pins
   *where* one may be presented, which is all it can do; the browsing itself is governed by the user's
   Safari settings, not by ours.
@@ -279,7 +279,7 @@ A privacy claim that overstates itself is worse than none. Specifically:
 ```
 xcodebuild test-without-building -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:FernletTests/NoTrackingBoundaryTests
+  -only-testing:Tests/FernletTests/NoTrackingBoundaryTests
 ```
 
 It runs as part of `FernletTests`, needs no simulator state, and should be a **required status
@@ -319,9 +319,9 @@ plist.
 
 ## 8. Related
 
-- [`FernletTests/NoTrackingBoundaryTests.swift`](../FernletTests/NoTrackingBoundaryTests.swift) — the enforcement.
+- [`Tests/FernletTests/NoTrackingBoundaryTests.swift`](../Tests/FernletTests/NoTrackingBoundaryTests.swift) — the enforcement.
 - [`FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift`](../FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift) — the private-tab session itself, with the per-setting rationale (§2a).
-- [`FernletTests/S3BoundaryTests.swift`](../FernletTests/S3BoundaryTests.swift) — the sibling wall, and the source of the matchers this one reuses so the two agree on what an `import` is.
+- [`Tests/FernletTests/S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift) — the sibling wall, and the source of the matchers this one reuses so the two agree on what an `import` is.
 - [`Docs/Privacy-Policy.md`](Privacy-Policy.md) — the user-facing statement this wall backs up.
 - [`Docs/Verifiability.md`](Verifiability.md) — how anyone can verify this wall (and the rest of
   the privacy claims) themselves: the per-claim verification table, the standing traffic-audit

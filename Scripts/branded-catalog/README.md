@@ -16,9 +16,9 @@ The two sets are disjoint by GTIN, so base + ODR = the full ~414k with no duplic
 3. `python3 3_build_odr_sqlite.py`  → `FoodCatalogBranded.sqlite` (v2 schema, FTS5, matches
    `FoodCatalogSchema` in BundledFoodStore.swift).
 4. Copy `BrandedCuratedFoodItems.json` → `FoodDataSource/`, then regenerate the base DB:
-   `TEST_RUNNER_REGEN_FOOD_CATALOG_DB=1 xcodebuild test-without-building -scheme Fernlet \
-      -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/FoodCatalogGenerationTests`
+   `TEST_RUNNER_REGEN_FOOD_CATALOG_DB=1 xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
+      -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:Tests/FernletTests/FoodCatalogGenerationTests`
 5. Copy `FoodCatalogBranded.sqlite` → `ODRAssets/` and ODR-tag it in Xcode (see ODRAssets/README.md).
 
 The Python build mirrors the Swift `USDAFoodItemRecord` branded decode + `FoodCatalogDatabaseBuilder`
-schema; `FernletTests/BrandedODRCatalogTests` validates the resulting DB against the live `FoodCatalog`.
+schema; `Tests/FernletTests/BrandedODRCatalogTests` validates the resulting DB against the live `FoodCatalog`.

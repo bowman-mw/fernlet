@@ -51,11 +51,11 @@ xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulato
 
 | Claim | Verification |
 |---|---|
-| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eight independent scans, each with planted-violation fixtures proving the scan itself works. What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. |
-| AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
+| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:Tests/FernletTests/NoTrackingBoundaryTests` — eight independent scans, each with planted-violation fixtures proving the scan itself works. What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. |
+| AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:Tests/FernletTests/S3BoundaryTests`. |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
-| Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
-| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
+| Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:Tests/FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
+| The at-rest crypto formats cannot drift silently | `-only-testing:Tests/FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:Tests/FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:Tests/FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
 | Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 
@@ -121,7 +121,7 @@ protected by keys that never leave the device:
   own-photos key exists at all — and it never changes the key material, so no photo is stranded by
   it. Afterwards the own read paths drop their pre-split dual-open fallback, which is what makes the
   binding mean anything. Pinned by `KeyCustodyBoundaryTests.ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied`
-  and `FernletTests/OwnPhotoKeyBindingTests`. Honest limit: an encrypted device backup taken while
+  and `Tests/FernletTests/OwnPhotoKeyBindingTests`. Honest limit: an encrypted device backup taken while
   the row was still backup-restorable already carries the old key, so the binding protects backups
   taken *after* the flip, and a user who takes neither route keeps the old, backup-restorable
   custody rather than being bound without a recovery path.
@@ -309,7 +309,7 @@ shipped; the rest are still open.
    PIN-before-biometrics and the duress flag — must hold for that to be safe; neither alone is
    sufficient. Four properties keep the terminal state from
    being worse than the trade it was approved as, and each is pinned by a test in
-   `FernletTests/SecureEnclaveWrapTests`: the reset the error prescribes is reachable from the
+   `Tests/FernletTests/SecureEnclaveWrapTests`: the reset the error prescribes is reachable from the
    unlock overlay itself; a transient keychain read failure is a separate retryable error that
    never advises a reset; the two scopes that never receive the content key still unlock on the
    verifier match (so Settings → App lock cannot be bricked); and while a biometric bypass copy
@@ -364,7 +364,7 @@ shipped; the rest are still open.
    both providers keep vending keys; counting those as "opens under no key" would let a pass that
    read nothing look identical to a fully migrated corpus. Honest limit until the latch is set: an
    un-migrated own photo is still openable under the backup-restorable friend key. Pinned by
-   `FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
+   `Tests/FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
    (`ownPhotoKeyIsASecondRowDistinctFromTheFriendWallKey` asserts the two rows really are two
    independent, non-synchronizable keys, so a "split" that vended the same bytes twice fails loudly;
    the row's accessibility class is asserted by the step-5c test named below).
@@ -398,7 +398,7 @@ shipped; the rest are still open.
    the sole authority on membership, and rewriting it from one device's ids would leave the other
    device's bodies as permanently unnamed orphans. Rollback is caught by a photo-namespaced
    `SealedBackupGenerationStore` high-water mark on the manifest, plus a per-id content hash inside
-   it. Pinned by `FernletTests/SealedPhotoBackupTests` and the byte-exact AAD v3 pin in
+   it. Pinned by `Tests/FernletTests/SealedPhotoBackupTests` and the byte-exact AAD v3 pin in
    `SealedBackupFormatPinTests`; the delete-all teardown is enforced by `PrivacyWipeCoverageTests`
    (`deleteOwnPhotoEscrowBackups`).
    **UPDATE (2026-08-11, Phase 5 step 5c): the binding is flipped, and the fallback is gone with it.**
@@ -420,7 +420,7 @@ shipped; the rest are still open.
    neither route is not bound and keeps the pre-5c custody: the hardening is opt-in *because* its
    cost is the user's, not because it is unfinished. Honest limit: a device backup taken before the
    flip already carries the loose key, so the binding protects backups taken after it. Pinned by
-   `FernletTests/OwnPhotoKeyBindingTests` (including "no own photo becomes unreadable across the
+   `Tests/FernletTests/OwnPhotoKeyBindingTests` (including "no own photo becomes unreadable across the
    flip", end to end on the real keychain rows) and by `KeyCustodyBoundaryTests`
    (`ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied`). Item 3 is now **closed**.
 4. **Sealed-backup escrow: do NOT device-bind it** — cross-device restore is its entire purpose.
@@ -434,7 +434,7 @@ shipped; the rest are still open.
    record *requires* a 32-byte salt or fails closed as malformed, and a chunk set that mixes formats
    or salts is rejected. All new writes are v2. The device-binding half stays rejected, unchanged:
    binding the escrow key would destroy cross-device restore. Pinned by
-   `FernletTests/SealedBackupFormatPinTests`.
+   `Tests/FernletTests/SealedBackupFormatPinTests`.
 5. **The escrow custody model itself.** It is exactly as strong as iCloud Keychain E2EE plus the
    user's Apple account. If that is not acceptable, the alternative is a user-held recovery
    secret or a device-to-device QR ceremony instead of iCloud Keychain — and zero-config
@@ -457,7 +457,7 @@ shipped; the rest are still open.
    no gate write can clobber the real blob with launch-fallback defaults. The flip NEVER rides
    the tolerant decode — both `localBackupExcludedFromiOSBackup` and the new field keep `false`
    as their absent-key default, so a pre-Phase-6 blob decodes with its exclusion value
-   byte-for-byte unchanged (pinned in `FernletTests/StoragePreferencesTests`).
+   byte-for-byte unchanged (pinned in `Tests/FernletTests/StoragePreferencesTests`).
    Post-#1 justification, which is why this sequenced after the hard SE binding: an *included*
    `FernletPrivate` file is ciphertext-unreadable off-device even with the passcode (the SE key
    never restores to another device and the scrypt fallback is gone), so its only marginal backup
@@ -481,8 +481,8 @@ shipped; the rest are still open.
    pre-migration history in plaintext, and it was the last local Fernlet-data file the
    preference did not reach — flagging it closes that gap in the Privacy & Data toggle's "your
    local Fernlet data is excluded" copy. The manual toggle remains for later changes. Gate logic
-   pinned by `FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
-   `FernletTests/LocalDayBlobBackupExclusionTests`.
+   pinned by `Tests/FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
+   `Tests/FernletTests/LocalDayBlobBackupExclusionTests`.
 
 ## 7. What publishing unlocks
 
@@ -509,6 +509,6 @@ publication rather than waiting for it.
 - [`Docs/Release-Process.md`](Release-Process.md) — signed tags, branch protection, checksum
   publication, and the publish steps.
 - [`.github/CODEOWNERS`](../.github/CODEOWNERS) — review gate on every wall file.
-- `FernletTests/NoTrackingBoundaryTests.swift`, `FernletTests/S3BoundaryTests.swift`,
-  `FernletTests/KeyCustodyBoundaryTests.swift`, `FernletTests/ColumnCryptoDeviceBindingTests.swift`,
-  `FernletTests/SealedBackupFormatPinTests.swift` — the mechanical halves.
+- `Tests/FernletTests/NoTrackingBoundaryTests.swift`, `Tests/FernletTests/S3BoundaryTests.swift`,
+  `Tests/FernletTests/KeyCustodyBoundaryTests.swift`, `Tests/FernletTests/ColumnCryptoDeviceBindingTests.swift`,
+  `Tests/FernletTests/SealedBackupFormatPinTests.swift` — the mechanical halves.

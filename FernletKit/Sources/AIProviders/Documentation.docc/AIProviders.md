@@ -60,7 +60,7 @@ report unavailable via ``SystemLanguageModelCapabilityProvider``, the single slo
 
 Note: three further AI files (`FoundationDishDecomposition`, `FoodProductWebImporter`,
 `LaunchPreparationService`) still live in the app target — they need app-side helpers a package
-cannot import — and are held sealed-free by the `FernletTests/S3BoundaryTests` grep-wall until
+cannot import — and are held sealed-free by the `Tests/FernletTests/S3BoundaryTests` grep-wall until
 their helpers are extracted.
 
 ## Topics

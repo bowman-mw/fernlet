@@ -152,7 +152,7 @@ In `FernletKit/Package.swift` this target depends only on `FernletFoundation` an
 **protected side** of the wall: the walled consumers `AIProviders` and `CloudKitSync` omit every `Private*` store from
 their dependency lists by construction, so `import PrivateMediaStore` there is a hard build
 error under `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (see `Scripts/spm-wall-check.sh`
-and `FernletTests/S3BoundaryTests`). Its own dependents are `ProximityKit` (the mesh manager's
+and `Tests/FernletTests/S3BoundaryTests`). Its own dependents are `ProximityKit` (the mesh manager's
 photowall cache) and the app target (`FernletStore` owns the meal/recipe/progress stores).
 
 ### Fail-closed invariants

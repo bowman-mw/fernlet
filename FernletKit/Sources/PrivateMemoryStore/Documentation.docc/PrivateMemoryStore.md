@@ -19,7 +19,7 @@ above it. It is one of the sealed `Private*` targets that the walled consumers (
 and `CloudKitSync`) must never import: the `Package.swift` dependency DAG omits any edge from
 those targets to this one, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` turns a forbidden
 `import PrivateMemoryStore` into a hard build error (see `Scripts/spm-wall-check.sh`), and
-`FernletTests/S3BoundaryTests` is the complementary grep-wall. Deliberately NOT here: the memory
+`Tests/FernletTests/S3BoundaryTests` is the complementary grep-wall. Deliberately NOT here: the memory
 "gatekeeper" `MemoryAgent` and the `AIAuditLog` sink live in the `AIContext` module, because they
 are AI-facing control plane — placing them in this sealed module would have forced an
 `AIProviders` → `Private*` wall violation.

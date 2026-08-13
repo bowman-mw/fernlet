@@ -130,7 +130,7 @@ in the current app process — like iOS first-unlock-after-reboot — enforced f
 the button condition and the auto-prompt guard.
 
 **Current state (verified).** `FernletLockService` is `@MainActor @Observable`, created once per process
-as `@State private var lockService = FernletLockService()` (`Fernlet/FernletApp.swift:33`), so any
+as `@State private var lockService = FernletLockService()` (`App/Fernlet/FernletApp.swift:33`), so any
 in-memory non-persisted property is inherently process-lifetime and resets on relaunch/termination. No
 biometric-gating on process-first-unlock exists today: a cold-launched, still-locked app auto-prompts
 Face ID from `FernletLockView.onAppear` (`FernletLockUI/FernletLockView.swift:538-548`, `:542` guard) and
@@ -192,7 +192,7 @@ Three fail-closed enforcement points:
 - `FernletKit/Sources/FernletLock/Documentation.docc/FernletLock.md`,
   `FernletKit/Sources/FernletLockUI/Documentation.docc/FernletLockUI.md` (key-scheme / gate note,
   same commit)
-- `FernletTests/FernletLockServiceTests.swift` (regression tests)
+- `Tests/FernletTests/FernletLockServiceTests.swift` (regression tests)
 
 **Tests to add.**
 - *Service.* A fresh service after `configure` has `passcodeUnlockedThisProcess == true` (configure
@@ -228,10 +228,10 @@ silently: a device-local sidecar that the funnel already clears but the doc and 
 record.
 
 **The confirmed gap (verified).** `RecipeWebImageAttemptMemory.clearAll(defaults: webImageAttemptDefaults)`
-is called in `resetAll` (`Fernlet/FernletStore.swift:4281`) but appears in **neither**
+is called in `resetAll` (`App/Fernlet/FernletStore.swift:4281`) but appears in **neither**
 `Docs/PrivacyWipeCoverage.md` (only `BarcodeServingMemory`, the "Barcode serving memory" row) **nor** the
 `PrivacyWipeCoverageTests` `wipeManifest` (only `"BarcodeServingMemory.clearAll"`,
-`FernletTests/PrivacyWipeCoverageTests.swift:64`). It is a device-local `UserDefaults` sidecar
+`Tests/FernletTests/PrivacyWipeCoverageTests.swift:64`). It is a device-local `UserDefaults` sidecar
 (`RecipeWebImageAttemptMemory.swift:50-52`, the "one automatic web-image attempt per recipe" memory), the
 same class of surface as `BarcodeServingMemory` — so it needs a **doc row + a manifest token**, **not** a
 keychain-service entry. The `knownKeychainServices` floor (`PrivacyWipeCoverageTests.swift:301-306`) is
@@ -252,7 +252,7 @@ unaffected.
 `deleteAllCoversEveryManifestSurface` (`:189-193`) then re-covers the new token automatically.
 
 **Files touched.**
-- `FernletTests/PrivacyWipeCoverageTests.swift` (token; behavioral test)
+- `Tests/FernletTests/PrivacyWipeCoverageTests.swift` (token; behavioral test)
 - `Docs/PrivacyWipeCoverage.md` (the new row)
 
 **Tests to add.** The behavioral survival test above (serialized, real funnel — mirror the existing
@@ -284,7 +284,7 @@ half** of the Phase-1 deletion audit.
 Phase 1). This section produces only the audit result and the doc/test reconciliation.
 
 **Verification method (no production code).** Walk every call in the comment-stripped bodies of
-`deleteAllData` (`Fernlet/FernletStore.swift:3941-4225`) and `resetAll` (`:4232-4311`) against the
+`deleteAllData` (`App/Fernlet/FernletStore.swift:3941-4225`) and `resetAll` (`:4232-4311`) against the
 "Cleared by delete everything" table and the `wipeManifest`, in both directions.
 
 **Result of the drafting pass (to be re-run against the rebased tree and signed off):**
@@ -310,7 +310,7 @@ new production behavior in this track's half.
 
 **Files touched.**
 - `Docs/PrivacyWipeCoverage.md` (audit sign-off / any wording nits found during the walk)
-- `FernletTests/PrivacyWipeCoverageTests.swift` (already carries the Phase-0 token; no further change from
+- `Tests/FernletTests/PrivacyWipeCoverageTests.swift` (already carries the Phase-0 token; no further change from
   the verify half)
 
 **Tests.** No new tests beyond the Phase-0 gap-fix trio. The existing
@@ -390,10 +390,10 @@ becomes trivially justifiable.
 
 **Files touched.**
 - `FernletKit/Sources/FernletFoundation/StoragePreferences.swift` (additive `backupExclusionChoiceMade`)
-- `Fernlet/PrivacyDataSettingsView.swift` (the one-time prompt; `localBackupCard` copy)
+- `App/Fernlet/PrivacyDataSettingsView.swift` (the one-time prompt; `localBackupCard` copy)
 - `FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift` (apply `BackupExclusion` to the day
   blob)
-- `FernletTests/StoragePreferencesTests.swift` (tolerant decode / no silent flip)
+- `Tests/FernletTests/StoragePreferencesTests.swift` (tolerant decode / no silent flip)
 - `Docs/Verifiability.md` (§6.6 → done)
 
 **Tests to add.**
@@ -463,8 +463,8 @@ sealed-backup reconcile, no new `CaseIterable` enum case, no key-binding here); 
 - **Swift-Testing vacuous-filter gotcha.** Method-level `-only-testing:` selectors on Swift Testing suites
   can silently match nothing and report success. Scope by **suite**, and confirm the run actually executed
   the intended cases (check counts / the "TEST EXECUTE SUCCEEDED" banner), not a naïve grep of the log.
-- **Wall / doc-coverage gates before merge.** `FernletTests/NoTrackingBoundaryTests` (confirm green — no
-  Fable item adds an outbound destination or an SPM dependency); `FernletTests/S3BoundaryTests` (unaffected
+- **Wall / doc-coverage gates before merge.** `Tests/FernletTests/NoTrackingBoundaryTests` (confirm green — no
+  Fable item adds an outbound destination or an SPM dependency); `Tests/FernletTests/S3BoundaryTests` (unaffected
   — no import crosses the AI/sync wall); the doc-coverage baseline (`Scripts/doc-coverage-scan.py`) for the
   touched DocC pages (`FernletLock.md`, `FernletLockUI.md`) and the load-bearing doc comments. No
   `Scripts/spm-wall-*.sh` run is required by this track (no `Package.swift` DAG change).

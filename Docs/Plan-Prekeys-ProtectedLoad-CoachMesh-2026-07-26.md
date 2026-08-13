@@ -1,7 +1,7 @@
 # Plan — sidecar durability, prekey coverage, coach-path posture (2026-07-26)
 
 Branch: `claude/heartdrop-durability` (off `main` @ `db40340`). Source: three research passes over the
-just-merged bitchat-adoptions round ([Docs/Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md))
+just-merged bitchat-adoptions round (the bitchat-adoptions plan, since retired from the tree)
 plus a spot-check of the shipped code. bitchat remains the pattern reference (Unlicense); nothing is
 copied verbatim.
 
@@ -26,10 +26,10 @@ Read before trusting the increments below; these are the places the reports were
 | Claim | Truth at `db40340` |
 | --- | --- |
 | "Nothing constructs or begins a `.trainer` coordinator" | True **in production**. The test footprint is far larger than an earlier draft said: 32 `begin(… mode: .trainer)` call sites across 5 files (ProximityCoordinatorTests 26, TrainerProximityServiceTests, HeartShareTests, MeshClothingShopTests, RecipeShareCodecTests), plus ~21 more `.trainer` record constructions in ConnectionInspectorTests / ProximityTrustVaultTests / FernletSnapshotRoundTripTests. Direction unchanged, and the size strengthens the do-not-delete decision. The trainer branches are test-covered dead code, not untested dead code. There is no `TrainerProximityService` type — the test file is named after one that does not exist. |
-| "S3BoundaryTests has no CloudKit-import rule" (Increment 3 note, plan doc :100) | **Stale.** `FernletTests/S3BoundaryTests.swift:226-227` now enforces both directions: ProximityKit ⊬ CloudKit, CloudKitSync ⊬ ProximityKit, with comment-vs-import discrimination tested at :252-260. That earlier plan line should be treated as superseded. |
+| "S3BoundaryTests has no CloudKit-import rule" (Increment 3 note, plan doc :100) | **Stale.** `Tests/FernletTests/S3BoundaryTests.swift:226-227` now enforces both directions: ProximityKit ⊬ CloudKit, CloudKitSync ⊬ ProximityKit, with comment-vs-import discrimination tested at :252-260. That earlier plan line should be treated as superseded. |
 | "`heartDropPrekeyBundleProvider` is zero-argument" | Confirmed: `ProximityCoordinator.swift:771`, wired identically at `MeshNetworkManager.swift:1535` and `PresenceManager.swift:637`. |
 | "`advertisedFingerprint` is always nil on the mesh radio" | Confirmed: `currentDiscoveryInfo()` (`MeshNetworkManager.swift:1438-1450`) publishes only `v`/`sid`/`name`/`meshID`/`meshName`/`memberCount`. No `fp`. |
-| "`FernletStore` cannot be constructed in the background" | Confirmed by construction, not by policy: `FernletStoreLoader.startIfNeeded()` (`FernletStoreLoader.swift:19`) is called only from `FernletApp.swift:112` inside the `WindowGroup` `.task`, and `retry()` (:25). `heartDropService` is a `lazy var` at `FernletStore.swift:218`. But `Info.plist:6-9` already declares `UIBackgroundModes = remote-notification`, and `FernletWidgets/GuidedWorkoutLiveActivityIntents.swift` + `Fernlet/FernletAppIntents.swift` both run `openAppWhenRun = false` in the app process from a locked device. The isolation is one wiring line thick. |
+| "`FernletStore` cannot be constructed in the background" | Confirmed by construction, not by policy: `FernletStoreLoader.startIfNeeded()` (`FernletStoreLoader.swift:19`) is called only from `FernletApp.swift:112` inside the `WindowGroup` `.task`, and `retry()` (:25). `heartDropService` is a `lazy var` at `FernletStore.swift:218`. But `Info.plist:6-9` already declares `UIBackgroundModes = remote-notification`, and `App/FernletWidgets/GuidedWorkoutLiveActivityIntents.swift` + `App/Fernlet/FernletAppIntents.swift` both run `openAppWhenRun = false` in the app process from a locked device. The isolation is one wiring line thick. |
 | "Outbox `load`/`persist` swallow everything" | Confirmed: `HeartDropOutbox.swift:221-225` (`try?` ×2, absent/unreadable/corrupt all → `[]`) and `:227-232` (`try?` write, no dirty flag). Same shape at `HeartDropDedupStore.persist` (:342), `HeartDropPeerBundleCache` init (:44-49) / `persist` (:139), and `ProximityHeartLedger.load/save` (:219-241). |
 
 ---
@@ -179,7 +179,7 @@ unknown answer that the caller propagates, not an empty array.
 
 ## Increment 3 — surface it (nothing-silent) + close the `flush` divergence
 
-**Files:** `HeartDropService.swift`, `Fernlet/FriendListView.swift`, and (O5) `ProximityHeartLedger.swift`.
+**Files:** `HeartDropService.swift`, `App/Fernlet/FriendListView.swift`, and (O5) `ProximityHeartLedger.swift`.
 
 - Add `QueueOutcome.storageUnavailable` (enum at `HeartDropService.swift:26`) and
   `DeliveryProblem.storageUnavailable` (:41). `refreshDeliveryProblem` (:344) raises it when any
@@ -339,13 +339,13 @@ one-time → else fresh SPK → else nil, returning `(id, publicKey, isOneTime)`
 a richer one and destroy key material, and the `!bundle.keys.isEmpty` guard would silently drop an
 SPK-only bundle entirely. Extend — do not merely keep passing — the existing tests
 `olderBundleNeverReplacesNewerAndKeepsConsumption` and `staleBundleIsNotSealedTo`
-(`FernletTests/HeartDropTests.swift:380, :401`).
+(`Tests/FernletTests/HeartDropTests.swift:380, :401`).
 
 **Ordering note:** this file is rewritten by Increment 2. Do A first.
 
 ## Increment 7 — service wiring, audit, invariant test
 
-**Files:** `HeartDropService.swift`, `FernletTests/HeartDropTests.swift`.
+**Files:** `HeartDropService.swift`, `Tests/FernletTests/HeartDropTests.swift`.
 
 - `queueHeart` (:161) passes the tuple through unchanged.
 - Make the local `returnPrekey()` helper (:201-204) explicitly skip non-one-time keys instead of
@@ -458,13 +458,13 @@ coach spec §3.2 forbids. Also not inherited: the QR ceremony (see (b)).
 
 **Nothing is broken in the coach transport, because none of it is built.** The shipped coach feature
 is a file: `TrainerExportView` → `FernletStore.writeTrainerExportFile`
-(`Fernlet/TrainerExportBuilder.swift:195-205`) writes JSON to `temporaryDirectory` with
+(`App/Fernlet/TrainerExportBuilder.swift:195-205`) writes JSON to `temporaryDirectory` with
 `.completeFileProtection` and hands it to `ShareLink`. `TrainerExportView.swift:131-137` says so on
 screen. `TrainerExportPayload` (`Wire/TrainerPayloads.swift:23-40`) has zero production call sites.
 
 One **live user-visible** bug, and it is coach-shaped only by name:
 
-- `MoveView.hasRecentCoachInteraction` (`Fernlet/MoveView.swift:62-67`) scans `trainerAuditEvents` for
+- `MoveView.hasRecentCoachInteraction` (`App/Fernlet/MoveView.swift:62-67`) scans `trainerAuditEvents` for
   `.peerAccepted/.envelopeReceived/.envelopeSent` in the last 14 days. That log is misnamed: it is the
   generic proximity audit for **all** modes, written on every state transition, envelope send/receive,
   reject, fail and session end. So it returns `true` for a user who has only ever used the friend
@@ -499,7 +499,7 @@ keychain service to miss.
 
 ## Increment 8 — fix the live defect, record the do-not-delete decision
 
-**Files:** `Fernlet/MoveView.swift:62-67` (+ the three tag sites :106/:117/:179);
+**Files:** `App/Fernlet/MoveView.swift:62-67` (+ the three tag sites :106/:117/:179);
 `ProximityCoordinator.swift:1086`.
 
 Gate `hasRecentCoachInteraction` on `PlannedWorkout.source == .coach` actually appearing in the user's
@@ -648,7 +648,7 @@ which does.
 - **S3 wall.** Nothing here crosses it. ProximityKit gains a UIKit notification observer (UIKit is
   already imported in four ProximityKit files; the package is iOS-only). ProximityKit still never
   imports CloudKit; the transport seam stays in FernletDomainModel. Run `Scripts/spm-wall-check.sh`
-  plus `FernletTests/S3BoundaryTests` before merge.
+  plus `Tests/FernletTests/S3BoundaryTests` before merge.
 - **Test cadence.** Targeted `HeartDropTests` / `HeartDropAppWiringTests` during increments; full
   suite in batches (lock suite dominates, ~7 min total) + wall check + one clean build before merge.
   New test seam: a `readData:` injection on the three stores, defaulted so no existing call site

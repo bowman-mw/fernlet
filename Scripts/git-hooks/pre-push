@@ -20,7 +20,7 @@ if [ "${SKIP_S3_WALL_CHECK:-0}" = "1" ]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|Fernlet/.*\.swift|Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|FernletTests/NoTrackingBoundaryTests\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|App/Fernlet/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|Tests/FernletTests/NoTrackingBoundaryTests\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
 zero="0000000000000000000000000000000000000000"
 
 changed_files=""

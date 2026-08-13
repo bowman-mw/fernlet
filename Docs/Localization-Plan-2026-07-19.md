@@ -9,7 +9,7 @@ cheapest possible first wave.
 
 **Explicitly out of scope:** CJK, Arabic/Hebrew (RTL), Thai, and other non-Latin scripts. They
 additionally require new fonts (the serif identity faces — Fraunces / DM Serif Display /
-Instrument Serif, `Fernlet/FernletDesignSystem.swift:37-64` — are Latin-only), FTS tokenizer work
+Instrument Serif, `App/Fernlet/FernletDesignSystem.swift:37-64` — are Latin-only), FTS tokenizer work
 (no CJK word segmentation in `unicode61`), and realistically regional food data. Separate project.
 
 ---
@@ -36,7 +36,7 @@ Localization scaffolding is **zero**: no `.xcstrings`/`.strings`/`.lproj` anywhe
 `knownRegions = (en, Base)` (`project.pbxproj:437-440`); `FernletKit/Package.swift` has no
 `defaultLocalization`; `Bundle.module` appears only in a comment. The only localization-ready API
 surface is `LocalizedStringResource` on the App Intents (`FernletAppIntents.swift:14,52,64`,
-`FernletWidgets/WaterPlusOneIntent.swift:14`, `GuidedWorkoutLiveActivityIntents.swift:19,32`).
+`App/FernletWidgets/WaterPlusOneIntent.swift:14`, `GuidedWorkoutLiveActivityIntents.swift:19,32`).
 
 What is already safe (do not touch):
 

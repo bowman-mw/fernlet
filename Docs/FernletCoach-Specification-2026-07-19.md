@@ -559,7 +559,7 @@ trainee-agnostic until assigned).
 | **D8** | Coach multi-device | **DECIDED 2026-07-19.** Single device V1 + sealed backup file. Multi-device would need the mesh-offline-sync work already on the Fernlet roadmap. |
 | **D9** | Error copy | **DECIDED 2026-07-19.** Shipping copy: **"This workout was sent to someone else"** + explanation; the requirement's phrase is the accepted meaning, not the literal string. |
 | **D10** | Sharing a session note with its trainee (in person) | **DECIDED 2026-07-19.** Not in V1; tracked as a candidate follow-up. |
-| **D11** | Per-plan link card titles ("7/19–7/26 Workouts") | **Prototype:** sender-supplied `LPLinkMetadata` from Coach's share flow — if Messages carries it into the sent bubble, per-plan titles are free. Likely fallback: per-length static pages + exact dates in the coach's message text (§3.3). Rejected: per-date static pages (date leak to host logs) and an edge renderer (operated server). Harness ready: `Fernlet/LinkMetadataPrototypeView.swift` + [D11-LinkMetadata-Prototype.md](D11-LinkMetadata-Prototype.md). |
+| **D11** | Per-plan link card titles ("7/19–7/26 Workouts") | **Prototype:** sender-supplied `LPLinkMetadata` from Coach's share flow — if Messages carries it into the sent bubble, per-plan titles are free. Likely fallback: per-length static pages + exact dates in the coach's message text (§3.3). Rejected: per-date static pages (date leak to host logs) and an edge renderer (operated server). Harness ready: `App/Fernlet/LinkMetadataPrototypeView.swift` + [D11-LinkMetadata-Prototype.md](D11-LinkMetadata-Prototype.md). |
 
 ---
 

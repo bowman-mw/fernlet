@@ -39,7 +39,7 @@ Local complement: every clone runs `Scripts/install-git-hooks.sh` once, so the c
    `Scripts/spm-wall-check.sh` exits 0.
 2. `Scripts/doc-coverage-scan.py` reports zero undocumented type declarations.
 3. The privacy policy triple is in sync (`Docs/Privacy-Policy.md`, `Site/privacy/index.html`,
-   `Fernlet/PrivacyPolicyView.swift` — same substance, same effective date).
+   `App/Fernlet/PrivacyPolicyView.swift` — same substance, same effective date).
 4. If any network destination or dependency changed: the change is allowlisted in
    `NoTrackingBoundaryTests` **and** documented in
    [`Docs/No-Tracking-Wall.md`](No-Tracking-Wall.md), in the same commit (§5 of that doc).

@@ -15,7 +15,7 @@ requests. Fonts, styles and script are all served from this origin.
 | Path | Purpose |
 | --- | --- |
 | `index.html` | Landing page — the companion, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
-| `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
+| `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
 | `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
@@ -31,10 +31,10 @@ requests. Fonts, styles and script are all served from this origin.
 they must always match:
 
 1. `Docs/Privacy-Policy.md` — the source of truth
-2. `Fernlet/PrivacyPolicyView.swift` — the in-app copy
+2. `App/Fernlet/PrivacyPolicyView.swift` — the in-app copy
 3. `Site/privacy/index.html` — the hosted copy (the App Store Connect Privacy Policy URL)
 
-`FernletTests/PrivacyPolicyParityTests` pins the effective date and the load-bearing clauses across
+`Tests/FernletTests/PrivacyPolicyParityTests` pins the effective date and the load-bearing clauses across
 all three, and the Pages workflow re-checks the same thing before every deploy — so a stale hosted
 policy fails the deploy instead of going live. Any material change: update all three and bump the
 effective date in all three.

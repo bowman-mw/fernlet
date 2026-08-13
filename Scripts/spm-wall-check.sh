@@ -45,7 +45,7 @@ echo "    destination: $DESTINATION"
 echo "    flag:        DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR"
 echo
 
-xcodebuild build-for-testing -scheme Fernlet \
+xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet \
   -destination "$DESTINATION" \
   DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR
 CODE=$?

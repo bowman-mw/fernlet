@@ -12,3 +12,14 @@ ODRAssets/FoodCatalogBranded.sqlite
 # Large intermediate conversion artifacts (regenerable from the USDA FDC download)
 FoodDataSource/BrandedFoodItems.json
 FoodDataSource/BrandedODRFoodItems.json
+
+# Agent instruction files — local tooling context, not part of the shipped project
+CLAUDE.md
+AGENTS.md
+
+# macOS Finder metadata
+.DS_Store
+
+# Stale root-level project stub: an Xcode window still open on the pre-restructure path
+# recreates ./Fernlet.xcodeproj holding only UI state. The real project is App/Fernlet.xcodeproj.
+/Fernlet.xcodeproj/

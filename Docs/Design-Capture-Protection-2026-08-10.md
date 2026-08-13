@@ -10,7 +10,7 @@ are ordinary public API (`UIApplication.userDidTakeScreenshotNotification`,
 `UIScreen.capturedDidChangeNotification`, `scenePhase`) and pure UI. There is nothing like it in the
 tree today: a repo-wide grep for `isCaptured`, `capturedDidChangeNotification`,
 `userDidTakeScreenshotNotification`, `isSecureTextEntry`, and every common "screen shield" spelling
-across `Fernlet/`, `FernletKit/`, and `FernletWidgets/` returns zero hits. `UIScreen` is never
+across `App/Fernlet/`, `FernletKit/`, and `App/FernletWidgets/` returns zero hits. `UIScreen` is never
 referenced anywhere in the app.
 
 **What this is not.** This is **friction, not a guarantee.** It cannot prevent a screenshot; it
@@ -47,7 +47,7 @@ stated in that frame.
 | Screen recording (Control Center) with a private surface open | 2 | `isCaptured` goes true; an opaque panel covers the protected views for the whole recording. | Genuinely effective for its case: the recording contains the panel, not the content. Stops the "I recorded my whole screen and forgot the journal was open" accident. |
 | AirPlay **mirroring** to a TV / Mac | 2 | Same as recording — mirroring sets `isCaptured` on the mirrored screen. | Effective. This is the most common accidental-broadcast path. |
 | QuickTime capture over USB, ReplayKit-based screen-share apps | 2 | Same path; `isCaptured` covers these. | Effective for the same reason, with the same limits. |
-| App-switcher / Control Center / notification-shade snapshot | 2b | Cover paints on resign-active, so the OS snapshot is the cover. | Effective, and the one case with an existing in-repo precedent (`Fernlet/ProgressPhotoTimeline.swift:65`, `:167`). |
+| App-switcher / Control Center / notification-shade snapshot | 2b | Cover paints on resign-active, so the OS snapshot is the cover. | Effective, and the one case with an existing in-repo precedent (`App/Fernlet/ProgressPhotoTimeline.swift:65`, `:167`). |
 | **A second camera pointed at the screen** | — | Nothing happens. | The analog hole. Unclosable by any app on any OS. |
 | **A determined self-sharer** | — | They will screenshot anyway, or type the text out, or record with another phone. | Out of scope by construction. This feature targets impulse, not intent. |
 | A malicious app on the same device, a jailbroken device, forensic imaging | — | Out of scope here; addressed (to the extent it can be) by the lock service and key custody — see [`Verifiability.md`](Verifiability.md) §4–§5. | Capture protection adds nothing against these and must not be cited as if it did. |
@@ -87,12 +87,12 @@ be covered separately. Six attachments is the floor, not a preference.
 
 | # | Surface | Attach at | Notes |
 |---|---|---|---|
-| 1 | Private hub: Journal + Cycle + Worry Box pages, **and** their pushed details | `Fernlet/PrivateHubView.swift:83` — same modifier chain as the existing `.fernletLockGate(scope: .privateHub, …)`, after `.background(Color.parchment)` (`:78`) | The hub body is a paged `TabView` (`:61`) holding `JournalView` (`:63`), `CycleTrackerView` (`:65`, conditional), `WorryBoxView` (`:68`). `navigationDestination` content renders inline in the same presentation host, so `DayDetailView` (`Fernlet/JournalView.swift:802`, pushed at `:93`) and `CycleDayDetailView` (`Fernlet/CycleDayDetailView.swift:21`, pushed at `Fernlet/CycleTrackerView.swift:102`) are covered for free. `WorryBoxView` (`Fernlet/WorryBoxView.swift:361`) presents no sheets at all — its composer is inline (`:396-420`), so the hub attachment fully covers it. |
-| 2 | `JournalSheet` | `Fernlet/JournalView.swift:136` (body; struct at `:119`) | Presented from the root router at `Fernlet/ContentView.swift:538`. Also raised from the Journal page (`JournalView.swift:33`, `:51`), Home's quick-log tile (`Fernlet/HomeView.swift:985`), a notification tap (`ContentView.swift:314`), and the "Write in my journal" App Intent (`ContentView.swift:307`). |
-| 3 | `JournalEntryEditorSheet` | `Fernlet/JournalView.swift:455` (body; struct at `:428`) | Two call sites, both in scope: `JournalView.swift:101` and `DayDetailView`'s `:945`. Attaching at the type covers both with one edit. |
-| 4 | `DayEditSheet` | `Fernlet/JournalView.swift:1260` | Presented from `DayDetailView` at `JournalView.swift:939`; reachable only by pushing from the Journal calendar. |
-| 5 | `LogPeriodSheet` | `Fernlet/LogPeriodSheet.swift:63` (body; struct at `:18`) | Presented from the root router at `Fernlet/ContentView.swift:613`; raised from the Cycle page (`CycleTrackerView.swift:113`) **and** Home's quick-log tile (`HomeView.swift:989`). |
-| 6 | `LogIntimacySheet` | `Fernlet/LogIntimacySheet.swift:32` (body; struct at `:18`) | Presented from the root router at `Fernlet/ContentView.swift:620`. |
+| 1 | Private hub: Journal + Cycle + Worry Box pages, **and** their pushed details | `App/Fernlet/PrivateHubView.swift:83` — same modifier chain as the existing `.fernletLockGate(scope: .privateHub, …)`, after `.background(Color.parchment)` (`:78`) | The hub body is a paged `TabView` (`:61`) holding `JournalView` (`:63`), `CycleTrackerView` (`:65`, conditional), `WorryBoxView` (`:68`). `navigationDestination` content renders inline in the same presentation host, so `DayDetailView` (`App/Fernlet/JournalView.swift:802`, pushed at `:93`) and `CycleDayDetailView` (`App/Fernlet/CycleDayDetailView.swift:21`, pushed at `App/Fernlet/CycleTrackerView.swift:102`) are covered for free. `WorryBoxView` (`App/Fernlet/WorryBoxView.swift:361`) presents no sheets at all — its composer is inline (`:396-420`), so the hub attachment fully covers it. |
+| 2 | `JournalSheet` | `App/Fernlet/JournalView.swift:136` (body; struct at `:119`) | Presented from the root router at `App/Fernlet/ContentView.swift:538`. Also raised from the Journal page (`JournalView.swift:33`, `:51`), Home's quick-log tile (`App/Fernlet/HomeView.swift:985`), a notification tap (`ContentView.swift:314`), and the "Write in my journal" App Intent (`ContentView.swift:307`). |
+| 3 | `JournalEntryEditorSheet` | `App/Fernlet/JournalView.swift:455` (body; struct at `:428`) | Two call sites, both in scope: `JournalView.swift:101` and `DayDetailView`'s `:945`. Attaching at the type covers both with one edit. |
+| 4 | `DayEditSheet` | `App/Fernlet/JournalView.swift:1260` | Presented from `DayDetailView` at `JournalView.swift:939`; reachable only by pushing from the Journal calendar. |
+| 5 | `LogPeriodSheet` | `App/Fernlet/LogPeriodSheet.swift:63` (body; struct at `:18`) | Presented from the root router at `App/Fernlet/ContentView.swift:613`; raised from the Cycle page (`CycleTrackerView.swift:113`) **and** Home's quick-log tile (`HomeView.swift:989`). |
+| 6 | `LogIntimacySheet` | `App/Fernlet/LogIntimacySheet.swift:32` (body; struct at `:18`) | Presented from the root router at `App/Fernlet/ContentView.swift:620`. |
 
 **Attach inside each sheet type's `body`, not at the call sites.** Three of the five sheets have two
 or more presenters; typing it at the sheet root is one edit each, cannot be forgotten at a new call
@@ -111,7 +111,7 @@ in §9.
 Recipes (`RecipeBookSheet` / `RecipeSheet`, `ContentView.swift:520-525`), Milestones (instantiated
 inside `HomeView.swift:177`), Home / companion, Settings (`ContentView.swift:574`), Trends
 (`:588`), and the Food / Move / Social tabs. These are structural **siblings** of `PrivateHubView`
-in `pagedTabs` (`Fernlet/ContentView.swift:417-449`), so a hub-scoped modifier physically cannot
+in `pagedTabs` (`App/Fernlet/ContentView.swift:417-449`), so a hub-scoped modifier physically cannot
 reach them — the scope boundary is enforced by the view tree, not by discipline.
 
 ### 2.3 The Home tab renders in-scope *content* on an out-of-scope *screen*
@@ -128,15 +128,15 @@ intimacy marker, and the notes behind each). Protecting a one-line prediction wo
 usability — people legitimately screenshot their companion and its cards — for very little privacy
 gain. Do not re-raise this.
 
-**STILL OPEN — `lookingBackCard`** (`Fernlet/AmbientCards.swift:201-215`, computed at `:222`)
+**STILL OPEN — `lookingBackCard`** (`App/Fernlet/AmbientCards.swift:201-215`, computed at `:222`)
 renders **decrypted journal text** from a past day on the Home tab. Note that the decided rationale
 *cuts the other way here*: this is not a derived summary, it is verbatim sealed-corpus prose — the
 raw record — surfaced on the tab a user is most likely to screenshot to show off their companion.
 It is the strongest case in the app for a narrow exception. Recommendation: apply the modifier to
 this **card**, not to the Home screen.
 
-**STILL OPEN — the First Aid worry composer.** `WorryEntryView` (`Fernlet/WorryBoxView.swift:24`)
-is pushed inside `FirstAidView`'s stack (`Fernlet/FirstAidView.swift:122`), presented as a root
+**STILL OPEN — the First Aid worry composer.** `WorryEntryView` (`App/Fernlet/WorryBoxView.swift:24`)
+is pushed inside `FirstAidView`'s stack (`App/Fernlet/FirstAidView.swift:122`), presented as a root
 sheet case (`ContentView.swift:604`) and reached from Home's `.worryBox` tile (`HomeView.swift:1004`).
 This is where worry text is actually *typed*, so "worry box including its sheets" arguably already
 covers it — but First Aid also hosts breathing and grounding tools that are not sensitive, so
@@ -159,7 +159,7 @@ pixels are captured, and carries no scene attribution.
    fill here — the user knows what they just did; the point is a beat of hesitation, not alarm) for
    a short fixed interval, then clear on its own.
 2. Once — see §9 on frequency — show a small, calm nudge in the voice of the existing per-surface
-   privacy copy (`Fernlet/CycleTrackerView.swift:294-310` is the tonal precedent):
+   privacy copy (`App/Fernlet/CycleTrackerView.swift:294-310` is the tonal precedent):
 
    > **This is your private data — it stays safest on your device.**
    > A screenshot leaves Fernlet's protection behind.
@@ -201,7 +201,7 @@ true background transition, and that is precisely the gap.
 
 Two interactions to get right:
 
-- **The existing background re-lock already covers part of this.** `Fernlet/FernletApp.swift:137`
+- **The existing background re-lock already covers part of this.** `App/Fernlet/FernletApp.swift:137`
   calls `lockService.lock(reason: .background)` on a true background transition, which scrubs the
   content key and flips the gate to `.locked`
   (`FernletKit/Sources/FernletLock/FernletLockService.swift:1022-1026`), so `FernletLockGateModifier`
@@ -220,7 +220,7 @@ Two interactions to get right:
 ### 4.1 Multi-scene and external-display correctness
 
 `UIScreen.main` is both deprecated and **wrong here**. The built `Info.plist` carries
-`UIApplicationSupportsMultipleScenes: true` (from `Fernlet.xcodeproj/project.pbxproj:578-579`), the
+`UIApplicationSupportsMultipleScenes: true` (from `App/Fernlet.xcodeproj/project.pbxproj:578-579`), the
 device family is iPhone + iPad (`pbxproj:604`), and all four iPad orientations are enabled
 (`pbxproj:586`) — so Stage Manager and Split View can run two Fernlet windows. Deployment target is
 iOS 26.5 (`pbxproj:588`), so every API here is available unconditionally and there is no reason to
@@ -231,7 +231,7 @@ Rules:
 - **Resolve the screen from the view's own window scene.** A small `UIViewRepresentable` probe
   inside the modifier reports `view.window?.windowScene` upward; read `windowScene.screen.isCaptured`.
   The only existing scene traversal in the app is `UIApplication.shared.connectedScenes` at
-  `Fernlet/FernletApp.swift:107-108` — do **not** copy that shape for per-view state; it cannot tell
+  `App/Fernlet/FernletApp.swift:107-108` — do **not** copy that shape for per-view state; it cannot tell
   which window the modifier is in.
 - **Observe `capturedDidChangeNotification` with `object: nil`** and re-read the modifier's own
   screen on each post, rather than trusting the notification's subject. Per-screen state, one
@@ -257,22 +257,22 @@ scene) and a screenshot *pulse* (a monotonically increasing token or a timestamp
 observe). It installs both `NotificationCenter` observers once and is injected via `.environment(…)`.
 
 This matches the app's established service shape — `WorryBoxService`
-(`Fernlet/WorryBoxService.swift:42`), `StressService` (`Fernlet/StressService.swift:57`),
-`AgeAssuranceStore` (`Fernlet/AgeAssuranceStore.swift:20`), `ConnectionInspector`
-(`Fernlet/Proximity/Audit/ConnectionInspector.swift:29`) — and the observer template is
+(`App/Fernlet/WorryBoxService.swift:42`), `StressService` (`App/Fernlet/StressService.swift:57`),
+`AgeAssuranceStore` (`App/Fernlet/AgeAssuranceStore.swift:20`), `ConnectionInspector`
+(`App/Fernlet/Proximity/Audit/ConnectionInspector.swift:29`) — and the observer template is
 `FernletKit/Sources/ProximityKit/HeartSharing/ProtectedSidecar.swift:172-191`: `#if canImport(UIKit)`,
 `addObserver(forName:object:queue:)` with `[weak self]`, an explicit `Task { @MainActor [weak self] in … }`
 hop, token stored and removed in `deinit`. The comment at `:174` is the load-bearing one — *the block
 runs nonisolated under Swift 6; never touch state directly, hop first.* A second stored-token example
-is `Fernlet/FernletStore.swift:4348-4356`.
+is `App/Fernlet/FernletStore.swift:4348-4356`.
 
 One observer is sufficient even while a sheet is up: SwiftUI does not fire `.onDisappear` on a view
 covered by a `.sheet` (`FernletLockGate.swift:7-9`), so a hub-mounted observer stays alive. Only the
 **rendering** has to be duplicated per presentation context.
 
 **Ownership and injection.** Declare `@State private var captureProtection = CaptureProtectionState()`
-alongside the existing app-lifetime singletons at `Fernlet/FernletApp.swift:32-34`, and inject in
-`readyContent(store:)` at `Fernlet/FernletApp.swift:220`, next to the existing `.environment(lockService)`
+alongside the existing app-lifetime singletons at `App/Fernlet/FernletApp.swift:32-34`, and inject in
+`readyContent(store:)` at `App/Fernlet/FernletApp.swift:220`, next to the existing `.environment(lockService)`
 / `.environment(storagePreferencesStore)` (`:219-221`). Then **re-inject per sheet case**, following
 the convention already in place at `ContentView.swift:582-583` (`.settings`), `:612` (`.firstAid`),
 `:618` (`.logPeriod`), `:625-626` (`.logIntimacy`). Modern SwiftUI does propagate environment into
@@ -313,9 +313,9 @@ decision because it is easy to get backwards.
 ### 5.4 Always-on, not visibility-keyed
 
 **Recommendation: always on for all four surfaces, unconditional.** `PrivateHubSection.visibleSections`
-(`Fernlet/PrivateHubView.swift:26-34`) gates only `.cycle` — `.journal` and `.worryBox` return `true`
+(`App/Fernlet/PrivateHubView.swift:26-34`) gates only `.cycle` — `.journal` and `.worryBox` return `true`
 unconditionally at `:31`. Keying protection to `store.sensitiveSurfaceVisibility`
-(`Fernlet/FernletStore.swift:700-705`) would therefore leave two of the four in-scope surfaces
+(`App/Fernlet/FernletStore.swift:700-705`) would therefore leave two of the four in-scope surfaces
 permanently unprotected while adding a conditional path to reason about. Any conditional scheme
 degenerates to "`.cycle` only," which buys nothing.
 
@@ -332,7 +332,7 @@ the period/intimacy gating work.
   until allowlisted and documented in the same commit — which is one more reason to build these ~200
   lines in-house with UIKit/SwiftUI only.
 - **S3 wall.** No sealed-store access, no `Private*` import, no `AIProviders` / `CloudKitSync`
-  involvement. Nothing in `Scripts/spm-wall-check.sh` or `FernletTests/S3BoundaryTests` changes.
+  involvement. Nothing in `Scripts/spm-wall-check.sh` or `Tests/FernletTests/S3BoundaryTests` changes.
 
 **Module placement.** If the modifier's API takes only plain inputs (`Bool`, closures), it belongs in
 `FernletKit/Sources/FernletUI/` alongside the other view modifiers — the module is wall-neutral,
@@ -357,10 +357,10 @@ no switch. Capture protection is the second kind.
 **Settings toggle — recommendation: no.** A toggle turns a quiet protection into a decision the user
 has to make about a threat they have not thought about, and it adds surface to maintain. If the owner
 wants one anyway, the constraints are concrete: it belongs with the other privacy cards in
-`Fernlet/PrivacyDataSettingsView.swift` (`privacyControls` at `:313-333`, `SectionLabel` groups at
+`App/Fernlet/PrivacyDataSettingsView.swift` (`privacyControls` at `:313-333`, `SectionLabel` groups at
 `:337` / `:678` / `:699`), that whole screen sits behind a fresh-biometric gate on every entry
 (`:210-222`) — so reaching a low-stakes toggle costs a Face ID prompt — and any new Privacy & Data
-control **must** also be registered in `Fernlet/SettingsSearchIndex.swift` (Privacy & Data entries
+control **must** also be registered in `App/Fernlet/SettingsSearchIndex.swift` (Privacy & Data entries
 run ~`:369-425`) in the same commit. The flag would be passed *into* `captureProtected(active:)` as a
 `Bool` from app-side code, never read from inside `FernletUI`.
 
@@ -409,8 +409,8 @@ test posting a screenshot to `.default` bumps every other test's live state: tha
 |---|---|---|
 | Unit (Swift Testing) | Construct `CaptureProtectionState` **on a private `NotificationCenter`**, post `UIApplication.userDidTakeScreenshotNotification` / a synthetic capture change to it on the main actor | The observable's state transitions, the MainActor hop, observer removal in `deinit` (no retain cycle), and that a post to any other center is ignored |
 | View-level | Host each of the six roots with an injected state, toggle it | Cover renders when captured; clears when not; frontmost gating suppresses the pulse when `selectedTab != .personal` |
-| UI (XCUITest) | A `FERNLET_UI_TEST_FORCE_CAPTURE` flag following `Fernlet/UITestSupport.swift:31`/`:37`/`:42` with `#else` no-op stubs at `:69-71` | The cover appears over each of the six surfaces and carries its accessibility label |
-| UI regression guard | Existing `ScreenAppearanceUITests` (screenshots the private hub and the logging sheets via `FernletUITests/UXScreenProbe.swift:185`, under `FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK=1`, `UITestSupport.swift:37`) | **Nothing goes blank.** A `scenePhase != .active` cover or a screenshot-triggered blur firing during those runs empties the appearance gallery and fails its "nothing is blank" assertions. This is the most likely way this feature breaks CI. |
+| UI (XCUITest) | A `FERNLET_UI_TEST_FORCE_CAPTURE` flag following `App/Fernlet/UITestSupport.swift:31`/`:37`/`:42` with `#else` no-op stubs at `:69-71` | The cover appears over each of the six surfaces and carries its accessibility label |
+| UI regression guard | Existing `ScreenAppearanceUITests` (screenshots the private hub and the logging sheets via `Tests/FernletUITests/UXScreenProbe.swift:185`, under `FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK=1`, `UITestSupport.swift:37`) | **Nothing goes blank.** A `scenePhase != .active` cover or a screenshot-triggered blur firing during those runs empties the appearance gallery and fails its "nothing is blank" assertions. This is the most likely way this feature breaks CI. |
 
 **Manual device matrix — required before shipping, since CI cannot cover it:**
 
@@ -439,10 +439,10 @@ test posting a screenshot to `.default` bumps every other test's live state: tha
 - **DocC landing page.** No new module is proposed, so no new landing page is needed — but the
   owning module's page is updated in the same commit: `FernletKit/Sources/FernletUI/Documentation.docc/FernletUI.md`
   (Overview modifier list + Topics) if it lands in `FernletUI`, or
-  `Fernlet/Documentation.docc/Fernlet.md` (the "Cycle, Journal & Private Data" prose, Topics list) if
+  `App/Fernlet/Documentation.docc/Fernlet.md` (the "Cycle, Journal & Private Data" prose, Topics list) if
   app-target.
 - **Index files.** New source files get a row in [`FileIndex.md`](FileIndex.md). If a Settings toggle
-  ships, `Fernlet/SettingsSearchIndex.swift` must be updated too (§6).
+  ships, `App/Fernlet/SettingsSearchIndex.swift` must be updated too (§6).
 - **No wall-doc changes.** [`No-Tracking-Wall.md`](No-Tracking-Wall.md) and
   [`SPM-Module-Carveup-Plan.md`](SPM-Module-Carveup-Plan.md) are untouched, for the reasons in §5.5:
   no new egress, no new dependency, no sealed-store reach. Stating this explicitly is itself an
@@ -480,7 +480,7 @@ test posting a screenshot to `.default` bumps every other test's live state: tha
   — the two walls; neither changes (§5.5).
 - [`Docs/Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) — the hardening
   ledger this brief is deliberately **not** part of.
-- `Fernlet/ProgressPhotoTimeline.swift:64-65`, `:167`, `:209-222`, `:388`, `:497-516` — the existing
+- `App/Fernlet/ProgressPhotoTimeline.swift:64-65`, `:167`, `:209-222`, `:388`, `:497-516` — the existing
   hand-rolled snapshot cover, and the recorded lesson that a partial cover leaks.
 - `FernletKit/Sources/FernletLockUI/FernletLockGate.swift:52`, `:120-141`, `:278-285` — the
   ViewModifier, scene-suppression, and public-API templates.

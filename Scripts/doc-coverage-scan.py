@@ -2,8 +2,8 @@
 """Scan Swift sources for type declarations lacking an adjacent /// doc comment.
 
 Usage: Scripts/doc-coverage-scan.py [<root> ...]
-With no arguments, scans the four documented roots: FernletKit/Sources, Fernlet,
-FernletWidgets, FernletShareExtension (relative to the repo root, which is
+With no arguments, scans the four documented roots: FernletKit/Sources, App/Fernlet,
+App/FernletWidgets, App/FernletShareExtension (relative to the repo root, which is
 resolved from this script's location).
 
 Prints one line per undocumented declaration (path:line:TypeName: decl) and a
@@ -89,7 +89,7 @@ def main():
         repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         roots = [
             os.path.join(repo, d)
-            for d in ("FernletKit/Sources", "Fernlet", "FernletWidgets", "FernletShareExtension")
+            for d in ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension")
         ]
     total = 0
     for root in roots:

@@ -304,7 +304,7 @@ record:
 
 Save through [SavedRecipeService](../FernletKit/Sources/StoreCore/SavedRecipeService.swift)
 (`add(_:)`), then log the meal with **`MealBuilder.mealFromRecipe`**
-([MealBuilder.swift:52](../Fernlet/MealBuilder.swift)), which sums the structured ingredients.
+([MealBuilder.swift:52](../App/Fernlet/MealBuilder.swift)), which sums the structured ingredients.
 
 > ~~log the meal with the existing `SavedRecipeService.makeMeal(from:mealType:)`~~ — **corrected
 > 2026-07-24:** `SavedRecipeService.makeMeal` is **webImport-only** and logs a zero-macro
@@ -444,7 +444,7 @@ API keys are new long-lived secrets. Rules:
 - ~~Cleared by the existing delete-all-data action.~~ **Corrected 2026-07-24: a new keychain-purge
   leg must be ADDED to delete-all-data.** `FernletStore.deleteAllData` touches **zero** keychain
   items today and *deliberately* skips `FernletLockService.reset()`
-  ([FernletStore.swift:3025-3027](../Fernlet/FernletStore.swift)), so a BYOK API key would **survive
+  ([FernletStore.swift:3025-3027](../App/Fernlet/FernletStore.swift)), so a BYOK API key would **survive
   a full "delete everything."** Add an explicit keychain-purge leg (with a failure line, per the
   funnel's per-store contract) **plus a post-wipe test asserting the key is gone**. Scheduled in the
   build order (§9).
@@ -524,7 +524,7 @@ needs:
   >   web rung — the one shipped destination whose `leavesDevice == true`.)
 
 **Payload tests:** every new payload gets a test asserting its field set, mirroring the existing
-`FernletTests/S3BoundaryTests` grep-wall discipline. A forbidden field appearing in
+`Tests/FernletTests/S3BoundaryTests` grep-wall discipline. A forbidden field appearing in
 `includedFieldNames` should fail the build's test phase.
 
 ---

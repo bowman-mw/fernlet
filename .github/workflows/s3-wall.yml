@@ -12,7 +12,7 @@
 #   * Swift tools 6.2 — FernletKit/Package.swift's tools version. An older toolchain cannot even
 #     resolve the package ("using Swift tools version 6.2.0 but the installed version is 6.1.0").
 #   * the iOS 26.5 SDK — the app uses API introduced there (AgeRangeService.AgeRangeDeclaration
-#     .confirmed, in Fernlet/AgeAssuranceRequest.swift).
+#     .confirmed, in App/Fernlet/AgeAssuranceRequest.swift).
 # The job selects the NEWEST Xcode 26+ on the image rather than pinning a minor version; pinning
 # 26.5 is how this workflow silently fell back to Xcode 16.4 and failed on every run. If hosted
 # images ever fall behind the SDK floor again, point `runs-on` at a self-hosted label. The
@@ -79,7 +79,7 @@ jobs:
 
           # The Xcode version is not the real requirement — the iOS SDK it ships is. The app uses
           # API that only exists from the 26.5 SDK on (AgeRangeService.AgeRangeDeclaration
-          # .confirmed, in Fernlet/AgeAssuranceRequest.swift), so an older SDK fails three minutes
+          # .confirmed, in App/Fernlet/AgeAssuranceRequest.swift), so an older SDK fails three minutes
           # in with "has no member 'confirmed'", which looks nothing like a toolchain problem.
           # Fail here instead, in seconds, saying exactly what is missing.
           required_sdk="26.5"
@@ -117,6 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild test-without-building \
+            -project App/Fernlet.xcodeproj \
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/S3BoundaryTests
@@ -128,6 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild test-without-building \
+            -project App/Fernlet.xcodeproj \
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/NoTrackingBoundaryTests
@@ -143,6 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild test-without-building \
+            -project App/Fernlet.xcodeproj \
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/KeyCustodyBoundaryTests \

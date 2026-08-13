@@ -32,8 +32,8 @@ on any device is undetectable until the devices meet. So "warn that another devi
 
 `CloudKitDataService.detectExistingData()` ([CloudKitSync/CloudKitDataService.swift:167](../FernletKit/Sources/CloudKitSync/CloudKitDataService.swift))
 already queries CloudKit for data written by another device. It runs in onboarding
-([OnboardingStorageChoiceView.swift:108](../Fernlet/OnboardingStorageChoiceView.swift)) and is also already
-surfaced in Privacy settings as a **"Cloud records" count card** ([PrivacyDataSettingsView.swift:884](../Fernlet/PrivacyDataSettingsView.swift)) —
+([OnboardingStorageChoiceView.swift:108](../App/Fernlet/OnboardingStorageChoiceView.swift)) and is also already
+surfaced in Privacy settings as a **"Cloud records" count card** ([PrivacyDataSettingsView.swift:884](../App/Fernlet/PrivacyDataSettingsView.swift)) —
 but that card is deletion-oriented (how much is in iCloud), **not** re-run on the sync-disable action and not
 framed as a divergence warning. So the detection machinery exists; what's missing is wiring it to a
 second-device warning. `iCloudAvailable = ubiquityIdentityToken != nil`;
@@ -62,7 +62,7 @@ relationship type, so a paired own-device is treated like a friend. Add `relatio
 | **Journal / cycle / intimacy narratives** | sealed, encrypted, **local-only** | 🔒 exclude from live sync; move via backup-transfer |
 
 **Sealed backup over mesh.** The backup is **sealed-narratives only** (Tier-2 memories + cycle notes),
-**not** whole-account ([SealedBackupCoordinator.swift:427](../Fernlet/SealedBackupCoordinator.swift)), and
+**not** whole-account ([SealedBackupCoordinator.swift:427](../App/Fernlet/SealedBackupCoordinator.swift)), and
 restore needs the escrow key, which today syncs via **iCloud Keychain** — so a backup-transfer is *not yet
 truly offline*. Making it offline means exchanging the escrow public key over the mesh handshake.
 
@@ -101,7 +101,7 @@ items/recipes half of Phase 1 below; only the warning remains.
    backup-**transfer** (Option C) for new-device setup; enables warning A3. Decide whether to extend the
    backup to whole-account.
 3. **Phase 3:** mesh **live merge** sync (Option D) on top of the per-row day split
-   ([Day-PerRow-Split-Plan-2026-06-29.md](Completed%20Implemtations/Day-PerRow-Split-Plan-2026-06-29.md)), with a settings merge
+   (`Day-PerRow-Split-Plan-2026-06-29.md`), with a settings merge
    policy. Narratives travel only via the backup-transfer path.
 
 **Cross-cutting:** the per-row, union-mergeable architecture (coin ledger is the template) is what makes all
