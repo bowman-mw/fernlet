@@ -41,6 +41,7 @@ struct DeleteAllDataTests {
     private func makeStore(_ name: String) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)),
+            sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: uniqueProximityDirectory(),
@@ -252,7 +253,7 @@ struct DeleteAllDataTests {
         repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
-        let store = FernletStore(repository: repository, appGroupDirectory: uniqueAppGroupDirectory(),
+        let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -273,7 +274,7 @@ struct DeleteAllDataTests {
     @Test func noPendingSaveResurrectsDataAfterTheWipe() async throws {
         let url = temporaryDatabaseURL("delete-all-debounce")
         let repository = LocalFernletRepository(fileURL: url)
-        let store = FernletStore(repository: repository, appGroupDirectory: uniqueAppGroupDirectory(),
+        let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -307,7 +308,7 @@ struct DeleteAllDataTests {
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
     /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
     @Test func outcomeReportsAStoreThatFailedToDelete() async {
-        let store = FernletStore(repository: FailingPurgeRepository(), appGroupDirectory: uniqueAppGroupDirectory(),
+        let store = FernletStore(repository: FailingPurgeRepository(), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),

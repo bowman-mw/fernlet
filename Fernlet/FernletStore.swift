@@ -574,14 +574,23 @@ final class FernletStore {
     /// second device re-encodes the synced settings without the visibility keys; on re-decode the pin would
     /// re-fire (nil ⇒ visible-true) and intimacy would default back to visible, silently re-opening a
     /// deliberately hidden surface. This marker lets a device that has already resolved re-assert its own
-    /// values fail-closed instead. Injectable so tests isolate it from `.standard`, mirroring
-    /// `pastDayJournalScrubDefaults`. See `reconcileSensitiveSurfaceVisibility`.
+    /// values fail-closed instead. See `reconcileSensitiveSurfaceVisibility`.
+    ///
+    /// Its identity is a UserDefaults SUITE, not a path — the axis `aiQuotaDefaults` is on. `.standard`
+    /// means the real sidecar, which is what production always passes. It has to be injectable for the
+    /// same reason the container roots do, only more so: every `init` WRITES the three keys through
+    /// `reconcileSensitiveSurfaceVisibility`, and `resetAll` clears them (plus `ageAssurance.clear`) —
+    /// and `resetAll` is far and away the commonest wipe in the suite. Left on `.standard`, one store's
+    /// reset returns every concurrently-live store to "never resolved", so the next read re-derives from
+    /// `sex` instead of re-asserting a hidden surface fail-closed.
     @ObservationIgnored private let sensitiveVisibilityDefaults: UserDefaults
 
     /// The age determination behind the intimacy (16+) and mesh-chat (13+) gates. Deliberately shares
     /// `sensitiveVisibilityDefaults` rather than taking its own injection point: it is the same kind of
     /// device-local, never-synced sidecar for the same set of sensitive surfaces, and tests that isolate
-    /// one want the other isolated with it.
+    /// one want the other isolated with it. That sharing is why the suite is the whole seam — the age
+    /// record is never synced, so a store handed someone else's cleared suite has no blob to recover
+    /// its verdict from and simply fails closed.
     ///
     /// NOT `@ObservationIgnored` on the inside — `AgeAssuranceStore.record` is observable, so a view that
     /// reads a gate during `body` re-renders when the verdict changes.
@@ -716,7 +725,9 @@ final class FernletStore {
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
         // value here: the widget extension is a separate process with no seam, so an app that
-        // resolved elsewhere would strand every widget tap in a file nothing drains.
+        // resolved elsewhere would strand every widget tap in a file nothing drains — and the
+        // sensitive-visibility sidecar is the launch's own memory of a hidden surface, so a fresh
+        // suite per launch would read "never resolved" and re-derive from `sex` every single time.
         self.appGroupDirectory = nil
         self.aiQuotaDefaults = .standard
         self.sensitiveVisibilityDefaults = .standard

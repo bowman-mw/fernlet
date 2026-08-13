@@ -315,6 +315,7 @@ struct AIAuditLogTests {
         sink.save([entry(payloadKind: "recipe.extract", outcome: .schemaFailed)])
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("export-db")),
+            sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             aiAuditLogStore: sink,
             appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
@@ -340,6 +341,7 @@ struct AIAuditLogTests {
 
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: tempURL("wipe-db")),
+            sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             aiAuditLogStore: sink,
             appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),

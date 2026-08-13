@@ -56,7 +56,7 @@ struct FernletPersistenceTests {
         )
         let activePrivate = privateController ?? PrivatePersistenceController(inMemory: true)
         let jnr = JournalNarrativeRepository(controller: activePrivate)
-        return FernletStore(date: testDate, repository: repo, journalNarrativeRepository: jnr, appGroupDirectory: uniqueAppGroupDirectory(),
+        return FernletStore(date: testDate, repository: repo, journalNarrativeRepository: jnr, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
                             photoDocumentsDirectory: uniquePhotoDirectory(),
                             proximitySupportDirectory: uniqueProximityDirectory(),
                             heartDropKeychainService: uniqueHeartDropKeychainService())
@@ -125,7 +125,7 @@ struct FernletPersistenceTests {
     @MainActor
     @Test func test_batchPersistence_singleSaveCycle() async {
         let spy = SpyFernletRepository()
-        let store = FernletStore(date: testDate, repository: spy, appGroupDirectory: uniqueAppGroupDirectory(),
+        let store = FernletStore(date: testDate, repository: spy, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService())

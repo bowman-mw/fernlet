@@ -18,7 +18,7 @@ import PrivateStoreCore
 struct SensitiveSurfaceGateTests {
 
     private func makeStore(_ name: String) -> FernletStore {
-        FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)), photoDocumentsDirectory: uniquePhotoDirectory())
+        FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(), photoDocumentsDirectory: uniquePhotoDirectory(), proximitySupportDirectory: uniqueProximityDirectory())
     }
 
     private func temporaryDatabaseURL(_ name: String) -> URL {
@@ -350,7 +350,9 @@ struct SensitiveSurfaceGateTests {
         let store1 = FernletStore(
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-keydrop-src")),
             sensitiveVisibilityDefaults: defaults,
-            photoDocumentsDirectory: uniquePhotoDirectory()
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
         )
         seedAgeMeetingIntimacyGate(store1)
         store1.setPeriodTrackingVisible(false)
@@ -366,12 +368,87 @@ struct SensitiveSurfaceGateTests {
         let store2 = FernletStore(
             repository: LocalFernletRepository(fileURL: syncedURL),
             sensitiveVisibilityDefaults: defaults,
-            photoDocumentsDirectory: uniquePhotoDirectory()
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
         )
         seedAgeMeetingIntimacyGate(store2)
 
         #expect(!store2.isPeriodTrackingVisible)
         #expect(!store2.isIntimacyTrackingVisible)
+    }
+
+    /// The isolation twin of the test above: this store's device-local sidecar has to survive a wipe in
+    /// a DIFFERENT store, the way one running app is untouched by another resetting itself.
+    ///
+    /// Both halves of the suite hang off `resetAll()` — `clearSensitiveVisibilityResolution()` and
+    /// `ageAssurance.clear()` — and `resetAll()` is by far the commonest wipe in these suites, which
+    /// run in parallel in one process. On the process-wide `.standard` one store's reset therefore
+    /// returned every concurrently-live store to "never resolved" holding no age verdict, and the
+    /// symptom landed wherever a gate happened to be read next rather than here.
+    ///
+    /// The proof is the THIRD store, built AFTER the wipe on the first one's suite and reading an
+    /// existing user's pre-gate blob: nothing but the sidecar can keep it hidden, and nothing but the
+    /// sidecar can carry the age verdict at all — that half never rides the synced blob. Asserting on `mine`
+    /// alone would pass with the defect fully present, since its in-memory settings and its already
+    /// loaded `AgeAssuranceStore` record both survive another store clearing the defaults underneath.
+    @Test func aResetInAnotherStoreLeavesThisOnesSensitiveSidecarIntact() throws {
+        let mineDefaults = uniqueSensitiveVisibilityDefaults()
+        let theirsDefaults = uniqueSensitiveVisibilityDefaults()
+
+        // 1. My device resolves BOTH surfaces hidden, from above the intimacy age gate.
+        let mine = FernletStore(
+            repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("sidecar-iso-mine")),
+            sensitiveVisibilityDefaults: mineDefaults,
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
+        )
+        seedAgeMeetingIntimacyGate(mine)
+        mine.setPeriodTrackingVisible(false)
+        mine.setIntimacyTrackingVisible(false)
+
+        // 2. A different store, on a different suite entirely, resets itself to factory.
+        let theirs = FernletStore(
+            repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("sidecar-iso-theirs")),
+            sensitiveVisibilityDefaults: theirsDefaults,
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
+        )
+        seedAgeMeetingIntimacyGate(theirs)
+        _ = theirs.resetAll()
+        #expect(!theirs.ageAssurance.allows(.intimacy),
+                "the reset must still clear the RESETTING store's own verdict — isolation is not a no-op")
+
+        #expect(!mine.isPeriodTrackingVisible)
+        #expect(!mine.isIntimacyTrackingVisible)
+
+        // 3. The real proof: a fresh store on MY suite, built after their reset, loading an existing
+        //    user's pre-gate blob — onboarded, no visibility keys, no marker. Deliberately NOT
+        //    age-seeded: the verdict has to come back off the sidecar, the one half no blob could ever
+        //    restore.
+        //
+        //    `writePreGateUserDatabase` rather than `writeKeyDroppedDatabase` because the one-time pin
+        //    is gated on `hasCompletedOnboarding` — only the onboarded blob makes the period assertion
+        //    below discriminating. On the key-dropped one the reconcile takes the blank-slate branch
+        //    and leaves `periodTrackingVisible` nil either way, so the assertion would have passed
+        //    just as happily against the defect it exists to catch.
+        let syncedURL = temporaryDatabaseURL("sidecar-iso-pregate")
+        try writePreGateUserDatabase(to: syncedURL)
+        let relaunched = FernletStore(
+            repository: LocalFernletRepository(fileURL: syncedURL),
+            sensitiveVisibilityDefaults: mineDefaults,
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
+        )
+        #expect(relaunched.ageAssurance.allows(.intimacy),
+                "another store's reset cleared this store's age verdict")
+        #expect(!relaunched.isPeriodTrackingVisible,
+                "another store's reset unresolved this store's sidecar, so the pre-gate blob re-ran the one-time pin")
+        #expect(relaunched.settings.intimacyTrackingVisible == false,
+                "the re-assert must restore the hidden intimacy value the pre-gate blob defaulted back to true")
     }
 
     /// Writes a `LocalFernletRepository` database file whose settings LACK the three visibility keys —
@@ -426,7 +503,7 @@ struct SensitiveSurfaceGateTests {
         // Fresh install: no record yet — the repository serves the synthesized default database.
         let remote = RemoteSwappableRepository(
             current: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-freshpull-empty")))
-        let store = FernletStore(repository: remote, sensitiveVisibilityDefaults: defaults, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: remote, sensitiveVisibilityDefaults: defaults, appGroupDirectory: uniqueAppGroupDirectory(), photoDocumentsDirectory: uniquePhotoDirectory(), proximitySupportDirectory: uniqueProximityDirectory())
         #expect(store.settings.periodTrackingVisible == nil)
         // Flush the init-scheduled save NOW so the reload below (which flushes pending saves before
         // loading, as the real path does) can't clobber the just-arrived blob with pristine state.
@@ -472,7 +549,9 @@ struct SensitiveSurfaceGateTests {
         let store = FernletStore(
             repository: LocalFernletRepository(fileURL: url),
             sensitiveVisibilityDefaults: defaults,
-            photoDocumentsDirectory: uniquePhotoDirectory()
+            appGroupDirectory: uniqueAppGroupDirectory(),
+            photoDocumentsDirectory: uniquePhotoDirectory(),
+            proximitySupportDirectory: uniqueProximityDirectory()
         )
         // Any benign first-session mutation (init also schedules one for the designer-id mint).
         store.setCompanionName("Fern")

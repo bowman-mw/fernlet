@@ -76,6 +76,28 @@ struct PhotoDirectoryIsolationTests {
         "deleteAllData",
     ]
 
+    /// Anything reaching the device-local sensitive-surface sidecar: the period/intimacy visibility
+    /// RESOLUTION and the age determination, which `FernletStore` deliberately keeps in ONE defaults
+    /// suite (see `FernletStore.ageAssurance`), so one argument isolates both.
+    ///
+    /// Case matters (`String.contains`), hence the doubled spellings: lowercase
+    /// `periodTrackingVisible` matches `settings.periodTrackingVisible` but NOT
+    /// `isPeriodTrackingVisible` / `setPeriodTrackingVisible`.
+    private static let sensitiveVisibilityTriggers = [
+        // The sidecar itself.
+        "sensitiveVisibilityDefaults", "SensitiveVisibility", "SensitiveSurfaceVisibility",
+        // The visibility half — the settings values and the derived reads/setters.
+        "periodTrackingVisible", "PeriodTrackingVisible",
+        "intimacyTrackingVisible", "IntimacyTrackingVisible",
+        // The age half, which shares the suite.
+        "ageAssurance", "AgeAssuranceStore", "AgeGate",
+        "selfAttest", "applyDetermination", "isIntimateLoggingAllowed",
+        // The funnels. `resetAll()` is the one that matters most here: it calls BOTH
+        // `clearSensitiveVisibilityResolution()` and `ageAssurance.clear()`, and it is far commoner
+        // in these suites than `deleteAllData`.
+        "deleteAllData", "resetAll(",
+    ]
+
     @Test func everyDirectStoreConstructionInTestsPinsItsOwnPhotoDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         // Recursive: subdirectories (Mocks/, and anything added later) are covered too.
@@ -274,7 +296,51 @@ struct PhotoDirectoryIsolationTests {
         #expect(scanned > 8, "the AI-quota store-construction scan found only \(scanned) sites — scanner broken?")
     }
 
-    /// The comment stripper is what stops all three walls above from being satisfied by prose, so it
+    /// The device-local sensitive-surface sidecar — the period/intimacy visibility resolution and the
+    /// age verdict, which share ONE defaults suite by design.
+    ///
+    /// The widest blast radius of the family so far, for two reasons. Every `FernletStore.init` WRITES
+    /// this sidecar (`reconcileSensitiveSurfaceVisibility` → `storeSensitiveVisibilityResolution`), and
+    /// its wipe is `resetAll()` — which clears the resolution AND the age record, and which these
+    /// suites call far more often than `deleteAllData`. On `.standard` one store's reset therefore
+    /// returned every concurrently-live store to "never resolved" with no verdict, so the next read
+    /// re-derived visibility from `sex` and both gates fell back to fail-closed mid-test.
+    ///
+    /// Neither half is recoverable from the synced blob, which is what makes this worse than a shared
+    /// directory rather than merely equivalent: the age record is never synced at all, and the whole
+    /// point of the resolution marker is to out-rank a blob whose visibility keys a mixed-version peer
+    /// dropped.
+    @Test func everySensitiveSurfaceTouchingStoreConstructionPinsItsOwnVisibilityDefaults() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            guard Self.sensitiveVisibilityTriggers.contains(where: { source.contains($0) }) else { continue }
+            for arguments in Self.storeConstructionArguments(in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("sensitiveVisibilityDefaults"),
+                    """
+                    \(file.lastPathComponent) reaches the device-local sensitive-surface sidecar but \
+                    constructs FernletStore without `sensitiveVisibilityDefaults:`, so its \
+                    period/intimacy visibility resolution and its age verdict live in `.standard` — \
+                    which every concurrent `resetAll()` clears. Pass `sensitiveVisibilityDefaults: \
+                    uniqueSensitiveVisibilityDefaults()`, or build the store through \
+                    makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
+                    """
+                )
+            }
+        }
+        // Floor well below the measured 34: this trigger set catches every `resetAll(`/`deleteAllData`
+        // file, so the count tracks how many wipe tests exist rather than anything about isolation.
+        #expect(scanned > 25, "the sensitive-visibility store-construction scan found only \(scanned) sites — scanner broken?")
+    }
+
+    /// The comment stripper is what stops every wall above from being satisfied by prose, so it
     /// gets its own coverage rather than being trusted — including the two cases that would quietly
     /// break it: a `//` inside a string literal (a URL), and an escaped quote.
     @Test func theCommentStripperKeepsCodeAndDropsProse() {
@@ -294,7 +360,7 @@ struct PhotoDirectoryIsolationTests {
     ///
     /// Applied to every extracted argument list before the walls look for an argument NAME in it.
     /// Without this the scan is satisfied by prose: a construction carrying the comment
-    /// "see `photoDocumentsDirectory`" and not the argument passes all three walls, which is
+    /// "see `photoDocumentsDirectory`" and not the argument passes every wall here, which is
     /// precisely backwards — these files comment their isolation arguments heavily, so the token is
     /// likelier to appear in a comment than anywhere else.
     static func strippingComments(_ text: String) -> String {

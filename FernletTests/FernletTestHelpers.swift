@@ -109,6 +109,28 @@ func uniqueAIQuotaDefaults() -> UserDefaults {
     UserDefaults(suiteName: "fernlet.tests.aiQuota.\(UUID().uuidString)") ?? .standard
 }
 
+/// A fresh throwaway defaults suite for ONE test store's device-local sensitive-surface sidecar — the
+/// period/intimacy visibility RESOLUTION *and* the age determination, which `FernletStore` deliberately
+/// keeps in the same suite (see `FernletStore.ageAssurance`).
+///
+/// The identity is a UserDefaults SUITE rather than a path, and this one is written on EVERY store
+/// init (`reconcileSensitiveSurfaceVisibility` stores the resolution) and cleared by `resetAll` — the
+/// commonest wipe in the suite by a wide margin. On `.standard` that means one store's reset returns
+/// every concurrently-live store to "never resolved" and drops its age verdict, so the next read
+/// re-derives visibility from `sex` and both gates fail closed mid-test.
+///
+/// A throwaway suite rather than unique KEYS on `.standard`, for the reason `uniqueAIQuotaDefaults()`
+/// gives: keys would litter the app's real domain permanently and invisibly. Nothing removes the suite
+/// afterwards either, but a suite that was never registered leaves no file on disk unless written, and
+/// the tests that DO want a named suite (`AgeAssuranceStoreTests`) already tear their own down.
+///
+/// Pass the SAME suite to two stores when a test deliberately simulates a relaunch on the same device —
+/// that is what `SensitiveSurfaceGateTests.mixedVersionKeyDropDoesNotReopenHiddenSurfaces` does, and
+/// the sidecar surviving into the second store is the entire point of that test.
+func uniqueSensitiveVisibilityDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.sensitiveVisibility.\(UUID().uuidString)") ?? .standard
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///
@@ -128,7 +150,8 @@ func makeTestStore(
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
-    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults()
+    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
+    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
@@ -137,7 +160,8 @@ func makeTestStore(
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
-        aiQuotaDefaults: aiQuotaDefaults
+        aiQuotaDefaults: aiQuotaDefaults,
+        sensitiveVisibilityDefaults: sensitiveVisibilityDefaults
     ).store
 }
 
@@ -157,6 +181,7 @@ func makeTestStoreWithRepositories(
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
+    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -196,6 +221,9 @@ func makeTestStoreWithRepositories(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
+        // The period/intimacy visibility resolution AND the age verdict share one defaults SUITE, and
+        // `resetAll` clears both — see `uniqueSensitiveVisibilityDefaults()`.
+        sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
         // Guided/cooking run state, the widget queue and the widget snapshot — see
         // `uniqueAppGroupDirectory()`.
         appGroupDirectory: appGroupDirectory,
@@ -221,7 +249,10 @@ func makeTestStoreWithRepositories(
 /// The photo corpus is NOT shared by default — pass the first store's `photoDocumentsDirectory` when
 /// a test needs its photos to survive into the simulated relaunch. Nor is the heart state: pass the
 /// first store's `proximitySupportDirectory` AND `heartDropKeychainService` (both, or the relaunch
-/// finds a sealed sidecar it has no key for) when the hearts have to survive too.
+/// finds a sealed sidecar it has no key for) when the hearts have to survive too. Nor is the
+/// device-local sensitive-surface sidecar: pass the first store's `sensitiveVisibilityDefaults` when
+/// the relaunch has to remember a hidden period/intimacy surface or an age verdict — neither of those
+/// ever rides the synced blob, so the repository this helper shares cannot carry them across.
 @MainActor
 func makeStoreSharingStores(
     date: Date = .now,
@@ -231,7 +262,8 @@ func makeStoreSharingStores(
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
-    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults()
+    aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
+    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -252,6 +284,7 @@ func makeStoreSharingStores(
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
+        sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
         appGroupDirectory: appGroupDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,

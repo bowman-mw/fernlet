@@ -25,14 +25,14 @@ struct FernletTests {
     @MainActor
     @Test func addWorkoutDispatchesHealthKitSaveTask() async {
         let authorizedService = MockWorkoutHealthKitService(isWorkoutLoggingAuthorized: true)
-        let authorizedStore = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-save-authorized")), healthKitService: authorizedService, photoDocumentsDirectory: uniquePhotoDirectory())
+        let authorizedStore = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-save-authorized")), healthKitService: authorizedService, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         authorizedStore.addWorkout(sampleWorkout())
         await waitForAsyncWork { authorizedService.saveWorkoutCallCount == 1 }
 
         #expect(authorizedService.saveWorkoutCallCount == 1)
 
         let unauthorizedService = MockWorkoutHealthKitService(isWorkoutLoggingAuthorized: false)
-        let unauthorizedStore = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-save-unauthorized")), healthKitService: unauthorizedService, photoDocumentsDirectory: uniquePhotoDirectory())
+        let unauthorizedStore = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-save-unauthorized")), healthKitService: unauthorizedService, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         unauthorizedStore.addWorkout(sampleWorkout())
         await waitForAsyncWork()
 
@@ -43,7 +43,7 @@ struct FernletTests {
     @Test func addWorkoutPersistsHealthKitUUIDOnSuccess() async throws {
         let expectedUUID = UUID()
         let service = MockWorkoutHealthKitService(isWorkoutLoggingAuthorized: true, saveWorkoutUUID: expectedUUID)
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-uuid")), healthKitService: service, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("workout-hk-uuid")), healthKitService: service, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         let workout = sampleWorkout()
 
         store.addWorkout(workout)
@@ -103,7 +103,7 @@ struct FernletTests {
     @Test func personalCareTasksCanBeCustomizedAndPersisted() throws {
         let url = temporaryDatabaseURL("personal-care-custom")
         let repository = LocalFernletRepository(fileURL: url)
-        let store = FernletStore(repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
 
         #expect(store.personalCareTasks.map(\.id) == HygieneItem.allCases.map(\.rawValue))
 
@@ -115,7 +115,7 @@ struct FernletTests {
         #expect(store.personalCareProgress().completed == 1)
         store.flushPendingSnapshotSave()
 
-        let loadedStore = FernletStore(date: Date(), repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let loadedStore = FernletStore(date: Date(), repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         let loadedTask = try #require(loadedStore.personalCareTasks.first { $0.id == customTask.id })
 
         #expect(loadedTask.label == "Take meds")
@@ -127,7 +127,7 @@ struct FernletTests {
         let url = temporaryDatabaseURL("retry-count")
         let repository = LocalFernletRepository(fileURL: url)
         let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
-        let store = FernletStore(date: todayDate, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: todayDate, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         let meal = sampleMeal()
 
         #expect(store.pendingRetryCount == 0)
@@ -145,7 +145,7 @@ struct FernletTests {
         let url = temporaryDatabaseURL("retry-nonmeal-survives")
         let repository = LocalFernletRepository(fileURL: url)
         let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
-        let store = FernletStore(date: todayDate, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: todayDate, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
 
         let meal = store.addMeal(from: "oatmeal")
         store.queueMealRetry(meal)
@@ -168,7 +168,7 @@ struct FernletTests {
         let url = temporaryDatabaseURL("retry-nonmeal-noop")
         let repository = LocalFernletRepository(fileURL: url)
         let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
-        let store = FernletStore(date: todayDate, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: todayDate, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
 
         let nonMeal = AIAnalysisRetryRecord(payloadType: "recipe-synthesis", sourceId: UUID(), note: "keep me")
         store.aiRetryQueueService.apply([nonMeal])
@@ -424,7 +424,7 @@ struct FernletTests {
 
     @MainActor
     @Test func intimacyAgeGateControlsHubAndQuickLogVisibility() {
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("intimacy-age-gate")), photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("intimacy-age-gate")), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         // The 16+ gate reads the device-local age record, not the profile stepper. Set explicitly in
         // both directions so a record left behind by another test can never decide this one.
         store.ageAssurance.applyDetermination(
@@ -774,7 +774,7 @@ struct FernletTests {
         let today = "2026-05-17"
         let past = "2026-05-16"
         let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
-        let store = FernletStore(date: todayDate, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: todayDate, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
 
         store.addMeal(from: "oatmeal and eggs", type: .breakfast, date: past)
         let todaySnapshot = repository.loadSnapshot(todayKey: today)
@@ -790,7 +790,7 @@ struct FernletTests {
         let url = temporaryDatabaseURL("journal-edit")
         let repository = LocalFernletRepository(fileURL: url)
         let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
-        let store = FernletStore(date: todayDate, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: todayDate, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
 
         store.addJournal(text: "Original journal text", tag: .neutral)
         let entry = try #require(store.day.journals.first)
@@ -991,7 +991,7 @@ struct FernletTests {
     @MainActor
     @Test func coreMemoriesCanBeEditedAndDeleted() {
         let url = temporaryDatabaseURL("memory-editing")
-        let store = FernletStore(repository: LocalFernletRepository(fileURL: url), photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: url), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         let memory = MemoryNote(category: "quiet", text: "Long enough journal text to become a visible memory.")
         store.memories = [memory]
 
@@ -1032,7 +1032,7 @@ struct FernletTests {
         )
         #expect(repository.saveSnapshot(snapshot))
 
-        let store = FernletStore(date: computedAt, repository: repository, photoDocumentsDirectory: uniquePhotoDirectory())
+        let store = FernletStore(date: computedAt, repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), photoDocumentsDirectory: uniquePhotoDirectory())
         let stored = store.dailyHealthScore(for: date, day: store.day)
 
         #expect(stored.daySummaryText == "Stored summary from earlier analysis.")

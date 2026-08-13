@@ -98,6 +98,7 @@ struct HeartDropAppWiringTests {
                 fileURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent("\(name)-\(UUID().uuidString).json")
             ),
+            sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             appGroupDirectory: uniqueAppGroupDirectory(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: proximityDirectory ?? heartDropDirectory,
