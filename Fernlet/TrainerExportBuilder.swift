@@ -47,7 +47,7 @@ struct TrainerExportOptions: Equatable {
 ///
 /// `nil` on a field means no limit. Windows are counted in `yyyy-MM-dd` day keys against the export
 /// date, so a gap in logging doesn't stretch the window.
-struct TrainerExportWindow: Equatable {
+struct TrainerExportWindow: Equatable, Sendable {
     var workoutDays: Int?
     var nutritionDays: Int?
     var exerciseHistoryDays: Int?
@@ -60,13 +60,13 @@ struct TrainerExportWindow: Equatable {
     var plannedDaysAhead: Int? = 35
 
     /// Everything ever logged — what the file export and the coach mesh send.
-    static let unlimited = TrainerExportWindow(workoutDays: nil, nutritionDays: nil,
-                                               exerciseHistoryDays: nil, plannedDaysAhead: nil)
+    nonisolated static let unlimited = TrainerExportWindow(workoutDays: nil, nutritionDays: nil,
+                                                           exerciseHistoryDays: nil, plannedDaysAhead: nil)
 
     /// The clipboard window: 8 weeks of sessions, 2 weeks of day-by-day nutrition, 6 months of
     /// rollup, and 5 weeks of upcoming plans to adjust.
-    static let coachHandoff = TrainerExportWindow(workoutDays: 56, nutritionDays: 14,
-                                                  exerciseHistoryDays: 183, plannedDaysAhead: 35)
+    nonisolated static let coachHandoff = TrainerExportWindow(workoutDays: 56, nutritionDays: 14,
+                                                              exerciseHistoryDays: 183, plannedDaysAhead: 35)
 
     /// The earliest day key still inside `days`, or nil when unlimited.
     func earliestKey(_ days: Int?, from today: Date) -> String? {

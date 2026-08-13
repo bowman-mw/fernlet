@@ -119,7 +119,7 @@ struct HomeView: View {
 
     // MARK: - Milestones entry card
 
-    /// One kind of care the user has kept, as a struck-coin token on the shelf.
+    /// One kind of care the user has kept, as a soft Home-dashboard icon token.
     ///
     /// Stable order + tint per kind so the shelf doesn't reshuffle between renders; built by
     /// `keptKeepsakes(counts:worries:)` from the pre-read ledger values.
@@ -129,7 +129,7 @@ struct HomeView: View {
         let tint: Color
     }
 
-    /// Icon + tint per milestone kind. Tints are chosen to stay distinct on the parchment shelf rather
+    /// Icon + tint per milestone kind. Tints are chosen to stay distinct on the parchment card rather
     /// than to encode meaning. A kind with no entry here still gets a token (generic seal) — see
     /// `keepsakeStyle(for:)` — so a new `MilestoneEventKind` can't make the shelf silently under-count
     /// against the summary before someone styles it.
@@ -159,9 +159,8 @@ struct HomeView: View {
         }
     }
 
-    /// M1 "keepsake shelf": the kinds of care kept, as struck-coin tokens resting on a shelf ledge —
-    /// a keepsake shelf, not another nav row. Always shows on the home feed (even when mostly empty)
-    /// and taps through to `MilestonesView`, which owns the behavior — this is a warm doorway to it.
+    /// M1 milestones doorway: the kinds of care kept, using the same soft tinted icon-tile language as
+    /// the rest of Home. The dedicated milestone screen still owns the pressed keepsake shelf.
     /// Cumulative-only, never a scoreboard: a warm sentence and a soft coins aside, no streaks, no
     /// percentages, and the empty state is a gentle invitation.
     private var milestonesCard: some View {
@@ -201,22 +200,19 @@ struct HomeView: View {
                             .foregroundStyle(Color.slate.opacity(0.65))
                     }
                     if !kept.isEmpty {
-                        ZStack(alignment: .bottom) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.bark.opacity(0.14))
-                                .frame(height: 3)
-                                .offset(y: 2)
-                            HStack(spacing: 12) {
-                                ForEach(kept.prefix(5)) { k in
-                                    PressedMedallion(icon: k.icon, tint: k.tint, diameter: 38)
-                                }
-                                if kept.count > 5 {
-                                    Text("+\(kept.count - 5)")
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                Spacer(minLength: 0)
+                        HStack(spacing: 10) {
+                            ForEach(kept.prefix(5)) { k in
+                                keepsakeTile(k)
                             }
+                            if kept.count > 5 {
+                                Text("+\(kept.count - 5)")
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color.bark.opacity(0.06), in: Capsule())
+                            }
+                            Spacer(minLength: 0)
                         }
                     }
                     Text(summary)
@@ -233,6 +229,22 @@ struct HomeView: View {
         // and coin pill from the tree, and a hint is silenced by the system "Speak Hints" setting — so a
         // hint-only summary would leave a VoiceOver user hearing just "Milestones, button".
         .accessibilityLabel("Milestones. \(summary)")
+    }
+
+    private func keepsakeTile(_ keepsake: Keepsake) -> some View {
+        Image(systemName: keepsake.icon)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(keepsake.tint)
+            .frame(width: 38, height: 38)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(keepsake.tint.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(keepsake.tint.opacity(0.20), lineWidth: 1)
+            )
+            .accessibilityHidden(true)
     }
 
     /// A warm, count-aware one-liner for the milestones card, from already-scanned inputs. Keeps the
@@ -539,6 +551,12 @@ struct HomeView: View {
     private var mealPhotosStrip: some View {
         let bites = recentBites
         let rotations: [Double] = [-3, 2, -1.5, 3, -2.5, 1.5]
+        let placeholderColors: [Color] = [
+            .fern.opacity(0.45),
+            .goldenrod.opacity(0.45),
+            .slate.opacity(0.32),
+            .dustyRose.opacity(0.38)
+        ]
         return FernletCard {
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel("Recent bites")
@@ -561,7 +579,8 @@ struct HomeView: View {
                                         name: bite.name,
                                         rotation: rotations[index % rotations.count],
                                         loadData: { store.mealPhotoData(for: bite.photoID) },
-                                        hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) }
+                                        hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) },
+                                        placeholderColor: placeholderColors[index % placeholderColors.count]
                                     )
                                 }
                                 .buttonStyle(.plain)

@@ -424,7 +424,7 @@ final class FernletStore {
     /// one store's wipe zeroes the counter of every other live store. Deliberately NOT folded into
     /// `sensitiveVisibilityDefaults`: that suite is shared with `AgeAssuranceStore` because both are
     /// sensitive-surface state, and a daily AI-call count is neither.
-    @ObservationIgnored nonisolated let aiQuotaDefaults: UserDefaults
+    @ObservationIgnored let aiQuotaDefaults: UserDefaults
     /// The two halves above as the one value ProximityKit takes, so the heart-drop stores this store
     /// builds can never end up half-isolated.
     @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
@@ -4985,7 +4985,7 @@ final class FernletStore {
             let outcome = complete
                 ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
                 : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
-            await MainActor.run { self?.recordOwnPhotoKeyBindingOutcome(outcome) }
+            await self?.recordOwnPhotoKeyBindingOutcome(outcome)
         }
     }
 

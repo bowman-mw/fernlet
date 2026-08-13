@@ -50,36 +50,6 @@
             endingLineNumber = "334"
             landmarkName = "supplementalNutritionLabelURLs(for:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "AF7FBDD4-BABC-4E0D-AE17-95123660E6AC - fdeead565147c897"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(5) suspend resume partial function for static Fernlet.FoodProductWebImporter.importProduct(from: Fernlet.ProductPagePreview, gate: AIContext.FernletAIGate) async throws -&gt; Fernlet.ImportedFoodProduct"
-                  moduleName = "Fernlet.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/michaelbowman/Desktop/Fernlet%205-18/Fernlet/Fernlet/FoodProductWebImporter.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "335"
-                  endingLineNumber = "335">
-               </Location>
-               <Location
-                  uuid = "AF7FBDD4-BABC-4E0D-AE17-95123660E6AC - fdeead565147c878"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(5) suspend resume partial function for static Fernlet.FoodProductWebImporter.importProduct(from: Fernlet.ProductPagePreview, gate: AIContext.FernletAIGate) async throws -&gt; Fernlet.ImportedFoodProduct"
-                  moduleName = "Fernlet.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/michaelbowman/Desktop/Fernlet%205-18/Fernlet/Fernlet/FoodProductWebImporter.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "334"
-                  endingLineNumber = "334">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

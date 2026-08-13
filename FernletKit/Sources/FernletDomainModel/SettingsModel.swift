@@ -208,6 +208,15 @@ public nonisolated struct FernletSettings: Codable {
     /// defence, but keeping the surface off by default means the default install has no
     /// unverified-plan ingestion path at all.
     public var coachExchangeEnabled: Bool = false
+    /// Optional categories added to the trainer/nutritionist summary from Settings > Move.
+    ///
+    /// Off by default so the Share sheet keeps exporting the existing core-only summary unless the
+    /// user has deliberately widened it in Settings.
+    public var trainerExportIncludesGoal: Bool = false
+    public var trainerExportIncludesHydration: Bool = false
+    public var trainerExportIncludesSleep: Bool = false
+    public var trainerExportIncludesSickness: Bool = false
+    public var trainerExportIncludesWellbeing: Bool = false
 
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
@@ -382,6 +391,11 @@ public nonisolated struct FernletSettings: Codable {
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
         customExercises = try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? []
         coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
+        trainerExportIncludesGoal = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesGoal) ?? false
+        trainerExportIncludesHydration = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesHydration) ?? false
+        trainerExportIncludesSleep = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSleep) ?? false
+        trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
+        trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
 
         // Generic unknown-key parking (see `parkedUnknownKeys`): capture every remaining top-level key
         // this build doesn't know, with its raw JSON value, so a re-encode here round-trips a newer
@@ -425,7 +439,9 @@ public nonisolated struct FernletSettings: Codable {
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
              workoutLocations, activeWorkoutLocationID, workoutProgression,
-             customExercises, coachExchangeEnabled
+             customExercises, coachExchangeEnabled, trainerExportIncludesGoal,
+             trainerExportIncludesHydration, trainerExportIncludesSleep,
+             trainerExportIncludesSickness, trainerExportIncludesWellbeing
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -492,6 +508,11 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(workoutProgression, forKey: .workoutProgression)
         try container.encode(customExercises, forKey: .customExercises)
         try container.encode(coachExchangeEnabled, forKey: .coachExchangeEnabled)
+        try container.encode(trainerExportIncludesGoal, forKey: .trainerExportIncludesGoal)
+        try container.encode(trainerExportIncludesHydration, forKey: .trainerExportIncludesHydration)
+        try container.encode(trainerExportIncludesSleep, forKey: .trainerExportIncludesSleep)
+        try container.encode(trainerExportIncludesSickness, forKey: .trainerExportIncludesSickness)
+        try container.encode(trainerExportIncludesWellbeing, forKey: .trainerExportIncludesWellbeing)
 
         // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
         // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard

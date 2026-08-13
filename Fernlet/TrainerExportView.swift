@@ -5,10 +5,10 @@ import FernletUI
 import UIKit
 #endif
 
-/// The Trainer / Nutritionist export review + consent screen (Phase 7), and — when the manual coach
-/// exchange is switched on — the two-way coach handoff. The user picks exactly what to include and
-/// sees precisely what is and is NEVER shared, then prepares a curated summary to hand to a trainer
-/// or nutritionist. Nothing leaves the device until the user shares it.
+/// The Trainer / Nutritionist export screen (Phase 7), and — when the manual coach exchange is switched
+/// on — the two-way coach handoff. The user prepares a curated summary to hand to a trainer or
+/// nutritionist; optional categories are configured in Settings > Move. Nothing leaves the device until
+/// the user shares it.
 ///
 /// A coach is NOT a friend, so this deliberately does NOT ride the friend mesh. In-person sharing
 /// over the dedicated `fernlet-coach` trainer channel (to a coach running the separate coaching app)
@@ -22,7 +22,6 @@ struct TrainerExportView: View {
     var store: FernletStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var options = TrainerExportOptions.coreOnly
     @State private var preparedFile: URL?
     @State private var prepareError = false
     @State private var showCopyConfirm = false
@@ -64,20 +63,27 @@ struct TrainerExportView: View {
     @State private var previewDayCount = 0
 
     private func refreshPreviewCount() {
-        previewDayCount = store.buildTrainerExport(options: options).days.count
+        previewDayCount = store.buildTrainerExport(options: trainerExportOptions).days.count
     }
 
     /// Whether the manual coach exchange (clipboard out, paste back) is switched on.
     private var coachExchangeEnabled: Bool { store.settings.coachExchangeEnabled }
+
+    private var trainerExportOptions: TrainerExportOptions {
+        TrainerExportOptions(
+            includeGoal: store.settings.trainerExportIncludesGoal,
+            includeHydration: store.settings.trainerExportIncludesHydration,
+            includeSleep: store.settings.trainerExportIncludesSleep,
+            includeSickness: store.settings.trainerExportIncludesSickness,
+            includeWellbeing: store.settings.trainerExportIncludesWellbeing
+        )
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
                     intro
-                    alwaysIncludedCard
-                    optionalCard
-                    neverSharedCard
                     prepareSection
                     if coachExchangeEnabled {
                         aiCoachCard
@@ -139,10 +145,9 @@ struct TrainerExportView: View {
                 if let result = importResult { Text(Self.importSummary(result)) }
             }
             .onAppear { refreshPreviewCount() }
-            // Options changed → the prepared file no longer matches what the screen describes, so it must
-            // not be shareable. Delete it rather than just forgetting it: a stale plaintext summary
-            // outliving the choice that produced it is the exact lifetime this screen is trying to shorten.
-            .onChange(of: options) { _, _ in
+            // Settings changed elsewhere → the prepared file no longer matches what this screen would
+            // export, so delete it rather than leaving a stale plaintext summary shareable.
+            .onChange(of: trainerExportOptions) { _, _ in
                 discardPreparedFile()
                 refreshPreviewCount()
             }
@@ -160,7 +165,7 @@ struct TrainerExportView: View {
 
     /// Puts the prompt + data blob on the clipboard, after the user has confirmed the alert.
     private func copyForAssistant() {
-        guard let text = store.coachHandoffClipboardText(options: options) else {
+        guard let text = store.coachHandoffClipboardText(options: trainerExportOptions) else {
             prepareError = true
             return
         }
@@ -210,45 +215,6 @@ struct TrainerExportView: View {
         }
     }
 
-    private var alwaysIncludedCard: some View {
-        card {
-            // Must stay in step with `TrainerExportBundle.About.includes` in TrainerExportBuilder —
-            // this card is the consent surface, and a list shorter than what actually ships is the
-            // one kind of inaccuracy this screen cannot afford.
-            cardTitle("Always included")
-            bullet("Your workouts (names, sets/reps/weights as logged, duration, effort)")
-            bullet("Per-day nutrition summaries (calories, macros, micronutrient totals, meal names)")
-            bullet("Your daily calorie and macro targets")
-            bullet("Where you train, the equipment you have, and the split you follow")
-            bullet("How each exercise has progressed (frequency, recent and best sets)")
-            bullet("Workouts you've already planned for the coming weeks, so they can be adjusted")
-            bullet("Training-safety notes (injuries, muscles and movements to avoid)")
-        }
-    }
-
-    private var optionalCard: some View {
-        card {
-            cardTitle("Also include (optional)")
-            Toggle("Your goal", isOn: $options.includeGoal).tint(Color.moss)
-            Toggle("Hydration", isOn: $options.includeHydration).tint(Color.moss)
-            Toggle("Sleep summaries", isOn: $options.includeSleep).tint(Color.moss)
-            Toggle("Days you were unwell", isOn: $options.includeSickness).tint(Color.moss)
-            Toggle("Wellbeing score", isOn: $options.includeWellbeing).tint(Color.moss)
-        }
-        .font(.fernlet(.body))
-        .foregroundStyle(Color.bark)
-    }
-
-    private var neverSharedCard: some View {
-        card {
-            cardTitle("Never shared")
-            bullet("Journal entries and private notes", tint: Color.terracotta)
-            bullet("Period, cycle, and intimate-activity data", tint: Color.terracotta)
-            bullet("Photos, friends, and location", tint: Color.terracotta)
-            bullet("Recipe ingredients and your private keys", tint: Color.terracotta)
-        }
-    }
-
     private var prepareSection: some View {
         VStack(spacing: 10) {
             Text("\(previewDayCount) day\(previewDayCount == 1 ? "" : "s") of training will be included.")
@@ -274,7 +240,7 @@ struct TrainerExportView: View {
                 .accessibilityIdentifier("trainer.share")
             } else {
                 Button {
-                    if let url = store.writeTrainerExportFile(options: options) {
+                    if let url = store.writeTrainerExportFile(options: trainerExportOptions) {
                         preparedFile = url
                     } else {
                         prepareError = true

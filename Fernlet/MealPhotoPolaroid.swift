@@ -12,6 +12,7 @@ struct MealPhotoPolaroid: View {
     /// Existence-only probe (no decrypt) used to tell a photo that never synced here (no file → "on your
     /// other device") from one that's here but won't open (corrupt → "couldn't open this photo").
     let hasSealedData: () -> Bool
+    var placeholderColor: Color = .goldenrod.opacity(0.45)
     var width: CGFloat = 128
 
     @Environment(\.displayScale) private var displayScale
@@ -38,9 +39,9 @@ struct MealPhotoPolaroid: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.cream)
+                .fill(photoFill)
                 .frame(width: width, height: width * 0.86)
                 .overlay {
                     if let image {
@@ -78,22 +79,20 @@ struct MealPhotoPolaroid: View {
                                 .padding(.horizontal, 6)
                         }
                     } else {
-                        Image(systemName: "fork.knife")
-                            .font(.title3)
-                            .foregroundStyle(Color.slate.opacity(0.45))
+                        EmptyView()
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(name)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark.opacity(0.72))
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate.opacity(0.58))
                 .lineLimit(1)
                 .frame(maxWidth: width)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.horizontal, 7)
+        .padding(.top, 7)
         .padding(.bottom, 14)
-        .background(Color.cream.opacity(0.92), in: RoundedRectangle(cornerRadius: 5))
+        .background(Color.cream.opacity(0.82), in: RoundedRectangle(cornerRadius: 4))
         // `barkShadow` is the fixed dark-brown shadow token; the adaptive `bark` text token resolves
         // near-white under the forced dark appearance and would read as a pale halo, not a shadow.
         .shadow(color: Color.barkShadow.opacity(0.10), radius: 10, x: 0, y: 5)
@@ -117,6 +116,13 @@ struct MealPhotoPolaroid: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
+    }
+
+    private var photoFill: Color {
+        if image == nil && presence == .onThisDevice {
+            return placeholderColor
+        }
+        return Color.cream
     }
 }
 
