@@ -518,10 +518,26 @@ final class FernletStore {
     @ObservationIgnored lazy var pendingWidgetActionQueue =
         PendingWidgetActionQueue(directory: appGroupDirectory)
     @ObservationIgnored private var isProcessingPendingWidgetActions = false
-    /// Inbound queue of recipes shared in from the share extension (injectable file URL for tests).
-    /// One instance shared by the drain and by "delete everything", so a wipe can't miss a queue the
-    /// drain would still find.
-    @ObservationIgnored var sharedRecipeImportQueue = SharedRecipeImportQueue()
+    /// Inbound queue of recipes shared in from the share extension. One instance shared by the drain
+    /// and by "delete everything", so a wipe can't miss a queue the drain would still find.
+    ///
+    /// THIS store's queue file, pinned at init from `sharedRecipeImportQueueFileURL:`. Nil — what
+    /// production always passes — means the real
+    /// `<group.MBO.Fernlet>/SharedRecipeImports/PendingRecipeURLs.json`. That is a DIFFERENT app-group
+    /// subdirectory from `appGroupDirectory`'s `FernletWidgets/`, and the seam is a file rather than a
+    /// directory because the queue owns exactly one.
+    ///
+    /// Injectable for the reason the container roots are: `deleteAllData` calls `clear()` on it, so on
+    /// the production path one store's wipe empties the inbox of every concurrently-live store. Unlike
+    /// the widget files, nothing in the suite reads the production queue today — this one is latent,
+    /// and the natural way to write the test that would trip it (read `store.sharedRecipeImportQueue`
+    /// rather than hand-injecting one) is exactly what joins the race.
+    ///
+    /// Nil meaning production is load-bearing well beyond tests: the share extension is a separate
+    /// process with NO seam and its own hand-copied path resolution, so an app that resolved anywhere
+    /// else would strand every shared-in recipe in a file nothing drains — and there is no
+    /// share-extension test target to catch it.
+    @ObservationIgnored var sharedRecipeImportQueue: SharedRecipeImportQueue
     /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
@@ -613,13 +629,16 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
+        // A different app-group subdirectory from the one above, so it gets its own seam. Nil resolves
+        // to the real `SharedRecipeImports/PendingRecipeURLs.json` — see `sharedRecipeImportQueue`.
+        self.sharedRecipeImportQueue = SharedRecipeImportQueue(fileURL: sharedRecipeImportQueueFileURL)
         self.aiQuotaDefaults = aiQuotaDefaults
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
@@ -728,7 +747,10 @@ final class FernletStore {
         // resolved elsewhere would strand every widget tap in a file nothing drains — and the
         // sensitive-visibility sidecar is the launch's own memory of a hidden surface, so a fresh
         // suite per launch would read "never resolved" and re-derive from `sex` every single time.
+        // The share extension is the same separate-process argument as the widget: it hand-copies its
+        // own path resolution, so an app anywhere else strands every shared-in recipe.
         self.appGroupDirectory = nil
+        self.sharedRecipeImportQueue = SharedRecipeImportQueue()
         self.aiQuotaDefaults = .standard
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)

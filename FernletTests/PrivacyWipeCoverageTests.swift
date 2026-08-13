@@ -618,6 +618,7 @@ struct PrivacyWipeMediaKeySurvivalTests {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("wipe-media-key-\(UUID().uuidString).json")
         let store = FernletStore(repository: LocalFernletRepository(fileURL: url), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -657,6 +658,7 @@ struct PrivacyWipeAttemptMemoryRemovalTests {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("wipe-attempt-memory-\(UUID().uuidString).json")
         let store = FernletStore(repository: LocalFernletRepository(fileURL: url), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),

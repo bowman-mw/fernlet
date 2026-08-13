@@ -43,6 +43,7 @@ struct DeleteAllDataTests {
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL(name)),
             sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             appGroupDirectory: uniqueAppGroupDirectory(),
+            sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: uniqueProximityDirectory(),
             heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -254,6 +255,7 @@ struct DeleteAllDataTests {
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
         let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -275,6 +277,7 @@ struct DeleteAllDataTests {
         let url = temporaryDatabaseURL("delete-all-debounce")
         let repository = LocalFernletRepository(fileURL: url)
         let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
@@ -305,10 +308,49 @@ struct DeleteAllDataTests {
         #expect(queue.records().isEmpty)
     }
 
+    /// The survival twin of the test above: the wipe must reach THIS store's inbox and no one else's.
+    ///
+    /// The share-extension queue is the app-group container's OTHER tenant — `SharedRecipeImports/`
+    /// rather than the `FernletWidgets/` root `appGroupDirectory` covers — so it needed its own seam,
+    /// and `deleteAllData` clears it for every concurrently-live store on the production path. Latent
+    /// rather than live only because the two suites that drive the drain hand-inject a queue over
+    /// their store's; the obvious way to write this test, reaching for `store.sharedRecipeImportQueue`
+    /// directly, is exactly the one that joins the race.
+    ///
+    /// The queue is stateless (a file URL plus coders), so every assertion here is already a FILE
+    /// read — and the third store, built on our file after the wipe, keeps it from passing if writing
+    /// had silently stopped.
+    @Test func aDeleteAllInAnotherStoreLeavesThisOnesRecipeInboxIntact() async {
+        let mineQueueURL = uniqueSharedRecipeImportQueueURL()
+        let mine = makeTestStore(sharedRecipeImportQueueFileURL: mineQueueURL)
+        let theirs = makeTestStore()   // its own helper-defaulted inbox file
+
+        let queued = SharedRecipeImportRecord(url: URL(string: "https://example.com/stew")!)
+        mine.sharedRecipeImportQueue.save([queued])
+        theirs.sharedRecipeImportQueue.save([
+            SharedRecipeImportRecord(url: URL(string: "https://example.com/theirs")!)
+        ])
+        #expect(!mine.sharedRecipeImportQueue.records().isEmpty, "precondition: the seeded row did not land")
+
+        await theirs.deleteAllData(includingHealthKitSamples: false)
+
+        // Their own inbox really is empty, so nothing below can pass against a wipe that quietly
+        // stopped wiping.
+        #expect(theirs.sharedRecipeImportQueue.records().isEmpty,
+                "precondition: the other store's wipe did not clear its own inbox")
+
+        #expect(mine.sharedRecipeImportQueue.records().map(\.id) == [queued.id],
+                "another store's delete-all emptied this store's recipe inbox")
+        let relaunched = makeTestStore(sharedRecipeImportQueueFileURL: mineQueueURL)
+        #expect(relaunched.sharedRecipeImportQueue.records().map(\.id) == [queued.id],
+                "the queued import did not survive on disk — the other store's wipe reached our file")
+    }
+
     /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
     /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
     @Test func outcomeReportsAStoreThatFailedToDelete() async {
         let store = FernletStore(repository: FailingPurgeRepository(), sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
+                                 sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
                                  photoDocumentsDirectory: uniquePhotoDirectory(),
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),

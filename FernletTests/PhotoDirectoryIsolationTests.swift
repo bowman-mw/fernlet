@@ -98,6 +98,15 @@ struct PhotoDirectoryIsolationTests {
         "deleteAllData", "resetAll(",
     ]
 
+    /// Anything reaching the share-extension recipe inbox. Its funnel is `deleteAllData` ALONE —
+    /// `resetAll()` does not touch the queue — which is why this list is not the app-group one even
+    /// though both files live in the same container.
+    private static let sharedRecipeInboxTriggers = [
+        "sharedRecipeImportQueue", "SharedRecipeImportQueue", "SharedRecipeImportRecord",
+        "processSharedRecipeImportQueue", "shared recipe inbox",
+        "deleteAllData",
+    ]
+
     @Test func everyDirectStoreConstructionInTestsPinsItsOwnPhotoDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         // Recursive: subdirectories (Mocks/, and anything added later) are covered too.
@@ -338,6 +347,126 @@ struct PhotoDirectoryIsolationTests {
         // Floor well below the measured 34: this trigger set catches every `resetAll(`/`deleteAllData`
         // file, so the count tracks how many wipe tests exist rather than anything about isolation.
         #expect(scanned > 25, "the sensitive-visibility store-construction scan found only \(scanned) sites — scanner broken?")
+    }
+
+    /// The share-extension recipe inbox — the app-group container's OTHER tenant, in
+    /// `SharedRecipeImports/` rather than `FernletWidgets/`, so `appGroupDirectory` never covered it.
+    /// A file seam rather than a directory one, because the queue owns exactly one file.
+    ///
+    /// Latent rather than live, unlike the app-group round: `deleteAllData` clears the queue for every
+    /// concurrently-live store, but nothing reads the production file today because the two suites
+    /// that exercise the drain hand-inject a queue of their own. Those hand-rolled injections are
+    /// precisely the tell — writing the test the obvious way, by reaching for
+    /// `store.sharedRecipeImportQueue`, is what would have joined the race.
+    ///
+    /// Nil still means production at every layer, and that rule is load-bearing beyond tests here: the
+    /// share extension is a separate process with NO seam and its own hand-copied path resolution, so
+    /// an app resolving anywhere else would strand every shared-in recipe in a file nothing drains —
+    /// and there is no share-extension test target to notice.
+    @Test func everySharedRecipeInboxTouchingStoreConstructionPinsItsOwnQueueFile() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            guard Self.sharedRecipeInboxTriggers.contains(where: { source.contains($0) }) else { continue }
+            for arguments in Self.storeConstructionArguments(in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("sharedRecipeImportQueueFileURL"),
+                    """
+                    \(file.lastPathComponent) reaches the share-extension recipe inbox but constructs \
+                    FernletStore without `sharedRecipeImportQueueFileURL:`, so its queue is the real \
+                    `<group.MBO.Fernlet>/SharedRecipeImports/PendingRecipeURLs.json` that every \
+                    concurrent delete-all empties. Pass `sharedRecipeImportQueueFileURL: \
+                    uniqueSharedRecipeImportQueueURL()`, or build the store through \
+                    makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.
+                    """
+                )
+            }
+        }
+        // Floor below the measured 11, on the same reasoning as the AI-quota wall: at 11 a `> 10` floor
+        // goes red the first time a wipe test is deleted, for reasons unrelated to isolation.
+        #expect(scanned > 8, "the shared-recipe-inbox store-construction scan found only \(scanned) sites — scanner broken?")
+    }
+
+    /// Every isolation seam `FernletStore.init` takes, in the order the initializer declares them.
+    ///
+    /// Adding a seam means adding it here — this list is what the helper-forwarding wall below walks.
+    private static let isolationSeams = [
+        "appGroupDirectory", "sharedRecipeImportQueueFileURL", "photoDocumentsDirectory",
+        "proximitySupportDirectory", "heartDropKeychainService", "aiQuotaDefaults",
+        "sensitiveVisibilityDefaults",
+    ]
+
+    /// The blind spot the seven walls above share: they only look at DIRECT `FernletStore(...)`
+    /// constructions, and their whole escape hatch is "or build the store through the helpers". A
+    /// helper that takes a seam parameter and then forgets to FORWARD it silently un-isolates every
+    /// store built through it, and passes all seven walls while doing so — the argument is present at
+    /// the construction site, just wired to the helper's own fresh default instead of the caller's.
+    ///
+    /// Swift never warns about an unused parameter, so nothing else catches it. This is not
+    /// hypothetical: `makeTestStore` was landed in exactly that state during this round —
+    /// `sharedRecipeImportQueueFileURL` declared, defaulted, and dropped on the floor — and the only
+    /// thing that noticed was one behavioral test's third-store assertion. Every other test that asked
+    /// two stores to share a file would simply have got two files and quietly proved nothing.
+    @Test func everyTestStoreHelperForwardsEveryIsolationSeamItAccepts() throws {
+        let helpersURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("FernletTestHelpers.swift")
+        let source = Self.strippingComments(try String(contentsOf: helpersURL, encoding: .utf8))
+
+        for helper in ["makeTestStore", "makeTestStoreWithRepositories", "makeStoreSharingStores"] {
+            let body = try #require(Self.functionBody(of: helper, in: source),
+                                    "\(helper) not found in FernletTestHelpers.swift — has it been renamed?")
+            for seam in Self.isolationSeams where body.contains("\(seam):") {
+                #expect(
+                    body.contains("\(seam): \(seam)"),
+                    """
+                    \(helper) accepts `\(seam):` but never forwards it, so every store it builds gets \
+                    the callee's own fresh default and the caller's value is silently discarded. Two \
+                    stores handed the same \(seam) would land on two different ones — which is not a \
+                    failure, it is a test that proves nothing. Pass `\(seam): \(seam)` through.
+                    """
+                )
+            }
+        }
+    }
+
+    /// The source of `func <name>(...)` through its closing brace, or nil when the function is absent.
+    ///
+    /// The parameter list is skipped by PAREN depth before any brace counting starts, which is
+    /// load-bearing rather than fastidious: `makeTestStoreWithRepositories` ends its signature with
+    /// `wrapNarrativeStore: ... = { $0 }`, so taking the first `{` after the name would return that
+    /// default closure as the entire "body" — and the wall would then fail for every seam, on a
+    /// helper that forwards all of them.
+    private static func functionBody(of name: String, in source: String) -> String? {
+        guard let signature = source.range(of: "func \(name)(") else { return nil }
+        var index = source.index(before: signature.upperBound)   // the `(` itself
+        var parenDepth = 0
+        while index < source.endIndex {
+            if source[index] == "(" { parenDepth += 1 }
+            if source[index] == ")" {
+                parenDepth -= 1
+                if parenDepth == 0 { break }
+            }
+            index = source.index(after: index)
+        }
+        guard index < source.endIndex else { return nil }
+        var braceDepth = 0
+        var sawBrace = false
+        while index < source.endIndex {
+            if source[index] == "{" { braceDepth += 1; sawBrace = true }
+            if source[index] == "}" {
+                braceDepth -= 1
+                if sawBrace, braceDepth == 0 { return String(source[signature.lowerBound...index]) }
+            }
+            index = source.index(after: index)
+        }
+        return nil
     }
 
     /// The comment stripper is what stops every wall above from being satisfied by prose, so it

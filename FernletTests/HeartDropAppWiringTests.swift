@@ -100,6 +100,7 @@ struct HeartDropAppWiringTests {
             ),
             sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(),
             appGroupDirectory: uniqueAppGroupDirectory(),
+            sharedRecipeImportQueueFileURL: uniqueSharedRecipeImportQueueURL(),
             photoDocumentsDirectory: uniquePhotoDirectory(),
             proximitySupportDirectory: proximityDirectory ?? heartDropDirectory,
             heartDropKeychainService: keychainService ?? heartDropKeychainService,

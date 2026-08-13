@@ -131,6 +131,24 @@ func uniqueSensitiveVisibilityDefaults() -> UserDefaults {
     UserDefaults(suiteName: "fernlet.tests.sensitiveVisibility.\(UUID().uuidString)") ?? .standard
 }
 
+/// A fresh, never-shared queue file for ONE test store's share-extension recipe inbox.
+///
+/// A FILE, not a directory: the queue owns exactly one, and it lives in a different app-group
+/// subdirectory (`SharedRecipeImports/`) from the `FernletWidgets/` root `uniqueAppGroupDirectory()`
+/// covers, so the two seams are genuinely separate rather than redundant.
+///
+/// `deleteAllData` calls `sharedRecipeImportQueue.clear()`, so on the production path one store's wipe
+/// empties the inbox of every concurrently-live store. That one is latent rather than live — nothing
+/// reads the production queue today, because the two suites that exercise the drain
+/// (`RecipeSourceURLTests`, `DeleteAllDataTests`) hand-inject a queue over their store's. Those
+/// injections are the tell: writing the test the OBVIOUS way, by reaching for
+/// `store.sharedRecipeImportQueue`, is exactly what joins the race.
+func uniqueSharedRecipeImportQueueURL() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("fernlet.tests.recipeInbox.\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("PendingRecipeURLs.json")
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///
@@ -151,7 +169,8 @@ func makeTestStore(
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
-    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults()
+    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
@@ -161,7 +180,8 @@ func makeTestStore(
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
         aiQuotaDefaults: aiQuotaDefaults,
-        sensitiveVisibilityDefaults: sensitiveVisibilityDefaults
+        sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
+        sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL
     ).store
 }
 
@@ -182,6 +202,7 @@ func makeTestStoreWithRepositories(
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -227,6 +248,9 @@ func makeTestStoreWithRepositories(
         // Guided/cooking run state, the widget queue and the widget snapshot — see
         // `uniqueAppGroupDirectory()`.
         appGroupDirectory: appGroupDirectory,
+        // The share-extension recipe inbox, a FILE in a different app-group subdirectory — see
+        // `uniqueSharedRecipeImportQueueURL()`.
+        sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
         // Own-photo corpora in a per-store temp root — see `uniquePhotoDirectory()`.
         photoDocumentsDirectory: photoDocumentsDirectory,
         // Friend photo wall + the heart ledger and heart-drop sidecars likewise — see
@@ -263,7 +287,8 @@ func makeStoreSharingStores(
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
-    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults()
+    sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -286,6 +311,7 @@ func makeStoreSharingStores(
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([])),
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
         appGroupDirectory: appGroupDirectory,
+        sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
