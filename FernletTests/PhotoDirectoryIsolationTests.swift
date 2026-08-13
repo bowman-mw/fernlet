@@ -393,6 +393,59 @@ struct PhotoDirectoryIsolationTests {
         #expect(scanned > 8, "the shared-recipe-inbox store-construction scan found only \(scanned) sites — scanner broken?")
     }
 
+    /// The pending-narrative buffer — the sealed holding pen for cycle notes written while the app
+    /// lock is engaged — is the same hazard one OWNER over: its single live instance belongs to
+    /// `FernletLockService`, not `FernletStore`, so this wall scans lock-service constructions
+    /// where every other wall in this file scans the store's.
+    ///
+    /// Its identity is two halves carried as one value (`PendingNarrativeStorageScope`): the
+    /// directory holding `pending-narratives.bin` AND the keychain service holding the key that
+    /// seals it. `PendingNarrativeBuffer.init` has no argument-less form — the compiler forces a
+    /// scope — so what this wall guards is the one place the omission still compiles: the
+    /// lock-service parameter, whose default is `.production`. A construction that omits
+    /// `narrativeBufferScope:` silently rejoins the process-wide buffer, and the wipe funnels are
+    /// everywhere: `reset()` purges the file (and every lock suite resets — at construction, in
+    /// cleanup, or both), `purgePendingNarratives()` is the delete-all hook's whole body, and the
+    /// harness cleanups sweep the key service. Both halves matter: a scope isolating only the file
+    /// would leave the key on the shared service, and a concurrent sweep of that service turns the
+    /// isolated file into ciphertext nothing can open — every `append`/`drainAll` then throws (no
+    /// quarantine, no latch; the buffer just refuses until purged), which is strictly worse than
+    /// losing the file.
+    ///
+    /// Deliberately ungated (no trigger list): constructing the service constructs the buffer, and
+    /// resetting — which every one of these suites does — wipes it, so every construction site is
+    /// a wiper. A trigger list could only create silent false negatives here.
+    @Test func everyLockServiceConstructionPinsItsOwnNarrativeBufferScope() throws {
+        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !Self.excludedFiles.contains($0.lastPathComponent) }
+
+        var scanned = 0
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for arguments in Self.constructionArguments(of: "FernletLockService", in: source) {
+                scanned += 1
+                #expect(
+                    arguments.contains("narrativeBufferScope"),
+                    """
+                    \(file.lastPathComponent) constructs FernletLockService without \
+                    `narrativeBufferScope:`, so its pending-narrative buffer defaults to the \
+                    process-wide `.production` scope — which every concurrent `reset()` / \
+                    `purgePendingNarratives()` wipes, and whose buffered notes every concurrent \
+                    suite can destroy. Pass `narrativeBufferScope: uniqueNarrativeBufferScope()`, \
+                    or the first service's own scope when simulating a relaunch.
+                    """
+                )
+            }
+        }
+
+        // A real site floor: measured 14 lock-service constructions when this wall landed. Set
+        // below that so deleting a couple of lock tests cannot go red for reasons unrelated to
+        // isolation; well under it means the paren-matcher broke or the test root moved.
+        #expect(scanned > 10, "the lock-service construction scan found only \(scanned) sites — scanner broken?")
+    }
+
     /// Every isolation seam `FernletStore.init` takes, in the order the initializer declares them.
     ///
     /// Adding a seam means adding it here — this list is what the helper-forwarding wall below walks.
@@ -527,13 +580,19 @@ struct PhotoDirectoryIsolationTests {
         return output
     }
 
-    /// The argument list of every `FernletStore(...)` construction in `source`, paren-matched so a
+    /// The argument list of every `FernletStore(...)` construction in `source` — the walls above
+    /// all scan the store's initializer, so they share this spelling of the needle.
+    private static func storeConstructionArguments(in source: String) -> [String] {
+        constructionArguments(of: "FernletStore", in: source)
+    }
+
+    /// The argument list of every `<typeName>(...)` construction in `source`, paren-matched so a
     /// nested call (`LocalFernletRepository(fileURL:)`) or a multi-line call is captured whole.
     /// String literals are skipped so a paren inside one can't unbalance the scan. Comments are
     /// stripped from the result — see ``strippingComments(_:)``.
-    private static func storeConstructionArguments(in source: String) -> [String] {
+    private static func constructionArguments(of typeName: String, in source: String) -> [String] {
         let characters = Array(source)
-        let needle = Array("FernletStore(")
+        let needle = Array("\(typeName)(")
         var results: [String] = []
         var index = 0
         while index + needle.count <= characters.count {
@@ -541,7 +600,7 @@ struct PhotoDirectoryIsolationTests {
                 index += 1
                 continue
             }
-            // `.FernletStore(` / `MockFernletStore(` are different symbols — require a boundary.
+            // `.TypeName(` / `MockTypeName(` are different symbols — require a boundary.
             if index > 0, characters[index - 1].isLetter || characters[index - 1].isNumber
                 || characters[index - 1] == "_" || characters[index - 1] == "." {
                 index += 1

@@ -459,7 +459,8 @@ struct FernletLockServiceTests {
 
         #expect(harness.makeService().sealedContentKeyServices == [harness.sealedContentKeyServiceID])
         // …and production still points at the real one, so the injection cannot silently disable it.
-        #expect(FernletLockService(keychainService: "com.fernlet.lock.test.default.\(UUID().uuidString)")
+        #expect(FernletLockService(keychainService: "com.fernlet.lock.test.default.\(UUID().uuidString)",
+                                   narrativeBufferScope: uniqueNarrativeBufferScope())
             .sealedContentKeyServices == [KeychainItem.journalService])
     }
 
@@ -705,6 +706,11 @@ final class LockTestHarness {
     /// Injected for exactly the reason the two above are: an unscoped harness would have every
     /// duress-wipe test destroy the simulator's REAL progress-photo / friend-wall media keys.
     let mediaKeychainServiceID = "com.fernlet.private-media.test.\(UUID().uuidString)"
+    /// The scoped stand-in for the pending-narrative buffer's file + key identity, which `reset()`
+    /// purges (file) and this harness's `cleanup()` sweeps (key). Injected for the same reason the
+    /// three above are: an unscoped harness would have every reset() and cleanup() in this suite
+    /// destroy the process-wide buffer that every concurrently-running suite shares.
+    let narrativeBufferScope = uniqueNarrativeBufferScope()
     let clock = FakeDateProvider(now: Date(timeIntervalSinceReferenceDate: 1_000_000))
     let uptime = MockUptimeProvider(systemUptime: 100_000)
     let crypto = FakeLockCryptoProvider()
@@ -717,6 +723,7 @@ final class LockTestHarness {
             keychainService: serviceID,
             sealedContentKeyServices: [sealedContentKeyServiceID],
             mediaKeychainServices: [mediaKeychainServiceID],
+            narrativeBufferScope: narrativeBufferScope,
             dateProvider: clock,
             uptimeProvider: uptime,
             cryptoProvider: crypto,
@@ -729,7 +736,10 @@ final class LockTestHarness {
         KeychainItem.deleteAll(service: serviceID)
         KeychainItem.deleteAll(service: sealedContentKeyServiceID)
         KeychainItem.deleteAll(service: mediaKeychainServiceID)
-        try? PendingNarrativeBuffer().purge()
+        // The harness's OWN scope — purging the process-wide buffer here is exactly the
+        // cross-suite wipe the scope exists to end.
+        try? PendingNarrativeBuffer(scope: narrativeBufferScope).purge()
+        KeychainItem.deleteAll(service: narrativeBufferScope.keychainService)
     }
 }
 

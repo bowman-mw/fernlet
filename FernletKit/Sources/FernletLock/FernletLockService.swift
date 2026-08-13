@@ -979,8 +979,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     @ObservationIgnored private let privatePersistenceController: PrivatePersistenceController
     /// The unwrapped content key; non-nil only while `.unlocked`, scrubbed on lock/reset.
     @ObservationIgnored private var _contentKey: SymmetricKey?
-    /// The sealed pending-narrative buffer exposed through the `PeriodLockContext` seam.
-    @ObservationIgnored private let buffer = PendingNarrativeBuffer()
+    /// The storage identity — buffer-file directory AND buffer-key keychain service, as one
+    /// value — of the pending-narrative buffer this service owns. Injected (like
+    /// ``keychainService``) so a test's `reset()`/`purgePendingNarratives()` cannot destroy the
+    /// process-wide buffer that every concurrently-running suite shares; `.production` in the app.
+    /// Public so a test simulating a relaunch can hand a second service the first one's scope —
+    /// the shared buffer IS that test's fixture, and it needs the same file and the same key.
+    public let narrativeBufferScope: PendingNarrativeStorageScope
+    /// The sealed pending-narrative buffer exposed through the `PeriodLockContext` seam, built on
+    /// ``narrativeBufferScope``.
+    @ObservationIgnored private let buffer: PendingNarrativeBuffer
 
     /// Creates the service, wiring production defaults for any dependency not injected,
     /// and derives the initial state from the keychain: `.notConfigured` when no salt
@@ -989,6 +997,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         keychainService: String = KeychainItem.productionService,
         sealedContentKeyServices: [String] = [KeychainItem.journalService],
         mediaKeychainServices: [String] = [FernletLockService.privateMediaKeychainService],
+        narrativeBufferScope: PendingNarrativeStorageScope = .production,
         dateProvider: FernletDateProviding? = nil,
         uptimeProvider: FernletUptimeProviding? = nil,
         cryptoProvider: FernletLockCryptoProviding? = nil,
@@ -1002,6 +1011,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         self.keychainService = keychainService
         self.sealedContentKeyServices = sealedContentKeyServices
         self.mediaKeychainServices = mediaKeychainServices
+        self.narrativeBufferScope = narrativeBufferScope
+        self.buffer = PendingNarrativeBuffer(scope: narrativeBufferScope)
         self.dateProvider = dateProvider ?? SystemFernletDateProvider()
         self.uptimeProvider = uptimeProvider ?? SystemFernletUptimeProvider()
         self.cryptoProvider = cryptoProvider ?? SystemFernletLockCryptoProvider()

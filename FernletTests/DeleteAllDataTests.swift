@@ -754,6 +754,8 @@ struct DeleteAllDataTests {
             keychainService: "com.fernlet.lock.test.p1a.\(UUID().uuidString)",
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
             sealedContentKeyServices: ["com.fernlet.journal.test.p1a.\(UUID().uuidString)"],
+            // The purge hook below drives the REAL buffer purge; keep it off the process-wide scope.
+            narrativeBufferScope: uniqueNarrativeBufferScope(),
             privatePersistenceController: controller
         )
         defer { try? lock.reset() }

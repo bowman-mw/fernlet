@@ -53,6 +53,8 @@ struct SecureEnclaveWrapTests {
             keychainService: keychainService,
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
             sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+            narrativeBufferScope: uniqueNarrativeBufferScope(),
             biometricBypassLoader: biometricBypassLoader,
             biometricTypeOverride: biometricTypeOverride,
             keychainStore: refusingStore,
@@ -149,7 +151,9 @@ struct SecureEnclaveWrapTests {
         let lockService = FernletLockService(
             keychainService: service,
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
-            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+            narrativeBufferScope: uniqueNarrativeBufferScope()
         )
         try await lockService.configure(credential: .pin6("246802"), grantingScope: .privateHub)
         #expect(SecureEnclaveContentKeyWrap.loadKey(service: service) != nil)
@@ -177,7 +181,9 @@ struct SecureEnclaveWrapTests {
         let lockService = FernletLockService(
             keychainService: service,
             // reset() sweeps the sealed-content device keys too; keep that off the real service.
-            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+            // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+            narrativeBufferScope: uniqueNarrativeBufferScope()
         )
         defer {
             try? lockService.reset()

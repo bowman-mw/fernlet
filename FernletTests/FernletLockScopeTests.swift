@@ -34,7 +34,9 @@ private func freshScopedService() -> FernletLockService {
         keychainService: "com.fernlet.lock.scopetest.\(UUID().uuidString)",
         // reset() sweeps the sealed-content device keys too; keep that off the real service.
         sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
-        mediaKeychainServices: ["com.fernlet.private-media.test.\(UUID().uuidString)"]
+        mediaKeychainServices: ["com.fernlet.private-media.test.\(UUID().uuidString)"],
+        // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+        narrativeBufferScope: uniqueNarrativeBufferScope()
     )
     try? service.reset()
     return service
@@ -69,6 +71,8 @@ struct FernletLockScopeTests {
             keychainService: keychainService,
             sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
             mediaKeychainServices: ["com.fernlet.private-media.test.\(UUID().uuidString)"],
+            // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+            narrativeBufferScope: uniqueNarrativeBufferScope(),
             biometricBypassLoader: { _, _ in bypassKey }
         )
         defer { try? service.reset() }

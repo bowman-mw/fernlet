@@ -24,7 +24,9 @@ private func freshService() -> FernletLockService {
     let service = FernletLockService(
         keychainService: "com.fernlet.lock.test.\(UUID().uuidString)",
         // reset() sweeps the sealed-content device keys too; keep that off the real service.
-        sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+        // reset() also purges the pending-narrative buffer; keep that off the process-wide scope.
+        narrativeBufferScope: uniqueNarrativeBufferScope()
     )
     try? service.reset()      // Clear any leftover Keychain state
     return service
@@ -209,7 +211,9 @@ struct FernletLockTests {
 
         let serviceB = FernletLockService(
             keychainService: serviceA.keychainService,
-            sealedContentKeyServices: serviceA.sealedContentKeyServices
+            sealedContentKeyServices: serviceA.sealedContentKeyServices,
+            // A simulated relaunch shares the SAME buffer scope — same file, same key.
+            narrativeBufferScope: serviceA.narrativeBufferScope
         )
         #expect(serviceB.currentAttemptCount == 2)
 
@@ -241,7 +245,9 @@ struct FernletLockTests {
 
         let service2 = FernletLockService(
             keychainService: service.keychainService,
-            sealedContentKeyServices: service.sealedContentKeyServices
+            sealedContentKeyServices: service.sealedContentKeyServices,
+            // A simulated relaunch shares the SAME buffer scope — same file, same key.
+            narrativeBufferScope: service.narrativeBufferScope
         )
         #expect(service2.state == .notConfigured)
         #expect(KeychainItem.load(for: .cooldownMonotonicAnchor, service: service.keychainService) == nil)
@@ -320,7 +326,9 @@ struct FernletLockTests {
     // MARK: - PendingNarrativeBuffer round-trip
 
     @Test func pendingNarrativeBufferAppendDrainRoundTrip() throws {
-        let buffer = PendingNarrativeBuffer()
+        let scope = uniqueNarrativeBufferScope()
+        defer { KeychainItem.deleteAll(service: scope.keychainService) }
+        let buffer = PendingNarrativeBuffer(scope: scope)
         try buffer.purge()  // clean slate
 
         let payload = PendingNarrativePayload(
@@ -354,7 +362,9 @@ struct FernletLockTests {
     // MARK: - PendingNarrativeBuffer eviction at 50
 
     @Test func pendingNarrativeBufferEvictsAt50() throws {
-        let buffer = PendingNarrativeBuffer()
+        let scope = uniqueNarrativeBufferScope()
+        defer { KeychainItem.deleteAll(service: scope.keychainService) }
+        let buffer = PendingNarrativeBuffer(scope: scope)
         try buffer.purge()
 
         for i in 0..<55 {
@@ -377,7 +387,9 @@ struct FernletLockTests {
     // MARK: - PendingNarrativeBuffer encryption (ChaChaPoly)
 
     @Test func pendingNarrativeBufferIsEncrypted() throws {
-        let buffer = PendingNarrativeBuffer()
+        let scope = uniqueNarrativeBufferScope()
+        defer { KeychainItem.deleteAll(service: scope.keychainService) }
+        let buffer = PendingNarrativeBuffer(scope: scope)
         try buffer.purge()
 
         let secret = "top-secret-note-content"
@@ -390,13 +402,96 @@ struct FernletLockTests {
         )
         try buffer.append(payload)
 
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let fileURL = support.appendingPathComponent("Fernlet/pending-narratives.bin")
+        let fileURL = PendingNarrativeBuffer.fileURL(in: scope.directory)
         let raw = try Data(contentsOf: fileURL)
         let rawString = String(data: raw, encoding: .utf8) ?? ""
         #expect(!rawString.contains(secret), "Raw file must not contain plaintext note")
 
         try buffer.purge()
+    }
+
+    // MARK: - PendingNarrativeBuffer per-scope isolation
+
+    /// The behavioral half of the buffer's cross-suite isolation (the grep-wall in
+    /// `PhotoDirectoryIsolationTests` is the other): two lock services on different
+    /// `PendingNarrativeStorageScope`s, wipe one, the other's buffered notes survive.
+    ///
+    /// The wipe is BOTH halves of the identity: `purgePendingNarratives()` (the exact body of the
+    /// `pendingNarrativeBufferPurgeHook` closure `ContentView.attachDeleteAllHooks` wires) plus a
+    /// `deleteAll` over the scope's keychain service (what every harness `cleanup()` does today,
+    /// and what the flagged owner call in `Docs/PrivacyWipeCoverage.md` will fold into delete-all).
+    ///
+    /// The THIRD service, built on A's scope only after B's wipe, is the load-bearing assertion
+    /// twice over: it must load A's buffer key fresh from the keychain, so it fails if the two
+    /// scopes secretly share a key service (B's sweep would have taken A's key, and the drain
+    /// would throw on ChaChaPoly open — the file-path-only fix this family warns about); and it
+    /// reads the file from disk, so it fails just as loudly if persistence silently stopped and
+    /// the live instance A was draining from memory it never wrote.
+    @MainActor
+    @Test func theNarrativeBufferIsIsolatedPerScope() throws {
+        let scopeA = uniqueNarrativeBufferScope()
+        let scopeB = uniqueNarrativeBufferScope()
+        defer {
+            try? PendingNarrativeBuffer(scope: scopeA).purge()
+            KeychainItem.deleteAll(service: scopeA.keychainService)
+            KeychainItem.deleteAll(service: scopeB.keychainService)
+        }
+        func makeLockService(scope: PendingNarrativeStorageScope) -> FernletLockService {
+            FernletLockService(
+                keychainService: "com.fernlet.lock.test.\(UUID().uuidString)",
+                sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"],
+                narrativeBufferScope: scope
+            )
+        }
+        func payload(_ uuid: String) -> PendingNarrativePayload {
+            PendingNarrativePayload(
+                hkExternalUUID: uuid, dateKey: "2026-08-12",
+                noteBytes: "note for \(uuid)".data(using: .utf8),
+                symptomFlagsBytes: nil, customSymptomScalesBytes: nil
+            )
+        }
+
+        let serviceA = makeLockService(scope: scopeA)
+        let serviceB = makeLockService(scope: scopeB)
+        try serviceA.bufferPendingNarrative(payload("uuid-A"))
+        try serviceB.bufferPendingNarrative(payload("uuid-B"))
+
+        // The buffer key must LIVE on the scope's service ("com.fernlet.buffer.key.v2" is the
+        // buffer's v2 account). This is the assertion the wipe below cannot replace: a regression
+        // that sealed per-scope files under a process-wide key would survive that wipe — the test
+        // only sweeps B's NAMED service — and every scoped buffer would share one key again.
+        #expect(KeychainItem.load(account: "com.fernlet.buffer.key.v2", service: scopeA.keychainService) != nil,
+                "A's buffer key is not on A's scoped keychain service")
+
+        // B's wipe: the real purge funnel, plus the key half its harness cleanup sweeps.
+        try serviceB.purgePendingNarratives()
+        KeychainItem.deleteAll(service: scopeB.keychainService)
+
+        // A intact through the live instance…
+        let drainedA = try serviceA.drainPendingNarratives()
+        #expect(drainedA.map(\.hkExternalUUID) == ["uuid-A"], "A's buffered note did not survive B's wipe")
+
+        // …and through a FRESH service on A's scope, built after the wipe — same file, same key.
+        let serviceC = makeLockService(scope: scopeA)
+        let drainedC = try serviceC.drainPendingNarratives()
+        #expect(drainedC.map(\.hkExternalUUID) == ["uuid-A"],
+                "a fresh service on A's scope could not reopen A's buffer — file or key was shared with B")
+
+        // And the wipe actually wiped: a fresh service on B's scope finds nothing.
+        let serviceB2 = makeLockService(scope: scopeB)
+        #expect(try serviceB2.drainPendingNarratives().isEmpty, "B's wipe left buffered notes behind")
+    }
+
+    /// Pins `.production` to the shipped identity — the exact file path and keychain service the
+    /// buffer used before the scope seam existed — so the seam that made it injectable can never
+    /// silently migrate a real install. The spelled-out path is the pre-seam spelling verbatim.
+    @Test func theProductionNarrativeBufferScopeResolvesToTheShippedIdentity() {
+        let scope = PendingNarrativeStorageScope.production
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        #expect(scope.directory.path == support.appendingPathComponent("Fernlet", isDirectory: true).path)
+        #expect(PendingNarrativeBuffer.fileURL(in: scope.directory).path
+                == support.appendingPathComponent("Fernlet/pending-narratives.bin").path)
+        #expect(scope.keychainService == "com.fernlet.narrative-buffer")
     }
 
     // MARK: - FernletLockGate: onDisappear locks

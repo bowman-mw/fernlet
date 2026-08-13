@@ -83,6 +83,34 @@ func uniqueHeartDropKeychainService() -> String {
     "com.fernlet.heartdrop.test.\(UUID().uuidString)"
 }
 
+/// A fresh, never-shared storage scope for ONE test `FernletLockService`'s pending-narrative
+/// buffer — the directory holding its sealed `pending-narratives.bin` AND the keychain service
+/// holding the key that seals it, as the single value `PendingNarrativeStorageScope` makes them.
+///
+/// EVERY lock service built in the test process needs its own: `reset()` purges the buffer file
+/// (and `purgePendingNarratives()` is the delete-all hook's whole body), so on the process-wide
+/// `.production` scope any resetting test destroys the buffered locked-state cycle notes of every
+/// concurrently-running one. Both halves ride together because the buffer is sealed: a private
+/// directory with the shared key service would still lose its key to whatever sweeps that service,
+/// leaving the isolated file as ciphertext nothing can open — every `append`/`drainAll` then
+/// throws until a purge, which is strictly worse than losing the file outright.
+///
+/// The service is shaped `com.fernlet.narrative-buffer.test.<uuid>` to match the suite-fixture
+/// convention `PrivacyWipeCoverageTests.keychainServiceLiterals` skips (`.test.`). The directory is
+/// not created on disk here: the buffer creates it on first write, and an unwritten buffer should
+/// leave nothing behind.
+///
+/// Pass the SAME scope to two services when a test deliberately simulates a relaunch over the same
+/// buffered notes — the shared buffer is that test's fixture, and it needs the same file AND the
+/// same key or the "relaunch" finds a file it cannot open.
+func uniqueNarrativeBufferScope() -> PendingNarrativeStorageScope {
+    PendingNarrativeStorageScope(
+        directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet.tests.narrativeBuffer.\(UUID().uuidString)", isDirectory: true),
+        keychainService: "com.fernlet.narrative-buffer.test.\(UUID().uuidString)"
+    )
+}
+
 /// A fresh, never-shared app-group root for ONE test store — the guided-run and cooking-run state
 /// files, the inbound widget-action queue, and the widget snapshot, which are all co-tenants of the
 /// real `<group.MBO.Fernlet>/FernletWidgets/` directory.

@@ -63,13 +63,19 @@ public struct PendingNarrativePayload: Codable {
 /// re-sealed as `MenstrualNarrative` rows under the real column key.
 ///
 /// Storage and crypto:
+/// - The buffer's whole identity — the directory holding `pending-narratives.bin` AND the
+///   keychain service holding its key — is the ``PendingNarrativeStorageScope`` given at init,
+///   `.production` resolving to the shipped `Application Support/Fernlet` +
+///   `com.fernlet.narrative-buffer`. Two instances share state exactly when their scopes match.
 /// - All entries are JSON-encoded as a single array and sealed with ChaChaPoly into
-///   `Application Support/Fernlet/pending-narratives.bin`; each save excludes the file from
+///   `pending-narratives.bin` under the scope's directory; each save excludes the file from
 ///   backup and (best-effort) applies complete file protection.
 /// - The 256-bit buffer key is its own data-protection keychain item
 ///   (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`), deliberately separate from the lock's
 ///   content key so logging can reach the buffer without the user's Fernlet passcode. A legacy
-///   service-less keychain item is migrated into the scoped slot on first read.
+///   service-less keychain item is migrated into the scoped slot on first read — by the
+///   production scope only, since that row is production's migration source and the migration
+///   deletes it.
 /// - The buffer caps at 50 entries; ``append(_:)`` evicts the oldest beyond the cap and records
 ///   the eviction via `FernletAuditLog`.
 ///
@@ -81,21 +87,31 @@ public struct PendingNarrativePayload: Codable {
 /// relies on the single lock-service-owned instance being driven from the main actor.
 public final class PendingNarrativeBuffer {
 
-    /// Creates a buffer handle; every instance shares the same on-disk file and keychain key.
-    public init() {}
+    /// The buffer's storage identity — file directory and keychain service as one value. Two
+    /// instances share on-disk and keychain state exactly when their scopes are equal.
+    private let scope: PendingNarrativeStorageScope
 
-    private static let bufferKeyService = "com.fernlet.narrative-buffer"
+    /// Creates a buffer handle on the given scope. Deliberately no argument-less variant: an
+    /// implicit process-wide default is exactly how an instance silently rejoins the cross-suite
+    /// wipe race this scope exists to end. Production callers pass `.production`.
+    public init(scope: PendingNarrativeStorageScope) {
+        self.scope = scope
+    }
+
     private static let bufferKeyAccount = "com.fernlet.buffer.key"           // legacy (no service)
     private static let bufferKeyAccountV2 = "com.fernlet.buffer.key.v2"      // current (with service)
     private static let maxEntries = 50
-    /// The sealed buffer file under `Application Support/Fernlet/`, creating the directory as a side effect.
+
+    /// The sealed buffer file inside `directory` — the ONE spelling of the file's name, so the
+    /// production default and a scoped root can never name different files.
+    public static func fileURL(in directory: URL) -> URL {
+        directory.appendingPathComponent("pending-narratives.bin")
+    }
+
+    /// The sealed buffer file under the scope's directory, creating the directory as a side effect.
     private var bufferFileURL: URL {
-        let support = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!
-            .appendingPathComponent("Fernlet", isDirectory: true)
-        try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        return support.appendingPathComponent("pending-narratives.bin")
+        try? FileManager.default.createDirectory(at: scope.directory, withIntermediateDirectories: true)
+        return Self.fileURL(in: scope.directory)
     }
 
     // MARK: - Public API
@@ -191,8 +207,14 @@ public final class PendingNarrativeBuffer {
     /// scoped v2 slot when that is all that exists.
     private func loadBufferKey() -> SymmetricKey? {
         // Try current key (with service) first
-        if let data = KeychainItem.load(account: Self.bufferKeyAccountV2, service: Self.bufferKeyService) {
+        if let data = KeychainItem.load(account: Self.bufferKeyAccountV2, service: scope.keychainService) {
             return SymmetricKey(data: data)
+        }
+        // Only the production scope may consume the legacy row: it is production's one migration
+        // source, and the migration below DELETES it — a scoped (test) buffer that fell through
+        // here would steal the key into its throwaway service and strand the real buffer file.
+        guard scope.keychainService == PendingNarrativeStorageScope.productionKeychainService else {
+            return nil
         }
         // Migrate legacy key (no service) into the scoped service slot
         if let key = loadLegacyServicelessKey() {
@@ -202,7 +224,7 @@ public final class PendingNarrativeBuffer {
             KeychainItem.store(
                 keyData,
                 account: Self.bufferKeyAccountV2,
-                service: Self.bufferKeyService,
+                service: scope.keychainService,
                 accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             )
             // Raw SecItemDelete: KeychainItem cannot express a service-less query (service is a
@@ -248,7 +270,7 @@ public final class PendingNarrativeBuffer {
         let status = KeychainItem.store(
             keyData,
             account: Self.bufferKeyAccountV2,
-            service: Self.bufferKeyService,
+            service: scope.keychainService,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         )
         guard status == errSecSuccess else {
