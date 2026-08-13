@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "Untitled design-2.png",
+      "filename" : "fernlet-icon-1024.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "fernlet-icon-dark-1024.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -24,6 +25,7 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "fernlet-icon-tinted-1024.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
