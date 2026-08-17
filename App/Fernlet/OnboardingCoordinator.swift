@@ -23,7 +23,7 @@ extension CloudKitDataService: ExistingCloudDataDetecting {}
 ///
 /// Built by ``OnboardingCloudDataDetectorFactory`` when the UI-test launch environment asks for a
 /// deterministic storage step — either "no existing data" or a summary assembled from env counts.
-struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
+private struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
     var summary: ExistingDataSummary?
 
     func detectExistingData() async throws -> ExistingDataSummary? {
@@ -312,7 +312,7 @@ struct OnboardingScreenContainer<Content: View>: View {
 /// Reuses ``GoalPresetCards`` from Settings so the goal choice shows the same paired nutrition and
 /// training summaries in both places. All four bindings point into the coordinator model's draft
 /// state; nothing is saved until the flow's `complete()`.
-struct OnboardingGoalScreen: View {
+private struct OnboardingGoalScreen: View {
     var stepText: String
     @Binding var goal: GoalType
     @Binding var level: String
@@ -364,7 +364,7 @@ struct OnboardingGoalScreen: View {
 /// The color is a typed `CompanionAssetColor` end to end — picker, preview, and the eventual write
 /// in the model's `complete()` all read the same binding, which is what keeps the previewed color
 /// and the persisted one from drifting (see the property comments below for the history).
-struct OnboardingStarterScreen: View {
+private struct OnboardingStarterScreen: View {
     var stepText: String
     @Binding var starterName: String
     @Binding var starterColor: CompanionAssetColor
@@ -427,7 +427,7 @@ struct OnboardingStarterScreen: View {
 /// The stepper age feeds nutrition targets only; the age-gated features (intimacy 16+, mesh chat
 /// 13+) read Apple's DeclaredAgeRange answer instead, requested through ``AgeAssuranceStore`` when
 /// Continue is tapped. A declined or unavailable answer never blocks onboarding.
-struct OnboardingPersonalDetailsScreen: View {
+private struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
     @Binding var displayName: String
@@ -500,7 +500,7 @@ struct OnboardingPersonalDetailsScreen: View {
 ///
 /// Writes only `preferences.dietaryPattern` on the coordinator model's draft; the subtitle copy is
 /// deliberately gentle — the pattern tunes suggestions without imposing rules.
-struct OnboardingDietaryPatternScreen: View {
+private struct OnboardingDietaryPatternScreen: View {
     var stepText: String
     @Binding var preferences: UserNutritionPreferences
     var continueAction: () -> Void
@@ -546,7 +546,7 @@ struct OnboardingDietaryPatternScreen: View {
 ///
 /// Used by ``OnboardingDietaryPatternScreen`` for its pattern choices; purely presentational, with
 /// selection state and the tap action owned by the caller.
-struct OnboardingChoiceRow: View {
+private struct OnboardingChoiceRow: View {
     var title: String
     var subtitle: String
     var systemImage: String

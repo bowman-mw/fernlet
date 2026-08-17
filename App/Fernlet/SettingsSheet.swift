@@ -77,6 +77,12 @@ struct SettingsSheet: View {
     @State private var settingsSearch = ""
     // Debug tab only: tier-2 records load post-render (repository decodes the whole DB per read).
     @State private var debugTierTwoMemories: [TierTwoMemoryRecord]?
+    /// One in-flight reminder reschedule at a time (R3): the DatePicker emits a change per wheel
+    /// tick, and they all write the same notification identifier.
+    @State private var checkInRescheduleTask: Task<Void, Never>?
+    /// One in-flight HealthKit body-profile sync at a time (R3): Stepper/Picker ticks would otherwise
+    /// each spawn their own `saveBodyProfileMeasurements` write for a single edit session.
+    @State private var profileSyncTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -199,221 +205,267 @@ struct SettingsSheet: View {
 
     private var settingsForm: some View {
         Form {
-                Section {
-                } header: {
-                    Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .textCase(nil)
-                        .fernletWrappingText()
-                }
-                .listSectionSeparator(.hidden)
-                .listSectionSpacing(.compact)
+            dataStaysLocalHeader
+            generalSection
+            wellnessSection
+            periodSection
+            intimacySection
+            advancedSection
+            privacySection
+            dangerSection
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.parchment)
+    }
 
-                Section("General") {
-                    NavigationLink("Appearance", value: SettingsRoute.appearance)
-                    NavigationLink("Goal & nutrition", value: SettingsRoute.goalNutrition)
-                    NavigationLink("Layout & shortcuts", value: SettingsRoute.layoutShortcuts)
-                }
-                .listRowBackground(Color.cream)
+    /// The standing promise at the top of Settings: nothing leaves the device unless the user says so.
+    private var dataStaysLocalHeader: some View {
+        Section {
+        } header: {
+            Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.slate)
+                .textCase(nil)
+                .fernletWrappingText()
+        }
+        .listSectionSeparator(.hidden)
+        .listSectionSpacing(.compact)
+    }
 
-                Section("Wellness") {
-                    NavigationLink("Health", value: SettingsRoute.health)
-                    NavigationLink("Sleep", value: SettingsRoute.sleep)
-                    NavigationLink("Move", value: SettingsRoute.move)
-                        .accessibilityIdentifier("settings.move")
-                }
-                .listRowBackground(Color.cream)
+    private var generalSection: some View {
+        Section("General") {
+            NavigationLink("Appearance", value: SettingsRoute.appearance)
+            NavigationLink("Goal & nutrition", value: SettingsRoute.goalNutrition)
+            NavigationLink("Layout & shortcuts", value: SettingsRoute.layoutShortcuts)
+        }
+        .listRowBackground(Color.cream)
+    }
 
-                Section {
-                    Toggle("Period tracking", isOn: periodTrackingVisibleBinding)
-                        .accessibilityIdentifier("settings.period.visible")
-                    // Cosmetic sub-options: these still read cycle data, so they only make sense —
-                    // and are only offered — while the hard gate above is on.
-                    if store.isPeriodTrackingVisible {
-                        Toggle("Hide predictions", isOn: hidePredictionsBinding)
-                        Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
-                        Toggle("Period-aware care", isOn: periodAwareScoringBinding)
-                    }
-                } header: {
-                    Text("Period")
-                } footer: {
-                    if store.isPeriodTrackingVisible {
-                        Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.\n\nTurning off Period tracking hides every cycle surface and stops Fernlet reading your cycle data. Your entries are kept, not deleted.")
-                    } else {
-                        Text("Cycle surfaces are hidden and Fernlet isn't reading your cycle data. Your entries are kept — turn this back on any time to see them again. Entries in Apple Health stay there either way.")
-                    }
-                }
-                .listRowBackground(Color.cream)
+    private var wellnessSection: some View {
+        Section("Wellness") {
+            NavigationLink("Health", value: SettingsRoute.health)
+            NavigationLink("Sleep", value: SettingsRoute.sleep)
+            NavigationLink("Move", value: SettingsRoute.move)
+                .accessibilityIdentifier("settings.move")
+        }
+        .listRowBackground(Color.cream)
+    }
 
-                Section {
-                    if store.isIntimateLoggingAllowed {
-                        Toggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
-                            .accessibilityIdentifier("settings.intimacy.visible")
-                    } else {
-                        // Age is a floor, not a preference — say the true reason rather than showing a
-                        // toggle that would silently do nothing. The notice also carries the only way
-                        // back for someone who installed before this gate existed, or who has since
-                        // had a birthday.
-                        AgeGateNotice(
-                            gate: .intimacy,
-                            featureName: "Intimacy tracking",
-                            ageAssurance: store.ageAssurance
-                        )
-                    }
-                } header: {
-                    Text("Intimacy")
-                } footer: {
-                    if store.isIntimateLoggingAllowed {
-                        Text(store.settings.intimacyTrackingVisible
-                             ? "Private intimacy notes, sealed on this device. Turning this off hides the feature and stops Fernlet reading it. Your notes are kept, not deleted."
-                             : "Intimacy surfaces are hidden and Fernlet isn't reading them. Your notes are kept — turn this back on any time. Entries in Apple Health stay there either way.")
-                    }
-                }
-                .listRowBackground(Color.cream)
-
-                Section("Advanced") {
-                    NavigationLink("Core memory", value: SettingsRoute.coreMemory)
-                    NavigationLink("Signals", value: SettingsRoute.signals)
-                    NavigationLink("Debug", value: SettingsRoute.debug)
-                    NavigationLink("Connection Inspector", value: SettingsRoute.connectionInspector)
-                    NavigationLink("Connection History", value: SettingsRoute.connectionHistory)
-                }
-                .listRowBackground(Color.cream)
-
-                Section {
-                    NavigationLink("Privacy & Data", value: SettingsRoute.privacyData)
-                    NavigationLink("Privacy Policy", value: SettingsRoute.privacyPolicy)
-                    NavigationLink("Safety & reporting", value: SettingsRoute.safetyReporting)
-                    NavigationLink("App lock", value: SettingsRoute.appLock)
-                    Toggle(
-                        "Allow nearby recipe shares",
-                        isOn: Binding(
-                            get: { store.settings.allowNearbyRecipeShares },
-                            set: { store.setAllowNearbyRecipeShares($0) }
-                        )
-                    )
-                    // Phase 3a: payload-layer control — the shop rides the friend session (no
-                    // standalone radio), so this governs whether shop catalogs are shared at all.
-                    Toggle(
-                        "Share clothing shops with friends",
-                        isOn: Binding(
-                            get: { store.settings.allowNearbyClothingShares },
-                            set: { store.setAllowNearbyClothingShares($0) }
-                        )
-                    )
-                    // Phase 4b: hearts ride the presence radio (no standalone radio). This governs
-                    // whether hearts are sent AND received; the presence toggle below still runs.
-                    // Hearts require presence (Group 2): enabling hearts while Nearby Friends is off
-                    // offers to enable presence, since hearts cannot function without it.
-                    Toggle(
-                        "Allow nearby hearts",
-                        isOn: Binding(
-                            get: { store.settings.allowNearbyHearts },
-                            set: { newValue in
-                                store.setAllowNearbyHearts(newValue)
-                                if newValue && !store.settings.allowNearbyPresence {
-                                    offerPresenceForHearts = true
-                                }
-                            }
-                        )
-                    )
-                    if store.settings.allowNearbyHearts && !store.settings.allowNearbyPresence {
-                        Text("Hearts need Nearby Friends turned on to work — turn it on below.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                    }
-                    // In-session messaging has no toggle — session membership is its consent gate — so
-                    // its 13+ age requirement is the one thing that can withhold it. Surfaced here
-                    // because the chat button simply doesn't appear in-session, which on its own would
-                    // read as a bug rather than a rule.
-                    if !store.ageAssurance.allows(.chat) {
-                        AgeGateNotice(
-                            gate: .chat,
-                            featureName: "Messaging friends nearby",
-                            ageAssurance: store.ageAssurance
-                        )
-                    }
-                    // Away delivery (bitchat adoptions Increment 3): the one proximity feature
-                    // that touches the network, so it carries its own explicit opt-in — separate
-                    // from iCloud Sync (public dead-drop, not the synced store).
-                    Toggle(
-                        "Deliver hearts when apart",
-                        isOn: Binding(
-                            get: { store.settings.heartsAwayDelivery },
-                            set: { store.setHeartsAwayDelivery($0) }
-                        )
-                    )
-                    if store.settings.heartsAwayDelivery {
-                        Text("When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                        // Nothing-silent: the toggle being on is a promise of delivery, so every
-                        // state where that promise isn't being kept gets said out loud here.
-                        if let problem = awayDeliveryProblemText {
-                            HStack(alignment: .top, spacing: 10) {
-                                Text(problem)
-                                    .font(.fernlet(.bodySmall))
-                                    .foregroundStyle(Color.goldenrod)
-                                    // Identifiers sit on the leaves, not the HStack: an identifier
-                                    // on the container shadows its children for UI tests.
-                                    .accessibilityIdentifier("settings.heartsAway.problem")
-                                Spacer(minLength: 0)
-                                Button("Dismiss") {
-                                    store.heartDropService.acknowledgeDeliveryProblem()
-                                }
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("settings.heartsAway.dismissProblem")
-                            }
-                        }
-                    } else if store.heartsAwayPurgePending {
-                        // Consent is off but our own sealed records are still on the public
-                        // database, because the delete didn't go through. Say so rather than let
-                        // "off" imply they were removed; the foreground listener retries.
-                        Text("Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.goldenrod)
-                            .accessibilityIdentifier("settings.heartsAway.purgePending")
-                    }
-                    // Phase 4a: the standing presence radio — rotating pairwise tags only.
-                    Toggle(
-                        "Nearby friends presence",
-                        isOn: Binding(
-                            get: { store.settings.allowNearbyPresence },
-                            set: { store.setAllowNearbyPresence($0) }
-                        )
-                    )
-                    // Phase 4: share a fuzzy vibe (thriving/okay/struggling) + your avatar with kept
-                    // friends when you meet in person. Never a number, goal, or cycle. Default off.
-                    Toggle(
-                        "Share your vibe with friends",
-                        isOn: Binding(
-                            get: { store.settings.allowNearbyFriendState },
-                            set: { store.setAllowNearbyFriendState($0) }
-                        )
-                    )
-                } header: {
-                    Text("Privacy")
-                } footer: {
-                    Text("Nearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped.")
-                }
-                .alert("Turn on Nearby Friends?", isPresented: $offerPresenceForHearts) {
-                    Button("Turn on") { store.setAllowNearbyPresence(true) }
-                    Button("Not now", role: .cancel) {}
-                } message: {
-                    Text("Hearts are sent in person over Nearby Friends. Turn it on so you can see when friends are close by and send them a heart. Fernlet broadcasts only rotating tags your friends can recognize — never your name.")
-                }
-                .listRowBackground(Color.cream)
-
-                Section("Danger zone") {
-                    resetSection
-                }
-                .listRowBackground(Color.cream)
+    private var periodSection: some View {
+        Section {
+            Toggle("Period tracking", isOn: periodTrackingVisibleBinding)
+                .accessibilityIdentifier("settings.period.visible")
+            // Cosmetic sub-options: these still read cycle data, so they only make sense —
+            // and are only offered — while the hard gate above is on.
+            if store.isPeriodTrackingVisible {
+                Toggle("Hide predictions", isOn: hidePredictionsBinding)
+                Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
+                Toggle("Period-aware care", isOn: periodAwareScoringBinding)
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.parchment)
+        } header: {
+            Text("Period")
+        } footer: {
+            if store.isPeriodTrackingVisible {
+                Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.\n\nTurning off Period tracking hides every cycle surface and stops Fernlet reading your cycle data. Your entries are kept, not deleted.")
+            } else {
+                Text("Cycle surfaces are hidden and Fernlet isn't reading your cycle data. Your entries are kept — turn this back on any time to see them again. Entries in Apple Health stay there either way.")
+            }
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    private var intimacySection: some View {
+        Section {
+            if store.isIntimateLoggingAllowed {
+                Toggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
+                    .accessibilityIdentifier("settings.intimacy.visible")
+            } else {
+                // Age is a floor, not a preference — say the true reason rather than showing a
+                // toggle that would silently do nothing. The notice also carries the only way
+                // back for someone who installed before this gate existed, or who has since
+                // had a birthday.
+                AgeGateNotice(
+                    gate: .intimacy,
+                    featureName: "Intimacy tracking",
+                    ageAssurance: store.ageAssurance
+                )
+            }
+        } header: {
+            Text("Intimacy")
+        } footer: {
+            if store.isIntimateLoggingAllowed {
+                Text(store.settings.intimacyTrackingVisible
+                     ? "Private intimacy notes, sealed on this device. Turning this off hides the feature and stops Fernlet reading it. Your notes are kept, not deleted."
+                     : "Intimacy surfaces are hidden and Fernlet isn't reading them. Your notes are kept — turn this back on any time. Entries in Apple Health stay there either way.")
+            }
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    private var advancedSection: some View {
+        Section("Advanced") {
+            NavigationLink("Core memory", value: SettingsRoute.coreMemory)
+            NavigationLink("Signals", value: SettingsRoute.signals)
+            NavigationLink("Debug", value: SettingsRoute.debug)
+            NavigationLink("Connection Inspector", value: SettingsRoute.connectionInspector)
+            NavigationLink("Connection History", value: SettingsRoute.connectionHistory)
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// The privacy hub: links to the standalone privacy screens plus every nearby-sharing consent
+    /// switch. The hearts-need-presence offer alert stays attached to this section, because it is
+    /// raised by the hearts toggle inside it.
+    private var privacySection: some View {
+        Section {
+            NavigationLink("Privacy & Data", value: SettingsRoute.privacyData)
+            NavigationLink("Privacy Policy", value: SettingsRoute.privacyPolicy)
+            NavigationLink("Safety & reporting", value: SettingsRoute.safetyReporting)
+            NavigationLink("App lock", value: SettingsRoute.appLock)
+            nearbySharingToggles
+            awayDeliveryControls
+            presenceToggles
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("Nearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped.")
+        }
+        .alert("Turn on Nearby Friends?", isPresented: $offerPresenceForHearts) {
+            Button("Turn on") { store.setAllowNearbyPresence(true) }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Hearts are sent in person over Nearby Friends. Turn it on so you can see when friends are close by and send them a heart. Fernlet broadcasts only rotating tags your friends can recognize — never your name.")
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// The in-person sharing consents: recipes, clothing shops, and hearts (which need presence).
+    @ViewBuilder
+    private var nearbySharingToggles: some View {
+        Toggle(
+            "Allow nearby recipe shares",
+            isOn: Binding(
+                get: { store.settings.allowNearbyRecipeShares },
+                set: { store.setAllowNearbyRecipeShares($0) }
+            )
+        )
+        // Phase 3a: payload-layer control — the shop rides the friend session (no
+        // standalone radio), so this governs whether shop catalogs are shared at all.
+        Toggle(
+            "Share clothing shops with friends",
+            isOn: Binding(
+                get: { store.settings.allowNearbyClothingShares },
+                set: { store.setAllowNearbyClothingShares($0) }
+            )
+        )
+        // Phase 4b: hearts ride the presence radio (no standalone radio). This governs
+        // whether hearts are sent AND received; the presence toggle below still runs.
+        // Hearts require presence (Group 2): enabling hearts while Nearby Friends is off
+        // offers to enable presence, since hearts cannot function without it.
+        Toggle(
+            "Allow nearby hearts",
+            isOn: Binding(
+                get: { store.settings.allowNearbyHearts },
+                set: { newValue in
+                    store.setAllowNearbyHearts(newValue)
+                    if newValue && !store.settings.allowNearbyPresence {
+                        offerPresenceForHearts = true
+                    }
+                }
+            )
+        )
+        if store.settings.allowNearbyHearts && !store.settings.allowNearbyPresence {
+            Text("Hearts need Nearby Friends turned on to work — turn it on below.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+        }
+        // In-session messaging has no toggle — session membership is its consent gate — so
+        // its 13+ age requirement is the one thing that can withhold it. Surfaced here
+        // because the chat button simply doesn't appear in-session, which on its own would
+        // read as a bug rather than a rule.
+        if !store.ageAssurance.allows(.chat) {
+            AgeGateNotice(
+                gate: .chat,
+                featureName: "Messaging friends nearby",
+                ageAssurance: store.ageAssurance
+            )
+        }
+    }
+
+    /// Away delivery (bitchat adoptions Increment 3): the one proximity feature that touches the
+    /// network, so it carries its own explicit opt-in — separate from iCloud Sync (public dead-drop,
+    /// not the synced store) — plus every state where the "on" promise isn't being kept.
+    @ViewBuilder
+    private var awayDeliveryControls: some View {
+        Toggle(
+            "Deliver hearts when apart",
+            isOn: Binding(
+                get: { store.settings.heartsAwayDelivery },
+                set: { store.setHeartsAwayDelivery($0) }
+            )
+        )
+        if store.settings.heartsAwayDelivery {
+            Text("When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+            // Nothing-silent: the toggle being on is a promise of delivery, so every
+            // state where that promise isn't being kept gets said out loud here.
+            if let problem = awayDeliveryProblemText {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(problem)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.goldenrod)
+                        // Identifiers sit on the leaves, not the HStack: an identifier
+                        // on the container shadows its children for UI tests.
+                        .accessibilityIdentifier("settings.heartsAway.problem")
+                    Spacer(minLength: 0)
+                    Button("Dismiss") {
+                        store.heartDropService.acknowledgeDeliveryProblem()
+                    }
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.heartsAway.dismissProblem")
+                }
+            }
+        } else if store.heartsAwayPurgePending {
+            // Consent is off but our own sealed records are still on the public
+            // database, because the delete didn't go through. Say so rather than let
+            // "off" imply they were removed; the foreground listener retries.
+            Text("Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.goldenrod)
+                .accessibilityIdentifier("settings.heartsAway.purgePending")
+        }
+    }
+
+    /// The standing presence radio and the fuzzy-vibe share that rides it.
+    @ViewBuilder
+    private var presenceToggles: some View {
+        // Phase 4a: the standing presence radio — rotating pairwise tags only.
+        Toggle(
+            "Nearby friends presence",
+            isOn: Binding(
+                get: { store.settings.allowNearbyPresence },
+                set: { store.setAllowNearbyPresence($0) }
+            )
+        )
+        // Phase 4: share a fuzzy vibe (thriving/okay/struggling) + your avatar with kept
+        // friends when you meet in person. Never a number, goal, or cycle. Default off.
+        Toggle(
+            "Share your vibe with friends",
+            isOn: Binding(
+                get: { store.settings.allowNearbyFriendState },
+                set: { store.setAllowNearbyFriendState($0) }
+            )
+        )
+    }
+
+    private var dangerSection: some View {
+        Section("Danger zone") {
+            resetSection
+        }
+        .listRowBackground(Color.cream)
     }
 
     /// Why away hearts aren't being delivered right now, or nil when the drop-off is healthy.
@@ -1193,182 +1245,260 @@ struct SettingsSheet: View {
             get: { store.settings.userProfile },
             set: { profile in
                 store.settings.userProfile = profile
-                Task { await healthKit.syncBodyProfileMeasurements(profile) }
+                syncBodyProfileToHealth(profile)
             }
         )
     }
 
+    /// Mirrors the edited body profile into HealthKit, at most one write in flight (R3).
+    ///
+    /// Weight and height are Steppers: holding one emits a value per tick, and
+    /// `syncBodyProfileMeasurements` has no coalescing of its own, so without the cancel-previous a
+    /// single edit session fans out into an unbounded number of concurrent HealthKit writes. The
+    /// short sleep is the debounce; the latest value wins.
+    private func syncBodyProfileToHealth(_ profile: UserNutritionProfile) {
+        profileSyncTask?.cancel()
+        profileSyncTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+            } catch {
+                return  // superseded by a newer edit (or the view went away)
+            }
+            guard !Task.isCancelled else { return }
+            await healthKit.syncBodyProfileMeasurements(profile)
+        }
+    }
+
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Goal")
-            // Preset cards: each goal shows its paired nutrition + training setup, so one choice reads as
-            // configuring both. Replaces the bare Picker + lone tagline. The binding routes through
-            // `setSelectedGoal` so the pick schedules a snapshot save (a bare keypath binding never did).
-            GoalPresetCards(selectedGoal: Binding(
-                get: { store.settings.selectedGoal },
-                set: { store.setSelectedGoal($0) }
-            ))
-            if let note = goalOverrideFootnote {
-                Text(note)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Sick mode", isOn: Binding(
-                    get: { store.isSick(on: store.todayKey) },
-                    set: { store.setSick($0, on: store.todayKey) }
-                ))
-                Toggle("Show calories", isOn: $store.settings.showCalories)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-            SectionLabel("Body & preferences")
-            ProfileEditor(profile: healthSyncedProfileBinding, preferences: $store.settings.nutritionPreferences)
-
-            NutritionTargetsEditor(store: store)
-
-            SectionLabel("AI")
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Current")
-                    Spacer()
-                    Text(store.effectiveAIStatus.label)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                }
-                Toggle("Manual off mode", isOn: aiManualOffBinding)
-                Divider().overlay(Color.bark.opacity(0.08))
-                Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
-                    .disabled(store.settings.aiStatus == .off)
-                Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Divider().overlay(Color.bark.opacity(0.08))
-                Toggle("Weather-aware recovery prompts", isOn: Binding(
-                    get: { store.settings.weatherPromptsEnabled },
-                    set: { newValue in
-                        if newValue {
-                            Task {
-                                let granted = await WeatherKitService.shared.requestAuthorization()
-                                store.settings.weatherPromptsEnabled = granted
-                            }
-                        } else {
-                            store.settings.weatherPromptsEnabled = false
-                        }
-                    }
-                ))
-                Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Text(FernletVoice.message(for: {
-                    // Reflect the EFFECTIVE status (intent overlaid with today's local budget): off shows
-                    // the switched-off copy, a spent budget (.sleepy/.resting) the resting copy, otherwise
-                    // the gentle retry note.
-                    switch store.effectiveAIStatus {
-                    case .off: return .aiUnavailable
-                    case .sleepy, .resting: return .aiResting
-                    case .ready: return .retryAvailable
-                    }
-                }()))
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-            SectionLabel("Coach")
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Manual plan exchange", isOn: $store.settings.coachExchangeEnabled)
-                Text("Adds two things to \"Share with a trainer\" on the Move tab: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                // Said plainly and unprompted. A pasted plan carries no signature, so the review
-                // screen is the only thing standing between it and the user's week — and the copy
-                // step puts plaintext health data into another app's hands by design.
-                Text("Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Divider().overlay(Color.bark.opacity(0.08))
-                Text("Also include in trainer summaries")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.slate)
-                Toggle("Your goal", isOn: $store.settings.trainerExportIncludesGoal)
-                Toggle("Hydration", isOn: $store.settings.trainerExportIncludesHydration)
-                Toggle("Sleep summaries", isOn: $store.settings.trainerExportIncludesSleep)
-                Toggle("Days you were unwell", isOn: $store.settings.trainerExportIncludesSickness)
-                Toggle("Wellbeing score", isOn: $store.settings.trainerExportIncludesWellbeing)
-                Text("These choices apply when you use Share on the Move tab.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-            SectionLabel("Body signals")
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Notice body tension", isOn: stressAwarenessBinding)
-                Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
-                    Text("Body signals needs Apple Health. Turn on Health integration in Privacy & Data to feed it.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracotta)
-                        .fernletWrappingText()
-                }
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-            SectionLabel("Reminders")
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Daily check-in", isOn: dailyCheckInBinding)
-                if dailyCheckInEnabled {
-                    DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
-                }
-                Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                if dailyCheckInAuthDenied {
-                    Text("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracotta)
-                        .fernletWrappingText()
-                }
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            .task { await loadDailyCheckInState() }
-            .onChange(of: dailyCheckInTime) { _, newValue in
-                guard didLoadDailyCheckIn, dailyCheckInEnabled else { return }
-                Task { await scheduleDailyCheckIn(at: newValue) }
-            }
-
-            SectionLabel("Hydration")
-            VStack(alignment: .leading, spacing: 10) {
-                Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
-                Divider().overlay(Color.bark.opacity(0.08))
-                Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: $store.settings.hydrationTarget, in: 1...30)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
+            goalSection
+            bodyAndPreferencesSection
+            aiSection
+            coachSection
+            bodySignalsSection
+            remindersSection
+            hydrationSection
             personalCareSettings
         }
+    }
+
+    /// The goal presets, the sick/calories switches, and the footnote naming anything pinned that
+    /// quietly overrides the chosen goal's plan.
+    @ViewBuilder
+    private var goalSection: some View {
+        SectionLabel("Goal")
+        // Preset cards: each goal shows its paired nutrition + training setup, so one choice reads as
+        // configuring both. Replaces the bare Picker + lone tagline. The binding routes through
+        // `setSelectedGoal` so the pick schedules a snapshot save (a bare keypath binding never did).
+        GoalPresetCards(selectedGoal: Binding(
+            get: { store.settings.selectedGoal },
+            set: { store.setSelectedGoal($0) }
+        ))
+        if let note = goalOverrideFootnote {
+            Text(note)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Sick mode", isOn: Binding(
+                get: { store.isSick(on: store.todayKey) },
+                set: { store.setSick($0, on: store.todayKey) }
+            ))
+            Toggle("Show calories", isOn: $store.settings.showCalories)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The body profile (HealthKit-synced) and the nutrition targets editor.
+    @ViewBuilder
+    private var bodyAndPreferencesSection: some View {
+        SectionLabel("Body & preferences")
+        ProfileEditor(profile: healthSyncedProfileBinding, preferences: $store.settings.nutritionPreferences)
+
+        NutritionTargetsEditor(store: store)
+    }
+
+    /// The AI switches: manual off, web nutrition lookup, weather-aware prompts, and the voice line
+    /// reflecting today's EFFECTIVE status.
+    @ViewBuilder
+    private var aiSection: some View {
+        SectionLabel("AI")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Current")
+                Spacer()
+                Text(store.effectiveAIStatus.label)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+            }
+            Toggle("Manual off mode", isOn: aiManualOffBinding)
+            Divider().overlay(Color.bark.opacity(0.08))
+            Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
+                .disabled(store.settings.aiStatus == .off)
+            Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Divider().overlay(Color.bark.opacity(0.08))
+            Toggle("Weather-aware recovery prompts", isOn: Binding(
+                get: { store.settings.weatherPromptsEnabled },
+                set: { newValue in
+                    if newValue {
+                        Task {
+                            let granted = await WeatherKitService.shared.requestAuthorization()
+                            store.settings.weatherPromptsEnabled = granted
+                        }
+                    } else {
+                        store.settings.weatherPromptsEnabled = false
+                    }
+                }
+            ))
+            Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Text(FernletVoice.message(for: aiStatusVoiceLine))
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Reflects the EFFECTIVE status (intent overlaid with today's local budget): off shows the
+    /// switched-off copy, a spent budget (`.sleepy`/`.resting`) the resting copy, otherwise the
+    /// gentle retry note.
+    private var aiStatusVoiceLine: FernletVoice {
+        switch store.effectiveAIStatus {
+        case .off: return .aiUnavailable
+        case .sleepy, .resting: return .aiResting
+        case .ready: return .retryAvailable
+        }
+    }
+
+    /// The manual coach plan exchange, its two honesty disclosures, and what trainer summaries carry.
+    @ViewBuilder
+    private var coachSection: some View {
+        SectionLabel("Coach")
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Manual plan exchange", isOn: $store.settings.coachExchangeEnabled)
+            Text("Adds two things to \"Share with a trainer\" on the Move tab: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            // Said plainly and unprompted. A pasted plan carries no signature, so the review
+            // screen is the only thing standing between it and the user's week — and the copy
+            // step puts plaintext health data into another app's hands by design.
+            Text("Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Divider().overlay(Color.bark.opacity(0.08))
+            Text("Also include in trainer summaries")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+            Toggle("Your goal", isOn: $store.settings.trainerExportIncludesGoal)
+            Toggle("Hydration", isOn: $store.settings.trainerExportIncludesHydration)
+            Toggle("Sleep summaries", isOn: $store.settings.trainerExportIncludesSleep)
+            Toggle("Days you were unwell", isOn: $store.settings.trainerExportIncludesSickness)
+            Toggle("Wellbeing score", isOn: $store.settings.trainerExportIncludesWellbeing)
+            Text("These choices apply when you use Share on the Move tab.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The body-tension opt-in, its two plain-language disclosures, and the Health-needed note.
+    @ViewBuilder
+    private var bodySignalsSection: some View {
+        SectionLabel("Body signals")
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Notice body tension", isOn: stressAwarenessBinding)
+            Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
+                Text("Body signals needs Apple Health. Turn on Health integration in Privacy & Data to feed it.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.terracotta)
+                    .fernletWrappingText()
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The daily check-in reminder. Keeps its own `.task` mirror of the pending notification request
+    /// and the reschedule-on-time-change handler.
+    @ViewBuilder
+    private var remindersSection: some View {
+        SectionLabel("Reminders")
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Daily check-in", isOn: dailyCheckInBinding)
+            if dailyCheckInEnabled {
+                DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
+            }
+            Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            if dailyCheckInAuthDenied {
+                Text("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.terracotta)
+                    .fernletWrappingText()
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .task { await loadDailyCheckInState() }
+        .onChange(of: dailyCheckInTime) { _, newValue in
+            guard didLoadDailyCheckIn, dailyCheckInEnabled else { return }
+            rescheduleDailyCheckIn(at: newValue)
+        }
+    }
+
+    /// Reschedules the one daily-check-in notification, at most one task in flight (R3).
+    ///
+    /// Dragging the DatePicker wheel emits a change per tick; without the cancel-previous the ticks
+    /// would race on one notification identifier and the LAST TO FINISH — not the last value picked
+    /// — would win. The short sleep is the debounce; a cancelled sleep simply ends the superseded
+    /// task.
+    private func rescheduleDailyCheckIn(at time: Date) {
+        checkInRescheduleTask?.cancel()
+        checkInRescheduleTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return  // superseded by a newer tick (or the view went away)
+            }
+            guard !Task.isCancelled else { return }
+            await scheduleDailyCheckIn(at: time)
+        }
+    }
+
+    /// Bottle size and the daily bottle target.
+    @ViewBuilder
+    private var hydrationSection: some View {
+        SectionLabel("Hydration")
+        VStack(alignment: .leading, spacing: 10) {
+            Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
+            Divider().overlay(Color.bark.opacity(0.08))
+            Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: $store.settings.hydrationTarget, in: 1...30)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var aiManualOffBinding: Binding<Bool> {
@@ -1448,61 +1578,110 @@ struct SettingsSheet: View {
         await NotificationService.scheduleDailyCheckIn(hour: components.hour ?? 19, minute: components.minute ?? 0)
     }
 
+    /// R3 cap on the one collection this screen grows per user tap: the persisted personal-care task
+    /// list. Nothing downstream bounds it (`DiaryStore.addPersonalCareTask` only trims,
+    /// `PersonalCareTask.normalized` only dedupes by id), so the cap is enforced at this entry.
+    private static let maxCustomCareTasks = 40
+    /// R3 cap on the free-text task label, mirroring `MemoryEditorSheet`'s 240-character clamp.
+    private static let maxCareTaskLabelLength = 60
+
+    /// Add is unavailable for an empty label and once the task list is at its cap.
+    private var isAddCareTaskDisabled: Bool {
+        newCareTaskName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || store.personalCareTasks.count >= Self.maxCustomCareTasks
+    }
+
+    /// Appends one personal-care task, re-checking both caps at the point of use.
+    private func addPersonalCareTask() {
+        let label = String(newCareTaskName.prefix(Self.maxCareTaskLabelLength))
+        guard !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard store.personalCareTasks.count < Self.maxCustomCareTasks else {
+            FernletAuditLog.log("settings.personalCare.addRejected", context: ["reason": "atCap"])
+            return
+        }
+        store.addPersonalCareTask(label: label, group: newCareTaskGroup)
+        newCareTaskName = ""
+    }
+
     private var personalCareSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Personal care tasks")
-            VStack(alignment: .leading, spacing: 10) {
-                TextField("Moisturizer, meds, stretch...", text: $newCareTaskName)
-                    .sheetTextInput()
-                FlowLayout(spacing: 8) {
-                    ForEach(PersonalCareTask.groups, id: \.self) { group in
-                        Button(group) { newCareTaskGroup = group }
-                            .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group))
-                    }
-                }
-                Button {
-                    store.addPersonalCareTask(label: newCareTaskName, group: newCareTaskGroup)
-                    newCareTaskName = ""
-                } label: {
-                    Label("Add task", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(.white)
-                .padding(.vertical, 11)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                .disabled(newCareTaskName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(newCareTaskName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
+            newCareTaskEditor
             ForEach(PersonalCareTask.groups, id: \.self) { group in
-                let tasks = store.personalCareTasks.filter { $0.group == group }
-                if !tasks.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(group)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                        ForEach(tasks) { task in
-                            HStack(spacing: 10) {
-                                Label(task.label, systemImage: task.systemImage)
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.bark)
-                                Spacer()
-                                Button { store.removePersonalCareTask(task) } label: {
-                                    Image(systemName: "minus.circle")
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(Color.terracotta)
-                                        .frame(width: 32, height: 32)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(12)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        }
+                careTaskGroupList(group)
+            }
+        }
+    }
+
+    /// The add-a-task composer: label field (length-capped), group chips, the Add button, and the
+    /// at-capacity note.
+    private var newCareTaskEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Moisturizer, meds, stretch...", text: $newCareTaskName)
+                .sheetTextInput()
+                // R3: cap the free-text label where it enters. The persisted settings array is
+                // synced, so an unbounded label is unbounded growth in the snapshot.
+                .onChange(of: newCareTaskName) { _, newValue in
+                    if newValue.count > Self.maxCareTaskLabelLength {
+                        newCareTaskName = String(newValue.prefix(Self.maxCareTaskLabelLength))
                     }
+                }
+            FlowLayout(spacing: 8) {
+                ForEach(PersonalCareTask.groups, id: \.self) { group in
+                    Button(group) { newCareTaskGroup = group }
+                        .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group))
+                }
+            }
+            Button {
+                addPersonalCareTask()
+            } label: {
+                Label("Add task", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(.white)
+            .padding(.vertical, 11)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isAddCareTaskDisabled)
+            .opacity(isAddCareTaskDisabled ? 0.45 : 1)
+            if store.personalCareTasks.count >= Self.maxCustomCareTasks {
+                Text("That's the most personal care tasks Fernlet keeps (\(Self.maxCustomCareTasks)). Remove one to add another.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("settings.care.limitReached")
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// One group's saved tasks, each with its remove button. Renders nothing for an empty group.
+    @ViewBuilder
+    private func careTaskGroupList(_ group: String) -> some View {
+        let tasks = store.personalCareTasks.filter { $0.group == group }
+        if !tasks.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(group)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                ForEach(tasks) { task in
+                    HStack(spacing: 10) {
+                        Label(task.label, systemImage: task.systemImage)
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.bark)
+                        Spacer()
+                        Button { store.removePersonalCareTask(task) } label: {
+                            Image(systemName: "minus.circle")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Color.terracotta)
+                                .frame(width: 32, height: 32)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(12)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
@@ -1528,100 +1707,123 @@ struct SettingsSheet: View {
                 .foregroundStyle(Color.terracotta)
                 .fernletWrappingText()
 
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Friends tab")
-                Toggle(
-                    "Proximity debug tools",
-                    isOn: Binding(
-                        get: { store.settings.showProximityDebugTools },
-                        set: { store.setShowProximityDebugTools($0) }
-                    )
-                )
-                Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
+            proximityDebugSection
 
             debugCard
 
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Tier 2 memory (test-only view)")
-                Text("Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+            tierTwoMemorySection
 
-                // Loaded post-render by the `.task` on this section: the repository decodes the
-                // whole database for this read, which is far too slow for a NavigationStack push's
-                // first body pass. Until it lands, say so — the previous three-branch form rendered
-                // neither the list nor the empty state on the initial push, which reads as a broken
-                // page rather than a deliberate on-demand load.
-                if debugTierTwoMemories == nil {
-                    FernletCard { EmptyState(text: "Loading tier 2 memories…") }
-                } else if let tier2 = debugTierTwoMemories, tier2.isEmpty {
-                    FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
-                } else if let tier2 = debugTierTwoMemories {
-                    ForEach(tier2) { record in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(record.category.uppercased())
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                Spacer()
-                                Text(record.extractedDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                            }
-                            Text(record.text)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                            if !record.active {
-                                Text("Inactive")
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.terracotta)
-                            }
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                }
-            }
-            // The load the comment above describes. Runs once per push, after the first frame, so
-            // the whole-database decode never blocks the navigation animation.
-            .task {
-                guard debugTierTwoMemories == nil else { return }
-                debugTierTwoMemories = store.tierTwoMemories
-            }
+            derivedSignalsSection
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Derived signals (test-only view)")
-                let signals = store.derivedSignals
-                if signals.isEmpty {
-                    FernletCard { EmptyState(text: "No signals computed yet. More logs will make trends useful.") }
-                } else {
-                    ForEach(signals) { signal in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(signal.signalName)
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                Spacer()
-                                Text(signal.value.capitalized)
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(SignalPresentation.color(for: signal.value))
-                            }
-                            Text("Window: \(signal.windowStart) → \(signal.windowEnd)")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                        }
-                        .padding(12)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    }
+    /// The Friends-tab debug switch and what turning it on actually exposes.
+    private var proximityDebugSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Friends tab")
+            Toggle(
+                "Proximity debug tools",
+                isOn: Binding(
+                    get: { store.settings.showProximityDebugTools },
+                    set: { store.setShowProximityDebugTools($0) }
+                )
+            )
+            Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    /// The tier-2 memory inspector. Loads post-render via its own `.task`: the repository decodes the
+    /// whole database for this read, which is far too slow for a NavigationStack push's first body
+    /// pass.
+    private var tierTwoMemorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Tier 2 memory (test-only view)")
+            Text("Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
+            // Until the load lands, say so — the previous three-branch form rendered neither the
+            // list nor the empty state on the initial push, which reads as a broken page rather
+            // than a deliberate on-demand load.
+            if debugTierTwoMemories == nil {
+                FernletCard { EmptyState(text: "Loading tier 2 memories…") }
+            } else if let tier2 = debugTierTwoMemories, tier2.isEmpty {
+                FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
+            } else if let tier2 = debugTierTwoMemories {
+                ForEach(tier2) { record in
+                    tierTwoMemoryRow(record)
                 }
             }
         }
+        // The load the comment above describes. Runs once per push, after the first frame, so
+        // the whole-database decode never blocks the navigation animation.
+        .task {
+            guard debugTierTwoMemories == nil else { return }
+            debugTierTwoMemories = store.tierTwoMemories
+        }
+    }
+
+    private func tierTwoMemoryRow(_ record: TierTwoMemoryRecord) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(record.category.uppercased())
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                Spacer()
+                Text(record.extractedDate.formatted(.dateTime.month(.abbreviated).day().year()))
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+            Text(record.text)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            if !record.active {
+                Text("Inactive")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.terracotta)
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The computed derived signals, read straight from the store.
+    private var derivedSignalsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Derived signals (test-only view)")
+            let signals = store.derivedSignals
+            if signals.isEmpty {
+                FernletCard { EmptyState(text: "No signals computed yet. More logs will make trends useful.") }
+            } else {
+                ForEach(signals) { signal in
+                    derivedSignalRow(signal)
+                }
+            }
+        }
+    }
+
+    private func derivedSignalRow(_ signal: DerivedSignalRecord) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(signal.signalName)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                Spacer()
+                Text(signal.value.capitalized)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(SignalPresentation.color(for: signal.value))
+            }
+            Text("Window: \(signal.windowStart) → \(signal.windowEnd)")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        }
+        .padding(12)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var connectionInspectorTab: some View {
@@ -1758,10 +1960,10 @@ struct SettingsSheet: View {
 /// Presented by ``SettingsSheet``'s Core memory tab via `.sheet(item:)`. The source date is shown
 /// read-only; Save routes through `FernletStore.updateMemory` and Delete through
 /// `FernletStore.deleteMemory`, so the sheet itself persists nothing.
-struct MemoryEditorSheet: View {
+private struct MemoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: FernletStore
-    var memory: MemoryNote
+    let memory: MemoryNote
     @State private var category: String
     @State private var text: String
     @State private var confirmDelete = false
@@ -1875,6 +2077,10 @@ struct AppLockSettingsView: View {
     @State private var showBiometricPasscodeVerify = false
     @State private var verifyCurrentPasscode = ""
     @State private var verifyError: String?
+    /// Shown on the biometric card when turning biometrics OFF failed. Disabling needs no passcode,
+    /// so there is no verify sheet to carry the message — without this the toggle would just snap
+    /// back silently.
+    @State private var biometricDisableError: String?
     @State private var pendingBiometricEnable = false
     /// Duress-code setup (security-hardening Phase 7, step 9).
     @State private var showDuressSetup = false
@@ -1884,6 +2090,39 @@ struct AppLockSettingsView: View {
     @State private var showRecoveryReturn = false
 
     var body: some View {
+        resetPresentations(
+            cardsColumn
+                .scrollContentBackground(.hidden)
+                .background(Color.parchment)
+                .navigationTitle("App lock")
+                .sheet(isPresented: $showSetup) {
+                    FernletLockSetupView(grantingScope: .appLockSettings)
+                        .environment(lockService)
+                }
+                .sheet(isPresented: $showChangePasscode) {
+                    FernletLockChangePasscodeView()
+                        .environment(lockService)
+                }
+                .sheet(isPresented: $showBiometricPasscodeVerify) {
+                    biometricVerifySheet
+                }
+                .sheet(isPresented: $showDuressSetup) {
+                    DuressPINSetupView()
+                        .environment(lockService)
+                }
+                .sheet(isPresented: $showRecoveryCustodian) {
+                    DuressRecoveryEnrollmentSheet()
+                        .environment(lockService)
+                }
+                .sheet(isPresented: $showRecoveryReturn) {
+                    DuressRecoveryReturnSheet()
+                        .environment(lockService)
+                }
+        )
+    }
+
+    /// The page itself: status, then either the manage/biometric/duress/danger cards or the setup CTA.
+    private var cardsColumn: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 statusCard
@@ -1901,58 +2140,41 @@ struct AppLockSettingsView: View {
             .padding(20)
             .padding(.bottom, 20)
         }
-        .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("App lock")
-        .sheet(isPresented: $showSetup) {
-            FernletLockSetupView(grantingScope: .appLockSettings)
-                .environment(lockService)
-        }
-        .sheet(isPresented: $showChangePasscode) {
-            FernletLockChangePasscodeView()
-                .environment(lockService)
-        }
-        .sheet(isPresented: $showBiometricPasscodeVerify) {
-            biometricVerifySheet
-        }
-        .sheet(isPresented: $showDuressSetup) {
-            DuressPINSetupView()
-                .environment(lockService)
-        }
-        .sheet(isPresented: $showRecoveryCustodian) {
-            DuressRecoveryEnrollmentSheet()
-                .environment(lockService)
-        }
-        .sheet(isPresented: $showRecoveryReturn) {
-            DuressRecoveryReturnSheet()
-                .environment(lockService)
-        }
-        .confirmationDialog(
-            "Reset app lock?",
-            isPresented: $showResetConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Reset app lock", role: .destructive) {
-                do {
-                    try lockService.reset()
-                    dismiss()
-                } catch {
-                    // Keys and rows are gone either way; the store FILE could not be re-created.
-                    // Stay on this screen and say so rather than dismissing on a promise the app
-                    // did not keep.
-                    print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
-                    FernletAuditLog.log("lock.reset.rebuild.failed")
-                    showResetRebuildFailure = true
-                }
+    }
+
+    /// The reset ceremony: its confirmation dialog and the nothing-silent alert for the one failure
+    /// the reset can leave behind (keys and rows destroyed, sealed store file not rebuilt).
+    private func resetPresentations(_ content: some View) -> some View {
+        content
+            .confirmationDialog(
+                "Reset app lock?",
+                isPresented: $showResetConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Reset app lock", role: .destructive) { resetAppLock() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
             }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
-        }
-        .alert("App lock reset", isPresented: $showResetRebuildFailure) {
-            Button("OK", role: .cancel) { dismiss() }
-        } message: {
-            Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
+            .alert("App lock reset", isPresented: $showResetRebuildFailure) {
+                Button("OK", role: .cancel) { dismiss() }
+            } message: {
+                Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
+            }
+    }
+
+    /// Destroys the lock and its keys, dismissing only if the sealed store was rebuilt.
+    private func resetAppLock() {
+        do {
+            try lockService.reset()
+            dismiss()
+        } catch {
+            // Keys and rows are gone either way; the store FILE could not be re-created.
+            // Stay on this screen and say so rather than dismissing on a promise the app
+            // did not keep.
+            print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
+            FernletAuditLog.log("lock.reset.rebuild.failed")
+            showResetRebuildFailure = true
         }
     }
 
@@ -2016,6 +2238,15 @@ struct AppLockSettingsView: View {
                     )
                 }
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+                // The toggle re-reads `lockService.biometricEnabled`, so a failed disable would
+                // otherwise just snap the switch back with no explanation.
+                if let biometricDisableError {
+                    Text(biometricDisableError)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("applock.biometric.disableError")
+                }
             } else {
                 Text("No biometric authentication available on this device.")
                     .font(.fernlet(.body))
@@ -2213,10 +2444,25 @@ struct AppLockSettingsView: View {
                     showBiometricPasscodeVerify = true
                 } else {
                     // Disabling doesn't need verification
-                    Task { try? await lockService.setBiometricEnabled(false, passcode: "") }
+                    disableBiometrics()
                 }
             }
         )
+    }
+
+    /// Turns biometrics off. No passcode is required to disable, but the failure is not silent: the
+    /// toggle re-reads `lockService.biometricEnabled`, so a throw would leave it snapping back with
+    /// no explanation unless the error is logged and shown.
+    private func disableBiometrics() {
+        Task { @MainActor in
+            do {
+                try await lockService.setBiometricEnabled(false, passcode: "")
+                biometricDisableError = nil
+            } catch {
+                FernletAuditLog.log("lock.biometric.disableFailed")
+                biometricDisableError = error.localizedDescription
+            }
+        }
     }
 
     private var statusLabel: String {

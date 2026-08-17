@@ -17,6 +17,7 @@
 
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 import FoodCatalog
 
 // MARK: - Export DTO (curated, human-readable projections)
@@ -242,6 +243,40 @@ struct FernletDataExport: Codable {
 extension FernletStore {
     /// Assembles the readable export from live in-memory state. Excludes sealed/sensitive data.
     func buildDataExport() -> FernletDataExport {
+        FernletDataExport(
+            about: FernletDataExport.About(
+                exportedOn: todayKey,
+                includes: Self.exportIncludes,
+                excludes: Self.exportExcludes),
+            you: FernletDataExport.Profile(
+                goal: settings.selectedGoal.rawValue,
+                dailyWaterTargetBottles: settings.hydrationTarget,
+                bottleOunces: settings.bottleOz,
+                showsCalories: settings.showCalories),
+            days: exportDays(),
+            coreMemories: exportMemories(),
+            goals: exportGoals(),
+            recipes: exportRecipes(),
+            wardrobe: exportWardrobe(),
+            friends: exportFriends())
+    }
+
+    /// What the export contains, as shown in its own About preamble.
+    private static let exportIncludes = [
+        "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day",
+        "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)",
+        "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends",
+    ]
+
+    /// What the export deliberately leaves out (the sealed/sensitive exclusion list).
+    private static let exportExcludes = [
+        "Period / cycle data and intimate-activity data",
+        "Sensitive (Tier-2) memories and Worry Box notes",
+        "Photo image data and your private cryptographic keys",
+    ]
+
+    /// Every day with logged content, newest first, each projected with its score and water target.
+    private func exportDays() -> [FernletDataExport.DayExport] {
         let scoresByDay = Dictionary(dailyScores.map { ($0.dateKey, $0) }, uniquingKeysWith: { a, _ in a })
 
         // Resolve planned-recipe ids to names for the export, unioning BOTH recipe stores exactly as the
@@ -250,16 +285,20 @@ extension FernletStore {
         let recipeNameByID = Dictionary(
             (recipes + savedRecipes).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
 
-        let dayExports: [FernletDataExport.DayExport] = loadDays().values
+        return loadDays().values
             .filter { $0.hasLoggedContent }
             .sorted { $0.date > $1.date }   // newest first
             .map { day in Self.projectDay(day, score: scoresByDay[day.date], target: settings.hydrationTarget, recipeNameByID: recipeNameByID) }
+    }
 
-        let memoryExports = memories.map {
+    private func exportMemories() -> [FernletDataExport.MemoryExport] {
+        memories.map {
             FernletDataExport.MemoryExport(category: $0.category, note: $0.text, remembered: $0.sourceDate)
         }
+    }
 
-        let goalExports = goals.map { g in
+    private func exportGoals() -> [FernletDataExport.GoalExport] {
+        goals.map { g in
             FernletDataExport.GoalExport(
                 type: g.type.rawValue, goal: g.goal,
                 timeframe: g.timeframe.isEmpty ? nil : g.timeframe,
@@ -267,8 +306,10 @@ extension FernletStore {
                 milestones: g.milestones.isEmpty ? nil : g.milestones,
                 weeklyStructure: g.weeklyStructure)
         }
+    }
 
-        let recipeExports = recipes.map { r in
+    private func exportRecipes() -> [FernletDataExport.RecipeExport] {
+        recipes.map { r in
             // Resolve each ingredient's food name from the catalog so a manually-built recipe exports
             // "Flour (2 cup)" rather than a nameless "2 cup" (RecipeIngredient stores only a foodItemId).
             let nameByFoodID = Dictionary(
@@ -280,46 +321,24 @@ extension FernletStore {
                 steps: Self.recipeStepLines(r),
                 createdAt: r.createdAt)
         }
+    }
 
+    private func exportWardrobe() -> FernletDataExport.Wardrobe {
         let wardrobeItems = customItems.map { item in
             FernletDataExport.Wardrobe.WardrobeItem(
                 name: item.name, slot: item.slot.rawValue,
                 madeByYou: isSelfDesigned(item), createdAt: item.createdAt)
         }
+        return FernletDataExport.Wardrobe(coins: coinBalance, customItems: wardrobeItems)
+    }
 
-        let friendExports = trustedProximityPeers.map { peer in
+    private func exportFriends() -> [FernletDataExport.FriendExport] {
+        trustedProximityPeers.map { peer in
             FernletDataExport.FriendExport(
                 displayName: peer.displayName, fingerprint: peer.fingerprint,
                 status: Self.friendStatus(peer),
                 friendsSince: peer.firstAcceptedAt, lastSeen: peer.lastSeenAt)
         }
-
-        let about = FernletDataExport.About(
-            exportedOn: todayKey,
-            includes: [
-                "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day",
-                "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)",
-                "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends",
-            ],
-            excludes: [
-                "Period / cycle data and intimate-activity data",
-                "Sensitive (Tier-2) memories and Worry Box notes",
-                "Photo image data and your private cryptographic keys",
-            ])
-
-        return FernletDataExport(
-            about: about,
-            you: FernletDataExport.Profile(
-                goal: settings.selectedGoal.rawValue,
-                dailyWaterTargetBottles: settings.hydrationTarget,
-                bottleOunces: settings.bottleOz,
-                showsCalories: settings.showCalories),
-            days: dayExports,
-            coreMemories: memoryExports,
-            goals: goalExports,
-            recipes: recipeExports,
-            wardrobe: FernletDataExport.Wardrobe(coins: coinBalance, customItems: wardrobeItems),
-            friends: friendExports)
     }
 
     /// The one directory every user-facing export — the "export my data" dump and the
@@ -368,10 +387,12 @@ extension FernletStore {
         // Belt-and-braces: sweep any earlier plaintext export before writing a new one. The share-sheet
         // completion handler purges once sharing finishes, but a kill/crash/jettison mid-share leaves the
         // full decrypted dump in tmp/ indefinitely — so every fresh export first clears whatever a prior
-        // share may have stranded. Best-effort (nothing to keep from a previous export), so the result is
-        // ignored; the new file we write below is what the caller shares. Launch sweeps too, so between the
-        // two no plaintext dump outlives its share.
-        purgeDataExports()
+        // share may have stranded. Best-effort — a failed sweep does not stop this export, because the new
+        // file we write below is what the caller shares and the launch sweep is the backstop — but the miss
+        // is recorded rather than swallowed: it means an older plaintext dump is still on disk.
+        if !purgeDataExports() {
+            FernletAuditLog.log("privacy.export.purgeFailed", context: ["trigger": "preExport"])
+        }
         return try writeProtectedExport(Self.makeExportJSONEncoder().encode(buildDataExport()), kind: "data")
     }
 
@@ -404,7 +425,17 @@ extension FernletStore {
         // trainer writer moved into `dataExportsDirectory`). Exactly those two prefixes, deliberately NOT
         // a blanket `Fernlet-` match: other tmp/ files are not this sweep's to delete.
         let tmp = fileManager.temporaryDirectory
-        let strays = (try? fileManager.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)) ?? []
+        let strays: [URL]
+        do {
+            strays = try fileManager.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)
+        } catch {
+            // A listing failure is NOT "nothing to sweep": the legacy strays may still be there, so
+            // this call has not established the property the Bool promises. Report the miss.
+            FernletAuditLog.log("privacy.export.purgeListFailed", context: [
+                "errorType": "\(type(of: error))"
+            ])
+            return false
+        }
         for stray in strays
         where (stray.lastPathComponent.hasPrefix("Fernlet-data-")
                || stray.lastPathComponent.hasPrefix("Fernlet-training-")) && stray.pathExtension == "json" {
