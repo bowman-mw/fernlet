@@ -25,11 +25,12 @@ final class WorkoutTombstoneStore {
     /// - Parameters:
     ///   - defaults: The backing defaults store (injectable for tests).
     ///   - key: The defaults key the ring persists under.
-    ///   - cap: Maximum number of retained ids before FIFO eviction.
+    ///   - cap: Maximum number of retained ids before FIFO eviction. Clamped to at least 1 — a
+    ///     non-positive cap would make `insert`'s `removeFirst(count - cap)` trap.
     init(defaults: UserDefaults = .standard, key: String = "fernlet.workout.tombstones", cap: Int = 200) {
         self.defaults = defaults
         self.key = key
-        self.cap = cap
+        self.cap = max(1, cap)
     }
 
     /// The persisted ring, oldest first — read fresh from defaults on every access.

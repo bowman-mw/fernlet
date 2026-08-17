@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletUI
 
 // MARK: - Guided workout sheet
@@ -101,7 +102,12 @@ struct GuidedWorkoutSheet: View {
             titleVisibility: .visible
         ) {
             Button("Start this one instead", role: .destructive) {
-                store.startGuidedRun(session, replacingActiveRun: true)
+                // R7: a replace can still be refused (the plan moved on under us) — name it and get
+                // out of the way rather than leaving the sheet pretending the run began.
+                if !store.startGuidedRun(session, replacingActiveRun: true) {
+                    FernletAuditLog.log("workout.guided.startRefused", context: ["replacing": "true"])
+                    dismiss()
+                }
             }
             Button("Go back to it", role: .cancel) {
                 dismiss()
@@ -195,8 +201,10 @@ struct GuidedWorkoutSheet: View {
                 // fresh session, so this Start can arrive with sets already done elsewhere. Ask first.
                 if store.activeGuidedRunBlockingStart(of: session) != nil {
                     showReplaceConfirm = true
-                } else {
-                    store.startGuidedRun(session)
+                } else if !store.startGuidedRun(session) {
+                    // R7: the only refusal left is a run that became blocking between the check and
+                    // the start — ask before throwing it away, instead of a Start that does nothing.
+                    showReplaceConfirm = true
                 }
             }
         }

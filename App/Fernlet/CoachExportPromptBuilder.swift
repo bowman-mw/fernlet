@@ -63,7 +63,7 @@ enum CoachExportPromptBuilder {
     /// exercise (rather than only unfamiliar ones) is what makes the import reliable. Fernlet drops
     /// definitions for exercises it already knows, so a redundant definition costs nothing, while a
     /// missing one blocks the whole import.
-    private static var instructions: String {
+    private static let instructions: String =
         """
         You are helping me program my own training. Below is my recent training data from Fernlet, \
         a privacy-first health app. Read it, then reply with ONE JSON code block and nothing else — \
@@ -92,13 +92,22 @@ enum CoachExportPromptBuilder {
         and `edits` for ones already on my calendar. An `edits`-only reply is fine if all I need is \
         my existing plan adjusted.
         """
-    }
 
     /// The exact JSON shape to reply with, mirroring ``CoachPlan``'s coding keys.
-    private static var schemaSection: String {
+    ///
+    /// Assembled from two data-shaped constants (R4: a schema example is data, not a function body).
+    private static let schemaSection: String =
         """
         REPLY WITH EXACTLY THIS SHAPE:
 
+        \(schemaExampleJSON)
+
+        \(schemaFieldNotes)
+        """
+
+    /// The fenced JSON example itself — every key here is a ``CoachPlan`` coding key.
+    private static let schemaExampleJSON: String =
+        """
         ```json
         {
           "format": "\(CoachPlan.formatTag)",
@@ -156,7 +165,11 @@ enum CoachExportPromptBuilder {
           ]
         }
         ```
+        """
 
+    /// The prose that qualifies the schema: optional fields, the `edits` actions, and the maximums.
+    private static let schemaFieldNotes: String =
+        """
         Notes on the fields: `reps` is text, so "8-10", "AMRAP", or "30s each side" are all fine. \
         `restSeconds` is optional — leave it out and Fernlet uses its own rest guidance. A rest day \
         has `isRestDay: true` and no sessions.
@@ -173,11 +186,10 @@ enum CoachExportPromptBuilder {
         \(CoachPlanLimits.maxExercisesPerSession) exercises per session, \
         \(CoachPlanLimits.maxSets) sets per exercise.
         """
-    }
 
     /// The enum tokens a definition must use, quoted from the domain model itself so the prompt can
     /// never drift from what ``CoachPlanTokens`` will accept.
-    private static var vocabularySection: String {
+    private static let vocabularySection: String =
         """
         VOCABULARY — use these exact values:
 
@@ -187,7 +199,6 @@ enum CoachExportPromptBuilder {
         session kind: \(CoachPlanTokens.sessionKindVocabulary)
         inputKind: strength, treadmill, none
         """
-    }
 }
 
 // MARK: - Store seam

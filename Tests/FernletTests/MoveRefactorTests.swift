@@ -482,7 +482,8 @@ struct MoveRefactorTests {
         strength.speed = "6.0"
         strength.incline = "2"
         var strengthRows: [WorkoutExerciseEntry] = []
-        strength.commit(into: &strengthRows)
+        let strengthCommitted = strength.commit(into: &strengthRows)
+        #expect(strengthCommitted)
 
         #expect(strengthRows[0].weight == "95 lb")
         #expect(strengthRows[0].speed.isEmpty)
@@ -494,7 +495,8 @@ struct MoveRefactorTests {
         treadmill.speed = "6.0"
         treadmill.incline = "2"
         var treadmillRows: [WorkoutExerciseEntry] = []
-        treadmill.commit(into: &treadmillRows)
+        let treadmillCommitted = treadmill.commit(into: &treadmillRows)
+        #expect(treadmillCommitted)
 
         #expect(treadmillRows[0].weight.isEmpty)
         #expect(treadmillRows[0].speed == "6.0")
@@ -513,7 +515,8 @@ struct MoveRefactorTests {
         let tokenBefore = draft.resetToken
         var rows: [WorkoutExerciseEntry] = []
 
-        draft.commit(into: &rows)
+        let committed = draft.commit(into: &rows)
+        #expect(committed)
 
         #expect(!draft.hasExercise)
         #expect(draft.sets.isEmpty && draft.reps.isEmpty && draft.weight.isEmpty)

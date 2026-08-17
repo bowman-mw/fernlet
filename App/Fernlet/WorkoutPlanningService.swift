@@ -125,7 +125,14 @@ final class WorkoutPlanningService {
                 ) {
                     sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
                 }
-            } catch {}
+            } catch {
+                // Degrade, don't fail: this session keeps its generated exercises. Named so a plan
+                // that "adjusted" into nothing leaves a trace instead of a silent no-op.
+                FernletAuditLog.log("workout.adjust.modelFailed", context: [
+                    "session": session.kind.rawValue,
+                    "error": String(describing: type(of: error)),
+                ])
+            }
         }
         return WorkoutProgram.DayPlan(
             splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,

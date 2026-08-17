@@ -176,6 +176,9 @@ enum CoachPlanImporter {
     /// Picking matters because the FIRST brace isn't reliably the plan — a reply like
     /// `Here's your block (I used {sets}x{reps} notation): {…}` would otherwise yield `{sets}`.
     static func extractJSON(from raw: String) -> String? {
+        // R5: this is a boundary function over untrusted text and is callable independently of
+        // `decode(pastedText:)`, so it carries the size bound itself rather than trusting a caller.
+        guard raw.utf8.count <= CoachPlanLimits.maxPastedBytes else { return nil }
         let candidates = balancedObjects(in: raw.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !candidates.isEmpty else { return nil }
         // Strongest signal first: the format tag, then the required `days` key, then whatever came
@@ -306,6 +309,15 @@ extension FernletStore {
             guard resolvedByKey[key] == nil else { continue }
             resolvedByKey[key] = target
             newExercises.append(target)
+        }
+
+        // R3: the custom-exercise catalog is capped, so a plan that would overflow it fails closed
+        // here — blocking at review beats silently dropping definitions the plan then prescribes.
+        let headroom = max(0, Self.maxCustomExercises - settings.customExercises.count)
+        if newExercises.count > headroom {
+            issues.append(.init(kind: .blocking, subject: "New exercises",
+                                detail: "This plan adds \(newExercises.count) exercises but your list can hold "
+                                + "only \(headroom) more. Remove some custom exercises, then import again."))
         }
 
         let (resolvedEdits, editIssues) = resolveEdits(plan.edits)
@@ -514,6 +526,45 @@ extension FernletStore {
 
 // MARK: - Apply (store-side, writes)
 
+/// The user's safety strikes from the review screen, applied to a plan's sessions and edits.
+///
+/// One place decides what a strike removes, so the "does this import write anything?" question and
+/// the write itself can never disagree — the disagreement that let a fully-struck plan delete rows
+/// and then report "nothing was changed".
+private struct CoachPlanStrikeFilter {
+    /// Normalized exercise keys the user turned off.
+    let struckKeys: Set<String>
+
+    /// The exercises of `session` that survive the strikes.
+    func kept(_ session: CoachSession) -> [CoachExercise] {
+        session.exercises.filter { !struckKeys.contains(CoachPlan.normalizedName($0.name)) }
+    }
+
+    /// Whether a session still prescribes anything at all once strikes are applied.
+    func prescribesSomething(_ session: CoachSession) -> Bool {
+        !kept(session).isEmpty || !(session.conditioning?.isEmpty ?? true)
+    }
+
+    /// The edit's replacement exercise text with struck lines removed — nil when nothing survives,
+    /// which means the original row must be left standing rather than replaced with an empty one.
+    func survivingExercises(of resolved: ResolvedCoachPlanEdit) -> String? {
+        guard let after = resolved.after else { return nil }
+        var text = after.exercises
+        if !struckKeys.isEmpty {
+            let lines = after.exerciseLines.filter { line in
+                !struckKeys.contains(where: { line.lowercased().hasPrefix($0) })
+            }
+            text = lines.joined(separator: "\n")
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+    }
+
+    /// Whether this edit still does something once strikes are applied.
+    func survives(_ resolved: ResolvedCoachPlanEdit) -> Bool {
+        resolved.action == .delete || survivingExercises(of: resolved) != nil
+    }
+}
+
 extension FernletStore {
 
     /// Materializes a reviewed plan into dated ``PlannedWorkout`` rows and registers its new
@@ -526,59 +577,106 @@ extension FernletStore {
     ///   - startDayKey: the day plan-day 1 lands on.
     ///   - struckExerciseKeys: normalized keys the user chose to strike from the safety flags.
     ///   - collisionPolicy: what to do about days that already hold planned workouts.
-    @discardableResult
     func applyCoachPlan(_ review: CoachPlanImportReview,
                         startingOn startDayKey: String,
                         struckExerciseKeys: Set<String>,
                         collisionPolicy: CoachPlanCollisionPolicy) -> CoachPlanImportResult? {
-        guard review.isImportable else { return nil }
+        // R5: validate BOTH parameters at entry. A `startDayKey` that isn't a day key makes every
+        // plan day skip, so without this the catalog and the edits would be written for an import
+        // that then reports "nothing was changed".
+        guard review.isImportable, FernletDate.date(fromDayKey: startDayKey) != nil else { return nil }
         let plan = review.plan
-
-        /// The exercises of `session` that survive the user's strikes.
-        func kept(_ session: CoachSession) -> [CoachExercise] {
-            session.exercises.filter { !struckExerciseKeys.contains(CoachPlan.normalizedName($0.name)) }
-        }
-        /// Whether a session still prescribes anything at all once strikes are applied.
-        func prescribesSomething(_ session: CoachSession) -> Bool {
-            !kept(session).isEmpty || !(session.conditioning?.isEmpty ?? true)
-        }
+        let filter = CoachPlanStrikeFilter(struckKeys: struckExerciseKeys)
 
         // Decide up front whether this import does ANYTHING, before touching a single row. If the
-        // user struck every exercise, the loop below would delete their existing planned workouts
+        // user struck every exercise, the loops below would delete their existing planned workouts
         // (under `.replace`), write nothing in their place, and then return nil — so the UI would say
         // "nothing was changed" over real data loss. Bail before any mutation instead.
         let writesSomething = plan.days.contains { day in
-            !day.isRestDay && day.sessions.contains(where: prescribesSomething)
+            !day.isRestDay && day.sessions.contains(where: filter.prescribesSomething)
         }
-        // An edits-only plan writes no new days and is still a real import.
-        guard writesSomething || !review.resolvedEdits.isEmpty else { return nil }
+        // An edits-only plan writes no new days and is still a real import — but only edits that
+        // survive the strikes count, or a fully-struck edit set would mutate the catalog first.
+        let survivingEdits = review.resolvedEdits.filter(filter.survives)
+        guard writesSomething || !survivingEdits.isEmpty else { return nil }
 
         // Counted across the whole plan rather than accumulated while writing, so the confirmation is
         // accurate even for strikes on days that ended up writing nothing.
         let struckCount = plan.days.reduce(0) { total, day in
-            total + day.sessions.reduce(0) { $0 + ($1.exercises.count - kept($1).count) }
+            total + day.sessions.reduce(0) { $0 + ($1.exercises.count - filter.kept($1).count) }
         }
 
         // Register new exercises FIRST: the rows written below carry muscle groups resolved from the
         // catalog, so a plan's own exercises have to be in it before its sessions are projected.
-        if !review.newExercises.isEmpty {
-            let existingKeys = Set(settings.customExercises.map { CoachPlan.normalizedName($0.name) })
-            let additions = review.newExercises.filter { !existingKeys.contains(CoachPlan.normalizedName($0.name)) }
-            if !additions.isEmpty {
-                settings.customExercises.append(contentsOf: additions)
-                syncCustomExerciseCatalog()
-            }
-        }
-
-        var writtenDayKeys: [String] = []
-        var plannedCount = 0
-        var editedCount = 0
-        var deletedCount = 0
+        registerNewExercises(review.newExercises)
 
         // Edits FIRST, against the calendar as the review screen showed it. Running them after the
         // new days would let a `.replace` collision delete a row an edit was about to rewrite, so
         // the user would see "3 adjusted" for rows that no longer existed when the edit ran.
-        for resolved in review.resolvedEdits {
+        let edits = applyResolvedEdits(survivingEdits, filter: filter, plan: plan)
+        let days = applyPlanDays(plan, startingOn: startDayKey, filter: filter,
+                                 collisionPolicy: collisionPolicy)
+        let writtenDayKeys = edits.dayKeys + days.dayKeys
+
+        guard let first = writtenDayKeys.min(), let last = writtenDayKeys.max() else {
+            // Unreachable: `writesSomething || !survivingEdits.isEmpty` was checked above, and both
+            // paths append a day key. Named rather than silently nil so a regression is visible.
+            assertionFailure("applyCoachPlan wrote no day after deciding the import writes something")
+            FernletAuditLog.log("coachPlan.import.wroteNothing")
+            return nil
+        }
+
+        recordTrainerAudit(TrainerAuditEvent(
+            kind: .envelopeReceived,
+            peerDisplayName: plan.coachDisplayName.isEmpty ? nil : plan.coachDisplayName,
+            // Deliberately NOT stamped with a peer fingerprint or a trust basis: a manually pasted
+            // plan has no verified sender. Recording one would make an unauthenticated import look
+            // like a paired-coach delivery in the audit log.
+            message: "Imported a pasted plan across \(writtenDayKeys.count) day(s): \(days.planned) added, "
+            + "\(edits.edited) changed, \(edits.deleted) removed."))
+
+        // `settings.customExercises` is written through the plain forwarder, which has no didSet —
+        // unlike `planWorkout`, which schedules its own save. Without this an imported exercise
+        // would live only in memory until some unrelated mutation happened to persist the blob.
+        scheduleSnapshotSave()
+
+        return CoachPlanImportResult(
+            plannedWorkoutCount: days.planned,
+            dayCount: writtenDayKeys.count,
+            newExerciseCount: review.newExercises.count,
+            struckExerciseCount: struckCount,
+            editedCount: edits.edited,
+            deletedCount: edits.deleted,
+            firstDayKey: first,
+            lastDayKey: last)
+    }
+
+    /// R3: the persisted custom-exercise catalog is fed by clipboard imports, so it carries an
+    /// explicit total cap — ``reviewCoachPlan`` blocks a plan that would exceed it, and this is the
+    /// belt-and-braces enforcement at the point the additions actually enter.
+    static let maxCustomExercises = 300
+
+    /// Adds the plan's genuinely new exercises to the user's catalog, up to ``maxCustomExercises``.
+    private func registerNewExercises(_ targets: [ExerciseTarget]) {
+        guard !targets.isEmpty else { return }
+        let existingKeys = Set(settings.customExercises.map { CoachPlan.normalizedName($0.name) })
+        let headroom = max(0, Self.maxCustomExercises - settings.customExercises.count)
+        let additions = targets
+            .filter { !existingKeys.contains(CoachPlan.normalizedName($0.name)) }
+            .prefix(headroom)
+        guard !additions.isEmpty else { return }
+        settings.customExercises.append(contentsOf: additions)
+        syncCustomExerciseCatalog()
+    }
+
+    /// Applies the surviving edits to the calendar, reporting what changed and which days it touched.
+    private func applyResolvedEdits(_ edits: [ResolvedCoachPlanEdit],
+                                    filter: CoachPlanStrikeFilter,
+                                    plan: CoachPlan) -> (edited: Int, deleted: Int, dayKeys: [String]) {
+        var editedCount = 0
+        var deletedCount = 0
+        var dayKeys: [String] = []
+        for resolved in edits {
             switch resolved.action {
             case .delete:
                 // Planned rows only. `deletePlannedWorkout` cannot reach a logged workout, which is
@@ -586,29 +684,29 @@ extension FernletStore {
                 deletePlannedWorkout(resolved.before, date: resolved.dayKey)
                 deletedCount += 1
             case .adjust, .replace:
-                guard var updated = resolved.after else { continue }
                 // Struck exercises are honoured here too: a safety conflict the user turned off must
-                // not come back in through an edit.
-                if !struckExerciseKeys.isEmpty {
-                    let kept = updated.exerciseLines.filter { line in
-                        !struckExerciseKeys.contains(where: { line.lowercased().hasPrefix($0) })
-                    }
-                    updated.exercises = kept.joined(separator: "\n")
-                }
-                guard !updated.exercises.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    // Everything in the replacement was struck — leave the original standing rather
-                    // than replacing a real workout with an empty one.
-                    continue
-                }
+                // not come back in through an edit. Nothing surviving leaves the original standing.
+                guard var updated = resolved.after,
+                      let exercises = filter.survivingExercises(of: resolved) else { continue }
+                updated.exercises = exercises
                 updated.source = .coach
                 updated.notes = Self.editedNote(updated.notes, plan: plan)
                 deletePlannedWorkout(resolved.before, date: resolved.dayKey)
                 planWorkout(updated, date: resolved.dayKey)
                 editedCount += 1
             }
-            if !writtenDayKeys.contains(resolved.dayKey) { writtenDayKeys.append(resolved.dayKey) }
+            if !dayKeys.contains(resolved.dayKey) { dayKeys.append(resolved.dayKey) }
         }
+        return (editedCount, deletedCount, dayKeys)
+    }
 
+    /// Writes the plan's own days, reporting how many rows it planned and which days it touched.
+    private func applyPlanDays(_ plan: CoachPlan,
+                               startingOn startDayKey: String,
+                               filter: CoachPlanStrikeFilter,
+                               collisionPolicy: CoachPlanCollisionPolicy) -> (planned: Int, dayKeys: [String]) {
+        var plannedCount = 0
+        var dayKeys: [String] = []
         for day in plan.days.sorted(by: { $0.dayIndex < $1.dayIndex }) {
             guard !day.isRestDay, !day.sessions.isEmpty else { continue }
             guard let dayKey = Self.dayKey(startingOn: startDayKey, offsetBy: day.dayIndex - 1) else { continue }
@@ -616,7 +714,7 @@ extension FernletStore {
             // Sessions surviving the strikes, resolved BEFORE the collision delete: a day this plan
             // now prescribes nothing for must not have the user's existing plan cleared out from
             // under it and replaced with nothing.
-            let sessions = day.sessions.filter(prescribesSomething)
+            let sessions = day.sessions.filter(filter.prescribesSomething)
             guard !sessions.isEmpty else { continue }
 
             if collisionPolicy == .replace {
@@ -628,38 +726,13 @@ extension FernletStore {
             }
 
             for session in sessions {
-                planWorkout(Self.plannedWorkout(from: session, keeping: kept(session), day: day, plan: plan),
+                planWorkout(Self.plannedWorkout(from: session, keeping: filter.kept(session), day: day, plan: plan),
                             date: dayKey)
                 plannedCount += 1
             }
-            writtenDayKeys.append(dayKey)
+            dayKeys.append(dayKey)
         }
-
-        guard let first = writtenDayKeys.min(), let last = writtenDayKeys.max() else { return nil }
-
-        recordTrainerAudit(TrainerAuditEvent(
-            kind: .envelopeReceived,
-            peerDisplayName: plan.coachDisplayName.isEmpty ? nil : plan.coachDisplayName,
-            // Deliberately NOT stamped with a peer fingerprint or a trust basis: a manually pasted
-            // plan has no verified sender. Recording one would make an unauthenticated import look
-            // like a paired-coach delivery in the audit log.
-            message: "Imported a pasted plan across \(writtenDayKeys.count) day(s): \(plannedCount) added, "
-            + "\(editedCount) changed, \(deletedCount) removed."))
-
-        // `settings.customExercises` is written through the plain forwarder, which has no didSet —
-        // unlike `planWorkout`, which schedules its own save. Without this an imported exercise
-        // would live only in memory until some unrelated mutation happened to persist the blob.
-        scheduleSnapshotSave()
-
-        return CoachPlanImportResult(
-            plannedWorkoutCount: plannedCount,
-            dayCount: writtenDayKeys.count,
-            newExerciseCount: review.newExercises.count,
-            struckExerciseCount: struckCount,
-            editedCount: editedCount,
-            deletedCount: deletedCount,
-            firstDayKey: first,
-            lastDayKey: last)
+        return (plannedCount, dayKeys)
     }
 
     /// Stamps an edited row so its origin survives in the row's own text, like a newly imported one.
