@@ -17,6 +17,10 @@ struct OnboardingLockSetupView: View {
     var biometricsOnlyAction: () -> Void
     var skipAction: () -> Void
 
+    /// Read on the setup sheet's dismissal so a CANCELLED sheet records a deferral rather than a
+    /// choice. Injected on `OnboardingCoordinator` by `FernletApp`.
+    @Environment(FernletLockService.self) private var lockService
+
     @State private var isShowingPasscodeSetup = false
 
     var body: some View {
@@ -57,11 +61,22 @@ struct OnboardingLockSetupView: View {
             }
         }
         .accessibilityIdentifier("onboarding.lock")
-        .sheet(isPresented: $isShowingPasscodeSetup, onDismiss: setPasscodeAction) {
+        .sheet(isPresented: $isShowingPasscodeSetup, onDismiss: recordPasscodeSetupOutcome) {
             // No locked surface is on screen during onboarding; grant the Private Hub, which is what
             // the user just agreed to protect and the first place they'll go looking for it.
             FernletLockSetupView(grantingScope: .privateHub)
         }
+    }
+
+    /// Checks what the setup sheet actually did before reporting it. Dismissal alone is not a
+    /// result: a user who opened the sheet and backed out configured nothing, so recording
+    /// "chosen" there would clear the deferral and stop lockable features ever offering setup.
+    private func recordPasscodeSetupOutcome() {
+        guard lockService.state != .notConfigured else {
+            skipAction()
+            return
+        }
+        setPasscodeAction()
     }
 
     private func lockChoice(title: String, subtitle: String, systemImage: String, action: @escaping () -> Void) -> some View {

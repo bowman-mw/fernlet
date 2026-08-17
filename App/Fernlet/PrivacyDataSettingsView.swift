@@ -135,6 +135,12 @@ struct PrivacyDataSettingsView: View {
     /// instead of mutating directly, so the warning (and only-on-confirm mutation) is guaranteed (WS-5).
     @State private var pendingDestructiveAction: DestructiveConfirmation?
     @State private var isResolvingEscrowConflict = false
+    /// One "Retry restore" pass in flight at a time (R3): the coordinator it calls has no in-flight
+    /// guard of its own, so repeated taps would overlap whole restore passes.
+    @State private var isRetryingRestore = false
+    /// Set when the iCloud record probe THREW. Without it a failed query is indistinguishable from
+    /// "this account is empty", which suppresses the multi-device warning on a false premise.
+    @State private var cloudCountsUnavailable = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
     private let cloudDataService: any PrivacyCloudDataManaging
@@ -152,6 +158,22 @@ struct PrivacyDataSettingsView: View {
     }
 
     var body: some View {
+        consentAlerts(screenContent)
+            .destructiveConfirmation($pendingDestructiveAction)
+            // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
+            .deleteEverythingAlerts(deleteFlow, successButtonTitle: "OK", successButtonRole: .cancel) {
+                deleteFlow.showSuccess = false
+            }
+            .sheet(item: $exportPayload) { payload in
+                ActivityShareView(items: [payload.url]) { purgeExportsAfterShare() }
+            }
+            .task { await onFirstAppear() }
+    }
+
+    /// The screen itself: the scrolling controls plus the two busy overlays, the navigation chrome,
+    /// and the two sheets it presents. The consent alerts and the destructive/delete presentations
+    /// are layered on by `body`.
+    private var screenContent: some View {
         ZStack {
             ScrollView {
                 content
@@ -186,53 +208,62 @@ struct PrivacyDataSettingsView: View {
         .sheet(isPresented: $isShowingDisableConfirmation) {
             disableICloudConfirmationSheet
         }
-        .alert("Turn on iCloud sync?", isPresented: $isShowingEnableConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Turn on") { enableICloudSync() }
-        } message: {
-            Text("Your local data will upload to iCloud and sync to your other Fernlet devices.")
-        }
-        .alert("Turn on encrypted backup?", isPresented: $pendingSealedBackupEnable.isPresent()) {
-            Button("Cancel", role: .cancel) { pendingSealedBackupEnable = nil }
-            Button("Encrypt & back up") {
-                if let payload = pendingSealedBackupEnable { applySealedBackup(payload, enabled: true) }
-                pendingSealedBackupEnable = nil
+    }
+
+    /// The three informed-consent alerts that gate anything leaving the device: turning iCloud sync
+    /// on, and turning on either kind of encrypted backup. Grouped here so `body` stays readable;
+    /// they stay in the same order and position in the modifier chain as before.
+    private func consentAlerts(_ content: some View) -> some View {
+        content
+            .alert("Turn on iCloud sync?", isPresented: $isShowingEnableConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Turn on") { enableICloudSync() }
+            } message: {
+                Text("Your local data will upload to iCloud and sync to your other Fernlet devices.")
             }
-        } message: {
-            Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
-        }
-        .alert("Back up your photos?", isPresented: $pendingOwnPhotoBackupEnable) {
-            Button("Cancel", role: .cancel) { pendingOwnPhotoBackupEnable = false }
-            Button("Encrypt & back up") { applyOwnPhotoBackup(enabled: true) }
-        } message: {
-            Text(Self.ownPhotoBackupSizeDisclosure + "\n\n" + sealedBackupDisclosure(for: nil)
-                 + "\n\n" + Self.ownPhotoBackupBindingDisclosure)
-        }
-        .destructiveConfirmation($pendingDestructiveAction)
-        // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
-        .deleteEverythingAlerts(deleteFlow, successButtonTitle: "OK", successButtonRole: .cancel) {
-            deleteFlow.showSuccess = false
-        }
-        .sheet(item: $exportPayload) { payload in
-            ActivityShareView(items: [payload.url]) {
-                // The export is a full, UNENCRYPTED JSON dump of the user's decrypted data. Once the
-                // share sheet is done reading it — whether the user shared it or cancelled — remove it
-                // rather than letting it linger in tmp/ until the next "delete everything". Sweeping the
-                // whole exports directory also clears any older exports from previous days at the same
-                // seam. Runs on completion (after UIActivityViewController has finished copying the file
-                // into whatever activity read it), not on dismissal, so the share can't race the delete.
-                store?.purgeDataExports()
+            .alert("Turn on encrypted backup?", isPresented: $pendingSealedBackupEnable.isPresent()) {
+                Button("Cancel", role: .cancel) { pendingSealedBackupEnable = nil }
+                Button("Encrypt & back up") {
+                    if let payload = pendingSealedBackupEnable { applySealedBackup(payload, enabled: true) }
+                    pendingSealedBackupEnable = nil
+                }
+            } message: {
+                Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
             }
-        }
-        .task {
-            #if DEBUG
-            seedUITestPreferencesIfNeeded()
-            if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1" {
-                hasFreshVerification = true
+            .alert("Back up your photos?", isPresented: $pendingOwnPhotoBackupEnable) {
+                Button("Cancel", role: .cancel) { pendingOwnPhotoBackupEnable = false }
+                Button("Encrypt & back up") { applyOwnPhotoBackup(enabled: true) }
+            } message: {
+                Text(Self.ownPhotoBackupSizeDisclosure + "\n\n" + sealedBackupDisclosure(for: nil)
+                     + "\n\n" + Self.ownPhotoBackupBindingDisclosure)
             }
-            #endif
-            await loadCloudCountsIfNeeded()
+    }
+
+    /// Share-sheet completion sweep. The export is a full, UNENCRYPTED JSON dump of the user's
+    /// decrypted data. Once the share sheet is done reading it — whether the user shared it or
+    /// cancelled — remove it rather than letting it linger in tmp/ until the next "delete
+    /// everything". Sweeping the whole exports directory also clears any older exports from previous
+    /// days at the same seam. Runs on completion (after `UIActivityViewController` has finished
+    /// copying the file into whatever activity read it), not on dismissal, so the share can't race
+    /// the delete. A failed sweep means that plaintext dump is STILL in tmp/, so it is recorded
+    /// rather than dropped; "Delete everything" and the launch sweep remain the backstop.
+    private func purgeExportsAfterShare() {
+        guard let store else { return }
+        guard store.purgeDataExports() else {
+            FernletAuditLog.log("privacy.export.purgeFailed", context: ["trigger": "shareCompleted"])
+            return
         }
+    }
+
+    /// First-appearance work: the DEBUG UI-test seeding and the iCloud record count.
+    private func onFirstAppear() async {
+        #if DEBUG
+        seedUITestPreferencesIfNeeded()
+        if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1" {
+            hasFreshVerification = true
+        }
+        #endif
+        await loadCloudCountsIfNeeded()
     }
 
     @ViewBuilder
@@ -593,7 +624,7 @@ struct PrivacyDataSettingsView: View {
     /// The honest size disclosure for the own-photo backup. Fernlet puts no count cap on meal,
     /// recipe or progress photos, so a heavy user's library really can run to hundreds of megabytes
     /// — and it is the USER's iCloud quota, not the developer's. Said plainly next to the switch.
-    static let ownPhotoBackupSizeDisclosure =
+    private static let ownPhotoBackupSizeDisclosure =
         "Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, "
         + "so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB "
         + "or more for a big library. Only photos that changed are uploaded."
@@ -603,7 +634,7 @@ struct PrivacyDataSettingsView: View {
     /// photos' key is locked to this device, which is irreversible and changes how they come back on
     /// a new phone. Deliberately phrased "once your photos are safely in the backup" because that is
     /// exactly the gate — the binding follows a committed upload, never the switch alone.
-    static let ownPhotoBackupBindingDisclosure =
+    private static let ownPhotoBackupBindingDisclosure =
         "Once your photos are safely in the backup, Fernlet locks their encryption key to this device, "
         + "so a copy of your device backup can't open them. That can't be undone, and from then on this "
         + "encrypted backup is how they come back on a new phone."
@@ -659,164 +690,213 @@ struct PrivacyDataSettingsView: View {
     /// status so a deferred/failed restore is visible and retryable instead of silently swallowed.
     @ViewBuilder
     private var sealedBackupStatusBanner: some View {
-        if let store {
-            let attentionItems: [SealedBackupAttention] =
-                SealedBackupPayloadType.allCases.compactMap { payload in
-                    guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
-                    return SealedBackupAttention(payload: payload, outcome: outcome)
-                }
-            let photoAttention = store.ownPhotoBackupStatus.flatMap { $0.needsAttention ? $0 : nil }
-            if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
-                || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
-                || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
-                || photoAttention != nil || ownPhotoBackupDisableFailed
-                || store.ownPhotoBackupUploadFailed {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel("Encrypted backup status")
-
-                    // An UPLOAD failure, which the restore vocabulary above cannot express: a device
-                    // that has photos never takes the restore path at all, so without this line a
-                    // pass in which nothing reached iCloud is completely invisible — an ON switch, an
-                    // accepted size disclosure, and no backup.
-                    if store.ownPhotoBackupUploadFailed {
-                        Text("Couldn't upload your photos to your encrypted backup just now, so some or "
-                            + "all of them may not be in iCloud yet. We'll keep trying, or tap Retry.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosUploadFailed")
-                    }
-
-                    if ownPhotoBackupDisableFailed {
-                        Text("Couldn't delete your encrypted photo backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosDisableFailed")
-                    }
-
-                    // The photo route reuses the same outcome vocabulary as the payload backups, so
-                    // it reads the same — only the noun differs.
-                    if let photoAttention {
-                        Text(restoreStatusMessage(photoAttention, noun: "photo"))
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosStatus")
-                    }
-
-                    // A failed disable-delete. The pref stayed ON deliberately (see applySealedBackup),
-                    // so the remedy is the toggle the user already has — say so rather than leaving an
-                    // off-looking switch and a live backup.
-                    ForEach(SealedBackupPayloadType.allCases.filter(sealedBackupDisableFailures.contains), id: \.self) { payload in
-                        Text("Couldn't delete your encrypted \(payload.displayNoun) backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.disableFailed")
-                    }
-
-                    if store.sealedBackupPeriodReuploadDeferred {
-                        // Two states share the flag: period still hidden (the un-hide is the remedy — and
-                        // it now actually triggers the re-upload), or already visible but the re-upload
-                        // hasn't succeeded yet. The visible copy must NOT promise an unconditional
-                        // automatic retry: the launch follow-through re-uploads only from a NON-EMPTY
-                        // narrative store (an empty one would overwrite the good cloud backup), so a
-                        // visible device with no local history waits on "Retry restore" (shown below for
-                        // exactly this state) to pull the backup down first.
-                        Text(store.isPeriodTrackingVisible
-                             ? "Your period backup still needs re-uploading with your other device's backup key. This device re-uploads it automatically once your cycle history is on it — if it isn't yet, tap Retry restore to pull it down first."
-                             : "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-
-                    // The journal/intimacy equivalents. Their payloads are sealed under the Private
-                    // tab's key, so turning the backup on from here (Home → Settings, hub re-locked)
-                    // always defers. The copy names the ONE remedy that always works and deliberately
-                    // does not promise an unconditional automatic upload: the retry only runs from a
-                    // store that actually holds entries this device can seal, because exporting an
-                    // empty one would replace the cloud backup with nothing.
-                    if store.sealedBackupJournalReuploadDeferred {
-                        Text("Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.journalDeferred")
-                    }
-
-                    if store.sealedBackupIntimacyReuploadDeferred {
-                        Text(store.isIntimacyTrackingVisible
-                             ? "Your intimate log backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your logs are on it."
-                             : "Your intimate log backup hasn't finished uploading yet. It's hidden right now — un-hide intimacy tracking, then this device will finish it.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("privacy.sealedBackup.intimacyDeferred")
-                    }
-
-                    if store.sealedBackupEscrowConflict {
-                        Text("We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded.")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-                        Button { resolveEscrowConflict() } label: {
-                            Label(isResolvingEscrowConflict ? "Switching…" : "Use my other device's key",
-                                  systemImage: "key.horizontal")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 11)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                        .disabled(isResolvingEscrowConflict)
-                        .accessibilityIdentifier("privacy.sealedBackup.resolveConflict")
-                    }
-
-                    ForEach(attentionItems) { item in
-                        Text(restoreStatusMessage(item.outcome, payload: item.payload))
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-
-                    // Also offered for a stuck VISIBLE re-upload deferral: with an empty narrative store
-                    // there is no retryable attention item (the ambient restore is fresh-install-only and
-                    // records nothing), yet the remedy IS a retry — `userInitiated` takes the targeted
-                    // restore, and the same pass's follow-through then re-uploads and clears the deferral.
-                    if attentionItems.contains(where: { $0.outcome.isRetryable })
-                        // The photo route rides the same Retry: `restoreSealedBackupsIfNeeded` runs
-                        // its synchronize pass too, so one button covers both routes — for a failed
-                        // restore, for the ids a partial restore left owed (the repair pass), and
-                        // for a failed upload.
-                        || (photoAttention?.isRetryable ?? false)
-                        || store.ownPhotoBackupUploadFailed
-                        || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
-                        // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
-                        // store records no retryable attention item, yet Retry IS the remedy —
-                        // `userInitiated` takes their targeted restores, and the same pass's
-                        // follow-through then re-uploads and clears the deferral.
-                        || store.sealedBackupJournalReuploadDeferred
-                        || (store.sealedBackupIntimacyReuploadDeferred && store.isIntimacyTrackingVisible) {
-                        Button { retrySealedRestore() } label: {
-                            Label("Retry restore", systemImage: "arrow.clockwise")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(.white)
-                        .padding(.vertical, 11)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                        .accessibilityIdentifier("privacy.sealedBackup.retryRestore")
-                    }
-                }
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
+        if showsSealedBackupStatusBanner {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel("Encrypted backup status")
+                ownPhotoStatusLines
+                sealedBackupDisableFailureLines
+                reuploadDeferredLines
+                escrowConflictSection
+                attentionLines
+                if showsRetryRestore { retryRestoreButton }
             }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
         }
+    }
+
+    /// The payload backups whose last restore attempt needs the user's attention, in `allCases` order.
+    private var sealedBackupAttentionItems: [SealedBackupAttention] {
+        guard let store else { return [] }
+        return SealedBackupPayloadType.allCases.compactMap { payload in
+            guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
+            return SealedBackupAttention(payload: payload, outcome: outcome)
+        }
+    }
+
+    /// The own-photo route's restore outcome when it needs attention, else nil.
+    private var ownPhotoAttention: SealedBackupRestoreOutcome? {
+        store?.ownPhotoBackupStatus.flatMap { $0.needsAttention ? $0 : nil }
+    }
+
+    /// Whether anything at all is wrong with the encrypted backups. The banner is hidden entirely
+    /// when this is false — there is no "everything is fine" state to report here.
+    private var showsSealedBackupStatusBanner: Bool {
+        guard let store else { return false }
+        return store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
+            || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
+            || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
+            || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
+            || store.ownPhotoBackupUploadFailed
+    }
+
+    /// The own-photo backup's three failure lines: a failed upload, a failed disable-delete, and a
+    /// restore outcome that needs attention.
+    @ViewBuilder
+    private var ownPhotoStatusLines: some View {
+        if let store, store.ownPhotoBackupUploadFailed {
+            // An UPLOAD failure, which the restore vocabulary cannot express: a device that has
+            // photos never takes the restore path at all, so without this line a pass in which
+            // nothing reached iCloud is completely invisible — an ON switch, an accepted size
+            // disclosure, and no backup.
+            Text("Couldn't upload your photos to your encrypted backup just now, so some or "
+                + "all of them may not be in iCloud yet. We'll keep trying, or tap Retry.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.ownPhotosUploadFailed")
+        }
+
+        if ownPhotoBackupDisableFailed {
+            Text("Couldn't delete your encrypted photo backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.ownPhotosDisableFailed")
+        }
+
+        // The photo route reuses the same outcome vocabulary as the payload backups, so
+        // it reads the same — only the noun differs.
+        if let ownPhotoAttention {
+            Text(restoreStatusMessage(ownPhotoAttention, noun: "photo"))
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.ownPhotosStatus")
+        }
+    }
+
+    /// A failed disable-delete, one line per payload. The pref stayed ON deliberately (see
+    /// `applySealedBackup`), so the remedy is the toggle the user already has — say so rather than
+    /// leaving an off-looking switch and a live backup.
+    private var sealedBackupDisableFailureLines: some View {
+        ForEach(SealedBackupPayloadType.allCases.filter(sealedBackupDisableFailures.contains), id: \.self) { payload in
+            Text("Couldn't delete your encrypted \(payload.displayNoun) backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.disableFailed")
+        }
+    }
+
+    /// The period / journal / intimacy re-upload deferrals, each naming the remedy that works for
+    /// the state it is actually in.
+    @ViewBuilder
+    private var reuploadDeferredLines: some View {
+        if let store, store.sealedBackupPeriodReuploadDeferred {
+            // Two states share the flag: period still hidden (the un-hide is the remedy — and
+            // it now actually triggers the re-upload), or already visible but the re-upload
+            // hasn't succeeded yet. The visible copy must NOT promise an unconditional
+            // automatic retry: the launch follow-through re-uploads only from a NON-EMPTY
+            // narrative store (an empty one would overwrite the good cloud backup), so a
+            // visible device with no local history waits on "Retry restore" (shown below for
+            // exactly this state) to pull the backup down first.
+            Text(store.isPeriodTrackingVisible
+                 ? "Your period backup still needs re-uploading with your other device's backup key. This device re-uploads it automatically once your cycle history is on it — if it isn't yet, tap Retry restore to pull it down first."
+                 : "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+
+        // The journal/intimacy equivalents. Their payloads are sealed under the Private
+        // tab's key, so turning the backup on from here (Home → Settings, hub re-locked)
+        // always defers. The copy names the ONE remedy that always works and deliberately
+        // does not promise an unconditional automatic upload: the retry only runs from a
+        // store that actually holds entries this device can seal, because exporting an
+        // empty one would replace the cloud backup with nothing.
+        if let store, store.sealedBackupJournalReuploadDeferred {
+            Text("Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.journalDeferred")
+        }
+
+        if let store, store.sealedBackupIntimacyReuploadDeferred {
+            Text(store.isIntimacyTrackingVisible
+                 ? "Your intimate log backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your logs are on it."
+                 : "Your intimate log backup hasn't finished uploading yet. It's hidden right now — un-hide intimacy tracking, then this device will finish it.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.intimacyDeferred")
+        }
+    }
+
+    /// The cross-device escrow-key conflict explanation and its adopt button.
+    @ViewBuilder
+    private var escrowConflictSection: some View {
+        if let store, store.sealedBackupEscrowConflict {
+            Text("We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            Button { resolveEscrowConflict() } label: {
+                Label(isResolvingEscrowConflict ? "Switching…" : "Use my other device's key",
+                      systemImage: "key.horizontal")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(.white)
+            .padding(.vertical, 11)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isResolvingEscrowConflict)
+            .accessibilityIdentifier("privacy.sealedBackup.resolveConflict")
+        }
+    }
+
+    /// One line per payload backup whose restore needs attention.
+    private var attentionLines: some View {
+        ForEach(sealedBackupAttentionItems) { item in
+            Text(restoreStatusMessage(item.outcome, payload: item.payload))
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    /// Whether "Retry restore" can actually do anything about the states on screen.
+    ///
+    /// Also offered for a stuck VISIBLE re-upload deferral: with an empty narrative store there is no
+    /// retryable attention item (the ambient restore is fresh-install-only and records nothing), yet
+    /// the remedy IS a retry — `userInitiated` takes the targeted restore, and the same pass's
+    /// follow-through then re-uploads and clears the deferral.
+    private var showsRetryRestore: Bool {
+        guard let store else { return false }
+        return sealedBackupAttentionItems.contains(where: { $0.outcome.isRetryable })
+            // The photo route rides the same Retry: `restoreSealedBackupsIfNeeded` runs
+            // its synchronize pass too, so one button covers both routes — for a failed
+            // restore, for the ids a partial restore left owed (the repair pass), and
+            // for a failed upload.
+            || (ownPhotoAttention?.isRetryable ?? false)
+            || store.ownPhotoBackupUploadFailed
+            || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
+            // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
+            // store records no retryable attention item, yet Retry IS the remedy —
+            // `userInitiated` takes their targeted restores, and the same pass's
+            // follow-through then re-uploads and clears the deferral.
+            || store.sealedBackupJournalReuploadDeferred
+            || (store.sealedBackupIntimacyReuploadDeferred && store.isIntimacyTrackingVisible)
+    }
+
+    /// The one retry for both routes. Disabled while a retry is in flight (R3: one pass per tap —
+    /// `restoreSealedBackupsIfNeeded` has no in-flight guard of its own, so overlapping taps would
+    /// run concurrent escrow-reconcile + restore + photo-verification passes).
+    private var retryRestoreButton: some View {
+        Button { retrySealedRestore() } label: {
+            Label(isRetryingRestore ? "Retrying…" : "Retry restore", systemImage: "arrow.clockwise")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .font(.fernlet(.label))
+        .foregroundStyle(.white)
+        .padding(.vertical, 11)
+        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        .disabled(isRetryingRestore)
+        .accessibilityIdentifier("privacy.sealedBackup.retryRestore")
     }
 
     private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, payload: SealedBackupPayloadType) -> String {
@@ -846,11 +926,19 @@ struct PrivacyDataSettingsView: View {
 
     private func retrySealedRestore() {
         guard let store else { return }
+        // One pass in flight at a time (R3): `SealedBackupCoordinator.restoreSealedBackupsIfNeeded`
+        // has no in-flight guard, so without this every tap would spawn another overlapping
+        // escrow-reconcile + restore + photo-verification pass.
+        guard !isRetryingRestore else { return }
         FernletAuditLog.log("privacy.sealedBackup.retryRestore")
+        isRetryingRestore = true
         // `userInitiated` lets the period half fall back to the targeted restore. Without it, Retry on an
         // in-use device can only ever hit the fresh-install-only gate, so it would clear the banner
         // without having retried anything.
-        Task { await store.restoreSealedBackupsIfNeeded(userInitiated: true) }
+        Task {
+            await store.restoreSealedBackupsIfNeeded(userInitiated: true)
+            await MainActor.run { isRetryingRestore = false }
+        }
     }
 
     private func resolveEscrowConflict() {
@@ -858,8 +946,17 @@ struct PrivacyDataSettingsView: View {
         FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict")
         isResolvingEscrowConflict = true
         Task {
-            _ = await store.resolveSealedBackupEscrowConflict()
-            await MainActor.run { isResolvingEscrowConflict = false }
+            let adopted = await store.resolveSealedBackupEscrowConflict()
+            await MainActor.run {
+                isResolvingEscrowConflict = false
+                // Nothing silent: a failed adoption leaves the conflict banner exactly as it was,
+                // which on its own reads as a button that does nothing.
+                guard adopted else {
+                    operationError = "Couldn't switch to your other device's backup key. Check iCloud and try again."
+                    FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict.failed")
+                    return
+                }
+            }
         }
     }
 
@@ -999,85 +1096,10 @@ struct PrivacyDataSettingsView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if isUpdatingStorage {
-                    VStack(spacing: 12) {
-                        Spacer()
-                        ProgressView()
-                            .tint(Color.moss)
-                        Text("Updating storage settings…")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("privacy.storage.spinner")
+                    disableSheetSpinner
                 } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ScreenHeader(
-                                title: "Turn off iCloud sync?",
-                                subtitle: "Stop syncing now, or also delete iCloud data."
-                            )
-
-                            cloudCountsCard
-
-                            Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                                .padding(14)
-                                .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                                .accessibilityIdentifier("privacy.icloud.divergenceWarning")
-
-                            Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                                .padding(14)
-                                .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-
-                            SheetField("Type DELETE to confirm") {
-                                TextField("DELETE", text: $deleteConfirmationText)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.characters)
-                                    .sheetTextInput()
-                                    .accessibilityIdentifier("privacy.icloud.confirmText")
-                            }
-                        }
-                        .padding(20)
-                    }
-
-                    VStack(spacing: 12) {
-                        Button("Stop syncing, keep iCloud data") {
-                            stopSyncingKeepCloudData()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-                        .accessibilityIdentifier("privacy.icloud.stopSync")
-
-                        HStack {
-                            Spacer()
-                            Button("Delete iCloud data") {
-                                disableICloudSyncAndDeleteCloudData()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
-                            .background(
-                                deleteConfirmationText.uppercased() == "DELETE" ? Color.moss : Color.moss.opacity(0.4),
-                                in: RoundedRectangle(cornerRadius: 16)
-                            )
-                            .disabled(deleteConfirmationText.uppercased() != "DELETE")
-                            .accessibilityIdentifier("privacy.icloud.confirmDelete")
-                        }
-                    }
-                    .padding(20)
-                    .background(Color.parchment)
+                    disableSheetExplanation
+                    disableSheetActions
                 }
             }
             .background(Color.parchment)
@@ -1088,6 +1110,96 @@ struct PrivacyDataSettingsView: View {
                 }
             }
         }
+    }
+
+    /// The in-sheet busy state while the persistence stack is being swapped.
+    private var disableSheetSpinner: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            ProgressView()
+                .tint(Color.moss)
+            Text("Updating storage settings…")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("privacy.storage.spinner")
+    }
+
+    /// What turning sync off actually costs — the record counts, the divergence warning, the
+    /// deletion warning — and the type-DELETE confirmation field that arms the destructive button.
+    private var disableSheetExplanation: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                ScreenHeader(
+                    title: "Turn off iCloud sync?",
+                    subtitle: "Stop syncing now, or also delete iCloud data."
+                )
+
+                cloudCountsCard
+
+                Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                    .padding(14)
+                    .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("privacy.icloud.divergenceWarning")
+
+                Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                    .padding(14)
+                    .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+
+                SheetField("Type DELETE to confirm") {
+                    TextField("DELETE", text: $deleteConfirmationText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.characters)
+                        .sheetTextInput()
+                        .accessibilityIdentifier("privacy.icloud.confirmText")
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    /// The two ways out: keep the iCloud copy, or delete it (armed only by the typed DELETE).
+    private var disableSheetActions: some View {
+        VStack(spacing: 12) {
+            Button("Stop syncing, keep iCloud data") {
+                stopSyncingKeepCloudData()
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityIdentifier("privacy.icloud.stopSync")
+
+            HStack {
+                Spacer()
+                Button("Delete iCloud data") {
+                    disableICloudSyncAndDeleteCloudData()
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 16)
+                .background(
+                    deleteConfirmationText.uppercased() == "DELETE" ? Color.moss : Color.moss.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: 16)
+                )
+                .disabled(deleteConfirmationText.uppercased() != "DELETE")
+                .accessibilityIdentifier("privacy.icloud.confirmDelete")
+            }
+        }
+        .padding(20)
+        .background(Color.parchment)
     }
 
     private var cloudCountsCard: some View {
@@ -1109,6 +1221,13 @@ struct PrivacyDataSettingsView: View {
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+            } else if cloudCountsUnavailable {
+                // The probe threw. Saying "none found" here would report a check that never ran.
+                Text("Couldn't check iCloud just now, so what's up there is unknown.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.icloud.countsUnavailable")
             } else {
                 Text("No Fernlet iCloud records were found.")
                     .font(.fernlet(.body))
@@ -1226,6 +1345,12 @@ struct PrivacyDataSettingsView: View {
                     // and the banner says so instead of the failure hiding behind an off switch.
                     ownPhotoBackupDisableFailed = true
                     FernletAuditLog.log("privacy.sealedBackup.disableFailed", context: ["payload": "ownPhotos"])
+                } else {
+                    // A FAILED enable. The preference stays off, so the switch the user just
+                    // consented to (size + binding disclosures) snaps back — say why instead of
+                    // letting it look like a switch that refuses to move.
+                    operationError = "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again."
+                    FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
                 }
             }
         }
@@ -1268,6 +1393,16 @@ struct PrivacyDataSettingsView: View {
                     if ok {
                         setSealedBackupPreference(payload, true)
                         sealedBackupDisableFailures.remove(payload)
+                    } else {
+                        // A FAILED enable (escrow key not provisioned, or a reconcile failure). The
+                        // preference stays off, so the toggle the user just confirmed through the
+                        // "Encrypt & back up" consent alert snaps back — say why rather than leaving
+                        // the screen whose invariant is "never a silent swallow" doing exactly that.
+                        operationError = "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again."
+                        FernletAuditLog.log(
+                            "privacy.sealedBackup.enableFailed",
+                            context: ["payload": payload.rawValue]
+                        )
                     }
                 } else if ok {
                     setSealedBackupPreference(payload, false)
@@ -1525,7 +1660,9 @@ struct PrivacyDataSettingsView: View {
 
     private func reloadPersistence(with preferences: StoragePreferences) async throws {
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_SLOW_RELOAD"] == "1" {
-            try? await Task.sleep(for: .milliseconds(1500))
+            // Propagates: this function is `async throws` and both callers already surface the error,
+            // so a cancelled reload ends the wait instead of vanishing into a `try?`.
+            try await Task.sleep(for: .milliseconds(1500))
         }
         do {
             try await persistenceController.reload(with: preferences)
@@ -1544,8 +1681,15 @@ struct PrivacyDataSettingsView: View {
         defer { isDetectingCloudData = false }
         do {
             existingDataSummary = try await cloudDataService.detectExistingData()
+            cloudCountsUnavailable = false
         } catch {
+            // "The query failed" is not "the account is empty": conflating them would claim no
+            // iCloud records exist and suppress the multi-device warning on a check that never ran.
             existingDataSummary = nil
+            cloudCountsUnavailable = true
+            FernletAuditLog.log("privacy.icloud.detectFailed", context: [
+                "errorType": "\(type(of: error))"
+            ])
         }
     }
 

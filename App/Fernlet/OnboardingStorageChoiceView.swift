@@ -22,6 +22,9 @@ struct OnboardingStorageChoiceView: View {
     @State private var selectedStorage: OnboardingStorageChoice?
     @State private var existingDataSummary: ExistingDataSummary?
     @State private var isDetecting = true
+    /// Set when the iCloud probe threw. Distinguishes "this account has no Fernlet data" from
+    /// "we couldn't check", so the fresh-install copy is never shown on the strength of a failure.
+    @State private var detectionFailed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,6 +68,9 @@ struct OnboardingStorageChoiceView: View {
                         if selectedStorage == .localOnly, existingDataSummary?.hasData == true {
                             localOnlyDataWarning
                         }
+                        if detectionFailed {
+                            detectionFailedNote
+                        }
                     }
                 }
             }
@@ -97,6 +103,18 @@ struct OnboardingStorageChoiceView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.sun.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityIdentifier("onboarding.storage.localWarning")
+    }
+
+    /// Shown when the iCloud probe failed: the choices below are being offered without knowing
+    /// whether this account already holds Fernlet data, and the user is told so rather than being
+    /// quietly handed the fresh-install copy.
+    private var detectionFailedNote: some View {
+        Text("Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it.")
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("onboarding.storage.detectFailed")
     }
 
     private var localOnlyCopy: String {
@@ -154,8 +172,17 @@ struct OnboardingStorageChoiceView: View {
         defer { isDetecting = false }
         do {
             existingDataSummary = try await detector.detectExistingData()
+            detectionFailed = false
         } catch {
+            // A failed probe is NOT "no data": treating it as such would show a returning user the
+            // fresh-install copy and no local-only warning — the exact mistake the spinner gate
+            // above exists to prevent. Say so, and log it.
             existingDataSummary = nil
+            detectionFailed = true
+            FernletAuditLog.log(
+                "onboarding.storage.detectFailed",
+                context: ["errorType": "\(type(of: error))"]
+            )
         }
     }
 }
@@ -165,7 +192,7 @@ struct OnboardingStorageChoiceView: View {
 ///
 /// Selection state for ``OnboardingStorageChoiceView`` only — the durable record is the
 /// `StoragePreferences` write the card tap performs.
-enum OnboardingStorageChoice {
+private enum OnboardingStorageChoice {
     case icloud
     case localOnly
 }
