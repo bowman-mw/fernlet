@@ -26,7 +26,7 @@ public protocol CoinLedgerRepositoring {
     /// Awaitable variant of ``load()`` for callers off the blocking startup path.
     func loadAsync() async -> [CoinLedgerEntry]
     /// Inserts or replaces (by `id`) each entry. Rows not in `entries` are left untouched — never deleted.
-    @discardableResult func append(_ entries: [CoinLedgerEntry]) -> Bool
+    func append(_ entries: [CoinLedgerEntry]) -> Bool
     /// Removes every ledger row (used only by a full account reset).
-    @discardableResult func deleteAll() -> Bool
+    func deleteAll() -> Bool
 }

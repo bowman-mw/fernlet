@@ -400,7 +400,15 @@ public final class CloudKitDataService {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("fernlet-sealed-backup")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
+        defer {
+            // These temp files hold sealed-backup ciphertext; a silent leak into the temporary
+            // directory is exactly the best-effort failure worth naming (R7).
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                FernletAuditLog.log("cloudkit.tempCiphertext.cleanupFailed", context: ["stage": "sealedBackup"])
+            }
+        }
         try record.ciphertext.write(to: fileURL, options: .atomic)
 
         let cloudRecord = CKRecord(
@@ -551,7 +559,15 @@ public final class CloudKitDataService {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("fernlet-sealed-photo")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
+        defer {
+            // Sealed-photo ciphertext — same rule as `saveSealedBackup` (R7): best-effort cleanup
+            // still names its failure.
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                FernletAuditLog.log("cloudkit.tempCiphertext.cleanupFailed", context: ["stage": "sealedPhoto"])
+            }
+        }
         try record.ciphertext.write(to: fileURL, options: .atomic)
 
         let cloudRecord = CKRecord(
@@ -747,6 +763,14 @@ public final class CloudKitDataService {
         // single-record payload (chunk 0 of 1) so those still decode.
         let chunkIndex = (record["chunkIndex"] as? Int) ?? 0
         let chunkCount = (record["chunkCount"] as? Int) ?? 1
+        // Bound the two chunk fields HERE, where the untrusted CloudKit values enter (R3/R5): they
+        // drive `sealedBackupChunks`' record-ID fan-out, so an out-of-range `chunkCount` would
+        // allocate one CKRecord.ID per unit before any crypto runs. The existing all-or-nothing
+        // `malformedRecord` policy already covers the rejection.
+        guard chunkCount >= 1, chunkCount <= SealedBackupRecord.maxChunkCount,
+              chunkIndex >= 0, chunkIndex < chunkCount else {
+            throw SealedBackupError.malformedRecord
+        }
         // `generation` is REQUIRED and deliberately has no default — unlike the chunk fields above.
         // It is the rollback defense, so a record without one cannot be authenticated against a
         // generation-bound AAD and must fail closed rather than silently decode as generation 0
@@ -826,14 +850,30 @@ public final class CloudKitDataService {
             do {
                 recordIDs.append(contentsOf: try await database.recordIDs(matching: recordType, in: zoneID))
             } catch let error as CKError where error.code == .unknownItem {
+                // "This record type was never created in this zone" is a legitimate skip — but the
+                // same code is raised when a zone vanishes mid-sweep, which during
+                // `deleteAllCloudKitData` means records were NOT enumerated for deletion. Name it.
+                FernletAuditLog.log("cloudkit.recordType.absent", context: [
+                    "type": recordType,
+                    "zone": zoneID.zoneName
+                ])
             }
         }
         return recordIDs
     }
 
     private func summaryFromAggregateRecord(_ record: CKRecord) -> ExistingDataSummary {
-        guard let payload = Self.aggregatePayloadData(from: record),
-              let localDatabase = try? decoder.decode(LocalFernletDatabase.self, from: payload) else {
+        guard let payload = Self.aggregatePayloadData(from: record) else { return .empty }
+        let localDatabase: LocalFernletDatabase
+        do {
+            localDatabase = try decoder.decode(LocalFernletDatabase.self, from: payload)
+        } catch {
+            // A blob that will not decode is NOT "this account holds no Fernlet data" — that answer
+            // drives `MultiDeviceSyncWarning.anotherDeviceHasData`, so silently returning `.empty`
+            // produces the DANGEROUS outcome (no warning, devices diverge). Name the failure (R7).
+            FernletAuditLog.log("cloudkit.detect.blobDecodeFailed", context: [
+                "errorType": "\(type(of: error))"
+            ])
             return .empty
         }
 
@@ -1017,7 +1057,37 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
         }
     }
 
+    /// Named upper bound on cursor follows for one query (R2/R3).
+    ///
+    /// The cursor chain used to be followed by a self-call from inside the result callback, which had
+    /// no page cap at all: a server that keeps returning a non-nil cursor grew both the accumulated
+    /// id array and a chain of live suspended continuations without limit. The sibling
+    /// `HeartDropCloudTransport.maxPagesPerChunk` bounds exactly this shape; so does this.
+    private static let maxQueryPages = 200
+
+    /// Follows the query's cursor chain up to ``maxQueryPages`` pages, accumulating record IDs.
+    /// A truncated sweep is LOGGED, never silent — the remaining records stay on the server.
     private func recordIDs(from operation: CKQueryOperation) async throws -> [CKRecord.ID] {
+        var all: [CKRecord.ID] = []
+        var next: CKQueryOperation? = operation
+        var pages = 0
+        while let current = next, pages < Self.maxQueryPages {
+            let (ids, cursor) = try await page(current)
+            all += ids
+            pages += 1
+            next = cursor.map { CKQueryOperation(cursor: $0) }
+        }
+        if next != nil {
+            FernletAuditLog.log("cloudkit.query.truncated", context: [
+                "pages": "\(pages)",
+                "records": "\(all.count)"
+            ])
+        }
+        return all
+    }
+
+    /// One query page: its matched record IDs plus the server's continuation cursor (nil at the end).
+    private func page(_ operation: CKQueryOperation) async throws -> ([CKRecord.ID], CKQueryOperation.Cursor?) {
         try await withCheckedThrowingContinuation { continuation in
             var recordIDs: [CKRecord.ID] = []
             operation.recordMatchedBlock = { recordID, result in
@@ -1025,21 +1095,10 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
                     recordIDs.append(recordID)
                 }
             }
-            operation.queryResultBlock = { [weak self] result in
+            operation.queryResultBlock = { result in
                 switch result {
                 case .success(let cursor):
-                    guard let cursor, let self else {
-                        continuation.resume(returning: recordIDs)
-                        return
-                    }
-                    Task {
-                        do {
-                            recordIDs.append(contentsOf: try await self.recordIDs(from: CKQueryOperation(cursor: cursor)))
-                            continuation.resume(returning: recordIDs)
-                        } catch {
-                            continuation.resume(throwing: error)
-                        }
-                    }
+                    continuation.resume(returning: (recordIDs, cursor))
                 case .failure(let error):
                     continuation.resume(throwing: error)
                 }

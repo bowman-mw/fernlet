@@ -68,7 +68,11 @@ public final class SnapshotSaveCoordinator {
         snapshotSaveTask?.cancel()
         let debounce = debounce
         snapshotSaveTask = Task { [weak self] in
-            try? await ContinuousClock().sleep(for: debounce)
+            do {
+                try await ContinuousClock().sleep(for: debounce)
+            } catch {
+                return  // cancelled during the debounce window — a newer schedule() owns this save
+            }
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
@@ -143,7 +147,13 @@ public final class SnapshotSaveCoordinator {
     ) {
         remoteReloadTask?.cancel()
         remoteReloadTask = Task { [weak self] in
-            try? await ContinuousClock().sleep(for: debounce)
+            do {
+                try await ContinuousClock().sleep(for: debounce)
+            } catch {
+                // Cancelled — a newer remote change, or `cancelPending()` during a delete-everything
+                // wipe, owns this reload. Returning here states that contract at the site.
+                return
+            }
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self?.remoteReloadTask = nil

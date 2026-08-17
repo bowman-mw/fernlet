@@ -139,7 +139,9 @@ public struct WorkoutLogRecord: Identifiable, Codable, Equatable {
 
     public init(dateKey: String, workout: Workout) {
         assert(!dateKey.isEmpty, "date key required")
-        assert(workout.duration == nil || workout.duration! >= 0, "duration invalid")
+        // `?? 0` rather than a force unwrap: identical truth table (nil → 0 >= 0 → true), still
+        // side-effect free, and no trap inside the assertion expression (R5).
+        assert((workout.duration ?? 0) >= 0, "duration invalid")
         self.dateKey = dateKey
         self.type = workout.type
         self.exercises = workout.exercises

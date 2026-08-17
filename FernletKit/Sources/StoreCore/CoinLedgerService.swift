@@ -110,6 +110,8 @@ public final class CoinLedgerService {
     /// independently approve a spend of the same coins; both rows then sum (distinct refs) and the balance
     /// floors at zero — a bounded over-acquisition that is inherent without a server and is accepted.
     /// `reloadFromStore` (on remote sync) narrows the window by refreshing before the next spend.
+    // R7 exception: App/Fernlet/FernletStore.swift:1280 still calls this for effect; the attribute
+    // can only be removed together with that out-of-slice call site.
     @discardableResult
     public func spend(amount: Int, ref: String) -> Bool {
         guard CoinEconomy.canSpend(amount: amount, in: entries) else { return false }
@@ -125,7 +127,6 @@ public final class CoinLedgerService {
     /// report a failed per-row CloudKit delete (coins left on disk to re-sync) instead of the funnel
     /// discarding it and claiming a complete wipe. The returned value reflects only the row DELETE — the
     /// reset-boundary marker below is a new row whose write has its own retry, not data left behind.
-    @discardableResult
     public func reset() -> Bool {
         // Delete every row (honoring the user's "delete all data" intent — the deletes propagate to their
         // other devices via CloudKit), THEN append a reset-boundary marker. The marker makes reconcile refuse

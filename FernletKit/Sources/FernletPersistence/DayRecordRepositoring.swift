@@ -66,9 +66,9 @@ public protocol DayRecordRepositoring {
     /// the whole history.
     func loadRecent(limit: Int) -> [FernletDay]
     /// Inserts or replaces (by `dateKey`) each day. Rows not listed are left untouched — never deleted.
-    @discardableResult func upsert(_ days: [DayRecordUpsert]) -> Bool
+    func upsert(_ days: [DayRecordUpsert]) -> Bool
     /// Removes only the rows whose `dateKey`s are listed; other rows are left untouched.
-    @discardableResult func delete(dateKeys: [String]) -> Bool
+    func delete(dateKeys: [String]) -> Bool
     /// Removes every row (used only by a full account reset).
-    @discardableResult func deleteAll() -> Bool
+    func deleteAll() -> Bool
 }

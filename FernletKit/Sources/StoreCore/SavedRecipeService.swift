@@ -127,7 +127,6 @@ public final class SavedRecipeService {
     /// Returns whether the persisted rows were actually deleted. Threaded back so "delete everything" can
     /// report a failed per-row CloudKit delete (recipes left on disk to re-sync) instead of the funnel
     /// discarding it and claiming a complete wipe.
-    @discardableResult
     public func reset() -> Bool {
         savedRecipes = []
         buffer.clear()

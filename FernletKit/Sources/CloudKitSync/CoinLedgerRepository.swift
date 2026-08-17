@@ -67,12 +67,14 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
     /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func append(_ entries: [CoinLedgerEntry]) -> Bool {
         store.append(entries)
     }
 
     /// Removes every ledger row — the delete-all/reset path only (normal operation never deletes).
-    @discardableResult public func deleteAll() -> Bool {
+    public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "CoinLedgerRecord")
         do {

@@ -35,9 +35,9 @@ public protocol FernletRepository {
     /// Persists a snapshot to the (potentially iCloud-synced) blob. Takes a `SanitizedSnapshot` — a
     /// snapshot that can ONLY be produced by the storage privacy strip — so an un-stripped snapshot can
     /// never reach the synced blob by accident (the data-side analogue of the compiler import-wall).
-    @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool
+    func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool
     /// Persists a single (past) day. Takes a `SanitizedDay` for the same reason as `saveSnapshot`.
-    @discardableResult func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool
+    func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool
     /// A short, human-readable description of the backing store, surfaced for diagnostics.
     func storageDescription() -> String
     /// Every persisted day keyed by date key — the authoritative, uncapped history the store
@@ -48,14 +48,14 @@ public protocol FernletRepository {
     /// Overwrites the persisted Tier-2 behavioral memories. Used by sealed-backup restore on a
     /// fresh install to seed the inference base from an encrypted iCloud backup. Returns whether
     /// the write succeeded.
-    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool
+    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool
     /// Loads a single persisted day by its date key (defaulted below in terms of ``loadSnapshot(todayKey:)``).
     func loadDay(for dateKey: String, todayKey: String) -> FernletDay
     /// Erases every persisted day and the snapshot blob. Distinct from resetting the in-memory diary:
     /// the per-row day store is the authoritative, uncapped source of truth, so clearing memory alone
     /// leaves the full history on disk to be reloaded by `loadAllDays()` on the next launch — and
     /// re-uploaded to iCloud. "Reset everything" was doing exactly that.
-    @discardableResult func purgeAllPersistedData() -> Bool
+    func purgeAllPersistedData() -> Bool
 }
 
 public extension FernletRepository {
@@ -63,10 +63,13 @@ public extension FernletRepository {
         loadSnapshot(todayKey: dateKey).day
     }
 
-    // Default no-op so lightweight test doubles need not implement persistence. The two real
-    // repositories (`LocalFernletRepository`, `CoreDataFernletRepository`) override this.
-    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool { false }
+    // INVARIANT for both defaults below: a conformer with ANY persistent state MUST override them.
+    // These defaults are correct ONLY for doubles that hold none — for such a double,
+    // "no memories were written" is `false` (nothing was persisted) and "everything was purged" is
+    // `true` (there was nothing to purge), which is why the two differ. A real store that inherits
+    // `purgeAllPersistedData` would report a complete wipe of data it never touched, in the one
+    // flow where a false success is directly user-visible.
+    func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool { false }
 
-    // Same contract as above — the two real repositories override; doubles hold nothing to purge.
-    @discardableResult func purgeAllPersistedData() -> Bool { true }
+    func purgeAllPersistedData() -> Bool { true }
 }

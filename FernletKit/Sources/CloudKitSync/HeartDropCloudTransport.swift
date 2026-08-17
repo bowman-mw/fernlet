@@ -43,6 +43,9 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
     /// Belt-and-braces bound on cursor follows per chunk, so a server that keeps handing back a
     /// non-nil cursor can't spin the sync forever.
     static let maxPagesPerChunk = 40
+    /// Upper bound on one drop's sealed payload, under CloudKit's ~1 MB per-record budget (R3:
+    /// caller-supplied bytes are validated where they enter, not discovered as a server error).
+    public static let maxPayloadBytes = 900_000
 
     // CKContainer/CKDatabase are documented thread-safe — the @unchecked Sendable is these two
     // immutable references only.
@@ -85,7 +88,12 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
 
     /// Saves one sealed drop under `tag` and returns the server-assigned record name (kept so
     /// the sender can delete its own record after the outbox lifetime).
+    ///
+    /// Validates its two parameters at entry (R5): an empty tag would be unqueryable and therefore
+    /// uncollectable, and an oversize payload is rejected here rather than after a round trip.
     public func upload(tag: String, payload: Data) async throws -> String {
+        guard !tag.isEmpty else { throw HeartDropTransportError.invalidTag }
+        guard payload.count <= Self.maxPayloadBytes else { throw HeartDropTransportError.payloadTooLarge }
         let record = CKRecord(recordType: Self.recordType)
         record[Self.tagField] = tag as CKRecordValue
         record[Self.payloadField] = payload as CKRecordValue
@@ -96,10 +104,14 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
     /// Paginated: CloudKit returns one page plus a cursor, and dropping the cursor meant only the
     /// first page of each chunk was ever read — one hostile writer flooding a single valid tag
     /// could then starve every other tag in that chunk indefinitely.
+    ///
+    /// Both loop bounds are visible at the `while` (R2): the per-chunk record budget (via
+    /// `chunkFull`) and `maxPagesPerChunk`.
     public func fetch(tags: [String]) async throws -> [HeartDropRecord] {
         guard !tags.isEmpty else { return [] }
         var results: [HeartDropRecord] = []
         var truncated = false
+        var skipped = 0
 
         let chunks = Self.chunked(tags)
         let perChunkBudget = Self.perChunkBudget(chunkCount: chunks.count)
@@ -112,28 +124,17 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
             var page = try await database.records(matching: query)
             var pagesRead = 1
             var chunkCount = 0
-            var chunkFull = false
-            while true {
-                for (recordID, result) in page.matchResults {
-                    // Checked PER RECORD, not once per page: a server-chosen page can carry far
-                    // more matches than the remaining headroom, and every record admitted here
-                    // costs the receiver a ChaChaPoly open plus a deflate inflate on the main
-                    // actor — the work this cap exists to bound.
-                    guard chunkCount < perChunkBudget else { chunkFull = true; break }
-                    guard let record = try? result.get(),
-                          let tag = record[Self.tagField] as? String,
-                          let payload = record[Self.payloadField] as? Data else { continue }
-                    results.append(HeartDropRecord(tag: tag, payload: payload, recordName: recordID.recordName))
-                    chunkCount += 1
-                }
-                guard !chunkFull else { truncated = true; break }
-                guard let cursor = page.queryCursor, pagesRead < Self.maxPagesPerChunk else {
-                    if page.queryCursor != nil { truncated = true }
-                    break
-                }
-                page = try await database.records(continuingMatchFrom: cursor)
+            var chunkFull = ingest(page, budget: perChunkBudget, into: &results,
+                                   count: &chunkCount, skipped: &skipped)
+            var cursor = page.queryCursor
+            while !chunkFull, pagesRead < Self.maxPagesPerChunk, let next = cursor {
+                page = try await database.records(continuingMatchFrom: next)
                 pagesRead += 1
+                chunkFull = ingest(page, budget: perChunkBudget, into: &results,
+                                   count: &chunkCount, skipped: &skipped)
+                cursor = page.queryCursor
             }
+            if chunkFull || cursor != nil { truncated = true }
             // Deliberately NO `break` here: a truncated chunk stops ITSELF, never its successors.
             // The remaining records stay on the server and the next sync picks them up.
         }
@@ -144,14 +145,68 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
                 "tags": "\(tags.count)"
             ])
         }
+        if skipped > 0 {
+            // A chunk in which every record failed to materialise must not read as an empty one.
+            FernletAuditLog.log("heartdrop.fetch.skippedRecords", context: [
+                "skipped": "\(skipped)",
+                "kept": "\(results.count)"
+            ])
+        }
         return results
+    }
+
+    /// Appends one query page's usable records to `results`, returning whether the chunk's budget
+    /// ran out mid-page (the `chunkFull` signal the fetch loop's condition reads).
+    private func ingest(
+        _ page: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?),
+        budget: Int,
+        into results: inout [HeartDropRecord],
+        count: inout Int,
+        skipped: inout Int
+    ) -> Bool {
+        for (recordID, result) in page.matchResults {
+            // Checked PER RECORD, not once per page: a server-chosen page can carry far
+            // more matches than the remaining headroom, and every record admitted here
+            // costs the receiver a ChaChaPoly open plus a deflate inflate on the main
+            // actor — the work this cap exists to bound.
+            guard count < budget else { return true }
+            guard let record = try? result.get(),
+                  let tag = record[Self.tagField] as? String,
+                  let payload = record[Self.payloadField] as? Data else {
+                skipped += 1
+                continue
+            }
+            results.append(HeartDropRecord(tag: tag, payload: payload, recordName: recordID.recordName))
+            count += 1
+        }
+        return false
     }
 
     /// Deletes the caller's own drop records by name (public-DB records are deletable only by
     /// their creator) — the post-pickup/expiry cleanup path.
+    ///
+    /// CloudKit's async `modifyRecords` reports per-record failures inside the returned `Result`s
+    /// rather than throwing, so the delete results are inspected (R7) instead of discarded: a
+    /// partially failed cleanup would otherwise leave the sender's own drops in the PUBLIC database
+    /// past their intended lifetime while the caller marks its outbox rows collected.
     public func deleteOwnRecords(recordNames: [String]) async throws {
         guard !recordNames.isEmpty else { return }
         let ids = recordNames.map { CKRecord.ID(recordName: $0) }
-        _ = try await database.modifyRecords(saving: [], deleting: ids)
+        let (_, deleteResults) = try await database.modifyRecords(saving: [], deleting: ids)
+        let failed = deleteResults.values.filter { if case .failure = $0 { return true } else { return false } }.count
+        if failed > 0 {
+            FernletAuditLog.log("heartdrop.delete.partialFailure", context: [
+                "failed": "\(failed)",
+                "requested": "\(ids.count)"
+            ])
+        }
     }
+}
+
+/// Parameter-validation failures raised by ``HeartDropCloudTransport`` before any network call.
+public enum HeartDropTransportError: Error {
+    /// The drop tag was empty — an untagged record would be unqueryable and uncollectable.
+    case invalidTag
+    /// The sealed payload exceeded ``HeartDropCloudTransport/maxPayloadBytes``.
+    case payloadTooLarge
 }

@@ -72,7 +72,7 @@ struct AppendOnlyRowStore<Entry: Codable> {
     /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    @discardableResult func append(_ entries: [Entry]) -> Bool {
+    func append(_ entries: [Entry]) -> Bool {
         guard !entries.isEmpty else { return true }
         let context = controller.container.viewContext
         do {

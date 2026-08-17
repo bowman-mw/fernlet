@@ -54,6 +54,12 @@ public enum SealedBackupPayloadType: String, Codable, CaseIterable {
 /// new write is version 2 (per-generation salted derivation). Both open through the same crypto on the
 /// same identity, so v1 and v2 records coexist in one container with no migration.
 public struct SealedBackupRecord: Equatable {
+    /// Upper bound on a payload's chunk count, enforced where the field enters from CloudKit
+    /// (`CloudKitDataService.decodeSealedBackup`). Comfortably above any real backup (4096 chunks of
+    /// ~1 MB) and low enough that a corrupt or hostile `chunkCount` cannot make the fetch path
+    /// allocate an unbounded record-ID array before any crypto runs (R3).
+    public static let maxChunkCount = 4_096
+
     public var payloadType: SealedBackupPayloadType
     /// The owner's signing public key, carried as provenance for the app-side restore checks.
     public var signingPublicKey: Data

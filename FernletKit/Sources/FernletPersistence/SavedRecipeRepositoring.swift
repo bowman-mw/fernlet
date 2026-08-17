@@ -16,9 +16,9 @@ public protocol SavedRecipeRepositoring {
     /// Awaitable variant of ``load()`` for callers off the blocking startup path.
     func loadAsync() async -> [RecipeDefinition]
     /// Inserts or replaces (by `id`) each recipe. Rows not in `recipes` are left untouched — never deleted.
-    @discardableResult func upsert(_ recipes: [RecipeDefinition]) -> Bool
+    func upsert(_ recipes: [RecipeDefinition]) -> Bool
     /// Removes only the rows whose ids are listed; other rows are left untouched.
-    @discardableResult func delete(ids: [UUID]) -> Bool
+    func delete(ids: [UUID]) -> Bool
     /// Removes every row (used only by a full account reset).
-    @discardableResult func deleteAll() -> Bool
+    func deleteAll() -> Bool
 }

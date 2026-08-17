@@ -175,7 +175,15 @@ public struct SavedRecipeRepository {
             if recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) {
                 let migrated = legacyRepository.load()
                 if !migrated.isEmpty {
-                    _ = upsert(migrated)
+                    // The one-time flag is set ONLY on a confirmed write (R7): marking the migration
+                    // complete after a failed upsert would strand the recipes in the legacy JSON file
+                    // that no other code path reads, permanently.
+                    guard upsert(migrated) else {
+                        FernletAuditLog.log("savedRecipe.legacyMigration.failed", context: [
+                            "count": "\(migrated.count)"
+                        ])
+                        return migrated
+                    }
                 }
                 defaults.set(true, forKey: Self.migrationCompletedKey)
                 return migrated
@@ -194,7 +202,13 @@ public struct SavedRecipeRepository {
             let migrated = legacyRepository.load()
             StartupTiming.end("SavedRecipeRepository.legacyLoad.async", signpostID: signpostID)
             if !migrated.isEmpty {
-                _ = upsert(migrated)
+                // Same rule as `load()`: the migration-complete flag follows a confirmed write.
+                guard upsert(migrated) else {
+                    FernletAuditLog.log("savedRecipe.legacyMigration.failed", context: [
+                        "count": "\(migrated.count)"
+                    ])
+                    return migrated
+                }
             }
             defaults.set(true, forKey: Self.migrationCompletedKey)
             return migrated
@@ -218,7 +232,7 @@ public struct SavedRecipeRepository {
     /// deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    @discardableResult public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
+    public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
         guard !recipes.isEmpty else { return true }
         let context = controller.container.viewContext
         // Fetch ONLY the rows we're about to touch (predicate IN), then upsert by idString. We never delete
@@ -251,7 +265,7 @@ public struct SavedRecipeRepository {
     }
 
     /// Deletes only the rows with the listed ids.
-    @discardableResult public func delete(ids: [UUID]) -> Bool {
+    public func delete(ids: [UUID]) -> Bool {
         guard !ids.isEmpty else { return true }
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
@@ -272,6 +286,8 @@ public struct SavedRecipeRepository {
     }
 
     /// Removes every saved-recipe row — the delete-all/reset path.
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
@@ -483,7 +499,7 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
         return recipes.map { $0.toRecipeDefinition() }
     }
 
-    @discardableResult public func save(_ recipes: [RecipeDefinition]) -> Bool {
+    public func save(_ recipes: [RecipeDefinition]) -> Bool {
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),

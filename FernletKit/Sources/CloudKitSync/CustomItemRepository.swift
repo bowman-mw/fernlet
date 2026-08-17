@@ -68,12 +68,12 @@ public struct CustomItemRepository: CustomItemRepositoring {
     /// Inserts or updates the given items by UUID, never deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    @discardableResult public func upsert(_ items: [CustomizationItem]) -> Bool {
+    public func upsert(_ items: [CustomizationItem]) -> Bool {
         store.append(items)
     }
 
     /// Deletes only the rows with the listed ids (a no-op for ids with no row).
-    @discardableResult public func delete(ids: [UUID]) -> Bool {
+    public func delete(ids: [UUID]) -> Bool {
         guard !ids.isEmpty else { return true }
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "CustomItemRecord")
@@ -94,7 +94,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
     }
 
     /// Removes every custom-item row — the delete-all/reset path.
-    @discardableResult public func deleteAll() -> Bool {
+    public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "CustomItemRecord")
         do {

@@ -118,8 +118,14 @@ public final class AIRetryQueueService {
 
     /// Replaces the whole queue from a loaded snapshot WITHOUT firing ``onChange`` — the restore
     /// path must not schedule a save of the very state it just loaded.
+    ///
+    /// The restore boundary enforces the SAME two policies as ``queueMealRetry(_:dayKey:)`` (R3):
+    /// TTL age-out then the ``maxQueueSize`` cap. The blob this reads is written by another device
+    /// and synced, so without them a corrupt or hostile snapshot reinstates an unbounded queue that
+    /// `pendingCount`, `mealPendingCount` and the dispatcher then walk on the main actor.
     public func apply(_ queue: [AIAnalysisRetryRecord]) {
-        retryQueue = queue
+        let cutoff = now().addingTimeInterval(-Self.recordTTL)
+        retryQueue = Array(queue.filter { $0.createdAt >= cutoff }.suffix(Self.maxQueueSize))
     }
 
     /// Empties the queue without firing ``onChange`` — the delete-everything path manages its own

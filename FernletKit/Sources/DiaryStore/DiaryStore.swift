@@ -204,7 +204,7 @@ public final class DiaryStore {
         self.workshop = snapshot.workshop
         self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
         self.recipes = snapshot.recipes
-        self.dailyScores = snapshot.dailyScores
+        self.dailyScores = Self.boundedDailyScores(snapshot.dailyScores)
         self.companionThought = nil
         foodCatalog.setUserItems(foodItems)
     }
@@ -342,6 +342,7 @@ public final class DiaryStore {
                 var healthScore = dailyHealthScore(for: dateKey, day: targetDay)
                 healthScore.daySummaryText = trimmed
                 dailyScores.append(healthScore)
+                dailyScores = Self.boundedDailyScores(dailyScores)   // R3: bounded growth
             }
         }
     }
@@ -565,6 +566,33 @@ public final class DiaryStore {
     /// budget, so a hostile peer cannot grow the synced aggregate without bound. See `setKnownDesignerName`.
     public static let maxKnownDesignerNames = 256
 
+    /// Upper bound on the per-day score rows kept in ``dailyScores`` (R3: bounded growth).
+    ///
+    /// Every row carries a component-score dictionary, a weight vector and the day's activity/body
+    /// context, and the whole array rides the SINGLE aggregate blob record — the same ~1 MB CloudKit
+    /// per-record wall ``maxKnownDesignerNames`` exists to stay under. Matched to the rolling window
+    /// the derived tables use (`FernletLimits.derivedLogWindowDays`), restated here because
+    /// `DiaryStore` deliberately does not depend on `LocalPersistence`.
+    public static let maxDailyScoreDays = 370
+
+    /// Newest-first trim of a day-score history to ``maxDailyScoreDays`` — applied wherever the
+    /// array is installed (launch, sync apply) or appended to, so no path can reinstate an
+    /// unbounded array.
+    static func boundedDailyScores(_ scores: [DailyHealthScore]) -> [DailyHealthScore] {
+        guard scores.count > maxDailyScoreDays else { return scores }
+        return Array(scores.sorted { $0.dateKey > $1.dateKey }.prefix(maxDailyScoreDays))
+    }
+
+    /// Upper bound on the day keys retained by the per-day settings maps (`sickDays`,
+    /// `intentDismissedDays`), which live in the synced settings blob and are only ever read for
+    /// recent days. Same window as ``maxDailyScoreDays``.
+    static let maxTrackedDayKeys = 370
+
+    /// Upper bound on distinct exercise NAMES tracked in `settings.workoutProgression`. Names are
+    /// free text from the workout editor, so the map's cardinality is user-input driven; without a
+    /// cap a name typed once is retained forever in the synced settings blob.
+    public static let maxTrackedExerciseNames = 512
+
     /// Records the calendar day the user last changed their shop's listed set (drives the gentle
     /// once-per-day re-publish note). Stored in the synced settings blob, so it's shared across the user's
     /// own devices.
@@ -780,6 +808,8 @@ public final class DiaryStore {
     /// Pure workout removal by id: mirrors `appendWorkout` (mutate the day + invalidate the cached
     /// summary). The facade's `removeWorkout` runs the guided/planned/progression reversal around this.
     /// Returns whether a row was actually removed.
+    // R7 exception: App/Fernlet/FernletStore.swift:2489 and :5316 still call this for effect; the
+    // attribute can only be removed together with those out-of-slice call sites.
     @discardableResult
     public func removeWorkout(id: UUID, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
@@ -798,7 +828,6 @@ public final class DiaryStore {
     /// Pure workout replace-by-id (edit). Mirrors `appendWorkout`; invalidates the cached summary.
     /// Returns whether a matching row was found and replaced. Provenance is the caller's responsibility
     /// — the facade re-asserts the fields the edit UI can't reach before calling here.
-    @discardableResult
     public func updateWorkout(_ workout: Workout, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         var replaced = false
@@ -947,8 +976,29 @@ public final class DiaryStore {
         let deduped = Array(Set(names)).filter { $0.isEmpty == false }
         guard deduped.isEmpty == false else { return }
         batchSnapshotPersistence {
-            for name in deduped { settings.workoutProgression[name, default: 0] += 1 }
+            for name in deduped {
+                // R3: bumping an EXISTING key never grows the map, so only a new name can evict.
+                if settings.workoutProgression[name] == nil {
+                    evictLowestProgressionIfFull()
+                }
+                settings.workoutProgression[name, default: 0] += 1
+            }
         }
+    }
+
+    /// Keeps `settings.workoutProgression` at or below ``maxTrackedExerciseNames`` by dropping the
+    /// lowest-count name (ties broken by the lexicographically smallest key, so the eviction is
+    /// deterministic across devices) and recording it.
+    private func evictLowestProgressionIfFull() {
+        guard settings.workoutProgression.count >= Self.maxTrackedExerciseNames else { return }
+        guard let victim = settings.workoutProgression
+            .sorted(by: { ($0.value, $0.key) < ($1.value, $1.key) })
+            .first else { return }
+        settings.workoutProgression.removeValue(forKey: victim.key)
+        FernletAuditLog.log("workoutProgression.evicted", context: [
+            "cap": "\(Self.maxTrackedExerciseNames)",
+            "count": "\(victim.value)"
+        ])
     }
 
     /// Exact reverse of `recordCompletedExercises`: decrement each name's progression by one, floored at
@@ -1086,12 +1136,15 @@ public final class DiaryStore {
     }
 
     /// Marks or unmarks a sick day; unmarking removes the key so the synced map stays sparse.
+    /// Writing also prunes keys older than the retention window (R3: the map lives in the synced
+    /// settings blob and only recent days are ever read).
     public func setSick(_ value: Bool, on dateKey: String) {
         if value {
             settings.sickDays[dateKey] = true
         } else {
             settings.sickDays.removeValue(forKey: dateKey)
         }
+        settings.sickDays = Self.pruningDayKeyed(settings.sickDays, cutoff: dayKeyRetentionCutoff())
         scheduleSnapshotSave()
     }
 
@@ -1100,10 +1153,27 @@ public final class DiaryStore {
         settings.intentDismissedDays[todayKey] ?? false
     }
 
-    /// Dismisses today's intent prompt for the rest of the day.
+    /// Dismisses today's intent prompt for the rest of the day, pruning day keys outside the
+    /// retention window so the synced map cannot grow one permanent key per day (R3).
     public func dismissTodayIntent() {
         settings.intentDismissedDays[todayKey] = true
+        settings.intentDismissedDays = Self.pruningDayKeyed(settings.intentDismissedDays,
+                                                            cutoff: dayKeyRetentionCutoff())
         scheduleSnapshotSave()
+    }
+
+    /// The oldest day key the per-day settings maps retain — `todayKey` minus
+    /// ``maxTrackedDayKeys`` days. Day keys are zero-padded `yyyy-MM-dd`, so string comparison is
+    /// chronological (the same property the rest of the persistence layer relies on).
+    private func dayKeyRetentionCutoff() -> String {
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -Self.maxTrackedDayKeys,
+                                               to: FernletDate.date(fromDayKey: todayKey) ?? Date())
+        return FernletDate.dayKey(for: cutoffDate ?? Date())
+    }
+
+    /// Drops entries whose day key is older than `cutoff` from a day-keyed settings map.
+    static func pruningDayKeyed<Value>(_ map: [String: Value], cutoff: String) -> [String: Value] {
+        map.filter { $0.key >= cutoff }
     }
 
     /// Whether the micronutrient nudge bubble for `key` may show (true when never dismissed
@@ -1313,9 +1383,12 @@ public final class DiaryStore {
         repository.loadTierTwoMemories()
     }
 
-    /// Replaces the tier-two memory records wholesale in the repository.
+    /// Replaces the tier-two memory records wholesale in the repository. A failed write (the
+    /// sealed-backup restore path is the caller that matters) is audit-logged rather than dropped.
     public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
-        repository.replaceTierTwoMemories(records)
+        if !repository.replaceTierTwoMemories(records) {
+            FernletAuditLog.log("diary.tierTwoRestore.failed", context: ["count": "\(records.count)"])
+        }
     }
 
     /// Every persisted day keyed by date, straight from the repository WITHOUT overlaying the
@@ -1400,11 +1473,14 @@ public final class DiaryStore {
             } else {
                 let targetDay = repository.loadDay(for: date, todayKey: todayKey)
                 if targetDay.workouts.contains(where: { $0.id == workoutID }) {
-                    mutatePastDay(date) { day in
+                    let stamped = mutatePastDay(date) { day in
                         if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
                             day.workouts[index].healthKitUUID = hkUUID
                             day.workouts[index].healthKitAuthored = true
                         }
+                    }
+                    if !stamped {
+                        FernletAuditLog.log("diary.workoutHealthKitUUID.saveFailed", context: ["date": date])
                     }
                     return
                 }
@@ -1418,11 +1494,14 @@ public final class DiaryStore {
 
             for (dateKey, pastDay) in repository.loadAllDays() where dateKey != todayKey {
                 guard pastDay.workouts.contains(where: { $0.id == workoutID && $0.healthKitUUID == nil }) else { continue }
-                mutatePastDay(dateKey) { targetDay in
+                let stamped = mutatePastDay(dateKey) { targetDay in
                     if let index = targetDay.workouts.firstIndex(where: { $0.id == workoutID && $0.healthKitUUID == nil }) {
                         targetDay.workouts[index].healthKitUUID = hkUUID
                         targetDay.workouts[index].healthKitAuthored = true
                     }
+                }
+                if !stamped {
+                    FernletAuditLog.log("diary.workoutHealthKitUUID.saveFailed", context: ["date": dateKey])
                 }
                 return
             }
@@ -1436,9 +1515,18 @@ public final class DiaryStore {
     /// save; past dates round-trip through the repository (with the sealed-field strip — see
     /// `mutatePastDay`).
     /// - Returns: Whether the write succeeded (always true for today).
+    // R7 exception: App/Fernlet/FernletStore.swift discards this at five call sites (2078, 2266,
+    // 3035, 3068, 3082, 5276, 5451); the attribute can only be removed with those out-of-slice sites.
     @discardableResult
     public func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
-        assert(!date.isEmpty, "date key required")
+        // Guard, not assert: in Release an empty key would flow into `updateDay(…, for: "")` and
+        // write a CloudKit-synced `DayRecord` row keyed by the empty string. Every public per-day
+        // mutator funnels through here, so this one guard covers them all.
+        guard !date.isEmpty else {
+            assertionFailure("date key required")
+            FernletAuditLog.log("diary.mutateDay.rejected", context: ["reason": "emptyDateKey"])
+            return false
+        }
         if date == todayKey {
             change(&day)
             scheduleSnapshotSave()
@@ -1450,9 +1538,12 @@ public final class DiaryStore {
     /// Loads, mutates, and re-saves a past day's repository row. Every past-day write passes
     /// through `SanitizedDay` first, so sealed journal text and hidden cycle/intimate context
     /// can never leak into the (potentially iCloud-synced) blob — see the inline note.
-    @discardableResult
     private func mutatePastDay(_ dateKey: String, _ mutate: (inout FernletDay) -> Void) -> Bool {
-        assert(!dateKey.isEmpty, "date key required")
+        guard !dateKey.isEmpty else {
+            assertionFailure("date key required")
+            FernletAuditLog.log("diary.mutatePastDay.rejected", context: ["reason": "emptyDateKey"])
+            return false
+        }
         var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
         mutate(&targetDay)
         // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass.
@@ -1467,7 +1558,13 @@ public final class DiaryStore {
             SanitizedDay.sanitizing(targetDay, sealedJournalIDs: sealedJournalIDsHook()),
             for: dateKey, todayKey: todayKey
         )
-        assert(saved, "past-date save failed for \(dateKey)")
+        if !saved {
+            // An assert alone compiles out of Release, which left a failed past-day write (read-only
+            // recovery, a Core Data fault, a rolled-back context) completely silent: the UI showed the
+            // edit, nothing was persisted, and no record existed to explain the lost entry later.
+            FernletAuditLog.log("diary.pastDaySave.failed", context: ["date": dateKey])
+            assertionFailure("past-date save failed for \(dateKey)")
+        }
         return saved
     }
 
@@ -1518,7 +1615,8 @@ public final class DiaryStore {
         workshop = snapshot.workshop
         foodItems = snapshot.foodItems.filter { $0.source != .usda }
         recipes = snapshot.recipes
-        dailyScores = snapshot.dailyScores
+        // R3: a synced blob must not be able to reinstate an unbounded score history.
+        dailyScores = Self.boundedDailyScores(snapshot.dailyScores)
         // Also add this device's id + guarantee localDesignerID is non-nil, so the getter never lazily mints
         // (mutating observed state) mid-render.
         ensureLocalDesignerID()

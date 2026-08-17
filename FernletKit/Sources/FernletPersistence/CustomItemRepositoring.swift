@@ -28,9 +28,9 @@ public protocol CustomItemRepositoring {
     /// Awaitable variant of ``load()`` for callers off the blocking startup path.
     func loadAsync() async -> [CustomizationItem]
     /// Inserts or replaces (by `id`) each item. Rows not in `items` are left untouched — never deleted.
-    @discardableResult func upsert(_ items: [CustomizationItem]) -> Bool
+    func upsert(_ items: [CustomizationItem]) -> Bool
     /// Removes only the rows whose ids are listed; other rows are left untouched.
-    @discardableResult func delete(ids: [UUID]) -> Bool
+    func delete(ids: [UUID]) -> Bool
     /// Removes every row (used only by a full account reset).
-    @discardableResult func deleteAll() -> Bool
+    func deleteAll() -> Bool
 }
