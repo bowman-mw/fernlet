@@ -160,6 +160,12 @@ struct FernletApp: App {
                     }
                     lockService.lock(reason: .background)
                 } else if newPhase == .active {
+                    // A launch that could not read the keychain (background relaunch / pre-first-unlock
+                    // prewarm) failed CLOSED to `.locked`, which is right but sticky: on an
+                    // UNCONFIGURED device it paints "unlock Fernlet" over a lock that does not exist
+                    // for the whole process. Activation means protected data is readable, so re-derive
+                    // the real state here. A no-op while unlocked, and while the state is already right.
+                    lockService.refreshStateFromKeychain()
                     // Self-heal a sealed store whose rebuild could not re-add it — the dominant
                     // cause is the device auto-locking mid-wipe, and writing anything again means
                     // unlocking the device, which lands here. Without this the coordinator stays
@@ -201,6 +207,17 @@ struct FernletApp: App {
                 )
             ) { _ in
                 lockService.lock(reason: .protectedDataUnavailable)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIApplication.protectedDataDidBecomeAvailableNotification
+                )
+            ) { _ in
+                // The companion of the `willBecomeUnavailable` lock above, and the earliest moment a
+                // launch that booted blind (keychain unreadable → fail-closed `.locked`) can learn what
+                // the keychain actually holds. Scene activation retries the same call, but a background
+                // relaunch may never become active.
+                lockService.refreshStateFromKeychain()
             }
             .onReceive(
                 NotificationCenter.default.publisher(

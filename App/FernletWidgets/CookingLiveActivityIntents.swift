@@ -97,7 +97,10 @@ enum CookingIntentRunner {
         // Persist first so a foreground reconcile that races the activity update still sees the new
         // state. On a finish the file is kept (marked `finished`) so the app's reconcile can retire it
         // and end any lingering activity; the app clears it once it has.
-        store.write(state)
+        // R7: the file IS the shared truth. If the write did not land, do not tell the app to
+        // reconcile to a state it cannot read, and leave the activity showing the step that is
+        // genuinely on disk — the store has already logged the failure.
+        guard store.write(state) else { return }
         // Signal the app (same process) to reconcile its in-memory walker NOW that the file is durable,
         // rather than waiting for the next scenePhase round-trip — see `.cookingRunAdvancedByIntent`.
         NotificationCenter.default.post(name: .cookingRunAdvancedByIntent, object: nil)

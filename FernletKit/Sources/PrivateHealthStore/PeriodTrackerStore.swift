@@ -393,9 +393,37 @@ public final class PeriodTrackerStore {
     /// and because reading it lazily (rather than caching a Bool) means a toggle mid-session takes
     /// effect on the very next call. Defaults to fail-CLOSED (`{ false }`): a store nobody wired must
     /// read nothing, so a construction that races ahead of its wiring can never leak cycle data. The
-    /// real derived closure is set in `ContentView`'s launch task before any load call runs; tests
-    /// that exercise the visible path inject `{ true }` explicitly.
-    @ObservationIgnored public var isVisible: () -> Bool = { false }
+    /// real derived closure is installed in `ContentView`'s launch task, via ``attachVisibilityGate(_:)``,
+    /// before any load call runs; tests that exercise the visible path install `{ true }` explicitly.
+    ///
+    /// R6: readable everywhere, writable only through ``attachVisibilityGate(_:)`` — a gate any
+    /// holder of the store could reassign in passing is not a gate; installing one is a deliberate
+    /// wiring act with a name.
+    @ObservationIgnored public private(set) var isVisible: () -> Bool = { false }
+
+    /// Installs the visibility gate. Called from the app's launch wiring (and by the sealed-backup
+    /// coordinator on its own instance) before anything loads; until then the store refuses.
+    ///
+    /// - Parameter gate: The derived visibility verdict, re-read on every call.
+    public func attachVisibilityGate(_ gate: @escaping () -> Bool) {
+        isVisible = gate
+    }
+
+    /// The live private-hub content key, when the app has wired one.
+    ///
+    /// The second half of the post-`await` recheck in ``loadEntries(unlockedContentKey:)``: the key a
+    /// caller passed in was live when the load STARTED, and a lock can engage during the HealthKit
+    /// await. Wired by the app to `FernletLockService.contentKey(for: .privateHub)`; left `nil` where
+    /// nobody wired it (tests, and any caller with no lock at all), in which case the caller's key is
+    /// the only authority there is and only the visibility half of the recheck applies.
+    @ObservationIgnored private var liveContentKey: (() -> SymmetricKey?)?
+
+    /// Installs the live-content-key provider used by the post-`await` staleness recheck.
+    ///
+    /// - Parameter provider: Returns the hub's current content key, or `nil` while locked.
+    public func attachLiveContentKeyProvider(_ provider: @escaping () -> SymmetricKey?) {
+        liveContentKey = provider
+    }
 
     /// Whether the last `loadEntries` ran with a content key, i.e. whether `entries` carry narratives
     /// and a prediction is legitimately derivable. Guards the recompute in `deleteEntry`, which has no
@@ -447,6 +475,19 @@ public final class PeriodTrackerStore {
         do {
             // R3: HealthKit is external input — cap the sample array where it enters the store.
             let samples = Array(try await healthService.loadPeriodEvents(in: range).prefix(Self.maxLoadedSamples))
+            // G1 (post-await half). The gate above was checked BEFORE the HealthKit await, and that
+            // await is arbitrarily long: the user can hide cycle tracking, or the app can lock, while
+            // it is in flight. Re-check both before the decrypt below, not just before assigning —
+            // otherwise a load begun while visible+unlocked decrypts narratives with a key the hub has
+            // since dropped and publishes 240 days of cycle plaintext into a locked, hidden session.
+            guard isVisible() else {
+                scrubCycleState()
+                return
+            }
+            guard isContentKeyStillLive(unlockedContentKey) else {
+                scrubCycleState()
+                return
+            }
             let narratives = loadNarratives(in: range, contentKey: unlockedContentKey)
             // R5: `uniqueKeysWithValues` traps on a duplicate `hkExternalUUID`, a state a partial
             // buffer drain can genuinely produce. Newest row wins instead of aborting the process.
@@ -468,6 +509,26 @@ public final class PeriodTrackerStore {
             prediction = nil
             lastLoadHadContentKey = false
         }
+    }
+
+    /// Whether `key` — captured by the caller before the HealthKit await — is still the hub's live
+    /// content key, i.e. whether decrypting with it now is still legitimate.
+    ///
+    /// `true` for a keyless load (there is nothing to go stale) and when no provider is wired (the
+    /// caller's key is then the only authority in the process). Otherwise the hub must still hold a
+    /// key and it must be the SAME key: a re-key or a lock during the await both mean this load's
+    /// authorization expired mid-flight, and the recovery is to scrub rather than publish.
+    private func isContentKeyStillLive(_ key: SymmetricKey?) -> Bool {
+        guard let key, let liveContentKey else { return true }
+        guard let live = liveContentKey() else {
+            FernletAuditLog.log("period.loadAbandoned", context: ["reason": "lockedDuringLoad"])
+            return false
+        }
+        guard live == key else {
+            FernletAuditLog.log("period.loadAbandoned", context: ["reason": "contentKeyChanged"])
+            return false
+        }
+        return true
     }
 
     /// Fetches the sealed narratives for `range`, distinguishing "no notes" from "notes unavailable".

@@ -135,8 +135,17 @@ struct RecipeShareCodec {
     /// persists one `FoodItem` per ingredient, so an unbounded payload is unbounded storage.
     /// - Throws: `RecipeImportError.missingPayload` / `.invalidPayload` / `.unsupportedFormat`.
     static func decodePayload(from text: String) throws -> SharedRecipePayload {
-        // R3: cap the input where it enters — an oversize paste is rejected before any parsing work.
-        guard text.utf8.count <= RecipeLimits.maxShareTextUTF8Bytes else {
+        // R3: cap the input where it enters — an oversize paste is rejected BEFORE `JSONDecoder` (or
+        // any string scanning) runs, so a hostile clipboard cannot make the parser do unbounded work.
+        // Logged with both numbers: the user-facing error is the generic "couldn't read that", and
+        // without this line "too big" is indistinguishable from "malformed".
+        let pastedByteCount = text.utf8.count
+        guard pastedByteCount <= RecipeLimits.maxShareTextUTF8Bytes else {
+            FernletAuditLog.log("recipeShare.decodeRejected", context: [
+                "reason": "oversizePaste",
+                "bytes": String(pastedByteCount),
+                "max": String(RecipeLimits.maxShareTextUTF8Bytes)
+            ])
             throw RecipeImportError.invalidPayload
         }
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)

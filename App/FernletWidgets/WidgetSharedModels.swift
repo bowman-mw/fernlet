@@ -246,11 +246,18 @@ struct WidgetSnapshotStore {
 /// read-modify-write runs as one `NSFileCoordinator` transaction, and a duplicate row id is dropped
 /// rather than appended twice.
 struct PendingWidgetActionWriter {
-    /// Max queued rows kept on disk; older rows are dropped (R3 — repeated taps are input-driven
-    /// growth and the app, which drains the file, may stay closed for weeks). 200 taps is far more
-    /// than a realistic un-drained backlog, and each append rewrites the whole array, so an
-    /// unbounded queue is also a quadratic cost inside the widget's tight memory budget.
-    static let maxPendingActions = 200
+    /// R3: hard cap on the app-group queue, and the byte-format twin of
+    /// `PendingWidgetActionQueue.maxQueuedActions` in `App/Fernlet/WidgetBridge.swift` — the two
+    /// processes write and read ONE file, so they must agree on both the number and what happens at
+    /// it. Repeated taps are input-driven growth and the app, which drains the file, may stay closed
+    /// for weeks; each append also rewrites the whole array inside the widget's tight memory budget.
+    ///
+    /// A full queue REFUSES the append (this returns `false`, and ``WaterPlusOneIntent`` then leaves
+    /// the ring truthful) rather than evicting the oldest row: an already-queued tap was promised to
+    /// the user when it was written, and dropping it silently is the one failure neither process can
+    /// see. That is the app side's stated policy, and this is the same policy on the writing side.
+    /// `WidgetBridgeTests.widgetWriterAndAppQueueAgreeOnTheQueueCap` pins the constant on both sides.
+    static let maxQueuedActions = 512
 
     private let fileManager: FileManager
     private let fileURL: URL
@@ -264,8 +271,8 @@ struct PendingWidgetActionWriter {
     /// Append one action row unless a row with the same id already exists (idempotent under retries).
     ///
     /// - Returns: `true` when the row is durably queued (or was already present), `false` when the
-    ///   queue could not be written — the caller must not pretend the tap landed. Not
-    ///   `@discardableResult`: this is a success/failure signal (R7).
+    ///   queue could not be written or is at ``maxQueuedActions`` — the caller must not pretend the
+    ///   tap landed. Not `@discardableResult`: this is a success/failure signal (R7).
     func append(_ action: PendingWidgetAction) -> Bool {
         // The app drains rows by `dateKey` and dispatches on `action`; a row missing either is a row
         // the other process can only drop, so refuse it here rather than write it (R5).
@@ -286,10 +293,13 @@ struct PendingWidgetActionWriter {
                 appended = true          // already queued — the idempotent contract's success case
                 return
             }
-            records.append(action)
-            if records.count > Self.maxPendingActions {
-                records.removeFirst(records.count - Self.maxPendingActions)
+            // R3: enforce the cap where the input enters, exactly as the app-side twin does — refuse
+            // the new tap rather than silently dropping an older one the user was already told landed.
+            guard records.count < Self.maxQueuedActions else {
+                widgetBridgeLog.error("pending-action queue full (cap \(Self.maxQueuedActions, privacy: .public)) — tap not queued")
+                return
             }
+            records.append(action)
             do {
                 let encoded = try WidgetBridgeFiles.makeEncoder().encode(records)
                 try fileManager.createDirectory(at: writeURL.deletingLastPathComponent(), withIntermediateDirectories: true)

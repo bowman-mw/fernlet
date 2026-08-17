@@ -39,13 +39,13 @@ struct SealedBackupFormatPinTests {
         let service = "com.fernlet.identity.test.formatpin.\(UUID().uuidString)"
         let identity = IdentityService(keychainService: service)
         try identity.ensureProvisioned()
-        KeychainItem.store(
+        #expect(KeychainItem.store(
             plantedEscrowRaw,
             account: "backupEscrowPrivateKey",
             service: service,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             synchronizable: false
-        )
+        ) == errSecSuccess)
         #expect(identity.loadBackupEscrowKeyForOpen(), "planted escrow key was not discovered")
         return (identity, service)
     }

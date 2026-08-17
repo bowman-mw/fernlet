@@ -250,7 +250,11 @@ final class LaunchPreparationService {
         // sheet closes — but a kill/crash/jettison mid-share leaves the full decrypted dump on disk. Launch
         // is a point where no share can be in flight, so sweep any survivor here (belt-and-braces with the
         // pre-write sweep in writeDataExportFile()).
-        store.purgeDataExports()
+        // R7: a failed sweep leaves a full plaintext dump on disk, so it is named rather than
+        // assumed. Launch continues — the pre-write sweep and "Delete everything" both cover it.
+        if !store.purgeDataExports() {
+            FernletAuditLog.log("privacy.export.purgeFailed", context: ["site": "launch"])
+        }
 
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)

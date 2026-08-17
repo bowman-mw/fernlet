@@ -134,10 +134,13 @@ struct DuressLockTests {
         // are the gate: two public keys with no sealed blob is a half-written enrollment, and
         // arming this response over one would destroy the local keys with nothing able to give
         // them back. (The real ceremony is exercised in `DuressRecoveryEnrollmentTests`.)
-        KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey, service: harness.serviceID)
-        KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey, service: harness.serviceID)
+        #expect(KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
+        #expect(KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
         #expect(!service.hasRecoveryCustodian, "the blob is the third row of the gate")
-        KeychainItem.store(Data(repeating: 0x33, count: 96), for: .recoveryBlob, service: harness.serviceID)
+        #expect(KeychainItem.store(Data(repeating: 0x33, count: 96), for: .recoveryBlob,
+                                  service: harness.serviceID) == errSecSuccess)
         #expect(service.hasRecoveryCustodian)
 
         try await service.configureDuress(pin: "654321", mode: .recoveryLock)
@@ -521,9 +524,12 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey, service: harness.serviceID)
-        KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey, service: harness.serviceID)
-        KeychainItem.store(Data(repeating: 0x33, count: 96), for: .recoveryBlob, service: harness.serviceID)
+        #expect(KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
+        #expect(KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
+        #expect(KeychainItem.store(Data(repeating: 0x33, count: 96), for: .recoveryBlob,
+                                  service: harness.serviceID) == errSecSuccess)
         try await service.configureDuress(pin: "654321", mode: .recoveryLock)
         // The blob vanishes after the response was armed.
         KeychainItem.delete(for: .recoveryBlob, service: harness.serviceID)

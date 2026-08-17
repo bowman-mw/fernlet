@@ -110,9 +110,9 @@ public final class CoinLedgerService {
     /// independently approve a spend of the same coins; both rows then sum (distinct refs) and the balance
     /// floors at zero — a bounded over-acquisition that is inherent without a server and is accepted.
     /// `reloadFromStore` (on remote sync) narrows the window by refreshing before the next spend.
-    // R7 exception: App/Fernlet/FernletStore.swift:1280 still calls this for effect; the attribute
-    // can only be removed together with that out-of-slice call site.
-    @discardableResult
+    ///
+    /// - Returns: `false` when the balance is too low or `ref` was already spent. Not discardable
+    ///   (R7): a caller that grants goods must know whether the ledger actually debited.
     public func spend(amount: Int, ref: String) -> Bool {
         guard CoinEconomy.canSpend(amount: amount, in: entries) else { return false }
         let id = CoinLedgerEntry.spendID(ref: ref)

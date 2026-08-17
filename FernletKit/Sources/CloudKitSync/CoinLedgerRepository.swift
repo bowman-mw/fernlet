@@ -67,9 +67,8 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
     /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func append(_ entries: [CoinLedgerEntry]) -> Bool {
+    ///   Not discardable (R7): a dropped save loses the coins the caller just awarded or spent.
+    public func append(_ entries: [CoinLedgerEntry]) -> Bool {
         store.append(entries)
     }
 

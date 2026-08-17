@@ -313,7 +313,7 @@ extension FernletStore {
 
         // R3: the custom-exercise catalog is capped, so a plan that would overflow it fails closed
         // here — blocking at review beats silently dropping definitions the plan then prescribes.
-        let headroom = max(0, Self.maxCustomExercises - settings.customExercises.count)
+        let headroom = max(0, WorkoutExerciseCatalog.maxCustomExercises - settings.customExercises.count)
         if newExercises.count > headroom {
             issues.append(.init(kind: .blocking, subject: "New exercises",
                                 detail: "This plan adds \(newExercises.count) exercises but your list can hold "
@@ -651,19 +651,28 @@ extension FernletStore {
             lastDayKey: last)
     }
 
-    /// R3: the persisted custom-exercise catalog is fed by clipboard imports, so it carries an
-    /// explicit total cap — ``reviewCoachPlan`` blocks a plan that would exceed it, and this is the
-    /// belt-and-braces enforcement at the point the additions actually enter.
-    static let maxCustomExercises = 300
-
-    /// Adds the plan's genuinely new exercises to the user's catalog, up to ``maxCustomExercises``.
+    /// Adds the plan's genuinely new exercises to the user's catalog, up to
+    /// `WorkoutExerciseCatalog.maxCustomExercises`.
+    ///
+    /// R3: the persisted catalog is fed by clipboard imports, so the cap is the DOMAIN's — the same
+    /// number `WorkoutExerciseCatalog.registerCustomExercises` and the settings decode enforce, so no
+    /// two seams can disagree about how many exercises the user has. ``reviewCoachPlan`` already
+    /// blocks a plan that would exceed it; this is the belt-and-braces enforcement at the point the
+    /// additions actually enter, and a truncation here means the review gate was bypassed — reported
+    /// rather than silently swallowed (R7).
     private func registerNewExercises(_ targets: [ExerciseTarget]) {
         guard !targets.isEmpty else { return }
         let existingKeys = Set(settings.customExercises.map { CoachPlan.normalizedName($0.name) })
-        let headroom = max(0, Self.maxCustomExercises - settings.customExercises.count)
-        let additions = targets
-            .filter { !existingKeys.contains(CoachPlan.normalizedName($0.name)) }
-            .prefix(headroom)
+        let headroom = max(0, WorkoutExerciseCatalog.maxCustomExercises - settings.customExercises.count)
+        let wanted = targets.filter { !existingKeys.contains(CoachPlan.normalizedName($0.name)) }
+        let additions = wanted.prefix(headroom)
+        if additions.count < wanted.count {
+            FernletAuditLog.log("coachPlan.customExercises.truncated", context: [
+                "requested": String(wanted.count),
+                "accepted": String(additions.count),
+                "max": String(WorkoutExerciseCatalog.maxCustomExercises)
+            ])
+        }
         guard !additions.isEmpty else { return }
         settings.customExercises.append(contentsOf: additions)
         syncCustomExerciseCatalog()

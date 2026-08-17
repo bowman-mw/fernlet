@@ -235,9 +235,8 @@ public final class PendingNarrativeBuffer {
         }
         // Migrate legacy key (no service) into the scoped service slot
         if let key = loadLegacyServicelessKey() {
-            let keyData = key.withUnsafeBytes { Data($0) }
             let storeStatus = KeychainItem.store(
-                keyData,
+                key.rawBytes,
                 account: Self.bufferKeyAccountV2,
                 service: scope.keychainService,
                 accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -291,11 +290,10 @@ public final class PendingNarrativeBuffer {
     /// device only); throws `FernletLockError.internalError` when the keychain write fails.
     private func createAndStoreBufferKey() throws -> SymmetricKey {
         let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
 
         // Background-accessible: works after first device unlock, no passcode required
         let status = KeychainItem.store(
-            keyData,
+            key.rawBytes,
             account: Self.bufferKeyAccountV2,
             service: scope.keychainService,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly

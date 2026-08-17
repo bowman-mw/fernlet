@@ -46,13 +46,13 @@ struct SealedPhotoBackupTests {
         let service = "com.fernlet.identity.test.sealedphoto.\(UUID().uuidString)"
         let identity = IdentityService(keychainService: service)
         try identity.ensureProvisioned()
-        KeychainItem.store(
+        #expect(KeychainItem.store(
             escrowRaw ?? Data((0..<32).map { UInt8($0 &+ 3) }),
             account: "backupEscrowPrivateKey",
             service: service,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             synchronizable: false
-        )
+        ) == errSecSuccess)
         #expect(identity.loadBackupEscrowKeyForOpen(), "planted escrow key was not discovered")
         return (identity, service)
     }
@@ -572,7 +572,7 @@ struct SealedPhotoBackupTests {
             cloudFactory: { self.makeCloud(database) },
             defaults: isolatedDefaults()
         )
-        await coordinatorTwo.synchronize(preferenceOverride: true)
+        _ = await coordinatorTwo.synchronize(preferenceOverride: true)
         #expect(mealStore(in: deviceTwo).imageData(for: uploadedID) == uploadedBytes,
                 "the photo did not restore onto the empty device")
         #expect(hostTwo.outcomes.last == .restored(1))
@@ -591,7 +591,7 @@ struct SealedPhotoBackupTests {
             cloudFactory: { self.makeCloud(database) },
             defaults: isolatedDefaults()
         )
-        await coordinatorThree.synchronize(preferenceOverride: true)
+        _ = await coordinatorThree.synchronize(preferenceOverride: true)
 
         #expect(mealStore(in: deviceThree).imageData(for: localID) == localBytes,
                 "a non-empty corpus was restored into")
@@ -636,7 +636,7 @@ struct SealedPhotoBackupTests {
             cloudFactory: { self.makeCloud(database) },
             defaults: isolatedDefaults()
         )
-        await coordinator.synchronize(preferenceOverride: true)
+        _ = await coordinator.synchronize(preferenceOverride: true)
 
         #expect(database.ciphertext(named: "sealed-photo.meal.manifest") == manifestBefore,
                 "an empty corpus rewrote the committed manifest — a device that has not restored yet just destroyed the backup")
@@ -856,7 +856,7 @@ struct SealedPhotoBackupTests {
         let two = makeCoordinator(
             documents: deviceTwo, identity: identity, database: database, defaults: isolatedDefaults()
         )
-        await two.coordinator.synchronize(preferenceOverride: true)
+        _ = await two.coordinator.synchronize(preferenceOverride: true)
 
         #expect(mealStore(in: deviceTwo).imageData(for: uploadedID) == uploadedBytes,
                 "the escrow restore was skipped on the exact device it exists for")
@@ -986,7 +986,7 @@ struct SealedPhotoBackupTests {
         let (coordinatorTwo, hostTwo) = makeCoordinator(
             documents: deviceTwo, identity: identity, database: database, defaults: defaultsTwo
         )
-        await coordinatorTwo.synchronize(preferenceOverride: true)
+        _ = await coordinatorTwo.synchronize(preferenceOverride: true)
 
         #expect(mealStore(in: deviceTwo).imageData(for: landedID) == landedBytes)
         #expect(mealStore(in: deviceTwo).imageData(for: strandedID) == nil)
@@ -997,7 +997,7 @@ struct SealedPhotoBackupTests {
 
         // The transient failure clears. The next pass must fetch exactly the owed id.
         database.unfetchableRecordNames = []
-        await coordinatorTwo.synchronize(preferenceOverride: true)
+        _ = await coordinatorTwo.synchronize(preferenceOverride: true)
 
         #expect(mealStore(in: deviceTwo).imageData(for: strandedID) == strandedBytes,
                 "the ids a partial restore left behind were unrecoverable through any UI")
@@ -1034,14 +1034,14 @@ struct SealedPhotoBackupTests {
         let two = makeCoordinator(
             documents: deviceTwo, identity: identity, database: database, defaults: defaultsTwo
         )
-        await two.coordinator.synchronize(preferenceOverride: true)
+        _ = await two.coordinator.synchronize(preferenceOverride: true)
 
         #expect(progressStore(in: deviceTwo).records().isEmpty)
         #expect(progressStore(in: deviceTwo).isEmptyForRestore(),
                 "an index was committed over a restore in which nothing landed — the corpus is now permanently 'in use'")
 
         database.unfetchableRecordNames = []
-        await two.coordinator.synchronize(preferenceOverride: true)
+        _ = await two.coordinator.synchronize(preferenceOverride: true)
 
         #expect(progressStore(in: deviceTwo).records().map(\.caption) == ["week 1"])
         #expect(progressStore(in: deviceTwo).imageData(for: record.id) == bodyBytes)
@@ -1076,7 +1076,7 @@ struct SealedPhotoBackupTests {
         let two = makeCoordinator(
             documents: deviceTwo, identity: identity, database: database, defaults: isolatedDefaults()
         )
-        await two.coordinator.synchronize(preferenceOverride: true)
+        _ = await two.coordinator.synchronize(preferenceOverride: true)
 
         #expect(database.ciphertext(named: "sealed-photo.meal.manifest") == corrupted,
                 "a manifest this device could not read was replaced by one naming only its own ids")
@@ -1109,7 +1109,7 @@ struct SealedPhotoBackupTests {
         mealStore(in: device).delete(id: photoID)
         #expect(mealStore(in: device).isEmptyForRestore())
 
-        await coordinator.synchronize(preferenceOverride: true)
+        _ = await coordinator.synchronize(preferenceOverride: true)
         #expect(mealStore(in: device).storedPhotoIDs().isEmpty,
                 "a deleted photo was written back to disk from the backup")
         #expect(database.record(named: "sealed-photo.meal.\(photoID.uuidString)") == nil,
@@ -1117,7 +1117,7 @@ struct SealedPhotoBackupTests {
 
         // ...and it stays deleted: a corpus with nothing left to prune neither restores nor rewrites.
         let manifestAfterPrune = database.ciphertext(named: "sealed-photo.meal.manifest")
-        await coordinator.synchronize(preferenceOverride: true)
+        _ = await coordinator.synchronize(preferenceOverride: true)
         #expect(mealStore(in: device).storedPhotoIDs().isEmpty)
         #expect(database.ciphertext(named: "sealed-photo.meal.manifest") == manifestAfterPrune)
     }

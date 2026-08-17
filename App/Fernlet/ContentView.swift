@@ -306,18 +306,27 @@ struct ContentView: View {
         // delete-all funnel fires the same reconcile in-line via `identityRotatedHook`, and
         // this is the backstop for a rotation from any other route — including a wipe whose
         // process died before the hook ran.
-        DuressRecoveryCoordinator(
+        // R7: `true` means an enrollment this device's identity had outlived was actually retired
+        // — a rare, security-relevant state change, so it is recorded rather than dropped.
+        if DuressRecoveryCoordinator(
             identity: IdentityService(),
             lockService: lockService
-        ).reconcileEnrollmentWithLocalIdentity()
+        ).reconcileEnrollmentWithLocalIdentity() {
+            FernletAuditLog.log("duress.recoveryEnrollment.retired", context: ["site": "launch"])
+        }
         // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
         // on every cold launch, so wiring this later would let one full decrypt + HealthKit
         // read through before the gate existed.
-        periodStore.isVisible = { [store] in store.isPeriodTrackingVisible }
+        periodStore.attachVisibilityGate { [store] in store.isPeriodTrackingVisible }
+        // The staleness half of the same gate: the cycle load awaits HealthKit, and the hub can lock
+        // (or re-key) during that await. Wiring the live key here lets the store abandon a load whose
+        // authorization expired mid-flight instead of publishing narratives decrypted with a key the
+        // hub has since dropped.
+        periodStore.attachLiveContentKeyProvider { [lockService] in lockService.contentKey(for: .privateHub) }
         // Same hard gate for the intimacy sealed-notes seam. `IntimacyLogStore` funnels every
         // decrypt/seal and is fail-closed by default, so wiring it here — before any read below —
         // is what turns the gate from "reads nothing" into "reads exactly when visible".
-        intimacyStore.isVisible = { [store] in store.isIntimacyTrackingVisible }
+        intimacyStore.attachVisibilityGate { [store] in store.isIntimacyTrackingVisible }
         // A day record written before the user hid a feature keeps its last cycle/intimate
         // value (HealthDailyContext.merge coalesces), so scrub on load, not just on toggle.
         store.scrubHiddenHealthContext()
@@ -882,11 +891,14 @@ struct ContentView: View {
         let preferences = storagePreferencesStore.preferences
         if preferences.iCloudSyncEnabled {
             if preferences.sealedBackupJournalEnabled {
+                // R7: the outcome is recorded on the store inside the call — that recording is the
+                // restore banner and its Retry — so there is no decision left for this seam to make.
                 _ = await store.restoreJournalBackupTargeted()
             }
             // The intimacy gate is re-checked inside the targeted restore too (fail-closed at the
             // decrypt seam); this is the cheap pre-check that avoids the CloudKit fetch entirely.
             if preferences.sealedBackupIntimacyEnabled, store.isIntimacyTrackingVisible {
+                // Same as above: the outcome lands on the store's observable restore status.
                 _ = await store.restoreIntimacyBackupTargeted()
             }
         }
@@ -937,7 +949,9 @@ struct ContentView: View {
         // live in HealthKit, outside everything the content key seals — leaving them would hand a
         // coercer the Health app with the exact data the wipe exists to remove. This is the one
         // caller that never asks: a duress wipe has no dialog to ask on.
-        lockService.duressPurgeHook = { [store] in
+        // Installed through the set-once seam: this closure is the wipe's durable half, and a later
+        // writer replacing it would defuse the wipe silently.
+        lockService.installDuressPurgeHook { [store] in
             Task { _ = await store.deleteAllData(includingHealthKitSamples: true) }
         }
         // The other half of the duress-recovery custody story, and the one that is NOT a duress path
@@ -947,10 +961,12 @@ struct ContentView: View {
         // `DuressMode.recoveryLock` can neither stay armed nor be re-armed over it. Runs at launch
         // too (see the `.task` below), which covers a rotation from any other route.
         store.identityRotatedHook = { [lockService] in
-            DuressRecoveryCoordinator(
+            if DuressRecoveryCoordinator(
                 identity: IdentityService(),
                 lockService: lockService
-            ).reconcileEnrollmentWithLocalIdentity()
+            ).reconcileEnrollmentWithLocalIdentity() {
+                FernletAuditLog.log("duress.recoveryEnrollment.retired", context: ["site": "identityRotated"])
+            }
         }
         // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone with
         // sync off. `deleteAllCloudKitData` opens its own connection (no live sync session needed) and the
@@ -1022,9 +1038,11 @@ struct ContentView: View {
     ///   the backup again. Clearing them would make a transient network failure permanent.
     ///
     /// Everything else — Health access, per-capability grants, backup exclusion — goes back to
-    /// first-launch defaults. Returns `true` meaning "the reset ran": the store's write paths don't
-    /// report failure, and the hook's Bool exists so an UNWIRED funnel surfaces "your storage
-    /// settings" instead of silently leaving Health grants and backup flags as they were.
+    /// first-launch defaults. Returns whether the reset actually LANDED in the keychain: the
+    /// row-delete path reports its `OSStatus` and the rewrite path reports `lastPersistError`, so a
+    /// keychain that refused the write (most often `errSecInteractionNotAllowed`) surfaces as "your
+    /// storage settings" in the funnel's incomplete list instead of a silently kept row. The hook's
+    /// Bool also covers an UNWIRED funnel, which reports the same way.
     private static func resetStoragePreferencesAfterWipe(
         keepSealedBackupFlags: Bool,
         keepCloudCopyFlag: Bool,
@@ -1048,11 +1066,12 @@ struct ContentView: View {
         if reset == StoragePreferences(lastModifiedAt: reset.lastModifiedAt) {
             // Nothing worth preserving: drop the keychain row entirely, so not even a
             // `lastModifiedAt` survives as a trace of use.
-            preferencesStore.resetToDefaults()
-        } else {
-            preferencesStore.update { $0 = reset }
+            return preferencesStore.resetToDefaults()
         }
-        return true
+        preferencesStore.update { $0 = reset }
+        // `update` publishes before it persists, so the keychain verdict is the store's own error
+        // record — not the assignment above.
+        return preferencesStore.lastPersistError == nil
     }
 
     /// Loads period entries with whatever content key is currently available (nil when locked / no lock),

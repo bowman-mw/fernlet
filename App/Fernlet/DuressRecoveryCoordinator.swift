@@ -464,7 +464,6 @@ final class DuressRecoveryCoordinator {
     /// a no-op.
     ///
     /// - Returns: `true` when an enrollment was retired.
-    @discardableResult
     func reconcileEnrollmentWithLocalIdentity() -> Bool {
         guard let enrolledOwnerKey = lockService.enrolledRecoveryOwnerKeyAgreementPublicKey else { return false }
         guard (try? identity.ensureProvisioned()) != nil else { return false }

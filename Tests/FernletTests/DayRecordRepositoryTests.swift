@@ -13,10 +13,10 @@ struct DayRecordRepositoryTests {
     @Test func upsertAndLoadAllRoundTrips() {
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)
-        repo.upsert([
+        #expect(repo.upsert([
             DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 3), updatedAt: stamp),
             DayRecordUpsert(day: FernletDay(date: "2026-05-02", bottleCount: 5), updatedAt: stamp)
-        ])
+        ]) == true)
         let days = repo.loadAll()
         #expect(days.count == 2)
         #expect(days["2026-05-01"]?.bottleCount == 3)
@@ -28,8 +28,8 @@ struct DayRecordRepositoryTests {
         // already in the store — so a stale set on one device can't wipe days synced from another.
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)
-        repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)])
-        repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-02", bottleCount: 2), updatedAt: stamp)])
+        #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)]) == true)
+        #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-02", bottleCount: 2), updatedAt: stamp)]) == true)
         let days = repo.loadAll()
         #expect(days.count == 2)
         #expect(days["2026-05-01"]?.bottleCount == 1)
@@ -38,8 +38,8 @@ struct DayRecordRepositoryTests {
     @Test func upsertReplacesSameDateKeyInPlace() {
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)
-        repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)])
-        repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 9), updatedAt: stamp)])
+        #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)]) == true)
+        #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 9), updatedAt: stamp)]) == true)
         let days = repo.loadAll()
         #expect(days.count == 1)
         #expect(days["2026-05-01"]?.bottleCount == 9)
@@ -103,7 +103,7 @@ struct DayRecordRepositoryTests {
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)
         for (i, key) in ["2026-05-01", "2026-05-02", "2026-05-03"].enumerated() {
-            repo.upsert([DayRecordUpsert(day: FernletDay(date: key, bottleCount: i), updatedAt: stamp)])
+            #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: key, bottleCount: i), updatedAt: stamp)]) == true)
         }
         let subset = repo.load(dateKeys: ["2026-05-01", "2026-05-03"])
         #expect(Set(subset.keys) == ["2026-05-01", "2026-05-03"])
@@ -114,7 +114,7 @@ struct DayRecordRepositoryTests {
         let repo = DayRecordRepository(controller: controller)
         for day in 1...10 {
             let key = String(format: "2026-05-%02d", day)
-            repo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)])
+            #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)]) == true)
         }
         let recent = repo.loadRecent(limit: 3)
         #expect(recent.map(\.date) == ["2026-05-10", "2026-05-09", "2026-05-08"])
@@ -124,9 +124,9 @@ struct DayRecordRepositoryTests {
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)
         for key in ["2026-05-01", "2026-05-02", "2026-05-03"] {
-            repo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)])
+            #expect(repo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)]) == true)
         }
-        repo.delete(dateKeys: ["2026-05-02"])
+        #expect(repo.delete(dateKeys: ["2026-05-02"]) == true)
         #expect(Set(repo.loadAll().keys) == ["2026-05-01", "2026-05-03"])
     }
 

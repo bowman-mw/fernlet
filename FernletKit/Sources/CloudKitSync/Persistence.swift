@@ -64,7 +64,12 @@ nonisolated public final class PersistenceController {
     /// Process-wide controller. Boots with the keychain-persisted preferences but FORCES iCloud
     /// sync off — the app decides when to enable mirroring via `reload(with:)` once
     /// onboarding/consent state is known.
-    nonisolated(unsafe) public static let shared: PersistenceController = {
+    ///
+    /// `@MainActor` rather than `nonisolated(unsafe)` (R9): every consumer — the repositories'
+    /// no-argument inits, the app's reload path, the store facade — is already MainActor-isolated,
+    /// working on `container.viewContext`, so the isolation the compiler now checks is the isolation
+    /// the type always had by convention. `preview` next to it is isolated the same way.
+    @MainActor public static let shared: PersistenceController = {
         var startupPreferences = StoragePreferencesStore.currentPreferences()
         startupPreferences.iCloudSyncEnabled = false
         return PersistenceController(preferences: startupPreferences)

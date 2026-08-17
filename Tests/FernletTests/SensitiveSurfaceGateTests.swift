@@ -592,13 +592,13 @@ struct SensitiveSurfaceGateTests {
         let context = PrivatePersistenceController(inMemory: true).container.viewContext
         let store = makeIntimacyStore(context: context)
         let key = SymmetricKey(size: .bits256)
-        store.isVisible = { true }
+        store.attachVisibilityGate { true }
 
         // A real sealed row and a valid key — visibility is the only thing between caller and plaintext.
         try store.insert(IntimacyLog(eventDate: Date(), note: "sealed while visible"), contentKey: key)
         #expect(try store.logs(contentKey: key).count == 1)
 
-        store.isVisible = { false }
+        store.attachVisibilityGate { false }
 
         #expect(try store.logs(contentKey: key).isEmpty)
         #expect(throws: IntimacyTrackingHiddenError.self) {
@@ -611,13 +611,13 @@ struct SensitiveSurfaceGateTests {
         let context = PrivatePersistenceController(inMemory: true).container.viewContext
         let store = makeIntimacyStore(context: context)
         let key = SymmetricKey(size: .bits256)
-        store.isVisible = { true }
+        store.attachVisibilityGate { true }
         try store.insert(IntimacyLog(eventDate: Date(), note: "survives hiding"), contentKey: key)
 
-        store.isVisible = { false }
+        store.attachVisibilityGate { false }
         #expect(try store.logs(contentKey: key).isEmpty)
 
-        store.isVisible = { true }
+        store.attachVisibilityGate { true }
         #expect(try store.logs(contentKey: key).first?.note == "survives hiding")
     }
 
@@ -630,7 +630,7 @@ struct SensitiveSurfaceGateTests {
         let key = SymmetricKey(size: .bits256)
 
         let seeder = makeIntimacyStore(context: context)
-        seeder.isVisible = { true }
+        seeder.attachVisibilityGate { true }
         try seeder.insert(IntimacyLog(eventDate: Date(), note: "present but gated"), contentKey: key)
 
         // A fresh store with NO wiring — its default gate must be closed.

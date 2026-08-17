@@ -20,8 +20,8 @@
  {
   "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/FernletFoundation/KeychainHelpers.swift",
-  "line_contains": "key.withUnsafeBytes { Data($0) }",
-  "reason": "CryptoKit seam: SymmetricKey exposes its bytes only through ContiguousBytes.withUnsafeBytes — there is no Data(key) initializer or other byte accessor. The closure copies the buffer into an owned Data before returning, so the raw pointer never escapes the closure and no unowned memory outlives it."
+  "line_contains": "withUnsafeBytes { Data($0) }",
+  "reason": "CryptoKit seam — the ONE byte-export of a SymmetricKey in the shipping tree, `SymmetricKey.rawBytes` at the bottom of this file. SymmetricKey is not a Sequence and exposes its material only through ContiguousBytes.withUnsafeBytes; there is no Data(key) initializer or other byte accessor. Invariant: the closure copies the borrowed buffer into an owned Data INSIDE the callback, so no pointer, buffer, or index escapes withUnsafeBytes and the buffer is never read after it returns. PendingNarrativeBuffer, PrivateMediaKeyStore and this file's loadOrCreateSymmetricKey all call rawBytes now, which is why they no longer need entries of their own; narrowed by line_contains so any other unsafe construct added to this file stays enforced."
  },
  {
   "rule": "R9-UNSAFE",
@@ -40,22 +40,6 @@
   "path": "FernletKit/Sources/FernletLock/SecureEnclaveContentKeyWrap.swift",
   "line_contains": "Unmanaged<CFError>?",
   "reason": "Security-framework seam: SecKeyCreateDecryptedData reports failure through a Create-rule CFError out-parameter imported as Unmanaged<CFError>?. This is the ONE site in the file that needs it — unwrapResult consumes it exactly once via takeRetainedValue() immediately after the call, to tell a transient failure (interaction-not-allowed / not-available / auth-failed / user-canceled) apart from a terminal one, and never stores or escapes it. The file's three other Create-rule calls now pass nil, so no other hit exists; narrowed by line_contains so any new unsafe construct here stays enforced."
- },
- {
-  "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/CloudKitSync/Persistence.swift",
-  "line_contains": "nonisolated(unsafe) public static let shared",
-  "reason": "Core Data / NSPersistentCloudKitContainer stack seam. `shared` is a `let`: Swift initializes a static exactly once, atomically, and the reference is never reassigned. The class is deliberately `nonisolated` because it is constructed on whichever thread first touches it at launch, before any actor context exists; every member that mutates it — `reload(with:)`, `isReloading`, the container swap — is `@MainActor`, and every consumer is MainActor-isolated, so all mutable state behind the immutable reference has a single writer actor."
- },
- {
-  "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/PrivateStoreCore/PendingNarrativeBuffer.swift",
-  "reason": "CryptoKit seam: `SymmetricKey` exposes its 256-bit material only through `withUnsafeBytes` (it is not a Sequence and has no raw-bytes accessor). Invariant: the closure copies the borrowed buffer into a `Data` INSIDE the callback — no pointer, buffer, or index escapes it, so the buffer is never read after `withUnsafeBytes` returns — and the resulting `Data` is handed straight to the data-protection keychain and not retained."
- },
- {
-  "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/PrivateMediaStore/PrivateMediaKeyStore.swift",
-  "reason": "CryptoKit seam: `SymmetricKey` exposes its 256-bit material only through `withUnsafeBytes` (it is not a Sequence and has no raw-bytes accessor). Invariant: the closure copies the borrowed buffer into a `Data` INSIDE the callback — no pointer, buffer, or index escapes it — and the resulting `Data` is handed straight to the data-protection keychain and not retained."
  },
  {
   "rule": "R9-UNSAFE",

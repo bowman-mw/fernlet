@@ -502,9 +502,22 @@ public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable
 /// A configurable personal-care checklist task (built-in or user-created).
 ///
 /// Built-ins mirror ``HygieneItem`` via `defaultHygieneRawValue` so legacy hygiene sets keep
-/// counting; `normalized` de-dupes, cleans labels, and falls back to the defaults when a decoded
-/// list is unusable.
+/// counting; ``normalized(_:)`` is the validating seam every writer goes through — it de-dupes,
+/// cleans labels, applies ``maxTasks``/``maxLabelLength``, and falls back to the defaults when a
+/// decoded list is unusable.
 public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
+
+    /// R3: the largest checklist this type will ever hold. The list grows one row per user tap and
+    /// rides the synced settings blob, so the bound belongs HERE, on the type, rather than in the
+    /// Settings screen that happens to own today's add button — a restored blob, a paired device, or
+    /// any future writer reaches ``normalized(_:)`` and cannot exceed it. The Settings screen keeps
+    /// its own check so the button disables before the tap, but reads this constant.
+    public static let maxTasks = 40
+
+    /// R5: the longest task label. Free text from the add field; an unbounded label would ride the
+    /// synced settings blob and wrap unboundedly in every checklist row. Applied in
+    /// ``normalized(_:)``, so a label arriving from anywhere is clamped rather than trusted.
+    public static let maxLabelLength = 60
 
     public init(id: String, label: String, systemImage: String, group: String, defaultHygieneRawValue: String? = nil) {
         self.id = id
@@ -548,6 +561,11 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
         )
     }
 
+    /// The validating seam: de-dupes by id, drops empty ids/labels, clamps each label to
+    /// ``maxLabelLength``, defaults a missing glyph/group, caps the list at ``maxTasks``, and falls
+    /// back to ``defaultTasks`` when nothing usable survives. Every writer (the Settings add path,
+    /// the delete path, and the settings decode) runs its list through here, which is what makes the
+    /// two caps unbypassable rather than a policy of whichever screen wrote last.
     public static func normalized(_ tasks: [PersonalCareTask]) -> [PersonalCareTask] {
         var seen: Set<String> = []
         let cleaned = tasks.compactMap { task -> PersonalCareTask? in
@@ -555,12 +573,15 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
             guard !task.id.isEmpty, !trimmedLabel.isEmpty, !seen.contains(task.id) else { return nil }
             seen.insert(task.id)
             var normalizedTask = task
-            normalizedTask.label = trimmedLabel
+            // R5: clamp the free-text label at the domain boundary, not at the screen that typed it.
+            normalizedTask.label = String(trimmedLabel.prefix(maxLabelLength))
             normalizedTask.systemImage = task.systemImage.isEmpty ? "checkmark.circle" : task.systemImage
             normalizedTask.group = groups.contains(task.group) ? task.group : "Anytime"
             return normalizedTask
         }
-        return cleaned.isEmpty ? defaultTasks : cleaned
+        // R3: the list itself is bounded here. Oldest-first (the built-ins lead the array), so a list
+        // over the cap keeps the tasks the user has had longest rather than an arbitrary slice.
+        return cleaned.isEmpty ? defaultTasks : Array(cleaned.prefix(maxTasks))
     }
 }
 

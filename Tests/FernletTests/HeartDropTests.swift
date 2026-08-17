@@ -370,13 +370,13 @@ struct HeartDropTests {
         let serviceID = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
         // Account name mirrors HeartPrekeyStore.keychainAccount (internal to ProximityKit).
-        KeychainItem.store(
+        #expect(KeychainItem.store(
             Data("not json".utf8),
             account: "prekeyPrivateHalves",
             service: serviceID,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             synchronizable: false
-        )
+        ) == errSecSuccess)
         let store = HeartPrekeyStore(keychainService: serviceID)
         let bundle = try #require(store.currentBundle())
         let entry = try #require(bundle.keys.first)
@@ -1537,9 +1537,10 @@ struct HeartDropTests {
         let blob = try JSONEncoder().encode(legacy)
         let json = try #require(String(data: blob, encoding: .utf8))
         #expect(!json.contains("signedPrekey"), "fixture must really be the pre-change shape")
-        KeychainItem.store(
+        #expect(KeychainItem.store(
             blob, account: "prekeyPrivateHalves", service: svc,
-            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, synchronizable: false)
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            synchronizable: false) == errSecSuccess)
 
         let store = HeartPrekeyStore(keychainService: svc, now: { clock.date })
         #expect(store.privateKey(forPrekeyID: gossipedID) != nil,

@@ -18,8 +18,8 @@ import StoreCore
 ///   facade-only `PeriodContextBridge`; the facade supplies a closure that applies the opt-in
 ///   gate. Default `{ _ in .none }` makes scoring byte-identical to period-unaware.
 /// - `stressModifier` and `sealedJournalIDs` follow the same pattern (see their hook
-///   properties), and ``isAdultVerified`` is the fail-closed intimacy gate the facade sets
-///   separately.
+///   properties), and ``isAdultVerified`` is the fail-closed intimacy gate the facade installs
+///   separately via ``attachAdultVerification(_:)``.
 ///
 /// Construction is two-phase because the facade can only build its real closures after this
 /// store exists: `init` takes placeholders, then
@@ -42,8 +42,9 @@ import StoreCore
 ///   can never reach the (potentially iCloud-synced) blob.
 /// - ``foodItems`` never contains USDA catalog rows (filtered at init and on snapshot apply);
 ///   the bundled catalog is served read-only by `FoodCatalog`.
-/// - ``isAdultVerified`` defaults to refusal, so a store built before the facade wires it
-///   keeps intimate logging locked rather than open.
+/// - ``isAdultVerified`` defaults to refusal — and is read-only, installed only through
+///   ``attachAdultVerification(_:)`` — so a store built before the facade wires it keeps intimate
+///   logging locked rather than open.
 ///
 /// Concurrency: `@MainActor` + `@Observable` (the whole `DiaryStore` target compiles with
 /// `defaultIsolation(MainActor.self)`). Observation tracking lives on this class — the facade
@@ -376,12 +377,30 @@ public final class DiaryStore {
     /// This used to read `settings.userProfile.age >= 18`, which was self-attested and defaulted to 30 —
     /// a minor unlocked intimacy tracking by leaving the onboarding stepper alone. That profile age still
     /// exists and still feeds the nutrition targets; it just no longer gates anything.
-    @ObservationIgnored public var isAdultVerified: () -> Bool = { false }
+    ///
+    /// R6: the closure itself is `private` — a gate any holder of the store could reassign is not a
+    /// gate. It is installed once through ``attachAdultVerification(_:)`` and read through
+    /// ``isAdultVerified``.
+    @ObservationIgnored private var adultVerificationGate: () -> Bool = { false }
+
+    /// Read-only view of the fail-closed adult gate. Evaluates the injected closure on every read, so
+    /// a verdict that changes mid-session takes effect on the very next call.
+    public var isAdultVerified: Bool {
+        adultVerificationGate()
+    }
+
+    /// Installs the adult-verification gate. Called once by the app-side facade during startup
+    /// wiring, before any surface consults ``isIntimateLoggingAllowed``; until then the gate refuses.
+    ///
+    /// - Parameter gate: The device-local verdict, re-evaluated on every read.
+    public func attachAdultVerification(_ gate: @escaping () -> Bool) {
+        adultVerificationGate = gate
+    }
 
     /// Whether intimate-activity logging is available — a direct read of the fail-closed
     /// ``isAdultVerified`` gate.
     public var isIntimateLoggingAllowed: Bool {
-        isAdultVerified()
+        isAdultVerified
     }
 
     // MARK: - Settings toggles
@@ -639,7 +658,7 @@ public final class DiaryStore {
     public func appendMeal(_ meal: Meal, date: String) {
         assert(!date.isEmpty, "meal date required")
         batchSnapshotPersistence {
-            mutateDay(date: date) { $0.meals.append(meal) }
+            noteDayWrite(mutateDay(date: date) { $0.meals.append(meal) }, operation: "appendMeal", date: date)
             invalidateDaySummary(for: date)
             recentMeals.insert(meal, at: 0)
             recentMeals = Array(recentMeals.prefix(50))
@@ -800,7 +819,9 @@ public final class DiaryStore {
     public func appendWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
         batchSnapshotPersistence {
-            mutateDay(date: date) { $0.workouts.append(workout) }
+            noteDayWrite(
+                mutateDay(date: date) { $0.workouts.append(workout) }, operation: "appendWorkout", date: date
+            )
             invalidateDaySummary(for: date)
         }
     }
@@ -808,18 +829,19 @@ public final class DiaryStore {
     /// Pure workout removal by id: mirrors `appendWorkout` (mutate the day + invalidate the cached
     /// summary). The facade's `removeWorkout` runs the guided/planned/progression reversal around this.
     /// Returns whether a row was actually removed.
-    // R7 exception: App/Fernlet/FernletStore.swift:2489 and :5316 still call this for effect; the
-    // attribute can only be removed together with those out-of-slice call sites.
-    @discardableResult
+    /// Not discardable (R7): a past-day write can fail, and the caller decides what to say then.
     public func removeWorkout(id: UUID, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         var removed = false
         batchSnapshotPersistence {
-            mutateDay(date: date) { day in
+            let written = mutateDay(date: date) { day in
                 let before = day.workouts.count
                 day.workouts.removeAll { $0.id == id }
                 removed = day.workouts.count != before
             }
+            // A refused write means nothing was removed, whatever the closure saw in memory.
+            if !written { removed = false }
+            noteDayWrite(written, operation: "removeWorkout", date: date)
             if removed { invalidateDaySummary(for: date) }
         }
         return removed
@@ -832,12 +854,15 @@ public final class DiaryStore {
         assert(!date.isEmpty, "workout date required")
         var replaced = false
         batchSnapshotPersistence {
-            mutateDay(date: date) { day in
+            let written = mutateDay(date: date) { day in
                 if let index = day.workouts.firstIndex(where: { $0.id == workout.id }) {
                     day.workouts[index] = workout
                     replaced = true
                 }
             }
+            // Same rule as `removeWorkout`: a refused write replaced nothing.
+            if !written { replaced = false }
+            noteDayWrite(written, operation: "updateWorkout", date: date)
             if replaced { invalidateDaySummary(for: date) }
         }
         return replaced
@@ -847,11 +872,12 @@ public final class DiaryStore {
     /// creation time.
     public func planWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
+        let written = mutateDay(date: date) { day in
             day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
             day.plannedWorkouts.append(plannedWorkout)
             day.plannedWorkouts.sort { $0.createdAt < $1.createdAt }
         }
+        noteDayWrite(written, operation: "planWorkout", date: date)
     }
 
     /// The split to pre-select when planning on `date`: the same day's latest planned split if
@@ -884,9 +910,10 @@ public final class DiaryStore {
     /// Removes a planned workout from `date`'s plan (no-op if absent).
     public func deletePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
+        let written = mutateDay(date: date) { day in
             day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
         }
+        noteDayWrite(written, operation: "deletePlannedWorkout", date: date)
     }
 
     /// Removes a planned workout after it has been completed. The facade's
@@ -903,18 +930,20 @@ public final class DiaryStore {
     /// rides `DayRecord.payloadData` via Codable, so no schema change and per-row sync for free.
     public func planRecipe(_ recipeID: UUID, date: String) {
         assert(!date.isEmpty, "planned recipe date required")
-        mutateDay(date: date) { day in
+        let written = mutateDay(date: date) { day in
             guard !day.plannedRecipeIDs.contains(recipeID) else { return }
             day.plannedRecipeIDs.append(recipeID)
         }
+        noteDayWrite(written, operation: "planRecipe", date: date)
     }
 
     /// Removes a recipe from a day's plan. A no-op if it was not planned there.
     public func unplanRecipe(_ recipeID: UUID, date: String) {
         assert(!date.isEmpty, "planned recipe date required")
-        mutateDay(date: date) { day in
+        let written = mutateDay(date: date) { day in
             day.plannedRecipeIDs.removeAll { $0 == recipeID }
         }
+        noteDayWrite(written, operation: "unplanRecipe", date: date)
     }
 
     /// Persists the whole workout profile aggregate.
@@ -1068,9 +1097,19 @@ public final class DiaryStore {
 
     /// Appends a custom personal-care task (trimmed; empty labels ignored) and re-normalizes
     /// the list.
+    ///
+    /// R3/R5: refuses at `PersonalCareTask.maxTasks` rather than appending a row `normalized(_:)`
+    /// would then drop — the cap is the domain type's, and a refusal is logged so a caller that got
+    /// past the UI's disabled button sees why nothing appeared. The label is clamped by
+    /// `normalized(_:)` to `PersonalCareTask.maxLabelLength`.
     public func addPersonalCareTask(label: String, group: String) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard personalCareTasks.count < PersonalCareTask.maxTasks else {
+            FernletAuditLog.log("personalCare.addRejected",
+                                context: ["reason": "atCap", "max": String(PersonalCareTask.maxTasks)])
+            return
+        }
         batchSnapshotPersistence {
             var tasks = personalCareTasks
             tasks.append(PersonalCareTask.custom(label: trimmed, group: group))
@@ -1089,19 +1128,42 @@ public final class DiaryStore {
     }
 
     /// Records the sleep log for an explicit date — the single owner of `SleepLog`
-    /// construction and note trimming.
+    /// construction, note trimming, and hours validation.
     public func setSleep(hours: Double?, quality: SleepQuality, note: String, date: String) {
         assert(!date.isEmpty, "sleep date required")
-        mutateDay(date: date) {
-            $0.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
+        let validatedHours = Self.validatedSleepHours(hours)
+        let written = mutateDay(date: date) {
+            $0.sleep = SleepLog(hours: validatedHours, quality: quality,
+                                note: note.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+        noteDayWrite(written, operation: "setSleep", date: date)
+    }
+
+    /// The store-boundary guard on logged sleep hours (R5): `nil`, or a finite value in `0...24`.
+    ///
+    /// The sheets validate their own text fields, but this is the seam every path lands on — the
+    /// calendar back-edit, the demo seed, a future HealthKit import — and one bad value here is not a
+    /// cosmetic problem: a NaN or an infinity makes the snapshot's `JSONEncoder` THROW, which loses
+    /// the whole day's save. Rejected values become "no hours recorded" (exactly what the sheets do
+    /// with unparseable text) rather than a number nothing downstream can use, and are logged so the
+    /// drop is visible instead of silent.
+    private static func validatedSleepHours(_ hours: Double?) -> Double? {
+        guard let hours else { return nil }
+        guard hours.isFinite, (0...24).contains(hours) else {
+            FernletAuditLog.log("sleep.hoursRejected",
+                                context: ["value": String(describing: hours), "range": "0...24"])
+            return nil
+        }
+        return hours
     }
 
     /// Sets an explicit date's bottle count, clamped to 0…30 (the calendar back-edit path).
     public func setBottleCount(_ count: Int, date: String) {
         assert(!date.isEmpty, "water date required")
         let clamped = min(max(count, 0), 30)
-        mutateDay(date: date) { $0.bottleCount = clamped }
+        noteDayWrite(
+            mutateDay(date: date) { $0.bottleCount = clamped }, operation: "setBottleCount", date: date
+        )
     }
 
     /// Back-edit path that replaces a date's hygiene set by mapping items to task ids
@@ -1116,10 +1178,11 @@ public final class DiaryStore {
     public func setPersonalCareTaskIDs(_ ids: Set<String>, date: String) {
         assert(!date.isEmpty, "personal care date required")
         let defaultItems = Set(ids.compactMap(HygieneItem.init(rawValue:)))
-        mutateDay(date: date) {
+        let written = mutateDay(date: date) {
             $0.completedPersonalCareTaskIDs = ids
             $0.hygiene = defaultItems
         }
+        noteDayWrite(written, operation: "setPersonalCareTaskIDs", date: date)
     }
 
     /// Replaces the goal list (capped at 12) and persists.
@@ -1314,6 +1377,9 @@ public final class DiaryStore {
 
     /// Resolves (or mints) a custom-ingredient `FoodItem` from an editor row without attaching
     /// it to any recipe. Returns nil for a blank name.
+    ///
+    /// Discardable by design (R7): `nil` is not a failure, it is "the row had no name yet" — the
+    /// editor's own validation owns that state, and callers that only want the save can ignore it.
     @discardableResult public func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         guard !ingredient.trimmedName.isEmpty else { return nil }
         return batchSnapshotPersistence {
@@ -1426,7 +1492,6 @@ public final class DiaryStore {
     /// pending snapshot save so the outgoing `day` (plus `recentMeals`, etc.) is written under the OLD key
     /// before it advances. This method performs NO save itself; it only re-keys + reloads. No-op (returns
     /// false) when already on `newKey`.
-    @discardableResult
     public func advanceCurrentDay(to newKey: String) -> Bool {
         assert(!newKey.isEmpty, "day key required")
         guard newKey != todayKey else { return false }
@@ -1510,14 +1575,23 @@ public final class DiaryStore {
 
     // MARK: - Day mutation workhorse
 
+    /// R7: consumes a day-write verdict where the calling mutator's own signature has no failure
+    /// channel (`setSleep`, `planRecipe`, …). Today's write cannot fail; a PAST-day write is a
+    /// repository round trip that can, and a dropped `false` is an edit the user watched land in
+    /// the UI and never reached disk. Recovery is the next write of the same day — this is the
+    /// line that makes the miss diagnosable in the meantime.
+    private func noteDayWrite(_ didWrite: Bool, operation: String, date: String) {
+        guard !didWrite else { return }
+        FernletAuditLog.log("diary.mutateDay.saveFailed", context: ["operation": operation, "date": date])
+    }
+
+
     /// Mutates the day for the given date key — the single write seam every per-day content
     /// mutation funnels through. Today mutates the in-memory ``day`` and schedules a snapshot
     /// save; past dates round-trip through the repository (with the sealed-field strip — see
     /// `mutatePastDay`).
     /// - Returns: Whether the write succeeded (always true for today).
-    // R7 exception: App/Fernlet/FernletStore.swift discards this at five call sites (2078, 2266,
-    // 3035, 3068, 3082, 5276, 5451); the attribute can only be removed with those out-of-slice sites.
-    @discardableResult
+    ///   Not discardable (R7): a past-day round trip can fail, and the write is the whole point.
     public func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
         // Guard, not assert: in Release an empty key would flow into `updateDay(…, for: "")` and
         // write a CloudKit-synced `DayRecord` row keyed by the empty string. Every public per-day

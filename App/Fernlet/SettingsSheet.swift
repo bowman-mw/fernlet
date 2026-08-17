@@ -1578,12 +1578,14 @@ struct SettingsSheet: View {
         await NotificationService.scheduleDailyCheckIn(hour: components.hour ?? 19, minute: components.minute ?? 0)
     }
 
-    /// R3 cap on the one collection this screen grows per user tap: the persisted personal-care task
-    /// list. Nothing downstream bounds it (`DiaryStore.addPersonalCareTask` only trims,
-    /// `PersonalCareTask.normalized` only dedupes by id), so the cap is enforced at this entry.
-    private static let maxCustomCareTasks = 40
-    /// R3 cap on the free-text task label, mirroring `MemoryEditorSheet`'s 240-character clamp.
-    private static let maxCareTaskLabelLength = 60
+    /// The UI half of the personal-care caps. Both numbers now live on the domain type
+    /// (`PersonalCareTask.maxTasks` / `.maxLabelLength`), which enforces them in `normalized(_:)` on
+    /// every write — no writer can exceed them. This screen keeps its own check so the button
+    /// disables *before* the tap instead of the row being silently clamped afterwards, and reads the
+    /// domain constants so the two can never drift apart.
+    private static let maxCustomCareTasks = PersonalCareTask.maxTasks
+    /// R3 cap on the free-text task label — the domain's ``PersonalCareTask/maxLabelLength``.
+    private static let maxCareTaskLabelLength = PersonalCareTask.maxLabelLength
 
     /// Add is unavailable for an empty label and once the task list is at its cap.
     private var isAddCareTaskDisabled: Bool {

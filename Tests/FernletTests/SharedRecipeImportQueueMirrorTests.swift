@@ -151,7 +151,7 @@ struct SharedRecipeImportQueueMirrorTests {
 
         let deferred = SharedRecipeImportRecord(url: URL(string: "https://example.com/deferred")!)
         #expect(queue.save([deferred]))
-        queue.markBudgetDeferred(deferred, dayKey: "2026-08-09")
+        #expect(queue.markBudgetDeferred(deferred, dayKey: "2026-08-09"))
         #expect(queue.records().first?.budgetDeferredDayKey == "2026-08-09", "precondition: the stamp did not land")
 
         // What the extension does on a share: decode the whole file, drop any prior record for the same
@@ -189,6 +189,36 @@ struct SharedRecipeImportQueueMirrorTests {
             extensionSource.contains("readingItemAt") && extensionSource.contains("writingItemAt"),
             "the extension must take a combined coordinated read+write, matching the app's modifyRecords"
         )
+    }
+
+    /// The queue cap is part of the file's contract, not a private policy: both processes decode the
+    /// WHOLE file and rewrite it, so a smaller cap on one side silently deletes rows the other side
+    /// still considers queued. Pins the two constants to the same number, and pins the eviction END —
+    /// both must drop the OLDEST, or the app drains rows the extension threw away (and vice versa).
+    @Test func bothSidesDeclareTheSameQueueCapAndEvictTheSameEnd() throws {
+        let mirrorSource = try source(Self.extensionSourcePath)
+        let declaration = "static let maxQueuedRecords = "
+        let range = try #require(
+            mirrorSource.range(of: declaration),
+            "the extension no longer declares maxQueuedRecords — the twins have drifted"
+        )
+        let digits = mirrorSource[range.upperBound...]
+            .prefix { $0.isNumber || $0 == "_" }
+            .replacingOccurrences(of: "_", with: "")
+        let mirrorCap = try #require(Int(digits), "maxQueuedRecords is no longer an integer literal")
+        #expect(
+            mirrorCap == SharedRecipeImportQueue.maxQueuedImports,
+            "extension cap \(mirrorCap) != app cap \(SharedRecipeImportQueue.maxQueuedImports)"
+        )
+
+        // Same end: the extension trims `removeFirst` (oldest-out) and the app keeps the `suffix`.
+        #expect(mirrorSource.contains("records.removeFirst(records.count - Self.maxQueuedRecords)"))
+        let appSource = try source(Self.appSourcePath)
+        #expect(
+            appSource.contains("suffix(Self.maxQueuedImports)"),
+            "the app must keep the NEWEST records (suffix) to match the extension's oldest-out trim"
+        )
+        #expect(!appSource.contains("prefix(Self.maxQueuedImports)"))
     }
 
     /// The two sides must degrade to the SAME path when the App-Group container is unavailable, or the

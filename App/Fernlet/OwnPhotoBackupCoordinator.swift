@@ -291,7 +291,6 @@ final class OwnPhotoBackupCoordinator {
     /// runs on enable and on the user's explicit Retry; launch is incremental. The honest cost is in
     /// `SealedPhotoBackupService.reconcile`: a photo replaced in place under the same id waits for
     /// the next full pass.
-    @discardableResult
     func synchronize(
         preferenceOverride: Bool = false,
         fullVerification: Bool = false

@@ -878,6 +878,8 @@ enum AwayHeartsCopy {
                 : "\(count) hearts couldn't be delivered before they expired."
         case .storageUnavailable:
             return "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
+        case .incomingUnreachable(let since):
+            return "Fernlet hasn't been able to check for hearts since \(dayLabel(since)) — yours still send."
         }
     }
 
@@ -896,6 +898,8 @@ enum AwayHeartsCopy {
                 : "\(count) hearts couldn't be delivered before they expired."
         case .storageUnavailable:
             return "Fernlet couldn't read its saved hearts just now. Unlock and reopen, and it will retry."
+        case .incomingUnreachable(let since):
+            return "Hearts sent to you since \(dayLabel(since)) haven't been picked up yet. Fernlet keeps trying."
         }
     }
 

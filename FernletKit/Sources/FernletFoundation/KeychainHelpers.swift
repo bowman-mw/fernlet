@@ -100,7 +100,10 @@ public nonisolated enum KeychainItem {
     /// is there" behavior. Pass `.local` (or `.synced`) to remove only that variant — used when
     /// promoting a `ThisDeviceOnly` escrow item to `synchronizable` without risking the removal of a
     /// genuine key that just synced in under the same account.
-    @discardableResult
+    ///
+    /// - Returns: the `SecItemAdd` status (`errSecSuccess` on success). Not discardable (R7): a
+    ///   failed add means the secret was never persisted, and every caller here is minting key
+    ///   material whose loss is silent until the next read.
     public static func store(
         _ data: Data,
         account: String,
@@ -273,7 +276,8 @@ public nonisolated enum KeychainItem {
 
     /// Stores `data` for a well-known ``Account``, pinned to
     /// `AfterFirstUnlockThisDeviceOnly` accessibility (device-bound, never iCloud-synced).
-    @discardableResult
+    ///
+    /// - Returns: the `SecItemAdd` status, for the same reason the general overload does.
     public static func store(_ data: Data, for account: Account, service: String) -> OSStatus {
         store(data, account: account.rawValue, service: service,
               accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
@@ -320,12 +324,35 @@ public nonisolated enum KeychainItem {
             break
         }
         let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
-        let status = store(keyData, for: account, service: service)
+        let status = store(key.rawBytes, for: account, service: service)
         guard status != errSecSuccess else { return key }
         FernletAuditLog.log("keychain.deviceKey.storeFailed", context: [
             "account": account.rawValue, "status": "\(status)"
         ])
         return key
+    }
+}
+
+nonisolated extension SymmetricKey {
+    /// The key's raw material as an owned `Data` — the single CryptoKit byte-export seam in the
+    /// shipping tree (Power-of-10 R9).
+    ///
+    /// `SymmetricKey` is not a `Sequence` and exposes its bytes only through `ContiguousBytes`'
+    /// `withUnsafeBytes`; there is no `Data(key)` initialiser. Every store that has to hand key
+    /// material to the data-protection keychain used to spell that borrow out itself, so the same
+    /// unsafe idiom was repeated across four modules and needed four allowlist entries. It lives
+    /// here once instead.
+    ///
+    /// Invariant that makes the seam safe: the borrowed buffer is copied into an owned `Data`
+    /// *inside* the callback, so no pointer, buffer, or index escapes `withUnsafeBytes` and the
+    /// buffer is never read after it returns.
+    ///
+    /// Callers hand the result straight to the keychain and do not retain it; a `Data` of key
+    /// material is not zeroed on release, so never hold one longer than the write it feeds.
+    ///
+    /// `nonisolated`: a pure byte copy with no shared state, called from the `nonisolated`
+    /// ``KeychainItem`` accessors and from sealed stores on any executor.
+    public var rawBytes: Data {
+        withUnsafeBytes { Data($0) }
     }
 }

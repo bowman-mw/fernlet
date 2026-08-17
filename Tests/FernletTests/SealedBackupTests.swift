@@ -98,10 +98,10 @@ struct SealedBackupTests {
         // `ensureProvisioned` Case 2 adopts the synced escrow while minting a fresh signing + KA pair.
         let escrowAccount = IdentityService.escrowKeychainAccount(forPublicKey: first.localBackupEscrowPublicKey)
         let escrowData = try #require(KeychainItem.load(account: escrowAccount, service: firstID))
-        KeychainItem.store(
+        #expect(KeychainItem.store(
             escrowData, account: escrowAccount, service: secondID,
             accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true
-        )
+        ) == errSecSuccess)
         let second = IdentityService(keychainService: secondID)
         try second.ensureProvisioned()
 
@@ -152,8 +152,9 @@ struct SealedBackupTests {
         let otherPub = other.localBackupEscrowPublicKey
         let otherAccount = IdentityService.escrowKeychainAccount(forPublicKey: otherPub)
         let otherData = try #require(KeychainItem.load(account: otherAccount, service: otherID))
-        KeychainItem.store(otherData, account: otherAccount, service: serviceID,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(otherData, account: otherAccount, service: serviceID,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
 
         // Reconcile sees two keys → conflict; the SYNCED other-device key is adopted as canonical, but our
         // record's key still survives in the keychain.
@@ -171,8 +172,10 @@ struct SealedBackupTests {
         let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
         let legacyKey = Curve25519.KeyAgreement.PrivateKey()
-        KeychainItem.store(legacyKey.rawRepresentation, account: "backupEscrowPrivateKey", service: serviceID,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(legacyKey.rawRepresentation, account: "backupEscrowPrivateKey",
+                                  service: serviceID,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
 
         let identity = IdentityService(keychainService: serviceID)
         try identity.ensureProvisioned()   // Case 2: signing/KA absent, escrow present (legacy read) → adopt.

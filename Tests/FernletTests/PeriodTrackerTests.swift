@@ -226,7 +226,7 @@ struct PeriodTrackerTests {
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
-        store.isVisible = { false }
+        store.attachVisibilityGate { false }
 
         // Unlocked, with a valid key and real data present — the gate is the only thing stopping this.
         await store.loadEntries(unlockedContentKey: key)
@@ -259,7 +259,7 @@ struct PeriodTrackerTests {
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
-        store.isVisible = { visible }
+        store.attachVisibilityGate { visible }
 
         await store.loadEntries(unlockedContentKey: key)
         #expect(!store.entries.isEmpty)
@@ -270,6 +270,79 @@ struct PeriodTrackerTests {
         #expect(store.entries.isEmpty)
         #expect(store.currentPhase == .unknown)
         #expect(store.prediction == nil)
+    }
+
+    /// The gate is checked BEFORE the HealthKit await, and that await is arbitrarily long. Hiding
+    /// while it is in flight must abandon the load rather than publish narratives decrypted for a
+    /// surface the app is now presenting as off.
+    @Test func hidingDuringTheHealthKitAwaitAbandonsTheLoad() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 21, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "must not surface after hiding"
+        ), contentKey: key)
+        var visible = true
+        let store = makePeriodStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
+        )
+        store.attachVisibilityGate { visible }
+        health.duringLoad = { visible = false }
+
+        await store.loadEntries(unlockedContentKey: key)
+
+        #expect(store.entries.isEmpty)
+        #expect(store.prediction == nil)
+        #expect(store.currentPhase == .unknown)
+    }
+
+    /// The same race in the LOCK dimension: the caller's content key was live when the load started,
+    /// and the hub can lock during the HealthKit await. The load must be abandoned rather than
+    /// decrypt 240 days of narratives with a key the hub has already dropped.
+    @Test func lockingDuringTheHealthKitAwaitAbandonsTheLoad() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 22, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "must not surface after locking"
+        ), contentKey: key)
+        var liveKey: SymmetricKey? = key
+        let store = makePeriodStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
+        )
+        store.attachLiveContentKeyProvider { liveKey }
+
+        // Control: with the hub still holding the same key, the load publishes normally.
+        await store.loadEntries(unlockedContentKey: key)
+        #expect(!store.entries.isEmpty)
+
+        // The hub locks mid-await → abandon, scrubbing what the previous load left resident.
+        health.duringLoad = { liveKey = nil }
+        await store.loadEntries(unlockedContentKey: key)
+        #expect(store.entries.isEmpty)
+
+        // A re-key mid-await is the same verdict: this load's authorization no longer exists.
+        health.duringLoad = { liveKey = SymmetricKey(data: Data(repeating: 23, count: 32)) }
+        await store.loadEntries(unlockedContentKey: key)
+        #expect(store.entries.isEmpty)
     }
 
     /// Hidden must never mean deleted: the sealed rows survive and come back on un-hide.
@@ -293,7 +366,7 @@ struct PeriodTrackerTests {
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
-        store.isVisible = { visible }
+        store.attachVisibilityGate { visible }
 
         await store.loadEntries(unlockedContentKey: key)
         #expect(store.entries.isEmpty)
@@ -312,7 +385,7 @@ struct PeriodTrackerTests {
             narrativeRepository: makeRepository(),
             lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
-        store.isVisible = { false }
+        store.attachVisibilityGate { false }
 
         await #expect(throws: PeriodTrackingHiddenError.self) {
             _ = try await store.logEvent(
@@ -341,7 +414,7 @@ struct PeriodTrackerTests {
             narrativeRepository: makeRepository(),
             lockService: lock
         )
-        store.isVisible = { false }
+        store.attachVisibilityGate { false }
 
         try await store.drainPendingBuffer(contentKey: key)
 
@@ -371,7 +444,7 @@ struct PeriodTrackerTests {
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
-        store.isVisible = { visible }
+        store.attachVisibilityGate { visible }
         await store.loadEntries(unlockedContentKey: key)
         let entry = try #require(store.entries.first { $0.narrative != nil })
 
@@ -579,7 +652,7 @@ struct PeriodTrackerTests {
             lockService: lockService,
             calendar: calendar
         )
-        store.isVisible = isVisible
+        store.attachVisibilityGate(isVisible)
         return store
     }
 }
@@ -625,8 +698,14 @@ private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
     /// gate held.
     var loadPeriodEventsCallCount = 0
 
+    /// Runs INSIDE the HealthKit read, standing in for "the world changed while the await was in
+    /// flight" — the user hides cycle tracking, or the hub locks. The store re-checks both after this
+    /// returns, so a test can drive the race deterministically.
+    var duringLoad: (@MainActor () -> Void)?
+
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
         loadPeriodEventsCallCount += 1
+        duringLoad?()
         return loadedSamples
     }
 }

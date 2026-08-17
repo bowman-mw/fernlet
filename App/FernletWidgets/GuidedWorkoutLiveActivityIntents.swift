@@ -73,7 +73,10 @@ enum GuidedWorkoutIntentRunner {
         // Persist first so a foreground reconcile that races the activity update still sees the new
         // state (and, on a finish, logs it). The file is kept even when `.done` — the app clears it
         // once it has logged the finished workout.
-        store.write(state)
+        // R7: the file IS the shared truth (the app's reconcile logs the finish from it). If the
+        // write did not land, do not advance the activity past the state that is genuinely on disk —
+        // the store has already logged the failure, and the next tap retries from the real state.
+        guard store.write(state) else { return }
         await GuidedWorkoutActivityBridge.sync(to: state)
     }
 }

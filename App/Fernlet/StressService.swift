@@ -33,7 +33,11 @@ protocol StressScoringContextProviding: AnyObject {
     /// Deletes the device-local sidecar and clears the in-memory assessment. Called on
     /// "Reset everything" and when the user opts out, so HealthKit-derived baselines
     /// never outlive the user's consent.
-    func scrubStressLocalState()
+    ///
+    /// - Returns: `true` when nothing is left on disk. The result is a success/failure signal and
+    ///   therefore not discardable (R7): "delete everything" names "your body-signals baseline"
+    ///   rather than promising a wipe the file system refused.
+    func scrubStressLocalState() -> Bool
 }
 
 /// App-side owner of the opt-in "Body signals" stress estimate.
@@ -132,7 +136,7 @@ final class StressService: StressScoringContextProviding {
         // branch that deletes the on-disk HRV/RHR baseline.
         guard let store else { return }
         guard store.settings.stressAwarenessEnabled else {
-            scrubStressLocalState()
+            noteScrub(scrubStressLocalState(), reason: "optedOut")
             return
         }
         guard let fetchMetricDays else { return }
@@ -144,7 +148,7 @@ final class StressService: StressScoringContextProviding {
             // persisting now would silently re-create the clinical baselines after the user withdrew
             // consent (and un-do part of resetAll). Bail and re-scrub if it's off.
             guard store.settings.stressAwarenessEnabled else {
-                scrubStressLocalState()
+                noteScrub(scrubStressLocalState(), reason: "revokedMidFlight")
                 return
             }
             let samples = makeSamples(metricDays: metricDays, store: store)
@@ -155,23 +159,36 @@ final class StressService: StressScoringContextProviding {
             // `stressMetricDays` throws only for its gates (HealthKit master or the
             // bodyContext capability turned off) — per-metric errors are absorbed as empty
             // days. Treat a gate as revoked consent: scrub the cached clinical derivatives.
-            scrubStressLocalState()
+            noteScrub(scrubStressLocalState(), reason: "healthGateClosed")
         }
+    }
+
+    /// R7: consumes a scrub's verdict inside `refresh`, where there is no user-facing surface to
+    /// carry it. The scrub itself already logs the underlying file error; this names the CONSENT
+    /// path that asked for it, so a baseline surviving a revocation is attributable.
+    private func noteScrub(_ scrubbed: Bool, reason: String) {
+        guard !scrubbed else { return }
+        FernletAuditLog.log("stress.scrubIncomplete", context: ["reason": reason])
     }
 
     /// Deletes the device-local sidecar and clears the in-memory assessment — the reset/opt-out
     /// hook required by ``StressScoringContextProviding``.
-    func scrubStressLocalState() {
+    ///
+    /// - Returns: `true` when the sidecar is gone (including "was never there").
+    func scrubStressLocalState() -> Bool {
         assessment = nil
         lastRefreshedAt = nil
         do {
             try FileManager.default.removeItem(at: stateFileURL)
+            return true
         } catch let error as CocoaError where error.code == .fileNoSuchFile {
             // Nothing on disk — the scrub is already true. No recovery needed.
+            return true
         } catch {
             // The consent-honoring delete failed: a clinical-adjacent series is still on disk after
             // the user withdrew consent. Nothing here can force it, but it must not be invisible.
             FernletAuditLog.log("stress.scrubFailed", context: ["error": String(describing: error)])
+            return false
         }
     }
 

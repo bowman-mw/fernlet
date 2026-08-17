@@ -112,8 +112,8 @@ struct SealedBackupPayloadCoverageTests {
     /// fail-closed, so a raw `insert` would throw.
     private func seed(_ log: IntimacyLog, into store: IntimacyLogStore, key: SymmetricKey?) throws {
         let previous = store.isVisible
-        store.isVisible = { true }
-        defer { store.isVisible = previous }
+        store.attachVisibilityGate { true }
+        defer { store.attachVisibilityGate(previous) }
         try store.insert(log, contentKey: key)
     }
 

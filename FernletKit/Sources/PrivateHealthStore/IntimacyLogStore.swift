@@ -25,15 +25,25 @@ public nonisolated struct IntimacyTrackingHiddenError: Error, Equatable {
 /// `isVisible` is injected as a closure (this store is a leaf with no access to settings) and read
 /// lazily, so a toggle mid-session takes effect on the very next call — including a flip while the log
 /// sheet is still open, which `insert()` then refuses (closing that write race). It defaults to
-/// fail-CLOSED (`{ false }`): a store nobody wired must read and write nothing. `ContentView` wires the
-/// real derived closure in its launch task, next to `periodStore.isVisible`, before any load runs.
+/// fail-CLOSED (`{ false }`): a store nobody wired must read and write nothing. `ContentView` installs
+/// the real derived closure through `attachVisibilityGate(_:)` in its launch task, next to the period
+/// store's, before any load runs — the property itself is read-only from outside.
 @MainActor
 public final class IntimacyLogStore {
     /// The sealed persistence layer this funnel gates; the only object allowed to touch it.
     private let repository: IntimacyLogRepository
 
-    /// Fail-closed hard gate. See `PeriodTrackerStore.isVisible` — same contract, same reasoning.
-    public var isVisible: () -> Bool = { false }
+    /// Fail-closed hard gate. See `PeriodTrackerStore.isVisible` — same contract, same reasoning,
+    /// including R6: readable everywhere, installed only through ``attachVisibilityGate(_:)``.
+    public private(set) var isVisible: () -> Bool = { false }
+
+    /// Installs the visibility gate. Called by the app's launch wiring and by the sealed-backup
+    /// coordinator on its own instance, before anything reads or writes; until then the store refuses.
+    ///
+    /// - Parameter gate: The derived visibility verdict, re-read on every call.
+    public func attachVisibilityGate(_ gate: @escaping () -> Bool) {
+        isVisible = gate
+    }
 
     /// Creates the funnel over a sealed repository.
     ///

@@ -92,9 +92,15 @@ public struct SharedRecipeImportQueue {
     /// R3: the cap on how many queued imports the app will ever carry, applied where the external
     /// input enters (``records()`` and the read half of `modifyRecords`). The file is written by a
     /// SEPARATE process (the share extension) and can be refilled while the app is backgrounded, so
-    /// without this the drain's work — one web fetch per record — is unbounded. Oldest-first, which
-    /// matches the extension's append order.
-    public static let maxQueuedImports = 200
+    /// without this the drain's work — one web fetch per record — is unbounded.
+    ///
+    /// **Twin note (byte format):** this must equal `SharedRecipeImportQueueWriter.maxQueuedRecords`
+    /// in `App/FernletShareExtension/SharedRecipeImportQueueWriter.swift`, and evict the same END.
+    /// The extension trims OLDEST-out so the share the user just made always survives; the app
+    /// reading a different number — or keeping the opposite end — would drop rows the extension kept
+    /// and drain rows the extension considered evicted. `SharedRecipeImportQueueMirrorTests` pins
+    /// both halves.
+    public static let maxQueuedImports = 100
 
     /// R2: the named retry cap a record self-destructs at, so a permanently broken page cannot
     /// retry forever. **Twin note:** the extension never writes `attemptCount`, so this constant is
@@ -118,9 +124,9 @@ public struct SharedRecipeImportQueue {
     }
 
     /// The current queue contents under a coordinated read, capped at ``maxQueuedImports``
-    /// (oldest-first). Missing, unreadable, or corrupt files all read as an empty queue — the drain
-    /// never throws — but each of those outcomes is now named in the log rather than being
-    /// indistinguishable from "nothing queued".
+    /// (oldest-OUT, matching the share extension's trim). Missing, unreadable, or corrupt files all
+    /// read as an empty queue — the drain never throws — but each of those outcomes is now named in
+    /// the log rather than being indistinguishable from "nothing queued".
     public func records() -> [SharedRecipeImportRecord] {
         var result: [SharedRecipeImportRecord] = []
         var coordinatorError: NSError?
@@ -128,7 +134,9 @@ public struct SharedRecipeImportQueue {
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &coordinatorError) { url in
             guard fileManager.fileExists(atPath: url.path) else { return }
             guard let decoded = decodeRecords(at: url) else { return }
-            result = Array(decoded.prefix(Self.maxQueuedImports))   // R3: cap where the input enters.
+            // R3: cap where the input enters, oldest-out — the same end the extension trims, so the
+            // two processes never disagree about which rows are still queued.
+            result = Array(decoded.suffix(Self.maxQueuedImports))
         }
         if let coordinatorError {
             Self.logger.error("recipeImportQueue.coordinateReadFailed: \(coordinatorError.localizedDescription, privacy: .public)")
@@ -148,8 +156,13 @@ public struct SharedRecipeImportQueue {
     }
 
     /// Removes a record by id — the success path after an import lands in the store.
-    public func remove(_ record: SharedRecipeImportRecord) {
-        logIfRewriteFailed(modifyRecords { $0.removeAll { $0.id == record.id } }, operation: "remove")
+    ///
+    /// - Returns: whether the rewrite landed. Not discardable (R7): a `false` means this record is
+    ///   still queued and the next drain re-imports the recipe, so the drain reports it too.
+    public func remove(_ record: SharedRecipeImportRecord) -> Bool {
+        let didWrite = modifyRecords { $0.removeAll { $0.id == record.id } }
+        logIfRewriteFailed(didWrite, operation: "remove")
+        return didWrite
     }
 
     /// R7: names the recovery when a queue rewrite does not land. A failed rewrite after `remove`
@@ -181,7 +194,10 @@ public struct SharedRecipeImportQueue {
     /// Records a failed import attempt (timestamp + error text). A record that reaches
     /// ``maxImportAttempts`` attempts is removed outright, so a permanently broken page cannot
     /// retry forever.
-    public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
+    ///
+    /// - Returns: whether the rewrite landed (see ``remove(_:)`` — same not-discardable reasoning:
+    ///   a lost attempt stamp is a broken page that never reaches its self-destruct).
+    public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) -> Bool {
         let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].attemptCount += 1
@@ -192,17 +208,22 @@ public struct SharedRecipeImportQueue {
             }
         }
         logIfRewriteFailed(didWrite, operation: "markAttempt")
+        return didWrite
     }
 
     /// Stamps a record as deferred-for-budget on `dayKey` (the drain hit `aiBudgetExhausted`). Unlike
     /// `markAttempt`, this does NOT burn an attempt or remove the record — a budget miss is transient and
     /// not the page's fault; it only tells the drain to stop re-fetching this page today.
-    public func markBudgetDeferred(_ record: SharedRecipeImportRecord, dayKey: String) {
+    ///
+    /// - Returns: whether the rewrite landed (see ``remove(_:)``); a lost stamp only costs a repeat
+    ///   fetch today, but it is still reported rather than assumed.
+    public func markBudgetDeferred(_ record: SharedRecipeImportRecord, dayKey: String) -> Bool {
         let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].budgetDeferredDayKey = dayKey
         }
         logIfRewriteFailed(didWrite, operation: "markBudgetDeferred")
+        return didWrite
     }
 
     /// Applies `transform` to the queue under one coordinated read+write, returning whether the
@@ -221,7 +242,7 @@ public struct SharedRecipeImportQueue {
                 guard let decoded = decodeRecords(at: readURL) else {
                     return  // File exists but corrupt — abort mutation to preserve data.
                 }
-                current = Array(decoded.prefix(Self.maxQueuedImports))   // R3: cap where the input enters.
+                current = Array(decoded.suffix(Self.maxQueuedImports))   // R3: cap where the input enters (oldest-out).
             }
             transform(&current)
             didWrite = writeRecords(current, to: writeURL)

@@ -54,7 +54,7 @@ struct KeyCustodyBoundaryTests {
         // biometric bypass is separately pinned by source in `biometricBypassACLIsPinnedInSource`
         // because storing a WhenPasscodeSet item requires a device passcode the simulator lacks).
         for key in [LockKeychainKey.salt, .verifier, .wrappedContentKey, .seWrappedContentKey] {
-            KeychainItem.store(Data([0xAB]), for: key, service: service)
+            #expect(KeychainItem.store(Data([0xAB]), for: key, service: service) == errSecSuccess)
             let attrs = rowAttributes(account: key.rawValue, service: service)
             #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
                     "\(key.rawValue) must be WhenUnlockedThisDeviceOnly")

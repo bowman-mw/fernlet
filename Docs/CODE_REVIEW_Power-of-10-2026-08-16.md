@@ -18,6 +18,7 @@ Scope: every shipping Swift file (366 files, ~127k lines) in `FernletKit/Sources
 | Assertion density (guard+assert / logic functions ≥ 3 lines) | 0.684 (floor 0.60) |
 | Compiler warnings, app targets | 0 |
 | Compiler warnings, FernletKit package (hidden by Xcode's `-suppress-warnings`) | ~55 → **0** after rule-10 fixes |
+| **After the fix phase: enforced violations** | **0** (allowlist 12, density 0.686) |
 | Compiler warnings, test targets | 14 → **0** |
 
 ## Rule 10 — done in this round
@@ -458,5 +459,52 @@ Totals: 905 findings, 785 real ({'medium': 272, 'low': 473, 'high': 40}); by rul
 
 ## Fix phase
 
-_Pending — this section is filled in when the per-slice fix branches land (fixed / refuted / allowlisted / not fixed, final scanner + build + test results)._
+Sixteen fixers (one per slice, each in an isolated worktree, compile-checked against the strict build) then three sequential cross-slice follow-ups. Result: **scanner 0 violations across 366 files**, strict build-for-testing green (warnings as errors, package warnings un-suppressed), full `FernletTests` green, doc coverage 0, allowlist = 12 reasoned entries.
+
+| Slice | Fixed | Refuted | Allowlisted | Left for cross-slice | Files |
+|---|---|---|---|---|---|
+| App-Food-Capture | 34 | 3 | 0 | 2 | 12 |
+| App-Home-Companion | 38 | 13 | 0 | 5 | 11 |
+| App-Settings-Privacy | 28 | 4 | 0 | 4 | 6 |
+| App-Private-Journal-Photos | 48 | 3 | 1 | 0 | 16 |
+| App-Food-Recipes | 29 | 0 | 0 | 3 | 5 |
+| App-Duress-Backup-Social | 36 | 0 | 0 | 3 | 15 |
+| App-Move-Coach | 39 | 4 | 0 | 2 | 13 |
+| App-Store-Shell | 30 | 1 | 0 | 7 | 17 |
+| FernletDomainModel | 32 | 5 | 0 | 4 | 16 |
+| Lock-Crypto | 32 | 4 | 2 | 5 | 9 |
+| PrivateStores | 45 | 7 | 3 | 6 | 17 |
+| Persistence-Sync | 56 | 5 | 1 | 11 | 27 |
+| ProximityKit-Engine-Heart | 43 | 3 | 0 | 8 | 21 |
+| Foundation-Services | 25 | 7 | 3 | 6 | 21 |
+| AI-UI-Extensions | 21 | 6 | 1 | 3 | 13 |
+| ProximityKit-Mesh-Wire | 32 | 0 | 4 | 3 | 12 |
+| **Total** | **568** | **65** | 15 (→ 12 after follow-ups) | 72 | — |
+
+Fixes by rule (per-slice phase): R7-SWALLOW 143, R4-LENGTH 96, R7-DISCARD 85, R5-VALIDATION 76, R3-GROWTH 69, R9-UNSAFE 30, R5-FORCE 21, R6-SCOPE 12, R1-RECURSION 8, R2-BOUND 6, R5-TRAP 4, R6 4, R6-STATIC-VAR 4, R2-WHILE-TRUE 3, R10 2, R2-WHILE 2, R7 1, R8-IF-NEST 1, R1 1.
+
+### Cross-slice follow-ups (three sequential agents on the merged tree)
+
+**Follow-up 1** — 19 fixed, 6 deliberately left, 60 files. Fixed the DuressRecoveryTests regression from the merge and worked the R7 cross-slice queue: removed @discardableResult from every success/failure-signal API named in the brief (plus the ones the advisory listed whose result is Bool/Result/OSStatus/optional-error) and made every caller consume the value — guard/if with a FernletAuditLog "<area>.<op>.failed" line and a recovery in shipping code, #expect/XCTAssert in tests.
+
+**Follow-up 2** — 17 fixed, 4 deliberately left, 29 files. All 13 cross-slice Power-of-10 items addressed in the main working tree.
+
+**Follow-up 3** — 6 fixed, 7 deliberately left, 6 files. Three cross-slice Power-of-10 items fixed in the main working tree.
+
+Highlights (the ProximityCoordinator fan-out item was reverted, see Residuals): every `@discardableResult` on a Bool/Result/OSStatus/optional-error signal is gone and its callers consume the value (delete-everything now names a surviving stress sidecar and a surviving widget run-state file; a sustained heart-drop fetch outage surfaces as `DeliveryProblem.incomingUnreachable`); the byte-format twins agree on caps and eviction ends (widget pending actions 512/refuse, shared-recipe queue 100/oldest-out); `PeriodTrackerStore.loadEntries` re-checks visibility and the live key after its HealthKit await; `isVisible`/`duressPurgeHook`/`isAdultVerified` are `private(set)` behind attach seams; `PersistenceController.shared` is `@MainActor`; the CryptoKit `SymmetricKey→Data` idiom is one documented `rawBytes` helper.
+
+### Integration notes
+
+- Two 3-way merge conflicts (`ProtectedSidecar.retryLoad` Void vs Bool; `WorkoutModels` `Mutex` vs `NSLock`) resolved toward the fixers' versions; two merge interactions fixed by hand (`biometricPromptTimeout` needed `nonisolated`; a test had to assert `SharedRecipeImportQueue.clear()`'s new Bool).
+- **HealthKit lesson:** an `HKAnchoredObjectQuery` with both a `limit` and an `updateHandler` throws `NSInvalidArgumentException` — the R3 batch cap a fixer added crashed the test runner seven times, and every 'failing' suite in that run was a casualty. Restored `HKObjectQueryNoLimit`; the correct bounded design (paginate the first-run backfill with limited one-shot queries, then attach the unlimited update query) is a residual below.
+- `configure(credential:)` now refuses to mint over an existing lock (a re-mint orphans the sealed corpus's only content key); the one test that modelled that operation now asserts the refusal and the reset-then-configure sweep.
+
+### Residuals (tracked, not silent)
+
+- R3 — `ProximityCoordinator` still spawns one `Task { @MainActor }` per Combine event (inbound message, transport state, UWB distance, ranging state). Follow-up 3 replaced this with one long-lived consumer per stream over a bounded FIFO (`ProximityEventQueue`, caps 256/64/32/16, cancelled in `deinit`, overflow audited) — green alone, but the extra wake-up hop made 12 `ProximityCoordinatorTests`/`CoachSessionHardeningTests` expectations time out under full-suite load, so it was reverted at the capstone. The draft is preserved (session scratchpad `ProximityCoordinator.bounded-fifo.swift`) and the description above is the design to land together with deadline-based test waits (see memory: wall-clock deadlines vs MainActor starvation).
+- R3 — HealthKit first-run backfill is bounded only by the 30-day window predicate; paginated one-shot backfill before the update query is the follow-up (`HealthKitService.startAnchoredQuery`).
+- R3 — `ModerationLedger` per-reporter quota is a moderation-semantics decision (total and per-delivery caps are in place).
+- R7 — value-returning `@discardableResult`s (Meal/Recipe/UUID/Data results, fluent wrappers) stay, each with a doc note on why the discard is safe; `_ =` discards in shipping code were reviewed, the two security-relevant ones carry fail-closed rationales.
+- R5 — the density floor is a repo-wide ratchet (now 0.68; achieved 0.686); view-heavy slices sit below it individually by design.
+- The 12 allowlist entries: CryptoKit/Security/SQLite/Compression/Core Data/MC/NI/ActivityKit seams (R9), the two unreachable `init(coder:)` traps (R5), and the process-global HealthKit cache-clearer registry (R6) — each with its invariant in `Scripts/power-of-10-allowlist.json`.
 

@@ -38,7 +38,7 @@ struct CookingRunStateTests {
 
         var run = makeRun(stepIndex: 1)
         run.startTimer(now: Date(timeIntervalSince1970: 1_779_664_900))
-        store.write(run)
+        #expect(store.write(run) == true)
 
         let loaded = try #require(store.read())
         #expect(loaded.recipeID == run.recipeID)
@@ -55,9 +55,9 @@ struct CookingRunStateTests {
     @Test func storeClearRemovesTheRun() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = CookingRunStateStore(directory: dir)
-        store.write(makeRun())
+        #expect(store.write(makeRun()) == true)
         #expect(store.read() != nil)
-        store.clear()
+        #expect(store.clear() == true)
         #expect(store.read() == nil)
     }
 
@@ -66,7 +66,7 @@ struct CookingRunStateTests {
         let store = CookingRunStateStore(directory: dir)
         var run = makeRun()
         run.updatedAt = Date(timeIntervalSince1970: 0)   // deliberately stale
-        store.write(run)
+        #expect(store.write(run) == true)
         let loaded = try #require(store.read())
         // The store stamps a fresh updatedAt so reconcile can age-out abandoned runs — never the caller's.
         #expect(loaded.updatedAt.timeIntervalSince1970 > 1)

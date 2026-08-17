@@ -106,7 +106,7 @@ final class DataExportTests: XCTestCase {
     /// halves — the shared summary is gone, the unrelated export it must not touch survives.
     func testDiscardExportedFileRemovesOnlyTheSharedFile() throws {
         let (store, _, _) = makeTestStoreWithRepositories()
-        defer { store.purgeDataExports() }
+        defer { XCTAssertTrue(store.purgeDataExports(), "cleanup purge reported failure") }
 
         // Data export first: its write path sweeps the directory, so preparing it second would take the
         // trainer summary with it. Trainer-then-share is the real order a user hits anyway.
@@ -162,7 +162,7 @@ final class DataExportTests: XCTestCase {
                       "the fresh export should exist after writing")
 
         // Clean up so the shared tmp/ directory doesn't leak between tests.
-        store.purgeDataExports()
+        XCTAssertTrue(store.purgeDataExports(), "cleanup purge reported failure")
     }
 
     /// A user's authored cooking steps (F5) and their planner day-assignments (F3) are their own data, so

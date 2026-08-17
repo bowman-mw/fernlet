@@ -25,7 +25,7 @@ struct FernletSnapshotRoundTripTests {
         )
         let savedRecipes = try baselineSavedRecipes()
 
-        savedRecipeRepository.deleteAll()
+        #expect(savedRecipeRepository.deleteAll() == true)
         #expect(savedRecipeRepository.upsert(savedRecipes))
         #expect(repository.saveSnapshot(snapshot))
 

@@ -122,7 +122,8 @@ struct SecureEnclaveWrapTests {
         #expect(scryptItemExists(service: service), "setup must have left the legacy scrypt item")
 
         // A corrupt blob in the legacy state: the unlock must still succeed via scrypt…
-        KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey, service: service)
+        #expect(KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey,
+                                  service: service) == errSecSuccess)
         let lockService = makeService(keychainService: service)
         _ = try await lockService.unlock(passcode: "135791", for: .privateHub)
         #expect(try contentKeyBytes(lockService) == contentKeyData)
@@ -395,7 +396,8 @@ struct SecureEnclaveWrapTests {
         #expect(scryptItemExists(service: service), "an absent wrap must never trigger the flip")
 
         // CORRUPT wrap: unwrappable, and (writes refused) unrepairable — still no deletion.
-        KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey, service: service)
+        #expect(KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey,
+                                  service: service) == errSecSuccess)
         lockService.lock(reason: .manual)
         _ = try await lockService.unlock(passcode: "778899", for: .privateHub)
         #expect(try contentKeyBytes(lockService) == contentKeyData,
@@ -537,7 +539,8 @@ struct SecureEnclaveWrapTests {
 
         // The enclave wrap is destroyed (its blob replaced with garbage the live SE key rejects),
         // and the app relaunches: a cold service, nothing cached.
-        KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey, service: service)
+        #expect(KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey,
+                                  service: service) == errSecSuccess)
         let relaunched = makeService(
             keychainService: service,
             biometricBypassLoader: { _, _ in contentKeyData },
@@ -763,8 +766,9 @@ struct SecureEnclaveWrapTests {
             _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         // Residue from a previous lock: a bypass row and its enabled flag.
-        KeychainItem.store(Data(repeating: 0x11, count: 32), for: .biometricBypass, service: service)
-        KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: service)
+        #expect(KeychainItem.store(Data(repeating: 0x11, count: 32), for: .biometricBypass,
+                                  service: service) == errSecSuccess)
+        #expect(KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: service) == errSecSuccess)
 
         // A configure that dies at its very FIRST write.
         let failing = makeService(keychainService: service, refusingWritesFor: [.salt])

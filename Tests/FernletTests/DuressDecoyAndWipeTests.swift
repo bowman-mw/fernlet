@@ -271,7 +271,7 @@ struct DuressSilentWipeTests {
         try await service.configureDuress(pin: "654321", mode: .silentWipe)
 
         let counter = DuressTestCounter()
-        service.duressPurgeHook = { counter.increment() }
+        service.installDuressPurgeHook { counter.increment() }
 
         return WipeFixture(
             harness: harness,

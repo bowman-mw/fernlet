@@ -120,7 +120,8 @@ struct DayRowMigrationTests {
 
         // Pre-seed a SPARSE row for the day (as if a prior partial migration or a stale device wrote it).
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: Date())])  // empty row
+        // Empty row.
+        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: Date())]) == true)
 
         // The blob holds a RICHER same-day copy (meals + a journal).
         var blob = LocalFernletDatabase()
@@ -148,10 +149,10 @@ struct DayRowMigrationTests {
         // blob's stale copy — the pure-backfill guard against re-fan clobber.
         let controller = PersistenceController(inMemory: true)
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(
+        #expect(dayRepo.upsert([DayRecordUpsert(
             day: FernletDay(date: "2026-05-01", journals: [JournalEntry(text: "newer row edit", tag: .good)], bottleCount: 5),
             updatedAt: Date()
-        )])
+        )]) == true)
 
         var blob = LocalFernletDatabase()
         blob.days = ["2026-05-01": FernletDay(date: "2026-05-01", bottleCount: 1)]  // sparser

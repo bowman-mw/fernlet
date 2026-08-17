@@ -550,7 +550,7 @@ struct FernletLockServiceTests {
         // format, where the verifier and the content-key wrapping key were the same bytes).
         let salt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
         let rawDerived = try await harness.crypto.deriveVerifier(passcode: "123456", salt: salt, n: FernletLockCrypto.scryptN)
-        KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID)
+        #expect(KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID) == errSecSuccess)
         #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
 
         // Unlock still succeeds via the legacy compare, and yields the same content key.
@@ -578,7 +578,7 @@ struct FernletLockServiceTests {
 
         let salt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
         let rawDerived = try await harness.crypto.deriveVerifier(passcode: "123456", salt: salt, n: FernletLockCrypto.scryptN)
-        KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID)
+        #expect(KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID) == errSecSuccess)
 
         do {
             _ = try await service.unlock(passcode: "000000", for: .privateHub)

@@ -14,6 +14,7 @@ import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
 import PrivateStoreCore
+import FernletScoring
 @testable import Fernlet
 
 /// Covers "delete everything" actually deleting everything.
@@ -72,7 +73,7 @@ struct DeleteAllDataTests {
             exercises: [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)],
             suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
         )
-        mine.startGuidedRun(session)
+        #expect(mine.startGuidedRun(session) == true)
         _ = mine.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: mine.todayKey,
             action: PendingWidgetAction.waterPlusOne, createdAt: Date()
@@ -80,7 +81,7 @@ struct DeleteAllDataTests {
         #expect(mine.guidedRunState != nil, "precondition: the guided run did not start")
 
         // The other suite's "delete everything" — reaches resetAll's run-file clears AND the queue.
-        theirs.startGuidedRun(session)
+        #expect(theirs.startGuidedRun(session) == true)
         _ = await theirs.deleteAllData(includingHealthKitSamples: false)
 
         // Its own state really is gone, so the assertions below cannot pass against a wipe that
@@ -146,9 +147,9 @@ struct DeleteAllDataTests {
     @Test func purgingLeavesTheRepositoryUsable() {
         let todayKey = "2026-07-02"
         let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-usable"))
-        repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: todayKey, bottles: 1), sealedJournalIDs: []))
+        #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: todayKey, bottles: 1), sealedJournalIDs: [])) == true)
 
-        repository.purgeAllPersistedData()
+        #expect(repository.purgeAllPersistedData() == true)
 
         #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: todayKey, bottles: 3), sealedJournalIDs: [])))
         #expect(repository.loadSnapshot(todayKey: todayKey).day.bottleCount == 3)
@@ -251,7 +252,7 @@ struct DeleteAllDataTests {
         let url = temporaryDatabaseURL("delete-all-relaunch")
         let pastKey = "2026-01-02"
         let repository = LocalFernletRepository(fileURL: url)
-        repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
+        #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: [])) == true)
         #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
 
         let store = FernletStore(repository: repository, sensitiveVisibilityDefaults: uniqueSensitiveVisibilityDefaults(), appGroupDirectory: uniqueAppGroupDirectory(),
@@ -564,7 +565,7 @@ struct DeleteAllDataTests {
             exercises: [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)],
             suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
         )
-        store.startGuidedRun(s)
+        #expect(store.startGuidedRun(s) == true)
         #expect(store.guidedRunState != nil, "precondition: the guided run did not start")
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
@@ -631,7 +632,15 @@ struct DeleteAllDataTests {
 
     /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.
     /// HealthKit is left out because it only fires when the caller opts into deleting samples.
+    /// A stress context whose scrub always succeeds — the production shape (`ContentView` wires the
+    /// real `StressService`), so a "clean wipe" test is not tripped by an unwired seam.
+    private final class ScrubbingStressContext: StressScoringContextProviding {
+        var currentStressAssessment: StressAssessment?
+        func scrubStressLocalState() -> Bool { true }
+    }
+
     private func wireSucceedingSealedHooks(_ store: FernletStore) {
+        store.attachStressScoringContext(ScrubbingStressContext())
         store.periodDataDeleteHook = { true }
         store.intimacyDataDeleteHook = { true }
         store.journalDataDeleteHook = { true }

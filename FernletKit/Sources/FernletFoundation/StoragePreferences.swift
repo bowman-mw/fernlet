@@ -352,8 +352,12 @@ public final class StoragePreferencesStore {
     ///
     /// R7: the delete's `OSStatus` is checked, not dropped — a failed `SecItemDelete` leaves the row
     /// (with its `lastModifiedAt` trace of use) behind while the wipe reports complete, so it lands
-    /// in the audit log and in ``lastPersistError``.
-    public func resetToDefaults() {
+    /// in the audit log, in ``lastPersistError``, AND in this method's result. The result is a
+    /// success/failure signal and therefore not discardable: "delete everything" names the residual
+    /// row in its incomplete-stores list rather than promising a wipe the keychain refused.
+    ///
+    /// - Returns: `true` when the persisted row is genuinely gone.
+    public func resetToDefaults() -> Bool {
         let status = KeychainItem.deleteReportingStatus(for: .storagePreferences, service: keychainService)
         if status == errSecSuccess {
             lastPersistError = nil
@@ -362,6 +366,7 @@ public final class StoragePreferencesStore {
             lastPersistError = status
         }
         preferences = StoragePreferences()
+        return status == errSecSuccess
     }
 
     /// Persists `preferences` to the keychain, recording any failure in ``lastPersistError``.

@@ -84,9 +84,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
     /// handed; existing duplicate rows for a key are all updated (they collapse on the next read).
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func upsert(_ days: [DayRecordUpsert]) -> Bool {
+    ///   Not discardable (R7): a dropped save silently loses the day the caller just wrote.
+    public func upsert(_ days: [DayRecordUpsert]) -> Bool {
         guard !days.isEmpty else { return true }
         let context = controller.container.viewContext
         do {
@@ -128,9 +127,10 @@ public struct DayRecordRepository: DayRecordRepositoring {
 
     /// Deletes the rows for the listed days (a no-op, returning `true`, when none exist) — used
     /// when a day's last logged entry is removed so an emptied day doesn't linger.
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func delete(dateKeys: [String]) -> Bool {
+    ///
+    /// - Returns: `false` when the Core Data delete/save fails. Not discardable (R7): the emptied
+    ///   day is still on disk (and still syncing) when it does.
+    public func delete(dateKeys: [String]) -> Bool {
         guard !dateKeys.isEmpty else { return true }
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")

@@ -314,7 +314,9 @@ struct SessionMessageTests {
     @Test func newSessionFormationStartsWithAnEmptyTranscript() throws {
         let manager = store.meshNetworkManager
         // A stale message lingering in the store (no live session).
-        manager.sessionMessages.receiveIncoming(id: UUID(), senderFingerprint: "fp", senderDisplayName: "Ghost", text: "stale", sentAt: day, now: day)
+        #expect(manager.sessionMessages.receiveIncoming(id: UUID(), senderFingerprint: "fp",
+                                                       senderDisplayName: "Ghost", text: "stale",
+                                                       sentAt: day, now: day))
         #expect(!manager.sessionMessages.messages.isEmpty)
 
         // First slot COMMIT (session formation) clears it.
@@ -336,10 +338,10 @@ struct SessionMessageTests {
     @Test func messagesNeverEnterThePersistedSnapshot() throws {
         let (persistStore, repository, _) = makeTestStoreWithRepositories(date: day)
         let sentinel = "SECRET-CHAT-SENTINEL-9x7q"
-        persistStore.meshNetworkManager.sessionMessages.receiveIncoming(
+        #expect(persistStore.meshNetworkManager.sessionMessages.receiveIncoming(
             id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
             text: sentinel, sentAt: day, now: day
-        )
+        ))
         #expect(!persistStore.meshNetworkManager.sessionMessages.messages.isEmpty)
 
         // Force the store to persist everything it CAN persist.

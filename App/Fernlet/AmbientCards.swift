@@ -445,7 +445,16 @@ struct AmbientCardsView: View {
                         // accepting consumes the per-nutrient suppression.
                         if let food = suggestion.foods.first {
                             Button {
-                                store.logNutrientSuggestionFood(food, date: store.todayKey)
+                                // R7: a nil is an unresolvable pinned food, i.e. nothing was
+                                // logged. Recovery is to leave the bubble standing — dismissing it
+                                // would retire the nudge for a meal that never landed.
+                                guard store.logNutrientSuggestionFood(food, date: store.todayKey) != nil else {
+                                    FernletAuditLog.log(
+                                        "food.nutrientSuggestion.logFailed",
+                                        context: ["nutrient": food.nutrientKey]
+                                    )
+                                    return
+                                }
                                 store.dismissNutrientBubble(gap.nutrientKey)
                             } label: {
                                 Text(NutrientNudgeCopy.addButtonLabel(food: food))

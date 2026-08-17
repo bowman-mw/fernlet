@@ -184,7 +184,12 @@ public final class WorryNarrativeRepository: WorryStoring, Sendable {
     /// the private lock is closed (see ``WorryStoring/deleteAll()``). Routes through the shared
     /// `PrivateRowPlumbing.deleteRows` sequence, like every sealed repository's `deleteAll()`.
     public func deleteAll() throws {
-        try PrivateRowPlumbing.deleteRows(entityName: Self.entityName, in: context)
+        // R7: the Bool says whether rows were actually found and dropped. Nothing to recover here
+        // (a store that was already empty is the same end state), but a delete that found rows and
+        // a delete that found none are different facts, so the "some were dropped" case is named.
+        if try PrivateRowPlumbing.deleteRows(entityName: Self.entityName, in: context) {
+            FernletAuditLog.log("worryBox.deleteAll.rowsDropped")
+        }
     }
 
     /// Migrates every row sealed under `oldKey` to `newKey` in one transaction — the device-key →

@@ -123,8 +123,9 @@ struct IdentityServiceEscrowTests {
         let (fresh, freshID) = makeService()
         defer { KeychainItem.deleteAll(service: freshID) }
         let escrowData = try #require(KeychainItem.load(account: originAccount, service: originID))
-        KeychainItem.store(escrowData, account: originAccount, service: freshID,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(escrowData, account: originAccount, service: freshID,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
 
         try fresh.ensureProvisioned()
         let freshPub = fresh.provisionBackupEscrowKeyForSealing()
@@ -169,8 +170,9 @@ struct IdentityServiceEscrowTests {
 
         let (svc, id) = makeService()
         defer { KeychainItem.deleteAll(service: id) }
-        KeychainItem.store(escrowData, account: originAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(escrowData, account: originAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
         try svc.ensureProvisioned()
 
         #expect(svc.reconcileBackupEscrowKey() == .usingSynced)
@@ -198,8 +200,9 @@ struct IdentityServiceEscrowTests {
         #expect(localAccount != otherAccount)
         #expect(syncedKeyData != localKeyData)
         // The DIFFERENT synced key arrives at ITS OWN content-addressed account — coexists with the local one.
-        KeychainItem.store(syncedKeyData, account: otherAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(syncedKeyData, account: otherAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
 
         #expect(svc.reconcileBackupEscrowKey() == .conflict)
         // Both rows survive at their distinct accounts — nothing silently overwritten.
@@ -222,8 +225,9 @@ struct IdentityServiceEscrowTests {
         try svc.ensureProvisioned()
         let localPub = svc.provisionBackupEscrowKeyForSealing()
         let localAccount = IdentityService.escrowKeychainAccount(forPublicKey: localPub)
-        KeychainItem.store(syncedKeyData, account: syncedAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(syncedKeyData, account: syncedAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
         #expect(svc.reconcileBackupEscrowKey() == .conflict)
 
         // User confirms switching to the other device's key: adopt synced, drop the divergent local copy.
@@ -246,8 +250,9 @@ struct IdentityServiceEscrowTests {
         let legacyKey = Curve25519.KeyAgreement.PrivateKey()
         let (svc, id) = makeService()
         defer { KeychainItem.deleteAll(service: id) }
-        KeychainItem.store(legacyKey.rawRepresentation, account: legacyEscrowAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(legacyKey.rawRepresentation, account: legacyEscrowAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
         try svc.ensureProvisioned()
 
         #expect(svc.reconcileBackupEscrowKey() == .usingSynced)
@@ -261,8 +266,9 @@ struct IdentityServiceEscrowTests {
         let legacyKey = Curve25519.KeyAgreement.PrivateKey()
         let (svc, id) = makeService()
         defer { KeychainItem.deleteAll(service: id) }
-        KeychainItem.store(legacyKey.rawRepresentation, account: legacyEscrowAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(legacyKey.rawRepresentation, account: legacyEscrowAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
         try svc.ensureProvisioned()
 
         #expect(svc.reconcileBackupEscrowKey() == .usingSynced)
@@ -289,8 +295,9 @@ struct IdentityServiceEscrowTests {
         let keyB = Curve25519.KeyAgreement.PrivateKey()
         // Plant key A's bytes at the CA account DERIVED FROM key B's public key (account ≠ hash(keyA.pub)).
         let foreignAccount = IdentityService.escrowKeychainAccount(forPublicKey: keyB.publicKey.rawRepresentation)
-        KeychainItem.store(keyA.rawRepresentation, account: foreignAccount, service: id,
-                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+        #expect(KeychainItem.store(keyA.rawRepresentation, account: foreignAccount, service: id,
+                                  accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                  synchronizable: true) == errSecSuccess)
 
         #expect(svc.reconcileBackupEscrowKey() == .noEscrow)
         #expect(svc.sealedBackupKeyCandidates().isEmpty)

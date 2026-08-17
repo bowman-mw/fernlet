@@ -215,7 +215,7 @@ struct FriendShopTests {
                 remaining -= amount
                 dayN += 1
             }
-            coinRepo.append(rows)
+            #expect(coinRepo.append(rows) == true)
         }
         return FernletStore(
             date: day,

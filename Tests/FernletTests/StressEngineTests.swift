@@ -283,7 +283,7 @@ struct StressEngineTests {
         var currentStressAssessment: StressAssessment?
         var scrubbed = false
         init(_ assessment: StressAssessment?) { currentStressAssessment = assessment }
-        func scrubStressLocalState() { scrubbed = true }
+        func scrubStressLocalState() -> Bool { scrubbed = true; return true }
     }
 
     @Test func storeScoreUnchangedWhileSettingOff() {

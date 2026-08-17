@@ -255,7 +255,7 @@ struct SealedBackupRestoreTests {
         let legacyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()), updatedAt: Date())])
+        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()), updatedAt: Date())]) == true)
         let repository = CoreDataFernletRepository(
             controller: controller,
             legacyRepository: LocalFernletRepository(fileURL: legacyURL),

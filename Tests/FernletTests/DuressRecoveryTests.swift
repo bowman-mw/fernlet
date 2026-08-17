@@ -100,7 +100,7 @@ private final class RecoveryFixture {
             try await service.setBiometricEnabled(true, passcode: realPIN)
         }
         let counter = purgeCount
-        service.duressPurgeHook = { counter.increment() }
+        service.installDuressPurgeHook { counter.increment() }
     }
 
     /// Enrolls `custodianIdentity` the way the ceremony does: seal the content key to its
@@ -182,8 +182,10 @@ struct DuressRecoveryEnrollmentTests {
         defer { fixture.cleanup() }
         let harness = fixture.harness
 
-        KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey, service: harness.serviceID)
-        KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey, service: harness.serviceID)
+        #expect(KeychainItem.store(Data(repeating: 0x11, count: 32), for: .custodianSigningPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
+        #expect(KeychainItem.store(Data(repeating: 0x22, count: 32), for: .custodianKeyAgreementPublicKey,
+                                  service: harness.serviceID) == errSecSuccess)
 
         #expect(!fixture.service.hasRecoveryCustodian)
         await #expect(throws: FernletLockError.self) {
@@ -486,18 +488,49 @@ struct DuressRecoveryLockTriggerTests {
         #expect(relaunched.configuredDuressMode == .recoveryLock)
     }
 
-    /// An ordinary re-configure on a device that is NOT awaiting recovery still sweeps the material:
-    /// a fresh content key makes the blob (and the custodian enrolled against it) meaningless.
-    @Test func anOrdinaryReconfigureStillSweepsTheRecoveryMaterial() async throws {
+    /// `configure` is FIRST-TIME setup, and its mint destroys the only copies of the live content
+    /// key — so over a lock that still exists it is refused outright rather than allowed to sweep.
+    /// The custodian material survives the refusal, because a refusal must change nothing.
+    @Test func configuringOverALiveLockIsRefusedAndKeepsTheRecoveryMaterial() async throws {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
         try await fixture.enrollCustodian()
         #expect(fixture.service.hasRecoveryCustodian)
 
+        await #expect(throws: FernletLockError.self) {
+            try await fixture.service.configure(credential: .pin6("999999"), grantingScope: .privateHub)
+        }
+
+        #expect(fixture.service.hasRecoveryCustodian)
+        #expect(recoveryRow(.custodianSigningPublicKey, fixture.harness) != nil)
+        #expect(fixture.service.custodianRecoveryBlob != nil)
+        // …and the lock the refusal protected is still the ORIGINAL one.
+        fixture.service.lock(reason: .manual)
+        _ = try await fixture.service.unlock(passcode: "123456", for: .privateHub)
+        let key = try #require(fixture.service.contentKey(for: .privateHub))
+        #expect(key.withUnsafeBytes { Data($0) } == fixture.contentKey)
+    }
+
+    /// The legitimate re-setup route, end to end: `reset()` sweeps every row under the lock's
+    /// keychain service — the recovery material with them — so the fresh `configure` that follows
+    /// is a first-time setup again, and it lands with no custodian enrolled against it.
+    @Test func aResetThenAFreshConfigureLeavesNoRecoveryMaterial() async throws {
+        let fixture = try await RecoveryFixture()
+        defer { fixture.cleanup() }
+        try await fixture.enrollCustodian()
+
+        try fixture.service.reset()
+
+        // The sweep is `reset()`'s own `KeychainItem.deleteAll`, before any re-mint runs.
+        #expect(!fixture.service.hasRecoveryCustodian)
+        #expect(recoveryRow(.custodianSigningPublicKey, fixture.harness) == nil)
+        #expect(recoveryRow(.recoveryBlob, fixture.harness) == nil)
+
         try await fixture.service.configure(credential: .pin6("999999"), grantingScope: .privateHub)
 
         #expect(!fixture.service.hasRecoveryCustodian)
-        #expect(recoveryRow(.custodianSigningPublicKey, fixture.harness) == nil)
+        #expect(fixture.service.custodianRecoveryBlob == nil)
+        #expect(!fixture.service.hasSupersededRecoveryBlob)
     }
 }
 

@@ -29,10 +29,10 @@ struct HealthKitCacheCleanerTests {
             healthContext: HealthDailyContext(body: HealthBodyContext(sleepHours: 6))
         )
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([
+        #expect(dayRepo.upsert([
             DayRecordUpsert(day: healthSleepDay, updatedAt: Date()),
             DayRecordUpsert(day: userSleepDay, updatedAt: Date())
-        ])
+        ]) == true)
 
         // The aggregate blob still carries a bounded-cache day with healthContext — the leak the cleaner closes.
         seedBlobDay(
@@ -64,7 +64,7 @@ struct HealthKitCacheCleanerTests {
             healthContext: HealthDailyContext(body: HealthBodyContext(sleepHours: 7.5))
         )
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(day: healthSleepDay, updatedAt: Date())])
+        #expect(dayRepo.upsert([DayRecordUpsert(day: healthSleepDay, updatedAt: Date())]) == true)
 
         // Migrated blob: `days` already cleared (Stage B), but its derived cache still carries the HealthKit
         // sleep hours — the stale clinical value that keeps syncing to iCloud after opt-out.
@@ -100,7 +100,7 @@ struct HealthKitCacheCleanerTests {
             healthContext: HealthDailyContext(body: HealthBodyContext(sleepHours: 7.5))
         )
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(day: healthSleepDay, updatedAt: Date())])
+        #expect(dayRepo.upsert([DayRecordUpsert(day: healthSleepDay, updatedAt: Date())]) == true)
 
         // A corrupt / forward-schema DayRecord row: `payloadData` is not a decodable FernletDay.
         seedCorruptDayRow(controller: controller)

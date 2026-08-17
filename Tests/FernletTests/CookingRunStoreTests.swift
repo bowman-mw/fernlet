@@ -30,7 +30,7 @@ struct CookingRunStoreTests {
     }
 
     private func clearSharedRun() {
-        CookingRunStateStore(directory: cookingDir).clear()
+        #expect(CookingRunStateStore(directory: cookingDir).clear() == true)
     }
 
     /// A manual recipe with three steps (one timed), added to the store's recipe book so `startCookingRun`
@@ -122,7 +122,7 @@ struct CookingRunStoreTests {
             stepIndex: 0,
             finished: true
         )
-        shared.write(finished)
+        #expect(shared.write(finished) == true)
 
         let store = makeStore()
         store.reconcileCookingRunFromAppGroup()
@@ -196,7 +196,7 @@ struct CookingRunStoreTests {
             ],
             stepIndex: 1
         )
-        shared.write(seed)
+        #expect(shared.write(seed) == true)
 
         // "Repeat step" re-fires the current step's timer without moving the cursor.
         await CookingIntentRunner.repeatStep(directory: cookingDir)

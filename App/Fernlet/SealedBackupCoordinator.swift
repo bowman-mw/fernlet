@@ -282,7 +282,7 @@ final class SealedBackupCoordinator {
     /// than by handing in an ungated store.
     private func resolvedIntimacyStore(_ injected: IntimacyLogStore?) -> IntimacyLogStore {
         let store = injected ?? IntimacyLogStore()
-        store.isVisible = { [weak self] in self?.host.isIntimacyTrackingVisible ?? false }
+        store.attachVisibilityGate { [weak self] in self?.host.isIntimacyTrackingVisible ?? false }
         return store
     }
 
@@ -667,6 +667,9 @@ final class SealedBackupCoordinator {
         // invariant, and pinning this verdict weakens none of them.
         let deviceWasFresh = isFreshInstallForRestore()
         if prefs.sealedBackupSensitiveNotesEnabled {
+            // The outcome is already recorded on the host inside the call (that recording IS the
+            // user-visible signal + the Retry affordance), so this pass has nothing further to do
+            // with it — the launch arms fire and forget by design.
             _ = await restoreSealedBackupOutcome(payloadType: .sensitiveNotes, freshInstallOverride: deviceWasFresh)
         }
         // G5 (restore half). This decrypts cycle history off CloudKit and WRITES it into the local
@@ -683,6 +686,7 @@ final class SealedBackupCoordinator {
             // store genuinely holds history the fallback also answers `.skippedStoreNotEmpty`, so the
             // no-clobber behavior is unchanged.
             if userInitiated, outcome == .skippedStoreNotEmpty {
+                // Outcome recorded on the host by the call; the banner reads it from there.
                 _ = await restorePeriodBackupTargeted()
             }
         }
@@ -695,6 +699,7 @@ final class SealedBackupCoordinator {
                 payloadType: .journalNarratives, freshInstallOverride: deviceWasFresh
             )
             if userInitiated, outcome == .skippedStoreNotEmpty {
+                // Outcome recorded on the host by the call; the banner reads it from there.
                 _ = await restoreJournalBackupTargeted()
             }
         }
@@ -707,6 +712,7 @@ final class SealedBackupCoordinator {
                 payloadType: .intimacyLogs, freshInstallOverride: deviceWasFresh
             )
             if userInitiated, outcome == .skippedStoreNotEmpty {
+                // Outcome recorded on the host by the call; the banner reads it from there.
                 _ = await restoreIntimacyBackupTargeted()
             }
         }
@@ -850,7 +856,6 @@ final class SealedBackupCoordinator {
     ///
     /// `freshInstallOverride` pins the whole-device freshness verdict the launch pass computed before
     /// any arm ran; `nil` (the default) evaluates it live, which is what a standalone caller wants.
-    @discardableResult
     func restoreSealedBackupOutcome(
         payloadType: SealedBackupPayloadType,
         freshInstallOverride: Bool? = nil
@@ -878,7 +883,6 @@ final class SealedBackupCoordinator {
     ///
     /// Prefs gating (iCloud sync on, period backup enabled) lives with the caller, matching how
     /// `restoreSealedBackupsIfNeeded` holds the prefs guards and `performRestore` stays pure.
-    @discardableResult
     func restorePeriodBackupTargeted(
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) async -> SealedBackupRestoreOutcome {
@@ -928,7 +932,6 @@ final class SealedBackupCoordinator {
     /// `.payloadStoreOnly` drops ONLY the whole-device freshness gate. The per-payload store-empty check
     /// and the one-way divergence latch below still run, and they are what make it no-clobber: a user
     /// who DELETED their journal is never re-populated from the stale-by-construction cloud copy.
-    @discardableResult
     func restoreJournalBackupTargeted(
         journalRepository: JournalNarrativeRepository? = nil
     ) async -> SealedBackupRestoreOutcome {
@@ -956,7 +959,6 @@ final class SealedBackupCoordinator {
     /// `.deferredTransient` (retryable — un-hiding IS the retry), which also stops a caller from
     /// treating a gated, unpageable store as restored and re-uploading over the cloud copy. Then the
     /// one-way divergence latch, so logs the user deliberately DELETED are never resurrected.
-    @discardableResult
     func restoreIntimacyBackupTargeted(
         intimacyStore: IntimacyLogStore? = nil
     ) async -> SealedBackupRestoreOutcome {

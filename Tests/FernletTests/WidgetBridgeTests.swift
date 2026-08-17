@@ -248,4 +248,69 @@ struct WidgetBridgeTests {
         #expect(rolled.score == 0)
         #expect(rolled.macroSummary == WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
     }
+
+    // MARK: - Byte-format twin: the queue cap must match on both sides of the app-group file
+
+    /// The widget extension links no FernletKit product and is compiled into its own target, so
+    /// `PendingWidgetActionWriter` (widget) and ``PendingWidgetActionQueue`` (app) are hand-copied
+    /// twins over ONE file. A cap that differs between them is a silent split-brain: the writer would
+    /// evict or refuse at a boundary the reader never sees. Scanned off disk, like
+    /// `SharedRecipeImportQueueMirrorTests`, because the widget's sources cannot be imported here.
+    @Test func widgetWriterAndAppQueueAgreeOnTheQueueCap() throws {
+        let widgetSource = try RepoRoot.source("App/FernletWidgets/WidgetSharedModels.swift")
+        let declaration = "static let maxQueuedActions = "
+        let range = try #require(
+            widgetSource.range(of: declaration),
+            "the widget-side writer no longer declares maxQueuedActions — the twins have drifted"
+        )
+        let digits = widgetSource[range.upperBound...]
+            .prefix { $0.isNumber || $0 == "_" }
+            .replacingOccurrences(of: "_", with: "")
+        let widgetCap = try #require(Int(digits), "maxQueuedActions is no longer an integer literal")
+        #expect(
+            widgetCap == PendingWidgetActionQueue.maxQueuedActions,
+            "widget cap \(widgetCap) != app cap \(PendingWidgetActionQueue.maxQueuedActions)"
+        )
+    }
+
+    /// Both sides must also REFUSE at the cap rather than evict: an already-queued tap was promised to
+    /// the user when it was written, so dropping the oldest row is the one failure neither process can
+    /// observe. The app half is exercised directly; the widget half is pinned by source scan.
+    @Test func bothSidesRefuseRatherThanEvictWhenTheQueueIsFull() throws {
+        let widgetSource = try RepoRoot.source("App/FernletWidgets/WidgetSharedModels.swift")
+        #expect(
+            widgetSource.contains("guard records.count < Self.maxQueuedActions"),
+            "the widget writer must refuse at the cap (it evicted the oldest row before this pin)"
+        )
+        #expect(
+            !widgetSource.contains("records.removeFirst("),
+            "the widget writer must not evict queued rows — refuse the new one instead"
+        )
+
+        // App half, driven for real: a full queue refuses the append and keeps every queued row.
+        // The file is seeded in one write (the queue's own byte format) rather than by 512 appends,
+        // each of which rewrites the whole array.
+        let dir = makeTempDirectory()
+        let queue = PendingWidgetActionQueue(directory: dir)
+        let rows = (0..<PendingWidgetActionQueue.maxQueuedActions).map { index in
+            PendingWidgetAction(
+                id: UUID(), dateKey: "2026-07-05", action: PendingWidgetAction.waterPlusOne,
+                createdAt: Date(timeIntervalSince1970: 1_780_000_000 + Double(index))
+            )
+        }
+        let firstID = try #require(rows.first?.id)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try WidgetBridgeFiles.makeEncoder().encode(rows)
+            .write(to: dir.appendingPathComponent("PendingWidgetActions.json"), options: [.atomic])
+        #expect(queue.records().count == PendingWidgetActionQueue.maxQueuedActions)
+
+        let overflow = PendingWidgetAction(
+            id: UUID(), dateKey: "2026-07-05", action: PendingWidgetAction.waterPlusOne, createdAt: Date()
+        )
+        #expect(queue.append(overflow) == false)
+        let after = queue.records()
+        #expect(after.count == PendingWidgetActionQueue.maxQueuedActions)
+        #expect(after.first?.id == firstID, "the oldest row must survive a refused append")
+        #expect(!after.contains { $0.id == overflow.id })
+    }
 }

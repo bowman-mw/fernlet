@@ -176,7 +176,7 @@ struct HeartDropAppWiringTests {
         // Kept from when the store's service wrote to the app's real sidecar files and a previous
         // run's entries could be swept into this test's counts. Harmless now that the scope is
         // per-test, and it still pins that a queue-after-purge starts from a genuinely empty outbox.
-        _ = await store.heartDropService.purgeDeadDrop()
+        #expect(await store.heartDropService.purgeDeadDrop(), "the clean-slate purge reported failure")
         store.setHeartsAwayDelivery(true)
         let (friend, keychainService) = try makeFriendIdentity()
         #expect(store.heartDropService.queueHeart(to: friend) == .queued)
@@ -315,7 +315,8 @@ struct HeartDropAppWiringTests {
                 "the foreground retry stacked \(transport.deleteAttempts) purges over the same records")
 
         transport.failDeletes = false
-        await store.retryHeartsAwayPurgeNow()
+        // Cleanup: with deletes working again the seam still owes a purge, so it must report `true`.
+        #expect(await store.retryHeartsAwayPurgeNow())
     }
 
     /// And it must never fire while consent is ON — that would delete records the user still expects
@@ -351,7 +352,7 @@ struct HeartDropAppWiringTests {
         store.heartDropService.transport = transport
         // Clean slate first. The sidecar is this test's own now, so nothing can be left in it — but
         // the purge also exercises the empty case, which is the state this test is about.
-        _ = await store.heartDropService.purgeDeadDrop()
+        #expect(await store.heartDropService.purgeDeadDrop(), "the clean-slate purge reported failure")
         transport.deleteAttempts = 0
 
         store.retryHeartsAwayPurgeIfNeeded()

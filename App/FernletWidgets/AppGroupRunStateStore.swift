@@ -107,16 +107,21 @@ struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
     ///
     /// A failed write is not fatal — the caller's next transition rewrites the file and the app's
     /// foreground reconcile re-reads it — but it is never silent: encode / directory / write / file
-    /// coordination failures are all logged with the file they were for.
-    func write(_ state: State) {
+    /// coordination failures are all logged with the file they were for AND reported here.
+    ///
+    /// - Returns: `true` when the state reached the file. Not discardable (R7): a dropped `false` is
+    ///   a Live Activity (and a Lock Screen button) driving a run the file no longer describes.
+    func write(_ state: State) -> Bool {
         var stamped = state
         stamped.updatedAt = Date()
+        var written = false
         var coordinatorError: NSError?
         NSFileCoordinator().coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
             do {
                 let encoded = try makeEncoder().encode(stamped)
                 try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try encoded.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                written = true
             } catch {
                 // Recovery: leave the previous file in place — a stale run is recoverable, a torn one is not.
                 Self.log.error("""
@@ -127,20 +132,28 @@ struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
         }
         if let coordinatorError {
             Self.logCoordinationFailure("write", coordinatorError)
+            return false
         }
+        return written
     }
 
     /// Clear the active run (finished, abandoned/discarded, or a new run replacing it).
     ///
     /// An already-absent file is the desired end state, not a failure; anything else is logged so a
     /// finished run that survives on disk (and gets re-adopted by the next reconcile) leaves a trace.
-    func clear() {
+    ///
+    /// - Returns: `true` when no run-state file is left on disk. Not discardable (R7): a surviving
+    ///   file is re-adopted by the next reconcile, which is exactly what a wipe must be able to name.
+    func clear() -> Bool {
+        var cleared = false
         var coordinatorError: NSError?
         NSFileCoordinator().coordinate(writingItemAt: fileURL, options: .forDeleting, error: &coordinatorError) { url in
             do {
                 try fileManager.removeItem(at: url)
+                cleared = true
             } catch CocoaError.fileNoSuchFile {
                 // Already gone — exactly what clear() is for.
+                cleared = true
             } catch {
                 Self.log.error("""
                     run-state clear failed for \(State.runStateFileName, privacy: .public): \
@@ -150,7 +163,9 @@ struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
         }
         if let coordinatorError {
             Self.logCoordinationFailure("clear", coordinatorError)
+            return false
         }
+        return cleared
     }
 
     /// Names an `NSFileCoordinator` failure: coordination never ran the block, so nothing happened.

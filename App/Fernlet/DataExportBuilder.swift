@@ -409,7 +409,10 @@ extension FernletStore {
     /// root by a build that wrote there before this directory existed. No background writer rebuilds an
     /// export, so this can run at any point in the funnel — the only requirement is that the funnel not
     /// forget it.
-    @discardableResult
+    ///
+    /// - Returns: `true` when no plaintext export is left on disk afterwards. The result is a
+    ///   success/failure signal and therefore not discardable (R7): a caller that ignores it can
+    ///   promise the user a wipe that did not happen.
     func purgeDataExports() -> Bool {
         let fileManager = FileManager.default
         var ok = true
@@ -456,8 +459,8 @@ extension FernletStore {
     /// left on disk", not "this call did the removing". Failure is non-fatal — the launch sweep, the
     /// pre-export sweep, and "Delete everything" all still cover the file as a backstop.
     /// - Parameter url: The export file URL returned by ``writeProtectedExport(_:kind:)``.
-    /// - Returns: `true` when the file is gone afterwards.
-    @discardableResult
+    /// - Returns: `true` when the file is gone afterwards. Not discardable (R7): the caller decides
+    ///   whether the screen may claim the plaintext is gone.
     func discardExportedFile(at url: URL) -> Bool {
         let fileManager = FileManager.default
         let target = url.standardizedFileURL

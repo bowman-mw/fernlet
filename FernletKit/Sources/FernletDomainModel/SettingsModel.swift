@@ -258,7 +258,11 @@ public nonisolated struct FernletSettings: Codable {
     /// Upper bound on user-created workout locations retained at decode (R3).
     public static let maxWorkoutLocations = 20
     /// Upper bound on user-created personal-care tasks retained at decode (R3).
-    public static let maxPersonalCareTasks = 40
+    ///
+    /// Deliberately an alias for the domain type's own cap rather than a second number:
+    /// ``PersonalCareTask/normalized(_:)`` enforces the same bound on every write, so decode and the
+    /// type can never disagree about how long the list may be.
+    public static let maxPersonalCareTasks = PersonalCareTask.maxTasks
     /// Upper bound on unknown top-level keys parked from one settings blob (R3).
     ///
     /// The whole known key set is ~60, so hundreds of unknown keys is not a newer build — it is a

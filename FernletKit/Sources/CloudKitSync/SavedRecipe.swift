@@ -286,9 +286,10 @@ public struct SavedRecipeRepository {
     }
 
     /// Removes every saved-recipe row — the delete-all/reset path.
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func deleteAll() -> Bool {
+    ///
+    /// - Returns: `false` when the Core Data delete/save fails. Not discardable (R7): the wipe
+    ///   funnel names the surviving rows instead of promising a clean store.
+    public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
         do {

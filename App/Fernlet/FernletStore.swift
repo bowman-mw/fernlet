@@ -729,7 +729,7 @@ final class FernletStore {
         // The 16+ intimacy gate. A closure rather than a cached `Bool` so it re-reads the observable
         // record on every call — that is what lets a view consulting `isIntimateLoggingAllowed` in its
         // body re-render when the verdict changes. `?? false` keeps a deallocated facade fail-closed.
-        self.diary.isAdultVerified = { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
+        self.diary.attachAdultVerification { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
         self.diary.ensureLocalDesignerID()
         // Apply the one-time period-visibility migration + the mixed-version fail-closed guard against the
         // just-loaded settings, BEFORE any UI reads `isPeriodTrackingVisible` or a save can persist.
@@ -1157,7 +1157,12 @@ final class FernletStore {
         // Opting out scrubs the device-local sidecar (HealthKit-derived baselines) promptly
         // rather than waiting for the next debounced refresh.
         if !enabled {
-            stressScoringContext?.scrubStressLocalState()
+            // R7: an unwired context (nil) or a failed sidecar delete both leave HealthKit-derived
+            // baselines on disk after the user opted out — named, since the toggle itself has no
+            // failure surface to show.
+            if stressScoringContext?.scrubStressLocalState() != true {
+                FernletAuditLog.log("stress.scrubFailed", context: ["site": "optOutToggle"])
+            }
         }
     }
 
@@ -1646,7 +1651,10 @@ final class FernletStore {
             // burst of foreground events into a queue of sequential delete round trips over the
             // same records. If the purge is still owed afterwards, the next event retries.
             guard !self.isPurgingHeartDropRecords else { return }
-            await self.retryHeartsAwayPurgeNow()
+            // R7: `false` means nothing was owed (the common, benign case) — the fire-and-forget
+            // seam has nothing to do with either answer, and the purge itself already reports its
+            // own failure, so the value is consumed here and deliberately not acted on.
+            _ = await self.retryHeartsAwayPurgeNow()
         }
     }
 
@@ -1661,7 +1669,6 @@ final class FernletStore {
     /// caller was owed silently never ran (it also made the purge tests flaky in exactly that
     /// window). The reentrancy guard's job is preventing CONCURRENT purges, not refusing
     /// successors.
-    @discardableResult
     func retryHeartsAwayPurgeNow() async -> Bool {
         // Wait out an in-flight purge by awaiting ITS task (R2) instead of spinning on the flag:
         // the bound is that task's completion, and the wait now also covers the window between a
@@ -1692,9 +1699,13 @@ final class FernletStore {
         // both be in flight, and the user may have turned the feature back ON in between — purging
         // then would delete hearts they now expect to be delivered.
         guard !settings.heartsAwayDelivery else { return }
-        // No bookkeeping on the result: a failed purge leaves the entries (and their record names)
-        // in the outbox, which is exactly what `heartsAwayPurgePending` reads.
-        await heartDropService.purgeDeadDrop()
+        // The retry is state-driven: a failed purge leaves the entries (and their record names) in
+        // the outbox, which is exactly what `heartsAwayPurgePending` reads, so the recovery is
+        // already wired. R7: name the failure anyway — a purge that never succeeds leaves sealed
+        // hearts on the public database, and that must not be silent.
+        if await !heartDropService.purgeDeadDrop() {
+            FernletAuditLog.log("heartdrop.purge.deferred", context: ["site": "purgeHeartDropRecords"])
+        }
     }
 
     /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Turning
@@ -2046,7 +2057,10 @@ final class FernletStore {
     /// nudged nutrient, which would then suppress the nudge without moving the gap. Returns the
     /// logged meal, or `nil` when the pinned food cannot be resolved against the bundled catalog
     /// (a regeneration/packaging fault — the curated table is unit-pinned so this should not happen).
-    @discardableResult func logNutrientSuggestionFood(_ source: CuratedFoodSource, date: String? = nil) -> Meal? {
+    ///
+    /// The `nil` is a failure signal, so the result is NOT discardable (R7): a caller that ignores
+    /// it dismisses the nudge as if the food had been logged.
+    func logNutrientSuggestionFood(_ source: CuratedFoodSource, date: String? = nil) -> Meal? {
         guard let foodItem = CuratedNutrientSources.shared.resolve(source, in: foodCatalog) else { return nil }
         return diary.logNutrientSuggestionFoodItem(foodItem, date: date)
     }
@@ -2128,7 +2142,9 @@ final class FernletStore {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let correction = Self.correctedNutrition(macros: macros, componentSnapshots: componentSnapshots)
         batchSnapshotPersistence {
-            diary.mutateDay(date: todayKey) { targetDay in
+            // R7: today's write cannot fail (`mutateDay` mutates the live day), but the seam is
+            // shared with past-day writes that can — so the verdict is named, not dropped.
+            let written = diary.mutateDay(date: todayKey) { targetDay in
                 guard let index = targetDay.meals.firstIndex(where: { $0.id == mealID }) else { return }
                 Self.applyMealCorrection(
                     to: &targetDay.meals[index],
@@ -2138,6 +2154,9 @@ final class FernletStore {
                     micronutrients: correction.micronutrients,
                     componentSnapshots: correction.componentSnapshots
                 )
+            }
+            if !written {
+                FernletAuditLog.log("food.mealCorrection.saveFailed", context: ["date": todayKey])
             }
             if let index = recentMeals.firstIndex(where: { $0.id == mealID }) {
                 Self.applyMealCorrection(
@@ -2382,6 +2401,15 @@ final class FernletStore {
     /// literal at the comparison — a record that fails this many times is dropped, not retried forever.
     private static let sharedRecipeImportMaxAttempts = 3
 
+    /// R7: names a share-extension queue rewrite that did not land. Not recoverable inside the
+    /// drain — the record simply survives, so the next foreground drain re-imports the recipe (a
+    /// duplicate) or re-runs a page that should have self-destructed. The log line is what makes
+    /// that duplicate diagnosable rather than mysterious.
+    private func noteSharedRecipeQueueRewrite(_ didWrite: Bool, operation: String) {
+        guard !didWrite else { return }
+        FernletAuditLog.log("recipe.shareExtensionImport.queueRewriteFailed", context: ["operation": operation])
+    }
+
     func processSharedRecipeImportQueue() async {
         guard !isProcessingSharedRecipeImportQueue else { return }
         isProcessingSharedRecipeImportQueue = true
@@ -2391,12 +2419,12 @@ final class FernletStore {
         let maxAge: TimeInterval = 7 * 24 * 3600
         for record in queue.records() {
             guard let url = record.url else {
-                queue.remove(record)
+                noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeUnparseable")
                 continue
             }
             if record.attemptCount >= Self.sharedRecipeImportMaxAttempts
                 || Date().timeIntervalSince(record.queuedAt) > maxAge {
-                queue.remove(record)
+                noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeExpired")
                 continue
             }
             // Zero-network duplicate skip (owner decision 2026-08-09): a queued URL that matches an
@@ -2404,7 +2432,7 @@ final class FernletStore {
             // no retry bookkeeping. Re-sharing a page you already imported should not re-download
             // it; refreshing is the detail page's explicit "Re-import from source" affordance.
             if savedRecipe(matchingSourceURL: url) != nil {
-                queue.remove(record)
+                noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeDuplicate")
                 continue
             }
             // Already deferred for budget TODAY: the daily AI budget won't refresh until midnight, so
@@ -2423,20 +2451,24 @@ final class FernletStore {
                 // genuinely need the model.
                 let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off, userInvoked: false, gate: aiGate)
                 addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
-                queue.remove(record)
+                noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeImported")
             } catch RecipeWebImportError.aiBudgetExhausted {
                 // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Don't burn
                 // an attempt or remove the record; just stamp it deferred-for-today so the rest of today's
                 // foreground drains skip re-fetching it. Tomorrow's key differs → it retries with a fresh
                 // budget.
-                queue.markBudgetDeferred(record, dayKey: todayKey)
+                noteSharedRecipeQueueRewrite(
+                    queue.markBudgetDeferred(record, dayKey: todayKey), operation: "markBudgetDeferred"
+                )
                 FernletAuditLog.log("recipe.shareExtensionImport.deferred", context: [
                     "host": url.host() ?? "unknown",
                     "reason": "aiBudgetExhausted"
                 ])
             } catch {
                 let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
-                queue.markAttempt(record, errorDescription: description)
+                noteSharedRecipeQueueRewrite(
+                    queue.markAttempt(record, errorDescription: description), operation: "markAttempt"
+                )
                 FernletAuditLog.log("recipe.shareExtensionImport.failed", context: [
                     "host": url.host() ?? "unknown",
                     "errorType": "\(type(of: error))"
@@ -2548,7 +2580,13 @@ final class FernletStore {
             reverseGuidedCompletion(for: workout, date: date)
         }
 
-        diary.removeWorkout(id: id, date: date)
+        // R7: the day write is the act this method reports on. A failed write (a past-day
+        // repository failure) must not go on to tombstone the row and report a delete that never
+        // happened — the caller's alert says so instead, and the row is still there to retry on.
+        guard diary.removeWorkout(id: id, date: date) else {
+            FernletAuditLog.log("workout.remove.failed", context: ["date": date])
+            return false
+        }
 
         // Put back the planned row this completion consumed. Idempotent: `planWorkout` replaces by id,
         // and a repeat remove finds no row (so no double-restore on double-remove).
@@ -2896,7 +2934,10 @@ final class FernletStore {
         // — see `OwnPhotoBackupCoordinator.synchronize`. Gating only the ambient pass gave a
         // sync-off user exactly one upload attempt ever, with no retry from here and none from the
         // banner's Retry button, while the key was device-bound on the strength of it.
-        await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
+        // The pass records its own verdict on this store (`ownPhotoBackupStatus` +
+        // `ownPhotoBackupUploadFailed`, which the Privacy & Data banner reads), so there is no
+        // decision left for this seam — the value is consumed and deliberately not re-derived here.
+        _ = await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
     }
 
     /// Whether the own-photo escrow backup is on, and its last pass's outcome — observable so the
@@ -3329,7 +3370,6 @@ final class FernletStore {
     /// nothing — once any session has been completed or logged, so a rework can never orphan an
     /// already-counted session. This restores pre-refactor reachability: a plan committed by an
     /// exploratory tap is no longer an irreversible same-day pin.
-    @discardableResult
     func reworkTodaysGuidedPlan() -> Bool {
         guard canReworkTodaysGuidedPlan else { return false }
         guidedPlanStorage = nil
@@ -3414,7 +3454,6 @@ final class FernletStore {
     /// preserving its `SessionSuggestion.id` so completions/dedup stay valid. Allowed only while nothing
     /// of the plan is logged (same guard as rework) — editing after a session started would orphan a
     /// logged place in the plan. Returns false (changing nothing) otherwise.
-    @discardableResult
     func updateGuidedSession(_ updated: WorkoutProgram.SessionSuggestion) -> Bool {
         guard var plan = currentGuidedWorkoutPlan, canReworkTodaysGuidedPlan,
               let index = plan.sessions.firstIndex(where: { $0.id == updated.id }) else { return false }
@@ -3499,7 +3538,6 @@ final class FernletStore {
     /// would otherwise overwrite the in-progress run — state, app-group mirror and Live Activity — with
     /// no prompt. `replacingActiveRun` is the caller's word that the user was asked and said yes.
     /// Returns whether the run actually started.
-    @discardableResult
     func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false) -> Bool {
         guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
         let dayKey = guidedPlanDayKey ?? todayKey
@@ -3531,7 +3569,7 @@ final class FernletStore {
         )
         state.phase = .working
         guidedRunState = state
-        guidedRunStateStore.write(state)
+        mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
         return true
     }
@@ -3552,6 +3590,25 @@ final class FernletStore {
         applyGuidedTransition(state)
     }
 
+    /// Mirrors a guided-run transition to the app-group file, naming a failed write (R7).
+    ///
+    /// Recovery is the next event: the following transition rewrites the file and the foreground
+    /// reconcile re-reads it. What must not happen is silence — while the file is stale the Live
+    /// Activity's buttons drive a run it no longer describes.
+    private func mirrorGuidedRunState(_ state: GuidedWorkoutRunState) {
+        if !guidedRunStateStore.write(state) {
+            FernletAuditLog.log("widget.runstate.write.failed", context: ["file": "guided"])
+        }
+    }
+
+    /// Clears the guided run's app-group file, naming a failure (R7): a surviving file is re-adopted
+    /// by the next `reconcileGuidedRunFromAppGroup`, which is how a finished run comes back.
+    private func clearGuidedRunStateFile() {
+        if !guidedRunStateStore.clear() {
+            FernletAuditLog.log("widget.runstate.clear.failed", context: ["file": "guided"])
+        }
+    }
+
     /// Shared handling after an in-app transition: mirror to the group + reflect onto the activity;
     /// on a natural finish, log the workout (deduped) and end the activity; keep the done state in
     /// memory so the sheet can show its "nicely done" screen.
@@ -3559,11 +3616,11 @@ final class FernletStore {
         guidedRunState = state
         if state.isDone {
             // Clear the group file first so a foreground reconcile racing this can't re-log the finish.
-            guidedRunStateStore.clear()
+            clearGuidedRunStateFile()
             if state.completedNaturally { finishGuidedRunLogging(state) }
             syncActivity { await GuidedWorkoutActivityBridge.end() }
         } else {
-            guidedRunStateStore.write(state)
+            mirrorGuidedRunState(state)
             syncActivity { await GuidedWorkoutActivityBridge.sync(to: state) }
         }
     }
@@ -3573,7 +3630,7 @@ final class FernletStore {
     func abandonGuidedRun() {
         guard guidedRunState != nil else { return }
         guidedRunState = nil
-        guidedRunStateStore.clear()
+        clearGuidedRunStateFile()
         syncActivity { await GuidedWorkoutActivityBridge.end() }
     }
 
@@ -3581,7 +3638,7 @@ final class FernletStore {
     /// finish).
     func clearGuidedRun() {
         guidedRunState = nil
-        guidedRunStateStore.clear()
+        clearGuidedRunStateFile()
     }
 
     /// Reconcile the in-memory run with the app-group file — call on foreground and at launch so a
@@ -3599,7 +3656,7 @@ final class FernletStore {
         if fileState.isDone {
             // Clear the file BEFORE logging so a crash mid-log can't re-log the finish on the next
             // launch (mirrors the in-app finish path; a lost log beats a duplicate).
-            guidedRunStateStore.clear()
+            clearGuidedRunStateFile()
             guidedRunState = fileState.completedNaturally ? fileState : nil
             if fileState.completedNaturally { finishGuidedRunLogging(fileState) }
             syncActivity { await GuidedWorkoutActivityBridge.end() }
@@ -3609,7 +3666,7 @@ final class FernletStore {
         // recently-touched run, even one resting across midnight, is adopted so it stays resumable.
         if Date().timeIntervalSince(fileState.updatedAt) > GuidedWorkoutRunState.abandonedAfter {
             guidedRunState = nil
-            guidedRunStateStore.clear()
+            clearGuidedRunStateFile()
             syncActivity { await GuidedWorkoutActivityBridge.end() }
             return
         }
@@ -3671,6 +3728,9 @@ final class FernletStore {
     /// and requests the Live Activity. Replaces any cooking run already in progress (ending only the
     /// cooking activity — a live WORKOUT activity is a different type and is left untouched). A recipe
     /// with no steps is a no-op (the mise-only flow never enters the walker). Returns the run started.
+    ///
+    /// Discardable by design (R7): `nil` means the recipe has no steps — a property of the recipe the
+    /// caller already knows (the walker entry point is gated on it), not a failure to report.
     @discardableResult
     func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
         let domainSteps = recipe.steps ?? []
@@ -3683,7 +3743,7 @@ final class FernletStore {
             steps: steps
         )
         cookingRunState = state
-        cookingRunStateStore.write(state)
+        mirrorCookingRunState(state)
         CookingLiveActivityController.start(state)
         return state
     }
@@ -3718,6 +3778,22 @@ final class FernletStore {
         applyCookingTransition(state)
     }
 
+    /// Mirrors a cooking-run transition to the app-group file, naming a failed write (R7) — the
+    /// cooking twin of ``mirrorGuidedRunState(_:)``, with the same next-event recovery.
+    private func mirrorCookingRunState(_ state: CookingRunState) {
+        if !cookingRunStateStore.write(state) {
+            FernletAuditLog.log("widget.runstate.write.failed", context: ["file": "cooking"])
+        }
+    }
+
+    /// Clears the cooking run's app-group file, naming a failure (R7): a surviving file is re-adopted
+    /// by the next `reconcileCookingRunFromAppGroup`.
+    private func clearCookingRunStateFile() {
+        if !cookingRunStateStore.clear() {
+            FernletAuditLog.log("widget.runstate.clear.failed", context: ["file": "cooking"])
+        }
+    }
+
     /// Shared handling after an in-app cooking transition: mirror to the group + reflect onto the
     /// activity. On a finish the group file is cleared FIRST (so a racing foreground reconcile can't
     /// resurrect a done run) and the activity ended; the in-memory state is kept so the walker can show
@@ -3725,10 +3801,10 @@ final class FernletStore {
     private func applyCookingTransition(_ state: CookingRunState) {
         cookingRunState = state
         if state.isFinished {
-            cookingRunStateStore.clear()
+            clearCookingRunStateFile()
             syncActivity { await CookingActivityBridge.end() }
         } else {
-            cookingRunStateStore.write(state)
+            mirrorCookingRunState(state)
             syncActivity { await CookingActivityBridge.sync(to: state) }
         }
     }
@@ -3738,12 +3814,12 @@ final class FernletStore {
     func endCookingRun() {
         guard cookingRunState != nil else {
             // No in-memory run, but a group file (or orphan activity) may linger after a cold path.
-            cookingRunStateStore.clear()
+            clearCookingRunStateFile()
             syncActivity { await CookingActivityBridge.end() }
             return
         }
         cookingRunState = nil
-        cookingRunStateStore.clear()
+        clearCookingRunStateFile()
         syncActivity { await CookingActivityBridge.end() }
     }
 
@@ -3761,7 +3837,7 @@ final class FernletStore {
         if fileState.isFinished {
             // Clear the file BEFORE anything else so a crash can't re-surface a done run (mirrors the
             // guided finish path; a lost log beats a duplicate — though cooking's log is never automatic).
-            cookingRunStateStore.clear()
+            clearCookingRunStateFile()
             // ADOPT the finished state (don't nil it) — exactly as the guided path keeps a completed run
             // so the sheet can show its done screen. A Finish tapped from the Live Activity / Siri while
             // the walker is foregrounded must land the cook on the finish/log screen (via
@@ -3775,7 +3851,7 @@ final class FernletStore {
         }
         if Date().timeIntervalSince(fileState.updatedAt) > CookingRunState.abandonedAfter {
             cookingRunState = nil
-            cookingRunStateStore.clear()
+            clearCookingRunStateFile()
             syncActivity { await CookingActivityBridge.end() }
             return
         }
@@ -3968,7 +4044,9 @@ final class FernletStore {
     /// failed fetch, so it does NOT consume the attempt; a genuine failure does. Downloaded bytes
     /// go through ``saveRecipePhoto(data:for:)`` — the sealed store's normalize pipeline (bounded
     /// downscale + JPEG re-encode, which strips EXIF). A failed image can never fail an import.
-    /// - Returns: The sealed, stored photo bytes when the fetch landed, else `nil`.
+    /// - Returns: The sealed, stored photo bytes when the fetch landed, else `nil`. Discardable by
+    ///   design (R7): every caller is fire-and-forget decoration — a missing image is a recipe
+    ///   without a picture, and the attempt ledger (not the caller) owns the retry decision.
     @discardableResult
     func fetchRecipeWebImageIfNeeded(for recipe: RecipeDefinition) async -> Data? {
         guard let webImport = recipe.webImport,
@@ -4942,8 +5020,11 @@ final class FernletStore {
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
         // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
-        // must not leave clinical derivatives behind.
-        stressScoringContext?.scrubStressLocalState()
+        // must not leave clinical derivatives behind. `!= true` like the sealed hooks below: a nil
+        // (unwired) context and a failed delete are both a baseline the wipe did not remove.
+        if stressScoringContext?.scrubStressLocalState() != true {
+            incompleteStores.append("your body-signals baseline")
+        }
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
@@ -4979,7 +5060,9 @@ final class FernletStore {
         // UNCONDITIONALLY: a Live-Activity finish can leave the run only in the file with
         // `guidedRunState` already nil, so `abandonGuidedRun`'s non-nil guard is too weak here.
         guidedRunState = nil
-        guidedRunStateStore.clear()
+        // R7: a file that survives the wipe is re-adopted by the next reconcile — the very
+        // resurrection this leg exists to prevent — so name it with the other app-group files.
+        if !guidedRunStateStore.clear() { incompleteStores.append("widget data") }
         syncActivity { await GuidedWorkoutActivityBridge.end() }
         // The cooking runner is the SAME class of live writer: an in-flight cook is mirrored to its own
         // app-group file that a foreground/launch `reconcileCookingRunFromAppGroup` re-reads and adopts
@@ -4987,7 +5070,7 @@ final class FernletStore {
         // recipe name + current step text on the Lock Screen). Cooking never auto-logs, so there is no
         // re-log hazard, but the file + Live Activity must still be stopped unconditionally at the wipe.
         cookingRunState = nil
-        cookingRunStateStore.clear()
+        if !cookingRunStateStore.clear() { incompleteStores.append("widget data") }
         syncActivity { await CookingActivityBridge.end() }
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
@@ -5059,6 +5142,10 @@ final class FernletStore {
     ///
     /// Called on foreground (`scenePhase == .active`) and defensively at the start of the interactive
     /// meal-commit path so a meal typed just after midnight is filed on the correct new day.
+    ///
+    /// Discardable by design (R7): the `Bool` reports whether the day ADVANCED, not whether the work
+    /// succeeded — "still the same day" is the overwhelmingly common answer and nothing to act on.
+    /// The failure that could occur inside (the diary declining the re-key) is audited there.
     @discardableResult
     func refreshCurrentDayIfNeeded(now: Date = Date()) -> Bool {
         let currentDayKey = FernletDate.dayKey(for: now)
@@ -5068,7 +5155,12 @@ final class FernletStore {
         // save is pending (the outgoing day's row is then already durable). `currentSnapshot()` reads
         // `todayKey`, which is still the old key here, so the flush is correctly keyed to the old day.
         snapshotSaveCoordinator.flushPending()
-        diary.advanceCurrentDay(to: currentDayKey)
+        // R7: `false` means the diary was already on this key — impossible behind the guard above,
+        // and if it ever happened the derived rebuilds below would be re-keying to a day the diary
+        // never moved to. Named rather than assumed.
+        if !diary.advanceCurrentDay(to: currentDayKey) {
+            FernletAuditLog.log("day.rollover.diaryDeclined", context: ["day": currentDayKey])
+        }
         // Re-derive the new day's signals/score and refresh the coin ledger + widget mirror for it.
         rebuildDerivedSignals()
         reconcileCoinLedger()
@@ -5217,7 +5309,6 @@ final class FernletStore {
     ///
     /// A no-op unless both halves hold, and it never *widens* custody: an already-bound row stays
     /// bound, and there is deliberately no un-bind path (see `OwnPhotoDeviceBindingConsent`).
-    @discardableResult
     func bindOwnPhotoKeyIfEligible() -> OwnPhotoKeyBindingOutcome {
         let outcome = OwnPhotoKeyBinder(
             escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
@@ -5232,7 +5323,6 @@ final class FernletStore {
     /// Irreversible by design, which is why its only caller puts a WS-5 destructive confirmation in
     /// front of it. Consent is recorded even if the bind then defers on a transient keychain
     /// failure — the user's decision is durable; re-asking would be the wrong remedy.
-    @discardableResult
     func lockOwnPhotosToThisDevice() -> OwnPhotoKeyBindingOutcome {
         FernletAuditLog.log("privateMedia.ownKeyBindingConsentRecorded")
         let outcome = OwnPhotoKeyBinder(
@@ -5516,7 +5606,11 @@ extension FernletStore: WorkoutSyncContext {
     func removeWorkoutByHealthKitUUID(_ hkUUID: UUID) {
         for (dateKey, dayValue) in diary.loadDays() {
             if let row = dayValue.workouts.first(where: { $0.healthKitUUID == hkUUID }) {
-                diary.removeWorkout(id: row.id, date: dateKey)
+                // R7: a failed day write leaves a row mirroring a Health sample the user deleted.
+                // Nothing to retry from here (the observer event is spent), so name it.
+                if !diary.removeWorkout(id: row.id, date: dateKey) {
+                    FernletAuditLog.log("workout.removeByHealthKitUUID.failed", context: ["date": dateKey])
+                }
                 return
             }
         }

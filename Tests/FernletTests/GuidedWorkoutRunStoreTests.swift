@@ -53,7 +53,7 @@ struct GuidedWorkoutRunStoreTests {
         store.approveTodaysGuidedPlan()
         #expect(store.isTodaysGuidedPlanApproved == true)
         // Reworking drops approval again.
-        store.reworkTodaysGuidedPlan()
+        #expect(store.reworkTodaysGuidedPlan() == true)
         #expect(store.isTodaysGuidedPlanApproved == false)
     }
 
@@ -67,7 +67,7 @@ struct GuidedWorkoutRunStoreTests {
             PrescribedExercise(name: "Curl", sets: 3, reps: "12", role: .accessory, fromCatalog: true, restSecondsOverride: 42),
         ])
         commitPlan(store, s)
-        store.startGuidedRun(s)
+        #expect(store.startGuidedRun(s) == true)
 
         let run = try #require(store.guidedRunState)
         #expect(run.isWorking == true)
@@ -86,7 +86,7 @@ struct GuidedWorkoutRunStoreTests {
         // One 1-set exercise so a single "done" finishes the workout.
         let s = session("Quick", [PrescribedExercise(name: "Bench Press", sets: 1, reps: "5", role: .main, fromCatalog: true)])
         commitPlan(store, s)
-        store.startGuidedRun(s)
+        #expect(store.startGuidedRun(s) == true)
 
         store.guidedMarkSetDone()   // 1 set, 1 exercise → finish
 
@@ -127,7 +127,7 @@ struct GuidedWorkoutRunStoreTests {
         #expect(committed?.exercises.first?.restSecondsOverride == 180)
 
         // The edit flows into the run's rest when started.
-        store.startGuidedRun(try! #require(committed))
+        #expect(store.startGuidedRun(try #require(committed)) == true)
         #expect(store.guidedRunState?.exercises.first?.restSeconds == 180)
     }
 
@@ -151,7 +151,7 @@ struct GuidedWorkoutRunStoreTests {
         store.clearGuidedRun()
         let s = session("Push", [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)])
         commitPlan(store, s)
-        store.startGuidedRun(s)
+        #expect(store.startGuidedRun(s) == true)
         store.guidedMarkSetDone()   // resting on set 2 — active, freshly touched
 
         // Simulate a relaunch: a fresh store (no committed plan in memory) reconciles from the group.

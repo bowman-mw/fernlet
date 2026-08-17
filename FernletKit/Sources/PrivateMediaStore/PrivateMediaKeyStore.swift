@@ -202,9 +202,8 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         }
         guard mintsIfAbsent else { return nil }
         let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
         let status = KeychainItem.store(
-            keyData,
+            key.rawBytes,
             account: role.account,
             service: Self.service,
             accessibility: accessibility

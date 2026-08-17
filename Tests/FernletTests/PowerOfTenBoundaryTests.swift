@@ -60,7 +60,7 @@ struct PowerOfTenBoundaryTests {
     static let maxBodyLines = 60
 
     /// The R5 assertion-density ratchet. Mirrors the scanner's `DENSITY_FLOOR`; only ever raised.
-    static let densityFloor = 0.60
+    static let densityFloor = 0.68
 
     /// A body must have at least this many code lines to count in the density denominator. Mirrors the
     /// scanner's `DENSITY_MIN_LINES`.

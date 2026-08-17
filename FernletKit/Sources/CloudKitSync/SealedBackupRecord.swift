@@ -60,6 +60,17 @@ public struct SealedBackupRecord: Equatable {
     /// allocate an unbounded record-ID array before any crypto runs (R3).
     public static let maxChunkCount = 4_096
 
+    /// Upper bound on the chunk set one FETCH will assemble, enforced in
+    /// `CloudKitDataService.sealedBackupChunks` before any record ID is built (R3).
+    ///
+    /// The head's `chunkCount` is an unauthenticated CloudKit field read before any AEAD check, so it
+    /// is attacker-typed until a chunk opens. ``maxChunkCount`` is the *format* bound (what may be
+    /// stored); this is the *work* bound (what one restore may pull down and hold), and it matches
+    /// the app-side `SealedBackupService.maxRestoreChunkCount` deliberately: a set the restore would
+    /// refuse to open must not be fetched in the first place. Exports write ceil(rowCount / 250)
+    /// chunks, so 400 chunks (100k rows) is far above any real backup.
+    public static let maxFetchedChunkCount = 400
+
     public var payloadType: SealedBackupPayloadType
     /// The owner's signing public key, carried as provenance for the app-side restore checks.
     public var signingPublicKey: Data

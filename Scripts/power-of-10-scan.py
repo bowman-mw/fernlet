@@ -49,7 +49,7 @@ import os
 import re
 import sys
 
-DENSITY_FLOOR = 0.60          # ratchet — see Docs/Power-of-10-Swift.md §R5; only ever raise it
+DENSITY_FLOOR = 0.68          # ratchet — see Docs/Power-of-10-Swift.md §R5; only ever raise it
 MAX_BODY_LINES = 60           # NASA rule 4: one printed page
 
 SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension")

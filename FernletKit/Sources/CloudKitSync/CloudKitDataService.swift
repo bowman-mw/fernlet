@@ -467,9 +467,24 @@ public final class CloudKitDataService {
     /// mixed-generation set), so the caller restores all-or-nothing rather than reassembling a corrupt
     /// history. Disagreeing `formatVersion`/`keySalt` values are deliberately *not* fatal here — see
     /// the inline note; AES-GCM in `SealedBackupCrypto.open` is the authority on those.
+    ///
+    /// R3: the head's `chunkCount` is bounded at ``SealedBackupRecord/maxFetchedChunkCount`` BEFORE a
+    /// single record ID is built — see the guard.
     public func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
         guard let head = try await sealedBackup(payloadType: payloadType) else { return [] }
         guard head.chunkCount > 1 else { return [head] }
+        // R3: `chunkCount` comes off the UNAUTHENTICATED head record — no AEAD has vouched for it yet —
+        // and it is what sizes the fan-out below. Bound it here, where the untrusted value drives work,
+        // to the same number the app-side restore will accept (`SealedBackupService.maxRestoreChunkCount`);
+        // fetching a set that the restore is going to refuse is pure attacker-directed work.
+        guard head.chunkCount <= SealedBackupRecord.maxFetchedChunkCount else {
+            FernletAuditLog.log("cloudkit.sealedBackup.chunkCountRejected", context: [
+                "payloadType": payloadType.rawValue,
+                "chunkCount": String(head.chunkCount),
+                "max": String(SealedBackupRecord.maxFetchedChunkCount)
+            ])
+            throw SealedBackupError.malformedRecord
+        }
 
         let remainingIDs = (1..<head.chunkCount).map {
             sealedBackupRecordID(payloadType: payloadType, chunkIndex: $0)

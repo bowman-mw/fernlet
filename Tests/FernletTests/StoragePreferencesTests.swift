@@ -294,7 +294,8 @@ struct StoragePreferencesTests {
         #expect(decoded.iCloudSyncEnabled == true)
 
         // Undecodable: a present row that is not the blob's JSON — present, but values unknown.
-        KeychainItem.store(Data("not json".utf8), for: .storagePreferences, service: service)
+        #expect(KeychainItem.store(Data("not json".utf8), for: .storagePreferences,
+                                  service: service) == errSecSuccess)
         guard case .undecodable = StoragePreferencesStore.persistedBlobState(service: service) else {
             Issue.record("a corrupt row must read .undecodable, never .absent — its presence is prior-use evidence")
             return

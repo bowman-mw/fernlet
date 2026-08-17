@@ -37,8 +37,13 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
 
     private let controller: PersistenceController
 
-    init(controller: PersistenceController = .shared) {
-        self.controller = controller
+    /// - Parameter controller: The Core Data stack to scrub; `nil` resolves the shared one.
+    ///   Deliberately `nil`-defaulted rather than `= .shared`: `PersistenceController.shared` is
+    ///   `@MainActor`, and a default-argument expression is evaluated in the CALLER's isolation, which
+    ///   is nonisolated. Resolving in the body — which carries this type's own isolation — is the
+    ///   supported form.
+    init(controller: PersistenceController? = nil) {
+        self.controller = controller ?? .shared
     }
 
     func clearHealthKitCachedValues() throws {

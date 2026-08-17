@@ -139,7 +139,7 @@ struct BackupExclusionLaunchGateTests {
         #expect(fixture.marker.hasPriorUse)
 
         // "Delete everything" resets the preference blob to first-launch defaults.
-        fixture.store.resetToDefaults()
+        #expect(fixture.store.resetToDefaults(), "the preferences row survived the reset")
         #expect(fixture.store.preferences.backupExclusionChoiceMade == false)
 
         // Launch 2: the marker alone classifies this as prior use (no onboarding evidence
@@ -299,7 +299,9 @@ struct BackupExclusionLaunchGateTests {
             suiteName = "BackupExclusionLaunchGateTests.\(UUID().uuidString)"
             defaults = try #require(UserDefaults(suiteName: suiteName))
             if let preSeededBlob {
-                KeychainItem.store(try JSONEncoder().encode(preSeededBlob), for: .storagePreferences, service: service)
+                let seeded = KeychainItem.store(try JSONEncoder().encode(preSeededBlob),
+                                                for: .storagePreferences, service: service)
+                #expect(seeded == errSecSuccess, "pre-seeding the preferences blob failed")
             }
             store = StoragePreferencesStore(keychainService: service)
             marker = FernletPriorUseMarker(defaults: defaults)
@@ -320,7 +322,7 @@ struct BackupExclusionLaunchGateTests {
         /// the "another launch already persisted the real blob" shape the frozen-copy tests need.
         func writeBlobDirectly(_ preferences: StoragePreferences) {
             guard let data = try? JSONEncoder().encode(preferences) else { return }
-            KeychainItem.store(data, for: .storagePreferences, service: service)
+            #expect(KeychainItem.store(data, for: .storagePreferences, service: service) == errSecSuccess)
         }
 
         func tearDown() {

@@ -201,7 +201,7 @@ struct DuressAppLockSettingsRefusalTests {
         let service = try await armedService(harness, mode: .silentWipe)
         let originalVerifier = try #require(hardeningRow(.verifier, harness))
         let purged = DuressHardeningFlag()
-        service.duressPurgeHook = { purged.raise() }
+        service.installDuressPurgeHook { purged.raise() }
 
         await expectInvalidPasscode {
             _ = try await service.unlock(passcode: "654321", for: .appLockSettings)
@@ -371,12 +371,12 @@ struct DuressCredentialKindStrandingTests {
 struct DuressWipeMediaKeyTests {
 
     private func plantMediaKey(_ harness: LockTestHarness) {
-        _ = KeychainItem.store(
+        #expect(KeychainItem.store(
             Data(repeating: 0xAB, count: 32),
             account: "com.fernlet.private-media.ownContentKey",
             service: harness.mediaKeychainServiceID,
             accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        )
+        ) == errSecSuccess)
     }
 
     private func mediaKeyExists(_ harness: LockTestHarness) -> Bool {

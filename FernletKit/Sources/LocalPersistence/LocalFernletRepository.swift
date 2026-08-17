@@ -242,9 +242,8 @@ public struct LocalFernletRepository: FernletRepository {
     ///   strip, which is what keeps un-stripped content out of the blob by type.
     /// - Returns: `false` when the save is refused (read-only recovery mode) or any encode/write
     ///   step fails; the on-disk file is left untouched in that case.
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
+    ///   Not discardable (R7): a dropped `false` is a save the caller believes landed.
+    public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
         // Guard, not assert: asserts compile out of Release, and an empty key would write the
         // day under "" (R5). False is the documented not-durable signal the caller retries on.
@@ -358,9 +357,10 @@ public struct LocalFernletRepository: FernletRepository {
     /// Deletes the whole local store file. Removing the file rather than writing an empty database
     /// leaves nothing on disk to be recovered, and the next `loadDatabase` already treats an absent
     /// file as a fresh database — so this is the same end state a first launch sees.
-    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
-    // still discard this result on the CONCRETE type; removing it here would break their build.
-    @discardableResult public func purgeAllPersistedData() -> Bool {
+    ///
+    /// - Returns: `false` when the file could not be removed. Not discardable (R7): "delete
+    ///   everything" reports the store it could not clear.
+    public func purgeAllPersistedData() -> Bool {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
         do {
             try FileManager.default.removeItem(at: fileURL)

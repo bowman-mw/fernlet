@@ -620,8 +620,8 @@ extension KeychainItem {
     /// Stores a lock item as a ThisDeviceOnly generic password under `key`'s account name.
     ///
     /// - Returns: The raw `OSStatus`; ``FernletLockService`` both checks it AND reads the
-    ///   value back (`storeVerified`) before trusting the write.
-    @discardableResult
+    ///   value back (`storeVerified`) before trusting the write. Not discardable (R7): every lock
+    ///   row is key material whose loss is invisible until the next unlock.
     static func store(_ data: Data, for key: LockKeychainKey, service: String) -> OSStatus {
         store(
             data,
@@ -949,7 +949,27 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// `@MainActor`-isolated because the store it drives is, and `@ObservationIgnored` because it is
     /// launch-time wiring no view observes.
-    @ObservationIgnored public var duressPurgeHook: (@MainActor () -> Void)?
+    ///
+    /// R6: readable (the wiring tests assert it is installed) but writable only through
+    /// ``installDuressPurgeHook(_:)``, which is **set-once** — the most destructive seam in the app
+    /// must not be silently replaceable by whoever holds the service last.
+    @ObservationIgnored public private(set) var duressPurgeHook: (@MainActor () -> Void)?
+
+    /// Installs the durable-purge seam. Called exactly once, from the app's launch wiring.
+    ///
+    /// Set-once by design: a second install is REFUSED and recorded, never allowed to overwrite the
+    /// first. Swapping this closure mid-session would redirect (or defuse) the wipe that follows a
+    /// duress unlock, and a silent overwrite is precisely the failure nobody would see until the
+    /// wipe was needed. Re-wiring after a legitimate teardown means building a new service.
+    ///
+    /// - Parameter hook: The durable-purge errand, run on the main actor after the decoy is on screen.
+    public func installDuressPurgeHook(_ hook: @escaping @MainActor () -> Void) {
+        guard duressPurgeHook == nil else {
+            FernletAuditLog.log("lock.duressPurgeHook.reinstallRefused")
+            return
+        }
+        duressPurgeHook = hook
+    }
 
     /// Combine mirror of ``state`` for subscribers outside the Observation system.
     public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
@@ -2135,7 +2155,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Silent (no audit event) for the same reason the rest of the duress API is, and idempotent.
     ///
     /// - Returns: `true` when an enrollment was actually retired.
-    @discardableResult
     public func invalidateRecoveryCustodianForRotatedIdentity() -> Bool {
         guard hasRecoveryCustodian else { return false }
         if hasDuressConfigured, storedDuressMode() == .recoveryLock {

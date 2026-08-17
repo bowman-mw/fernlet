@@ -294,8 +294,9 @@ struct CoinEconomyTests {
         // already in the store (unlike CustomItemRepository's delete-unlisted save).
         let controller = PersistenceController(inMemory: true)
         let repo = CoinLedgerRepository(controller: controller)
-        repo.append([CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: day)])
-        repo.append([CoinLedgerEntry.spend(ref: "hat", amount: 2, at: day)])  // a different row
+        #expect(repo.append([CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: day)]) == true)
+        // A different row.
+        #expect(repo.append([CoinLedgerEntry.spend(ref: "hat", amount: 2, at: day)]) == true)
         let rows = repo.load()
         #expect(rows.count == 2)                                    // the first row survived
         #expect(CoinEconomy.balance(in: rows) == 3)

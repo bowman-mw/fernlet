@@ -16,7 +16,7 @@ struct DayHistoryUncappedTests {
         let stamp = Date(timeIntervalSince1970: 1_700_000_000)
         for i in 0..<400 {
             let key = String(format: "2020-%05d", i)
-            dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)])
+            #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: key), updatedAt: stamp)]) == true)
         }
         let repo = CoreDataFernletRepository(controller: controller)
         #expect(repo.loadAllDays().count >= 400)  // > the old 370 cap, nothing pruned
@@ -28,7 +28,7 @@ struct DayHistoryUncappedTests {
     @Test func loadAllDaysIsCachedAndInvalidatedOnRefresh() {
         let controller = PersistenceController(inMemory: true)
         let dayRepo = DayRecordRepository(controller: controller)
-        dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: Date())])
+        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: Date())]) == true)
         // Isolated (non-existent) legacy file so the blob-missing migration path can't fan stray on-disk
         // legacy days into rows and perturb the exact count — the count assertions below must be hermetic.
         let legacyURL = FileManager.default.temporaryDirectory
@@ -45,7 +45,7 @@ struct DayHistoryUncappedTests {
 
         // After a new row lands, an invalidation (what a remote CloudKit change or a local save triggers)
         // must drop the memoized set so the next read reflects the fresh history.
-        dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-02"), updatedAt: Date())])
+        #expect(dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-02"), updatedAt: Date())]) == true)
         repo.invalidateCache()
         #expect(repo.loadAllDays()["2026-05-02"] != nil)
     }
