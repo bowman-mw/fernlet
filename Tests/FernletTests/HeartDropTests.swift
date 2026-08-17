@@ -517,13 +517,13 @@ struct HeartDropTests {
         for index in 0..<HeartDropOutbox.maxPendingPerFriend {
             let id = UUID()
             ids.append(id)
-            outbox.enqueue(HeartDropOutbox.Entry(
+            _ = outbox.enqueue(HeartDropOutbox.Entry(
                 id: id, friendSigningKey: friend, tag: "t\(index)", wire: Data([1]), createdAt: currentTime))
         }
         #expect(!outbox.hasCapacity(forFriendSigningKey: friend))
 
         for (index, id) in ids.enumerated() {
-            outbox.markUploaded(id: id, recordName: "rec-\(index)")
+            _ = outbox.markUploaded(id: id, recordName: "rec-\(index)")
         }
         #expect(outbox.pendingCount(friendSigningKey: friend) == 0)
         #expect(outbox.hasCapacity(forFriendSigningKey: friend))
@@ -544,9 +544,9 @@ struct HeartDropTests {
         for index in 0..<HeartDropOutbox.maxPerFriendPerDay {
             #expect(outbox.hasDailyCapacity(forFriendSigningKey: friend, at: currentTime))
             let id = UUID()
-            outbox.enqueue(HeartDropOutbox.Entry(
+            _ = outbox.enqueue(HeartDropOutbox.Entry(
                 id: id, friendSigningKey: friend, tag: "t\(index)", wire: Data([1]), createdAt: currentTime))
-            outbox.markUploaded(id: id, recordName: "rec-\(index)") // delivered straight away
+            _ = outbox.markUploaded(id: id, recordName: "rec-\(index)") // delivered straight away
         }
         #expect(!outbox.hasDailyCapacity(forFriendSigningKey: friend, at: currentTime))
         #expect(outbox.hasCapacity(forFriendSigningKey: friend)) // backlog empty: only the day cap binds
@@ -569,15 +569,15 @@ struct HeartDropTests {
         let racing = UUID()
         let waiting = UUID()
         for (index, id) in [uploaded, racing, waiting].enumerated() {
-            outbox.enqueue(HeartDropOutbox.Entry(
+            _ = outbox.enqueue(HeartDropOutbox.Entry(
                 id: id, friendSigningKey: friend, tag: "t\(index)", wire: Data([1]), createdAt: currentTime))
         }
-        outbox.markUploaded(id: uploaded, recordName: "rec-1")
+        _ = outbox.markUploaded(id: uploaded, recordName: "rec-1")
 
         let captured = outbox.snapshot() ?? []
-        outbox.markUploaded(id: racing, recordName: "rec-2") // uploaded mid-purge
+        _ = outbox.markUploaded(id: racing, recordName: "rec-2") // uploaded mid-purge
         let newcomer = UUID()
-        outbox.enqueue(HeartDropOutbox.Entry(
+        _ = outbox.enqueue(HeartDropOutbox.Entry(
             id: newcomer, friendSigningKey: friend, tag: "new", wire: Data([1]), createdAt: currentTime))
 
         #expect(outbox.removeUnchanged(captured) == 2) // the uploaded one and the still-waiting one
@@ -1371,7 +1371,8 @@ struct HeartDropTests {
         #expect(broken.acceptIfWithinDailyBudget(senderFingerprint: "f", dayEpoch: 1) == .storageUnavailable)
 
         io.failReads = false
-        #expect(broken.retryLoad())
+        broken.retryLoad()
+        #expect(broken.isAvailable)
         #expect(!broken.recordIfNew(envelopeID: seen), "the preserved file still remembers the seen id")
         #expect(broken.recordIfNew(envelopeID: UUID()))
     }
@@ -1432,7 +1433,8 @@ struct HeartDropTests {
         #expect(!broken.recordReceivedHeart(id: UUID(), senderDisplayName: "F", senderFingerprint: "x"))
 
         io.failReads = false
-        #expect(broken.retryLoad())
+        broken.retryLoad()
+        #expect(broken.isLoaded)
         #expect(!broken.canSendHeart(to: "friend-1"), "the preserved file still arms the gate")
         clock.advance(5 * 60 + 1) // past the 5-minute rate window
         #expect(broken.canSendHeart(to: "friend-1"))
@@ -1836,7 +1838,8 @@ struct HeartDropTests {
         dedup.unrecord(envelopeID: id) // what openIncoming now does on that outcome
 
         io.failWrites = false
-        #expect(dedup.retryLoad(), "the commit-on-failure removal re-persists")
+        dedup.retryLoad()
+        #expect(dedup.isAvailable, "the commit-on-failure removal re-persists")
         #expect(dedup.recordIfNew(envelopeID: id), "the envelope id is fresh again — the heart re-delivers")
     }
 
