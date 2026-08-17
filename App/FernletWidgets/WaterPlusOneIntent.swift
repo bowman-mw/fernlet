@@ -27,7 +27,7 @@ struct WaterPlusOneIntent: AppIntent {
         // Record the intent's OWN day key so a tap after midnight (app closed) lands on the
         // correct day when the app drains the queue later (day-rollover safety).
         let dayKey = WidgetDayKey.current()
-        PendingWidgetActionWriter().append(
+        let queued = PendingWidgetActionWriter().append(
             PendingWidgetAction(
                 id: UUID(),
                 dateKey: dayKey,
@@ -35,6 +35,10 @@ struct WaterPlusOneIntent: AppIntent {
                 createdAt: Date()
             )
         )
+        // Only show the bottle the app will actually see. A failed queue write (logged by the writer)
+        // means nothing recorded the tap, so bumping the ring here would promise a bottle the app
+        // overwrites away on its next publish; leaving the widget truthful lets the user tap again.
+        guard queued else { return .result() }
         WidgetSnapshotStore().applyOptimisticWaterPlusOne(dayKey: dayKey)
         WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.companion)
         return .result()

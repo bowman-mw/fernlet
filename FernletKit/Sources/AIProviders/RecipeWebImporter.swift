@@ -278,7 +278,12 @@ public enum RecipeWebImporter {
             // IPv6 literal in any spelling.
             var address = in6_addr()
             guard inet_pton(AF_INET6, host, &address) == 1 else { return false }
-            let bytes = withUnsafeBytes(of: address) { Array($0) }
+            // The platform's own typed accessor for the same 16 bytes — no Unsafe* seam (R9).
+            let octets = address.__u6_addr.__u6_addr8
+            let bytes: [UInt8] = [octets.0, octets.1, octets.2, octets.3,
+                                  octets.4, octets.5, octets.6, octets.7,
+                                  octets.8, octets.9, octets.10, octets.11,
+                                  octets.12, octets.13, octets.14, octets.15]
             if bytes == Array(repeating: 0, count: 15) + [1] { return true }        // ::1 loopback
             if bytes[0] == 0xFE, bytes[1] & 0xC0 == 0x80 { return true }            // fe80::/10 link-local
             if bytes[0] & 0xFE == 0xFC { return true }                              // fc00::/7 unique-local
@@ -363,22 +368,34 @@ public enum RecipeWebImporter {
         return nil
     }
 
+    /// Max JSON-LD nodes examined while resolving one `image` value (R1/R3: the value comes from an
+    /// arbitrary page, so the walk needs a bound that is visible at the loop).
+    nonisolated private static let maxImageNodeVisits = 256
+
     /// Resolves a JSON-LD `image` value of any of its four schema.org shapes — string, `[string]`,
     /// `ImageObject`, `[ImageObject]` — to the first usable URL. `ImageObject` reads `url` first,
     /// then `contentUrl` (both appear in the wild).
+    ///
+    /// A bounded pre-order worklist rather than recursion (R1): the value is page-controlled, so
+    /// stack depth must not follow it. Precedence is preserved by push order — the last node pushed
+    /// is the next one popped.
     nonisolated static func imageURLValue(_ value: Any?, relativeTo sourceURL: URL) -> URL? {
-        if let string = stringValue(value) {
-            return normalizedImageURL(from: string, relativeTo: sourceURL)
-        }
-        if let array = value as? [Any] {
-            for element in array {
-                if let url = imageURLValue(element, relativeTo: sourceURL) { return url }
+        var work: [Any] = value.map { [$0] } ?? []
+        var budget = maxImageNodeVisits
+        while let node = work.popLast(), budget > 0 {
+            budget -= 1
+            if let string = stringValue(node) {
+                if let url = normalizedImageURL(from: string, relativeTo: sourceURL) { return url }
+                continue
             }
-            return nil
-        }
-        if let dictionary = value as? [String: Any] {
-            return imageURLValue(dictionary["url"], relativeTo: sourceURL)
-                ?? imageURLValue(dictionary["contentUrl"], relativeTo: sourceURL)
+            if let array = node as? [Any] {
+                work.append(contentsOf: array.reversed())      // reversed → first element popped first
+                continue
+            }
+            if let dictionary = node as? [String: Any] {
+                if let contentURL = dictionary["contentUrl"] { work.append(contentURL) }
+                if let url = dictionary["url"] { work.append(url) }   // pushed last → tried first
+            }
         }
         return nil
     }
@@ -649,7 +666,9 @@ public enum RecipeWebImporter {
 
     private static func importedRecipe(from dictionary: [String: Any], sourceURL: URL, catalog: FoodCatalog) -> ImportedRecipe? {
         let name = stringValue(dictionary["name"])
-        let ingredients = stringArrayValue(dictionary["recipeIngredient"])
+        // R3: `recipeIngredient` is page-controlled and otherwise bounded only by the 3 MB HTML cap;
+        // every kept line costs one main-actor catalog search in estimateMacrosFromIngredients.
+        let ingredients = Array(stringArrayValue(dictionary["recipeIngredient"]).prefix(maxImportedIngredients))
         let fullSummary = instructionsText(from: dictionary["recipeInstructions"])
         let summary = briefSummary(from: fullSummary)
         // F5: keep the ordered steps separately (briefSummary above still destroys them into a blurb).
@@ -691,15 +710,26 @@ public enum RecipeWebImporter {
 
     // MARK: - Servings
 
+    /// Max array-nesting levels unwrapped from a page's `recipeYield` (R1/R2: page-controlled input,
+    /// so the unwrap needs a bound visible at the loop).
+    nonisolated private static let maxYieldUnwrapDepth = 8
+
     private static func parseServings(from value: Any?) -> Int {
-        if let n = value as? Int { return max(1, n) }
-        if let d = value as? Double { return max(1, Int(d.rounded())) }
-        if let s = stringValue(value) {
+        // Unwrap `[[4]]`-style nesting iteratively rather than recursively (R1); a scalar or a string
+        // is not an `[Any]`, so this loop leaves every classified shape untouched.
+        var current = value
+        var depth = 0
+        while let array = current as? [Any], depth < maxYieldUnwrapDepth {
+            current = array.first
+            depth += 1
+        }
+        if let n = current as? Int { return max(1, n) }
+        if let d = current as? Double { return max(1, Int(d.rounded())) }
+        if let s = stringValue(current) {
             // "4 servings", "Makes 12 cookies", "4-6 servings" — take the first integer
             let digits = s.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
             if let first = digits.first, let n = Int(first) { return max(1, n) }
         }
-        if let array = value as? [Any] { return parseServings(from: array.first) }
         return 1
     }
 
@@ -752,6 +782,10 @@ public enum RecipeWebImporter {
     /// USDA fallback when the site publishes no nutrition label: parses each ingredient line, matches
     /// its cleaned name against the catalog's top result, sums scaled macros, and divides by servings.
     /// Unparseable or unmatched lines contribute nothing, so this UNDERestimates rather than invents.
+    ///
+    /// - Important: one catalog search per line, on the main actor. Callers cap `ingredients` at
+    ///   ``maxImportedIngredients`` where the page's list enters (R3); do not hand it an uncapped
+    ///   page-controlled array.
     nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
 
@@ -900,17 +934,52 @@ public enum RecipeWebImporter {
         return []
     }
 
+    /// Max JSON-LD nodes examined while flattening one `recipeInstructions` value (R1/R2/R3: the
+    /// value comes from an arbitrary page, so both the walk and the result need visible bounds).
+    nonisolated private static let maxInstructionNodeVisits = 4_000
+
+    /// Ingredient lines kept from one imported page (R3: page-controlled input). No real recipe
+    /// approaches 100 lines, and each kept line costs one catalog search during a user-visible import.
+    nonisolated public static let maxImportedIngredients = 100
+
+    /// Ordered steps kept from one imported page (R3: page-controlled input). A real recipe is far
+    /// below this; the cap exists because these steps are persisted and then serialised into the
+    /// app-group file a cold-launched Live Activity intent must decode on every Lock Screen tap.
+    nonisolated public static let maxImportedSteps = 200
+
     private static func instructionsText(from value: Any?) -> String {
-        if let string = stringValue(value) {
-            return string
+        instructionTexts(from: value).joined(separator: " ")
+    }
+
+    /// Flattens any `recipeInstructions` shape to its text, in order, with a node budget.
+    ///
+    /// The bounded, iterative replacement for the old mutually-recursive `instructionText` overload
+    /// pair (R1) — depth used to follow page-controlled `itemListElement` nesting. Joining the flat
+    /// leaf sequence with a single space is what the nested joins produced, because every level used
+    /// the same separator and an empty subtree contributed nothing. The one ordering detail kept from
+    /// the old dictionary overload: `text`/`name` win over `itemListElement`.
+    nonisolated private static func instructionTexts(from value: Any?) -> [String] {
+        var out: [String] = []
+        var work: [Any] = value.map { [$0] } ?? []
+        var budget = maxInstructionNodeVisits
+        while let node = work.popLast(), budget > 0 {
+            budget -= 1
+            if let string = stringValue(node) { out.append(string); continue }
+            if let array = node as? [Any] {
+                work.append(contentsOf: array.reversed())      // reversed → original order
+                continue
+            }
+            if let dictionary = node as? [String: Any] {
+                if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {
+                    out.append(text)
+                    continue
+                }
+                if let itemList = dictionary["itemListElement"], !(itemList is NSNull) {
+                    work.append(itemList)
+                }
+            }
         }
-        if let values = value as? [Any] {
-            return values.compactMap(instructionText).joined(separator: " ")
-        }
-        if let dictionary = value as? [String: Any] {
-            return instructionText(from: dictionary) ?? ""
-        }
-        return ""
+        return out
     }
 
     /// F5: parse `recipeInstructions` into ORDERED steps rather than flattening them (which
@@ -921,58 +990,42 @@ public enum RecipeWebImporter {
     ///   place, so sections concatenate section-by-section in order;
     /// - a single string → one step.
     /// Web JSON-LD steps rarely carry per-step timing, so `durationSeconds` stays nil here (manual
-    /// entry supplies timers). Blank steps are dropped. Purely shape-based, like `instructionText`.
+    /// entry supplies timers). Blank steps are dropped. Purely shape-based.
+    /// The result is capped at ``maxImportedSteps`` and the walk at ``maxInstructionNodeVisits``.
     /// Public so `RecipeStepsTests` can drive it directly (plain `import AIProviders`, matching the other
     /// importer tests) — it needs no network fetch or `FoodCatalog`, unlike the full import path.
     public nonisolated static func orderedSteps(from value: Any?) -> [RecipeStep] {
-        if let string = stringValue(value) {
-            return [RecipeStep(text: string)]
-        }
-        if let values = value as? [Any] {
-            return values.flatMap(orderedSteps(from:))
-        }
-        if let dictionary = value as? [String: Any] {
+        // A bounded pre-order worklist rather than recursion (R1) — the value is page-controlled, so
+        // stack depth must not follow it — and capped at `maxImportedSteps` (R3).
+        var out: [RecipeStep] = []
+        var work: [Any] = value.map { [$0] } ?? []
+        var budget = maxInstructionNodeVisits
+        while let node = work.popLast(), budget > 0, out.count < maxImportedSteps {
+            budget -= 1
+            if let string = stringValue(node) {
+                out.append(RecipeStep(text: string))
+                continue
+            }
+            if let values = node as? [Any] {
+                work.append(contentsOf: values.reversed())     // reversed → original order
+                continue
+            }
+            guard let dictionary = node as? [String: Any] else { continue }
             // HowToSection: flatten its ordered sub-steps (never surface the section name as a step).
-            // schema.org permits `itemListElement` to be either an array OR a single object, so recurse
-            // on the raw value rather than only matching `[Any]` — a single-object section would
+            // schema.org permits `itemListElement` to be either an array OR a single object, so push
+            // the raw value rather than only matching `[Any]` — a single-object section would
             // otherwise fall through to the text/name branch and emit the SECTION NAME as the step
-            // (dropping every real sub-step).
+            // (dropping every real sub-step). An empty result drops the section, matching the array path.
             if let itemList = dictionary["itemListElement"], !(itemList is NSNull) {
-                // Presence of `itemListElement` marks this as a section; return its flattened sub-steps
-                // and do NOT fall through to the section's own `name` (that would surface the section
-                // heading as a step). An empty result drops the section, matching the array path.
-                return orderedSteps(from: itemList)
+                work.append(itemList)
+                continue
             }
             // HowToStep: prefer `text`, fall back to `name`.
             if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {
-                return [RecipeStep(text: text)]
+                out.append(RecipeStep(text: text))
             }
         }
-        return []
-    }
-
-    nonisolated private static func instructionText(from value: Any) -> String? {
-        if let string = stringValue(value) {
-            return string
-        }
-        if let dictionary = value as? [String: Any] {
-            return instructionText(from: dictionary)
-        }
-        return nil
-    }
-
-    nonisolated private static func instructionText(from dictionary: [String: Any]) -> String? {
-        if let text = stringValue(dictionary["text"]) {
-            return text
-        }
-        if let name = stringValue(dictionary["name"]) {
-            return name
-        }
-        if let itemList = dictionary["itemListElement"] as? [Any] {
-            let text = itemList.compactMap(instructionText).joined(separator: " ")
-            return text.isEmpty ? nil : text
-        }
-        return nil
+        return out
     }
 
     /// This importer's entity-decoding policy: numeric character references (`&#8217;`, `&#x2019;`)
@@ -1006,9 +1059,12 @@ struct ExtractedRecipe {
     /// USDA-estimated macros at `servings: 1`.
     func importedRecipe(sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Same R3 cap as the JSON-LD path: the model's ingredient list is derived from page content.
         let trimmedIngredients = ingredients
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+            .prefix(RecipeWebImporter.maxImportedIngredients)
+            .map { $0 }
         let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard trimmedName.isEmpty == false, trimmedIngredients.isEmpty == false else {

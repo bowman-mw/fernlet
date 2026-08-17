@@ -38,107 +38,177 @@ struct WorkoutLiveActivity: Widget {
             let isStale = context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label {
-                        Text(context.attributes.workoutTitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } icon: {
-                        Image(systemName: "leaf.fill")
-                            .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
-                    }
+                    WorkoutIslandLeading(title: context.attributes.workoutTitle, isStale: isStale)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
-                    if !isStale && !isSimpleStep(state) {
-                        Text("Set \(state.setNumber) of \(state.totalSets)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    WorkoutIslandTrailing(state: state, isStale: isStale)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    if isStale {
-                        Text("Paused")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text(state.phase == .resting ? "Rest" : state.exerciseName)
-                            .font(.headline)
-                            .foregroundStyle(state.phase == .resting ? FernletWidgetPalette.leaf : .primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
+                    WorkoutIslandCenter(state: state, isStale: isStale)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if isStale {
-                        Text("Open Fernlet to pick it back up")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        VStack(spacing: 8) {
-                            if state.phase == .resting {
-                                RestCountdownText(state: state,
-                                                  font: .system(size: 38, weight: .semibold, design: .rounded),
-                                                  color: .primary)
-                                Text(nextUpLine(state))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            } else {
-                                Text(setRepsLine(state))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            guidedActionButton(state)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
+                    WorkoutIslandBottom(state: state, isStale: isStale)
                 }
             } compactLeading: {
                 Image(systemName: "leaf.fill")
                     .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
             } compactTrailing: {
-                if isStale {
-                    // Degrade to a still pause glyph — never a frozen timer or set count.
-                    Image(systemName: "pause.circle")
-                        .foregroundStyle(.secondary)
-                } else if state.phase == .resting {
-                    RestCountdownText(state: state,
-                                      font: .caption2.monospacedDigit(),
-                                      color: .primary)
-                        .frame(maxWidth: 44)
-                } else if !isSimpleStep(state) {
-                    Text("\(state.setNumber)/\(state.totalSets)")
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundStyle(.primary)
-                } else {
-                    Image(systemName: "figure.strengthtraining.functional")
-                        .foregroundStyle(FernletWidgetPalette.leaf)
-                }
+                WorkoutIslandCompactTrailing(state: state, isStale: isStale)
             } minimal: {
-                if isStale {
-                    Image(systemName: "pause.fill")
-                        .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
-                } else if state.phase == .resting {
-                    // The minimal slot is a tiny circle: clamp the timer's width and scale digits down,
-                    // or the Text reserves room for its widest possible value ("88:88") and overflows.
-                    RestCountdownText(state: state,
-                                      font: .caption2.monospacedDigit(),
-                                      color: FernletWidgetPalette.leaf,
-                                      maxWidth: 34)
-                } else {
-                    Image(systemName: "leaf.fill")
-                        .foregroundStyle(FernletWidgetPalette.leaf)
-                }
+                WorkoutIslandMinimal(state: state, isStale: isStale)
             }
             .keylineTint(FernletWidgetPalette.leaf)
+        }
+    }
+}
+
+// MARK: - Dynamic Island regions
+//
+// One private view per Island slot (R4: `body` stays a wiring diagram). Each is a pure function of
+// `state`/`isStale` and carries the exact modifiers it had while inlined.
+
+/// Expanded-Island leading slot: the workout title with the leaf glyph, dimmed when stale.
+private struct WorkoutIslandLeading: View {
+    let title: String
+    let isStale: Bool
+
+    var body: some View {
+        Label {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: "leaf.fill")
+                .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
+        }
+    }
+}
+
+/// Expanded-Island trailing slot: "Set X of Y", omitted while stale or for a single-step entry.
+private struct WorkoutIslandTrailing: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let isStale: Bool
+
+    var body: some View {
+        // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
+        if !isStale && !isSimpleStep(state) {
+            Text("Set \(state.setNumber) of \(state.totalSets)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// Expanded-Island centre slot: "Rest" / the exercise name, or a dimmed "Paused" when stale.
+private struct WorkoutIslandCenter: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let isStale: Bool
+
+    var body: some View {
+        if isStale {
+            Text("Paused")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Text(state.phase == .resting ? "Rest" : state.exerciseName)
+                .font(.headline)
+                .foregroundStyle(state.phase == .resting ? FernletWidgetPalette.leaf : .primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+}
+
+/// Expanded-Island bottom slot: the countdown / set line plus the interactive control, or the
+/// gentle "open Fernlet" line for a stale activity.
+private struct WorkoutIslandBottom: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let isStale: Bool
+
+    var body: some View {
+        if isStale {
+            Text("Open Fernlet to pick it back up")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+        } else {
+            liveContent
+        }
+    }
+
+    private var liveContent: some View {
+        VStack(spacing: 8) {
+            if state.phase == .resting {
+                RestCountdownText(state: state,
+                                  font: .system(size: 38, weight: .semibold, design: .rounded),
+                                  color: .primary)
+                Text(nextUpLine(state))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else {
+                Text(setRepsLine(state))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            guidedActionButton(state)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// Compact-Island trailing slot: pause glyph when stale, else the countdown, set count, or icon.
+private struct WorkoutIslandCompactTrailing: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let isStale: Bool
+
+    var body: some View {
+        if isStale {
+            // Degrade to a still pause glyph — never a frozen timer or set count.
+            Image(systemName: "pause.circle")
+                .foregroundStyle(.secondary)
+        } else if state.phase == .resting {
+            RestCountdownText(state: state,
+                              font: .caption2.monospacedDigit(),
+                              color: .primary)
+                .frame(maxWidth: 44)
+        } else if !isSimpleStep(state) {
+            Text("\(state.setNumber)/\(state.totalSets)")
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        } else {
+            Image(systemName: "figure.strengthtraining.functional")
+                .foregroundStyle(FernletWidgetPalette.leaf)
+        }
+    }
+}
+
+/// Minimal-Island slot: pause glyph when stale, the width-clamped countdown while resting, else leaf.
+private struct WorkoutIslandMinimal: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let isStale: Bool
+
+    var body: some View {
+        if isStale {
+            Image(systemName: "pause.fill")
+                .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
+        } else if state.phase == .resting {
+            // The minimal slot is a tiny circle: clamp the timer's width and scale digits down,
+            // or the Text reserves room for its widest possible value ("88:88") and overflows.
+            RestCountdownText(state: state,
+                              font: .caption2.monospacedDigit(),
+                              color: FernletWidgetPalette.leaf,
+                              maxWidth: 34)
+        } else {
+            Image(systemName: "leaf.fill")
+                .foregroundStyle(FernletWidgetPalette.leaf)
         }
     }
 }

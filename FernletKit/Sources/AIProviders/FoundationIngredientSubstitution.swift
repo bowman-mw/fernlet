@@ -106,6 +106,8 @@ public enum FoundationIngredientSubstitutionModel {
         resolve: (String) -> [FoodSelectionCandidate],
         limit: Int = 6
     ) -> [IngredientSubstitutionSuggestion] {
+        // R5: validate the cap at entry rather than building a pool `bind` would then discard.
+        guard limit > 0 else { return [] }
         var pool: [FoodSelectionCandidate] = []
         var numberPicks: [(candidateNumber: Int, reason: String?)] = []
         for pick in picks {
@@ -132,12 +134,16 @@ public enum FoundationIngredientSubstitutionModel {
     /// - a number matching no candidate id is dropped (out-of-range / hallucinated),
     /// - duplicate numbers keep only the first (a food is suggested once),
     /// - order follows the model's ranking,
-    /// - the result is capped at `limit`.
+    /// - the result is capped at `limit` — a `limit` of zero or less yields nothing, since the cap is
+    ///   checked after an append.
     public nonisolated static func bind(
         picks: [(candidateNumber: Int, reason: String?)],
         candidates: [FoodSelectionCandidate],
         limit: Int = 6
     ) -> [IngredientSubstitutionSuggestion] {
+        // R5: the cap below is enforced AFTER an append, so a non-positive limit would otherwise
+        // return one suggestion instead of none — validate it at entry.
+        guard limit > 0 else { return [] }
         var seen: Set<UUID> = []
         var result: [IngredientSubstitutionSuggestion] = []
         for pick in picks {

@@ -16,6 +16,11 @@
 // `fernletAppGroupIdentifier` / SharedRecipeImportQueue.appGroupIdentifier.
 
 import Foundation
+import os
+
+/// Subsystem log for the app-group run-state files: every persistence failure is named here rather
+/// than swallowed (R7). A `let` at file scope, shared by both concrete stores.
+private let runStateLog = Logger(subsystem: "com.fernlet", category: "widget-runstate")
 
 /// A run-state value that ``AppGroupRunStateStore`` can persist to its app-group JSON file.
 ///
@@ -37,15 +42,20 @@ protocol AppGroupRunStatePersistable: Codable {
 /// foreground reconcile) and the corresponding `LiveActivityIntent` runner (Lock Screen buttons,
 /// Siri). Every access runs inside an `NSFileCoordinator` block; dates are ISO-8601 with sorted
 /// keys; writes are atomic with `.completeFileProtectionUntilFirstUserAuthentication`. Reads are
-/// nil-tolerant — a missing, corrupt, or still-protected file reads as "no active run" — and every
-/// failure mode is silent by design (`try?` throughout): losing one write never crashes an intent.
-/// ``write(_:)`` re-stamps `updatedAt` so the app's reconcile can age-out an abandoned run.
+/// nil-tolerant — a missing, corrupt, or still-protected file reads as "no active run" — and no
+/// failure mode is fatal: losing one write never crashes an intent, it is logged (``log``) and the
+/// caller carries on. ``write(_:)`` re-stamps `updatedAt` so the app's reconcile can age-out an
+/// abandoned run.
 /// Self-contained (literal app-group id, own codecs) so this one file compiles identically in both
 /// targets. The two concrete stores are ``CookingRunStateStore`` and ``GuidedWorkoutRunStateStore``.
 struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
     /// Documented duplicate of `fernletAppGroupIdentifier` — see file header.
     /// (Computed, not stored: generic types cannot carry static stored properties.)
     private static var appGroupIdentifier: String { "group.MBO.Fernlet" }
+
+    /// Where every run-state persistence failure is named (R7: no silent `try?`).
+    /// (Computed over the file-scope constant: generic types cannot carry static stored properties.)
+    private static var log: Logger { runStateLog }
 
     private let fileManager: FileManager
     private let fileURL: URL
@@ -85,27 +95,70 @@ struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
                   let decoded = try? makeDecoder().decode(State.self, from: data) else { return }
             result = decoded
         }
+        // Coordination failure means the block never ran: report it rather than let "no coordination"
+        // masquerade as "no active run".
+        if let coordinatorError {
+            Self.logCoordinationFailure("read", coordinatorError)
+        }
         return result
     }
 
     /// Replace the active run. Stamps `updatedAt` so reconcile can age-out an abandoned run.
+    ///
+    /// A failed write is not fatal — the caller's next transition rewrites the file and the app's
+    /// foreground reconcile re-reads it — but it is never silent: encode / directory / write / file
+    /// coordination failures are all logged with the file they were for.
     func write(_ state: State) {
         var stamped = state
         stamped.updatedAt = Date()
         var coordinatorError: NSError?
         NSFileCoordinator().coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
-            guard let encoded = try? makeEncoder().encode(stamped) else { return }
-            try? fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? encoded.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            do {
+                let encoded = try makeEncoder().encode(stamped)
+                try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try encoded.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } catch {
+                // Recovery: leave the previous file in place — a stale run is recoverable, a torn one is not.
+                Self.log.error("""
+                    run-state write failed for \(State.runStateFileName, privacy: .public): \
+                    \(error.localizedDescription, privacy: .public)
+                    """)
+            }
+        }
+        if let coordinatorError {
+            Self.logCoordinationFailure("write", coordinatorError)
         }
     }
 
     /// Clear the active run (finished, abandoned/discarded, or a new run replacing it).
+    ///
+    /// An already-absent file is the desired end state, not a failure; anything else is logged so a
+    /// finished run that survives on disk (and gets re-adopted by the next reconcile) leaves a trace.
     func clear() {
         var coordinatorError: NSError?
         NSFileCoordinator().coordinate(writingItemAt: fileURL, options: .forDeleting, error: &coordinatorError) { url in
-            try? fileManager.removeItem(at: url)
+            do {
+                try fileManager.removeItem(at: url)
+            } catch CocoaError.fileNoSuchFile {
+                // Already gone — exactly what clear() is for.
+            } catch {
+                Self.log.error("""
+                    run-state clear failed for \(State.runStateFileName, privacy: .public): \
+                    \(error.localizedDescription, privacy: .public)
+                    """)
+            }
         }
+        if let coordinatorError {
+            Self.logCoordinationFailure("clear", coordinatorError)
+        }
+    }
+
+    /// Names an `NSFileCoordinator` failure: coordination never ran the block, so nothing happened.
+    private static func logCoordinationFailure(_ operation: String, _ error: NSError) {
+        log.error("""
+            run-state \(operation, privacy: .public) coordination failed for \
+            \(State.runStateFileName, privacy: .public): \(error.localizedDescription, privacy: .public)
+            """)
     }
 }
 

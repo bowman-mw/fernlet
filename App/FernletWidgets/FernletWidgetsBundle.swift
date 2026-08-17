@@ -207,86 +207,116 @@ private struct CompanionGlyph: View {
     }
 
     /// Draws each mood's exact eyes/mouth (+resting "z") with `.destinationOut`, matching the masks.
+    ///
+    /// One small function per mood (R4) over a shared ``FaceEraser``; every coordinate is unchanged,
+    /// so the rendered glyphs are identical to the SVG masks they were ported from.
     private static func eraseFace(for state: WidgetCompanionState?, in ctx: GraphicsContext) {
-        let clear = GraphicsContext.Shading.color(.black) // any opaque colour; blend mode erases
         var eyeCtx = ctx
         eyeCtx.blendMode = .destinationOut
-
-        func dotEye(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) -> Path {
-            Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
-        }
-        func stroke(_ build: (inout Path) -> Void, width: CGFloat) {
-            var p = Path(); build(&p)
-            eyeCtx.stroke(p, with: clear,
-                          style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-        }
+        let eraser = FaceEraser(ctx: eyeCtx)
 
         switch state {
-        case .thriving, nil:
-            eyeCtx.fill(dotEye(37, 45, 5.5), with: clear)
-            eyeCtx.fill(dotEye(63, 45, 5.5), with: clear)
-            stroke({ p in
-                p.move(to: CGPoint(x: 33, y: 55))
-                p.addQuadCurve(to: CGPoint(x: 67, y: 55), control: CGPoint(x: 50, y: 75))
-            }, width: 6.5)
-
-        case .okay:
-            eyeCtx.fill(dotEye(37, 48, 5.5), with: clear)
-            eyeCtx.fill(dotEye(63, 48, 5.5), with: clear)
-            stroke({ p in
-                p.move(to: CGPoint(x: 41, y: 61))
-                p.addQuadCurve(to: CGPoint(x: 59, y: 61), control: CGPoint(x: 50, y: 68))
-            }, width: 5.5)
-
-        case .tired:
-            stroke({ p in                       // sleepy slanted lines
-                p.move(to: CGPoint(x: 31, y: 47)); p.addLine(to: CGPoint(x: 44, y: 50))
-            }, width: 5.5)
-            stroke({ p in
-                p.move(to: CGPoint(x: 69, y: 47)); p.addLine(to: CGPoint(x: 56, y: 50))
-            }, width: 5.5)
-            stroke({ p in                       // flat mouth
-                p.move(to: CGPoint(x: 42, y: 63)); p.addLine(to: CGPoint(x: 58, y: 63))
-            }, width: 5)
-
-        case .resting:
-            stroke({ p in                       // closed-arc eyes
-                p.move(to: CGPoint(x: 31, y: 50))
-                p.addQuadCurve(to: CGPoint(x: 44, y: 50), control: CGPoint(x: 37.5, y: 56))
-            }, width: 5)
-            stroke({ p in
-                p.move(to: CGPoint(x: 56, y: 50))
-                p.addQuadCurve(to: CGPoint(x: 69, y: 50), control: CGPoint(x: 62.5, y: 56))
-            }, width: 5)
-            stroke({ p in                       // tiny mouth
-                p.move(to: CGPoint(x: 44, y: 62))
-                p.addQuadCurve(to: CGPoint(x: 56, y: 62), control: CGPoint(x: 50, y: 66))
-            }, width: 4.5)
-            stroke({ p in                       // the "z"
-                p.move(to: CGPoint(x: 70, y: 20))
-                p.addLine(to: CGPoint(x: 80, y: 20))
-                p.addLine(to: CGPoint(x: 70, y: 31))
-                p.addLine(to: CGPoint(x: 80, y: 31))
-            }, width: 3.4)
-
-        case .sick:
-            stroke({ p in                       // queasy x-ish eyes (chevrons)
-                p.move(to: CGPoint(x: 32, y: 44))
-                p.addLine(to: CGPoint(x: 40, y: 48))
-                p.addLine(to: CGPoint(x: 32, y: 52))
-            }, width: 4.5)
-            stroke({ p in
-                p.move(to: CGPoint(x: 68, y: 44))
-                p.addLine(to: CGPoint(x: 60, y: 48))
-                p.addLine(to: CGPoint(x: 68, y: 52))
-            }, width: 4.5)
-            stroke({ p in                       // wavy mouth
-                p.move(to: CGPoint(x: 38, y: 63))
-                p.addQuadCurve(to: CGPoint(x: 46, y: 63), control: CGPoint(x: 42, y: 58))
-                p.addQuadCurve(to: CGPoint(x: 54, y: 63), control: CGPoint(x: 50, y: 68))
-                p.addQuadCurve(to: CGPoint(x: 62, y: 63), control: CGPoint(x: 58, y: 58))
-            }, width: 4)
+        case .thriving, nil: eraseThrivingFace(eraser)
+        case .okay:          eraseOkayFace(eraser)
+        case .tired:         eraseTiredFace(eraser)
+        case .resting:       eraseRestingFace(eraser)
+        case .sick:          eraseSickFace(eraser)
         }
+    }
+
+    private static func eraseThrivingFace(_ e: FaceEraser) {
+        e.dot(37, 45, 5.5)
+        e.dot(63, 45, 5.5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 33, y: 55))
+            p.addQuadCurve(to: CGPoint(x: 67, y: 55), control: CGPoint(x: 50, y: 75))
+        }, width: 6.5)
+    }
+
+    private static func eraseOkayFace(_ e: FaceEraser) {
+        e.dot(37, 48, 5.5)
+        e.dot(63, 48, 5.5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 41, y: 61))
+            p.addQuadCurve(to: CGPoint(x: 59, y: 61), control: CGPoint(x: 50, y: 68))
+        }, width: 5.5)
+    }
+
+    private static func eraseTiredFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // sleepy slanted lines
+            p.move(to: CGPoint(x: 31, y: 47)); p.addLine(to: CGPoint(x: 44, y: 50))
+        }, width: 5.5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 69, y: 47)); p.addLine(to: CGPoint(x: 56, y: 50))
+        }, width: 5.5)
+        e.stroke({ p in                       // flat mouth
+            p.move(to: CGPoint(x: 42, y: 63)); p.addLine(to: CGPoint(x: 58, y: 63))
+        }, width: 5)
+    }
+
+    private static func eraseRestingFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // closed-arc eyes
+            p.move(to: CGPoint(x: 31, y: 50))
+            p.addQuadCurve(to: CGPoint(x: 44, y: 50), control: CGPoint(x: 37.5, y: 56))
+        }, width: 5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 56, y: 50))
+            p.addQuadCurve(to: CGPoint(x: 69, y: 50), control: CGPoint(x: 62.5, y: 56))
+        }, width: 5)
+        e.stroke({ p in                       // tiny mouth
+            p.move(to: CGPoint(x: 44, y: 62))
+            p.addQuadCurve(to: CGPoint(x: 56, y: 62), control: CGPoint(x: 50, y: 66))
+        }, width: 4.5)
+        e.stroke({ p in                       // the "z"
+            p.move(to: CGPoint(x: 70, y: 20))
+            p.addLine(to: CGPoint(x: 80, y: 20))
+            p.addLine(to: CGPoint(x: 70, y: 31))
+            p.addLine(to: CGPoint(x: 80, y: 31))
+        }, width: 3.4)
+    }
+
+    private static func eraseSickFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // queasy x-ish eyes (chevrons)
+            p.move(to: CGPoint(x: 32, y: 44))
+            p.addLine(to: CGPoint(x: 40, y: 48))
+            p.addLine(to: CGPoint(x: 32, y: 52))
+        }, width: 4.5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 68, y: 44))
+            p.addLine(to: CGPoint(x: 60, y: 48))
+            p.addLine(to: CGPoint(x: 68, y: 52))
+        }, width: 4.5)
+        e.stroke({ p in                       // wavy mouth
+            p.move(to: CGPoint(x: 38, y: 63))
+            p.addQuadCurve(to: CGPoint(x: 46, y: 63), control: CGPoint(x: 42, y: 58))
+            p.addQuadCurve(to: CGPoint(x: 54, y: 63), control: CGPoint(x: 50, y: 68))
+            p.addQuadCurve(to: CGPoint(x: 62, y: 63), control: CGPoint(x: 58, y: 58))
+        }, width: 4)
+    }
+}
+
+/// The two drawing primitives every mood's face is made of, over a `.destinationOut` context.
+///
+/// Holds the already-blend-mode-set context plus the opaque shading whose only job is to erase, so
+/// each `erase<Mood>Face` function is nothing but coordinates.
+private struct FaceEraser {
+    /// The erasing context — the caller sets `blendMode = .destinationOut` before handing it over.
+    let ctx: GraphicsContext
+    /// Any opaque colour; the blend mode is what turns a draw into an erase.
+    private let shade = GraphicsContext.Shading.color(.black)
+
+    /// Punches a filled circle of radius `r` centred at (`cx`, `cy`) — the dot eyes.
+    func dot(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) {
+        ctx.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: shade)
+    }
+
+    /// Punches a round-capped stroke of the path `build` describes — mouths, lids, and the "z".
+    func stroke(_ build: (inout Path) -> Void, width: CGFloat) {
+        guard width > 0 else { return }        // a non-positive line width erases nothing
+        var p = Path()
+        build(&p)
+        ctx.stroke(p, with: shade,
+                   style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 }
 

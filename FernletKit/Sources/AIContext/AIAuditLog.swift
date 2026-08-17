@@ -1,4 +1,5 @@
 import Foundation
+import os
 import FernletDomainModel
 
 #if canImport(FoundationModels)
@@ -212,7 +213,9 @@ public protocol AIAuditLogPersisting: Sendable {
     /// still be on disk — so the delete-all funnel can surface an incomplete-wipe signal instead of
     /// claiming a clean sweep. A file-backed sink has a real removal-failure signal (unlike the plain
     /// UserDefaults quota reset); a purely in-memory sink returns `true`.
-    @discardableResult
+    ///
+    /// Deliberately NOT `@discardableResult` (R7): this is a success/failure signal, and every
+    /// caller — the delete-all funnel and ``AIAuditLog/clear()`` — must act on it.
     func clear() -> Bool
 }
 
@@ -236,6 +239,11 @@ public actor AIAuditLog {
     /// oldest). ~500 keeps a meaningful history at a quota ceiling of ~60 calls/day without unbounded
     /// growth.
     public static let entryLimit = 500
+
+    /// Where a failed sink erase is named (R7 — no discarded failure signal). `os.Logger` rather than
+    /// `FernletAuditLog`: `AIContext` depends only on `FernletDomainModel`, and importing across a
+    /// dependency edge it does not declare is a hard build error under the SPM wall.
+    private static let log = Logger(subsystem: "com.fernlet", category: "ai-audit-log")
 
     /// The in-memory working set, oldest first, capped at ``entryLimit``. Mutated only through
     /// `record` / `updateOutcome` / `clear` so the sink and memory never diverge.
@@ -319,10 +327,16 @@ public actor AIAuditLog {
     }
 
     /// Wipes the in-memory working set and asks the sink to erase its file (delete-all-data).
+    ///
+    /// The delete-all funnel clears the sink directly and reports its verdict as an incomplete-store
+    /// signal; here the same verdict is consumed rather than discarded (R7), so ANY other caller of
+    /// `clear()` still leaves a trace when the in-memory view goes empty while a stale audit file
+    /// survives on disk.
     public func clear() {
         entries = []
-        // The removal-failure signal belongs to the delete-all funnel, which clears the sink directly
-        // and reports on it; the actor's job is only to wipe the in-memory working set.
-        _ = sink?.clear()
+        guard let sink else { return }
+        if sink.clear() == false {
+            Self.log.error("AI audit-log sink clear failed — the persisted log may still be on disk")
+        }
     }
 }

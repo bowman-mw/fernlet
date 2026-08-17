@@ -19,6 +19,11 @@
 // `group.MBO.Fernlet` container are the only contract between the two processes.
 
 import Foundation
+import os
+
+/// Subsystem log for the app-group bridge files: a failed optimistic bump or a dropped pending
+/// action is named here rather than swallowed (R7). A `let` at file scope, shared by both stores.
+private let widgetBridgeLog = Logger(subsystem: "com.fernlet", category: "widget-bridge")
 
 /// The shared app-group id — documented duplicate of the app/share-extension constants (see the file
 /// header). Every cross-process file in this target lives under this container.
@@ -180,12 +185,20 @@ struct WidgetSnapshotStore {
                   let decoded = try? WidgetBridgeFiles.makeDecoder().decode(WidgetSnapshot.self, from: data) else { return }
             result = decoded
         }
+        // Coordination failure means the block never ran; the caller falls through to the placeholder,
+        // but "we could not coordinate" must not read as "there is no snapshot".
+        if let coordinatorError {
+            widgetBridgeLog.error("snapshot read coordination failed: \(coordinatorError.localizedDescription, privacy: .public)")
+        }
         return result
     }
 
     /// Optimistic +1-water bump so the widget updates instantly after the intent fires; the app is
     /// the source of truth and republishes the real snapshot on its next save/foreground.
     func applyOptimisticWaterPlusOne(dayKey: String) {
+        // The day key is the join field for every app-group contract here; an empty one would stamp a
+        // snapshot no day gate can ever match (R5: validate at entry).
+        guard dayKey.isEmpty == false else { return }
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
@@ -210,8 +223,17 @@ struct WidgetSnapshotStore {
                 snapshot.macroSummary = WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0)
             }
             snapshot.computedAt = Date()
-            guard let encoded = try? WidgetBridgeFiles.makeEncoder().encode(snapshot) else { return }
-            try? encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            do {
+                let encoded = try WidgetBridgeFiles.makeEncoder().encode(snapshot)
+                try encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } catch {
+                // Recovery: leave the previous snapshot in place — the app republishes the true one on
+                // its next save/foreground, so the cost is one stale render, not a lost log.
+                widgetBridgeLog.error("optimistic water bump write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        if let coordinatorError {
+            widgetBridgeLog.error("optimistic water bump coordination failed: \(coordinatorError.localizedDescription, privacy: .public)")
         }
     }
 }
@@ -224,6 +246,12 @@ struct WidgetSnapshotStore {
 /// read-modify-write runs as one `NSFileCoordinator` transaction, and a duplicate row id is dropped
 /// rather than appended twice.
 struct PendingWidgetActionWriter {
+    /// Max queued rows kept on disk; older rows are dropped (R3 — repeated taps are input-driven
+    /// growth and the app, which drains the file, may stay closed for weeks). 200 taps is far more
+    /// than a realistic un-drained backlog, and each append rewrites the whole array, so an
+    /// unbounded queue is also a quadratic cost inside the widget's tight memory budget.
+    static let maxPendingActions = 200
+
     private let fileManager: FileManager
     private let fileURL: URL
 
@@ -234,7 +262,15 @@ struct PendingWidgetActionWriter {
     }
 
     /// Append one action row unless a row with the same id already exists (idempotent under retries).
-    func append(_ action: PendingWidgetAction) {
+    ///
+    /// - Returns: `true` when the row is durably queued (or was already present), `false` when the
+    ///   queue could not be written — the caller must not pretend the tap landed. Not
+    ///   `@discardableResult`: this is a success/failure signal (R7).
+    func append(_ action: PendingWidgetAction) -> Bool {
+        // The app drains rows by `dateKey` and dispatches on `action`; a row missing either is a row
+        // the other process can only drop, so refuse it here rather than write it (R5).
+        guard action.dateKey.isEmpty == false, action.action.isEmpty == false else { return false }
+        var appended = false
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
@@ -246,11 +282,29 @@ struct PendingWidgetActionWriter {
                let decoded = try? WidgetBridgeFiles.makeDecoder().decode([PendingWidgetAction].self, from: data) {
                 records = decoded
             }
-            guard !records.contains(where: { $0.id == action.id }) else { return }
+            guard !records.contains(where: { $0.id == action.id }) else {
+                appended = true          // already queued — the idempotent contract's success case
+                return
+            }
             records.append(action)
-            guard let encoded = try? WidgetBridgeFiles.makeEncoder().encode(records) else { return }
-            try? fileManager.createDirectory(at: writeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            if records.count > Self.maxPendingActions {
+                records.removeFirst(records.count - Self.maxPendingActions)
+            }
+            do {
+                let encoded = try WidgetBridgeFiles.makeEncoder().encode(records)
+                try fileManager.createDirectory(at: writeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                appended = true
+            } catch {
+                // Recovery: report failure so the caller leaves the widget showing the truth; the row
+                // is idempotent by id, so the user simply tapping again is a safe retry.
+                widgetBridgeLog.error("pending-action append failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
+        if let coordinatorError {
+            widgetBridgeLog.error("pending-action coordination failed: \(coordinatorError.localizedDescription, privacy: .public)")
+            return false
+        }
+        return appended
     }
 }
