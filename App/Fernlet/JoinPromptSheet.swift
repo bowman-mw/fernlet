@@ -37,73 +37,11 @@ struct JoinPromptSheet<Request>: View {
                         .foregroundStyle(Color.bark)
 
                     if let errorMessage {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(Color.orange)
-                            Text(errorMessage)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                            Spacer(minLength: 0)
-                            Button("Dismiss") { dismissError() }
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                                .accessibilityIdentifier("\(accessibilityPrefix).error.dismiss")
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.35), lineWidth: 1)
-                        )
-                        .accessibilityIdentifier("\(accessibilityPrefix).error")
+                        errorBanner(errorMessage)
                     }
 
                     if let request = requests.first {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("\(Text(displayName(request)).bold()) wants to join \(Text(targetName).bold())")
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-
-                            Text(fingerprint(request))
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(Color.slate)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.75)
-
-                            if requests.count > 1 {
-                                Text("\(requests.count - 1) more waiting")
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.bark.opacity(0.10), lineWidth: 1)
-                                    )
-                            }
-
-                            HStack(spacing: 10) {
-                                Button("Allow") {
-                                    allow(request)
-                                }
-                                .buttonStyle(ChipButtonStyle(selected: true))
-                                .accessibilityIdentifier("\(accessibilityPrefix).allow")
-
-                                Button("Decline") {
-                                    decline(request)
-                                }
-                                .buttonStyle(ChipButtonStyle(selected: false))
-                                .accessibilityIdentifier("\(accessibilityPrefix).decline")
-                            }
-                        }
-                        .padding(16)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-                        )
+                        requestCard(request)
                     }
                 }
                 .padding(20)
@@ -111,5 +49,79 @@ struct JoinPromptSheet<Request>: View {
             }
         }
         .background(Color.parchment)
+    }
+
+    /// The inline admit-time error banner, with its own Dismiss (a root-level alert cannot present
+    /// over this sheet, so the error has to live inside it).
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.orange)
+            Text(message)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            Spacer(minLength: 0)
+            Button("Dismiss") { dismissError() }
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .accessibilityIdentifier("\(accessibilityPrefix).error.dismiss")
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.35), lineWidth: 1)
+        )
+        .accessibilityIdentifier("\(accessibilityPrefix).error")
+    }
+
+    /// The first pending request: who is asking, their fingerprint for eyeball verification, the
+    /// "N more waiting" pill, and Allow/Decline.
+    private func requestCard(_ request: Request) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("\(Text(displayName(request)).bold()) wants to join \(Text(targetName).bold())")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+
+            Text(fingerprint(request))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(Color.slate)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+
+            if requests.count > 1 {
+                Text("\(requests.count - 1) more waiting")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.bark.opacity(0.10), lineWidth: 1)
+                    )
+            }
+
+            HStack(spacing: 10) {
+                Button("Allow") {
+                    allow(request)
+                }
+                .buttonStyle(ChipButtonStyle(selected: true))
+                .accessibilityIdentifier("\(accessibilityPrefix).allow")
+
+                Button("Decline") {
+                    decline(request)
+                }
+                .buttonStyle(ChipButtonStyle(selected: false))
+                .accessibilityIdentifier("\(accessibilityPrefix).decline")
+            }
+        }
+        .padding(16)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+        )
     }
 }

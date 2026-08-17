@@ -78,73 +78,17 @@ struct FriendsView: View {
             presentDisconnectReviewIfNeeded()
         }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
-            if !wasInSession && nowInSession {
-                if keepFriendsPromptPresented {
-                    // A new session became ready while the compact keep prompt was up: dismiss
-                    // WITHOUT consuming — the batch persists and re-presents (merged) at the
-                    // next teardown. Clearing reviewBatch first turns the sheet's onDismiss
-                    // finalize into a no-op, and skipping the fullScreenCover avoids presenting
-                    // it in the same transaction as a sheet dismissal (one of the two would drop).
-                    reviewBatch = nil
-                    friendCandidates = []
-                    keptFriendFingerprints = []
-                    keepFriendsPromptPresented = false
-                    sessionReady = true
-                } else {
-                    connectionPeerName = connectedPeerName()
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    withAnimation { showConnectionAnimation = true }
-                }
-            } else if wasInSession && !nowInSession {
-                sessionReady = false
-                showConnectionAnimation = false
-                presentDisconnectReviewIfNeeded()
-            }
+            handleSessionChange(wasInSession: wasInSession, nowInSession: nowInSession)
         }
         .sheet(isPresented: $disconnectReviewPresented) {
-            FriendPhotoReviewSheet(
-                photos: manager.sessionPhotos,
-                selectedIDs: $selectedForSave,
-                friendCandidates: friendCandidates,
-                keptFriendFingerprints: $keptFriendFingerprints,
-                saveSelected: {
-                    // Session photos are stored metadata-only to bound memory; rehydrate the
-                    // selected ones from the disk cache before saving to the photo library.
-                    let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
-                    do {
-                        try await FriendPhotoLibrarySaver.save(toSave)
-                        manager.finishSessionPhotos(keeping: selectedForSave)
-                        finalizeFriendKeeps()
-                        await manager.leaveSessionAfterNotifyingPeers()
-                        disconnectReviewPresented = false
-                    } catch {
-                        photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
-                    }
-                },
-                discardAll: {
-                    manager.deleteAllSessionPhotos()
-                    finalizeFriendKeeps()
-                    Task { @MainActor in
-                        await manager.leaveSessionAfterNotifyingPeers()
-                        disconnectReviewPresented = false
-                    }
-                },
-                loadImageData: { manager.imageData(for: $0) }
-            )
-            .interactiveDismissDisabled()
-            .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
+            disconnectReviewSheet
         }
         // Sessions with no photos but eligible new-friend candidates get the compact prompt.
         // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
         // consumes the presented batch either way (unless a new session abandoned the prompt,
         // in which case the batch survives and re-presents merged at the next teardown).
         .sheet(isPresented: $keepFriendsPromptPresented, onDismiss: finalizeFriendKeeps) {
-            KeepFriendsPromptSheet(
-                candidates: friendCandidates,
-                keptFingerprints: $keptFriendFingerprints,
-                done: { keepFriendsPromptPresented = false }
-            )
-            .presentationDetents([.medium, .large])
+            keepFriendsPromptSheet
         }
         .fullScreenCover(isPresented: $selectedAlbumPostID.isPresent()) {
             FriendPhotoFeedView(
@@ -154,6 +98,87 @@ struct FriendsView: View {
                     onDismiss: { selectedAlbumPostID = nil }
                 )
         }
+    }
+
+    /// The `isInSession` transition handler: a session becoming live either abandons a standing keep
+    /// prompt (without consuming its batch) or plays the connection choreography; a session ending
+    /// tears the live surface down and presents the review.
+    private func handleSessionChange(wasInSession: Bool, nowInSession: Bool) {
+        if !wasInSession && nowInSession {
+            if keepFriendsPromptPresented {
+                // A new session became ready while the compact keep prompt was up: dismiss
+                // WITHOUT consuming — the batch persists and re-presents (merged) at the
+                // next teardown. Clearing reviewBatch first turns the sheet's onDismiss
+                // finalize into a no-op, and skipping the fullScreenCover avoids presenting
+                // it in the same transaction as a sheet dismissal (one of the two would drop).
+                reviewBatch = nil
+                friendCandidates = []
+                keptFriendFingerprints = []
+                keepFriendsPromptPresented = false
+                sessionReady = true
+            } else {
+                connectionPeerName = connectedPeerName()
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                withAnimation { showConnectionAnimation = true }
+            }
+        } else if wasInSession && !nowInSession {
+            sessionReady = false
+            showConnectionAnimation = false
+            presentDisconnectReviewIfNeeded()
+        }
+    }
+
+    /// The end-of-session photo review sheet (keep/discard the session's photos, and the friend
+    /// candidates alongside them).
+    private var disconnectReviewSheet: some View {
+        FriendPhotoReviewSheet(
+            photos: manager.sessionPhotos,
+            selectedIDs: $selectedForSave,
+            friendCandidates: friendCandidates,
+            keptFriendFingerprints: $keptFriendFingerprints,
+            saveSelected: { await saveSelectedSessionPhotos() },
+            discardAll: { discardAllSessionPhotos() },
+            loadImageData: { manager.imageData(for: $0) }
+        )
+        .interactiveDismissDisabled()
+        .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
+    }
+
+    /// Saves the ticked session photos to the photo library, then finalizes keeps and leaves the
+    /// session; a save failure surfaces on the sheet and leaves the session up.
+    private func saveSelectedSessionPhotos() async {
+        // Session photos are stored metadata-only to bound memory; rehydrate the
+        // selected ones from the disk cache before saving to the photo library.
+        let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
+        do {
+            try await FriendPhotoLibrarySaver.save(toSave)
+            manager.finishSessionPhotos(keeping: selectedForSave)
+            finalizeFriendKeeps()
+            await manager.leaveSessionAfterNotifyingPeers()
+            disconnectReviewPresented = false
+        } catch {
+            photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
+        }
+    }
+
+    /// Discards every session photo, finalizes keeps, and leaves the session.
+    private func discardAllSessionPhotos() {
+        manager.deleteAllSessionPhotos()
+        finalizeFriendKeeps()
+        Task { @MainActor in
+            await manager.leaveSessionAfterNotifyingPeers()
+            disconnectReviewPresented = false
+        }
+    }
+
+    /// The compact "keep these as friends?" prompt used when a session produced no photos.
+    private var keepFriendsPromptSheet: some View {
+        KeepFriendsPromptSheet(
+            candidates: friendCandidates,
+            keptFingerprints: $keptFriendFingerprints,
+            done: { keepFriendsPromptPresented = false }
+        )
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Photo album
@@ -594,6 +619,8 @@ private struct FriendPhotoCarouselPostView: View {
     @State private var pendingDeletePhotoID: UUID?
     @State private var saveErrorMessage: PhotoSaveFailure?
     @State private var savedPhotoIDs: Set<UUID> = []
+    /// Photos with a save Task already running — the per-photo in-flight cap (R3).
+    @State private var inFlightSaveIDs: Set<UUID> = []
 
     init(post: FriendPhotoWallPost, manager: MeshNetworkManager, width: CGFloat) {
         self.post = post
@@ -614,33 +641,8 @@ private struct FriendPhotoCarouselPostView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: width * 1.25)
-            .overlay(alignment: .topTrailing) {
-                if chromeVisible, post.photos.count > 1 {
-                    Text("\(selectedIndex + 1) / \(post.photos.count)")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.58), in: Capsule())
-                        .padding(14)
-                        .transition(.opacity)
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if chromeVisible, post.photos.count > 1 {
-                    HStack(spacing: 6) {
-                        ForEach(post.photos) { photo in
-                            Circle()
-                                .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.5))
-                                .frame(width: 6, height: 6)
-                        }
-                    }
-                    .padding(10)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    .padding(.bottom, 14)
-                    .transition(.opacity)
-                }
-            }
+            .overlay(alignment: .topTrailing) { pageCounterOverlay }
+            .overlay(alignment: .bottom) { pageDotsOverlay }
         }
         .background(Color.parchment)
         .onAppear { scheduleChromeFade() }
@@ -659,15 +661,54 @@ private struct FriendPhotoCarouselPostView: View {
             isPresented: $pendingDeletePhotoID.isPresent(),
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
-                if let id = pendingDeletePhotoID { manager.deletePhoto(id) }
-                pendingDeletePhotoID = nil
-            }
-            Button("Cancel", role: .cancel) { pendingDeletePhotoID = nil }
+            deleteConfirmationButtons
         } message: {
             Text("This removes it from this device. It can't be undone.")
         }
         .photoSaveFailureAlert("Couldn't Save Photo", failure: $saveErrorMessage)
+    }
+
+    /// The "n / total" capsule, shown with the auto-fading chrome on multi-photo posts.
+    @ViewBuilder
+    private var pageCounterOverlay: some View {
+        if chromeVisible, post.photos.count > 1 {
+            Text("\(selectedIndex + 1) / \(post.photos.count)")
+                .font(.fernlet(.stat))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.58), in: Capsule())
+                .padding(14)
+                .transition(.opacity)
+        }
+    }
+
+    /// The page dots, shown with the auto-fading chrome on multi-photo posts.
+    @ViewBuilder
+    private var pageDotsOverlay: some View {
+        if chromeVisible, post.photos.count > 1 {
+            HStack(spacing: 6) {
+                ForEach(post.photos) { photo in
+                    Circle()
+                        .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.5))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(10)
+            .background(.black.opacity(0.35), in: Capsule())
+            .padding(.bottom, 14)
+            .transition(.opacity)
+        }
+    }
+
+    /// Actions of the per-photo delete confirmation dialog.
+    @ViewBuilder
+    private var deleteConfirmationButtons: some View {
+        Button("Delete", role: .destructive) {
+            if let id = pendingDeletePhotoID { manager.deletePhoto(id) }
+            pendingDeletePhotoID = nil
+        }
+        Button("Cancel", role: .cancel) { pendingDeletePhotoID = nil }
     }
 
     private var header: some View {
@@ -743,7 +784,13 @@ private struct FriendPhotoCarouselPostView: View {
     }
 
     private func savePhoto(_ photo: FriendPhotoPayload) {
+        // R3 (bounded task fan-out): at most one in-flight save per photo. Without this, a double
+        // tap writes the same image to the Photos library twice — the second Task starts long
+        // before the first has updated `savedPhotoIDs`.
+        guard !savedPhotoIDs.contains(photo.id), !inFlightSaveIDs.contains(photo.id) else { return }
+        inFlightSaveIDs.insert(photo.id)
         Task {
+            defer { inFlightSaveIDs.remove(photo.id) }
             // Persistent-gallery photos are stored metadata-only in memory; rehydrate the bytes
             // from the encrypted disk cache before handing them to the photo library.
             let hydrated = manager.hydratedPhotos([photo])
@@ -781,8 +828,13 @@ private struct FriendPhotoCarouselPostView: View {
             chromeVisible = true
         }
         chromeTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
+            // The sleep result IS the cancellation check: `Task.sleep` throws exactly when the task
+            // is cancelled, so a cancelled fade simply returns (R7 — no swallowed error).
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
             withAnimation(.easeInOut(duration: 0.3)) {
                 chromeVisible = false
             }
@@ -1020,6 +1072,9 @@ struct ConnectionSuccessOverlay: View {
     @State private var cardOpacity: Double = 0
     @State private var ringsScale: CGFloat = 0.3
     @State private var ringsOpacity: Double = 1
+    /// The choreography task, held so `onDisappear` can cancel it (and so a cancelled overlay never
+    /// calls `onComplete`).
+    @State private var animationTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -1070,6 +1125,7 @@ struct ConnectionSuccessOverlay: View {
             .opacity(cardOpacity)
         }
         .onAppear { runAnimation() }
+        .onDisappear { animationTask?.cancel() }
     }
 
     private func runAnimation() {
@@ -1078,17 +1134,34 @@ struct ConnectionSuccessOverlay: View {
             cardOpacity = 1
             ringsScale = 1.7
         }
-        Task {
-            try? await Task.sleep(for: .milliseconds(900))
+        animationTask?.cancel()
+        animationTask = Task {
+            // Every step's sleep result feeds the decision to continue (R7): `Task.sleep` throws
+            // exactly on cancellation, and an overlay that went away has nothing to complete — so a
+            // cancelled choreography returns WITHOUT calling `onComplete`, which would otherwise
+            // flip the parent's `sessionReady` behind a dismissed view.
+            do {
+                try await Task.sleep(for: .milliseconds(900))
+            } catch {
+                return
+            }
             withAnimation(.easeOut(duration: 0.55)) {
                 ringsOpacity = 0
             }
-            try? await Task.sleep(for: .milliseconds(1400))
+            do {
+                try await Task.sleep(for: .milliseconds(1400))
+            } catch {
+                return
+            }
             withAnimation(.easeInOut(duration: 0.4)) {
                 cardOffset = -70
                 cardOpacity = 0
             }
-            try? await Task.sleep(for: .milliseconds(400))
+            do {
+                try await Task.sleep(for: .milliseconds(400))
+            } catch {
+                return
+            }
             onComplete()
         }
     }

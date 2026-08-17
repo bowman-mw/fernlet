@@ -262,6 +262,15 @@ struct PendingRecoveryRequestSummary: Equatable, Sendable {
 @MainActor
 final class DuressRecoveryCoordinator {
 
+    /// Largest sealed hop this ceremony will even look at (R3/R5: framing declares its maximum and
+    /// rejects oversize input up front). Every hop travels as a photographed QR code, and a QR
+    /// carries at most 2,953 bytes; 4 KB leaves room for the base64url expansion of a legitimate
+    /// payload while refusing anything a camera could not have produced.
+    ///
+    /// `nonisolated` because the QR carrier (`DuressCeremonyQR.parse`, itself nonisolated) states
+    /// the same maximum: an immutable `Int` is safe to read from any isolation.
+    nonisolated static let maxSealedHopBytes = 4_096
+
     /// The identity whose keys sign, seal, and open everything here. Injected so tests can point it
     /// at a throwaway keychain service, and so one process can host two coordinators (a "primary"
     /// and a "custodian") over separate identities.
@@ -548,6 +557,10 @@ final class DuressRecoveryCoordinator {
         credential: FernletLockCredential,
         grantingScope: FernletLockScope
     ) async throws -> DuressRecoveryOutcome {
+        guard sealedReply.count <= Self.maxSealedHopBytes else {
+            FernletAuditLog.log("mesh.verifyQR.oversizePayloadDropped", context: ["hop": "reply"])
+            throw DuressRecoveryError.malformedPayload
+        }
         guard let round = pendingRound else { throw DuressRecoveryError.noRoundInProgress }
         guard let enrolledSigning = lockService.enrolledCustodianSigningPublicKey,
               let enrolledKeyAgreement = lockService.enrolledCustodianKeyAgreementPublicKey else {
@@ -617,6 +630,10 @@ final class DuressRecoveryCoordinator {
         _ sealed: Data,
         from senderKeyAgreementPublicKey: Data
     ) throws -> PendingRecoveryRequestSummary {
+        guard sealed.count <= Self.maxSealedHopBytes else {
+            FernletAuditLog.log("mesh.verifyQR.oversizePayloadDropped", context: ["hop": "request"])
+            throw DuressRecoveryError.malformedPayload
+        }
         try ensureIdentity()
         // Pinned to a live round: this device must have answered this exact challenge, from this
         // exact scanner, moments ago. A request arriving cold — or quoting an old round — is a

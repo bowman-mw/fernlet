@@ -243,7 +243,9 @@ final class OwnPhotoBackupCoordinator {
     ///
     /// Disabling tears every corpus down — the destructive half, which is why the UI puts a WS-5
     /// confirmation in front of it.
-    @discardableResult
+    ///
+    /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7). This is the one Bool the
+    ///   route cannot afford to have ignored — a `true` is what irreversibly device-binds the key.
     func setEnabled(_ enabled: Bool) async -> Bool {
         if enabled {
             guard makeIdentity(escrowMode: .forSealing) != nil else {
@@ -544,7 +546,9 @@ final class OwnPhotoBackupCoordinator {
     ///
     /// Needs no escrow key — deletion is by record name — so it works while the app is locked, like
     /// every other leg of the wipe.
-    @discardableResult
+    ///
+    /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7): "every corpus cleared" is a
+    ///   success/failure signal the delete-all dialog reports to the user verbatim.
     func tearDownForDeleteAll() async -> Bool {
         let cloud = makeCloudService()
         var allCleared = true

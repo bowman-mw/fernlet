@@ -216,13 +216,21 @@ enum SealedBackupCrypto {
         aad += Data(payloadType.rawValue.utf8) + Data([0])
         aad += signingPublicKey + Data([0])
         aad += Data("\(chunkIndex)/\(chunkCount)".utf8) + Data([0])
-        aad += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        aad += bigEndianBytes(UInt64(bitPattern: generation))
         // Whole seconds: a Double's sub-second bits are not reproducible across an encode/decode
         // round trip through CloudKit, and would make an otherwise valid record fail to open.
         let seconds = Int64(updatedAt.timeIntervalSince1970.rounded(.down))
-        aad += withUnsafeBytes(of: UInt64(bitPattern: seconds).bigEndian) { Data($0) }
+        aad += bigEndianBytes(UInt64(bitPattern: seconds))
         return aad
     }
+}
+
+/// The eight big-endian bytes of `value`, without an unsafe raw-buffer copy (Power-of-10 R9).
+///
+/// Byte-identical to `withUnsafeBytes(of: value.bigEndian) { Data($0) }` — the AAD layout it feeds is
+/// an at-rest format pinned by `SealedBackupFormatPinTests`, so the encoding may never drift.
+private func bigEndianBytes(_ value: UInt64) -> Data {
+    Data((0..<8).map { UInt8(truncatingIfNeeded: value >> (8 * (7 - $0))) })
 }
 
 /// Seals payloads and moves them to/from the private CloudKit database — the transport half of
@@ -341,14 +349,28 @@ final class SealedBackupService {
         try await cloudDataService.saveSealedBackup(record)
     }
 
-    /// Mints one backup generation's HKDF salt: 32 CSPRNG bytes from `SymmetricKey(size: .bits256)`.
+    /// Mints one backup generation's HKDF salt: 32 CSPRNG bytes from `SystemRandomNumberGenerator`
+    /// (`UInt8.random`), the platform CSPRNG — no unsafe buffer access (Power-of-10 R9).
     ///
     /// **Never empty.** An empty salt would mean record format v1 at the seal seam, silently
     /// reintroducing the static derivation this hardening exists to remove (the versioned info string
     /// is the second line of defense, not the first). Every production write goes through here.
     private static func mintKeySalt() -> Data {
-        SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+        let salt = Data((0..<Self.keySaltByteCount).map { _ in UInt8.random(in: .min ... .max) })
+        assert(salt.count == Self.keySaltByteCount)
+        return salt
     }
+
+    /// The per-generation HKDF salt width; the derivation and its fixtures assume 32 bytes.
+    private static let keySaltByteCount = 32
+
+    /// Upper bound on the chunks one restore will decrypt (Power-of-10 R3: bounded growth).
+    ///
+    /// The chunk count originates in `head.chunkCount`, an UNAUTHENTICATED CloudKit field read
+    /// before any AEAD check, so a substituted head could otherwise drive an unbounded fetch and an
+    /// unbounded plaintext array. Exports write ceil(rowCount / 250) chunks, so 400 chunks (100k
+    /// rows) is far above any real backup; anything larger is a malformed record, not a big user.
+    static let maxRestoreChunkCount = 400
 
     /// Fetches and opens every chunk of a payload, returning each chunk's plaintext in chunk order, or
     /// `nil` when no backup exists. Works for both single-record and multi-record payloads (a single
@@ -358,6 +380,17 @@ final class SealedBackupService {
     func restoreChunks(payloadType: SealedBackupPayloadType) async throws -> [Data]? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }
+        // R3 (bounded growth): the set size ultimately comes from `head.chunkCount`, an
+        // unauthenticated CloudKit field. Refuse an absurd set before decrypting it into memory, so
+        // a substituted head cannot drive an unbounded plaintext array on this side of the transport.
+        guard records.count <= Self.maxRestoreChunkCount else {
+            FernletAuditLog.log("sealedBackup.restore.chunkCountRejected", context: [
+                "payloadType": payloadType.rawValue,
+                "found": String(records.count),
+                "max": String(Self.maxRestoreChunkCount)
+            ])
+            throw SealedBackupError.malformedRecord
+        }
 
         // Open FIRST, then check the generation. Order matters: the generation is only meaningful
         // once the AEAD has authenticated it, since an unopened record's fields are attacker-typed
@@ -385,7 +418,10 @@ final class SealedBackupService {
 
 private extension AES.GCM.Nonce {
     /// The nonce's raw bytes, for storage in a `SealedBackupRecord`.
+    ///
+    /// `AES.GCM.Nonce` is a `Sequence` of `UInt8`, so `Data.init(_:)` copies it with no unsafe
+    /// buffer access (Power-of-10 R9).
     var data: Data {
-        withUnsafeBytes { Data($0) }
+        Data(self)
     }
 }

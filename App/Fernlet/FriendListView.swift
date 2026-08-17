@@ -45,133 +45,14 @@ struct FriendListView: View {
 
     var body: some View {
         List {
-            HStack(spacing: 10) {
-                Text("You appear as")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.slate)
-                Spacer()
-                TextField("Your name", text: $displayName)
-                    .multilineTextAlignment(.trailing)
-                    .foregroundStyle(Color.bark)
-                    .submitLabel(.done)
-                    .focused($nameFieldFocused)
-                    // Commit only when the user finishes — on Return, and when focus leaves the
-                    // field — never per keystroke. The old `.onChange` wrote the name to the synced
-                    // blob on every character AND fired on the `.onAppear` seed, and it would
-                    // persist a half-typed or empty name (which is also what a mesh peer sees, since
-                    // the display name rides the discovery broadcast) if the user navigated away
-                    // mid-edit. `commitDisplayName` rejects an empty value and restores the stored one.
-                    .onSubmit { commitDisplayName() }
-                    .onChange(of: nameFieldFocused) { _, focused in
-                        if !focused { commitDisplayName() }
-                    }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Color.slate)
-                TextField("Search by name or fingerprint", text: $searchText)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            HubSectionPicker(
-                sections: FriendListFilter.allCases,
-                selection: $filter
-            ) { $0.rawValue }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
+            displayNameRow
+            searchRow
+            filterPicker
             // Compute the sorted/filtered list ONCE per render. It was previously re-derived on
             // every access — `.isEmpty` here, the `ForEach`, and `filteredPeers.last?.id` inside
             // each row — re-sorting and re-filtering the whole peer list O(n) times per render.
             let peers = filteredPeers
-            let lastPeerID = peers.last?.id
-
-            if peers.isEmpty {
-                EmptyState(text: emptyStateText)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else {
-                ForEach(peers) { peer in
-                    VStack(alignment: .leading, spacing: 0) {
-                        peerRow(peer)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                                    selected = selected?.id == peer.id ? nil : peer
-                                }
-                            }
-
-                        if let expanded = selected, expanded.id == peer.id {
-                            peerDetailCard(peer)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 12)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
-
-                        if peer.id != lastPeerID {
-                            Divider()
-                                .overlay(Color.bark.opacity(0.07))
-                                .padding(.horizontal, 20)
-                        }
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.parchment)
-                    .listRowSeparator(.hidden)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
-                            if selected?.id == peer.id { selected = nil }
-                        } label: {
-                            Label("Remove", systemImage: "trash")
-                        }
-
-                        if peer.blockedAt == nil {
-                            Button {
-                                peerToBlock = peer
-                                blockConfirmShown = true
-                            } label: {
-                                Label("Block", systemImage: "hand.raised")
-                            }
-                            .tint(Color.terracotta)
-                        } else {
-                            Button {
-                                store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
-                            } label: {
-                                Label("Unblock", systemImage: "hand.raised.slash")
-                            }
-                            .tint(Color.moss)
-                        }
-
-                        if peer.reportedAt == nil {
-                            Button {
-                                peerToReport = peer
-                            } label: {
-                                Label("Report", systemImage: "flag")
-                            }
-                            .tint(Color.goldenrod)
-                        }
-                    }
-                }
-            }
+            peerList(peers, lastPeerID: peers.last?.id)
         }
         .listStyle(.plain)
         .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
@@ -184,14 +65,7 @@ struct FriendListView: View {
             isPresented: $peerToReport.isPresent(),
             presenting: peerToReport
         ) { peer in
-            ForEach(ReportReason.allCases) { reason in
-                Button(reason.label, role: .destructive) {
-                    store.reportProximityPeer(signingPublicKey: peer.signingPublicKey, reason: reason)
-                    if selected?.id == peer.id { selected = nil }
-                    peerToReport = nil
-                }
-            }
-            Button("Cancel", role: .cancel) { peerToReport = nil }
+            reportDialogActions(peer)
         } message: { peer in
             Text("Reporting \(peer.displayName) blocks them and flags their shared content on your device.")
         }
@@ -202,20 +76,191 @@ struct FriendListView: View {
         // Catch a name edited right up to a navigation/tab change that never resigned focus.
         .onDisappear { commitDisplayName() }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
-            Button("Block", role: .destructive) {
-                if let peer = peerToBlock {
-                    store.blockProximityPeer(signingPublicKey: peer.signingPublicKey)
-                    if selected?.id == peer.id { selected = nil }
-                }
-                peerToBlock = nil
-            }
-            Button("Cancel", role: .cancel) {
-                peerToBlock = nil
-            }
+            blockAlertActions
         } message: {
-            if let peer = peerToBlock {
-                Text("Blocking \(peer.displayName) will hide their content from you and yours from them.")
+            blockAlertMessage
+        }
+    }
+
+    /// The mesh display-name field — what nearby peers see, committed only when the edit finishes.
+    private var displayNameRow: some View {
+        HStack(spacing: 10) {
+            Text("You appear as")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+            Spacer()
+            TextField("Your name", text: $displayName)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(Color.bark)
+                .submitLabel(.done)
+                .focused($nameFieldFocused)
+                // Commit only when the user finishes — on Return, and when focus leaves the
+                // field — never per keystroke. The old `.onChange` wrote the name to the synced
+                // blob on every character AND fired on the `.onAppear` seed, and it would
+                // persist a half-typed or empty name (which is also what a mesh peer sees, since
+                // the display name rides the discovery broadcast) if the user navigated away
+                // mid-edit. `commitDisplayName` rejects an empty value and restores the stored one.
+                .onSubmit { commitDisplayName() }
+                .onChange(of: nameFieldFocused) { _, focused in
+                    if !focused { commitDisplayName() }
+                }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// The name/fingerprint search field.
+    private var searchRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Color.slate)
+            TextField("Search by name or fingerprint", text: $searchText)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// All / Friends / Blocked segment control.
+    private var filterPicker: some View {
+        HubSectionPicker(
+            sections: FriendListFilter.allCases,
+            selection: $filter
+        ) { $0.rawValue }
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// The peer rows themselves (or the empty state), each expandable in place and swipeable.
+    @ViewBuilder
+    private func peerList(_ peers: [ProximityTrustedPeerRecord], lastPeerID: UUID?) -> some View {
+        if peers.isEmpty {
+            EmptyState(text: emptyStateText)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        } else {
+            ForEach(peers) { peer in
+                peerCell(peer, isLast: peer.id == lastPeerID)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.parchment)
+                    .listRowSeparator(.hidden)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        swipeActions(for: peer)
+                    }
             }
+        }
+    }
+
+    /// One peer row: the summary line, the expanded detail card when selected, and the divider.
+    private func peerCell(_ peer: ProximityTrustedPeerRecord, isLast: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            peerRow(peer)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                        selected = selected?.id == peer.id ? nil : peer
+                    }
+                }
+
+            if let expanded = selected, expanded.id == peer.id {
+                peerDetailCard(peer)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            if !isLast {
+                Divider()
+                    .overlay(Color.bark.opacity(0.07))
+                    .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    /// Remove / block-or-unblock / report, the swipe mirror of the detail card's actions.
+    @ViewBuilder
+    private func swipeActions(for peer: ProximityTrustedPeerRecord) -> some View {
+        Button(role: .destructive) {
+            store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
+            if selected?.id == peer.id { selected = nil }
+        } label: {
+            Label("Remove", systemImage: "trash")
+        }
+
+        if peer.blockedAt == nil {
+            Button {
+                peerToBlock = peer
+                blockConfirmShown = true
+            } label: {
+                Label("Block", systemImage: "hand.raised")
+            }
+            .tint(Color.terracotta)
+        } else {
+            Button {
+                store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
+            } label: {
+                Label("Unblock", systemImage: "hand.raised.slash")
+            }
+            .tint(Color.moss)
+        }
+
+        if peer.reportedAt == nil {
+            Button {
+                peerToReport = peer
+            } label: {
+                Label("Report", systemImage: "flag")
+            }
+            .tint(Color.goldenrod)
+        }
+    }
+
+    /// One destructive button per report reason, plus Cancel.
+    @ViewBuilder
+    private func reportDialogActions(_ peer: ProximityTrustedPeerRecord) -> some View {
+        ForEach(ReportReason.allCases) { reason in
+            Button(reason.label, role: .destructive) {
+                store.reportProximityPeer(signingPublicKey: peer.signingPublicKey, reason: reason)
+                if selected?.id == peer.id { selected = nil }
+                peerToReport = nil
+            }
+        }
+        Button("Cancel", role: .cancel) { peerToReport = nil }
+    }
+
+    /// Confirm/cancel for the block alert.
+    @ViewBuilder
+    private var blockAlertActions: some View {
+        Button("Block", role: .destructive) {
+            if let peer = peerToBlock {
+                store.blockProximityPeer(signingPublicKey: peer.signingPublicKey)
+                if selected?.id == peer.id { selected = nil }
+            }
+            peerToBlock = nil
+        }
+        Button("Cancel", role: .cancel) {
+            peerToBlock = nil
+        }
+    }
+
+    /// The block alert's explanatory line (empty when no peer is pending).
+    @ViewBuilder
+    private var blockAlertMessage: some View {
+        if let peer = peerToBlock {
+            Text("Blocking \(peer.displayName) will hide their content from you and yours from them.")
         }
     }
 
@@ -442,18 +487,6 @@ struct FriendListView: View {
         let onCooldown = !store.heartLedger.canSendHeart(to: peer.fingerprint)
         let sending = heartSendInProgress
         let firstName = PresenceManager.firstName(of: peer.displayName)
-
-        // Presence line: a soft moss dot means you're actually together (good-vibes 10c);
-        // otherwise a muted taupe dot — warmth is a thing you do side by side.
-        HStack(spacing: 6) {
-            Circle()
-                .fill(reachable ? Color.moss : Color.softTaupe)
-                .frame(width: 7, height: 7)
-            Text(reachable ? "Nearby now" : "Not nearby")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(reachable ? Color.moss : Color.slate)
-        }
-
         let awayEnabled = store.settings.heartsAwayDelivery
         // "Queued but not yet at the drop-off" — an uploaded heart drops out of this count, so it
         // reads as "still waiting on us", not "still undelivered".
@@ -462,6 +495,51 @@ struct FriendListView: View {
         // of repeating the "delivered while you're apart" promise.
         let awayProblem = reachable ? nil : awayDeliveryProblemText
 
+        presenceLine(reachable: reachable)
+
+        sendHeartButton(
+            peer: peer,
+            reachable: reachable,
+            awayEnabled: awayEnabled,
+            onCooldown: onCooldown,
+            sending: sending,
+            firstName: firstName
+        )
+
+        heartHelperText(
+            onCooldown: onCooldown,
+            reachable: reachable,
+            awayEnabled: awayEnabled,
+            awayProblem: awayProblem,
+            pendingDrops: pendingDrops,
+            firstName: firstName
+        )
+
+        heartStatusLines
+    }
+
+    /// The presence line: a soft moss dot means you're actually together (good-vibes 10c);
+    /// otherwise a muted taupe dot — warmth is a thing you do side by side.
+    private func presenceLine(reachable: Bool) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(reachable ? Color.moss : Color.softTaupe)
+                .frame(width: 7, height: 7)
+            Text(reachable ? "Nearby now" : "Not nearby")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(reachable ? Color.moss : Color.slate)
+        }
+    }
+
+    /// The Send button and the first-away-send consent alert it raises.
+    private func sendHeartButton(
+        peer: ProximityTrustedPeerRecord,
+        reachable: Bool,
+        awayEnabled: Bool,
+        onCooldown: Bool,
+        sending: Bool,
+        firstName: String
+    ) -> some View {
         Button {
             awayStatus = nil
             if reachable {
@@ -497,7 +575,19 @@ struct FriendListView: View {
         } message: {
             Text("When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there.")
         }
+    }
 
+    /// The one line under the button explaining the current state: cooldown, an away-delivery
+    /// problem, what is already queued, or the in-person-only default.
+    @ViewBuilder
+    private func heartHelperText(
+        onCooldown: Bool,
+        reachable: Bool,
+        awayEnabled: Bool,
+        awayProblem: String?,
+        pendingDrops: Int,
+        firstName: String
+    ) -> some View {
         if onCooldown {
             // An unloaded ledger also reads as "on cooldown" (fail-closed refuse) — but the
             // cooldown copy would be a lie there, so say what is actually wrong (Track A).
@@ -540,7 +630,11 @@ struct FriendListView: View {
                     .fernletWrappingText()
             }
         }
+    }
 
+    /// The two transient status lines: the away-queue outcome and the live-send pipeline's state.
+    @ViewBuilder
+    private var heartStatusLines: some View {
         if let awayStatus {
             Text(awayStatus)
                 .font(.fernlet(.bubble))
