@@ -918,7 +918,7 @@ public nonisolated enum WorkoutExerciseCatalog {
     /// again every time a plan introduces an exercise — while the catalog is read from the planning
     /// engine, the picker, and rest guidance.
     nonisolated(unsafe) private static var custom: [ExerciseTarget] = []
-    nonisolated(unsafe) private static let customLock = NSLock()
+    private static let customLock = NSLock()
 
     /// Replaces the registered custom exercises. Call on settings load and after any change, so the
     /// catalog and `FernletSettings.customExercises` never disagree.

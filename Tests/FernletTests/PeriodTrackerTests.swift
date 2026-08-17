@@ -584,6 +584,10 @@ struct PeriodTrackerTests {
     }
 }
 
+// `@MainActor` like the suite that owns it: its call logs are mutated from the async witnesses,
+// and the HealthKitGateway value types it builds (`AuthorizationOutcome`, `HealthBodyProfile`)
+// have main-actor-isolated initializers.
+@MainActor
 private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
     var savedSamples: [HKSample] = []
     var loadedSamples: [HKSample] = []
@@ -627,8 +631,11 @@ private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
     }
 }
 
+// The isolated conformance (`@MainActor FernletLockServicing`) mirrors the production
+// `FernletLockService` declaration: the protocol refines `PeriodLockContext`, whose requirements
+// this main-actor mock satisfies with main-actor members.
 @MainActor
-private final class MockLockService: FernletLockServicing {
+private final class MockLockService: @MainActor FernletLockServicing {
     var state: FernletLockState
     var statePublisher: AnyPublisher<FernletLockState, Never> { Just(state).eraseToAnyPublisher() }
     var requiresReset = false

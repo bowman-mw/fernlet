@@ -321,6 +321,14 @@ public enum HealthKitServiceError: LocalizedError {
 /// suites inject recorders. Note the service still calls `healthStore` directly for some one-shot
 /// sample/statistics queries — only authorization, observation lifecycle, saves, and deletes are
 /// guaranteed to pass through this seam.
+///
+/// `@MainActor` is spelled out even though it is this module's default isolation: the seam is
+/// only ever driven by the `@MainActor` ``HealthKitService``, and every conformer (the production
+/// pass-through and the test recorders, whose mutable call logs rely on it) is main-actor
+/// isolated. Left implicit, the compiler treats the `async` requirements as nonisolated for
+/// witness checking and flags the non-Sendable `NSPredicate` in `deleteObjects(of:predicate:)`
+/// as crossing into a main-actor implementation.
+@MainActor
 public protocol HealthKitStoreControlling: AnyObject {
     /// Presents the system authorization sheet for the given share/read type sets.
     func requestAuthorization(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async throws

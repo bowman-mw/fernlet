@@ -22,7 +22,7 @@ final class ModerationBanTests: XCTestCase {
     func testBanSurvivesFreshStoreInstance_reinstall() {
         let service = uniqueService()
         let clock = MockMonotonicClock(100)
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
         let store1 = ModerationBanStore(service: service, clock: clock, date: { now })
         store1.applySelfBan(durationDays: 30)
         XCTAssertTrue(store1.isSelfBanned)

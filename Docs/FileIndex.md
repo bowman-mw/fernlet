@@ -621,6 +621,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Tests/FernletTests/JournalAppendPathTests.swift` | Pins the single journal-append path (`addJournal` overloads + `logQuickMood`): today updates day/`previousJournals`/memories, a back-dated entry touches none of the today-scoped state but persists and hydrates on its own day. |
 | `Fernlet/Tests/FernletTests/NoTrackingBoundaryTests.swift` | No-tracking wall: banned advertising/analytics SDKs and symbols across every target, exact SPM dependency + hardcoded-destination allowlists, pinned HTTP-client files, and PrivacyInfo.xcprivacy/entitlements assertions. See [No-Tracking-Wall.md](No-Tracking-Wall.md). |
 | `Fernlet/Tests/FernletTests/S3BoundaryTests.swift` | S3 privacy-wall grep-based backstop tests scanning AI-facing sources for sealed-store access. |
+| `Fernlet/Tests/FernletTests/PowerOfTenBoundaryTests.swift` | Power-of-10 grep-wall: the Swift port of `Scripts/power-of-10-scan.py` (function length, force unwraps/traps, swallowed `try?`, unbounded loops, mutable globals, `#if` policy, unsafe seams, density floor) plus the rule-10 build-setting pins. Reads the same allowlist. See [Power-of-10-Swift.md](Power-of-10-Swift.md). |
 | `Fernlet/Tests/FernletTests/SavedRecipeMigrationTests.swift` | Legacy SavedRecipe-to-RecipeDefinition migration round-trip tests. |
 | `Fernlet/Tests/FernletTests/SealedBackupChunkTests.swift` | Sealed-backup chunked-export paging and multi-chunk restore-writeback tests. |
 | `Fernlet/Tests/FernletTests/SealedBackupRestoreOutcomeTests.swift` | Sealed-backup restore-outcome classification and status-recording tests. |
@@ -737,6 +738,8 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
 | `Docs/No-Tracking-Wall.md` | The enforced no-tracking boundary: permitted network destinations and why each exists, mechanical vs. policy enforcement, and how to add a destination. Backed by `NoTrackingBoundaryTests`. |
 | `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
+| `Docs/Power-of-10-Swift.md` | The Power-of-10 wall: NASA's ten rules adapted to Swift/SwiftUI, rule by rule — what is enforced by `Scripts/power-of-10-scan.py` + `PowerOfTenBoundaryTests` (zero baseline + reasoned allowlist) and what is enforced by review. Read before writing any function. |
+| `Docs/CODE_REVIEW_Power-of-10-2026-08-16.md` | The audit that established the Power-of-10 baseline: findings per rule and slice, what was fixed, and the residual allowlist. |
 | `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. |
 | `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |
 | `Docs/Recipe-P2P-Real-Device-Validation.md` | Two-device validation script for recipe sharing. |
@@ -749,12 +752,15 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 
 | Path | Purpose |
 | --- | --- |
-| `Fernlet/Scripts/spm-wall-check.sh` | S3 wall enforcement: builds with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden cross-wall `import` fails the build. Run pre-merge and in CI. |
+| `Fernlet/Scripts/spm-wall-check.sh` | The ONE strict build: `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (S3 wall — a forbidden cross-wall `import` fails the build) plus `SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES` (Power-of-10 rule 10 — every warning, including the package warnings Xcode otherwise hides, is an error). Run pre-merge and in CI. |
+| `Fernlet/Scripts/power-of-10-scan.py` | Power-of-10 mechanical scan (rules 2/4/5/6/7/8/9 + assertion-density floor + allowlist hygiene); zero-violation baseline; `--advisory` lists the review-only signals; `--json` for tooling. |
+| `Fernlet/Scripts/power-of-10-allowlist.json` | The single reasoned allowlist read by both the scanner and `PowerOfTenBoundaryTests`; every entry names the invariant that makes the exemption safe. |
 | `Fernlet/Scripts/spm-wall-selftest.sh` | Negative test proving the wall is load-bearing: plants a forbidden `import PrivateHealthStore` in `AIProviders`, asserts the build fails, then reverts. |
 | `Fernlet/Scripts/install-git-hooks.sh` | Once per clone: points `core.hooksPath` at the versioned `Scripts/git-hooks` so pushes run the wall check. |
-| `Fernlet/Scripts/git-hooks/pre-push` | Versioned pre-push hook running `spm-wall-check.sh` when a push touches wall-relevant files. |
+| `Fernlet/Scripts/git-hooks/pre-push` | Versioned pre-push hook: runs `power-of-10-scan.py` on every push and `spm-wall-check.sh` when a push touches any Swift/manifest/project file. |
 | `Fernlet/Scripts/branded-catalog/` | Python pipeline converting the USDA branded dataset into the curated and On-Demand-Resource SQLite catalogs. |
 | `Fernlet/.github/workflows/s3-wall.yml` | CI workflow running the wall enforcement self-test plus the grep-wall on push/PR to `main`. |
+| `Fernlet/.github/workflows/power-of-10.yml` | CI workflow running the Power-of-10 mechanical scan and the doc-coverage scan on push/PR to `main` (Ubuntu, no Xcode). |
 
 ## Dependency
 

@@ -15,7 +15,9 @@ import PrivateStoreCore
 /// ciphertext columns decrypted by ``MenstrualNarrativeRepository``, while `id`,
 /// ``hkExternalUUID``, ``dateKey``, and the timestamps stay plaintext for querying. `Codable` so
 /// the app-side sealed-backup export can serialize decrypted records into its re-encrypted chunks.
-public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable {
+/// `Sendable` (a plain value type of Sendable fields) because the repository seals it inside
+/// `NSManagedObjectContext.performAndWait`, whose closure is `@Sendable`.
+public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     /// `HKMetadataKeyExternalUUID` of the HealthKit samples this narrative annotates — the join key
     /// ``PeriodTrackerStore`` matches on. Still minted (uniquely) for narrative-only events that
@@ -72,8 +74,15 @@ public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable {
 /// included) sets the one-way divergence latch.
 ///
 /// A `nonisolated` final class: all Core Data access is serialized through the view context's
-/// `performAndWait`, so it is callable from any executor.
-public nonisolated final class MenstrualNarrativeRepository {
+/// `performAndWait`, so it is callable from any executor — and therefore `Sendable`, which
+/// `performAndWait`'s `@Sendable` closure requires of the `self` it captures. The conformance is
+/// `@unchecked` for exactly one reason — `UserDefaults` carries no SDK `Sendable` annotation — and
+/// rests on this invariant: every stored property is a `let`; `context` (`NSManagedObjectContext`,
+/// `Sendable` in the iOS 26 SDK) is only ever touched inside its own `performAndWait`, which
+/// serializes on the context's queue; `crypto` is a stateless value; and `defaults` is
+/// Apple-documented thread-safe and used only for the one-way latch below. Adding a `var` here
+/// would break the invariant and must not happen.
+public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "menstrual-narrative")
 

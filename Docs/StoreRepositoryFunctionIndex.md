@@ -309,7 +309,7 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 
 | Function | What It Does |
 | --- | --- |
-| `PrivateRowPlumbing.deleteRows(entityName:predicate:fetchLimit:in:)` | The shared keyless fetch → delete → save → history-prune sequence the sealed repositories' `deleteAll()` methods each repeated inline (journal, worry, intimacy, menstrual narratives). Deletes without decrypting, so deletion stays available while the app is locked or the feature is hidden; returns whether any row was deleted and rethrows fetch/save/prune errors. |
+| `PrivateRowPlumbing.deleteRows(entityName:in:)` | The shared keyless whole-entity fetch → delete → save → history-prune sequence the sealed repositories' `deleteAll()` methods each repeated inline (journal, worry, intimacy, menstrual narratives). Deletes without decrypting, so deletion stays available while the app is locked or the feature is hidden; returns whether any row was deleted and rethrows fetch/save/prune errors. Deliberately takes no predicate/limit: `performAndWait`'s closure is `@Sendable`, and no caller ever filtered. |
 
 ### `AppendOnlyRowStore.swift`
 

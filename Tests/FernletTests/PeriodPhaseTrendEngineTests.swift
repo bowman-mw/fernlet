@@ -26,7 +26,7 @@ struct PeriodPhaseTrendEngineTests {
         let obs = observations(luteralSleep: 0.3, follicularSleep: 0.9, count: 12)
         let trends = PeriodPhaseTrendEngine.trends(from: obs, completedCycles: 4)
 
-        let lutealSleep = try? #require(trends.first { $0.phase == .luteal && $0.metric == .sleep })
+        let lutealSleep = trends.first { $0.phase == .luteal && $0.metric == .sleep }
         #expect(lutealSleep?.direction == .worse)
         #expect(lutealSleep?.confidence == .high)
 

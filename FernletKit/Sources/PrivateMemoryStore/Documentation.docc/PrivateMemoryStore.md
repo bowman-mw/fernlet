@@ -54,10 +54,14 @@ device-key → user-key migration (``WorryStoring/reencryptAll(from:to:)``) beca
 Concurrency: this target sets no `defaultIsolation(MainActor.self)` — both repositories are plain
 nonisolated `final class`es whose every operation runs synchronously inside
 `NSManagedObjectContext.performAndWait` on the sealed store's view context, so they can be called
-from the nonisolated contexts that own them without cross-actor hops. The value types
-(``JournalNarrative``, ``WorryNarrative``) are plain `Equatable` structs; ``JournalNarrative`` is
-additionally `Codable` so the sealed-backup export can serialize decrypted rows into its
-re-encrypted chunks.
+from the nonisolated contexts that own them without cross-actor hops. Because that closure is
+`@Sendable`, both are `Sendable` too: all-`let` state over the SDK-`Sendable` context and the
+stateless `ColumnCrypto` value (``WorryNarrativeRepository`` fully compiler-checked;
+``JournalNarrativeRepository`` `@unchecked` solely for its un-annotated but thread-safe
+`UserDefaults` latch — the invariant is spelled out on the type). The value types
+(``JournalNarrative``, ``WorryNarrative``) are plain `Equatable`, `Sendable` structs;
+``JournalNarrative`` is additionally `Codable` so the sealed-backup export can serialize
+decrypted rows into its re-encrypted chunks.
 
 ## Topics
 

@@ -10,17 +10,37 @@
 # wall-relevant code: the package manifest, any package source, the AI-facing app files the grep-wall
 # covers, or the wall script itself. The pbxproj, privacy manifests, and the no-tracking wall's own
 # test are in the list too — they are the inputs to the SECOND wall (Docs/No-Tracking-Wall.md), whose
-# dependency and destination allowlists a project-file edit can silently widen.
+# dependency and destination allowlists a project-file edit can silently widen. Since the strict
+# build also enforces Power-of-10 rule 10 (warnings are errors, package warnings un-suppressed —
+# Docs/Power-of-10-Swift.md §R10), every Swift file in the tree is wall-relevant too: the widgets,
+# the share extension, and BOTH test targets can each introduce a warning.
+#
+# The Power-of-10 mechanical scan (Scripts/power-of-10-scan.py, pure Python, ~2 s) runs on EVERY
+# push regardless of what changed — it is too cheap to gate.
 # githooks(5) passes the ref updates on stdin.
 set -u
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if [ "${SKIP_P10_SCAN:-0}" = "1" ]; then
+  echo "[pre-push] SKIP_P10_SCAN=1 — skipping Power-of-10 scan (CI still enforces it)."
+else
+  echo "[pre-push] Running Power-of-10 mechanical scan (Scripts/power-of-10-scan.py)…"
+  if ! python3 "$REPO_ROOT/Scripts/power-of-10-scan.py"; then
+    echo "[pre-push] Power-of-10 scan FAILED — push aborted."
+    echo "           Fix the listed violations (Docs/Power-of-10-Swift.md), or add a reviewed allowlist"
+    echo "           entry with a stated invariant; bypass once with: SKIP_P10_SCAN=1 git push."
+    exit 1
+  fi
+  echo "[pre-push] Power-of-10 scan passed."
+fi
 
 if [ "${SKIP_S3_WALL_CHECK:-0}" = "1" ]; then
   echo "[pre-push] SKIP_S3_WALL_CHECK=1 — skipping S3 wall check (CI still enforces it)."
   exit 0
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|App/Fernlet/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|Tests/FernletTests/NoTrackingBoundaryTests\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|App/.*\.swift|Tests/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
 zero="0000000000000000000000000000000000000000"
 
 changed_files=""
@@ -60,7 +80,9 @@ echo "[pre-push] Running S3 privacy-wall check (Scripts/spm-wall-check.sh)…"
 code=$?
 if [ "$code" -ne 0 ]; then
   echo "[pre-push] S3 wall check FAILED (exit $code) — push aborted."
-  echo "           Fix the cross-wall import (look for 'is missing a dependency on'),"
+  echo "           Fix the cross-wall import (look for 'is missing a dependency on') or the compiler"
+  echo "           warning-turned-error (Power-of-10 rule 10: the strict build treats every warning,"
+  echo "           including hidden package warnings, as an error),"
   echo "           or bypass once with: SKIP_S3_WALL_CHECK=1 git push   (CI still enforces it)."
   exit "$code"
 fi

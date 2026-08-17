@@ -18,6 +18,9 @@ import WeatherKit
 
 // MARK: - Pet time-lock governor
 
+// `@MainActor` (like `CompanionAmbienceTests` below): `PetInteractionGovernor` lives in the
+// main-actor-default app target, so its `Response` `Equatable` conformance is main-actor isolated.
+@MainActor
 struct PetInteractionGovernorTests {
 
     /// Mutable reference clock so tests can advance time deterministically.

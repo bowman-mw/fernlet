@@ -18,7 +18,9 @@ import PrivateStoreCore
 /// chunks (payload type `intimacyLogs`) and the restore can decode them back. The type is
 /// self-contained — nothing outside this row is needed to render a restored log — which is why
 /// intimacy restore, unlike journal restore, needs no day-skeleton reconstruction step.
-public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable {
+/// `Sendable` (a plain value type of Sendable fields) because the repository seals it inside
+/// `NSManagedObjectContext.performAndWait`, whose closure is `@Sendable`.
+public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     /// Canonical `yyyy-MM-dd` day key derived from ``eventDate`` (see `FernletDate`).
     public var dayKey: String
@@ -97,8 +99,15 @@ public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable {
 /// seam with its own gating decision.
 ///
 /// A `nonisolated` final class: all Core Data access is serialized through the view context's
-/// `performAndWait`, so it is callable from any executor.
-public nonisolated final class IntimacyLogRepository {
+/// `performAndWait`, so it is callable from any executor — and therefore `Sendable`, which
+/// `performAndWait`'s `@Sendable` closure requires of the `self` it captures. The conformance is
+/// `@unchecked` for exactly one reason — `UserDefaults` carries no SDK `Sendable` annotation — and
+/// rests on this invariant: every stored property is a `let`; `context` (`NSManagedObjectContext`,
+/// `Sendable` in the iOS 26 SDK) is only ever touched inside its own `performAndWait`, which
+/// serializes on the context's queue; `crypto` is a stateless value; and `defaults` is
+/// Apple-documented thread-safe and used only for the one-way latch below. Adding a `var` here
+/// would break the invariant and must not happen.
+public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "intimacy-log")
 

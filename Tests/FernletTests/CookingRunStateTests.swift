@@ -74,6 +74,9 @@ struct CookingRunStateTests {
 
     // MARK: - Codable round-trip (byte-portable, ISO-8601 dates)
 
+    // `CookingRunState` is a main-actor type in the app target, so its (isolated) `Codable`
+    // conformance must be exercised from the main actor.
+    @MainActor
     @Test func codableRoundTripPreservesEveryField() throws {
         var run = makeRun(stepIndex: 2)
         run.startTimer(now: Date(timeIntervalSince1970: 1_779_664_900))

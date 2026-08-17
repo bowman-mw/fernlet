@@ -397,7 +397,7 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
 ///
 /// Also the memory category for ``MemoryNote``'s journal capture; unknown tags from newer builds
 /// freeze to `.neutral` and park.
-public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable, Sendable {
     case bright, good, neutral, quiet, tired, hard
 
     public var id: String { rawValue }

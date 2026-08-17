@@ -3,7 +3,9 @@ import CoreGraphics
 @testable import Fernlet
 
 /// Geometry tests for the wind-driven Dynamic Island viewfinder (`IslandViewfinderMetrics`).
-/// Pure value type — no UI, no AVFoundation.
+/// Pure value type — no UI, no AVFoundation. `@MainActor` because the type lives in the
+/// main-actor-default app target, so its `Equatable` conformance is main-actor isolated.
+@MainActor
 @Suite struct IslandViewfinderMetricsTests {
 
     private func metrics(topInset: CGFloat = 59, width: CGFloat = 393) -> IslandViewfinderMetrics {

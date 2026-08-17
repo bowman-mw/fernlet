@@ -19,7 +19,9 @@ import PrivateStoreCore
 ///
 /// `Codable` so the app-side sealed-backup export can serialize decrypted rows into its
 /// re-encrypted chunks (payload type `journalNarratives`) and the restore can decode them back.
-public struct JournalNarrative: Identifiable, Codable, Equatable {
+/// `Sendable` (a plain value type of Sendable fields) because the repository seals it inside
+/// `NSManagedObjectContext.performAndWait`, whose closure is `@Sendable`.
+public struct JournalNarrative: Identifiable, Codable, Equatable, Sendable {
     /// Stable identity shared with the day's in-memory journal entry, used for upsert/delete matching.
     public var id: UUID
     /// The owning day's key (plaintext), used to fetch a day's narratives without decrypting them.
@@ -94,10 +96,17 @@ public protocol JournalNarrativeStoring: AnyObject {
 ///
 /// Every operation runs synchronously inside `NSManagedObjectContext.performAndWait`, so the class
 /// is a plain nonisolated `final class` (per the target's stance in `Package.swift`) and is safe to
-/// call from any context that owns its lifetime; it holds no mutable state of its own. After each
-/// mutation the persistent-history log is pruned via `PrivatePersistentHistoryPruner` so superseded
-/// ciphertext does not linger in the transaction log — best-effort (`try?`) after upserts, but
-/// rethrown after deletes.
+/// call from any context that owns its lifetime; it holds no mutable state of its own. That is
+/// also why it is `Sendable`, which `performAndWait`'s `@Sendable` closure requires of the `self`
+/// it captures. The conformance is `@unchecked` for exactly one reason — `UserDefaults` carries no
+/// SDK `Sendable` annotation — and rests on this invariant: every stored property is a `let`;
+/// `context` (`NSManagedObjectContext`, `Sendable` in the iOS 26 SDK) is only ever touched inside
+/// its own `performAndWait`, which serializes on the context's queue; `crypto` is a stateless
+/// value; and `defaults` is Apple-documented thread-safe and used only for the one-way latch below.
+/// Adding a `var` here would break the invariant and must not happen. After each mutation the
+/// persistent-history log is pruned via `PrivatePersistentHistoryPruner` so superseded ciphertext
+/// does not linger in the transaction log — best-effort (`try?`) after upserts, but rethrown after
+/// deletes.
 ///
 /// The app's `SealedBackupCoordinator` is the other caller: it exports via the paged
 /// ``narratives(offset:limit:contentKey:)`` / ``narrativeCount()`` pair, restores via
@@ -107,7 +116,7 @@ public protocol JournalNarrativeStoring: AnyObject {
 ///
 /// Failure modes: seal/open rethrow `ColumnCrypto` (CryptoKit/JSON) errors; a failed upsert save
 /// rolls back the in-memory change before rethrowing so the context is left clean.
-public final class JournalNarrativeRepository: JournalNarrativeStoring {
+public final class JournalNarrativeRepository: JournalNarrativeStoring, @unchecked Sendable {
     /// The sealed store's view context; every operation is funneled through its `performAndWait`.
     private let context: NSManagedObjectContext
     /// Column sealer bound to the `"journal-narrative"` HKDF label — the label is part of the

@@ -1,0 +1,55 @@
+# Power-of-10 wall — the mechanical half (Docs/Power-of-10-Swift.md).
+#
+# Runs Scripts/power-of-10-scan.py on every push/PR: the zero-violation checks for rules 2, 4, 5,
+# 6, 7, 8 and 9 (unbounded loops, >60-code-line bodies, force unwraps / traps, mutable globals,
+# swallowed `try?`, preprocessor nesting, unsafe pointers) plus the assertion-density floor and the
+# allowlist-hygiene check (an allowlist entry that matches nothing fails the scan so the list
+# cannot rot). Pure Python 3, no Xcode: it runs on the cheapest runner in well under a minute, so
+# it can be a required status check without slowing anything down.
+#
+# Rule 10 (warnings are errors, package warnings un-suppressed) is NOT here — it needs a real
+# build, and lives on the ONE strict build CI already does: Scripts/spm-wall-check.sh in
+# s3-wall.yml. The Swift grep-wall port of these same checks, PowerOfTenBoundaryTests, runs in the
+# normal test suite (and in s3-wall.yml) so a regression fails locally too.
+#
+# Make this a REQUIRED status check in branch protection alongside "S3 Wall".
+
+name: Power of 10
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: power-of-10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Mechanical scan (rules 2/4/5/6/7/8/9 + density + allowlist hygiene)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scanner self-check (the tool must find the tree, or fail loudly)
+        run: |
+          set -euo pipefail
+          python3 --version
+          test -f Scripts/power-of-10-scan.py
+          test -f Scripts/power-of-10-allowlist.json
+          python3 -c 'import json; json.load(open("Scripts/power-of-10-allowlist.json"))'
+
+      - name: Power-of-10 scan
+        run: python3 Scripts/power-of-10-scan.py
+
+      - name: Doc-coverage scan (every type carries a /// doc comment)
+        # Same "static analyzer, daily" obligation (rule 10) and the same cheap runner, so it rides
+        # along here rather than getting its own workflow.
+        run: python3 Scripts/doc-coverage-scan.py

@@ -39,6 +39,9 @@ import Foundation
 /// `NSManagedObjectContext.performAndWait` closures of the (nonisolated) sealed-store
 /// repositories, which under the package's Swift 6 language mode run in a nonisolated
 /// context. MainActor isolation here would make those synchronous calls illegal.
+/// `Sendable` for the same reason: `performAndWait` takes a `@Sendable` closure, and the
+/// repositories that hold an instance are themselves `Sendable`; the only stored state is
+/// the immutable `label`, so the conformance is compiler-checked, not `@unchecked`.
 ///
 /// Failure modes: sealing rethrows CryptoKit errors; opening throws when the blob is
 /// truncated, tampered with, or sealed under a different content key or label
@@ -48,7 +51,7 @@ import Foundation
 /// an authentication failure — a transient keychain outage means "try again", not
 /// "data corrupted". The `Codable` variants additionally rethrow JSON
 /// encoding/decoding errors.
-public nonisolated struct ColumnCrypto {
+public nonisolated struct ColumnCrypto: Sendable {
     /// HKDF `info` string that domain-separates this instance's derived column key
     /// from every other column sealed under the same content key.
     let label: String

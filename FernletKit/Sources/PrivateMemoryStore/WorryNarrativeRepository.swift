@@ -13,7 +13,10 @@ import PrivateStoreCore
 /// local `PrivatePersistenceController` store — never mirrored into `FernletDay`/the synced blob,
 /// never fed to `MemoryNote`/`TierTwoMemoryEngine`, and deliberately excluded from every
 /// `SealedBackup` payload: "let it go" data shouldn't follow you across devices.
-public struct WorryNarrative: Identifiable, Equatable {
+///
+/// `Sendable` (a plain value type of Sendable fields) because the repository seals it inside
+/// `NSManagedObjectContext.performAndWait`, whose closure is `@Sendable`.
+public struct WorryNarrative: Identifiable, Equatable, Sendable {
     /// Stable identity (plaintext) used to delete a specific worry.
     public var id: UUID
     /// When the worry was written (plaintext); the newest-first sort key for reads.
@@ -69,10 +72,13 @@ public protocol WorryStoring: AnyObject {
 /// Key handling is fail-closed (writes throw `FernletLockError.locked` without a key, reads
 /// return `[]`), and every operation runs synchronously inside
 /// `NSManagedObjectContext.performAndWait` — the class is a plain nonisolated `final class` with
-/// no mutable state of its own. Mutations prune the persistent-history log via
-/// `PrivatePersistentHistoryPruner` so superseded ciphertext does not linger: best-effort after
-/// inserts/re-seals, rethrown after deletes.
-public final class WorryNarrativeRepository: WorryStoring {
+/// no mutable state of its own, and therefore `Sendable` (compiler-checked: its stored properties
+/// are `let`s of Sendable types — the SDK-`Sendable` `NSManagedObjectContext`, whose access is
+/// serialized by its own `performAndWait` queue, and the stateless `ColumnCrypto` value — which
+/// is what lets `self` be captured by `performAndWait`'s `@Sendable` closure). Mutations prune the
+/// persistent-history log via `PrivatePersistentHistoryPruner` so superseded ciphertext does not
+/// linger: best-effort after inserts/re-seals, rethrown after deletes.
+public final class WorryNarrativeRepository: WorryStoring, Sendable {
     /// The sealed Core Data entity name backing worry rows.
     private static let entityName = "WorryNarrative"
     /// The sealed store's view context; every operation is funneled through its `performAndWait`.

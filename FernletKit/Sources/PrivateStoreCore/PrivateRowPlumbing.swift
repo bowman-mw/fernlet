@@ -26,34 +26,32 @@ import Foundation
 ///
 /// A caseless enum used purely as a namespace.
 public enum PrivateRowPlumbing {
-    /// Fetches the matching rows, deletes them, saves, and prunes the persistent history —
+    /// Fetches every row of the entity, deletes them, saves, and prunes the persistent history —
     /// all inside the context's `performAndWait`.
     ///
-    /// When nothing matches, this is a complete no-op: no save, no prune, and the return
+    /// When the entity is empty, this is a complete no-op: no save, no prune, and the return
     /// value is `false`. When rows were deleted, `true` is returned only after the save AND
     /// the (rethrowing) history prune both succeeded — callers that latch on "something was
     /// actually removed" (see `MenstrualNarrativeRepository.deleteAll()`) key off exactly
     /// that.
     ///
+    /// Deliberately whole-entity, with no predicate/limit parameters: the sequence exists for the
+    /// repositories' `deleteAll()` methods, all of which wipe the entity, and `performAndWait`'s
+    /// closure is `@Sendable` — a captured `NSPredicate` (non-Sendable) would be a concurrency
+    /// diagnostic, so a filtered variant belongs with a caller that actually needs one.
+    ///
     /// - Parameters:
     ///   - entityName: The sealed Core Data entity to delete from.
-    ///   - predicate: Optional row filter; `nil` (the default) matches every row.
-    ///   - fetchLimit: Cap on how many rows are fetched/deleted; `0` (the default) means
-    ///     unlimited.
     ///   - context: The sealed store's managed-object context.
     /// - Returns: `true` iff at least one row was deleted (and the save + prune succeeded).
     /// - Throws: Fetch, save, or history-prune errors, rethrown to the caller.
     @discardableResult
     public static func deleteRows(
         entityName: String,
-        predicate: NSPredicate? = nil,
-        fetchLimit: Int = 0,
         in context: NSManagedObjectContext
     ) throws -> Bool {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
-            request.predicate = predicate
-            if fetchLimit > 0 { request.fetchLimit = fetchLimit }
             let rows = try context.fetch(request)
             guard !rows.isEmpty else { return false }
             rows.forEach(context.delete)

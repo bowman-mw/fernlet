@@ -13,6 +13,7 @@ import Combine
 import OSLog
 import CryptoSwift
 import Observation
+import Synchronization
 import FernletDomainModel
 import PrivateStoreCore
 import PrivateHealthStore
@@ -637,8 +638,10 @@ extension KeychainItem {
     }
 
     /// Builds a `WhenPasscodeSetThisDeviceOnly` access control carrying `flag` (the
-    /// biometric gate); throws when the `SecAccessControl` cannot be created.
-    static func accessControl(for flag: SecAccessControlCreateFlags) throws -> SecAccessControl {
+    /// biometric gate); throws when the `SecAccessControl` cannot be created. `nonisolated`
+    /// because ``loadBiometricBypassSync(prompt:service:)`` calls it off the main thread; it is
+    /// a pure Security-framework call with no state of its own.
+    nonisolated static func accessControl(for flag: SecAccessControlCreateFlags) throws -> SecAccessControl {
         var cfError: Unmanaged<CFError>?
         guard let access = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
@@ -683,31 +686,26 @@ extension KeychainItem {
     ///
     /// Blocks the calling thread on the LocalAuthentication evaluation (semaphore), so it
     /// must run off the main thread — ``FernletLockService/unlockWithBiometrics(for:)`` calls
-    /// it from a global queue. The pre-evaluated `LAContext` is handed to
-    /// `SecItemCopyMatching`, so the user sees a single system prompt.
+    /// it from a global queue, which is why it (and the ``accessControl(for:)`` it uses) is
+    /// `nonisolated` rather than taking this module's MainActor default. The pre-evaluated
+    /// `LAContext` is handed to `SecItemCopyMatching`, so the user sees a single system prompt.
+    /// The evaluation reply lands in a `Mutex` (the reply block is `@Sendable`) and is read back
+    /// only after the semaphore confirms it was written.
     /// - Returns: The stored content-key bytes.
-    static func loadBiometricBypassSync(prompt: String, service: String) throws -> Data {
+    nonisolated static func loadBiometricBypassSync(prompt: String, service: String) throws -> Data {
         let context = LAContext()
         context.localizedReason = prompt
 
         let access = try accessControl(for: .biometryCurrentSet)
         let authGroup = DispatchSemaphore(value: 0)
-        let authLock = NSLock()
-        var authSucceeded = false
-        var authError: Error?
+        let authReply = Mutex<(succeeded: Bool, error: (any Error)?)>((succeeded: false, error: nil))
         context.evaluateAccessControl(access, operation: .useItem, localizedReason: prompt) { success, error in
-            authLock.lock()
-            authSucceeded = success
-            authError = error
-            authLock.unlock()
+            authReply.withLock { $0 = (succeeded: success, error: error) }
             authGroup.signal()
         }
         authGroup.wait()
 
-        authLock.lock()
-        let didAuthenticate = authSucceeded
-        let authenticationError = authError
-        authLock.unlock()
+        let (didAuthenticate, authenticationError) = authReply.withLock { $0 }
         guard didAuthenticate else {
             throw authenticationError ?? FernletLockError.biometricFailed
         }

@@ -85,8 +85,11 @@ than guessing when history is thin.
 Concurrency: the target builds with `defaultIsolation(MainActor.self)` because the two stores are
 `@MainActor` (``PeriodTrackerStore`` is `@Observable`). Everything else opts out — the value
 types, enums, seam-adjacent DTOs, and the two repositories are explicitly `nonisolated` (the
-repositories serialize all Core Data access through `performAndWait` on the view context), and
-the prediction engine is `nonisolated` pure math callable from any executor.
+repositories serialize all Core Data access through `performAndWait` on the view context — whose
+closure is `@Sendable`, which is why the repositories are `Sendable`: all-`let` state, the
+SDK-`Sendable` context, and the thread-safe `UserDefaults` latch, `@unchecked` only for that last
+un-annotated Foundation type, and why ``MenstrualNarrative``/``IntimacyLog`` are `Sendable` value
+types), and the prediction engine is `nonisolated` pure math callable from any executor.
 
 ## Topics
 

@@ -22,6 +22,13 @@
 # target above the runner's SDK is a hard build error, so raising it to the latest point release
 # silently makes this workflow unrunnable on hosted images.
 #
+# Since 2026-08-16 the same build is also the Power-of-10 rule-10 build (Docs/Power-of-10-Swift.md
+# §R10): Scripts/spm-wall-check.sh passes SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+# GCC_TREAT_WARNINGS_AS_ERRORS=YES, so every warning — including the package warnings Xcode hides
+# behind -suppress-warnings for local packages — fails the build. The Swift grep-wall port of the
+# Power-of-10 mechanical checks (PowerOfTenBoundaryTests) runs below next to the other grep-walls;
+# the Python scanner itself runs in power-of-10.yml on a cheap runner.
+#
 # Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
 
 name: S3 Wall
@@ -133,6 +140,19 @@ jobs:
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/NoTrackingBoundaryTests
+
+      - name: Power-of-10 grep-wall (PowerOfTenBoundaryTests)
+        # The Swift port of Scripts/power-of-10-scan.py (Docs/Power-of-10-Swift.md): function
+        # length, force unwraps / traps, swallowed `try?`, unbounded loops, mutable globals, `#if`
+        # policy, unsafe seams, the assertion-density floor, and the rule-10 build-setting pins.
+        # Reads the same allowlist as the scanner, so the two cannot disagree about an exemption.
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -project App/Fernlet.xcodeproj \
+            -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" \
+            -only-testing:FernletTests/PowerOfTenBoundaryTests
 
       - name: Key-custody + at-rest-format tripwires
         # Same shape as the no-tracking wall: no compiler half, so these suites ARE the

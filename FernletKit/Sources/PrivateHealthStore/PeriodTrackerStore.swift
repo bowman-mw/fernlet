@@ -161,7 +161,7 @@ public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable,
 /// never in HealthKit. `Comparable` by declaration order so the symptom set on
 /// ``UserLoggedCycleEvent`` serializes in a stable, display-matching order. User-defined symptoms
 /// travel separately in ``MenstrualNarrative/customSymptomScales``.
-public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable {
+public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable, Sendable {
     case cramps, headache, breastTenderness, moodSwings, fatigue, bloating, acne, backPain, foodCravings
     public var id: String { rawValue }
     public var title: String {

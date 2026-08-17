@@ -32,27 +32,25 @@ struct NutrientSuggestionTests {
         NutrientGap(nutrientKey: key, nutrientName: key.capitalized, unit: "mg", windowDays: window, coverageRatio: 0.1, dataCoverageRatio: 1.0, status: .gap)
     }
 
-    @Test func sevenDayGapShowsPassiveWithNoFood() {
+    @Test func sevenDayGapShowsPassiveWithNoFood() throws {
         let sources = CuratedNutrientSources.bundled()
-        let plan = NutrientNudgePlanner.plan(from: [gap("iron", window: 7)], sources: sources, isActive: { _ in true })
-        let unwrapped = try? #require(plan)
-        #expect(unwrapped?.namesFoods == false)
-        #expect(unwrapped?.foods.isEmpty == true)
+        let plan = try #require(NutrientNudgePlanner.plan(from: [gap("iron", window: 7)], sources: sources, isActive: { _ in true }))
+        #expect(plan.namesFoods == false)
+        #expect(plan.foods.isEmpty)
     }
 
-    @Test func fourteenDayGapNamesCuratedFoods() {
+    @Test func fourteenDayGapNamesCuratedFoods() throws {
         let sources = CuratedNutrientSources.bundled()
         // Both windows present (as they are in production) → dedup keeps the 14-day gap.
-        let plan = NutrientNudgePlanner.plan(
+        let plan = try #require(NutrientNudgePlanner.plan(
             from: [gap("iron", window: 7), gap("iron", window: 14)],
             sources: sources,
             isActive: { _ in true }
-        )
-        let unwrapped = try? #require(plan)
-        #expect(unwrapped?.namesFoods == true)
+        ))
+        #expect(plan.namesFoods)
         // Deterministic table order: iron's first two curated foods.
         let expected = Array(sources.sources(for: "iron").prefix(2).map(\.displayName))
-        #expect(unwrapped?.foods.map(\.displayName) == expected)
+        #expect(plan.foods.map(\.displayName) == expected)
     }
 
     @Test func suppressedNutrientProducesNoPlan() {

@@ -584,7 +584,10 @@ public nonisolated enum CoachPlanTokens {
         switch fold(raw) {
         case "strength": .strength
         case "treadmill": .treadmill
-        case "none": .none
+        // Spelled out: in an `ExerciseInputKind?` context a bare `.none` resolves to
+        // `Optional.none`, which silently turned the vocabulary's own "none" token into a
+        // miss (and so into the `.strength` fallback) instead of the no-input kind it names.
+        case "none": ExerciseInputKind.none
         default: nil
         }
     }
