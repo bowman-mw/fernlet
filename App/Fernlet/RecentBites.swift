@@ -80,6 +80,9 @@ enum RecentBites {
         window: Int = 7,
         limit: Int = 6
     ) -> [RecentBite] {
+        // R5: validate at entry. `prefix` traps on a negative count, so a caller that computed its
+        // limit (a remaining-slots subtraction, say) must not be able to crash the strip.
+        guard limit > 0 else { return [] }
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: today)
         // `window` days INCLUSIVE of today → reach back window - 1 days.

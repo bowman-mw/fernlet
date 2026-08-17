@@ -62,6 +62,11 @@ struct HomeView: View {
     /// `reloadPriorDayRows` / `mealPhotosStrip`'s `.task(id:)`) instead of on every `body` pass. Today is
     /// never cached here — it stays live from the observed `store.day`.
     @State private var cachedPriorDays: [FernletDay] = []
+    /// Cancel-and-replace handle for the recent-period-activity query (R3: one HealthKit read in
+    /// flight, never one per sheet dismissal / visibility flip).
+    @State private var periodActivityTask: Task<Void, Never>?
+    /// Cancel-and-replace handle for the settled-pose re-sync (R3: one sleeping task, not one per pet).
+    @State private var settledResyncTask: Task<Void, Never>?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -95,7 +100,12 @@ struct HomeView: View {
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
             await refreshRecentPeriodActivity()
-            try? await Task.sleep(for: .seconds(6))
+            do {
+                try await Task.sleep(for: .seconds(6))
+            } catch {
+                // Cancelled with the view's `.task` — the thought goes away with the view.
+                return
+            }
             withAnimation(.easeInOut(duration: 0.35)) {
                 isCompanionThoughtVisible = false
             }
@@ -109,11 +119,11 @@ struct HomeView: View {
             companionAmbient = await WeatherKitService.shared.currentAmbient()
         }
         .onChange(of: activeSheet?.id) { _, new in
-            if new == nil { Task { await refreshRecentPeriodActivity() } }
+            if new == nil { scheduleRecentPeriodActivityRefresh() }
         }
         // Hiding must drop the resident flag immediately, not wait for the next sheet dismiss.
         .onChange(of: store.isPeriodTrackingVisible) { _, _ in
-            Task { await refreshRecentPeriodActivity() }
+            scheduleRecentPeriodActivityRefresh()
         }
     }
 
@@ -652,14 +662,14 @@ struct HomeView: View {
         return "A few ordinary care notes are already here. Keep the day simple."
     }
 
-    private var companionTapThoughts: [String] {
-        [
-            "Fernlet notices you.",
-            "A little check-in counts.",
-            "Still here with you.",
-            "Small care is still care."
-        ]
-    }
+    /// The rotating tap thoughts — a constant table, so it is `static let` rather than a computed
+    /// property that rebuilt the literal array on every access (R6: smallest scope, no per-read work).
+    private static let companionTapThoughts = [
+        "Fernlet notices you.",
+        "A little check-in counts.",
+        "Still here with you.",
+        "Small care is still care."
+    ]
 
     /// The 5th-pet moment: Fern is visibly content and settles in for a while.
     private static let companionSettledThought = "Fern is soaking up all this love — feeling completely content."
@@ -689,8 +699,16 @@ struct HomeView: View {
             isCompanionSettled = settled
         }
         guard settled else { return }
-        Task {
-            try? await Task.sleep(for: .seconds(petGovernor.settleDuration))
+        // R3: cancel-and-replace, so a settled window holds ONE sleeping re-sync no matter how many
+        // times the user pets during it (each pet used to add another 10-minute task).
+        settledResyncTask?.cancel()
+        settledResyncTask = Task {
+            do {
+                try await Task.sleep(for: .seconds(petGovernor.settleDuration))
+            } catch {
+                // Superseded by a later pet (or the view went away): that task owns the re-sync now.
+                return
+            }
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     isCompanionSettled = petGovernor.isSettled
@@ -711,14 +729,32 @@ struct HomeView: View {
         }
 
         Task {
-            try? await Task.sleep(for: .milliseconds(440))
+            do {
+                try await Task.sleep(for: .milliseconds(440))
+            } catch {
+                // Abandoned mid-choreography: reopen the tap gate so a cancelled bounce can't leave
+                // the companion permanently un-pettable.
+                await MainActor.run {
+                    guard companionTapCount == tapID else { return }
+                    isCompanionJumping = false
+                }
+                return
+            }
             await MainActor.run {
                 guard companionTapCount == tapID else { return }
                 withAnimation(.easeInOut(duration: 0.46)) {
                     companionPetCount += 1
                 }
             }
-            try? await Task.sleep(for: .milliseconds(460))
+            do {
+                try await Task.sleep(for: .milliseconds(460))
+            } catch {
+                await MainActor.run {
+                    guard companionTapCount == tapID else { return }
+                    isCompanionJumping = false
+                }
+                return
+            }
             await MainActor.run {
                 guard companionTapCount == tapID else { return }
                 isCompanionJumping = false
@@ -728,7 +764,7 @@ struct HomeView: View {
         let thought: String? = if settling {
             Self.companionSettledThought
         } else if companionTapCount.isMultiple(of: 3) {
-            companionTapThoughts[companionTapCount % companionTapThoughts.count]
+            Self.companionTapThoughts[companionTapCount % Self.companionTapThoughts.count]
         } else {
             nil
         }
@@ -746,7 +782,13 @@ struct HomeView: View {
             isCompanionCalmSettling = true
         }
         Task {
-            try? await Task.sleep(for: .milliseconds(520))
+            do {
+                try await Task.sleep(for: .milliseconds(520))
+            } catch {
+                // Never leave the tap gate closed on an abandoned settle-squish.
+                await MainActor.run { isCompanionJumping = false }
+                return
+            }
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     isCompanionCalmSettling = false
@@ -767,7 +809,12 @@ struct HomeView: View {
 
         guard thought != nil else { return }
         Task {
-            try? await Task.sleep(for: .seconds(4))
+            do {
+                try await Task.sleep(for: .seconds(4))
+            } catch {
+                // Cancelled: leave the bubble to whatever superseded this tap.
+                return
+            }
             await MainActor.run {
                 guard companionTapCount == tapID else { return }
                 withAnimation(.easeInOut(duration: 0.30)) {
@@ -1025,6 +1072,16 @@ struct HomeView: View {
         }
     }
 
+    /// Cancel-and-replace trigger for ``refreshRecentPeriodActivity()``.
+    ///
+    /// Without the single handle, every sheet dismissal and every visibility flip spawned its own
+    /// 30-day HealthKit query and the answers landed in COMPLETION order: hiding cycle tracking mid
+    /// query set the flag false, then the older query re-latched it true.
+    private func scheduleRecentPeriodActivityRefresh() {
+        periodActivityTask?.cancel()
+        periodActivityTask = Task { await refreshRecentPeriodActivity() }
+    }
+
     private func refreshRecentPeriodActivity() async {
         // This owns a SECOND HealthKit client, so it inherits neither the period store's gate nor
         // `allowedHealthCapabilities` — it must check for itself. Without this it queries 30 days of
@@ -1043,7 +1100,16 @@ struct HomeView: View {
         let service = HealthKitService()
         let start = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date().addingTimeInterval(-30 * 86_400)
         let range = DateInterval(start: start, end: Date())
-        hasRecentPeriodEvent = ((try? await service.loadPeriodEvents(in: range)) ?? []).contains { sample in
+        let samples = (try? await service.loadPeriodEvents(in: range)) ?? []
+        // Re-check after the await: this task may have been superseded, or the user may have hidden
+        // cycle tracking while the query was suspended. A late answer must never re-latch a flag a
+        // newer trigger already cleared.
+        guard !Task.isCancelled else { return }
+        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking) else {
+            hasRecentPeriodEvent = false
+            return
+        }
+        hasRecentPeriodEvent = samples.contains { sample in
             (sample as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue
         }
     }

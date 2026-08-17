@@ -105,8 +105,14 @@ final class AgeAssuranceStore {
     private func update(_ updated: AgeAssuranceRecord) {
         guard updated != record else { return }
         record = updated
-        guard let data = try? JSONEncoder().encode(updated) else { return }
-        defaults.set(data, forKey: Keys.record)
+        do {
+            defaults.set(try JSONEncoder().encode(updated), forKey: Keys.record)
+        } catch {
+            // The in-memory record already moved, so a failed write means the gate silently reverts
+            // on relaunch (fail-closed, but surprising). Event name only — never the record itself,
+            // which carries the bracket the gate exists to protect.
+            FernletAuditLog.log("ageAssurance.persistFailed")
+        }
     }
 
     /// A record that fails to decode is treated as absent, i.e. fully locked. That is the safe

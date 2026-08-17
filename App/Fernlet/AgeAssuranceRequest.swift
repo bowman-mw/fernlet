@@ -1,6 +1,7 @@
 import SwiftUI
 import DeclaredAgeRange
 import FernletDomainModel
+import FernletFoundation
 
 /// The single seam between Fernlet and Apple's `DeclaredAgeRange` framework.
 ///
@@ -45,6 +46,11 @@ enum AgeAssuranceRequest {
                 store.applyUndetermined()
             }
         } catch {
+            // The recovery is `.undetermined` either way, but the KIND of failure matters to us: a
+            // missing entitlement / provisioning slip would otherwise be indistinguishable in the log
+            // from an account that simply carries no age information. The framework error is an enum
+            // and carries no bracket, so logging it leaks nothing.
+            FernletAuditLog.log("ageAssurance.requestFailed", context: ["error": String(describing: error)])
             store.applyUndetermined()
         }
     }
