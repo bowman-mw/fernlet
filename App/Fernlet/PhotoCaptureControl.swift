@@ -2,6 +2,7 @@
 import SwiftUI
 import PhotosUI
 import ImageIO
+import os
 
 /// A tappable control that yields a photo, using the camera when one is available and falling back
 /// to the photo library otherwise — the pattern that was inlined in the food-log sheet, extracted so
@@ -100,9 +101,10 @@ extension View {
     /// - `onLibraryData`, when set, receives the raw picked bytes with no `UIImage` decode here —
     ///   the jetsam-avoidance path (the store does the only, bounded decode).
     /// - Otherwise the bytes are decoded and handed to `onLibraryImage`, falling back to
-    ///   `onCameraImage`; a failed decode is dropped silently, matching every pre-existing copy.
-    /// - `onLibraryLoadFailed` fires only when `loadTransferable` itself yields nothing (iCloud
-    ///   eviction, transfer error); when nil, that failure is silent too.
+    ///   `onCameraImage`.
+    /// - `onLibraryLoadFailed` fires when `loadTransferable` throws or yields nothing (iCloud
+    ///   eviction, transfer error) AND when the bytes decode to no image; every one of those paths
+    ///   also logs its reason, so a dropped pick is never invisible.
     ///
     /// - Parameters:
     ///   - showingCamera: Presents the full-screen rear-camera cover while true.
@@ -132,15 +134,29 @@ extension View {
             .onChange(of: selection.wrappedValue) { _, newItem in
                 guard let newItem else { return }
                 Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self) {
-                        if let onLibraryData {
-                            onLibraryData(data)
-                        } else if let image = UIImage(data: data) {
-                            (onLibraryImage ?? onCameraImage)(image)
-                        }
+                    let loaded: Data?
+                    do {
+                        loaded = try await newItem.loadTransferable(type: Data.self)
+                    } catch {
+                        // iCloud eviction / transfer error: name it, then take the failure path.
+                        Logger(subsystem: "com.fernlet", category: "photoPicker")
+                            .error("library pick failed: \(error.localizedDescription, privacy: .public)")
+                        loaded = nil
+                    }
+                    // A pick the user made but whose bytes couldn't load — or that decoded to
+                    // nothing — must not vanish silently when the caller opted into feedback.
+                    guard let data = loaded else {
+                        onLibraryLoadFailed?()
+                        selection.wrappedValue = nil
+                        return
+                    }
+                    if let onLibraryData {
+                        onLibraryData(data)
+                    } else if let image = UIImage(data: data) {
+                        (onLibraryImage ?? onCameraImage)(image)
                     } else {
-                        // A pick the user made but whose bytes couldn't load must not vanish
-                        // silently when the caller opted into failure feedback.
+                        Logger(subsystem: "com.fernlet", category: "photoPicker")
+                            .error("library pick decoded to no image")
                         onLibraryLoadFailed?()
                     }
                     selection.wrappedValue = nil

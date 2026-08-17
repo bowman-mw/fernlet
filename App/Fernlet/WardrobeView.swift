@@ -18,69 +18,11 @@ struct WardrobeView: View {
 
     var body: some View {
         List {
-            Section {
-                NavigationLink {
-                    CreationStudioView(store: store)
-                } label: {
-                    designNewItemRow
-                }
-                .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-
-            if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
-                Section {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bag")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.moss)
-                        Text(shopStatusText)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                    }
-                    .listRowInsets(EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-            }
-
-            if !store.customItems.isEmpty {
-                Section {
-                    sectionLabel("Your items")
-                        .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 4, trailing: 24))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-            }
-
-            ForEach(ItemSlot.allCases) { slot in
-                let items = store.customItems.filter { $0.slot == slot }
-                if !items.isEmpty {
-                    Section {
-                        ForEach(items) { item in
-                            row(for: item)
-                                .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                        }
-                    } header: {
-                        Text(slot.label)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .textCase(nil)
-                    }
-                }
-            }
-
-            if store.customItems.isEmpty {
-                Section {
-                    emptyCloset
-                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 20, trailing: 20))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-            }
+            designNewSection
+            shopStatusSection
+            yourItemsHeaderSection
+            slotSections
+            emptyClosetSection
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -97,6 +39,78 @@ struct WardrobeView: View {
             }
         }
         .alert(item: $shopAlert) { $0.alert(in: .wardrobe) }
+    }
+
+    /// The row that pushes the Creation Studio.
+    private var designNewSection: some View {
+        Section {
+            NavigationLink {
+                CreationStudioView(store: store)
+            } label: {
+                designNewItemRow
+            }
+            .plainClosetRow(insets: EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+        }
+    }
+
+    /// The one-line shop summary, shown only when there is a shop to summarize.
+    @ViewBuilder
+    private var shopStatusSection: some View {
+        if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
+            Section {
+                HStack(spacing: 6) {
+                    Image(systemName: "bag")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.moss)
+                    Text(shopStatusText)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                }
+                .plainClosetRow(insets: EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
+            }
+        }
+    }
+
+    /// The "Your items" label above the per-slot sections.
+    @ViewBuilder
+    private var yourItemsHeaderSection: some View {
+        if !store.customItems.isEmpty {
+            Section {
+                sectionLabel("Your items")
+                    .plainClosetRow(insets: EdgeInsets(top: 6, leading: 24, bottom: 4, trailing: 24))
+            }
+        }
+    }
+
+    /// One section per slot that actually holds items.
+    private var slotSections: some View {
+        ForEach(ItemSlot.allCases) { slot in
+            let items = store.customItems.filter { $0.slot == slot }
+            if !items.isEmpty {
+                Section {
+                    ForEach(items) { item in
+                        row(for: item)
+                            .plainClosetRow(insets: EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+                    }
+                } header: {
+                    Text(slot.label)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .textCase(nil)
+                }
+            }
+        }
+    }
+
+    /// The empty-closet invitation, shown only when nothing has been designed yet.
+    @ViewBuilder
+    private var emptyClosetSection: some View {
+        if store.customItems.isEmpty {
+            Section {
+                emptyCloset
+                    .plainClosetRow(insets: EdgeInsets(top: 12, leading: 20, bottom: 20, trailing: 20))
+            }
+        }
     }
 
     private var shopStatusText: String {
@@ -307,10 +321,23 @@ struct WardrobeView: View {
         }
         let price = ClothingShopLimits.clampedPrice(item.price)
         switch store.listCustomItemForSale(id: item.id, price: price) {
-        case .listed, .notAllowed: break
+        case .listed: break
+        case .notAllowed:
+            // Unreachable behind the `isShareable`/self-designed gate above — but an unreachable
+            // refusal that does nothing is invisible if that gate ever drifts, so name it.
+            assertionFailure("toggleListing reached .notAllowed behind the self-designed guard")
         case .nameFlagged: shopAlert = .nameFlagged
         case .capReached: shopAlert = .capReached
         case .storeBanned: shopAlert = .storeBanned
         }
+    }
+}
+
+private extension View {
+    /// The closet's repeated row chrome: custom insets, a clear background, and no separator.
+    func plainClosetRow(insets: EdgeInsets) -> some View {
+        listRowInsets(insets)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }

@@ -196,7 +196,14 @@ final class JournalSealingCoordinator {
 
     /// Deletes a sealed narrative and forgets its sealed-ID.
     func deleteSealed(id: UUID) {
-        try? narrativeRepository.delete(id: id)
+        do {
+            try narrativeRepository.delete(id: id)
+        } catch {
+            // The entry is leaving the days blob either way, so the id is dropped from
+            // `sealedJournalIDs` in both paths; what is left behind is an ENCRYPTED orphan row in the
+            // narrative store (never plaintext), which no read path can reach again.
+            FernletAuditLog.log("journal.deleteSealed.failed", context: ["id": id.uuidString])
+        }
         sealedJournalIDs.remove(id)
     }
 
@@ -207,7 +214,9 @@ final class JournalSealingCoordinator {
         var loaded = day
         let emptyEntries = loaded.journals.filter { $0.text.isEmpty }
         guard !emptyEntries.isEmpty, let key = activeJournalRefreshKey() else { return loaded }
-        let narratives = (try? narrativeRepository.narratives(forDayKey: dateKey, contentKey: key)) ?? []
+        let narratives = loadNarratives("hydrateDay") {
+            try narrativeRepository.narratives(forDayKey: dateKey, contentKey: key)
+        }
         let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         loaded.journals = loaded.journals.map { entry in
             guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
@@ -253,16 +262,42 @@ final class JournalSealingCoordinator {
     /// sealed with the device key so they become protected by the user's content key.
     private func migrateDeviceKeyEntriesToUserKey(userKey: SymmetricKey) {
         let dKey = deviceJournalKey
-        let todayNarratives = (try? narrativeRepository.narratives(
-            forDayKey: host.todayKey, contentKey: dKey)) ?? []
+        let todayNarratives = loadNarratives("rekeyToday") {
+            try narrativeRepository.narratives(forDayKey: host.todayKey, contentKey: dKey)
+        }
         let prevDayKeys = Array(Set(
             host.previousJournals.filter { $0.text.isEmpty }.map { FernletDate.dayKey(for: $0.date) }
         ))
-        let prevNarratives = prevDayKeys.isEmpty ? [] :
-            ((try? narrativeRepository.narratives(
-                forDayKeys: prevDayKeys, contentKey: dKey)) ?? [])
+        let prevNarratives = prevDayKeys.isEmpty ? [] : loadNarratives("rekeyPrevious") {
+            try narrativeRepository.narratives(forDayKeys: prevDayKeys, contentKey: dKey)
+        }
+        var failed = 0
         for narrative in todayNarratives + prevNarratives {
-            try? narrativeRepository.update(narrative, contentKey: userKey)
+            do {
+                try narrativeRepository.update(narrative, contentKey: userKey)
+            } catch {
+                // The row stays decryptable under the DEVICE key (no data loss); this migration runs
+                // again on every `activateSealedJournals`, so the next unlock retries exactly this row.
+                failed += 1
+                FernletAuditLog.log("journal.rekey.failed", context: ["id": narrative.id.uuidString])
+            }
+        }
+        if failed > 0 {
+            FernletAuditLog.log("journal.rekey.incomplete", context: ["failed": String(failed)])
+        }
+    }
+
+    /// Reads sealed narratives, naming a decrypt/read failure instead of letting it read as "no rows".
+    ///
+    /// The `[]` fallback is deliberate (nothing hydrates — fail closed, never a plaintext fallback);
+    /// the audit line is what distinguishes a failed read from an empty day.
+    private func loadNarratives(_ context: String,
+                                _ read: () throws -> [JournalNarrative]) -> [JournalNarrative] {
+        do {
+            return try read()
+        } catch {
+            FernletAuditLog.log("journal.read.failed", context: ["where": context])
+            return []
         }
     }
 
@@ -271,7 +306,9 @@ final class JournalSealingCoordinator {
         // Today's journals
         let emptyToday = host.day.journals.filter { $0.text.isEmpty }
         if !emptyToday.isEmpty {
-            let narratives = (try? narrativeRepository.narratives(forDayKey: host.todayKey, contentKey: contentKey)) ?? []
+            let narratives = loadNarratives("refreshToday") {
+                try narrativeRepository.narratives(forDayKey: host.todayKey, contentKey: contentKey)
+            }
             let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             host.day.journals = host.day.journals.map { entry in
                 guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
@@ -284,7 +321,9 @@ final class JournalSealingCoordinator {
         let emptyPrevious = host.previousJournals.filter { $0.text.isEmpty }
         if !emptyPrevious.isEmpty {
             let dayKeys = Array(Set(emptyPrevious.map { FernletDate.dayKey(for: $0.date) }))
-            let narratives = (try? narrativeRepository.narratives(forDayKeys: dayKeys, contentKey: contentKey)) ?? []
+            let narratives = loadNarratives("refreshPrevious") {
+                try narrativeRepository.narratives(forDayKeys: dayKeys, contentKey: contentKey)
+            }
             let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             host.previousJournals = host.previousJournals.map { entry in
                 guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
@@ -306,9 +345,14 @@ final class JournalSealingCoordinator {
                 text: entry.text, emotions: entry.emotions,
                 createdAt: entry.date, updatedAt: entry.date
             )
-            if (try? narrativeRepository.insert(narrative, contentKey: contentKey)) != nil {
+            do {
+                try narrativeRepository.insert(narrative, contentKey: contentKey)
                 sealedJournalIDs.insert(entry.id)
                 anyMigrated = true
+            } catch {
+                // Plaintext is preserved (no data loss, exactly like `seal()`'s catch); the entry is
+                // simply not marked sealed, so the next activation tries this migration again.
+                FernletAuditLog.log("journal.migrate.seal.failed", context: ["id": entry.id.uuidString])
             }
         }
 
@@ -318,9 +362,14 @@ final class JournalSealingCoordinator {
                 text: entry.text, emotions: entry.emotions,
                 createdAt: entry.date, updatedAt: entry.date
             )
-            if (try? narrativeRepository.insert(narrative, contentKey: contentKey)) != nil {
+            do {
+                try narrativeRepository.insert(narrative, contentKey: contentKey)
                 sealedJournalIDs.insert(entry.id)
                 anyMigrated = true
+            } catch {
+                // Plaintext is preserved (no data loss, exactly like `seal()`'s catch); the entry is
+                // simply not marked sealed, so the next activation tries this migration again.
+                FernletAuditLog.log("journal.migrate.seal.failed", context: ["id": entry.id.uuidString])
             }
         }
 

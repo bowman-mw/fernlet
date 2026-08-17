@@ -37,65 +37,7 @@ struct JournalView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Journal", subtitle: "A small record of being.", identifier: "screen.journal")
-                        Spacer()
-                        HeaderActionButton(systemImage: "plus") { activeSheet = .journal }
-                    }
-                    .padding(.top, 4)
-
-                    // One-tap mood check-in — a tag-only entry, no writing required.
-                    FernletCard {
-                        QuickMoodRow(store: store)
-                    }
-
-                    JournalCalendarCard(
-                        displayedMonth: $displayedMonth,
-                        allDays: allDays,
-                        todayKey: store.todayKey,
-                        onDayTapped: { key in path.append(key) }
-                    )
-
-                    FernletScrollSection("Today") {
-                        if store.day.journals.isEmpty {
-                            Button { activeSheet = .journal } label: {
-                                Text("How was today?")
-                                    .font(.fernlet(.bubble))
-                                    .foregroundStyle(Color.slate)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            ForEach(Array(store.day.journals.enumerated()), id: \.element.id) { index, entry in
-                                Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey) } label: {
-                                    JournalRow(entry: entry)
-                                }
-                                .buttonStyle(.plain)
-                                if index < store.day.journals.count - 1 {
-                                    FernletRowDivider()
-                                }
-                            }
-                        }
-                    }
-
-                    if !store.previousJournals.isEmpty {
-                        FernletScrollSection("Previous") {
-                            let entries = Array(store.previousJournals.prefix(10))
-                            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                                Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: FernletDate.dayKey(for: entry.date)) } label: {
-                                    JournalRow(entry: entry, compact: true)
-                                }
-                                .buttonStyle(.plain)
-                                if index < entries.count - 1 {
-                                    FernletRowDivider()
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(20)
+                pageContent
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
@@ -126,6 +68,81 @@ struct JournalView: View {
                 .environment(captureProtection)
         }
         #endif
+    }
+
+    /// The scrolling page: header row, the one-tap mood card, the month calendar, and the two
+    /// entry lists (R4: `body` keeps only the NavigationStack and its modifiers).
+    private var pageContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                ScreenHeader(title: "Journal", subtitle: "A small record of being.", identifier: "screen.journal")
+                Spacer()
+                HeaderActionButton(systemImage: "plus") { activeSheet = .journal }
+            }
+            .padding(.top, 4)
+
+            // One-tap mood check-in — a tag-only entry, no writing required.
+            FernletCard {
+                QuickMoodRow(store: store)
+            }
+
+            JournalCalendarCard(
+                displayedMonth: $displayedMonth,
+                allDays: allDays,
+                todayKey: store.todayKey,
+                onDayTapped: { key in path.append(key) }
+            )
+
+            todaySection
+            previousSection
+        }
+        .padding(20)
+    }
+
+    /// Today's entries, or the "How was today?" invitation when there are none.
+    @ViewBuilder
+    private var todaySection: some View {
+        FernletScrollSection("Today") {
+            if store.day.journals.isEmpty {
+                Button { activeSheet = .journal } label: {
+                    Text("How was today?")
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(Color.slate)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+            } else {
+                ForEach(Array(store.day.journals.enumerated()), id: \.element.id) { index, entry in
+                    Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey) } label: {
+                        JournalRow(entry: entry)
+                    }
+                    .buttonStyle(.plain)
+                    if index < store.day.journals.count - 1 {
+                        FernletRowDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    /// The ten most recent earlier entries; absent entirely when there are none.
+    @ViewBuilder
+    private var previousSection: some View {
+        if !store.previousJournals.isEmpty {
+            FernletScrollSection("Previous") {
+                let entries = Array(store.previousJournals.prefix(10))
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: FernletDate.dayKey(for: entry.date)) } label: {
+                        JournalRow(entry: entry, compact: true)
+                    }
+                    .buttonStyle(.plain)
+                    if index < entries.count - 1 {
+                        FernletRowDivider()
+                    }
+                }
+            }
+        }
     }
 
     #if DEBUG
@@ -302,7 +319,12 @@ struct JournalSheet: View {
         journalPromptNotification = notification
 
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(6))
+            do {
+                try await Task.sleep(for: .seconds(6))
+            } catch {
+                // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
+                return
+            }
             if journalPromptNotification?.id == notification.id {
                 journalPromptNotification = nil
             }
@@ -587,7 +609,12 @@ struct JournalEntryEditorSheet: View {
         journalPromptNotification = notification
 
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(6))
+            do {
+                try await Task.sleep(for: .seconds(6))
+            } catch {
+                // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
+                return
+            }
             if journalPromptNotification?.id == notification.id {
                 journalPromptNotification = nil
             }
@@ -1337,6 +1364,17 @@ struct DayEditSheet: View {
         )
     }
 
+    /// R3: the optional sleep note is bounded where the text enters, so an unbounded paste never
+    /// reaches the day snapshot.
+    private static let maxSleepNoteLength = 200
+
+    private var limitedSleepNote: Binding<String> {
+        Binding(
+            get: { sleepNote },
+            set: { sleepNote = String($0.prefix(Self.maxSleepNoteLength)) }
+        )
+    }
+
     init(store: FernletStore, dateKey: String, initialDay: FernletDay) {
         self.store = store
         self.dateKey = dateKey
@@ -1365,119 +1403,12 @@ struct DayEditSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    SheetField("Journal entry") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            FlowLayout(spacing: 8) {
-                                ForEach(FeelingTag.allCases) { option in
-                                    Button(option.label) { journalTag = option }
-                                        .buttonStyle(ChipButtonStyle(selected: journalTag == option))
-                                }
-                            }
-                            SheetTextEditor(text: limitedJournalText, placeholder: "Add a note about this day…", minHeight: 100)
-                            Text("\(journalText.count)/800")
-                                .font(.fernlet(.stat))
-                                .foregroundStyle(Color.slate)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                    }
-
-                    SheetField("Add a meal") {
-                        TextField("What did you eat?", text: $mealDescription)
-                            .sheetTextInput()
-                    }
-
-                    SheetField("Add a workout") {
-                        VStack(spacing: 8) {
-                            TextField("Workout name (optional)", text: $workoutName)
-                                .sheetTextInput()
-                            HStack(spacing: 8) {
-                                Menu {
-                                    ForEach(WorkoutType.allCases) { type in
-                                        Button(type.rawValue) { workoutType = type }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(workoutType.rawValue)
-                                            .foregroundStyle(Color.bark)
-                                        Spacer()
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                            .foregroundStyle(Color.slate)
-                                    }
-                                    .font(.fernlet(.label))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                }
-
-                                Menu {
-                                    ForEach(WorkoutIntensity.allCases) { intensity in
-                                        Button(intensity.rawValue.capitalized) { workoutIntensity = intensity }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(workoutIntensity.rawValue.capitalized)
-                                            .foregroundStyle(Color.bark)
-                                        Spacer()
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                            .foregroundStyle(Color.slate)
-                                    }
-                                    .font(.fernlet(.label))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                }
-                            }
-                        }
-                    }
-
-                    SheetField("Water") {
-                        Stepper("Bottles: \(bottleCount)", value: $bottleCount, in: 0...30)
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    SheetField("Sleep") {
-                        VStack(spacing: 10) {
-                            FlowLayout(spacing: 8) {
-                                ForEach(SleepQuality.allCases) { option in
-                                    Button(option.label) { sleepQuality = option }
-                                        .buttonStyle(ChipButtonStyle(selected: sleepQuality == option))
-                                }
-                            }
-                            HStack(spacing: 12) {
-                                TextField("Hours (e.g. 7.5)", text: $sleepHoursText)
-                                    .keyboardType(.decimalPad)
-                                    .sheetTextInput()
-                                TextField("Note (optional)", text: $sleepNote)
-                                    .sheetTextInput()
-                            }
-                        }
-                    }
-
-                    SheetField("Personal care") {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 6)], spacing: 6) {
-                            ForEach(store.personalCareTasks) { task in
-                                Button { togglePersonalCareTask(task) } label: {
-                                    Label(task.label, systemImage: task.systemImage)
-                                        .font(.fernlet(.labelSmall))
-                                        .lineLimit(1)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 6)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .foregroundStyle(completedPersonalCareTaskIDs.contains(task.id) ? Color.moss : Color.slate)
-                                        .background(
-                                            completedPersonalCareTaskIDs.contains(task.id) ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04),
-                                            in: RoundedRectangle(cornerRadius: 10)
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
+                    journalField
+                    mealField
+                    workoutField
+                    waterField
+                    sleepField
+                    personalCareField
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -1503,6 +1434,131 @@ struct DayEditSheet: View {
         // Capture FRICTION (never a security control): a past day's edit sheet can hold that
         // day's journal text, so it is one of the six in-scope surfaces.
         .captureProtected(surface: "dayEdit")
+    }
+
+    /// Feeling chips + the 800-character journal editor for the edited day.
+    private var journalField: some View {
+        SheetField("Journal entry") {
+            VStack(alignment: .leading, spacing: 10) {
+                FlowLayout(spacing: 8) {
+                    ForEach(FeelingTag.allCases) { option in
+                        Button(option.label) { journalTag = option }
+                            .buttonStyle(ChipButtonStyle(selected: journalTag == option))
+                    }
+                }
+                SheetTextEditor(text: limitedJournalText, placeholder: "Add a note about this day…", minHeight: 100)
+                Text("\(journalText.count)/800")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    /// The single free-text meal line added to the edited day.
+    private var mealField: some View {
+        SheetField("Add a meal") {
+            TextField("What did you eat?", text: $mealDescription)
+                .sheetTextInput()
+        }
+    }
+
+    /// Optional workout name plus the type and intensity menus.
+    private var workoutField: some View {
+        SheetField("Add a workout") {
+            VStack(spacing: 8) {
+                TextField("Workout name (optional)", text: $workoutName)
+                    .sheetTextInput()
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(WorkoutType.allCases) { type in
+                            Button(type.rawValue) { workoutType = type }
+                        }
+                    } label: {
+                        menuLabel(workoutType.rawValue)
+                    }
+
+                    Menu {
+                        ForEach(WorkoutIntensity.allCases) { intensity in
+                            Button(intensity.rawValue.capitalized) { workoutIntensity = intensity }
+                        }
+                    } label: {
+                        menuLabel(workoutIntensity.rawValue.capitalized)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The shared chrome for the two workout menus (title + chevron in a cream capsule).
+    private func menuLabel(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(Color.bark)
+            Spacer()
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption)
+                .foregroundStyle(Color.slate)
+        }
+        .font(.fernlet(.label))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    /// The water-bottle stepper (0…30).
+    private var waterField: some View {
+        SheetField("Water") {
+            Stepper("Bottles: \(bottleCount)", value: $bottleCount, in: 0...30)
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// Sleep quality chips, the hours field, and the optional sleep note.
+    private var sleepField: some View {
+        SheetField("Sleep") {
+            VStack(spacing: 10) {
+                FlowLayout(spacing: 8) {
+                    ForEach(SleepQuality.allCases) { option in
+                        Button(option.label) { sleepQuality = option }
+                            .buttonStyle(ChipButtonStyle(selected: sleepQuality == option))
+                    }
+                }
+                HStack(spacing: 12) {
+                    TextField("Hours (e.g. 7.5)", text: $sleepHoursText)
+                        .keyboardType(.decimalPad)
+                        .sheetTextInput()
+                    TextField("Note (optional)", text: limitedSleepNote)
+                        .sheetTextInput()
+                }
+            }
+        }
+    }
+
+    /// The personal-care task grid for the edited day.
+    private var personalCareField: some View {
+        SheetField("Personal care") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 6)], spacing: 6) {
+                ForEach(store.personalCareTasks) { task in
+                    Button { togglePersonalCareTask(task) } label: {
+                        Label(task.label, systemImage: task.systemImage)
+                            .font(.fernlet(.labelSmall))
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(completedPersonalCareTaskIDs.contains(task.id) ? Color.moss : Color.slate)
+                            .background(
+                                completedPersonalCareTaskIDs.contains(task.id) ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04),
+                                in: RoundedRectangle(cornerRadius: 10)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private func togglePersonalCareTask(_ task: PersonalCareTask) {
@@ -1540,7 +1596,12 @@ struct DayEditSheet: View {
         journalPromptNotification = notification
 
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(6))
+            do {
+                try await Task.sleep(for: .seconds(6))
+            } catch {
+                // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
+                return
+            }
             if journalPromptNotification?.id == notification.id {
                 journalPromptNotification = nil
             }
@@ -1553,6 +1614,18 @@ struct DayEditSheet: View {
         openURL(url)
     }
 
+    /// The typed sleep hours, or nil when they are unusable.
+    ///
+    /// R5: the value is stored verbatim in the day snapshot, and `JSONEncoder`'s default
+    /// non-conforming-float strategy throws on a non-finite double, so `Double("nan")`,
+    /// `Double("1e400")` and negatives (all reachable by paste or a hardware keyboard) are rejected
+    /// here instead of corrupting the day.
+    private func validatedSleepHours() -> Double? {
+        guard let parsed = Double(sleepHoursText.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        guard parsed.isFinite, (0...24).contains(parsed) else { return nil }
+        return parsed
+    }
+
     private func saveAll() {
         store.setBottleCount(bottleCount, date: dateKey)
         store.setPersonalCareTaskIDs(completedPersonalCareTaskIDs, date: dateKey)
@@ -1561,7 +1634,7 @@ struct DayEditSheet: View {
         let hoursEntered = !sleepHoursText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let sleepNoteEntered = !sleepNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if hasSleepEntry || hoursEntered || sleepNoteEntered || sleepQuality != .ok {
-            store.setSleep(hours: Double(sleepHoursText.replacingOccurrences(of: ",", with: ".")), quality: sleepQuality, note: sleepNote, date: dateKey)
+            store.setSleep(hours: validatedSleepHours(), quality: sleepQuality, note: sleepNote, date: dateKey)
         }
 
         let journalTrimmed = journalText.trimmingCharacters(in: .whitespacesAndNewlines)

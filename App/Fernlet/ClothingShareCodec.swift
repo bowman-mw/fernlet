@@ -43,7 +43,10 @@ enum ClothingShareCodec {
     /// receive). Safe to render and buy from. Items are de-duplicated by id and re-ordered deterministically.
     static func sanitizedItems(from payload: ClothingCatalogPayload) -> [CustomizationItem] {
         var seen = Set<UUID>()
+        // R3: the COUNT is bounded here too, not only in MeshClothingShop.receiveCatalog — this
+        // codec is the defense-in-depth pass over the same peer-controlled input.
         return payload.items
+            .prefix(ClothingShopLimits.maxListedItems)
             .map { ClothingShopLimits.sanitizedForShop($0) }
             .filter { seen.insert($0.id).inserted }
             .sorted(by: Self.deterministicOrder)

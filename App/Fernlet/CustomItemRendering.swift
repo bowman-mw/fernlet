@@ -14,10 +14,16 @@ import FernletUI
 /// result in view `@State` keyed by the texture so it is never regenerated inside the companion's
 /// per-frame animation loop.
 enum ItemTextureRenderer {
+    /// R3: the largest grid this renderer will rasterize, mirroring
+    /// `ItemGridTexture.sanitized(maxCols:maxRows:)`'s defaults — the bound is declared where the
+    /// texture enters the renderer rather than relying on every caller having sanitized first.
+    static let maxRenderSide = 64
+
     static func image(for texture: ItemGridTexture) -> CGImage? {
         let width = texture.cols
         let height = texture.rows
         guard width > 0, height > 0, texture.pixels.count == width * height else { return nil }
+        guard width <= Self.maxRenderSide, height <= Self.maxRenderSide else { return nil }
 
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
         for i in 0..<(width * height) {
@@ -30,19 +36,22 @@ enum ItemTextureRenderer {
             bytes[p + 3] = 255
         }
 
-        return bytes.withUnsafeMutableBytes { raw -> CGImage? in
-            guard let base = raw.baseAddress else { return nil }
-            let context = CGContext(
-                data: base,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: width * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            )
-            return context?.makeImage()
-        }
+        // R9: no pointer seam — CGDataProvider takes the pixel bytes as `Data` and CGImage reads
+        // them through it, so the buffer's lifetime is managed by the framework, not by us.
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
     }
 
     /// Palette hex → RGB bytes for the pixel path. Delegates to the single shared hex parser on

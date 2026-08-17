@@ -37,7 +37,8 @@ struct WorryEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isEditorFocused: Bool
 
-    private static let characterLimit = 300
+    /// The composer's cap — the same constant the sealed-store entry point enforces.
+    private static let characterLimit = WorryBoxService.maxCharacters
 
     var body: some View {
         VStack(spacing: 20) {
@@ -69,29 +70,7 @@ struct WorryEntryView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            TextEditor(text: $text)
-                .focused($isEditorFocused)
-                .frame(minHeight: 180, maxHeight: .infinity)
-                .scrollContentBackground(.hidden)
-                .font(.fernlet(.body))
-                .overlay(alignment: .topLeading) {
-                    if text.isEmpty {
-                        Text("It's alright. Just start typing…")
-                            .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
-                            .foregroundStyle(Color.slate.opacity(0.7))
-                            .padding(.horizontal, 5)
-                            .padding(.top, 8)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .padding(12)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .onChange(of: text) { _, newValue in
-                    if newValue.count > Self.characterLimit {
-                        text = String(newValue.prefix(Self.characterLimit))
-                    }
-                }
-                .accessibilityLabel("Worry text")
+            worryEditor
 
             if text.count > 260 {
                 Text("The box holds about 300 characters.")
@@ -117,22 +96,54 @@ struct WorryEntryView: View {
                     .fernletWrappingText()
             }
 
-            Button {
-                letGo()
-            } label: {
-                let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                Text("Let it go")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Color.parchmentInk)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
-                                in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityIdentifier("firstAid.worry.letGo")
+            letGoButton
         }
+    }
+
+    /// The worry text editor: placeholder overlay, the 300-character cap, and its a11y label.
+    private var worryEditor: some View {
+        TextEditor(text: $text)
+            .focused($isEditorFocused)
+            .frame(minHeight: 180, maxHeight: .infinity)
+            .scrollContentBackground(.hidden)
+            .font(.fernlet(.body))
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text("It's alright. Just start typing…")
+                        .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
+                        .foregroundStyle(Color.slate.opacity(0.7))
+                        .padding(.horizontal, 5)
+                        .padding(.top, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+            .padding(12)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .onChange(of: text) { _, newValue in
+                if newValue.count > Self.characterLimit {
+                    text = String(newValue.prefix(Self.characterLimit))
+                }
+            }
+            .accessibilityLabel("Worry text")
+    }
+
+    /// The "Let it go" button — disabled until there is something to seal.
+    private var letGoButton: some View {
+        Button {
+            letGo()
+        } label: {
+            let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            Text("Let it go")
+                .font(.fernlet(.label))
+                .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Color.parchmentInk)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
+                            in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .accessibilityIdentifier("firstAid.worry.letGo")
     }
 
     private var letGoConfirmation: some View {
@@ -188,7 +199,13 @@ struct WorryEntryView: View {
             // the confirmation. The worry is already sealed in the store above — the wait is
             // purely the animation.
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(2200))
+                do {
+                    try await Task.sleep(for: .milliseconds(2200))
+                } catch {
+                    // Cancelled: the entry view is gone; the worry is already sealed, so there is
+                    // nothing to undo and no state left to settle.
+                    return
+                }
                 withAnimation(.easeOut(duration: 0.4)) { phase = .tucked }
             }
         } catch {
@@ -363,6 +380,9 @@ struct WorryBoxView: View {
     @State private var composeText = ""
     @State private var releasingID: WorryNarrative.ID?
     @State private var emberLifted = false
+    /// Gentle copy shown when a sealed write or a release did not land (never a silent failure).
+    @State private var composeError: String?
+    @State private var releaseError: String?
     @FocusState private var isComposeFocused: Bool
 
     var body: some View {
@@ -376,6 +396,13 @@ struct WorryBoxView: View {
                     .fernletWrappingText()
 
                 composer
+
+                if let releaseError {
+                    Text(releaseError)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                }
 
                 if worryBox.worries.isEmpty {
                     emptyState
@@ -401,10 +428,21 @@ struct WorryBoxView: View {
                     .focused($isComposeFocused)
                     .lineLimit(1...4)
                     .font(.fernlet(.body))
+                    // R3: the same cap the sealed-store entry point enforces, applied where the
+                    // text enters so the field cannot grow without bound.
+                    .onChange(of: composeText) { _, newValue in
+                        if newValue.count > WorryBoxService.maxCharacters {
+                            composeText = String(newValue.prefix(WorryBoxService.maxCharacters))
+                        }
+                    }
+                if let composeError {
+                    Text(composeError)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                }
                 Button {
-                    guard (try? worryBox.addWorry(composeText)) != nil else { return }
-                    composeText = ""
-                    isComposeFocused = false
+                    sealComposedWorry()
                 } label: {
                     Label("Let it go", systemImage: "archivebox")
                         .font(.fernlet(.label))
@@ -417,6 +455,21 @@ struct WorryBoxView: View {
                 .disabled(composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .opacity(composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
             }
+        }
+    }
+
+    /// Seals the hub composer's text, surfacing a gentle retry line when the sealed write fails.
+    private func sealComposedWorry() {
+        // The button is disabled when the field is blank; state it here too, so the entry point
+        // carries its own precondition rather than relying on the caller's disabled state.
+        guard !composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        do {
+            try worryBox.addWorry(composeText)
+            composeText = ""
+            isComposeFocused = false
+            composeError = nil
+        } catch {
+            composeError = "The box couldn't quite close just now — your words are still here."
         }
     }
 
@@ -507,12 +560,26 @@ struct WorryBoxView: View {
     private func release(_ worry: WorryNarrative) {
         guard releasingID == nil else { return }
         emberLifted = false
+        releaseError = nil
         withAnimation(.easeOut(duration: 0.3)) { releasingID = worry.id }
         withAnimation(.easeOut(duration: 1.1)) { emberLifted = true }
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(760))
-            withAnimation(.easeOut(duration: 0.45)) {
+            do {
+                try await Task.sleep(for: .milliseconds(760))
+            } catch {
+                // Cancelled before the ember finished: the worry was NOT released, so settle the
+                // row back instead of running the delete on a view that is going away.
+                releasingID = nil
+                emberLifted = false
+                return
+            }
+            let released = withAnimation(.easeOut(duration: 0.45)) {
                 worryBox.release(worry.id)
+            }
+            if !released {
+                // The sealed row is still on disk (the service audited the failure); say so rather
+                // than showing a letting-go that did not happen.
+                releaseError = "That one didn't quite lift just now — try again in a moment."
             }
             releasingID = nil
             emberLifted = false

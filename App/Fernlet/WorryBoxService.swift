@@ -71,10 +71,10 @@ final class WorryBoxService {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var mode: ActivationMode = .inactive
     @ObservationIgnored private var userContentKey: SymmetricKey?
-    /// Fired after a worry is released (deleted) from the hub, with the worry's id. Optional hook for
-    /// callers that want to react to a release; the lifetime count is NOT driven from here — it is
-    /// incremented at the "let it go" gesture (`addWorry`) so First Aid's primary flow counts.
-    @ObservationIgnored var onRelease: ((UUID) -> Void)?
+
+    /// The hard cap on a worry's text, enforced at ``addWorry(_:)`` — the one seam through which
+    /// every composer (First Aid's entry view and the Private hub's field) reaches the sealed store.
+    static let maxCharacters = 300
 
     init(repository: (any WorryStoring)? = nil, defaults: UserDefaults = .standard) {
         self.repository = repository ?? WorryNarrativeRepository()
@@ -100,7 +100,14 @@ final class WorryBoxService {
             if let contentKey {
                 mode = .unlocked
                 userContentKey = contentKey
-                try? repository.reencryptAll(from: deviceWorryKey, to: contentKey)
+                do {
+                    try repository.reencryptAll(from: deviceWorryKey, to: contentKey)
+                } catch {
+                    // The rows stay readable under the DEVICE key; this activation runs again on the
+                    // next `.unlocked(.privateHub)` transition, so the fold retries then. Until it
+                    // lands the hub shows only user-key rows — audited rather than silent.
+                    FernletAuditLog.log("worryBox.rekey.failed", context: [:])
+                }
             } else {
                 mode = .locked
                 userContentKey = nil
@@ -118,7 +125,8 @@ final class WorryBoxService {
     /// when available, else the device fallback key (mirrors `JournalSealingCoordinator.seal`),
     /// so a worry written from First Aid while locked still never exists as plaintext at rest.
     func addWorry(_ text: String) throws {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // R3/R5: the cap lives at the entry point, not in one composer — the hub's field has none.
+        let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxCharacters))
         guard !trimmed.isEmpty else { return }
         let worry = WorryNarrative(text: trimmed)
         try repository.insert(worry, contentKey: activeKey ?? deviceWorryKey)
@@ -131,12 +139,21 @@ final class WorryBoxService {
         lifetimeLetGoCount += 1
     }
 
-    /// Releases (deletes) a kept worry. Best-effort — releasing is a letting-go gesture and
-    /// should never surface an error. Does NOT change the lifetime count (that grew at `addWorry`).
-    func release(_ id: UUID) {
-        try? repository.delete(id: id)
+    /// Releases (deletes) a kept worry, reporting whether the sealed row actually went away.
+    ///
+    /// A failed disk delete keeps the worry in the in-memory list (so memory and disk agree and the
+    /// row does not reappear on the next ``reload()``), audits the failure, and returns `false` so
+    /// the caller can settle its release animation back instead of showing a letting-go that did not
+    /// happen. Does NOT change the lifetime count (that grew at `addWorry`).
+    func release(_ id: UUID) -> Bool {
+        do {
+            try repository.delete(id: id)
+        } catch {
+            FernletAuditLog.log("worryBox.release.failed", context: ["id": id.uuidString])
+            return false
+        }
         worries.removeAll { $0.id == id }
-        onRelease?(id)
+        return true
     }
 
     /// Bulk purge for "Reset everything": deletes every sealed worry row (even while locked — rows
@@ -145,7 +162,6 @@ final class WorryBoxService {
     /// the row delete landed — the "delete everything" dialog promises Worry Box notes by name, so a
     /// throw here must reach the outcome instead of being swallowed by `try?`. The in-memory state and
     /// count are cleared either way (the user asked for them gone; only the disk rows can fail).
-    @discardableResult
     func releaseAll() -> Bool {
         let deleted: Bool
         do {
@@ -161,9 +177,16 @@ final class WorryBoxService {
 
     /// Re-reads the sealed store with the currently active key (empty while locked/inactive).
     func reload() {
-        if let key = activeKey {
-            worries = (try? repository.worries(contentKey: key)) ?? []
-        } else {
+        guard let key = activeKey else {
+            worries = []
+            return
+        }
+        do {
+            worries = try repository.worries(contentKey: key)
+        } catch {
+            // Fail closed (never a plaintext fallback), but say so: without the audit line a failed
+            // decrypt is indistinguishable from an empty box.
+            FernletAuditLog.log("worryBox.read.failed", context: [:])
             worries = []
         }
     }
