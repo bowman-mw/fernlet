@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FernletFoundation
 
 /// Shared AES-256-GCM at-rest helpers for the module's media stores.
 ///
@@ -32,7 +33,10 @@ extension PrivateMediaKeyProviding {
     /// Seals `plaintext` via ``gcmSeal(_:)`` and atomically writes the ciphertext to `url` with
     /// `.completeFileProtection`. Returns whether the bytes reached disk; on a nil key, a seal
     /// failure, or a write error NOTHING is written (fail-closed — plaintext never touches disk).
-    @discardableResult
+    ///
+    /// Deliberately NOT `@discardableResult` (R7): the `Bool` is a success/failure signal, so every
+    /// caller must decide. Callers for whom a failed write is genuinely non-fatal use
+    /// ``sealAndWriteBestEffort(_:to:reason:)``, which makes that decision explicit and logged.
     func sealAndWrite(_ plaintext: Data, to url: URL) -> Bool {
         guard let sealed = gcmSeal(plaintext) else { return false }
         do {
@@ -40,6 +44,24 @@ extension PrivateMediaKeyProviding {
             return true
         } catch {
             return false
+        }
+    }
+
+    /// Best-effort variant for the upgrade-on-read re-seals: the caller has already returned usable
+    /// bytes, so a failed write only means the file stays in its old generation and the next pass
+    /// retries. The failure is audit-logged rather than dropped.
+    ///
+    /// - Parameters:
+    ///   - plaintext: Bytes to seal.
+    ///   - url: Destination file.
+    ///   - reason: Short label for the re-seal site, recorded in the audit line.
+    func sealAndWriteBestEffort(_ plaintext: Data, to url: URL, reason: StaticString) {
+        guard sealAndWrite(plaintext, to: url) else {
+            FernletAuditLog.log(
+                "privateMedia.resealFailed",
+                context: ["reason": "\(reason)", "file": url.lastPathComponent]
+            )
+            return
         }
     }
 }

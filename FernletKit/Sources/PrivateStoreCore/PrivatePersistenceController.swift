@@ -50,8 +50,26 @@ public final class PrivatePersistenceController {
     public let container: NSPersistentContainer
     /// `true` when the persistent store failed to load; the error is logged and the controller
     /// left running (against an empty container) rather than crashing.
-    public private(set) var didFailToLoad = false
+    ///
+    /// Lock-guarded, not a plain stored `var`: this is the one piece of mutable state on a
+    /// process-wide `nonisolated(unsafe)` object that is written OUTSIDE the
+    /// `viewContext.performAndWait` discipline the rest of the type relies on (the
+    /// `loadPersistentStores` completion runs on Core Data's own queue, while the app reads this
+    /// from the main actor). ``stateLock`` is what makes the R9 allowlist invariant true.
+    public var didFailToLoad: Bool {
+        stateLock.withLock { storedDidFailToLoad }
+    }
+
+    /// Serializes every read and write of ``storedDidFailToLoad``.
+    private let stateLock = NSLock()
+    /// Backing storage for ``didFailToLoad``; touched only under ``stateLock``.
+    private var storedDidFailToLoad = false
     private let inMemory: Bool
+
+    /// The one writer of ``didFailToLoad``, so every mutation goes through ``stateLock``.
+    private func setDidFailToLoad(_ value: Bool) {
+        stateLock.withLock { storedDidFailToLoad = value }
+    }
 
     /// Creates the stack and loads the `FernletPrivate` store with complete file protection,
     /// history tracking, lightweight migration, and — for on-disk stores — the user's
@@ -88,7 +106,7 @@ public final class PrivatePersistenceController {
         container.loadPersistentStores { [self] storeDescription, error in
             if let error {
                 print("[Fernlet] PrivatePersistenceController store failed to load: \(error)")
-                self.didFailToLoad = true
+                self.setDidFailToLoad(true)
                 return
             }
             // Honor the localBackupExcludedFromiOSBackup preference (default: NOT excluded) for the
@@ -276,7 +294,7 @@ public final class PrivatePersistenceController {
         // file out from under a live store is strictly worse than skipping the residue pass, so
         // skip it and report — the rows the caller deleted first are still gone.
         guard coordinator.persistentStores.isEmpty else {
-            didFailToLoad = false
+            setDidFailToLoad(false)
             print("[Fernlet] PrivatePersistenceController could not detach the sealed store; rebuild skipped: \(String(describing: removeFailure))")
             throw removeFailure ?? RebuildError.storeStillAttached
         }
@@ -290,14 +308,10 @@ public final class PrivatePersistenceController {
                 try coordinator.destroyPersistentStore(at: storeURL, ofType: description.type, options: description.options)
                 // Belt and braces, on the success path only: `destroyPersistentStore` is documented
                 // to remove the store, but has been seen to leave a zero-byte sqlite (or a sidecar)
-                // behind. Anything still on disk here is the residue this method exists to remove.
-                // Best-effort — a stale sidecar the fresh store overwrites is not worth failing an
-                // otherwise-complete wipe over. (Skipped when the destroy FAILED: hand-deleting the
-                // file there would quietly succeed at the rebuild while still reporting failure.)
-                let fileManager = FileManager.default
-                for path in [storeURL.path, storeURL.path + "-wal", storeURL.path + "-shm"] {
-                    try? fileManager.removeItem(atPath: path)
-                }
+                // behind. Best-effort and audit-logged — see ``removeSidecars(of:)``. (Skipped when
+                // the destroy FAILED: hand-deleting the file there would quietly succeed at the
+                // rebuild while still reporting failure.)
+                removeSidecars(of: storeURL)
                 // The external-blob directory is NOT covered by `destroyPersistentStore` — sealed
                 // columns over ~100 KB (a long journal entry, a big symptom payload) live in there
                 // as standalone ciphertext files that would otherwise outlive the store that named
@@ -305,8 +319,8 @@ public final class PrivatePersistenceController {
                 // directory and nothing overwrites it, so a silent failure here means live sealed
                 // blobs survived the wipe that claimed to take them.
                 let supportDirectory = BackupExclusion.supportDirectory(for: storeURL)
-                if fileManager.fileExists(atPath: supportDirectory.path) {
-                    try fileManager.removeItem(at: supportDirectory)
+                if FileManager.default.fileExists(atPath: supportDirectory.path) {
+                    try FileManager.default.removeItem(at: supportDirectory)
                 }
             } catch {
                 destroyFailure = error
@@ -324,12 +338,12 @@ public final class PrivatePersistenceController {
                 try addStore(at: storeURL, description: description)
             } catch let retryError {
                 print("[Fernlet] PrivatePersistenceController failed to re-add the sealed store after rebuild: \(retryError)")
-                didFailToLoad = true
+                setDidFailToLoad(true)
                 // The destroy failure, if there was one, is the root cause worth surfacing.
                 throw destroyFailure ?? retryError
             }
         }
-        didFailToLoad = false
+        setDidFailToLoad(false)
         Self.applyBackupExclusion(
             storeURL: storeURL,
             inMemory: inMemory,
@@ -338,6 +352,25 @@ public final class PrivatePersistenceController {
         // Nothing-silent: the store is usable again, but the old file — and the residue in it —
         // could not be destroyed, and the caller promised the user otherwise.
         if let destroyFailure { throw destroyFailure }
+    }
+
+    /// Best-effort removal of the sqlite file and its `-wal`/`-shm` sidecars after a successful
+    /// `destroyPersistentStore` (which has been seen to leave a zero-byte file behind).
+    private func removeSidecars(of storeURL: URL) {
+        let fileManager = FileManager.default
+        for path in [storeURL.path, storeURL.path + "-wal", storeURL.path + "-shm"] {
+            guard fileManager.fileExists(atPath: path) else { continue }
+            do {
+                try fileManager.removeItem(atPath: path)
+            } catch {
+                // Recovery: continue with the rebuild. A sidecar the fresh store overwrites must not
+                // fail an otherwise-complete wipe — but the failure is now named, not discarded.
+                FernletAuditLog.log(
+                    "sealedStore.sidecarRemoveFailed",
+                    context: ["path": (path as NSString).lastPathComponent, "error": "\(error)"]
+                )
+            }
+        }
     }
 
     /// Adds the sealed store at `storeURL` under `description`'s type/configuration/options, with
@@ -380,10 +413,10 @@ public final class PrivatePersistenceController {
             try addStore(at: storeURL, description: description)
         } catch {
             print("[Fernlet] PrivatePersistenceController could not reload the sealed store: \(error)")
-            didFailToLoad = true
+            setDidFailToLoad(true)
             throw error
         }
-        didFailToLoad = false
+        setDidFailToLoad(false)
         Self.applyBackupExclusion(
             storeURL: storeURL,
             inMemory: inMemory,
@@ -518,13 +551,36 @@ public enum PrivatePersistentHistoryPruner {
         try context.execute(request)
     }
 
+    /// Best-effort prune: a failure must not undo the write that just succeeded, so it is caught and
+    /// audit-logged rather than thrown. The superseded ciphertext then stays in the history shadow
+    /// tables until the next successful prune or a
+    /// ``PrivatePersistenceController/rebuildStore()``.
+    ///
+    /// The ONE spelling of "best-effort prune" — every sealed repository routes its post-write prune
+    /// through here so a prune failure can never again be invisible.
+    ///
+    /// - Parameters:
+    ///   - context: The sealed store's managed-object context.
+    ///   - site: Call-site label recorded in the audit line; defaults to the calling function.
+    public static func pruneBestEffort(context: NSManagedObjectContext, site: StaticString = #function) {
+        do {
+            try prune(context: context)
+        } catch {
+            FernletAuditLog.log(
+                "sealedStore.historyPruneFailed",
+                context: ["site": "\(site)", "error": "\(error)"]
+            )
+        }
+    }
+
     /// Saves the context, then best-effort prunes the persistent history so a re-sealed (edited) row
     /// leaves no prior ciphertext in the transaction log. A prune failure must not undo the write that
-    /// succeeded, so the prune is `try?`. Use this at the simple sealed-write sites where the save is
-    /// unconditional; sites that need rollback-on-failure must keep `save()` inside their own do/catch.
+    /// succeeded, so it goes through ``pruneBestEffort(context:site:)``. Use this at the simple
+    /// sealed-write sites where the save is unconditional; sites that need rollback-on-failure must
+    /// keep `save()` inside their own do/catch.
     public static func saveAndPrune(_ context: NSManagedObjectContext) throws {
         try context.saveSealed()
-        try? prune(context: context)
+        pruneBestEffort(context: context, site: "saveAndPrune")
     }
 }
 

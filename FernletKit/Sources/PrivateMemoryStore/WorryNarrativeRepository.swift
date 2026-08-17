@@ -39,8 +39,9 @@ public protocol WorryStoring: AnyObject {
     /// Seals a new worry into the private store. Throws `FernletLockError.locked` when
     /// `contentKey` is `nil`.
     func insert(_ worry: WorryNarrative, contentKey: SymmetricKey?) throws
-    /// All decryptable worries, newest first. Returns `[]` when `contentKey` is `nil`;
-    /// individual undecryptable rows are skipped, not rethrown.
+    /// The newest decryptable worries, newest first, bounded by the conformer's display cap (R3 —
+    /// this is a display read, not an export). Returns `[]` when `contentKey` is `nil`; individual
+    /// undecryptable rows are skipped, not rethrown.
     func worries(contentKey: SymmetricKey?) throws -> [WorryNarrative]
     /// Deletes the worry with `id` without decrypting it — no content key needed, so "releasing"
     /// a worry works while the app is locked.
@@ -81,6 +82,13 @@ public final class WorryNarrativeRepository: WorryStoring {
     /// isolated from the journal label even under the same content key.
     private let crypto = ColumnCrypto(label: "worry-box")
 
+    /// R3: cap on the display fetch, which decrypts every row it returns. Worry rows grow purely
+    /// from repeated user actions and there is no paged alternative here.
+    private static let maxDisplayedWorries = 500
+    /// R3: page size of the ``reencryptAll(from:to:)`` migration, so the whole table is never
+    /// faulted in, re-sealed and saved as one unbounded transaction.
+    private static let reencryptPageSize = 200
+
     /// Creates a repository on a private-store controller's view context.
     ///
     /// - Parameter controller: The sealed store to use; `nil` (the default) means the shared
@@ -112,26 +120,45 @@ public final class WorryNarrativeRepository: WorryStoring {
                 throw error
             }
             // Best-effort history prune so a released (deleted) worry's ciphertext does not
-            // linger in the transaction log longer than needed.
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // linger in the transaction log longer than needed (logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "Worry.insert")
         }
     }
 
-    /// All worries, newest first. Individual undecryptable rows are skipped rather than failing
-    /// the whole read (mirrors the journal/menstrual/intimacy repositories).
+    /// The newest worries, newest first (capped at ``maxDisplayedWorries``). Individual
+    /// undecryptable rows are skipped rather than failing the whole read (mirrors the
+    /// journal/menstrual/intimacy repositories).
     public func worries(contentKey: SymmetricKey?) throws -> [WorryNarrative] {
         guard let contentKey else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
             request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
+            // R3: repeated user actions grow this table without bound; take the newest page rather
+            // than faulting in and decrypting every worry ever written.
+            request.fetchLimit = Self.maxDisplayedWorries
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
+        }
+    }
+
+    /// Decrypts a fetched row set, skipping rows whose sealed column will not open and recording ONE
+    /// audit line per fetch (never per row, so a mass failure cannot spam the log).
+    private func decryptRows(_ objects: [NSManagedObject], contentKey: SymmetricKey) -> [WorryNarrative] {
+        var skipped = 0
+        let rows = objects.compactMap { object -> WorryNarrative? in
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                skipped += 1
+                return nil
             }
         }
+        if skipped > 0 {
+            FernletAuditLog.log(
+                "sealedRow.undecryptable",
+                context: ["entity": "WorryNarrative", "count": "\(skipped)"]
+            )
+        }
+        return rows
     }
 
     /// Deletes ("releases") the worry with `id` without decrypting it — no content key needed.
@@ -157,31 +184,85 @@ public final class WorryNarrativeRepository: WorryStoring {
     /// Migrates every row sealed under `oldKey` to `newKey` in one transaction — the device-key →
     /// user-key migration `WorryBoxService` runs on unlock (see ``WorryStoring/reencryptAll(from:to:)``).
     ///
-    /// - Important: Rows that do not open under `oldKey` (already migrated, or damaged) are
-    ///   silently skipped, as are rows whose re-seal fails; only the save itself can throw, and a
-    ///   failed save rolls back so no partially migrated state persists.
+    /// - Important: Rows that do not open under `oldKey` (already migrated, or damaged) are skipped
+    ///   as a classification decision. Rows that DO open but cannot be re-sealed are counted and
+    ///   audit-logged (`worryBox.reencryptSkipped`) — they stay readable under `oldKey`, so the
+    ///   caller must keep it alive until a pass reports none.
+    /// - Important: R3 — the walk is PAGED (``reencryptPageSize`` rows per transaction) so an
+    ///   unbounded table is never faulted in and saved as one transaction. Each page is atomic (a
+    ///   failed save rolls that page back and rethrows); earlier pages stay migrated and the rest
+    ///   migrate on the next pass, which is safe because migration is idempotent and per row.
     public func reencryptAll(from oldKey: SymmetricKey, to newKey: SymmetricKey) throws {
         try context.performAndWait {
-            let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
-            var mutated = false
-            for object in try context.fetch(request) {
-                // Only rows sealed under `oldKey` migrate; anything else (already under the new
-                // key, or damaged) is left untouched.
-                guard let text = try? crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: oldKey) else { continue }
-                guard let resealed = try? crypto.sealString(text, contentKey: newKey) else { continue }
-                object.setValue(resealed, forKey: "textCiphertext")
-                mutated = true
+            // R2: the bound is visible at the loop — `rowCount` is fixed before the walk and every
+            // iteration advances `offset` by the rows it just handled.
+            let rowCount = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: Self.entityName))
+            var offset = 0
+            var resealFailures = 0
+            var mutatedAnyPage = false
+            while offset < rowCount {
+                let page = try fetchWorryPage(offset: offset)
+                guard !page.isEmpty else { break }
+                let outcome = resealPage(page, from: oldKey, to: newKey)
+                resealFailures += outcome.failures
+                if outcome.mutated {
+                    mutatedAnyPage = true
+                    do {
+                        try context.saveSealed()
+                    } catch {
+                        context.rollback()
+                        throw error
+                    }
+                }
+                offset += page.count
             }
-            guard mutated else { return }
-            do {
-                try context.saveSealed()
-            } catch {
-                context.rollback()
-                throw error
+            if resealFailures > 0 {
+                // Recovery: the caller keeps the old key alive — these rows opened under `oldKey` but
+                // could not be re-sealed, so they are still readable there and migrate on a later pass.
+                FernletAuditLog.log("worryBox.reencryptSkipped", context: ["count": "\(resealFailures)"])
             }
+            guard mutatedAnyPage else { return }
             // Prune so the prior (old-key) ciphertext is not retained in history (best-effort).
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "Worry.reencryptAll")
         }
+    }
+
+    /// One bounded page of worry rows in a stable total order, so successive
+    /// ``reencryptAll(from:to:)`` pages neither overlap nor skip rows.
+    private func fetchWorryPage(offset: Int) throws -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "createdAt", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
+        request.fetchOffset = offset
+        request.fetchLimit = Self.reencryptPageSize
+        return try context.fetch(request)
+    }
+
+    /// Re-seals every row of `page` that opens under `oldKey`.
+    ///
+    /// - Returns: Whether anything was mutated, and how many rows opened under `oldKey` but could
+    ///   not be re-sealed under `newKey` (the silent data-loss case the caller audit-logs).
+    private func resealPage(
+        _ page: [NSManagedObject],
+        from oldKey: SymmetricKey,
+        to newKey: SymmetricKey
+    ) -> (mutated: Bool, failures: Int) {
+        var mutated = false
+        var failures = 0
+        for object in page {
+            // Only rows sealed under `oldKey` migrate; anything else (already under the new key, or
+            // damaged) is left untouched — a classification decision, not a swallowed failure.
+            guard let text = try? crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: oldKey) else { continue }
+            guard let resealed = try? crypto.sealString(text, contentKey: newKey) else {
+                failures += 1
+                continue
+            }
+            object.setValue(resealed, forKey: "textCiphertext")
+            mutated = true
+        }
+        return (mutated, failures)
     }
 
     // MARK: - Private

@@ -102,6 +102,14 @@ public nonisolated final class IntimacyLogRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "intimacy-log")
 
+    /// R3: cap on the display fetch, which decrypts every row it returns and holds the plaintext
+    /// notes for as long as the caller keeps them. Older rows stay reachable through the paged
+    /// ``logs(offset:limit:contentKey:)``.
+    private static let maxDisplayedLogs = 500
+    /// R3: upper bound on one page of ``logs(offset:limit:contentKey:)``, so an absurd `limit` cannot
+    /// decrypt the whole table at once. Above the 250-row sealed-backup chunk size.
+    private static let maxPageSize = 500
+
     /// Device-local marker for "this install has written intimacy logs at some point", used by the
     /// sealed-backup restore to tell TWO very different empty stores apart:
     ///
@@ -210,8 +218,8 @@ public nonisolated final class IntimacyLogRepository {
                 throw error
             }
             // Prune history after the atomic restore so no per-record transaction lingers in the
-            // persistent-history transaction log (best-effort).
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // persistent-history transaction log (best-effort, and logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "IntimacyLog.insertAtomically")
             // Latch AFTER the transaction commits. A restore that populates the store also counts as
             // "this device has intimacy logs", so a later delete-everything cannot re-pull them.
             markLogStored()
@@ -246,34 +254,53 @@ public nonisolated final class IntimacyLogRepository {
                 NSSortDescriptor(key: "id", ascending: true)
             ]
             request.fetchOffset = max(0, offset)
-            request.fetchLimit = limit
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decryptLog(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
-            }
+            // R3/R5: clamp the caller's page size so `limit: .max` cannot decrypt the whole table.
+            request.fetchLimit = min(limit, Self.maxPageSize)
+            return decryptLogs(try context.fetch(request), contentKey: contentKey)
         }
     }
 
-    /// Every stored log, newest first, decrypted with `contentKey`.
+    /// The newest stored logs, newest first, decrypted with `contentKey` — the DISPLAY read, bounded
+    /// by ``maxDisplayedLogs`` (R3). Older rows stay reachable through the paged
+    /// ``logs(offset:limit:contentKey:)``, which the sealed-backup export uses.
     ///
     /// - Returns: `[]` when `contentKey` is `nil` (locked). Rows whose ciphertext fails to
-    ///   authenticate (wrong key, tampering) are silently skipped rather than failing the fetch.
+    ///   authenticate (wrong key, tampering) are skipped rather than failing the fetch, and the
+    ///   number skipped is audit-logged once per fetch.
     public func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
         guard let contentKey else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
             request.sortDescriptors = [NSSortDescriptor(key: "eventDate", ascending: false)]
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decryptLog(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
+            // R3: repeated user actions grow this table without bound, so the display path takes the
+            // newest page instead of faulting in and decrypting every log ever written.
+            request.fetchLimit = Self.maxDisplayedLogs
+            return decryptLogs(try context.fetch(request), contentKey: contentKey)
+        }
+    }
+
+    /// Decrypts a fetched row set, skipping rows whose sealed columns will not open and recording ONE
+    /// audit line per fetch (never per row, so a mass failure cannot spam the log).
+    ///
+    /// Skip-don't-fail is deliberate — one unopenable row must not blank the list — but an
+    /// authentication failure (tampering, a wrong key, bit-rot) may not read as "no logs" either.
+    private func decryptLogs(_ objects: [NSManagedObject], contentKey: SymmetricKey) -> [IntimacyLog] {
+        var skipped = 0
+        let rows = objects.compactMap { object -> IntimacyLog? in
+            do {
+                return try decryptLog(object, contentKey: contentKey)
+            } catch {
+                skipped += 1
+                return nil
             }
         }
+        if skipped > 0 {
+            FernletAuditLog.log(
+                "sealedRow.undecryptable",
+                context: ["entity": "IntimacyLog", "count": "\(skipped)"]
+            )
+        }
+        return rows
     }
 
     /// Deletes one log by `id` without decrypting it, then prunes persistent history. A missing row

@@ -9,7 +9,12 @@ import FernletDomainModel
 extension UIImage {
     /// Returns the image downscaled so its longest side is at most `maxDimension` points
     /// (rendered at 1x, so points equal pixels); images already within the cap are returned as-is.
+    ///
+    /// R5: a non-positive `maxDimension`, or a zero-sized image, returns `self` unchanged. Computing
+    /// a zero-or-negative `targetSize` would hand `UIGraphicsImageRenderer` an empty canvas and the
+    /// outbound mesh photo would silently become blank instead of simply not being downscaled.
     public func resizedForFriendSharing(maxDimension: CGFloat = 1400) -> UIImage {
+        guard maxDimension > 0, size.width > 0, size.height > 0 else { return self }
         let largestSide = max(size.width, size.height)
         guard largestSide > maxDimension else { return self }
         let scale = maxDimension / largestSide

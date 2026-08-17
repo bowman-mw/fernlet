@@ -177,8 +177,12 @@ public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codab
         case .foodCravings: "Food cravings"
         }
     }
+    /// Orders by declaration position. R5: a case missing from `allCases` (an `@available` filter, a
+    /// future refactor) sorts last instead of trapping — the two force-unwrapped `firstIndex(of:)`
+    /// calls this replaces were assertions with no message and no recovery.
     public static func < (lhs: PeriodSymptom, rhs: PeriodSymptom) -> Bool {
-        Self.allCases.firstIndex(of: lhs)! < Self.allCases.firstIndex(of: rhs)!
+        let order = allCases
+        return (order.firstIndex(of: lhs) ?? order.count) < (order.firstIndex(of: rhs) ?? order.count)
     }
 }
 
@@ -371,6 +375,14 @@ public final class PeriodTrackerStore {
     @ObservationIgnored private var lockService: (any PeriodLockContext)?
     @ObservationIgnored private let calendar: Calendar
 
+    /// R3 cap on the HealthKit samples one load may hold — roughly 20 samples/day over the 240-day
+    /// window. A third-party cycle app writing hourly samples would otherwise grow this without bound.
+    private static let maxLoadedSamples = 5_000
+    /// R3 cap on the number of user-authored custom symptom entries sealed with one event.
+    private static let maxCustomSymptoms = 40
+    /// R3 cap on the length of one custom symptom's name.
+    private static let maxCustomSymptomNameLength = 40
+
     /// Hard visibility gate. While this returns false the store is INERT: it performs no cycle
     /// decrypt, no cycle HealthKit read, and holds no cycle plaintext. This is deliberately enforced
     /// here rather than in a `View` body — cycle data is read on ambient paths that no view drives
@@ -433,9 +445,15 @@ public final class PeriodTrackerStore {
         }
         let range = DateInterval(start: calendar.date(byAdding: .day, value: -240, to: Date()) ?? Date().addingTimeInterval(-240 * 86_400), end: Date())
         do {
-            let samples = try await healthService.loadPeriodEvents(in: range)
-            let narratives = (try? narrativeRepository.narratives(in: range, contentKey: unlockedContentKey)) ?? []
-            let narrativeByUUID = Dictionary(uniqueKeysWithValues: narratives.map { ($0.hkExternalUUID, $0) })
+            // R3: HealthKit is external input — cap the sample array where it enters the store.
+            let samples = Array(try await healthService.loadPeriodEvents(in: range).prefix(Self.maxLoadedSamples))
+            let narratives = loadNarratives(in: range, contentKey: unlockedContentKey)
+            // R5: `uniqueKeysWithValues` traps on a duplicate `hkExternalUUID`, a state a partial
+            // buffer drain can genuinely produce. Newest row wins instead of aborting the process.
+            let narrativeByUUID = Dictionary(
+                narratives.map { ($0.hkExternalUUID, $0) },
+                uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+            )
             entries = buildEntries(samples: samples, narratives: narrativeByUUID, range: range)
             currentPhase = currentPhaseFromObservations()
             lastLoadHadContentKey = unlockedContentKey != nil
@@ -449,6 +467,20 @@ public final class PeriodTrackerStore {
             currentPhase = .unknown
             prediction = nil
             lastLoadHadContentKey = false
+        }
+    }
+
+    /// Fetches the sealed narratives for `range`, distinguishing "no notes" from "notes unavailable".
+    ///
+    /// A fetch/decrypt failure is audit-logged and rendered as an empty set so the samples still
+    /// render — R7: the `?? []` this replaces made a Core Data failure indistinguishable from a user
+    /// who had simply written nothing.
+    private func loadNarratives(in range: DateInterval, contentKey: SymmetricKey?) -> [MenstrualNarrative] {
+        do {
+            return try narrativeRepository.narratives(in: range, contentKey: contentKey)
+        } catch {
+            FernletAuditLog.log("period.narrativeLoadFailed", context: ["error": "\(error)"])
+            return []
         }
     }
 
@@ -483,7 +515,7 @@ public final class PeriodTrackerStore {
             dateKey: FernletDate.dayKey(for: event.date),
             note: String(event.note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
             symptomFlags: event.symptoms.sorted(),
-            customSymptomScales: event.customSymptomScales
+            customSymptomScales: Self.boundedCustomScales(event.customSymptomScales)
         )
 
         if let unlockedContentKey {
@@ -505,6 +537,18 @@ public final class PeriodTrackerStore {
         return .savedWithBufferedNarrative
     }
 
+    /// Caps the user-authored custom symptom dictionary at ``maxCustomSymptoms`` entries and each
+    /// key at ``maxCustomSymptomNameLength`` characters, alongside the note's 1000-character cap.
+    /// R3: this dictionary is unbounded user input that is sealed into the store and the pending
+    /// buffer. Truncated keys that collide keep the larger value, so the merge cannot trap.
+    private static func boundedCustomScales(_ scales: [String: Int]) -> [String: Int] {
+        let bounded = scales
+            .sorted { $0.key < $1.key }
+            .prefix(maxCustomSymptoms)
+            .map { (String($0.key.prefix(maxCustomSymptomNameLength)), $0.value) }
+        return Dictionary(bounded, uniquingKeysWith: { lhs, rhs in max(lhs, rhs) })
+    }
+
     /// Replaces an existing entry: deletes its Fernlet-owned samples and sealed narrative, then
     /// re-logs `event` through ``logEvent(_:unlockedContentKey:)``. Gated up front so a hide racing
     /// an edit cannot delete without re-creating (see the inline note). Samples written by other
@@ -521,7 +565,17 @@ public final class PeriodTrackerStore {
             try await healthService.delete(ownedSamples)
         }
         if let narrative = entry.narrative {
-            try? narrativeRepository.delete(id: narrative.id)
+            do {
+                try narrativeRepository.delete(id: narrative.id)
+            } catch {
+                // Recovery: continue to the re-log. Throwing here would destroy the entry without
+                // writing its replacement — the hazard the gate comment above describes — so the
+                // superseded row is named in the log instead of vanishing silently.
+                FernletAuditLog.log(
+                    "period.narrativeDeleteFailedOnEdit",
+                    context: ["id": narrative.id.uuidString, "error": "\(error)"]
+                )
+            }
         }
         return try await logEvent(event, unlockedContentKey: unlockedContentKey)
     }
@@ -537,7 +591,14 @@ public final class PeriodTrackerStore {
             try await healthService.delete(ownedSamples)
         }
         if let narrative = entry.narrative {
-            try? narrativeRepository.delete(id: narrative.id)
+            do {
+                try narrativeRepository.delete(id: narrative.id)
+            } catch {
+                // Recovery: report. A deletion the UI claims happened must not leave the user's
+                // sealed note on disk, so the caller surfaces the failure instead of "day removed".
+                FernletAuditLog.log("period.narrativeDeleteFailed", context: ["error": "\(error)"])
+                throw error
+            }
         }
         entries.removeAll { $0.id == entry.id }
         // Only recompute a prediction we were entitled to in the first place. This used to run
@@ -568,6 +629,13 @@ public final class PeriodTrackerStore {
         let pending = try lockService.drainPendingNarratives()
         guard !pending.isEmpty else { return }
         for payload in pending {
+            // Idempotent drain. The purge below runs only after EVERY insert succeeds, so a partial
+            // drain (or a failed purge) leaves payloads both buffered and inserted; re-inserting them
+            // on the next unlock would create duplicate `hkExternalUUID` rows. Skip what is already
+            // sealed instead.
+            if try narrativeRepository.narrative(forHKUUID: payload.hkExternalUUID, contentKey: contentKey) != nil {
+                continue
+            }
             let symptomsRaw = try payload.symptomFlagsBytes.map { try JSONDecoder().decode([String].self, from: $0) } ?? []
             let scales = try payload.customSymptomScalesBytes.map { try JSONDecoder().decode([String: Int].self, from: $0) } ?? [:]
             try narrativeRepository.insert(MenstrualNarrative(

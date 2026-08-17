@@ -177,8 +177,9 @@ public struct OwnPhotoKeyBinder {
     /// loose and immediately updated.
     ///
     /// - Returns: the outcome; every non-``OwnPhotoKeyBindingOutcome/bound`` case leaves both the
-    ///   row and the dual-open fallback exactly as they were.
-    @discardableResult
+    ///   row and the dual-open fallback exactly as they were. R7: deliberately not
+    ///   `@discardableResult` — the value is Result-shaped (it carries `.rebindFailed(OSStatus)`),
+    ///   so ignoring it would drop a failure.
     public func bindIfEligible() -> OwnPhotoKeyBindingOutcome {
         guard migrationLatch.isComplete else { return .refusedMigrationIncomplete }
         guard hasCrossDeviceRoute else { return .refusedNoRecoveryRoute }
@@ -200,7 +201,8 @@ public struct OwnPhotoKeyBinder {
     /// Consent is recorded even when the bind then refuses (the migration is still running, the
     /// keychain is briefly unavailable): the user's decision is a durable fact, and re-asking for
     /// it would be the wrong remedy for a transient failure. The next pass binds.
-    @discardableResult
+    ///
+    /// - Returns: the ceremony's outcome, which the UI must reflect. R7: not `@discardableResult`.
     public func recordConsentAndBind() -> OwnPhotoKeyBindingOutcome {
         consent.record()
         return bindIfEligible()

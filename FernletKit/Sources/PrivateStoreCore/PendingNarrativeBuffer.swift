@@ -108,10 +108,17 @@ public final class PendingNarrativeBuffer {
         directory.appendingPathComponent("pending-narratives.bin")
     }
 
-    /// The sealed buffer file under the scope's directory, creating the directory as a side effect.
+    /// The sealed buffer file under the scope's directory. Pure — reading a path performs no I/O, so
+    /// `purge()`/`loadEntries()` no longer create a directory they only wanted a name from.
     private var bufferFileURL: URL {
-        try? FileManager.default.createDirectory(at: scope.directory, withIntermediateDirectories: true)
-        return Self.fileURL(in: scope.directory)
+        Self.fileURL(in: scope.directory)
+    }
+
+    /// Creates the scope's directory if it is missing. Called only by ``saveEntries(_:)`` — the one
+    /// path that needs the directory to exist — so the failure reaches the caller as a throw instead
+    /// of surfacing later as a misleading write error.
+    private func ensureDirectoryExists() throws {
+        try FileManager.default.createDirectory(at: scope.directory, withIntermediateDirectories: true)
     }
 
     // MARK: - Public API
@@ -180,19 +187,29 @@ public final class PendingNarrativeBuffer {
         let sealedBox = try ChaChaPoly.seal(plaintext, using: key)
         let encrypted = sealedBox.combined
 
+        try ensureDirectoryExists()
         let url = bufferFileURL
         try encrypted.write(to: url, options: .atomic)
 
-        // Mark file with complete protection and exclude from backup
+        // Mark file with complete protection and exclude from backup. Both stay best-effort — the
+        // ChaChaPoly seal is the primary at-rest protection — but a failure is now named, not lost.
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var mutableURL = url
-        try? mutableURL.setResourceValues(values)
+        do {
+            try mutableURL.setResourceValues(values)
+        } catch {
+            FernletAuditLog.log("buffer.backupExclusionFailed", context: ["error": "\(error)"])
+        }
 
-        try? (url as NSURL).setResourceValue(
-            URLFileProtection.complete,
-            forKey: .fileProtectionKey
-        )
+        do {
+            try (url as NSURL).setResourceValue(
+                URLFileProtection.complete,
+                forKey: .fileProtectionKey
+            )
+        } catch {
+            FernletAuditLog.log("buffer.fileProtectionFailed", context: ["error": "\(error)"])
+        }
     }
 
     // MARK: - Buffer key management
@@ -219,14 +236,19 @@ public final class PendingNarrativeBuffer {
         // Migrate legacy key (no service) into the scoped service slot
         if let key = loadLegacyServicelessKey() {
             let keyData = key.withUnsafeBytes { Data($0) }
-            // Status deliberately ignored: the legacy key is still returned below, so a failed
-            // migration write only means the migration re-runs on the next load.
-            KeychainItem.store(
+            let storeStatus = KeychainItem.store(
                 keyData,
                 account: Self.bufferKeyAccountV2,
                 service: scope.keychainService,
                 accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             )
+            // The legacy row is the ONLY other copy of this key: deleting it after a failed v2 write
+            // would lose the key outright and turn every buffered narrative into unopenable
+            // ciphertext. Keep the source row so the migration genuinely retries on the next load.
+            guard storeStatus == errSecSuccess else {
+                FernletAuditLog.log("buffer.keyMigrationWriteFailed", context: ["status": "\(storeStatus)"])
+                return key
+            }
             // Raw SecItemDelete: KeychainItem cannot express a service-less query (service is a
             // required parameter), and the v1 row was stored without one. Dies with the v1
             // migration when it is retired.
@@ -235,7 +257,12 @@ public final class PendingNarrativeBuffer {
                 kSecAttrAccount as String: Self.bufferKeyAccount,
                 kSecUseDataProtectionKeychain as String: true
             ]
-            SecItemDelete(deleteQuery as CFDictionary)
+            let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+            if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+                // Recovery: none needed — the v2 row is committed, so the surviving legacy row is
+                // inert residue that the next successful migration attempt removes.
+                FernletAuditLog.log("buffer.legacyKeyDeleteFailed", context: ["status": "\(deleteStatus)"])
+            }
             return key
         }
         return nil
