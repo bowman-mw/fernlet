@@ -1464,16 +1464,17 @@ public final class HealthKitService: HealthKitServicing {
     /// keychain anchor; both the initial and update handlers hop to the main actor before touching
     /// the caller's handler.
     ///
-    /// R3: the query carries BOTH bounds the workout observation already had — a
-    /// ``observationBackfillStartDate(referenceDate:)`` window predicate and a named
-    /// ``maxSamplesPerAnchoredBatch`` row limit. Without them, a first run (or any run after a
-    /// disable/enable, which wipes anchors) hands the initial-results handler the entire history of
-    /// the type — hundreds of thousands of step or heart-rate samples materialized in one array.
-    /// The anchor advances per batch, so the remainder still arrives through the update handler.
+    /// R3: the query is bounded by the ``observationBackfillStartDate(referenceDate:)`` window
+    /// predicate (the workout observation already had it). It deliberately does NOT carry a row
+    /// limit: HealthKit throws `NSInvalidArgumentException` ("setUpdateHandler: not callable when
+    /// query has a limit") for a long-running anchored query with a limit — verified 2026-08-17 when
+    /// a ``maxSamplesPerAnchoredBatch`` limit here crashed the test runner seven times. Bounding the
+    /// first-run backfill therefore needs a different shape: paginate the initial results with
+    /// limited one-shot anchored queries (no update handler) until a page comes back short, then
+    /// attach the unlimited update query from the final anchor. That is tracked as a Power-of-10
+    /// follow-up (Docs/CODE_REVIEW_Power-of-10-2026-08-16.md, "Residuals"); until then the peak is
+    /// one type's windowed history, and the anchor still advances per delivery.
     ///
-    /// One live query per type: a repeated `startObserving` (or an `enableIntegration()` that
-    /// restarts every registration) stops the previous query first, so `activeQueries` cannot grow
-    /// without bound and a sample cannot be delivered N times.
     private func startAnchoredQuery(for type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) {
         if let previous = activeQueriesByType[type.identifier] {
             storeController.stop(previous)
@@ -1486,7 +1487,7 @@ public final class HealthKitService: HealthKitServicing {
             type: type,
             predicate: HKQuery.predicateForSamples(withStart: windowStart, end: nil, options: []),
             anchor: savedAnchor,
-            limit: Self.maxSamplesPerAnchoredBatch
+            limit: HKObjectQueryNoLimit  // see the R3 note above: a limit here is illegal with updateHandler
         ) { query, samples, deletedObjects, newAnchor, error in
             guard Self.isObservationDeliverable(error, type: type.identifier) else { return }
             let samplesCopy = samples ?? []
@@ -1657,12 +1658,9 @@ public final class HealthKitService: HealthKitServicing {
     /// queries and the returned array against an unvalidated caller value.
     public static let maxStressMetricDays = 366
 
-    /// The largest number of samples one anchored-query batch may deliver.
-    ///
-    /// R3: the cap enforced where HealthKit's input enters. `HKObjectQueryNoLimit` on a per-type
-    /// anchored query hands the initial-results handler the ENTIRE history of the type on a first
-    /// run or after an anchor wipe. HealthKit keeps delivering the remainder through the update
-    /// handler as the anchor advances, so a batch limit costs nothing but bounds peak memory.
+    /// The page size the planned paginated first-run backfill will use (Power-of-10 R3 follow-up;
+    /// see ``startAnchoredQuery(for:handler:)``). Not yet applied: HealthKit rejects a limit on a
+    /// long-running anchored query, so it can only bound one-shot backfill pages.
     public static let maxSamplesPerAnchoredBatch = 5_000
 
     /// Start of the generic per-type observation window: 30 days before the reference date, mirroring
