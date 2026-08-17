@@ -17,6 +17,14 @@ struct WorkoutProgramTests {
         #expect(WorkoutLocation.fullGym.id != WorkoutLocation.home.id)
     }
 
+    /// The two built-in ids are spelled as raw bytes through `UUID(uuid:)` (no force unwrap, R5).
+    /// This pins their canonical string form: the ids are persisted in `settings`, so a typo in the
+    /// byte tuple would orphan every saved location without this check.
+    @Test func builtInLocationIDsMatchTheirPersistedStringForm() {
+        #expect(WorkoutLocation.fullGym.id.uuidString == "F0E1D2C3-B4A5-4968-8778-6A5B4C3D2E1F")
+        #expect(WorkoutLocation.home.id.uuidString == "0A1B2C3D-4E5F-4061-9273-8495A6B7C8D9")
+    }
+
     /// Templates must NOT inherit a built-in's fixed id, or adding a "Full gym" template alongside the
     /// default would produce two locations sharing an id — an Identifiable collision in the ForEach and
     /// an ambiguous `first(where:)` when resolving the active location.

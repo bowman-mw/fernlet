@@ -12,12 +12,27 @@ import Foundation
 /// which deliberately clears any parked token — Health is the local authority for that field.
 public nonisolated struct UserNutritionProfile: Codable, Equatable {
 
+    /// Sane bounds for the body-profile numbers (R5).
+    ///
+    /// `NutritionTargetCalculator` converts these through `Int(_: Double)`, which TRAPS on a
+    /// non-finite or out-of-range value, so an absurd weight typed into the editor — or arriving in
+    /// a corrupt/foreign synced blob — must be clamped at the boundary, not carried into the math.
+    public static let ageRange: ClosedRange<Int> = 5...120
+    public static let weightPoundsRange: ClosedRange<Double> = 40...1500
+    public static let heightInchesRange: ClosedRange<Double> = 24...108
+
     public init(age: Int = 30, weightPounds: Double = 170, heightInches: Double = 68, sex: BiologicalSex = .male, activityLevel: ActivityLevel = .moderate) {
-        self.age = age
-        self.weightPounds = weightPounds
-        self.heightInches = heightInches
+        self.age = min(max(age, Self.ageRange.lowerBound), Self.ageRange.upperBound)
+        self.weightPounds = Self.clamped(weightPounds, to: Self.weightPoundsRange, default: 170)
+        self.heightInches = Self.clamped(heightInches, to: Self.heightInchesRange, default: 68)
         self.sex = sex
         self.activityLevel = activityLevel
+    }
+
+    /// Clamps a body measurement into `range`, mapping a non-finite value to `fallback`.
+    private static func clamped(_ value: Double, to range: ClosedRange<Double>, default fallback: Double) -> Double {
+        guard value.isFinite else { return fallback }
+        return min(max(value, range.lowerBound), range.upperBound)
     }
     public var age: Int = 30
     public var weightPounds: Double = 170
@@ -41,9 +56,15 @@ public nonisolated struct UserNutritionProfile: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
         // age/weight/height feed calorie targets — fabricating defaults would silently mis-guide.
-        age = try c.decode(Int.self, forKey: .age)
-        weightPounds = try c.decode(Double.self, forKey: .weightPounds)
-        heightInches = try c.decode(Double.self, forKey: .heightInches)
+        // A PRESENT value is still clamped to its sane range (R5): the editor's "only positive,
+        // plausible numbers" invariant is not a decode guarantee, and these feed trapping `Int()`
+        // conversions in `NutritionTargetCalculator`.
+        let decodedAge = try c.decode(Int.self, forKey: .age)
+        age = min(max(decodedAge, Self.ageRange.lowerBound), Self.ageRange.upperBound)
+        weightPounds = Self.clamped(try c.decode(Double.self, forKey: .weightPounds),
+                                    to: Self.weightPoundsRange, default: 170)
+        heightInches = Self.clamped(try c.decode(Double.self, forKey: .heightInches),
+                                    to: Self.heightInchesRange, default: 68)
         let sexSplit = try c.decodeTolerantRequiredEnum(
             BiologicalSex.self, forKey: .sex, parkedTokenKey: .unknownSexToken, default: .male)
         sex = sexSplit.value
@@ -714,9 +735,10 @@ public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
 ///
 /// The row type of ``MicronutrientGapAnalyzer/trackedNutrients``; recommended amounts come from
 /// the shared ``FDADailyValues`` table.
-public nonisolated struct NutrientReference {
+public nonisolated struct NutrientReference: Sendable {
 
-    public init(key: String, name: String, unit: String, recommendedDailyAmount: Double, value: @escaping (Micronutrients) -> Double?) {
+    public init(key: String, name: String, unit: String, recommendedDailyAmount: Double,
+                value: @escaping @Sendable (Micronutrients) -> Double?) {
         self.key = key
         self.name = name
         self.unit = unit
@@ -727,7 +749,7 @@ public nonisolated struct NutrientReference {
     public var name: String
     public var unit: String
     public var recommendedDailyAmount: Double
-    public var value: (Micronutrients) -> Double?
+    public var value: @Sendable (Micronutrients) -> Double?
 }
 
 /// Deterministic micronutrient gap analysis over recent days' meals.
@@ -742,7 +764,7 @@ public nonisolated enum MicronutrientGapAnalyzer {
     // potassium here previously carried the stale NASEM figures (1,000 / 3,400); they
     // now match the FDA DVs the label prints (1,300 / 4,700). Omega-3 keeps the NASEM
     // ALA Adequate Intake because FDA defines no omega-3 DV — see `FDADailyValues`.
-    nonisolated(unsafe) public static let trackedNutrients: [NutrientReference] = [
+    public static let trackedNutrients: [NutrientReference] = [
         NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: FDADailyValues.fiberGrams) { $0.fiber },
         NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: FDADailyValues.vitaminCMilligrams) { $0.vitaminC },
         NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: FDADailyValues.vitaminDMicrograms) { $0.vitaminD },
@@ -767,7 +789,11 @@ public nonisolated enum MicronutrientGapAnalyzer {
     }
 
     public static func gaps(from days: [(String, FernletDay)], windowDays: Int) -> [NutrientGap] {
+        // R5: a public entry point taking a plain Int. `suffix(_:)` TRAPS on a negative length and a
+        // zero window divides by zero into NaN ratios, and `assert` is compiled out in Release — so
+        // the guard, not the assert, is what makes the parameter safe.
         assert(windowDays > 0, "window must be positive")
+        guard windowDays > 0 else { return [] }
         let window = Array(days.suffix(windowDays))
         let meals = window.flatMap { $0.1.meals.prefix(20) }
         guard meals.isEmpty == false else { return [] }
@@ -913,13 +939,19 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         case .usda:
             switch dataType {
             case .branded:
-                return brandSource?.isEmpty == false ? brandSource! : "Branded"
+                return nonEmptyBrandSource ?? "Branded"
             case .restaurant:
-                return brandSource?.isEmpty == false ? brandSource! : "Restaurant"
+                return nonEmptyBrandSource ?? "Restaurant"
             case .foundation, .survey, .srLegacy:
                 return "USDA"
             }
         }
+    }
+
+    /// `brandSource` when it carries an actual brand name, `nil` when absent or blank — so the
+    /// provenance label can fall back to the generic wording without a force unwrap.
+    private var nonEmptyBrandSource: String? {
+        brandSource.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     nonisolated public init(
@@ -1601,6 +1633,66 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
         self.ingredients = ingredients
         self.steps = steps
     }
+
+    /// Bounded decode (R3/R5). This type is built from UNTRUSTED bytes — pasted share text and mesh
+    /// recipe envelopes — and import mints one catalog `FoodItem` per ingredient into the synced
+    /// blob, so an unbounded payload is permanent bloat. Every collection and string is capped here,
+    /// where the bytes enter, and a non-finite or absurd quantity is rejected rather than carried
+    /// into the macro arithmetic.
+    public init(from decoder: Decoder) throws {
+        // Every key except `steps` stays REQUIRED, exactly as the synthesized decode had it — this
+        // initializer adds bounds, it does not relax the wire contract.
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        format = try c.decode(String.self, forKey: .format)
+        version = try c.decode(Int.self, forKey: .version)
+        name = try Self.bounded(c.decode(String.self, forKey: .name),
+                                limit: SharedRecipeLimits.maxNameCharacters)
+        notes = try Self.bounded(c.decode(String.self, forKey: .notes),
+                                 limit: SharedRecipeLimits.maxNotesCharacters)
+        servings = min(max(try c.decode(Int.self, forKey: .servings), 1), SharedRecipeLimits.maxServings)
+        let decodedIngredients = try c.decode([SharedRecipeIngredient].self, forKey: .ingredients)
+        guard decodedIngredients.count <= SharedRecipeLimits.maxIngredients else {
+            throw RecipeImportError.invalidPayload
+        }
+        for ingredient in decodedIngredients {
+            guard ingredient.quantity.isFinite,
+                  ingredient.quantity >= 0,
+                  ingredient.quantity <= SharedRecipeLimits.maxQuantity else {
+                throw RecipeImportError.invalidPayload
+            }
+        }
+        ingredients = decodedIngredients
+        let decodedSteps = try c.decodeIfPresent([RecipeStep].self, forKey: .steps)
+        if let decodedSteps, decodedSteps.count > SharedRecipeLimits.maxSteps {
+            throw RecipeImportError.invalidPayload
+        }
+        steps = decodedSteps
+    }
+
+    /// Rejects an over-long free-text field rather than silently truncating it — a truncated recipe
+    /// name or note is a quiet corruption of the sender's content.
+    private static func bounded(_ value: String, limit: Int) throws -> String {
+        guard value.count <= limit else { throw RecipeImportError.invalidPayload }
+        return value
+    }
+
+    /// Wire JSON keys for a shared recipe payload.
+    private enum CodingKeys: String, CodingKey {
+        case format, version, name, servings, notes, ingredients, steps
+    }
+}
+
+/// Hard bounds on a decoded ``SharedRecipePayload``.
+///
+/// The payload arrives as untrusted pasted text or a mesh envelope and every ingredient becomes a
+/// synced catalog food on import, so these are the caps that keep an import bounded (R3).
+public nonisolated enum SharedRecipeLimits {
+    public static let maxIngredients = 100
+    public static let maxSteps = 60
+    public static let maxNameCharacters = 120
+    public static let maxNotesCharacters = 2000
+    public static let maxServings = 99
+    public static let maxQuantity = 5000.0
 }
 
 /// One wire recipe ingredient: name, quantity/unit, and flat macro grams.
@@ -1702,12 +1794,23 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
 extension Macros {
     public func scaled(by scale: Double) -> Macros {
+        // R5: `scale` is user-driven (a typed recipe/meal quantity divided by a serving size), and
+        // `Int(_: Double)` TRAPS on a non-finite or out-of-range value — `max(NaN, 0)` is NaN, so
+        // the old floor did not exclude it. Reject a nonsense scale and clamp every product.
+        guard scale.isFinite else { return self }
         let safeScale = max(scale, 0)
         return Macros(
-            protein: Int((Double(protein) * safeScale).rounded()),
-            carbs: Int((Double(carbs) * safeScale).rounded()),
-            fat: Int((Double(fat) * safeScale).rounded())
+            protein: Macros.clampedInt(Double(protein) * safeScale),
+            carbs: Macros.clampedInt(Double(carbs) * safeScale),
+            fat: Macros.clampedInt(Double(fat) * safeScale)
         )
+    }
+
+    /// A total-conversion from `Double` to `Int`: non-finite becomes 0 and the magnitude is clamped
+    /// well inside `Int`'s range, so no macro arithmetic can trap.
+    public static func clampedInt(_ value: Double) -> Int {
+        guard value.isFinite else { return 0 }
+        return Int(min(max(value, 0), Double(Int32.max)).rounded())
     }
 }
 

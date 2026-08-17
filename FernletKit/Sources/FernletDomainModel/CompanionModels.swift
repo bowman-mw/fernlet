@@ -89,7 +89,7 @@ public nonisolated enum TextureTag: String, Codable, CaseIterable, Identifiable 
 /// preserved through re-saves, and is re-adopted after upgrade; an explicit local edit clears the
 /// park via `didSet`. The `*CustomColorHex` strings are the only free-text surface and are clamped
 /// at the wire boundary by ``FriendStatePayload``'s `sanitizedAppearance`.
-public nonisolated struct CompanionAppearance: Codable, Equatable {
+public nonisolated struct CompanionAppearance: Codable, Equatable, Sendable {
     // Every enum field decodes tolerantly (freeze-on-unknown + parked-token side channel): these
     // are the closet/customization enums, exactly the surface a newer build extends with new
     // cosmetics, and a present-but-unknown raw value in the synced settings blob would otherwise
@@ -139,9 +139,9 @@ public nonisolated struct CompanionAppearance: Codable, Equatable {
     public var unknownSideItemColorToken: String? = nil
     public var sideItemCustomColorHex: String?
 
-    // Immutable default appearance. `nonisolated(unsafe)` (rather than making the whole
-    // CompanionAppearance/enum tree Sendable) because the value is a constant and never mutated.
-    nonisolated(unsafe) public static let standard = CompanionAppearance()
+    /// The immutable default appearance. `CompanionAppearance` and its cosmetic enums are
+    /// `Sendable` value types, so this constant is concurrency-safe by construction.
+    public static let standard = CompanionAppearance()
 
     public init(
         bodyStyle: CompanionBodyStyle = .circle,
@@ -245,7 +245,7 @@ public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Ident
 ///
 /// Seeds the default ``CompanionAssetColor`` per slot (see its `init(palette:)`); decoded tolerantly
 /// by ``CompanionAppearance``.
-public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identifiable, Sendable {
     case state
     case fern
     case rose
@@ -270,7 +270,7 @@ public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identif
 /// Used independently for body, accessory, clothing, and side item so each can be tinted
 /// separately; decoded tolerantly by ``CompanionAppearance``. Actual color values live in the UI
 /// layer (`ModelColors` in FernletUI) — this module holds only the token.
-public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable, Sendable {
     case state
     case moss
     case fern
@@ -312,7 +312,7 @@ public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Iden
 ///
 /// Distinct from user-designed ``CustomizationItem``s — these are the fixed starter cosmetics.
 /// Decoded tolerantly by ``CompanionAppearance``.
-public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Identifiable, Sendable {
     case none
     case sprout
     case flower
@@ -334,7 +334,7 @@ public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Ident
 ///
 /// Fixed starter cosmetics alongside ``CompanionAccessory``; decoded tolerantly by
 /// ``CompanionAppearance``.
-public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identifiable, Sendable {
     case none
     case scarf
     case sleepCap
@@ -354,7 +354,7 @@ public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identi
 ///
 /// Fixed starter cosmetics with SF Symbol renderings; decoded tolerantly by
 /// ``CompanionAppearance``.
-public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identifiable, Sendable {
     case none
     case mug
     case book

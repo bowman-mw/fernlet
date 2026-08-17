@@ -157,6 +157,45 @@ public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable, Send
         self.startedAt = startedAt
         self.participants = participants
     }
+
+    /// Bounded decode (R3): this rides untrusted mesh plaintext, so the participant list is capped
+    /// where the bytes enter rather than trusting the sender.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        meshID = try c.decodeIfPresent(UUID.self, forKey: .meshID)
+        meshName = try c.decodeIfPresent(String.self, forKey: .meshName)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        participants = try FriendPhotoLimits.bounded(
+            c.decode([FriendPhotoSessionParticipant].self, forKey: .participants),
+            limit: FriendPhotoLimits.maxParticipants, container: c, key: .participants)
+    }
+
+    /// Wire JSON keys for the session metadata attached to a shared photo.
+    private enum CodingKeys: String, CodingKey { case id, meshID, meshName, startedAt, participants }
+}
+
+/// Hard bounds on the friend-photo wire payloads.
+///
+/// The manifest, request and session-metadata types are decoded from untrusted mesh plaintext, and
+/// nothing downstream caps them, so these are the caps that keep one hostile frame from
+/// materializing an unbounded array (R3).
+public enum FriendPhotoLimits {
+    public static let maxManifestEntries = 512
+    public static let maxRequestedPhotoIDs = 512
+    public static let maxParticipants = 32
+
+    /// Rejects a decoded collection that exceeds `limit`, naming the key in the thrown error.
+    static func bounded<Element, Key: CodingKey>(_ values: [Element], limit: Int,
+                                                 container: KeyedDecodingContainer<Key>,
+                                                 key: Key) throws -> [Element] {
+        guard values.count <= limit else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key, in: container,
+                debugDescription: "\(values.count) entries exceeds the \(limit) allowed")
+        }
+        return values
+    }
 }
 
 /// One row of a peer's photo manifest: photo id, sender fingerprint, and key epoch.
@@ -184,6 +223,17 @@ public struct FriendPhotoManifestPayload: Codable, Equatable, Sendable {
     public init(entries: [FriendPhotoManifestEntry]) {
         self.entries = entries
     }
+
+    /// Bounded decode (R3): a hostile manifest must not materialize an unbounded entry list.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        entries = try FriendPhotoLimits.bounded(
+            c.decode([FriendPhotoManifestEntry].self, forKey: .entries),
+            limit: FriendPhotoLimits.maxManifestEntries, container: c, key: .entries)
+    }
+
+    /// Wire JSON keys for a photo manifest.
+    private enum CodingKeys: String, CodingKey { case entries }
 }
 
 /// A request for the specific photo ids the receiver is missing.
@@ -196,4 +246,16 @@ public struct FriendPhotoRequestPayload: Codable, Equatable, Sendable {
     public init(missingPhotoIDs: [UUID]) {
         self.missingPhotoIDs = missingPhotoIDs
     }
+
+    /// Bounded decode (R3): the id list drives a filter over the session's photos on the answering
+    /// side, so an unbounded request is both memory and CPU the peer chose for us.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        missingPhotoIDs = try FriendPhotoLimits.bounded(
+            c.decode([UUID].self, forKey: .missingPhotoIDs),
+            limit: FriendPhotoLimits.maxRequestedPhotoIDs, container: c, key: .missingPhotoIDs)
+    }
+
+    /// Wire JSON keys for a photo request.
+    private enum CodingKeys: String, CodingKey { case missingPhotoIDs }
 }

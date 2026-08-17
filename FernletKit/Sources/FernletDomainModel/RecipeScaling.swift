@@ -31,10 +31,13 @@ public nonisolated enum RecipeScaling {
     }
 
     /// The proportional factor that rescales a recipe's WHOLE-BATCH quantities/totals from its stored
-    /// base yield to a target yield. Both inputs are floored at 1, so the factor is always finite and
-    /// non-negative; cooking a recipe at its own base yield returns exactly `1.0` (identity).
+    /// base yield to a target yield. The target is clamped into ``yieldRange`` and the base is
+    /// floored at 1, so the factor is always finite, non-negative and at most 24 — which is what
+    /// keeps the `Int(_: Double)` conversions in ``scaledTotals(_:baseServings:targetYield:)`` from
+    /// trapping when a caller passes an out-of-range yield (R5: the parameter is a plain `Int`).
+    /// Cooking a recipe at its own base yield returns exactly `1.0` (identity).
     public static func scaleFactor(baseServings: Int, targetYield: Int) -> Double {
-        Double(max(targetYield, 1)) / Double(max(baseServings, 1))
+        Double(clampedYield(targetYield)) / Double(max(baseServings, 1))
     }
 
     /// True only when there is structured quantity data to scale. Web imports carry free-text
@@ -70,10 +73,11 @@ public nonisolated enum RecipeScaling {
     /// only lets the whole-recipe total move.
     public static func scaledTotals(_ base: MacroTotals, baseServings: Int, targetYield: Int) -> MacroTotals {
         let factor = scaleFactor(baseServings: baseServings, targetYield: targetYield)
+        // Same total conversion the meal path uses: never trap on a stored total × factor.
         return MacroTotals(
-            protein: Int((Double(base.protein) * factor).rounded()),
-            carbs: Int((Double(base.carbs) * factor).rounded()),
-            fat: Int((Double(base.fat) * factor).rounded())
+            protein: Macros.clampedInt(Double(base.protein) * factor),
+            carbs: Macros.clampedInt(Double(base.carbs) * factor),
+            fat: Macros.clampedInt(Double(base.fat) * factor)
         )
     }
 

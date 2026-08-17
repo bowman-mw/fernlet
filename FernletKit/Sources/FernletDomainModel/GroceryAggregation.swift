@@ -135,14 +135,15 @@ public nonisolated enum GroceryAggregation {
         var buckets: [String: Bucket] = [:]
 
         func append(key: String, name: String, quantity: Double, unit: String) {
-            if buckets[key] == nil {
+            guard var bucket = buckets[key] else {
                 order.append(key)
                 buckets[key] = Bucket(name: name, quantity: quantity, unit: unit)
-            } else {
-                buckets[key]!.quantity += quantity
-                // Prefer a resolved name if the first occurrence was unresolvable.
-                if buckets[key]!.name.isEmpty, !name.isEmpty { buckets[key]!.name = name }
+                return
             }
+            bucket.quantity += quantity
+            // Prefer a resolved name if the first occurrence was unresolvable.
+            if bucket.name.isEmpty, !name.isEmpty { bucket.name = name }
+            buckets[key] = bucket
         }
 
         // A monotonically increasing suffix makes every un-summable (nil-normalized unit) item its own

@@ -56,8 +56,8 @@ public nonisolated enum FoodItemSearch {
     ///
     /// Build once per catalog snapshot and reuse across queries — construction does the per-item
     /// normalization so each query only normalizes itself.
-    public struct Index {
-        private var entries: [Entry]
+    public struct Index: Sendable {
+        private let entries: [Entry]
 
         public init(foodItems: [FoodItem]) {
             self.entries = foodItems.map { foodItem in
@@ -74,9 +74,9 @@ public nonisolated enum FoodItemSearch {
             }
         }
 
-        // Immutable empty index. `nonisolated(unsafe)` avoids cascading Sendable through
-        // Index/Entry/FoodItem; the value is a constant built from an empty array.
-        nonisolated(unsafe) public static let empty = Index(foodItems: [])
+        /// The immutable empty index. `Index`/`Entry` hold only `Sendable` values and `entries`
+        /// is assigned once in `init`, so the constant is concurrency-safe by construction.
+        public static let empty = Index(foodItems: [])
 
         fileprivate func matches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [FoodItem] {
             scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit).map(\.foodItem)
@@ -120,7 +120,7 @@ public nonisolated enum FoodItemSearch {
         /// One indexed food with its precomputed normalized name and token sets.
         ///
         /// Internal to the index; exists so scoring never re-normalizes catalog text per query.
-        fileprivate struct Entry {
+        fileprivate struct Entry: Sendable {
             var foodItem: FoodItem
             var normalizedName: String
             var nameTokens: Set<String>
@@ -133,6 +133,9 @@ public nonisolated enum FoodItemSearch {
     }
 
     public static func results(for query: String, in index: Index, limit: Int = 6) -> [FoodItem] {
+        // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
+        // is answered with no results.
+        guard limit > 0 else { return [] }
         let normalizedQuery = normalized(query)
         guard normalizedQuery.count >= minimumQueryLength else { return [] }
         let queryTokens = tokens(in: query)
@@ -143,6 +146,7 @@ public nonisolated enum FoodItemSearch {
     /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item
     /// so callers can apply a confidence floor (e.g. drop weak binds, flag low-confidence matches).
     public static func scoredResults(for query: String, in index: Index, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
+        guard limit > 0 else { return [] }
         let normalizedQuery = normalized(query)
         guard normalizedQuery.count >= minimumQueryLength else { return [] }
         let queryTokens = tokens(in: query)

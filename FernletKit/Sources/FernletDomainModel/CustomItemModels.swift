@@ -110,9 +110,18 @@ public nonisolated struct ItemGridTexture: Codable, Equatable, Sendable {
     }
 
     /// The 6-hex color string at `(x, y)`, or nil if out of bounds / transparent.
+    ///
+    /// The `pixels.count == cols * rows` invariant is documented but not enforced by the type, so a
+    /// persisted or peer texture that skipped ``sanitized(maxCols:maxRows:)`` — or a hostile `cols`
+    /// large enough to overflow `y * cols` — would trap on the subscript. The offset is therefore
+    /// computed with overflow reporting and range-checked against the real buffer (R5).
     public func hex(x: Int, y: Int) -> String? {
         guard x >= 0, x < cols, y >= 0, y < rows else { return nil }
-        let idx = pixels[y * cols + x]
+        let (rowStart, overflow) = y.multipliedReportingOverflow(by: cols)
+        guard !overflow else { return nil }
+        let (offset, offsetOverflow) = rowStart.addingReportingOverflow(x)
+        guard !offsetOverflow, offset >= 0, offset < pixels.count else { return nil }
+        let idx = pixels[offset]
         guard idx >= 0, idx < palette.count else { return nil }
         return palette[idx]
     }
