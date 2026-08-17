@@ -457,16 +457,17 @@ public struct CaptureProtectedModifier: ViewModifier {
         setPulsing(true, animation: .easeIn(duration: 0.12))
         pulseClearTask?.cancel()
         pulseClearTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+            // The throw IS the decision: a cancelled sleep means a newer pulse owns the blur (R7 —
+            // no bare `try?`, and no second `Task.isCancelled` re-derivation of the same fact).
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
             setPulsing(false, animation: .easeOut(duration: 0.35))
         }
         if captureProtection.claimNudge(for: pulse) {
             nudgeVisible = true
             nudgeClearTask?.cancel()
             nudgeClearTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(6))
-                guard !Task.isCancelled else { return }
+                // Cancelled: a newer claim owns the banner and will clear it (R7 — see above).
+                do { try await Task.sleep(for: .seconds(6)) } catch { return }
                 if reduceMotion {
                     nudgeVisible = false
                 } else {

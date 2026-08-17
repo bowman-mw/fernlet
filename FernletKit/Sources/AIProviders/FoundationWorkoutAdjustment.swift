@@ -53,7 +53,8 @@ public enum WorkoutAdjustmentCandidateBuilder {
     ///   - request: The user's natural-language request, tokenized for relevance scoring.
     ///   - location: Where the session happens; drives equipment feasibility.
     ///   - profile: The equipment and injury constraints `WorkoutSafetyFilter` applies.
-    ///   - limit: Maximum candidates emitted (the model's context budget).
+    ///   - limit: Maximum candidates emitted (the model's context budget). Zero or negative yields
+    ///     an empty result rather than trapping.
     ///   - catalog: The exercise universe to draw from.
     /// - Returns: Candidates numbered from 1 in rank order; empty when nothing is feasible.
     public static func candidates(
@@ -64,8 +65,10 @@ public enum WorkoutAdjustmentCandidateBuilder {
         limit: Int = 28,
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> [WorkoutAdjustmentCandidate] {
+        // R5: `prefix(_:)` traps on a negative length, so validate `limit` at entry rather than at the
+        // `prefix` below; "nothing to offer" is already this function's documented empty answer.
         let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
-        guard feasible.isEmpty == false else { return [] }
+        guard limit > 0, feasible.isEmpty == false else { return [] }
 
         let byName = Dictionary(catalog.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         let currentSet = Set(currentNames)

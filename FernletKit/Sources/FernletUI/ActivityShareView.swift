@@ -29,9 +29,14 @@ public struct ActivityShareView: UIViewControllerRepresentable {
     public var onFinish: () -> Void
 
     /// - Parameters:
-    ///   - items: Activity items to share; Fernlet's callers all pass exactly one file URL.
+    ///   - items: Activity items to share; Fernlet's callers all pass exactly one file URL. Must not
+    ///     be empty — an empty sheet presents and immediately fires ``onFinish``, so a cleanup seam
+    ///     would delete a plaintext export the user never received.
     ///   - onFinish: Runs on completion or cancellation. Defaults to a no-op for non-sensitive shares.
     public init(items: [Any], onFinish: @escaping () -> Void = {}) {
+        // R5: a side-effect-free entry assertion (a pure `isEmpty` read), matching HeaderActionButton.
+        // Release still degrades to an empty sheet rather than trapping.
+        assert(items.isEmpty == false, "share sheet needs at least one item")
         self.items = items
         self.onFinish = onFinish
     }

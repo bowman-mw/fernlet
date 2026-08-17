@@ -87,6 +87,14 @@ struct SharedRecipeImportQueueWriter {
     /// app-side `SharedRecipeImportQueue.appGroupIdentifier`.
     static let appGroupIdentifier = "group.MBO.Fernlet"
 
+    /// Max queued imports kept on disk; the OLDEST are dropped when a share exceeds it.
+    ///
+    /// R3 (bounded growth): a share is a repeated user action whose whole point is that the app may
+    /// stay closed, so nothing else bounds this file — and every enqueue decodes and re-encodes the
+    /// entire array inside the extension's small memory budget, where a jetsam is a visibly failed
+    /// share. 100 pending pages is far beyond any real backlog; the newest shares always survive.
+    static let maxQueuedRecords = 100
+
     private let fileManager: FileManager
     private let fileURL: URL
     private let encoder: JSONEncoder
@@ -108,8 +116,9 @@ struct SharedRecipeImportQueueWriter {
     /// Validates `url` and appends a fresh record for it to the queue file.
     ///
     /// Reads whatever records already exist (best effort), removes any prior record for the same
-    /// URL string, appends a new never-attempted record, and rewrites the whole file — all inside a
-    /// single coordinated read+write, so the app's drain cannot interleave between the read and the
+    /// URL string, appends a new never-attempted record, trims the queue to
+    /// ``maxQueuedRecords`` oldest-first, and rewrites the whole file — all inside a single
+    /// coordinated read+write, so the app's drain cannot interleave between the read and the
     /// rewrite and have its annotations (attempt counts, budget-deferral stamps) clobbered.
     ///
     /// The rewrite is why ``SharedRecipeImportRecord`` must mirror EVERY app-side field: records
@@ -133,6 +142,9 @@ struct SharedRecipeImportQueueWriter {
             var records = existingRecords(at: readURL)
             records.removeAll { $0.urlString == urlString }
             records.append(SharedRecipeImportRecord(url: url))
+            if records.count > Self.maxQueuedRecords {          // R3: drop the oldest, keep this share
+                records.removeFirst(records.count - Self.maxQueuedRecords)
+            }
             do {
                 try save(records, to: writeURL)
             } catch {
