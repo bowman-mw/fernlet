@@ -175,7 +175,7 @@ struct RecipeReimportTests {
 
         #expect(queue.records().isEmpty, "a matching row must be dropped as success, not retried")
         #expect(store.savedRecipes.count == 1, "the existing recipe must be kept, not superseded")
-        queue.clear()
+        #expect(queue.clear(), "teardown: the shared import queue must clear")
     }
 
     /// The negative half: a queued URL differing in QUERY is not a duplicate, so the drain still
@@ -194,7 +194,7 @@ struct RecipeReimportTests {
         let records = queue.records()
         #expect(records.count == 1)
         #expect(records.first?.attemptCount == 1, "a non-duplicate row must still be attempted")
-        queue.clear()
+        #expect(queue.clear(), "teardown: the shared import queue must clear")
     }
 
     // MARK: - Re-import from source (replace definition, preserve photo + notes)

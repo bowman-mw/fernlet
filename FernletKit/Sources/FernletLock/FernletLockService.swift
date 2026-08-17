@@ -692,7 +692,7 @@ extension KeychainItem {
     /// ``loadBiometricBypassSync(prompt:service:)`` — longer than any system biometric prompt
     /// lives, so a real user is never cut off, while the blocked thread (and the continuation it
     /// owns) can never be pinned forever if the reply block is not invoked (R2).
-    private static let biometricPromptTimeout: DispatchTimeInterval = .seconds(120)
+    nonisolated private static let biometricPromptTimeout: DispatchTimeInterval = .seconds(120)
 
     /// Synchronously authenticates with biometrics and reads the bypass item.
     ///

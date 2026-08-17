@@ -1,1 +1,85 @@
-[]
+[
+ {
+  "rule": "R5-TRAP",
+  "path": "FernletKit/Sources/FernletUI/CaptureProtection.swift",
+  "line_contains": "CaptureScreenProbe.ProbeView does not support NSCoder",
+  "reason": "UIKit subclass requirement; storyboard/NSCoder path unreachable in this SwiftUI app. ProbeView is a private zero-frame UIView constructed only by CaptureScreenProbe.makeUIView, its required init?(coder:) is marked @available(*, unavailable), and no nib, storyboard, or NSCoder archive in the app references the class, so the initialiser can never be entered."
+ },
+ {
+  "rule": "R5-TRAP",
+  "path": "App/Fernlet/ZoomablePixelCanvas.swift",
+  "line_contains": "init(coder:) has not been implemented",
+  "reason": "UIKit subclass requirement; storyboard/NSCoder path unreachable in this SwiftUI app. ZoomScrollView is constructed only programmatically by ZoomablePixelCanvas.makeUIView via init(frame:), and the app ships no nib or storyboard that could instantiate it, so the required init?(coder:) can never run."
+ },
+ {
+  "rule": "R6-STATIC-VAR",
+  "path": "FernletKit/Sources/HealthKitGateway/HealthKitService.swift",
+  "symbol": "defaultCacheClearer",
+  "reason": "Process-global cache-clearer registry, the dependency-inversion slot that keeps this gateway off the CloudKitSync/LocalPersistence edge. Concurrency story: HealthKitService is @MainActor, so the static is MainActor-isolated; FernletApp writes it exactly once at launch, before any HealthKitService is constructed, and it is only read afterwards — at init and re-checked at call time in disableIntegration(), which throws cacheClearerUnavailable when it is still nil, so a disable can never silently skip the purge of cached clinical values."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/FernletFoundation/KeychainHelpers.swift",
+  "line_contains": "key.withUnsafeBytes { Data($0) }",
+  "reason": "CryptoKit seam: SymmetricKey exposes its bytes only through ContiguousBytes.withUnsafeBytes — there is no Data(key) initializer or other byte accessor. The closure copies the buffer into an owned Data before returning, so the raw pointer never escapes the closure and no unowned memory outlives it."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/FoodCatalog/BundledFoodStore.swift",
+  "line_contains": "unsafeBitCast(-1, to: sqlite3_destructor_type.self)",
+  "reason": "SQLite C-API seam: the cast reproduces the SQLITE_TRANSIENT macro ((sqlite3_destructor_type)-1), a C macro Swift cannot import. SQLite compares the value by identity to mean 'copy the bound text now' and never invokes or dereferences it; the alternative (nil = SQLITE_STATIC) would require the Swift String's storage to outlive the statement."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/FernletLock/FernletLockService.swift",
+  "line_contains": "Unmanaged<CFError>?",
+  "reason": "Security-framework seam: SecAccessControlCreateWithFlags reports failure through a Create-rule CFError out-parameter that Swift imports as Unmanaged<CFError>?. In KeychainItem.accessControl(for:) the value is consumed exactly once via takeRetainedValue() on the failure path (balancing the +1 retain) to throw the real error, is never stored or escaped, and the success path never touches it. Narrowed by line_contains so every other unsafe construct in this file stays enforced."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/FernletLock/SecureEnclaveContentKeyWrap.swift",
+  "line_contains": "Unmanaged<CFError>?",
+  "reason": "Security-framework seam: SecKeyCreateDecryptedData reports failure through a Create-rule CFError out-parameter imported as Unmanaged<CFError>?. This is the ONE site in the file that needs it — unwrapResult consumes it exactly once via takeRetainedValue() immediately after the call, to tell a transient failure (interaction-not-allowed / not-available / auth-failed / user-canceled) apart from a terminal one, and never stores or escapes it. The file's three other Create-rule calls now pass nil, so no other hit exists; narrowed by line_contains so any new unsafe construct here stays enforced."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/CloudKitSync/Persistence.swift",
+  "line_contains": "nonisolated(unsafe) public static let shared",
+  "reason": "Core Data / NSPersistentCloudKitContainer stack seam. `shared` is a `let`: Swift initializes a static exactly once, atomically, and the reference is never reassigned. The class is deliberately `nonisolated` because it is constructed on whichever thread first touches it at launch, before any actor context exists; every member that mutates it — `reload(with:)`, `isReloading`, the container swap — is `@MainActor`, and every consumer is MainActor-isolated, so all mutable state behind the immutable reference has a single writer actor."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/PrivateStoreCore/PendingNarrativeBuffer.swift",
+  "reason": "CryptoKit seam: `SymmetricKey` exposes its 256-bit material only through `withUnsafeBytes` (it is not a Sequence and has no raw-bytes accessor). Invariant: the closure copies the borrowed buffer into a `Data` INSIDE the callback — no pointer, buffer, or index escapes it, so the buffer is never read after `withUnsafeBytes` returns — and the resulting `Data` is handed straight to the data-protection keychain and not retained."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/PrivateMediaStore/PrivateMediaKeyStore.swift",
+  "reason": "CryptoKit seam: `SymmetricKey` exposes its 256-bit material only through `withUnsafeBytes` (it is not a Sequence and has no raw-bytes accessor). Invariant: the closure copies the borrowed buffer into a `Data` INSIDE the callback — no pointer, buffer, or index escapes it — and the resulting `Data` is handed straight to the data-protection keychain and not retained."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift",
+  "reason": "Core Data seam: `NSPersistentContainer` is not `Sendable`, so the process-wide sealed-store controller cannot be a checked-Sendable global, and real actor isolation is unavailable because all four sealed repositories are deliberately `nonisolated` so keyless deletion works from any executor while the app is locked. Invariant: `shared` is a `let` initialized exactly once by Swift's lazy-static machinery; every use of `container.viewContext` happens inside `NSManagedObjectContext.performAndWait`, which serializes on the context's own queue; and the one piece of mutable state outside that discipline, `didFailToLoad`, is now read and written only under the type's `stateLock` (`NSLock`)."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/ProximityKit/Wire/SealedPayloadFraming.swift",
+  "reason": "Apple Compression framework C seam (compression_stream_init/process/destroy take raw pointers; NSData.decompressed(using:) has no inflate limit, so it cannot enforce maxInflatedByteCount and would lose the 16 MiB decompression-bomb guard). Invariant: the compression_stream and the 64 KiB destination buffer are allocated and deallocated in the SAME scope via defer and never escape; the source pointer is valid only inside input.withUnsafeBytes and the whole process loop runs inside that closure; every produced chunk is copied into a Swift Data before the buffer is reused; total output is bounded by `limit`."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift",
+  "reason": "MultipeerConnectivity delegate bridging seam: MC delegate callbacks arrive on an arbitrary queue with non-Sendable MCPeerID / invitationHandler values, and MCPeerID is the dictionary key for channels and peerMap, so it must cross the @MainActor hop as the object. Invariant: MCPeerID is an immutable NSObject value and each transferred reference is read ONLY on the MainActor after the hop, never again on the delegate thread; the invitationHandler is invoked exactly once, on the MainActor after the hop, on both the accept and the reject path."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/ProximityKit/Ranging/NIRangingSession.swift",
+  "reason": "NearbyInteraction delegate bridging seam. Invariant: the invalidated NISession is transferred solely to compare identity (===) against self.niSession on the MainActor; it is never called or mutated after the hop, and holding the strong reference until the comparison runs is precisely what prevents the address-reuse aliasing an ObjectIdentifier comparison would admit."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift",
+  "reason": "ActivityKit seam: Activity's update(_:) / end(_:dismissalPolicy:) are nonisolated async and documented callable from any context, and there is no actor-isolated alternative API. Invariant: the local is created on the MainActor from self.activity, used for exactly ONE call, and stop() claims ownership (self.activity = nil) before its await, so no second reference to the same activity is ever live."
+ }
+]
