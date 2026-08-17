@@ -64,7 +64,7 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
     /// there is no delete counterpart at all.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
-    @discardableResult public func append(_ entries: [MilestoneLedgerEntry]) -> Bool {
+    public func append(_ entries: [MilestoneLedgerEntry]) -> Bool {
         store.append(entries)
     }
 }

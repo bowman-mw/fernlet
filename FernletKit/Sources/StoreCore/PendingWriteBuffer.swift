@@ -8,6 +8,23 @@
 // means, dedup on load, reset semantics, idempotent minting) stays in the owning service.
 
 import Foundation
+import FernletFoundation
+
+/// Bounds shared by the two debounced pending-write buffers (R3: bounded growth).
+///
+/// A namespace enum rather than a static on the buffers themselves, because a generic type cannot
+/// hold a static stored property.
+public enum PendingWriteLimits {
+    /// Hard cap on each pending queue.
+    ///
+    /// The queues clear only after a CONFIRMED write, so while the store keeps failing — a Core Data
+    /// or CloudKit fault, or read-only recovery, which refuses every write for the rest of the
+    /// session — every subsequent user mutation would otherwise append with no ceiling. "Drop
+    /// nothing" is deliberate (these queues are the sole un-persisted copy of a mutation); "grow
+    /// without bound" is not, so the oldest entry is evicted and audit-logged rather than dropped
+    /// silently.
+    public static let maxPendingItems = 2_000
+}
 
 /// The debounced per-row pending-write buffer shared by ``SavedRecipeService`` and
 /// ``CustomItemService``: locally mutated rows are queued as upserts/deletes keyed by id and
@@ -34,6 +51,10 @@ public final class DebouncedRowBuffer<Item: Identifiable> {
     /// Ids deleted locally but not yet written. Exposed read-only for the owner's failed-flush
     /// re-merge.
     public private(set) var pendingDeletes: Set<Item.ID> = []
+    /// Insertion order of ``pendingUpserts`` / ``pendingDeletes`` keys, so "oldest" is well defined
+    /// when the overflow cap evicts.
+    private var pendingUpsertOrder: [Item.ID] = []
+    private var pendingDeleteOrder: [Item.ID] = []
     private var saveScheduled = false
 
     private let upsert: @MainActor ([Item]) -> Bool
@@ -53,17 +74,52 @@ public final class DebouncedRowBuffer<Item: Identifiable> {
     public var hasPending: Bool { !pendingUpserts.isEmpty || !pendingDeletes.isEmpty }
 
     /// Queues an upsert (cancelling any pending delete of the same id) and schedules a flush.
+    /// Re-enqueuing an already-pending id replaces it in place and never grows the queue.
     public func enqueueUpsert(_ item: Item) {
+        if pendingUpserts[item.id] == nil {
+            evictOldestUpsertIfFull()
+            pendingUpsertOrder.append(item.id)
+        }
         pendingUpserts[item.id] = item
-        pendingDeletes.remove(item.id)
+        if pendingDeletes.remove(item.id) != nil {
+            pendingDeleteOrder.removeAll { $0 == item.id }
+        }
         scheduleSave()
     }
 
     /// Queues a delete (cancelling any pending upsert of the same id) and schedules a flush.
     public func enqueueDelete(_ id: Item.ID) {
-        pendingDeletes.insert(id)
-        pendingUpserts[id] = nil
+        if !pendingDeletes.contains(id) {
+            evictOldestDeleteIfFull()
+            pendingDeleteOrder.append(id)
+            pendingDeletes.insert(id)
+        }
+        if pendingUpserts.removeValue(forKey: id) != nil {
+            pendingUpsertOrder.removeAll { $0 == id }
+        }
         scheduleSave()
+    }
+
+    /// Drops the oldest queued upsert once the queue is at ``maxPendingItems`` — oldest-out, logged.
+    private func evictOldestUpsertIfFull() {
+        guard pendingUpserts.count >= PendingWriteLimits.maxPendingItems, !pendingUpsertOrder.isEmpty else { return }
+        let dropped = pendingUpsertOrder.removeFirst()
+        pendingUpserts[dropped] = nil
+        FernletAuditLog.log("rowBuffer.overflow", context: [
+            "cap": "\(PendingWriteLimits.maxPendingItems)",
+            "queue": "upserts"
+        ])
+    }
+
+    /// Drops the oldest queued delete once the queue is at ``maxPendingItems`` — oldest-out, logged.
+    private func evictOldestDeleteIfFull() {
+        guard pendingDeletes.count >= PendingWriteLimits.maxPendingItems, !pendingDeleteOrder.isEmpty else { return }
+        let dropped = pendingDeleteOrder.removeFirst()
+        pendingDeletes.remove(dropped)
+        FernletAuditLog.log("rowBuffer.overflow", context: [
+            "cap": "\(PendingWriteLimits.maxPendingItems)",
+            "queue": "deletes"
+        ])
     }
 
     /// Writes any pending upserts/deletes to the store now; a failed write keeps that queue for retry.
@@ -84,8 +140,14 @@ public final class DebouncedRowBuffer<Item: Identifiable> {
         // it must not trap; the retry path above is exactly what makes it recoverable.
         let upsertOK = upserts.isEmpty || upsert(upserts)
         let deleteOK = deletes.isEmpty || delete(deletes)
-        if upsertOK { pendingUpserts = [:] }
-        if deleteOK { pendingDeletes = [] }
+        if upsertOK {
+            pendingUpserts = [:]
+            pendingUpsertOrder = []
+        }
+        if deleteOK {
+            pendingDeletes = []
+            pendingDeleteOrder = []
+        }
     }
 
     /// Drops every queued mutation and any scheduled flush — for the owner's `reset()`, where the
@@ -93,6 +155,8 @@ public final class DebouncedRowBuffer<Item: Identifiable> {
     public func clear() {
         pendingUpserts = [:]
         pendingDeletes = []
+        pendingUpsertOrder = []
+        pendingDeleteOrder = []
         saveScheduled = false
     }
 
@@ -143,6 +207,10 @@ public final class DebouncedAppendBuffer<Entry> {
     /// Queues a row for the next flush. Deliberately schedules nothing — callers batch enqueues
     /// and call ``scheduleSave()`` once per burst.
     public func enqueue(_ entry: Entry) {
+        if pending.count >= PendingWriteLimits.maxPendingItems {
+            pending.removeFirst()
+            FernletAuditLog.log("appendBuffer.overflow", context: ["cap": "\(PendingWriteLimits.maxPendingItems)"])
+        }
         pending.append(entry)
     }
 

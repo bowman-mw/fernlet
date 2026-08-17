@@ -29,5 +29,5 @@ public protocol MilestoneLedgerRepositoring {
     /// Awaitable variant of ``load()`` for callers off the blocking startup path.
     func loadAsync() async -> [MilestoneLedgerEntry]
     /// Inserts or replaces (by `id`) each entry. Rows not in `entries` are left untouched — never deleted.
-    @discardableResult func append(_ entries: [MilestoneLedgerEntry]) -> Bool
+    func append(_ entries: [MilestoneLedgerEntry]) -> Bool
 }

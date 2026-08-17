@@ -84,6 +84,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
     /// handed; existing duplicate rows for a key are all updated (they collapse on the next read).
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func upsert(_ days: [DayRecordUpsert]) -> Bool {
         guard !days.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -126,6 +128,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
 
     /// Deletes the rows for the listed days (a no-op, returning `true`, when none exist) — used
     /// when a day's last logged entry is removed so an emptied day doesn't linger.
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func delete(dateKeys: [String]) -> Bool {
         guard !dateKeys.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -147,7 +151,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
     }
 
     /// Removes every day row — the delete-all/reset path.
-    @discardableResult public func deleteAll() -> Bool {
+    public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
         do {
@@ -191,11 +195,16 @@ public struct DayRecordRepository: DayRecordRepositoring {
         /// deterministic across reads when several rows tie at the top `updatedAt`.
         struct Row { let record: NSManagedObject; let day: FernletDay; let updatedAt: Date; let tiebreak: String }
         var rowsByKey: [String: [Row]] = [:]
+        var skipped = 0
         let decoder = RowPayloadCoders.makeDecoder()
         for record in records {
             guard let key = record.value(forKey: "dateKey") as? String,
                   let payload = record.value(forKey: "payloadData") as? Data,
                   let day = try? decoder.decode(FernletDay.self, from: payload) else {
+                // A day row is written by THIS build, so an undecodable payload is corruption, not
+                // forward compat — count it and report once per fetch rather than losing a whole day
+                // of the user's history silently.
+                skipped += 1
                 continue
             }
             let updatedAt = record.value(forKey: "updatedAt") as? Date ?? .distantPast
@@ -209,7 +218,9 @@ public struct DayRecordRepository: DayRecordRepositoring {
             guard let maxUpdatedAt = rows.map(\.updatedAt).max() else { continue }
             let topRows = rows.filter { $0.updatedAt == maxUpdatedAt }
             // Deterministic dict winner among the top-stamped rows (stable across reads).
-            let winner = topRows.min { $0.tiebreak < $1.tiebreak }!
+            // `continue` is the correct recovery for the impossible empty case: a key with no top
+            // row contributes nothing to the result dict, which is exactly what it means (R5).
+            guard let winner = topRows.min(by: { $0.tiebreak < $1.tiebreak }) else { continue }
             result[key] = winner.day
             // Delete ONLY rows strictly older than the top stamp. Rows tied at the top are all kept on disk
             // (the mutual-delete guard) — including the ones that lost the in-dict tiebreak.
@@ -219,7 +230,25 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
         if !duplicatesToDelete.isEmpty {
             duplicatesToDelete.forEach { context.delete($0) }
-            if context.hasChanges { try? context.save() }
+            if context.hasChanges {
+                do {
+                    try context.save()
+                } catch {
+                    // The rollback is the load-bearing half: without it the deleted managed objects
+                    // stay pending in the SHARED view context, and the next unrelated save (a day-row
+                    // upsert) would commit these deletions as a side effect.
+                    context.rollback()
+                    FernletAuditLog.log("dayRecord.duplicateHeal.failed", context: [
+                        "rows": "\(duplicatesToDelete.count)"
+                    ])
+                }
+            }
+        }
+        if skipped > 0 {
+            FernletAuditLog.log("dayRecord.undecodableRows", context: [
+                "count": "\(skipped)",
+                "fetched": "\(records.count)"
+            ])
         }
         return result
     }

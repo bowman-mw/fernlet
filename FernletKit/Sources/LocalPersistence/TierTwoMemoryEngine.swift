@@ -102,15 +102,27 @@ enum TierTwoMemoryEngine {
 
     // MARK: Goal-Behavior Gap
 
+    /// One goal family's verdict — the four strings ``goalBehaviorGap(window:goals:)`` folds into a
+    /// `TierTwoMemoryRecord`. Exists so each goal family is a short, separately readable helper
+    /// instead of an arm of one oversized dispatcher (R4).
+    private struct GapVerdict {
+        let state: String
+        let confidence: String
+        let evidence: String
+        let text: String
+    }
+
     /// Infers whether logged behavior (workout/meal/journal/sleep rates) matches the primary
     /// stated goal, producing an aligned/partial/misaligned-style state per goal type. Returns
-    /// nil when the user has no goals.
+    /// nil when the user has no goals, or when the window is too short for the rates to mean
+    /// anything (the caller's `>= 3` bound, restated locally so it travels with the function).
     private static func goalBehaviorGap(
         window: [(String, FernletDay)],
         goals: [FitnessGoal]
     ) -> TierTwoMemoryRecord? {
         guard let primary = goals.first else { return nil }
         let n = window.count
+        guard n >= 3 else { return nil }
         let workoutDays = window.filter { !$0.1.workouts.isEmpty }.count
         let mealDays = window.filter { !$0.1.meals.isEmpty }.count
         let journalDays = window.filter { !$0.1.journals.isEmpty }.count
@@ -118,90 +130,115 @@ enum TierTwoMemoryEngine {
         let mealRate = Double(mealDays) / Double(n)
         let journalRate = Double(journalDays) / Double(n)
 
-        let text: String
-        let state: String
-        let evidence: String
-        let confidence: String
-
+        let verdict: GapVerdict
         switch primary.type {
         case .strength, .sportsPrep:
-            evidence = "\(workoutDays)/\(n) days with workouts"
-            if workoutRate < 0.2 {
-                state = "misaligned"; confidence = "high"
-                text = "Has stated strength goals but rarely exercises in the data window; likely lacks follow-through or is in a low-motivation period."
-            } else if workoutRate < 0.45 {
-                state = "partial"; confidence = "medium"
-                text = "Exercises occasionally but inconsistently relative to stated strength goals; partial adherence."
-            } else {
-                state = "aligned"; confidence = "high"
-                text = "Workout behavior aligns with stated strength goals; demonstrates consistent follow-through."
-            }
-
+            verdict = strengthVerdict(workoutDays: workoutDays, n: n, workoutRate: workoutRate)
         case .weightManagement:
-            evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
-            if mealRate < 0.3 {
-                state = "misaligned"; confidence = "high"
-                text = "States weight management goals but rarely logs meals; tends to avoid tracking when not on plan."
-            } else if workoutRate < 0.2 {
-                state = "dietary_only"; confidence = "medium"
-                text = "Tracks food reasonably often but seldom exercises; weight management approach is primarily dietary."
-            } else {
-                state = "aligned"; confidence = "high"
-                text = "Actively tracking both food and exercise consistent with weight management goals."
-            }
-
+            verdict = weightManagementVerdict(mealDays: mealDays, workoutDays: workoutDays, n: n,
+                                              mealRate: mealRate, workoutRate: workoutRate)
         case .mentalHealth:
-            evidence = "\(journalDays)/\(n) days with journal entries"
-            if journalRate < 0.25 {
-                state = "misaligned"; confidence = "medium"
-                text = "Has mental health goals but journals infrequently; reflective self-care behaviors are inconsistent with stated intent."
-            } else {
-                state = "aligned"; confidence = "medium"
-                text = "Journals regularly, consistent with a mental health focus; self-reflection appears to be a real practice."
-            }
-
+            verdict = mentalHealthVerdict(journalDays: journalDays, n: n, journalRate: journalRate)
         case .recovery:
-            let sleepDays = window.filter { $0.1.sleep != nil }.count
-            evidence = "\(sleepDays)/\(n) sleep logged, \(workoutDays)/\(n) workout days"
-            let sleepRate = Double(sleepDays) / Double(n)
-            if sleepRate < 0.3 && workoutRate > 0.5 {
-                state = "misaligned"; confidence = "medium"
-                text = "Trains frequently but rarely logs sleep or rest; recovery behaviors do not match stated recovery goals."
-            } else if sleepRate >= 0.4 {
-                state = "aligned"; confidence = "medium"
-                text = "Sleep and recovery tracking consistent with recovery-focused goals."
-            } else {
-                state = "partial"; confidence = "low"
-                text = "Recovery goal stated but few behaviors in the data consistently support it."
-            }
-
+            verdict = recoveryVerdict(window: window, workoutDays: workoutDays, n: n, workoutRate: workoutRate)
         case .wellness, .exploring:
-            evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
-            if mealRate < 0.2 && workoutRate < 0.2 {
-                state = "passive_wellness"; confidence = "high"
-                text = "General wellness goal stated but almost no tracking across any domain; app engagement is minimal."
-            } else {
-                state = "partial"; confidence = "low"
-                text = "Wellness-oriented user with intermittent engagement; no structured pattern is apparent."
-            }
+            verdict = wellnessVerdict(mealDays: mealDays, workoutDays: workoutDays, n: n,
+                                      mealRate: mealRate, workoutRate: workoutRate)
         }
 
         return TierTwoMemoryRecord(
             category: "goal_behavior_gap",
-            text: text,
-            state: state,
-            evidence: evidence,
-            confidence: confidence,
+            text: verdict.text,
+            state: verdict.state,
+            evidence: verdict.evidence,
+            confidence: verdict.confidence,
             dataWindowDays: n
         )
+    }
+
+    /// Strength / sports-prep: adherence read purely from the workout rate.
+    private static func strengthVerdict(workoutDays: Int, n: Int, workoutRate: Double) -> GapVerdict {
+        let evidence = "\(workoutDays)/\(n) days with workouts"
+        if workoutRate < 0.2 {
+            return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
+                              text: "Has stated strength goals but rarely exercises in the data window; likely lacks follow-through or is in a low-motivation period.")
+        }
+        if workoutRate < 0.45 {
+            return GapVerdict(state: "partial", confidence: "medium", evidence: evidence,
+                              text: "Exercises occasionally but inconsistently relative to stated strength goals; partial adherence.")
+        }
+        return GapVerdict(state: "aligned", confidence: "high", evidence: evidence,
+                          text: "Workout behavior aligns with stated strength goals; demonstrates consistent follow-through.")
+    }
+
+    /// Weight management: meal logging first, then whether exercise accompanies it.
+    private static func weightManagementVerdict(
+        mealDays: Int, workoutDays: Int, n: Int, mealRate: Double, workoutRate: Double
+    ) -> GapVerdict {
+        let evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
+        if mealRate < 0.3 {
+            return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
+                              text: "States weight management goals but rarely logs meals; tends to avoid tracking when not on plan.")
+        }
+        if workoutRate < 0.2 {
+            return GapVerdict(state: "dietary_only", confidence: "medium", evidence: evidence,
+                              text: "Tracks food reasonably often but seldom exercises; weight management approach is primarily dietary.")
+        }
+        return GapVerdict(state: "aligned", confidence: "high", evidence: evidence,
+                          text: "Actively tracking both food and exercise consistent with weight management goals.")
+    }
+
+    /// Mental health: journalling cadence as the stated practice's evidence.
+    private static func mentalHealthVerdict(journalDays: Int, n: Int, journalRate: Double) -> GapVerdict {
+        let evidence = "\(journalDays)/\(n) days with journal entries"
+        if journalRate < 0.25 {
+            return GapVerdict(state: "misaligned", confidence: "medium", evidence: evidence,
+                              text: "Has mental health goals but journals infrequently; reflective self-care behaviors are inconsistent with stated intent.")
+        }
+        return GapVerdict(state: "aligned", confidence: "medium", evidence: evidence,
+                          text: "Journals regularly, consistent with a mental health focus; self-reflection appears to be a real practice.")
+    }
+
+    /// Recovery: sleep logging weighed against training volume.
+    private static func recoveryVerdict(
+        window: [(String, FernletDay)], workoutDays: Int, n: Int, workoutRate: Double
+    ) -> GapVerdict {
+        let sleepDays = window.filter { $0.1.sleep != nil }.count
+        let evidence = "\(sleepDays)/\(n) sleep logged, \(workoutDays)/\(n) workout days"
+        let sleepRate = Double(sleepDays) / Double(n)
+        if sleepRate < 0.3 && workoutRate > 0.5 {
+            return GapVerdict(state: "misaligned", confidence: "medium", evidence: evidence,
+                              text: "Trains frequently but rarely logs sleep or rest; recovery behaviors do not match stated recovery goals.")
+        }
+        if sleepRate >= 0.4 {
+            return GapVerdict(state: "aligned", confidence: "medium", evidence: evidence,
+                              text: "Sleep and recovery tracking consistent with recovery-focused goals.")
+        }
+        return GapVerdict(state: "partial", confidence: "low", evidence: evidence,
+                          text: "Recovery goal stated but few behaviors in the data consistently support it.")
+    }
+
+    /// Wellness / exploring: engagement across any domain at all.
+    private static func wellnessVerdict(
+        mealDays: Int, workoutDays: Int, n: Int, mealRate: Double, workoutRate: Double
+    ) -> GapVerdict {
+        let evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
+        if mealRate < 0.2 && workoutRate < 0.2 {
+            return GapVerdict(state: "passive_wellness", confidence: "high", evidence: evidence,
+                              text: "General wellness goal stated but almost no tracking across any domain; app engagement is minimal.")
+        }
+        return GapVerdict(state: "partial", confidence: "low", evidence: evidence,
+                          text: "Wellness-oriented user with intermittent engagement; no structured pattern is apparent.")
     }
 
     // MARK: Consistency Profile
 
     /// Classifies overall engagement — consistent / intermittent / sporadic / minimal — from the
-    /// fraction of window days with any logged data at all.
+    /// fraction of window days with any logged data at all. Returns nil for a window shorter than
+    /// three days (the caller's bound, restated locally so the rate can never be NaN).
     private static func consistencyProfile(window: [(String, FernletDay)]) -> TierTwoMemoryRecord? {
         let n = window.count
+        guard n >= 3 else { return nil }
         let activeDays = window.filter { _, day in
             !day.meals.isEmpty || !day.workouts.isEmpty || !day.journals.isEmpty || day.sleep != nil
         }.count

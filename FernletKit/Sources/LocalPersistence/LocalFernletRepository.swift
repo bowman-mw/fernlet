@@ -242,9 +242,16 @@ public struct LocalFernletRepository: FernletRepository {
     ///   strip, which is what keeps un-stripped content out of the blob by type.
     /// - Returns: `false` when the save is refused (read-only recovery mode) or any encode/write
     ///   step fails; the on-disk file is left untouched in that case.
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
-        assert(!snapshot.todayKey.isEmpty, "snapshot key required")
+        // Guard, not assert: asserts compile out of Release, and an empty key would write the
+        // day under "" (R5). False is the documented not-durable signal the caller retries on.
+        guard !snapshot.todayKey.isEmpty else {
+            assertionFailure("snapshot key required")
+            return false
+        }
         var database = loadDatabase(todayKey: snapshot.todayKey)
         database.apply(snapshot)
         database.rebuildDerivedTables(todayKey: snapshot.todayKey)
@@ -259,11 +266,14 @@ public struct LocalFernletRepository: FernletRepository {
     ///   - dateKey: The day being written.
     ///   - todayKey: The current day key, used for the rebuild context.
     /// - Returns: `false` under read-only recovery mode or on any write failure.
-    @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
+    public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
         let day = sanitized.day
-        assert(!dateKey.isEmpty, "date key required")
-        assert(!todayKey.isEmpty, "today key required")
-        assert(day.date == dateKey, "day date mismatch")
+        // Guards, not asserts: in Release a `day.date != dateKey` mismatch would write the payload
+        // under the WRONG key in `database.days` — silent history corruption (R5).
+        guard !dateKey.isEmpty, !todayKey.isEmpty, day.date == dateKey else {
+            assertionFailure("day key mismatch")
+            return false
+        }
         var database = loadDatabase(todayKey: todayKey)
         database.days[dateKey] = day
         database.rebuildDerivedTables(todayKey: todayKey)
@@ -297,7 +307,7 @@ public struct LocalFernletRepository: FernletRepository {
     /// install), bumping `updatedAt`.
     ///
     /// - Returns: Whether the write succeeded (`false` under read-only recovery mode).
-    @discardableResult public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
+    public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
         var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
         database.tierTwoMemories = records
         database.updatedAt = Date()
@@ -348,6 +358,8 @@ public struct LocalFernletRepository: FernletRepository {
     /// Deletes the whole local store file. Removing the file rather than writing an empty database
     /// leaves nothing on disk to be recovered, and the next `loadDatabase` already treats an absent
     /// file as a fresh database — so this is the same end state a first launch sees.
+    // R7 exception: the attribute stays only because out-of-slice callers in Tests/FernletTests
+    // still discard this result on the CONCRETE type; removing it here would break their build.
     @discardableResult public func purgeAllPersistedData() -> Bool {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
         do {

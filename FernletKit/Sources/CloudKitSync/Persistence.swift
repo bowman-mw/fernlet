@@ -90,8 +90,21 @@ nonisolated public final class PersistenceController {
     /// Fires when iCloud pushes a remote change to the local store, and once after each
     /// successful `reload(with:)` so subscribers re-read from the new container.
     @ObservationIgnored public let remoteChangePublisher: AnyPublisher<Notification, Never>
-    /// Test hook: overrides the store URL used by the next `reload(with:)`.
+    #if DEBUG
+    /// Test hook: overrides the store URL used by the next `reload(with:)`. DEBUG-only (R6) — a
+    /// shipping build must not expose a way to redirect the next store load.
     @ObservationIgnored public var reloadStoreURLOverrideForTesting: URL?
+    #endif
+
+    /// The store URL the next `reload(with:)` uses — the DEBUG test override when set, otherwise
+    /// the controller's own. One accessor so the `#if DEBUG` fork lives in a single place.
+    private var reloadStoreURL: URL? {
+        #if DEBUG
+        return reloadStoreURLOverrideForTesting ?? storeURL
+        #else
+        return storeURL
+        #endif
+    }
 
     private let inMemory: Bool
     private let storeURL: URL?
@@ -165,7 +178,7 @@ nonisolated public final class PersistenceController {
             let configuration = Self.makeContainer(
                 inMemory: inMemory,
                 preferences: preferences,
-                storeURL: reloadStoreURLOverrideForTesting ?? storeURL,
+                storeURL: reloadStoreURL,
                 iCloudAvailabilityOverride: iCloudAvailabilityOverride
             )
             try await Self.loadPersistentStoresAsync(
@@ -347,12 +360,15 @@ nonisolated public final class PersistenceController {
     }
 
     #if DEBUG
-    /// One-shot guard so a second flagged, non-inMemory `PersistenceController` init in the same
-    /// process cannot push the schema twice. Only `shared` is non-inMemory in the app process
-    /// today, so this is belt-and-suspenders, but it keeps the (idempotent, additive) push from
-    /// firing redundantly if another controller is ever constructed. DEBUG-only dev tool, single
-    /// launch-time call path — `nonisolated(unsafe)` is sufficient.
-    nonisolated(unsafe) private static var schemaDeployDidRun = false
+    /// One-shot latch so a second flagged, non-inMemory `PersistenceController` init in the same
+    /// process cannot push the schema twice. This is a lazily-initialized `static let`, not a
+    /// mutable flag: Swift runs a static's initializer exactly once per process, atomically, so
+    /// the "runs once" property is a language mechanism rather than a convention (R6/R9 — no
+    /// mutable global and no `nonisolated(unsafe)` opt-out).
+    private static let schemaDeployOnce: Void = { performCloudKitSchemaDeploy() }()
+
+    /// Named upper bound on the scratch-store load wait inside the deploy (R2).
+    private static let schemaDeployLoadTimeoutSeconds = 60.0
 
     /// DEBUG-only, launch-argument-gated CloudKit schema deploy.
     ///
@@ -382,12 +398,13 @@ nonisolated public final class PersistenceController {
             FernletAuditLog.log("cloudkit.schema.initialize.skipped", context: ["reason": "in-memory-store"])
             return
         }
-        guard !schemaDeployDidRun else {
-            FernletAuditLog.log("cloudkit.schema.initialize.skipped", context: ["reason": "already-ran"])
-            return
-        }
-        schemaDeployDidRun = true
+        // Touching the once-latch runs the deploy on the FIRST reach and is a no-op on every
+        // later one. `Void` carries no failure information, so this is a legal `_ =` discard.
+        _ = schemaDeployOnce
+    }
 
+    /// The deploy itself — the body the ``schemaDeployOnce`` latch runs exactly once.
+    private static func performCloudKitSchemaDeploy() {
         FernletAuditLog.log("cloudkit.schema.initialize.started")
         print("[Fernlet] INITIALIZE_CLOUDKIT_SCHEMA: pushing the Core Data model to the CloudKit DEVELOPMENT schema for container iCloud.MBO.Fernlet…")
 
@@ -410,7 +427,14 @@ nonisolated public final class PersistenceController {
                 loadError = error
                 loadSemaphore.signal()
             }
-            loadSemaphore.wait()
+            // Bounded wait (R2): a store the mirroring delegate cannot open would otherwise park
+            // this queue for the process lifetime with no signal at all.
+            guard loadSemaphore.wait(timeout: .now() + Self.schemaDeployLoadTimeoutSeconds) == .success else {
+                FernletAuditLog.log("cloudkit.schema.initialize.failed", context: ["stage": "loadTimeout"])
+                print("[Fernlet] ❌ CloudKit schema deploy: scratch store load timed out")
+                cleanUpScratchStore(container: container, scratchURL: scratchURL)
+                return
+            }
 
             if let loadError {
                 FernletAuditLog.log("cloudkit.schema.initialize.failed", context: [
@@ -451,7 +475,14 @@ nonisolated public final class PersistenceController {
         }
         let fileManager = FileManager.default
         for path in [scratchURL.path, scratchURL.path + "-wal", scratchURL.path + "-shm"] {
-            try? fileManager.removeItem(at: URL(fileURLWithPath: path))
+            guard fileManager.fileExists(atPath: path) else { continue }
+            do {
+                try fileManager.removeItem(at: URL(fileURLWithPath: path))
+            } catch {
+                // Best-effort cleanup still names its failure (R7) — matching the detach
+                // reporting above; a left-behind scratch file is harmless but not invisible.
+                print("[Fernlet] CloudKit schema deploy: failed to delete scratch file \(path): \(error)")
+            }
         }
     }
     #endif
