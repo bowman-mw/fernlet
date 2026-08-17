@@ -84,7 +84,7 @@ struct SecureEnclaveWrapTests {
             return
         }
         let service = "com.fernlet.lock.test.se.\(UUID().uuidString)"
-        defer { SecureEnclaveContentKeyWrap.deleteKey(service: service) }
+        defer { _ = SecureEnclaveContentKeyWrap.deleteKey(service: service) }
 
         let contentKey = Data((0..<32).map { UInt8($0 ^ 0x5A) })
         let blob = SecureEnclaveContentKeyWrap.wrapVerified(contentKey, service: service)
@@ -92,7 +92,7 @@ struct SecureEnclaveWrapTests {
         guard let blob else { return }
         #expect(SecureEnclaveContentKeyWrap.unwrap(blob, service: service) == contentKey)
 
-        SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         #expect(SecureEnclaveContentKeyWrap.unwrap(blob, service: service) == nil,
                 "a wrapped blob must be unopenable once its enclave key is gone")
     }
@@ -113,7 +113,7 @@ struct SecureEnclaveWrapTests {
         let legacySetup = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? legacySetup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await legacySetup.configure(credential: .pin6("135791"), grantingScope: .privateHub)
@@ -187,7 +187,7 @@ struct SecureEnclaveWrapTests {
         )
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("864209"), grantingScope: .appLockSettings)
@@ -237,7 +237,7 @@ struct SecureEnclaveWrapTests {
         let legacySetup = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? legacySetup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await legacySetup.configure(credential: .pin6("975310"), grantingScope: .privateHub)
@@ -300,7 +300,7 @@ struct SecureEnclaveWrapTests {
         let lockService = makeService(keychainService: service)
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("112233"), grantingScope: .privateHub)
@@ -343,7 +343,7 @@ struct SecureEnclaveWrapTests {
         let legacySetup = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? legacySetup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await legacySetup.configure(credential: .pin6("445566"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(legacySetup)
@@ -385,7 +385,7 @@ struct SecureEnclaveWrapTests {
         let lockService = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("778899"), grantingScope: .privateHub)
@@ -413,7 +413,7 @@ struct SecureEnclaveWrapTests {
         let lockService = makeService(keychainService: service)
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("101112"), grantingScope: .privateHub)
@@ -427,7 +427,7 @@ struct SecureEnclaveWrapTests {
         lockService.lock(reason: .manual)
 
         // The enclave key dies out from under the app; the keychain rows all survive.
-        SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
 
         // A WRONG passcode still fails as a wrong passcode, and still counts (the verifier is
         // untouched by the custody change — it is what gates the brute-force ladder).
@@ -470,7 +470,7 @@ struct SecureEnclaveWrapTests {
         let lockService = makeService(keychainService: service)
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("202122"), grantingScope: .privateHub)
@@ -484,7 +484,7 @@ struct SecureEnclaveWrapTests {
             return
         }
 
-        SecureEnclaveContentKeyWrap.deleteKey(service: service)
+        _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
 
         for scope in [FernletLockScope.progressPhotos, .appLockSettings] {
             lockService.lock(reason: .manual)
@@ -518,7 +518,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await setup.configure(credential: .pin6("232425"), grantingScope: .privateHub)
@@ -580,7 +580,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await setup.configure(credential: .pin6("262728"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(setup)
@@ -621,7 +621,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service)
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await setup.configure(credential: .pin6("293031"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(setup)
@@ -665,7 +665,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await setup.configure(credential: .pin6("323334"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(setup)
@@ -713,7 +713,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service, biometricTypeOverride: { .faceID })
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await setup.configure(credential: .pin6("383940"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(setup)
@@ -760,7 +760,7 @@ struct SecureEnclaveWrapTests {
         let service = "com.fernlet.lock.test.se.configorder.\(UUID().uuidString)"
         defer {
             KeychainItem.deleteAll(service: service)
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         // Residue from a previous lock: a bypass row and its enabled flag.
         KeychainItem.store(Data(repeating: 0x11, count: 32), for: .biometricBypass, service: service)
@@ -789,7 +789,7 @@ struct SecureEnclaveWrapTests {
         let setup = makeService(keychainService: service, persistEnclaveWrap: false)
         defer {
             try? setup.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         try await setup.configure(credential: .pin6("444546"), grantingScope: .privateHub)
         let contentKeyData = try contentKeyBytes(setup)
@@ -832,7 +832,7 @@ struct SecureEnclaveWrapTests {
         let lockService = makeService(keychainService: service)
         defer {
             try? lockService.reset()
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
         try await lockService.configure(credential: .pin6("131415"), grantingScope: .privateHub)

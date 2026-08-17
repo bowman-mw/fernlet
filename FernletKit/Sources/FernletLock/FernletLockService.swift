@@ -366,10 +366,16 @@ enum FernletLockCrypto {
     }
 
     /// Mints a fresh random 256-bit content key — the root secret all sealed-column
-    /// keys are derived from.
-    nonisolated static func generateContentKey() -> Data {
-        let key = SymmetricKey(size: .bits256)
-        return key.withUnsafeBytes { Data($0) }
+    /// keys are derived from; throws on RNG failure rather than ever returning weak bytes.
+    ///
+    /// Produced by `SecRandomCopyBytes` exactly like ``generateSalt()``, so no
+    /// `withUnsafeBytes` round-trip through `SymmetricKey` is needed to get the bytes out (R9).
+    nonisolated static func generateContentKey() throws -> Data {
+        var bytes = [UInt8](repeating: 0, count: keyLength)
+        guard SecRandomCopyBytes(kSecRandomDefault, keyLength, &bytes) == errSecSuccess else {
+            throw FernletLockError.internalError("content key generation failed")
+        }
+        return Data(bytes)
     }
 
     /// Seals the content key with ChaChaPoly under the scrypt-derived wrapping key,
@@ -410,8 +416,8 @@ public protocol FernletLockCryptoProviding: AnyObject {
     func generateSalt() throws -> Data
     /// Derives the scrypt wrapping key for `passcode` and `salt` with cost parameter `n`.
     func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data
-    /// Mints a fresh random 256-bit content key.
-    func generateContentKey() -> Data
+    /// Mints a fresh random 256-bit content key; throws on RNG failure.
+    func generateContentKey() throws -> Data
     /// Seals the content key under the derived wrapping key.
     func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data
     /// Opens a wrapped content key; throws if the wrapping key is wrong or the blob is tampered.
@@ -431,8 +437,8 @@ final class SystemFernletLockCryptoProvider: FernletLockCryptoProviding {
         try await FernletLockCrypto.deriveVerifier(passcode: passcode, salt: salt, n: n)
     }
 
-    func generateContentKey() -> Data {
-        FernletLockCrypto.generateContentKey()
+    func generateContentKey() throws -> Data {
+        try FernletLockCrypto.generateContentKey()
     }
 
     func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
@@ -486,11 +492,11 @@ public enum LockKeychainKey: String {
     case biometricBypass = "com.fernlet.lock.biometricBypass"
     /// Presence flag: biometric unlock is enabled.
     case biometricEnabledFlag = "com.fernlet.lock.biometricEnabled"
-    /// Wall-clock cooldown deadline (seconds since reference date, as `Double` bytes).
+    /// Wall-clock cooldown deadline (seconds since reference date, as little-endian `Double` bytes).
     case cooldownDeadline = "com.fernlet.lock.cooldownDeadline"
     /// System-uptime anchor captured when the cooldown started (anti clock-rollback).
     case cooldownMonotonicAnchor = "com.fernlet.lock.cooldownMonotonicAnchor"
-    /// The active cooldown's duration in seconds (as `Double` bytes).
+    /// The active cooldown's duration in seconds (as little-endian `Double` bytes).
     case cooldownDurationSeconds = "com.fernlet.lock.cooldownDurationSeconds"
     /// Failed attempts since the last success or cooldown escalation (single byte).
     case attemptCount = "com.fernlet.lock.attemptCount"
@@ -498,7 +504,7 @@ public enum LockKeychainKey: String {
     case cooldownLevel = "com.fernlet.lock.cooldownLevel"
     /// Presence flag: escalation exhausted; only a destructive reset unlocks again.
     case requiresReset = "com.fernlet.lock.requiresReset"
-    /// The scrypt N the stored verifier was derived with (native-endian `Int32` bytes).
+    /// The scrypt N the stored verifier was derived with (little-endian `Int32` bytes).
     case scryptN = "com.fernlet.lock.scryptN"
     /// Presence flag: an EXISTING install just migrated to the hard Secure-Enclave binding and
     /// has not yet been told. Never set by `configure()` — a fresh setup already acknowledged the
@@ -682,6 +688,12 @@ extension KeychainItem {
         }
     }
 
+    /// The visible upper bound on the LocalAuthentication wait in
+    /// ``loadBiometricBypassSync(prompt:service:)`` — longer than any system biometric prompt
+    /// lives, so a real user is never cut off, while the blocked thread (and the continuation it
+    /// owns) can never be pinned forever if the reply block is not invoked (R2).
+    private static let biometricPromptTimeout: DispatchTimeInterval = .seconds(120)
+
     /// Synchronously authenticates with biometrics and reads the bypass item.
     ///
     /// Blocks the calling thread on the LocalAuthentication evaluation (semaphore), so it
@@ -703,7 +715,9 @@ extension KeychainItem {
             authReply.withLock { $0 = (succeeded: success, error: error) }
             authGroup.signal()
         }
-        authGroup.wait()
+        guard authGroup.wait(timeout: .now() + Self.biometricPromptTimeout) == .success else {
+            throw FernletLockError.biometricFailed
+        }
 
         let (didAuthenticate, authenticationError) = authReply.withLock { $0 }
         guard didAuthenticate else {
@@ -721,7 +735,16 @@ extension KeychainItem {
             kSecUseAuthenticationContext as String: context
         ]
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else {
+        // The status is a fact, not just a Bool: a keychain that would not ANSWER after a
+        // SUCCESSFUL biometric evaluation (errSecInteractionNotAllowed / errSecNotAvailable) is
+        // not "Face ID didn't recognize you", and telling the user it is sends them to retry the
+        // one thing that already worked.
+        guard status == errSecSuccess else {
+            throw status == errSecItemNotFound
+                ? FernletLockError.biometricFailed
+                : FernletLockError.keychainFailure(operation: "read biometric bypass", status: status)
+        }
+        guard let data = result as? Data else {
             throw FernletLockError.biometricFailed
         }
         return data
@@ -1027,11 +1050,50 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
         self.privatePersistenceController = privatePersistenceController ?? .shared
 
-        if self.keychainLoad(.salt, keychainService) == nil {
-            state = .notConfigured
-        } else {
-            state = .locked(cooldownDeadline: activeCooldownDeadline())
+        state = Self.initialState(
+            saltRow: self.keychainLoadDistinguishing(.salt, keychainService),
+            cooldownDeadline: activeCooldownDeadline()
+        )
+    }
+
+    /// Derives the launch-time state from the salt row, refusing to collapse "the read failed"
+    /// into "no lock exists".
+    ///
+    /// Every lock row is `WhenUnlockedThisDeviceOnly`, and the app can be launched into the
+    /// background while the device is still locked (remote notifications, HealthKit background
+    /// delivery) — where the read answers `errSecInteractionNotAllowed`. Reading that as absence
+    /// would boot a CONFIGURED install into `.notConfigured` for the whole process: the gate would
+    /// paint "Set up app lock" over sealed content, and a setup accepted there would mint over a
+    /// live lock. So an unreadable row fails CLOSED to `.locked`; a genuinely unconfigured device
+    /// then answers `.notConfigured` honestly at the first unlock attempt.
+    private static func initialState(
+        saltRow: KeychainItem.ReadResult,
+        cooldownDeadline: Date?
+    ) -> FernletLockState {
+        switch saltRow {
+        case .absent:
+            return .notConfigured
+        case .found:
+            return .locked(cooldownDeadline: cooldownDeadline)
+        case .unreadable(let status):
+            FernletAuditLog.log("lock.initialStateUnreadable", context: ["status": "\(status)"])
+            return .locked(cooldownDeadline: nil)
         }
+    }
+
+    /// Re-derives ``state`` from the keychain, for the launch that could not read it.
+    ///
+    /// The companion to ``initialState(saltRow:cooldownDeadline:)``'s fail-closed branch: once
+    /// protected data becomes available (`protectedDataDidBecomeAvailableNotification`, or the
+    /// scene turning `.active`), a process that booted blind can learn that the device really is
+    /// unconfigured instead of showing a lock screen for a lock that does not exist. A no-op while
+    /// unlocked — an in-force unlock session is in-memory truth the keychain cannot contradict.
+    public func refreshStateFromKeychain() {
+        if case .unlocked = state { return }
+        state = Self.initialState(
+            saltRow: keychainLoadDistinguishing(.salt, keychainService),
+            cooldownDeadline: activeCooldownDeadline()
+        )
     }
 
     /// True when the cooldown ladder has been exhausted (presence-flagged in the
@@ -1168,6 +1230,20 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// setting a lock up from Settings → App lock leaves the Private Hub locked, as it should.
     public func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws {
         try credential.validate()
+        // FIRST-TIME setup validates its precondition, not just its argument (R5): `mintLockRecords`
+        // delete-then-adds salt/verifier/wrappedContentKey and sweeps the enclave wrap, so running it
+        // over an EXISTING lock destroys the only copies of the live content key and the sealed
+        // corpus becomes permanently unopenable. `.unreadable` is refused for the same reason — a
+        // mint may not proceed on a read that could not answer. Legitimate re-setup still passes:
+        // `reset()` and the recovery-lock destruction both delete the salt row, and the wipe re-mint
+        // and the recovery re-establish call `mintLockRecords` directly rather than through here.
+        guard case .absent = keychainLoadDistinguishing(.salt, keychainService) else {
+            FernletAuditLog.log("lock.configureRefused.existingOrUnreadable")
+            throw FernletLockError.keychainFailure(
+                operation: "configure over an existing lock",
+                status: errSecDuplicateItem
+            )
+        }
         let contentKeyData = try await mintLockRecords(for: credential)
 
         retainContentKey(contentKeyData, for: grantingScope)
@@ -1224,9 +1300,17 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         contentKey suppliedContentKey: Data? = nil,
         preservingRecoveryMaterial: Bool = false
     ) async throws -> Data {
+        // The recovery-sweep decision below turns on three presence reads, and on a recovery-locked
+        // device the blob is the ONLY route back to the corpus. A transient read failure must never
+        // read as "no custodian" and take the delete branch, so an undeterminable read refuses the
+        // whole mint BEFORE a single row is written — the same rule `changeCredential` applies to an
+        // undeterminable custody read (R5).
+        if !preservingRecoveryMaterial {
+            try refuseIfRecoveryMaterialUnreadable()
+        }
         let saltData = try cryptoProvider.generateSalt()
         let derivedKey = try await cryptoProvider.deriveVerifier(passcode: credential.rawValue, salt: saltData, n: FernletLockCrypto.scryptN)
-        let contentKeyData = suppliedContentKey ?? cryptoProvider.generateContentKey()
+        let contentKeyData = try suppliedContentKey ?? cryptoProvider.generateContentKey()
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
         // A fresh content key has been minted: every surviving copy of the OLD one must go BEFORE
@@ -1281,8 +1365,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         try storeVerified(FernletLockCrypto.verifierDigest(of: derivedKey), for: .verifier)
         try storeVerified(Data(credential.kind.rawValue.utf8), for: .kind)
         try storeVerified(wrappedContentKey, for: .wrappedContentKey)
-        var configuredN = Int32(FernletLockCrypto.scryptN)
-        try storeVerified(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN)
+        try storeVerified(LockRecordCodec.encode(Int32(FernletLockCrypto.scryptN)), for: .scryptN)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
         KeychainItem.delete(for: .cooldownMonotonicAnchor, service: keychainService)
         KeychainItem.delete(for: .cooldownDurationSeconds, service: keychainService)
@@ -1290,6 +1373,25 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         KeychainItem.delete(for: .cooldownLevel, service: keychainService)
         KeychainItem.delete(for: .requiresReset, service: keychainService)
         return contentKeyData
+    }
+
+    /// Throws when ANY of the three recovery-material rows cannot be read, so no caller can infer
+    /// "no custodian is enrolled" from a keychain that merely would not answer.
+    ///
+    /// `hasRecoveryCustodian` — and therefore `isAwaitingCustodianRecovery` — is three collapsing
+    /// presence reads, and the branch it gates deletes the recovery blob. This is the guard that
+    /// keeps a transient keychain failure from becoming silent, permanent loss of the only route
+    /// back to a recovery-locked corpus.
+    private func refuseIfRecoveryMaterialUnreadable() throws {
+        for key in [
+            LockKeychainKey.recoveryBlob,
+            .custodianSigningPublicKey,
+            .custodianKeyAgreementPublicKey
+        ] {
+            guard case .unreadable(let status) = keychainLoadDistinguishing(key, keychainService) else { continue }
+            FernletAuditLog.log("lock.recoveryMaterialUnreadable", context: ["row": key.rawValue])
+            throw FernletLockError.keychainFailure(operation: "read recovery material", status: status)
+        }
     }
 
     /// Re-keys the lock under a new credential while preserving the content key.
@@ -1329,7 +1431,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // passcode" is a plausible demand, and honoring it would re-key the real lock to a passcode
         // the coercer chose. A match returns the decoy instead, having rewritten nothing.
         if let mode = await duressMode(for: current) {
-            await handleDuress(mode, passcode: current, scope: state.unlockedScope ?? .appLockSettings)
+            await performDuressResponse(mode, passcode: current, scope: state.unlockedScope ?? .appLockSettings)
             return
         }
         let custody = contentKeyCustody()
@@ -1340,30 +1442,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         if case .none = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier) {
             throw FernletLockError.invalidPasscode
         }
-        // The NEW credential may not BE the duress PIN either. Without this guard a re-key could
-        // silently promote the duress PIN to the real passcode, after which every unlock takes the
-        // duress branch first and the real content key is unreachable forever — data loss dressed
-        // as a passcode change. Deliberately placed AFTER the verifier match above, so the "that
-        // code is special" signal is only ever given to someone who has just proved they hold the
-        // real passcode.
-        if await duressMode(for: new.rawValue) != nil {
-            throw FernletLockError.invalidCredential(Self.duressPINMatchesPasscodeMessage)
-        }
-        // …and the new credential's KIND may not make the surviving duress PIN unenterable. The
-        // own-salt design deliberately carries the duress rows through a re-key untouched, which is
-        // right for a same-kind change and silently fatal across a kind change: the lock renders one
-        // entry surface, the PIN pads are hard-capped at 4 or 6 digits and auto-submit at exactly
-        // that length, so a 4-digit duress code simply cannot be typed at a pin6 lock. The rows
-        // would survive, `hasDuressConfigured` would keep reporting an armed response, and under
-        // coercion the user would type a code that lands on the real-verifier path as a failed
-        // attempt. Refusing is the only fail-safe answer: the app cannot re-derive the verifier (it
-        // never holds the duress plaintext here), and silently deleting the duress PIN would disarm
-        // a safety feature without saying so.
-        if hasDuressConfigured,
-           let duressKind = storedDuressKind(),
-           !Self.duressPINRemainsTypeable(duressKind: duressKind, under: new.kind) {
-            throw FernletLockError.invalidCredential(Self.duressPINWouldBeUnenterableMessage)
-        }
+        try await rejectDuressConflicts(with: new)
 
         let contentKeyData: Data
         switch custody {
@@ -1377,34 +1456,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         let newSalt = try cryptoProvider.generateSalt()
         let newDerivedKey = try await cryptoProvider.deriveVerifier(passcode: new.rawValue, salt: newSalt, n: FernletLockCrypto.scryptN)
 
-        // Re-keying is a MULTI-ROW write with one invariant: salt + verifier and the wrapped
-        // content key are written together or not at all. A throw partway (any storeVerified can
-        // fail on a hosed keychain) would otherwise leave a verifier derived from the NEW passcode
-        // sitting over a wrap only the SUPERSEDED derived key opens — a lock that accepts the new
-        // passcode and can never recover the content key again. So capture the prior records and
-        // put them back on any failure.
-        let priorKind = KeychainItem.load(for: .kind, service: keychainService)
-        let priorScryptN = KeychainItem.load(for: .scryptN, service: keychainService)
-        let priorWrappedContentKey = KeychainItem.load(for: .wrappedContentKey, service: keychainService)
-        do {
-            try storeVerified(newSalt, for: .salt)
-            try storeVerified(FernletLockCrypto.verifierDigest(of: newDerivedKey), for: .verifier)
-            try storeVerified(Data(new.kind.rawValue.utf8), for: .kind)
-            if case .legacyScryptWrapped = custody {
-                try storeVerified(try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey), for: .wrappedContentKey)
-            }
-            var newN = Int32(FernletLockCrypto.scryptN)
-            try storeVerified(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN)
-        } catch {
-            rollBackCredentialRecords(
-                salt: saltData,
-                verifier: storedVerifier,
-                kind: priorKind,
-                scryptN: priorScryptN,
-                wrappedContentKey: priorWrappedContentKey
-            )
-            throw error
-        }
+        try rewriteCredentialRecordsAtomically(
+            newSalt: newSalt,
+            newDerivedKey: newDerivedKey,
+            newKind: new.kind,
+            custody: custody,
+            contentKeyData: contentKeyData,
+            priorSalt: saltData,
+            priorVerifier: storedVerifier
+        )
 
         if KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil {
             try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
@@ -1422,6 +1482,76 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
 
         FernletAuditLog.log("lock.kindChanged", context: ["newKind": new.kind.rawValue])
+    }
+
+    /// The two ways a re-key could silently disarm the duress PIN, refused (P7).
+    ///
+    /// (1) The NEW credential may not BE the duress PIN. Without this a re-key could silently
+    /// promote the duress PIN to the real passcode, after which every unlock takes the duress
+    /// branch first and the real content key is unreachable forever — data loss dressed as a
+    /// passcode change. Called only AFTER the current passcode has matched, so the "that code is
+    /// special" signal is given exclusively to someone who has just proved they hold the real one.
+    ///
+    /// (2) The new credential's KIND may not make the surviving duress PIN unenterable. The
+    /// own-salt design carries the duress rows through a re-key untouched, which is right for a
+    /// same-kind change and silently fatal across a kind change: the lock renders one entry
+    /// surface, the PIN pads are hard-capped at 4 or 6 digits and auto-submit at exactly that
+    /// length, so a 4-digit duress code cannot be typed at a pin6 lock. The rows would survive,
+    /// `hasDuressConfigured` would keep reporting an armed response, and under coercion the user
+    /// would type a code that lands on the real-verifier path as a failed attempt. Refusing is the
+    /// only fail-safe answer: the app cannot re-derive the verifier (it never holds the duress
+    /// plaintext here), and silently deleting the duress PIN would disarm a safety feature without
+    /// saying so.
+    private func rejectDuressConflicts(with new: FernletLockCredential) async throws {
+        if await duressMode(for: new.rawValue) != nil {
+            throw FernletLockError.invalidCredential(Self.duressPINMatchesPasscodeMessage)
+        }
+        if hasDuressConfigured,
+           let duressKind = storedDuressKind(),
+           !Self.duressPINRemainsTypeable(duressKind: duressKind, under: new.kind) {
+            throw FernletLockError.invalidCredential(Self.duressPINWouldBeUnenterableMessage)
+        }
+    }
+
+    /// Writes the five credential rows of a re-key ALL-OR-NOTHING, restoring the prior values on
+    /// any failure.
+    ///
+    /// A throw partway (any `storeVerified` can fail on a hosed keychain) would otherwise leave a
+    /// verifier derived from the NEW passcode sitting over a wrap only the SUPERSEDED derived key
+    /// opens — a lock that accepts the new passcode and can never recover the content key again.
+    /// So the prior records are captured first and put back by `rollBackCredentialRecords` before
+    /// the error is rethrown. The wrapped content key is rewritten only in the LEGACY custody
+    /// state; hard-bound installs must never resurrect a scrypt-wrapped copy.
+    private func rewriteCredentialRecordsAtomically(
+        newSalt: Data,
+        newDerivedKey: Data,
+        newKind: FernletLockCredentialKind,
+        custody: ContentKeyCustody,
+        contentKeyData: Data,
+        priorSalt: Data,
+        priorVerifier: Data
+    ) throws {
+        let priorKind = KeychainItem.load(for: .kind, service: keychainService)
+        let priorScryptN = KeychainItem.load(for: .scryptN, service: keychainService)
+        let priorWrappedContentKey = KeychainItem.load(for: .wrappedContentKey, service: keychainService)
+        do {
+            try storeVerified(newSalt, for: .salt)
+            try storeVerified(FernletLockCrypto.verifierDigest(of: newDerivedKey), for: .verifier)
+            try storeVerified(Data(newKind.rawValue.utf8), for: .kind)
+            if case .legacyScryptWrapped = custody {
+                try storeVerified(try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey), for: .wrappedContentKey)
+            }
+            try storeVerified(LockRecordCodec.encode(Int32(FernletLockCrypto.scryptN)), for: .scryptN)
+        } catch {
+            rollBackCredentialRecords(
+                salt: priorSalt,
+                verifier: priorVerifier,
+                kind: priorKind,
+                scryptN: priorScryptN,
+                wrappedContentKey: priorWrappedContentKey
+            )
+            throw error
+        }
     }
 
     /// Attempts a passcode unlock.
@@ -1641,6 +1771,17 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             }
         }
 
+        // Shape check before the bytes are seated (R5): `SymmetricKey(data:)` accepts ANY length, so
+        // a truncated or corrupt bypass row would install a wrong-length key and every sealed read
+        // would fail with an opaque authentication error instead of a named cause. The row is
+        // dropped so the next unlock re-enrolls it. `reestablishLocalUnlock` already applies exactly
+        // this guard to the key a custodian hands back.
+        guard contentKeyData.count == FernletLockCrypto.keyLength else {
+            KeychainItem.delete(for: .biometricBypass, service: keychainService)
+            FernletAuditLog.log("lock.biometricBypassMalformed", context: ["bytes": "\(contentKeyData.count)"])
+            throw FernletLockError.biometricFailed
+        }
+
         // Accepted residual (document & accept, not a regression): a biometric-only legacy install
         // (upgraded from a pre-split build, enrolled biometrics, never enters a passcode) keeps
         // .verifier = the RAW scrypt derived key (= the content-key wrapping key). This path recovers
@@ -1729,7 +1870,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     public func reset() throws {
         KeychainItem.deleteAll(service: keychainService)
         // The Secure Enclave key is a kSecClassKey item outside the generic-password sweep above.
-        SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        // Its delete status is the evidence behind this method's "crypto-erased" claim, so it is
+        // checked and — when the key still loads afterwards — reported, rather than assumed (R7).
+        let enclaveDeleteStatus = SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        if enclaveDeleteStatus != errSecSuccess, enclaveDeleteStatus != errSecItemNotFound {
+            FernletAuditLog.log("lock.reset.enclaveKeyDeleteFailed", context: ["status": "\(enclaveDeleteStatus)"])
+        }
+        if case .loaded = SecureEnclaveContentKeyWrap.loadKeyResult(service: keychainService) {
+            FernletAuditLog.log("lock.reset.enclaveKeySurvived")
+        }
         // The journal / Worry Box device fallback keys seal rows in the store this method is about
         // to purge whenever no content key exists, so leaving them alive would leave the residue
         // this method claims to have crypto-erased openable. Destroyed BEFORE the purge/rebuild, so
@@ -1793,7 +1942,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             // NOTHING. Only the enabling branch needs the check: disabling consults no passcode
             // and only ever deletes.
             if let mode = await duressMode(for: passcode) {
-                await handleDuress(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
+                await performDuressResponse(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
                 return
             }
             let custody = contentKeyCustody()
@@ -1990,7 +2139,15 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     public func invalidateRecoveryCustodianForRotatedIdentity() -> Bool {
         guard hasRecoveryCustodian else { return false }
         if hasDuressConfigured, storedDuressMode() == .recoveryLock {
-            try? storeVerified(Data([DuressMode.decoy.rawValue]), for: .duressMode)
+            do {
+                try storeVerified(Data([DuressMode.decoy.rawValue]), for: .duressMode)
+            } catch {
+                // Recovery, not a swallow: a mode byte that cannot be downgraded is DELETED, because
+                // a missing row reads as `.decoy` everywhere (`storedDuressMode() ?? .decoy`) — the
+                // same fail-closed state the write was reaching for. Deliberately no audit line, per
+                // the duress-silence invariant this whole API observes.
+                KeychainItem.delete(for: .duressMode, service: keychainService)
+            }
         }
         for key in [
             LockKeychainKey.recoveryBlob,
@@ -2238,20 +2395,42 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         return storedDuressMode() ?? .decoy
     }
 
-    /// The duress salt, minting and persisting a random dummy when none exists.
+    /// The duress salt, minting and persisting a random dummy only when the row is AUTHORITATIVELY
+    /// absent.
     ///
     /// The row is present whether or not a duress PIN is configured — that is what makes the
     /// derivation in ``duressMode(for:)`` unconditional. A dummy carries no secret and no PIN is
     /// bound to it, so persisting it is best-effort: a write that fails costs a re-mint on the next
     /// unlock, never correctness.
+    ///
+    /// **Mint only on `.absent` (R5).** With the collapsing read, one transient failure to read an
+    /// EXISTING duress salt, followed by a successful delete-then-add here, replaces the salt the
+    /// configured duress verifier was derived under — permanently disarming the duress PIN while
+    /// `hasDuressConfigured` (which reads the untouched verifier row) still reports it armed. On an
+    /// unreadable row nothing is written: the derivation still runs against a fixed dummy, so
+    /// latency is unchanged, and with the verifier row equally unreadable the compare simply misses
+    /// — fail-closed "not duress" for that one attempt.
     private func duressSaltEnsuringPresence() -> Data {
-        if let existing = keychainLoad(.duressSalt, keychainService) { return existing }
+        switch keychainLoadDistinguishing(.duressSalt, keychainService) {
+        case .found(let existing):
+            return existing
+        case .unreadable:
+            return Data(repeating: 0, count: FernletLockCrypto.saltLength)
+        case .absent:
+            break
+        }
         guard let minted = try? cryptoProvider.generateSalt() else {
             // Pathological RNG failure. Derive against a fixed dummy anyway — the invariant is that
             // a derivation ALWAYS happens, and with no verifier row this can only ever miss.
             return Data(repeating: 0, count: FernletLockCrypto.saltLength)
         }
-        try? storeVerified(minted, for: .duressSalt)
+        do {
+            try storeVerified(minted, for: .duressSalt)
+        } catch {
+            // Named, not swallowed: the dummy just minted is unpersisted, the next unlock re-mints,
+            // and no PIN is bound to it, so there is nothing to recover. Deliberately no audit line
+            // — an event on this path fires only around duress entries (duress-silence invariant).
+        }
         return minted
     }
 
@@ -2307,9 +2486,27 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///     `.appLockSettings`.
     /// - Returns: The benign-looking ``UnlockResult``, or `nil` when `scope` is `.appLockSettings`,
     ///   in which case the service is left LOCKED with the duress session in force.
-    @discardableResult
+    ///
+    /// **No `@discardableResult`** (R7): `nil` here means "the unlock was REFUSED", and a caller
+    /// that drops it would report success for an unlock the service withheld. The three
+    /// settings-side entry points, which have no unlock to grant in the first place, call the void
+    /// ``performDuressResponse(_:passcode:scope:)`` instead — so no refusal signal exists there to
+    /// be discarded.
     private func handleDuress(_ mode: DuressMode, passcode: String, scope: FernletLockScope) async -> UnlockResult? {
-        let grantsUnlock = scope != .appLockSettings
+        await performDuressResponse(mode, passcode: passcode, scope: scope)
+        guard scope != .appLockSettings else { return nil }
+        return UnlockResult(method: .passcode)
+    }
+
+    /// Runs the configured duress response and enters whichever session `scope` allows, WITHOUT
+    /// producing an unlock result.
+    ///
+    /// The shape the three settings-side entry points (change passcode, enable biometrics, enrol a
+    /// recovery custodian) need: a coerced user who typed their duress code at any prompt gets the
+    /// response they armed, and the operation they were being coerced into performs nothing. They
+    /// return to the caller as an ordinary success, which is the point — the screen must not
+    /// announce that anything special happened.
+    private func performDuressResponse(_ mode: DuressMode, passcode: String, scope: FernletLockScope) async {
         switch mode {
         case .decoy:
             await spendBalancingDerivation(for: passcode)
@@ -2319,16 +2516,14 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             await spendBalancingDerivation(for: passcode)
             performRecoveryLockKeyDestruction()
         }
-        guard grantsUnlock else {
+        if scope == .appLockSettings {
             enterLockedDecoySession()
-            if case .silentWipe = mode { duressPurgeHook?() }
-            return nil
+        } else {
+            enterDecoySession(scope: scope)
         }
-        let result = enterDecoySession(scope: scope)
         // After the decoy is on screen, never before: the purge is a background errand and the user
         // in front of the coercer must see an ordinary unlock, not a pause.
         if case .silentWipe = mode { duressPurgeHook?() }
-        return result
     }
 
     /// Spends one throwaway scrypt derivation so a duress unlock costs the same two derivations a
@@ -2340,7 +2535,14 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// never compared: this is a clock, not a check.
     private func spendBalancingDerivation(for passcode: String) async {
         guard let saltData = keychainLoad(.salt, keychainService) else { return }
-        _ = try? await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
+        do {
+            _ = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
+        } catch {
+            // The balancing derivation failed (a bad stored N, a KDF/RNG fault), so latency
+            // equalisation is lost for this ONE attempt. Nothing to recover — and deliberately no
+            // audit line: an event emitted only on duress entries is exactly the tell this feature
+            // must not leave. The `_ =` is legitimate here; the derived key is a clock, not a check.
+        }
     }
 
     /// ``DuressMode/recoveryLock``: destroy every LOCAL way into the content key while keeping
@@ -2483,8 +2685,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
         // A `kSecClassKey` item, outside the generic-password rows above — the same explicit sweep
         // `reset()` needs, and the difference between "the wrap blob is gone" and "the key that
-        // opens it is gone".
-        SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        // opens it is gone". The status is retried ONCE on failure and never audit-logged: this
+        // path runs under duress, where a log line is itself the tell (R7 — the recovery is the
+        // retry, not a report).
+        let enclaveDeleteStatus = SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        if enclaveDeleteStatus != errSecSuccess, enclaveDeleteStatus != errSecItemNotFound {
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
+        }
         // The third sweep, for the same reason `reset()` documents: journal and Worry Box rows are
         // sealed under DEVICE FALLBACK keys — not the content key — whenever they are written while
         // the lock is closed. Destroying the content key alone would leave exactly those rows
@@ -2564,8 +2771,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
     }
 
-    /// Opens the KEYLESS decoy session for `scope` and returns the same ``UnlockResult`` a benign
-    /// passcode unlock returns.
+    /// Opens the KEYLESS decoy session for `scope`; the caller returns the same ``UnlockResult`` a
+    /// benign passcode unlock returns.
     ///
     /// Four properties make this indistinguishable from a real unlock, and all four are load-bearing:
     /// - **No content key.** `retainContentKey` is deliberately not called, so `_contentKey` stays
@@ -2585,14 +2792,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// the existing scrub path, so it is fully reversible by entering the real passcode. (A bug that
     /// persisted the forced-hidden visibility would turn a reversible decoy into silent data hiding
     /// — gate on this flag, never on a settings setter.)
-    private func enterDecoySession(scope: FernletLockScope) -> UnlockResult {
+    private func enterDecoySession(scope: FernletLockScope) {
         clearAttemptState()
         scrubContentKey()
         isDuressSessionActive = true
         state = .unlocked(scope: scope)
         hasAutoPromptedBiometricForCurrentLockSession = false
         FernletAuditLog.log("lock.released", context: ["method": "passcode", "scope": scope.rawValue])
-        return UnlockResult(method: .passcode)
     }
 
     /// Opens the duress session WITHOUT granting a scope, for the one surface a duress PIN may never
@@ -2686,7 +2892,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // coerced enrollment touches nothing. See the doc comment: this is the one entry point where
         // honoring a duress PIN would EXPORT the content key rather than merely reveal it locally.
         if let mode = await duressMode(for: passcode) {
-            await handleDuress(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
+            await performDuressResponse(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
             return
         }
         guard signingPublicKey.count == Self.recoveryCustodianPublicKeyByteCount,
@@ -3030,8 +3236,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
               constantTimeEqual(seUnwrapped, contentKeyData) else { return }
         KeychainItem.delete(for: .wrappedContentKey, service: keychainService)
         if migratingExistingInstall {
-            // Best-effort: a flag that cannot be written costs a disclosure, never data.
-            KeychainItem.store(Data([1]), for: .hardBindingNoticePending, service: keychainService)
+            // Best-effort: a flag that cannot be written costs a disclosure, never data — but the
+            // status is CHECKED rather than dropped, because a silently missing disclosure is the
+            // one outcome nobody would ever find out about (R7).
+            let status = KeychainItem.store(Data([1]), for: .hardBindingNoticePending, service: keychainService)
+            if status != errSecSuccess {
+                FernletAuditLog.log("lock.hardBindingNotice.flagWriteFailed", context: ["status": "\(status)"])
+            }
         }
         FernletAuditLog.log("lock.hardBoundToSecureEnclave", context: [
             "migration": "\(migratingExistingInstall)"
@@ -3078,14 +3289,31 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// which is what lets the biometric path re-establish a wrap after an enclave key rotation.
     private func maintainSecureEnclaveWrap(contentKeyData: Data) {
         guard SecureEnclaveContentKeyWrap.isAvailable else { return }
-        let existing = keychainLoad(.seWrappedContentKey, keychainService)
-            .flatMap { SecureEnclaveContentKeyWrap.unwrap($0, service: keychainService) }
-        if let existing {
-            if constantTimeEqual(existing, contentKeyData) { return }
-            guard case .legacyScryptWrapped = contentKeyCustody() else {
-                FernletAuditLog.log("lock.seWrapDivergence")
+        // CLASSIFY before healing (R5). Both halves of the old read collapsed failure into absence —
+        // `keychainLoad` returns nil for an unreadable row, and `unwrap` returns nil for a transient
+        // decrypt failure exactly as for a destroyed key — so a momentary keychain/enclave outage
+        // skipped the divergence check entirely and went on to delete-then-add over the ONE
+        // recoverable copy of the key in the hard-bound state. Neither transient may heal.
+        switch keychainLoadDistinguishing(.seWrappedContentKey, keychainService) {
+        case .unreadable(let status):
+            FernletAuditLog.log("lock.seWrapMaintenanceSkipped.unreadable", context: ["status": "\(status)"])
+            return
+        case .found(let blob):
+            switch SecureEnclaveContentKeyWrap.unwrapResult(blob, service: keychainService) {
+            case .recovered(let existing):
+                if constantTimeEqual(existing, contentKeyData) { return }
+                guard case .legacyScryptWrapped = contentKeyCustody() else {
+                    FernletAuditLog.log("lock.seWrapDivergence")
+                    return
+                }
+            case .unavailable(let status):
+                FernletAuditLog.log("lock.seWrapMaintenanceSkipped.transient", context: ["status": "\(status)"])
                 return
+            case .keyAbsent, .blobRejected:
+                break  // the genuine heal: no openable blob at all
             }
+        case .absent:
+            break  // nothing stored yet — establish the wrap
         }
         guard let blob = SecureEnclaveContentKeyWrap.wrapVerified(contentKeyData, service: keychainService) else { return }
         do {
@@ -3121,13 +3349,26 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     }
 
     /// When `match == .legacy`, opportunistically migrate a legacy raw-key verifier to its digest form
-    /// in place. Best-effort — a failure here leaves the legacy verifier intact (still valid via the
-    /// legacy compare) and retries on the next successful passcode unlock. Called from unlock() and
-    /// setBiometricEnabled() after the content key has been recovered. No-op for `.current`/`.none`.
+    /// in place. Called from unlock() and setBiometricEnabled() after the content key has been
+    /// recovered. No-op for `.current`/`.none`.
+    ///
+    /// **"Best-effort" is only true with the put-back.** `storeVerified` is delete-then-add over THE
+    /// passcode gate: a delete that lands followed by an add (or read-back) that does not leaves NO
+    /// verifier row, after which every `unlock()`/`changeCredential()` throws `.notConfigured` while
+    /// the state stays `.locked`, and `isAwaitingCustodianRecovery` can misread the device as
+    /// recovery-locked. So a failure restores the legacy verifier — the same discipline
+    /// `rollBackCredentialRecords` applies to a re-key — and the audit line reports which of the two
+    /// outcomes actually happened instead of always claiming success.
     private func migrateLegacyVerifierIfNeeded(_ match: VerifierMatch, computedVerifier: Data) {
         guard case .legacy = match else { return }
-        try? storeVerified(FernletLockCrypto.verifierDigest(of: computedVerifier), for: .verifier)
-        FernletAuditLog.log("lock.verifierMigratedToDigest")
+        do {
+            try storeVerified(FernletLockCrypto.verifierDigest(of: computedVerifier), for: .verifier)
+            FernletAuditLog.log("lock.verifierMigratedToDigest")
+        } catch {
+            let restored = keychainStore(computedVerifier, .verifier, keychainService) == errSecSuccess
+                && keychainLoad(.verifier, keychainService) == computedVerifier
+            FernletAuditLog.log("lock.verifierMigrationFailed", context: ["legacyRestored": "\(restored)"])
+        }
     }
 
     /// Writes a keychain item and verifies it by status check AND read-back, throwing
@@ -3280,14 +3521,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
                 let deadline = dateProvider.now.addingTimeInterval(duration)
                 try storeVerified(Data([UInt8(newLevel)]), for: .cooldownLevel)
 
-                var deadlineInterval = deadline.timeIntervalSinceReferenceDate
-                try storeVerified(Data(bytes: &deadlineInterval, count: MemoryLayout<Double>.size), for: .cooldownDeadline)
-
-                var anchor = uptimeProvider.systemUptime
-                try storeVerified(Data(bytes: &anchor, count: MemoryLayout<Double>.size), for: .cooldownMonotonicAnchor)
-
-                var durationSeconds = duration
-                try storeVerified(Data(bytes: &durationSeconds, count: MemoryLayout<Double>.size), for: .cooldownDurationSeconds)
+                try storeVerified(LockRecordCodec.encode(deadline.timeIntervalSinceReferenceDate), for: .cooldownDeadline)
+                try storeVerified(LockRecordCodec.encode(uptimeProvider.systemUptime), for: .cooldownMonotonicAnchor)
+                try storeVerified(LockRecordCodec.encode(duration), for: .cooldownDurationSeconds)
 
                 try storeAttemptCount(0)
                 state = .locked(cooldownDeadline: deadline)
@@ -3307,14 +3543,30 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         try storeVerified(Data([UInt8(min(count, 255))]), for: .attemptCount)
     }
 
+    /// The scrypt N every pre-NEW-3 install used, and the fail-closed fallback for a missing or
+    /// out-of-range ``LockKeychainKey/scryptN`` row.
+    private static let legacyScryptN: Int32 = 32768
+
     /// The scrypt N recorded at configure time; pre-NEW-3 installs stored none and
     /// always used 32768, so that is the fallback.
+    ///
+    /// **Validated, because a persisted row is external input (R5).** The value goes straight into
+    /// the memory-hard KDF, which allocates 128·r·N bytes: a corrupt or tampered row (N = 2²⁴ → 16 GB,
+    /// or a non-power-of-two, which CryptoSwift rejects outright) would turn every unlock into a
+    /// memory-exhaustion crash or a permanent throw. An out-of-range N reads as the pre-NEW-3
+    /// default — exactly what a missing row does — so the passcode simply fails to verify.
     private func storedScryptN() -> Int {
         guard let data = keychainLoad(.scryptN, keychainService),
-              data.count == MemoryLayout<Int32>.size else {
-            return 32768  // pre-NEW-3 installs stored no N; 32768 was the only value used
+              let stored = LockRecordCodec.decodeInt32(data) else {
+            return Int(Self.legacyScryptN)  // pre-NEW-3 installs stored no N; 32768 was the only value used
         }
-        return Int(data.withUnsafeBytes { $0.load(as: Int32.self) })
+        guard stored >= Self.legacyScryptN,
+              stored <= Int32(FernletLockCrypto.scryptN),
+              stored.nonzeroBitCount == 1 else {
+            FernletAuditLog.log("lock.scryptNInvalid", context: ["stored": "\(stored)"])
+            return Int(Self.legacyScryptN)
+        }
+        return Int(stored)
     }
 
     /// Wipes all attempt/cooldown/reset records after a successful passcode unlock.
@@ -3361,11 +3613,61 @@ extension LockKeychainKey: CaseIterable {
     }
 }
 
+/// Little-endian byte codecs for the fixed-width numbers persisted in lock keychain rows.
+///
+/// Explicit shifts in both directions, instead of `Data(bytes:count:)` on an `inout` scalar and
+/// `withUnsafeBytes { $0.load(as:) }` — raw-buffer reinterpretation is exactly what R9 bans, and a
+/// `load(as:)` of attacker-influenceable bytes is also unaligned-load UB waiting to happen. Byte
+/// for byte compatible with the rows already on disk: every Apple target is little-endian, so what
+/// the previous native-endian writes produced is what ``encode(_:)`` produces and ``decodeInt32(_:)`` /
+/// ``decodeFiniteDouble(_:)`` read.
+private enum LockRecordCodec {
+    /// The four little-endian bytes of `value` (the `.scryptN` row).
+    static func encode(_ value: Int32) -> Data {
+        encode(UInt32(bitPattern: value), byteCount: MemoryLayout<Int32>.size)
+    }
+
+    /// The eight little-endian bytes of `value`'s IEEE-754 bit pattern (the cooldown rows).
+    static func encode(_ value: Double) -> Data {
+        encode(value.bitPattern, byteCount: MemoryLayout<Double>.size)
+    }
+
+    /// Decodes exactly four little-endian bytes as an `Int32`; `nil` on any other length.
+    static func decodeInt32(_ data: Data) -> Int32? {
+        guard data.count == MemoryLayout<Int32>.size else { return nil }
+        return Int32(bitPattern: UInt32(truncatingIfNeeded: littleEndianValue(data)))
+    }
+
+    /// Decodes exactly eight little-endian bytes as a **finite** `Double`; `nil` on any other
+    /// length and on a NaN/±infinity bit pattern.
+    ///
+    /// The finiteness guard is a validation, not a nicety: a NaN cooldown deadline propagates into
+    /// `max()` and `> 0` comparisons that are false for NaN, which would silently dissolve an
+    /// active brute-force cooldown — a corrupt row failing OPEN. `nil` means "no record", which
+    /// the cooldown readers already handle.
+    static func decodeFiniteDouble(_ data: Data) -> Double? {
+        guard data.count == MemoryLayout<Double>.size else { return nil }
+        let value = Double(bitPattern: littleEndianValue(data))
+        guard value.isFinite else { return nil }
+        return value
+    }
+
+    /// Little-endian bytes of an unsigned integer, least-significant byte first.
+    private static func encode<T: FixedWidthInteger & UnsignedInteger>(_ value: T, byteCount: Int) -> Data {
+        Data((0..<byteCount).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) })
+    }
+
+    /// Reassembles up to eight little-endian bytes into a `UInt64`.
+    private static func littleEndianValue(_ data: Data) -> UInt64 {
+        data.reversed().reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+    }
+}
+
 private extension Data {
-    /// Reinterprets exactly 8 bytes as a native-endian `Double` (the encoding used for
-    /// the cooldown deadline/anchor/duration records); `nil` on any other length.
+    /// Decodes exactly 8 little-endian bytes as a finite `Double` (the encoding used for the
+    /// cooldown deadline/anchor/duration records); `nil` on any other length or a non-finite
+    /// bit pattern — see ``LockRecordCodec/decodeFiniteDouble(_:)``.
     var toDouble: Double? {
-        guard count == MemoryLayout<Double>.size else { return nil }
-        return withUnsafeBytes { $0.load(as: Double.self) }
+        LockRecordCodec.decodeFiniteDouble(self)
     }
 }

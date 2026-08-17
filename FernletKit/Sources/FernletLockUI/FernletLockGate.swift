@@ -120,18 +120,7 @@ struct FernletLockGateModifier: ViewModifier {
             isPresented: $showReset,
             titleVisibility: .visible
         ) {
-            Button("Reset app lock", role: .destructive) {
-                do {
-                    try lockService.reset()
-                } catch {
-                    // The keys and the rows are gone either way; what failed is re-creating the
-                    // store file, which is the part the user is told about rather than left to
-                    // discover.
-                    print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
-                    FernletAuditLog.log("lock.reset.rebuild.failed")
-                    showResetRebuildFailure = true
-                }
-            }
+            Button("Reset app lock", role: .destructive) { performReset() }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
@@ -152,29 +141,66 @@ struct FernletLockGateModifier: ViewModifier {
             // gate does not re-appear after an in-place unlock.
             if lockService.hardBindingNoticePending { showHardBindingNotice = true }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .inactive:
-                suppressRelockTask?.cancel()
-                suppressRelock = true
-            case .active:
-                // Keep suppression active briefly after returning to foreground so any
-                // spurious onDisappear/onAppear lifecycle events from the transition settle.
-                suppressRelockTask?.cancel()
-                suppressRelockTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(1500))
-                    suppressRelock = false
-                    // Execute any deferred lock request if the gate hasn't re-appeared.
-                    if pendingRelock && !gateIsActive {
-                        pendingRelock = false
-                        if lockService.isUnlocked(for: scope) {
-                            lockService.lock(reason: .viewDisappeared)
-                        }
+        .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
+    }
+
+    // MARK: Scene phase
+
+    /// How long suppression outlives the return to `.active`, so the spurious
+    /// `onDisappear`/`onAppear` events a scene transition emits on page-style TabViews settle
+    /// before the disappear re-lock is honored again.
+    private static let suppressionWindow: Duration = .milliseconds(1500)
+
+    /// Opens the suppression window on `.inactive` and closes it 1.5 s after `.active`, running
+    /// any re-lock that was deferred while it was open.
+    ///
+    /// Extracted from `body(content:)` so the body reads as layout (R4); the state it touches is
+    /// the modifier's own, so nothing needs to be passed in.
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        switch newPhase {
+        case .inactive:
+            suppressRelockTask?.cancel()
+            suppressRelock = true
+        case .active:
+            // Keep suppression active briefly after returning to foreground so any
+            // spurious onDisappear/onAppear lifecycle events from the transition settle.
+            suppressRelockTask?.cancel()
+            suppressRelockTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: Self.suppressionWindow)
+                } catch {
+                    // Cancelled — the NEXT phase change owns the window now. Clearing suppression
+                    // (or firing the deferred lock) from a task that was asked to stop is exactly
+                    // the re-lock-during-a-transition this modifier exists to prevent, so a
+                    // cancelled window does nothing at all.
+                    return
+                }
+                suppressRelock = false
+                // Execute any deferred lock request if the gate hasn't re-appeared.
+                if pendingRelock && !gateIsActive {
+                    pendingRelock = false
+                    if lockService.isUnlocked(for: scope) {
+                        lockService.lock(reason: .viewDisappeared)
                     }
                 }
-            default:
-                break
             }
+        default:
+            break
+        }
+    }
+
+    /// Performs the destructive reset the confirmation dialog just authorised, surfacing the
+    /// nothing-silent alert when the keys and rows went but the sealed store could not be rebuilt.
+    private func performReset() {
+        do {
+            try lockService.reset()
+        } catch {
+            // The keys and the rows are gone either way; what failed is re-creating the
+            // store file, which is the part the user is told about rather than left to
+            // discover.
+            print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
+            FernletAuditLog.log("lock.reset.rebuild.failed")
+            showResetRebuildFailure = true
         }
     }
 

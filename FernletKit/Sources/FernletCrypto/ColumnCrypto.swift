@@ -67,6 +67,10 @@ public nonisolated struct ColumnCrypto: Sendable {
     ///   (e.g. "journal-narrative"). Must stay stable for the life of the data —
     ///   ciphertext sealed under one label cannot be opened under another.
     public init(label: String) {
+        // R5(2): a programmer-error invariant, asserted side-effect-free. An empty label collapses
+        // the HKDF domain separation — every column would derive the same subkey from one content
+        // key. Every caller passes a compile-time literal, so this can only fail in development.
+        assert(!label.isEmpty, "ColumnCrypto label must be non-empty: it is the HKDF domain-separation input")
         self.label = label
     }
 

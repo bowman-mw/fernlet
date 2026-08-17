@@ -69,8 +69,9 @@ nonisolated enum SecureEnclaveContentKeyWrap {
         guard isAvailable, let privateKey = loadOrCreateKey(service: service),
               let publicKey = SecKeyCopyPublicKey(privateKey),
               SecKeyIsAlgorithmSupported(publicKey, .encrypt, algorithm) else { return nil }
-        var error: Unmanaged<CFError>?
-        guard let wrapped = SecKeyCreateEncryptedData(publicKey, algorithm, contentKey as CFData, &error) as Data? else {
+        // No CFError out-parameter: nothing here reads it, and an unread Create-rule error is a
+        // leak. The nil return is the whole classification this path needs (R9).
+        guard let wrapped = SecKeyCreateEncryptedData(publicKey, algorithm, contentKey as CFData, nil) as Data? else {
             return nil
         }
         // Keep-old-until-verified: only hand back a blob the enclave demonstrably opens to the
@@ -131,23 +132,49 @@ nonisolated enum SecureEnclaveContentKeyWrap {
         guard SecKeyIsAlgorithmSupported(privateKey, .decrypt, algorithm) else {
             return .unavailable(errSecUnimplemented)
         }
+        // The ONE site in this file where the Create-rule CFError is load-bearing: without it every
+        // decrypt failure reads as TERMINAL, and `FernletLockService.secureEnclaveBoundContentKey()`
+        // turns terminal into the destructive-reset copy. The enclave key is
+        // `WhenUnlockedThisDeviceOnly` and an unlock straddles a several-hundred-ms scrypt derive,
+        // so "the keychain would not answer right now" is a reachable, retryable state.
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCreateDecryptedData(privateKey, algorithm, blob as CFData, &error) as Data? else {
+            // Consumed exactly once (balancing the Create rule's +1 retain), never stored, never
+            // escaped — the invariant the R9 allowlist entry for this file names.
+            if let cfError = error?.takeRetainedValue() {
+                let code = OSStatus(truncatingIfNeeded: CFErrorGetCode(cfError))
+                if transientDecryptStatuses.contains(code) { return .unavailable(code) }
+            }
             return .blobRejected
         }
         return .recovered(data)
     }
 
+    /// The `SecKeyCreateDecryptedData` failure statuses that mean "the keychain/enclave would not
+    /// answer right now", never "this key will not open this blob" — the transient half of
+    /// ``UnwrapOutcome``.
+    private static let transientDecryptStatuses: Set<OSStatus> = [
+        errSecInteractionNotAllowed,
+        errSecNotAvailable,
+        errSecAuthFailed,
+        errSecUserCanceled
+    ]
+
     /// Deletes this service's SE key. Called from `FernletLockService.reset()` — the wrapped
     /// blob is a generic password swept by the service-wide delete, but the `kSecClassKey`
     /// enclave key lives outside that sweep and must be removed explicitly.
-    static func deleteKey(service: String) {
+    ///
+    /// - Returns: The raw `SecItemDelete` status. This deletion is what the "crypto-erased" claim
+    ///   of `reset()` and the duress wipe rests on, so the status is RETURNED rather than dropped:
+    ///   anything other than `errSecSuccess`/`errSecItemNotFound` means the enclave key may still
+    ///   be alive, and the caller (which owns the audit log) records it.
+    static func deleteKey(service: String) -> OSStatus {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: keyTag(forService: service),
             kSecUseDataProtectionKeychain as String: true
         ]
-        SecItemDelete(query as CFDictionary)
+        return SecItemDelete(query as CFDictionary)
     }
 
     /// Loads this service's persisted SE key reference, or `nil` when none exists **or the read
@@ -184,11 +211,13 @@ nonisolated enum SecureEnclaveContentKeyWrap {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return .absent }
         guard status == errSecSuccess else { return .unreadable(status) }
-        guard let result, CFGetTypeID(result) == SecKeyGetTypeID() else {
+        // The CFGetTypeID compare IS the assertion (a pattern cast to a CoreFoundation type is
+        // unchecked at runtime, and `as?` would only earn an "always succeeds" warning); folding
+        // the cast into the same guard keeps the check and drops the trap (R5).
+        guard let result, CFGetTypeID(result) == SecKeyGetTypeID(), case let key as SecKey = result else {
             return .unreadable(errSecInternalError)
         }
-        // Type-checked via CFGetTypeID above; `as?` cannot dynamically verify CF types.
-        return .loaded(result as! SecKey)
+        return .loaded(key)
     }
 
     /// Loads the SE key, creating (permanent, enclave-resident, `.privateKeyUsage`-gated,
@@ -196,12 +225,13 @@ nonisolated enum SecureEnclaveContentKeyWrap {
     /// creation fails — callers fall back to scrypt-only behavior.
     private static func loadOrCreateKey(service: String) -> SecKey? {
         if let existing = loadKey(service: service) { return existing }
-        var accessError: Unmanaged<CFError>?
+        // No CFError out-parameter (R9): the guard on the nil return IS the recovery, and this file
+        // has no logger that could consume the error anyway.
         guard let access = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             .privateKeyUsage,
-            &accessError
+            nil
         ) else { return nil }
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -214,7 +244,8 @@ nonisolated enum SecureEnclaveContentKeyWrap {
                 kSecAttrAccessControl as String: access
             ]
         ]
-        var createError: Unmanaged<CFError>?
-        return SecKeyCreateRandomKey(attributes as CFDictionary, &createError)
+        // Same as above: callers treat nil as "no enclave key — stay legacy", so the error has no
+        // consumer and passing it would only leak it (R9).
+        return SecKeyCreateRandomKey(attributes as CFDictionary, nil)
     }
 }

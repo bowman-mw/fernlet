@@ -72,7 +72,7 @@ struct KeyCustodyBoundaryTests {
         let service = "com.fernlet.lock.test.custody.hardbound.\(UUID().uuidString)"
         defer {
             KeychainItem.deleteAll(service: service)
-            SecureEnclaveContentKeyWrap.deleteKey(service: service)
+            _ = SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
         let lockService = FernletLockService(
             keychainService: service,
