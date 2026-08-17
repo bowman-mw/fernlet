@@ -2,6 +2,8 @@
 // Split out of Models.swift (SPM carve-up §5c). Workout, exercise, muscle, and equipment models.
 
 import Foundation
+import FernletFoundation
+import Synchronization
 
 /// One completed workout row: what was done, how hard, and where the record came from.
 ///
@@ -506,7 +508,7 @@ public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable
 ///
 /// Derived from ``MuscleGroup``'s `region`; used to infer a workout's category from its muscle mix
 /// and to match program slots by region.
-public nonisolated enum BodyRegion: String, Codable, CaseIterable {
+public nonisolated enum BodyRegion: String, Codable, CaseIterable, Sendable {
     case upper
     case lower
     case core
@@ -518,7 +520,7 @@ public nonisolated enum BodyRegion: String, Codable, CaseIterable {
 /// Persisted in day rows AND in the safety-relevant ``WorkoutProfile`` avoided-muscles set, so
 /// both decode tolerantly with parked tokens (dropping an avoided muscle would silently un-avoid
 /// it). `fromLegacyString` maps the old coarse strings from early catalogs.
-public nonisolated enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum MuscleGroup: String, Codable, CaseIterable, Identifiable, Sendable {
     case chest
     case upperBack
     case lats
@@ -607,7 +609,7 @@ extension MuscleGroup {
 ///
 /// The unit of both slot matching in the program engine and movement-level contraindications in
 /// ``WorkoutProfile``; also keys rest demand in ``WorkoutRestGuidance``.
-public nonisolated enum MovementPattern: String, Codable, CaseIterable {
+public nonisolated enum MovementPattern: String, Codable, CaseIterable, Sendable {
     case push
     case pull
     case hinge
@@ -623,7 +625,7 @@ public nonisolated enum MovementPattern: String, Codable, CaseIterable {
 ///
 /// User-facing granular gear (``GymEquipment``) maps down onto these; the safety filter checks
 /// that a ``WorkoutLocation`` has an exercise's capability before it can be prescribed.
-public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable, Sendable {
     case barbell
     case dumbbell
     case machine
@@ -803,7 +805,7 @@ public nonisolated enum WorkoutIntensity: String, Codable, CaseIterable, Identif
 /// What logging inputs an exercise expects (strength sets, treadmill fields, or none).
 ///
 /// A catalog attribute on ``ExerciseTarget``; defaults to `.strength` for legacy rows.
-public nonisolated enum ExerciseInputKind: String, Codable {
+public nonisolated enum ExerciseInputKind: String, Codable, Sendable {
     case strength
     case treadmill
     case none
@@ -814,7 +816,7 @@ public nonisolated enum ExerciseInputKind: String, Codable {
 /// The unit the program engine scores against slots and ``WorkoutSafetyFilter`` vets. Decode is
 /// legacy-tolerant: rows written with the old `muscles` string array map through
 /// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
-public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable {
+public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Sendable {
     public var id: String { name }
     public var name: String
     public var primaryMuscles: Set<MuscleGroup>
@@ -906,37 +908,47 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable {
 /// scores free text against catalog names for legacy rows without muscle data; `search` powers the
 /// exercise picker.
 public nonisolated enum WorkoutExerciseCatalog {
-    // Immutable, computed-once catalog. `nonisolated(unsafe)` avoids cascading Sendable
-    // through ExerciseTarget; the array is built once and never mutated.
-    nonisolated(unsafe) public static let baseExercises: [ExerciseTarget] = loadBaseExercises()
+    /// The bundled catalog, computed once. `ExerciseTarget` is a `Sendable` value type, so this
+    /// constant is concurrency-safe by construction.
+    public static let baseExercises: [ExerciseTarget] = loadBaseExercises()
 
     // MARK: - Custom exercises
 
+    /// Hard ceiling on the registered custom exercises (R3: the list grows across coach-plan
+    /// imports and rides the synced settings blob, so it needs a total cap, not just a per-import
+    /// one). Oldest-first truncation keeps the entries the user has had longest.
+    public static let maxCustomExercises = 500
+
     /// The user's own exercises, registered from `FernletSettings.customExercises` (the coach-plan
-    /// importer is the first writer). Guarded by `customLock` rather than left `nonisolated(unsafe)`
-    /// alone: unlike `baseExercises` this one genuinely mutates at runtime — on settings load, and
-    /// again every time a plan introduces an exercise — while the catalog is read from the planning
-    /// engine, the picker, and rest guidance.
-    nonisolated(unsafe) private static var custom: [ExerciseTarget] = []
-    nonisolated(unsafe) private static let customLock = NSLock()
+    /// importer is the first writer). A `Mutex` rather than a bare mutable static: unlike
+    /// `baseExercises` this one genuinely mutates at runtime — on settings load, and again every
+    /// time a plan introduces an exercise — while the catalog is read from the planning engine, the
+    /// picker, and rest guidance. The lock is the type, so no unsynchronized access can be written.
+    private static let custom = Mutex<[ExerciseTarget]>([])
 
     /// Replaces the registered custom exercises. Call on settings load and after any change, so the
     /// catalog and `FernletSettings.customExercises` never disagree.
     ///
     /// Replace-not-append is deliberate: it makes "delete everything" (and a settings restore that
     /// drops a custom exercise) actually take effect here instead of leaving a stale entry alive in
-    /// the picker until relaunch.
+    /// the picker until relaunch. More than ``maxCustomExercises`` entries are dropped (and logged)
+    /// rather than retained.
     public static func registerCustomExercises(_ exercises: [ExerciseTarget]) {
-        customLock.lock()
-        defer { customLock.unlock() }
-        custom = exercises
+        let capped: [ExerciseTarget]
+        if exercises.count > maxCustomExercises {
+            FernletAuditLog.log("workout.customExercises.truncated",
+                                context: ["count": String(exercises.count),
+                                          "max": String(maxCustomExercises)])
+            capped = Array(exercises.prefix(maxCustomExercises))
+        } else {
+            capped = exercises
+        }
+        custom.withLock { $0 = capped }
     }
 
     /// The registered custom exercises.
     public static var customExercises: [ExerciseTarget] {
-        customLock.lock()
-        defer { customLock.unlock() }
-        return custom
+        custom.withLock { $0 }
     }
 
     /// Every exercise the app knows: the bundled catalog plus the user's own.
@@ -1021,11 +1033,19 @@ public nonisolated enum WorkoutExerciseCatalog {
     }
 
     private static func loadBaseExercises() -> [ExerciseTarget] {
-        guard let url = Bundle.main.url(forResource: "WorkoutExercises", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let exercises = try? JSONDecoder().decode([ExerciseTarget].self, from: data) else {
+        // An ABSENT resource is legitimate (test bundles and the extensions don't carry it), so it
+        // stays silent. A PRESENT-but-unreadable one is not: without this line a corrupt
+        // WorkoutExercises.json empties the whole catalog and every planning/safety consumer
+        // degrades with no trace (R7). The recovery in both cases is an empty catalog.
+        guard let url = Bundle.main.url(forResource: "WorkoutExercises", withExtension: "json") else {
             return []
         }
-        return exercises
+        do {
+            return try JSONDecoder().decode([ExerciseTarget].self, from: Data(contentsOf: url))
+        } catch {
+            FernletAuditLog.log("workout.catalog.load.failed",
+                                context: ["error": error.localizedDescription])
+            return []
+        }
     }
 }

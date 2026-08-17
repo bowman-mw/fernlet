@@ -217,7 +217,7 @@ public nonisolated enum CoinEconomy {
         let today = FernletDate.dayKey(for: date)
         return activeDayKeys
             .subtracting(earnedDayKeys(in: existing))
-            .filter { resetBoundary == nil || $0 >= resetBoundary! }
+            .filter { dayKey in resetBoundary.map { dayKey >= $0 } ?? true }
             .filter { $0 <= today }
             .sorted()
             .map { CoinLedgerEntry.earn(dayKey: $0, amount: coinsPerActiveDay, at: date) }

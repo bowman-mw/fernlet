@@ -175,6 +175,15 @@ public nonisolated struct PayloadSummary: Codable, Equatable, Sendable {
     public let dateRange: DateRange?
     public let extraDetails: [String: String]
 
+    /// Most `extraDetails` entries a decoded summary may carry, and the longest any single summary
+    /// string may be.
+    ///
+    /// R3: the summary is built by the SENDER and rendered to the receiving user before consent, so
+    /// its strings and dictionary are untrusted peer input with nothing else bounding them. A
+    /// legitimate disclosure is a handful of short lines; anything past these caps is rejected.
+    public static let maxExtraDetails = 16
+    public static let maxDetailCharacters = 200
+
     public init(
         title: String,
         subtitle: String? = nil,
@@ -187,5 +196,42 @@ public nonisolated struct PayloadSummary: Codable, Equatable, Sendable {
         self.itemCount = itemCount
         self.dateRange = dateRange
         self.extraDetails = extraDetails
+    }
+
+    /// Bounded decode (R3/R5): rejects an oversize summary rather than holding and rendering it.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try Self.boundedText(c.decode(String.self, forKey: .title), in: c, key: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+            .map { try Self.boundedText($0, in: c, key: .subtitle) }
+        itemCount = try c.decode(Int.self, forKey: .itemCount)
+        dateRange = try c.decodeIfPresent(DateRange.self, forKey: .dateRange)
+        let details = try c.decode([String: String].self, forKey: .extraDetails)
+        guard details.count <= Self.maxExtraDetails else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .extraDetails, in: c,
+                debugDescription: "\(details.count) detail rows exceeds the \(Self.maxExtraDetails) allowed")
+        }
+        for (key, value) in details {
+            _ = try Self.boundedText(key, in: c, key: .extraDetails)
+            _ = try Self.boundedText(value, in: c, key: .extraDetails)
+        }
+        extraDetails = details
+    }
+
+    /// Rejects a summary string longer than ``maxDetailCharacters``.
+    private static func boundedText(_ value: String, in container: KeyedDecodingContainer<CodingKeys>,
+                                    key: CodingKeys) throws -> String {
+        guard value.count <= maxDetailCharacters else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key, in: container,
+                debugDescription: "summary text of \(value.count) characters exceeds the \(maxDetailCharacters) allowed")
+        }
+        return value
+    }
+
+    /// Wire JSON keys for a disclosure summary.
+    private enum CodingKeys: String, CodingKey {
+        case title, subtitle, itemCount, dateRange, extraDetails
     }
 }

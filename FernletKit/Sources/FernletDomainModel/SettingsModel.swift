@@ -248,10 +248,44 @@ public nonisolated struct FernletSettings: Codable {
 
     nonisolated public init() {}
 
+    /// Upper bound on the day-keyed maps (`sickDays`, `intentDismissedDays`) kept at decode.
+    ///
+    /// R3: both are append-only — one key per day the user marks sick or dismisses the intent
+    /// prompt — and nothing prunes them, so every key rides every synced save forever. 400 days is
+    /// well past any window the app reads; older keys are dropped newest-first (`yyyy-MM-dd` sorts
+    /// chronologically) at the point the map enters this build.
+    public static let maxDayKeyedEntries = 400
+    /// Upper bound on user-created workout locations retained at decode (R3).
+    public static let maxWorkoutLocations = 20
+    /// Upper bound on user-created personal-care tasks retained at decode (R3).
+    public static let maxPersonalCareTasks = 40
+    /// Upper bound on unknown top-level keys parked from one settings blob (R3).
+    ///
+    /// The whole known key set is ~60, so hundreds of unknown keys is not a newer build — it is a
+    /// corrupt or hostile blob. Exceeding it FAILS the decode loudly rather than dropping keys
+    /// silently, because silent dropping is exactly the loss `parkedUnknownKeys` exists to prevent.
+    public static let maxParkedUnknownKeys = 256
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        bottleOz = try container.decodeIfPresent(Int.self, forKey: .bottleOz) ?? 24
-        hydrationTarget = try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4
+        // Every stored property has a default, so `self` is fully initialized here and the decode
+        // can be split into mutating passes by field group (R4). The passes run in wire order.
+        try decodeCoreAndEnums(from: container)
+        try decodeFlagsAndSensitiveGate(from: container)
+        try decodeNutrition(from: container)
+        try decodeHomeLayout(from: container)
+        try decodeCareAndProximity(from: container)
+        try decodeWorkoutAndExport(from: container)
+        try parkUnknownKeys(from: decoder)
+    }
+
+    /// Hydration, developer flags, the tolerant scalar enums, closet/designer state, and the
+    /// day-keyed maps.
+    private mutating func decodeCoreAndEnums(from container: KeyedDecodingContainer<CodingKeys>) throws {
+        // R5: a corrupt or foreign blob can carry any Int here, and these feed UI math directly, so
+        // clamp to sane ranges at the boundary rather than trusting the editor's invariant.
+        bottleOz = Self.clamped(try container.decodeIfPresent(Int.self, forKey: .bottleOz) ?? 24, to: 1...128)
+        hydrationTarget = Self.clamped(try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4, to: 0...30)
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
         // Scalar enum fields decode tolerantly (freeze-on-unknown + parked-token side channel):
         // `decodeIfPresent(EnumType.self) ?? default` only defaults on an ABSENT key — a present
@@ -275,14 +309,20 @@ public nonisolated struct FernletSettings: Codable {
             resolve: GoalType.init(persistedToken:))
         selectedGoal = goalSplit.value
         unknownSelectedGoalToken = goalSplit.parkedToken
-        sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
-        intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]
+        // R3: keep only the newest `maxDayKeyedEntries` day keys of each append-only map.
+        sickDays = Self.newestDayKeys(try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:])
+        intentDismissedDays = Self.newestDayKeys(
+            try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:])
         nutrientBubbleDismissedUntil = try container.decodeIfPresent([String: Date].self, forKey: .nutrientBubbleDismissedUntil) ?? [:]
         let aiStatusSplit = try container.decodeTolerantEnum(
             AIStatus.self, forKey: .aiStatus,
             parkedTokenKey: .unknownAIStatusToken, default: .off)
         aiStatus = aiStatusSplit.value
         unknownAIStatusToken = aiStatusSplit.parkedToken
+    }
+
+    /// The feature flags, the onboarding marker, and the sensitive-surface visibility gate.
+    private mutating func decodeFlagsAndSensitiveGate(from container: KeyedDecodingContainer<CodingKeys>) throws {
         webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
         weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
@@ -318,12 +358,23 @@ public nonisolated struct FernletSettings: Codable {
         periodAwareScoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .periodAwareScoringEnabled) ?? false
         periodContextPrimerSeen = try container.decodeIfPresent(Bool.self, forKey: .periodContextPrimerSeen) ?? false
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
+    }
+
+    /// The nutrition profile, preferences, and the three pinned macro-target overrides.
+    private mutating func decodeNutrition(from container: KeyedDecodingContainer<CodingKeys>) throws {
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
         // Absent key ⇒ nil ⇒ derive (correct for every settings blob written before overrides existed).
-        calorieTargetOverride = try container.decodeIfPresent(Int.self, forKey: .calorieTargetOverride)
-        proteinTargetOverride = try container.decodeIfPresent(Int.self, forKey: .proteinTargetOverride)
-        fatTargetOverride = try container.decodeIfPresent(Int.self, forKey: .fatTargetOverride)
+        // R5: a present value is only meaningful when positive — the editor can only write positive
+        // integers, but a corrupt/foreign blob can carry anything, and a negative or absurd override
+        // flows straight into `NutritionTargetCalculator`. Treat an out-of-range one as "derive".
+        calorieTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .calorieTargetOverride))
+        proteinTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .proteinTargetOverride))
+        fatTargetOverride = Self.positiveOverride(try container.decodeIfPresent(Int.self, forKey: .fatTargetOverride))
+    }
+
+    /// The quick-log shortcuts, home widgets (with their two one-time migrations), and care tasks.
+    private mutating func decodeHomeLayout(from container: KeyedDecodingContainer<CodingKeys>) throws {
         // These enum arrays sync across devices, so decode them tolerantly: a strict `[FernletShortcut]`/
         // `[HomeWidget]` decode throws on the first raw value only a NEWER build knows, and that error
         // cascades into decode-failure recovery (empty read-only database) on this device. Known tokens
@@ -372,7 +423,12 @@ public nonisolated struct FernletSettings: Codable {
         }
         homeWidgets = HomeWidget.normalized(decodedHomeWidgets)
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks
-        personalCareTasks = PersonalCareTask.normalized(decodedCareTasks)
+        // R3: a user-created list with no cap anywhere; bound it where the rows enter this build.
+        personalCareTasks = PersonalCareTask.normalized(Array(decodedCareTasks.prefix(Self.maxPersonalCareTasks)))
+    }
+
+    /// Proximity consents, the companion name, and the rest of the in-person surface flags.
+    private mutating func decodeCareAndProximity(from container: KeyedDecodingContainer<CodingKeys>) throws {
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
@@ -384,33 +440,74 @@ public nonisolated struct FernletSettings: Codable {
         hasPromptedForPresence = try container.decodeIfPresent(Bool.self, forKey: .hasPromptedForPresence) ?? false
         shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
+    }
+
+    /// Workout configuration (profile, locations, progression, custom exercises) and the trainer
+    /// export toggles.
+    private mutating func decodeWorkoutAndExport(from container: KeyedDecodingContainer<CodingKeys>) throws {
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
-        workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
+        // R3: user-created list, capped where it enters this build.
+        workoutLocations = decodedLocations.isEmpty
+            ? [WorkoutLocation.fullGym]
+            : Array(decodedLocations.prefix(Self.maxWorkoutLocations))
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
-        customExercises = try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? []
+        // R3: accumulates across coach-plan imports with no per-import total; the registry applies
+        // the same ceiling, so decode and registry can never disagree about what is retained.
+        customExercises = Array((try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? [])
+            .prefix(WorkoutExerciseCatalog.maxCustomExercises))
         coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
         trainerExportIncludesGoal = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesGoal) ?? false
         trainerExportIncludesHydration = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesHydration) ?? false
         trainerExportIncludesSleep = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSleep) ?? false
         trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
         trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
+    }
 
+    /// Clamps `value` into `range` — the boundary guard for the scalar settings a corrupt or foreign
+    /// blob could otherwise push into UI math.
+    private static func clamped(_ value: Int, to range: ClosedRange<Int>) -> Int {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    /// A macro-target override is honoured only when positive and plausible; anything else decodes
+    /// as `nil`, i.e. "derive the target".
+    private static func positiveOverride(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return min(value, 20_000)
+    }
+
+    /// Keeps only the newest ``maxDayKeyedEntries`` entries of a `yyyy-MM-dd`-keyed map (the keys
+    /// sort chronologically, so lexicographic order is date order).
+    private static func newestDayKeys<Value>(_ map: [String: Value]) -> [String: Value] {
+        guard map.count > maxDayKeyedEntries else { return map }
+        let keep = Set(map.keys.sorted().suffix(maxDayKeyedEntries))
+        return map.filter { keep.contains($0.key) }
+    }
+
+    /// Captures every top-level key this build does not know, so a re-encode round-trips a newer
+    /// build's settings losslessly.
+    private mutating func parkUnknownKeys(from decoder: Decoder) throws {
         // Generic unknown-key parking (see `parkedUnknownKeys`): capture every remaining top-level key
         // this build doesn't know, with its raw JSON value, so a re-encode here round-trips a newer
         // build's settings losslessly instead of dropping them. `knownKeys` is every `CodingKeys` case,
         // all decoded above, so a key this build owns is EXCLUDED here and can never be parked — the
         // current version always wins for its own keys. That specifically covers the privacy-critical
         // `didMigratePeriodVisibility` / `periodTrackingVisible` / `intimacyTrackingVisible` markers, so
-        // parking can never let a stale copy of them shadow the live gate. This capture is deliberately
-        // UNCAPPED (unlike the bounded enum-token channels): a newer build may legitimately add many keys
-        // over versions, and dropping any of them would reintroduce the very loss this fixes; the blob's
-        // overall size is already bounded by the sync layer.
+        // parking can never let a stale copy of them shadow the live gate. The capture is generous but
+        // BOUNDED (R3) by `maxParkedUnknownKeys`: a newer build may legitimately add many keys over
+        // versions — hundreds is not a newer build — and exceeding the bound throws rather than
+        // dropping keys, because a silent drop is the very loss this parking exists to prevent.
         let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
         let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
         var parked: [String: JSONValue] = [:]
         for key in dynamicContainer.allKeys where !knownKeys.contains(key.stringValue) {
+            guard parked.count < Self.maxParkedUnknownKeys else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: dynamicContainer.codingPath,
+                    debugDescription: "settings blob carries more than \(Self.maxParkedUnknownKeys) unknown keys"))
+            }
             parked[key.stringValue] = try dynamicContainer.decode(JSONValue.self, forKey: key)
         }
         parkedUnknownKeys = parked
@@ -450,6 +547,28 @@ public nonisolated struct FernletSettings: Codable {
     /// build decodes) — then writes every parked key back verbatim.
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        // Split by the same field groups the decode uses (R4). Key ORDER is preserved exactly, so
+        // the emitted JSON is byte-identical to the pre-split encoder.
+        try encodeCoreAndEnums(into: &container)
+        try encodeFlagsAndSensitiveGate(into: &container)
+        try encodeNutritionAndHomeLayout(into: &container)
+        try encodeCareAndProximity(into: &container)
+        try encodeWorkoutAndExport(into: &container)
+
+        // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
+        // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard
+        // makes current-version-wins precedence explicit and defensive. When nothing is parked (every
+        // legacy blob) no second container is opened, so the encoded shape gains no parking artifact.
+        guard !parkedUnknownKeys.isEmpty else { return }
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
+        for (key, value) in parkedUnknownKeys where !knownKeys.contains(key) {
+            try dynamicContainer.encode(value, forKey: DynamicCodingKey(stringValue: key))
+        }
+    }
+
+    /// Mirror of `decodeCoreAndEnums(from:)`.
+    private func encodeCoreAndEnums(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(bottleOz, forKey: .bottleOz)
         try container.encode(hydrationTarget, forKey: .hydrationTarget)
         try container.encode(showDeveloperNotes, forKey: .showDeveloperNotes)
@@ -467,6 +586,10 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(nutrientBubbleDismissedUntil, forKey: .nutrientBubbleDismissedUntil)
         try container.encode(aiStatus, forKey: .aiStatus)
         try container.encodeIfPresent(unknownAIStatusToken, forKey: .unknownAIStatusToken)
+    }
+
+    /// Mirror of `decodeFlagsAndSensitiveGate(from:)`.
+    private func encodeFlagsAndSensitiveGate(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(webNutritionLookupEnabled, forKey: .webNutritionLookupEnabled)
         try container.encode(weatherPromptsEnabled, forKey: .weatherPromptsEnabled)
         try container.encode(showCalories, forKey: .showCalories)
@@ -479,6 +602,10 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(periodAwareScoringEnabled, forKey: .periodAwareScoringEnabled)
         try container.encode(periodContextPrimerSeen, forKey: .periodContextPrimerSeen)
         try container.encode(stressAwarenessEnabled, forKey: .stressAwarenessEnabled)
+    }
+
+    /// Mirror of `decodeNutrition(from:)` + `decodeHomeLayout(from:)`.
+    private func encodeNutritionAndHomeLayout(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(userProfile, forKey: .userProfile)
         try container.encode(nutritionPreferences, forKey: .nutritionPreferences)
         try container.encodeIfPresent(calorieTargetOverride, forKey: .calorieTargetOverride)
@@ -491,6 +618,10 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(didMigrateMilestonesFirstAidWidgets, forKey: .didMigrateMilestonesFirstAidWidgets)
         try container.encode(didMigrateMealPhotosWidget, forKey: .didMigrateMealPhotosWidget)
         try container.encode(personalCareTasks, forKey: .personalCareTasks)
+    }
+
+    /// Mirror of `decodeCareAndProximity(from:)`.
+    private func encodeCareAndProximity(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(proximityDisplayName, forKey: .proximityDisplayName)
         try container.encode(showProximityDebugTools, forKey: .showProximityDebugTools)
         try container.encode(allowNearbyRecipeShares, forKey: .allowNearbyRecipeShares)
@@ -502,6 +633,10 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(hasPromptedForPresence, forKey: .hasPromptedForPresence)
         try container.encodeIfPresent(shopLastPublishedDayKey, forKey: .shopLastPublishedDayKey)
         try container.encode(companionName, forKey: .companionName)
+    }
+
+    /// Mirror of `decodeWorkoutAndExport(from:)`.
+    private func encodeWorkoutAndExport(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(workoutProfile, forKey: .workoutProfile)
         try container.encode(workoutLocations, forKey: .workoutLocations)
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
@@ -513,17 +648,6 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(trainerExportIncludesSleep, forKey: .trainerExportIncludesSleep)
         try container.encode(trainerExportIncludesSickness, forKey: .trainerExportIncludesSickness)
         try container.encode(trainerExportIncludesWellbeing, forKey: .trainerExportIncludesWellbeing)
-
-        // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
-        // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard
-        // makes current-version-wins precedence explicit and defensive. When nothing is parked (every
-        // legacy blob) no second container is opened, so the encoded shape gains no parking artifact.
-        guard !parkedUnknownKeys.isEmpty else { return }
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
-        for (key, value) in parkedUnknownKeys where !knownKeys.contains(key) {
-            try dynamicContainer.encode(value, forKey: DynamicCodingKey(stringValue: key))
-        }
     }
 
     /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when
@@ -689,8 +813,21 @@ public nonisolated enum JSONValue: Codable, Hashable, Sendable {
     case array([JSONValue])
     case object([String: JSONValue])
 
+    /// Maximum nesting depth of a parked value.
+    ///
+    /// R1/R2: decoding a nested value re-enters this initializer through `Codable` — one stack frame
+    /// per level — so the depth must be bounded in code, not left to whatever ceiling the underlying
+    /// JSON scanner happens to have. No Fernlet build writes a settings value anywhere near this
+    /// deep; a blob that does is corrupt or hostile and is rejected rather than walked.
+    public static let maxNestingDepth = 64
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
+        guard decoder.codingPath.count <= JSONValue.maxNestingDepth else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Parked settings value nested deeper than \(JSONValue.maxNestingDepth)")
+        }
         if container.decodeNil() {
             self = .null
         } else if let value = try? container.decode(Bool.self) {

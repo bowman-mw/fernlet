@@ -634,7 +634,7 @@ public nonisolated struct FitnessGoal: Identifiable, Codable, Equatable {
 /// ``WorkoutRestGuidance``. `init(persistedToken:)` also maps the legacy display-string aliases
 /// early builds wrote; the lenient `init(from:)` freezes unrecognized tokens to `.wellness`, and
 /// ``FernletSettings`` additionally parks them in a side channel.
-public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, Sendable {
     case wellness
     case strength
     case weightManagement

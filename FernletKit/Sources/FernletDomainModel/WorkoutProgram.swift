@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 
 // MARK: - Experience level
 
@@ -156,7 +157,7 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
 // MARK: - Equipment (granular, user-facing) → coarse engine capability
 
 /// Equipment categories shown as sections in the selection grid.
-public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable {
+public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable, Sendable {
     case cardio
     case freeWeights
     case machines
@@ -178,7 +179,7 @@ public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable {
 
 /// Specific pieces of equipment the user checks off per location. Each maps down to a coarse
 /// `Equipment` capability that the planning engine / safety filter actually reasons about.
-public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiable, Sendable {
     case treadmill, exerciseBike, rowingMachine, elliptical, stairClimber
     case dumbbells, barbell, kettlebells, weightPlates, weightBench
     case cableMachine, latPulldown, legPress, smithMachine, chestPress
@@ -269,7 +270,7 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
 }
 
 /// A preset starting point for a new location, pre-filling typical equipment.
-public nonisolated struct LocationTemplate: Identifiable {
+public nonisolated struct LocationTemplate: Identifiable, Sendable {
 
     public init(id: String, name: String, subtitle: String, systemImage: String, equipment: Set<GymEquipment>) {
         self.id = id
@@ -288,7 +289,7 @@ public nonisolated struct LocationTemplate: Identifiable {
         WorkoutLocation(name: name, ownedEquipment: equipment)
     }
 
-    nonisolated(unsafe) public static let all: [LocationTemplate] = [
+    public static let all: [LocationTemplate] = [
         LocationTemplate(id: "full-gym", name: "Full gym", subtitle: "Commercial or studio",
                          systemImage: "dumbbell.fill", equipment: Set(GymEquipment.allCases)),
         LocationTemplate(id: "hotel-gym", name: "Hotel gym", subtitle: "Small, shared space",
@@ -322,8 +323,17 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try c.decode(String.self, forKey: .name)
-        // Defensive: drop any unknown raw values rather than throwing (handles older saves).
-        let raws = (try? c.decodeIfPresent([String].self, forKey: .ownedEquipment)) ?? []
+        // Defensive: drop any unknown raw values rather than throwing (handles older saves) — that
+        // is `compactMap` below. The decode itself only throws when the key is PRESENT and is not
+        // an array of strings, i.e. real corruption, which must not be silent (R7): the recovery is
+        // an empty equipment set that the next save persists, so it is named in the log.
+        var raws: [String] = []
+        do {
+            raws = try c.decodeIfPresent([String].self, forKey: .ownedEquipment) ?? []
+        } catch {
+            FernletAuditLog.log("workout.location.ownedEquipment.decodeFailed",
+                                context: ["error": error.localizedDescription])
+        }
         ownedEquipment = Set(raws.compactMap(GymEquipment.init(rawValue:)))
     }
 
@@ -340,7 +350,7 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey { case id, name, ownedEquipment }
 
     /// Equipment available regardless of location (no gear required).
-    nonisolated(unsafe) public static let alwaysAvailable: Set<Equipment> = [.bodyweight, .none]
+    public static let alwaysAvailable: Set<Equipment> = [.bodyweight, .none]
 
     /// Coarse capabilities the planning engine checks against, derived from granular equipment.
     public var capabilities: Set<Equipment> {
@@ -366,8 +376,15 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     // captured from one read matched nothing on the next. A hardcoded UUID makes the built-ins stable
     // across reads, launches and devices; `static let` would not (it is initialized once per PROCESS, so
     // the id would still change every launch).
-    private static let fullGymID = UUID(uuidString: "F0E1D2C3-B4A5-4968-8778-6A5B4C3D2E1F")!
-    private static let homeID = UUID(uuidString: "0A1B2C3D-4E5F-4061-9273-8495A6B7C8D9")!
+    //
+    // Spelled through the non-failable `UUID(uuid:)` byte initializer rather than
+    // `UUID(uuidString:)!` — same 128-bit value, no force unwrap (R5).
+    // `WorkoutProgramTests.builtInLocationIDsMatchTheirPersistedStringForm` pins the `uuidString`
+    // form of `fullGym`/`home`, so a typo in the bytes cannot silently change a persisted id.
+    private static let fullGymID = UUID(uuid: (0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x49, 0x68,
+                                               0x87, 0x78, 0x6A, 0x5B, 0x4C, 0x3D, 0x2E, 0x1F))
+    private static let homeID = UUID(uuid: (0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x5F, 0x40, 0x61,
+                                            0x92, 0x73, 0x84, 0x95, 0xA6, 0xB7, 0xC8, 0xD9))
 
     /// The default location: assume the user has every standard piece of gym equipment.
     nonisolated public static var fullGym: WorkoutLocation {
@@ -406,7 +423,7 @@ public nonisolated enum WorkoutSafetyFilter {
 ///
 /// Drives set counts (``WorkoutGoalStyle``), exercise slot scoring, and rest demand
 /// (``WorkoutRestGuidance``).
-public nonisolated enum SlotRole {
+public nonisolated enum SlotRole: Sendable {
     case main          // compound, heavier
     case accessory     // isolation / lighter
     case core          // trunk
@@ -415,7 +432,7 @@ public nonisolated enum SlotRole {
 /// A slot describes the INTENT of a movement (pattern + target region/muscles + role), not a fixed
 /// exercise. The engine fills it from the equipment- and injury-filtered catalog, so the same split
 /// adapts to the user's location and limits while keeping the structure consistent week to week.
-public nonisolated struct WorkoutSlotSpec {
+public nonisolated struct WorkoutSlotSpec: Sendable {
 
     public init(label: String, role: SlotRole, movement: MovementPattern? = nil, muscles: Set<MuscleGroup> = [], region: BodyRegion? = nil) {
         self.label = label
@@ -435,7 +452,7 @@ public nonisolated struct WorkoutSlotSpec {
 ///
 /// Cardio/mobility sessions render their conditioning descriptor directly; the others are filled
 /// from the catalog via slots.
-public nonisolated enum SessionKind: String, CaseIterable {
+public nonisolated enum SessionKind: String, CaseIterable, Sendable {
     case strength
     case fullBody
     case cardio
@@ -444,7 +461,7 @@ public nonisolated enum SessionKind: String, CaseIterable {
 }
 
 /// When in the day a session happens — lets a split prescribe e.g. morning cardio + evening lifting.
-public nonisolated enum SessionTime: String {
+public nonisolated enum SessionTime: String, Sendable {
     case any
     case morning
     case midday
@@ -462,7 +479,7 @@ public nonisolated enum SessionTime: String {
 
 /// One training session. Strength/full-body/sport sessions are filled from the catalog via `slots`;
 /// cardio/mobility sessions render their `conditioning` descriptor directly.
-public nonisolated struct WorkoutSessionTemplate {
+public nonisolated struct WorkoutSessionTemplate: Sendable {
 
     public init(title: String, kind: SessionKind, time: SessionTime = .any, slots: [WorkoutSlotSpec] = [], conditioning: String? = nil) {
         self.title = title
@@ -479,7 +496,7 @@ public nonisolated struct WorkoutSessionTemplate {
 }
 
 /// A day in the split. Most days have one session; some (cardio + strength, two-a-days) have several.
-public nonisolated struct WorkoutSplitDay {
+public nonisolated struct WorkoutSplitDay: Sendable {
 
     public init(title: String, sessions: [WorkoutSessionTemplate]) {
         self.title = title
@@ -490,7 +507,7 @@ public nonisolated struct WorkoutSplitDay {
 }
 
 /// How specific a split is, from "just move" to a body-part split.
-public nonisolated enum SplitSpecificity: Int, CaseIterable {
+public nonisolated enum SplitSpecificity: Int, CaseIterable, Sendable {
     case minimal = 0      // very broad: daily movement / full body
     case balanced = 1     // upper/lower, full-body rotations
     case focused = 2      // push/pull/legs
@@ -510,7 +527,7 @@ public nonisolated enum SplitSpecificity: Int, CaseIterable {
 ///
 /// The unit ``WorkoutSplitRecommender`` ranks and the program engine rotates through; `id` is the
 /// stable token stored in `WorkoutProfile.selectedSplitID`.
-public nonisolated struct TrainingSplit: Identifiable {
+public nonisolated struct TrainingSplit: Identifiable, Sendable {
 
     public init(id: String, name: String, summary: String, specificity: SplitSpecificity, goalFit: Set<GoalType>, days: [WorkoutSplitDay]) {
         self.id = id
@@ -553,33 +570,33 @@ extension WorkoutSessionTemplate {
 /// The static library of reusable session templates (full-body variants, PPL days, body-part days,
 /// cardio).
 ///
-/// Immutable constants (`nonisolated(unsafe)` because they are built once and never mutated),
-/// composed into every ``TrainingSplit`` in ``WorkoutSplitCatalog``.
+/// Immutable `Sendable` constants, built once and never mutated, composed into every
+/// ``TrainingSplit`` in ``WorkoutSplitCatalog``.
 public nonisolated enum WorkoutSessions {
     // Strength sessions. Vertical/horizontal pushes & pulls are distinguished by target muscles
     // (the catalog tags only movementPattern); "not used today" diversifies picks within a day.
-    nonisolated(unsafe) public static let fullBodyA = WorkoutSessionTemplate(title: "Full Body A", kind: .fullBody, slots: [
+    public static let fullBodyA = WorkoutSessionTemplate(title: "Full Body A", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Squat", role: .main, movement: .squat, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Hinge", role: .accessory, movement: .hinge, muscles: [.hamstrings, .glutes]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
-    nonisolated(unsafe) public static let fullBodyB = WorkoutSessionTemplate(title: "Full Body B", kind: .fullBody, slots: [
+    public static let fullBodyB = WorkoutSessionTemplate(title: "Full Body B", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Hinge", role: .main, movement: .hinge, muscles: [.hamstrings, .glutes]),
         WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
         WorkoutSlotSpec(label: "Lunge", role: .accessory, movement: .lunge, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
-    nonisolated(unsafe) public static let fullBodyC = WorkoutSessionTemplate(title: "Full Body C", kind: .fullBody, slots: [
+    public static let fullBodyC = WorkoutSessionTemplate(title: "Full Body C", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Lunge", role: .main, movement: .lunge, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Incline push", role: .main, movement: .push, muscles: [.chest, .frontDelts]),
         WorkoutSlotSpec(label: "Row", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Carry / loaded", role: .accessory, movement: .carry, muscles: [.forearms, .traps]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
-    nonisolated(unsafe) public static let upper = WorkoutSessionTemplate(title: "Upper", kind: .strength, slots: [
+    public static let upper = WorkoutSessionTemplate(title: "Upper", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
@@ -587,28 +604,28 @@ public nonisolated enum WorkoutSessions {
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
-    nonisolated(unsafe) public static let lower = WorkoutSessionTemplate(title: "Lower", kind: .strength, slots: [
+    public static let lower = WorkoutSessionTemplate(title: "Lower", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Squat", role: .main, movement: .squat, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Hinge", role: .main, movement: .hinge, muscles: [.hamstrings, .glutes]),
         WorkoutSlotSpec(label: "Lunge", role: .accessory, movement: .lunge, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Calves", role: .accessory, movement: .isolation, muscles: [.calves]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
-    nonisolated(unsafe) public static let push = WorkoutSessionTemplate(title: "Push", kind: .strength, slots: [
+    public static let push = WorkoutSessionTemplate(title: "Push", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Incline push", role: .accessory, movement: .push, muscles: [.chest, .frontDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
-    nonisolated(unsafe) public static let pull = WorkoutSessionTemplate(title: "Pull", kind: .strength, slots: [
+    public static let pull = WorkoutSessionTemplate(title: "Pull", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
         WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Hinge", role: .accessory, movement: .hinge, muscles: [.hamstrings, .glutes]),
     ])
-    nonisolated(unsafe) public static let legs = WorkoutSessionTemplate(title: "Legs", kind: .strength, slots: [
+    public static let legs = WorkoutSessionTemplate(title: "Legs", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Squat", role: .main, movement: .squat, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Hinge", role: .main, movement: .hinge, muscles: [.hamstrings, .glutes]),
         WorkoutSlotSpec(label: "Lunge", role: .accessory, movement: .lunge, muscles: [.quads, .glutes]),
@@ -616,42 +633,42 @@ public nonisolated enum WorkoutSessions {
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
     // Body-part sessions (specialized splits)
-    nonisolated(unsafe) public static let chest = WorkoutSessionTemplate(title: "Chest", kind: .strength, slots: [
+    public static let chest = WorkoutSessionTemplate(title: "Chest", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Incline press", role: .main, movement: .push, muscles: [.chest, .frontDelts]),
         WorkoutSlotSpec(label: "Chest isolation", role: .accessory, movement: .isolation, muscles: [.chest]),
         WorkoutSlotSpec(label: "Dip / decline", role: .accessory, movement: .push, muscles: [.chest, .triceps]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
-    nonisolated(unsafe) public static let back = WorkoutSessionTemplate(title: "Back", kind: .strength, slots: [
+    public static let back = WorkoutSessionTemplate(title: "Back", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
         WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Row variation", role: .accessory, movement: .pull, muscles: [.upperBack]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
     ])
-    nonisolated(unsafe) public static let shoulders = WorkoutSessionTemplate(title: "Shoulders", kind: .strength, slots: [
+    public static let shoulders = WorkoutSessionTemplate(title: "Shoulders", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Front delts", role: .accessory, movement: .isolation, muscles: [.frontDelts]),
         WorkoutSlotSpec(label: "Traps", role: .accessory, movement: .isolation, muscles: [.traps]),
     ])
-    nonisolated(unsafe) public static let arms = WorkoutSessionTemplate(title: "Arms", kind: .strength, slots: [
+    public static let arms = WorkoutSessionTemplate(title: "Arms", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Biceps", role: .main, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Triceps", role: .main, movement: .isolation, muscles: [.triceps]),
         WorkoutSlotSpec(label: "Biceps 2", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Triceps 2", role: .accessory, movement: .isolation, muscles: [.triceps]),
         WorkoutSlotSpec(label: "Forearms / grip", role: .accessory, movement: .isolation, muscles: [.forearms]),
     ])
-    nonisolated(unsafe) public static let arnoldChestBack = WorkoutSessionTemplate(title: "Chest & Back", kind: .strength, slots: [
+    public static let arnoldChestBack = WorkoutSessionTemplate(title: "Chest & Back", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
         WorkoutSlotSpec(label: "Incline press", role: .accessory, movement: .push, muscles: [.chest]),
         WorkoutSlotSpec(label: "Horizontal pull", role: .accessory, movement: .pull, muscles: [.upperBack]),
         WorkoutSlotSpec(label: "Chest isolation", role: .accessory, movement: .isolation, muscles: [.chest]),
     ])
-    nonisolated(unsafe) public static let arnoldShouldersArms = WorkoutSessionTemplate(title: "Shoulders & Arms", kind: .strength, slots: [
+    public static let arnoldShouldersArms = WorkoutSessionTemplate(title: "Shoulders & Arms", kind: .strength, slots: [
         WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
@@ -660,11 +677,11 @@ public nonisolated enum WorkoutSessions {
     ])
 
     // Cardio / mobility / sport sessions (rendered from their descriptor, not the catalog)
-    nonisolated(unsafe) public static let easyCardio = WorkoutSessionTemplate(title: "Easy cardio", kind: .cardio, conditioning: "Easy cardio - 20 min")
-    nonisolated(unsafe) public static let intervals = WorkoutSessionTemplate(title: "Intervals", kind: .cardio, conditioning: "Intervals - 8 × 1 min hard / 1 min easy")
-    nonisolated(unsafe) public static let longCardio = WorkoutSessionTemplate(title: "Steady cardio", kind: .cardio, conditioning: "Steady cardio - 40 min")
-    nonisolated(unsafe) public static let mobility = WorkoutSessionTemplate(title: "Mobility", kind: .mobility, conditioning: "Mobility flow - 15 min")
-    nonisolated(unsafe) public static let sportConditioning = WorkoutSessionTemplate(title: "Sport conditioning", kind: .sport, slots: [
+    public static let easyCardio = WorkoutSessionTemplate(title: "Easy cardio", kind: .cardio, conditioning: "Easy cardio - 20 min")
+    public static let intervals = WorkoutSessionTemplate(title: "Intervals", kind: .cardio, conditioning: "Intervals - 8 × 1 min hard / 1 min easy")
+    public static let longCardio = WorkoutSessionTemplate(title: "Steady cardio", kind: .cardio, conditioning: "Steady cardio - 40 min")
+    public static let mobility = WorkoutSessionTemplate(title: "Mobility", kind: .mobility, conditioning: "Mobility flow - 15 min")
+    public static let sportConditioning = WorkoutSessionTemplate(title: "Sport conditioning", kind: .sport, slots: [
         WorkoutSlotSpec(label: "Lower power", role: .main, movement: .squat, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Carry / loaded", role: .accessory, movement: .carry, muscles: [.forearms, .traps]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
@@ -680,7 +697,7 @@ public nonisolated enum WorkoutSessions {
 public nonisolated enum WorkoutSplitCatalog {
     nonisolated public static var fallback: TrainingSplit { fullBody3 }
 
-    nonisolated(unsafe) public static let all: [TrainingSplit] = [
+    public static let all: [TrainingSplit] = [
         dailyMove, fullBody2, recoveryFlow, fullBody3, upperLowerFull3, upperLower4,
         ppl3, cardioStrength4, sportPrep, pplUL5, ppl6, broSplit5, arnold6, twoADay,
     ]
@@ -690,19 +707,19 @@ public nonisolated enum WorkoutSplitCatalog {
     }
 
     // --- Minimal / very broad ---
-    nonisolated(unsafe) public static let dailyMove = TrainingSplit(
+    public static let dailyMove = TrainingSplit(
         id: "daily-move", name: "Daily Movement",
         summary: "Easy full-body days and walks — just keep moving.",
         specificity: .minimal, goalFit: [.wellness, .mentalHealth, .recovery, .exploring],
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.easyCardio]), day("Day 3", [WorkoutSessions.fullBodyB])]
     )
-    nonisolated(unsafe) public static let fullBody2 = TrainingSplit(
+    public static let fullBody2 = TrainingSplit(
         id: "full-body-2", name: "Full Body ×2",
         summary: "Two full-body sessions a week. Simple and forgiving.",
         specificity: .minimal, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB])]
     )
-    nonisolated(unsafe) public static let recoveryFlow = TrainingSplit(
+    public static let recoveryFlow = TrainingSplit(
         id: "recovery-flow", name: "Recovery Flow",
         summary: "Mobility and easy movement to feel better, not beat up.",
         specificity: .minimal, goalFit: [.recovery, .mentalHealth, .wellness],
@@ -710,19 +727,19 @@ public nonisolated enum WorkoutSplitCatalog {
     )
 
     // --- Balanced ---
-    nonisolated(unsafe) public static let fullBody3 = TrainingSplit(
+    public static let fullBody3 = TrainingSplit(
         id: "full-body-3", name: "Full Body ×3",
         summary: "Three full-body sessions — the most efficient way to cover everything.",
         specificity: .balanced, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
-    nonisolated(unsafe) public static let upperLowerFull3 = TrainingSplit(
+    public static let upperLowerFull3 = TrainingSplit(
         id: "upper-lower-full-3", name: "Upper / Lower / Full",
         summary: "A bit more focus than full-body, still only three days.",
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep, .exploring],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
-    nonisolated(unsafe) public static let upperLower4 = TrainingSplit(
+    public static let upperLower4 = TrainingSplit(
         id: "upper-lower-4", name: "Upper / Lower",
         summary: "Four days alternating upper and lower body.",
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep],
@@ -730,13 +747,13 @@ public nonisolated enum WorkoutSplitCatalog {
     )
 
     // --- Focused ---
-    nonisolated(unsafe) public static let ppl3 = TrainingSplit(
+    public static let ppl3 = TrainingSplit(
         id: "ppl-3", name: "Push / Pull / Legs",
         summary: "Classic three-day split organised by movement.",
         specificity: .focused, goalFit: [.strength, .sportsPrep, .weightManagement],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs])]
     )
-    nonisolated(unsafe) public static let cardioStrength4 = TrainingSplit(
+    public static let cardioStrength4 = TrainingSplit(
         id: "cardio-strength-4", name: "Cardio + Strength",
         summary: "Morning cardio, evening lifting — for fat loss and conditioning.",
         specificity: .focused, goalFit: [.weightManagement, .wellness, .sportsPrep],
@@ -747,7 +764,7 @@ public nonisolated enum WorkoutSplitCatalog {
             day("Day 4", [WorkoutSessions.longCardio.at(.morning), WorkoutSessions.pull.at(.evening)]),
         ]
     )
-    nonisolated(unsafe) public static let sportPrep = TrainingSplit(
+    public static let sportPrep = TrainingSplit(
         id: "sport-prep", name: "Sport Prep",
         summary: "Sport-specific conditioning paired with strength work.",
         specificity: .focused, goalFit: [.sportsPrep],
@@ -758,13 +775,13 @@ public nonisolated enum WorkoutSplitCatalog {
             day("Day 4", [WorkoutSessions.pull]),
         ]
     )
-    nonisolated(unsafe) public static let pplUL5 = TrainingSplit(
+    public static let pplUL5 = TrainingSplit(
         id: "ppl-ul-5", name: "PPL + Upper / Lower",
         summary: "Five days mixing push/pull/legs with upper/lower.",
         specificity: .focused, goalFit: [.strength, .sportsPrep],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs]), day("Upper", [WorkoutSessions.upper]), day("Lower", [WorkoutSessions.lower])]
     )
-    nonisolated(unsafe) public static let ppl6 = TrainingSplit(
+    public static let ppl6 = TrainingSplit(
         id: "ppl-6", name: "Push / Pull / Legs ×2",
         summary: "Six high-frequency days for serious volume.",
         specificity: .focused, goalFit: [.strength, .sportsPrep],
@@ -772,19 +789,19 @@ public nonisolated enum WorkoutSplitCatalog {
     )
 
     // --- Specialized / very specific ---
-    nonisolated(unsafe) public static let broSplit5 = TrainingSplit(
+    public static let broSplit5 = TrainingSplit(
         id: "bro-5", name: "Bro Split",
         summary: "One body part per day for maximum focus.",
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest", [WorkoutSessions.chest]), day("Back", [WorkoutSessions.back]), day("Shoulders", [WorkoutSessions.shoulders]), day("Arms", [WorkoutSessions.arms]), day("Legs", [WorkoutSessions.legs])]
     )
-    nonisolated(unsafe) public static let arnold6 = TrainingSplit(
+    public static let arnold6 = TrainingSplit(
         id: "arnold-6", name: "Arnold Split",
         summary: "Chest+back, shoulders+arms, legs — twice over, six days.",
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs]), day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs])]
     )
-    nonisolated(unsafe) public static let twoADay = TrainingSplit(
+    public static let twoADay = TrainingSplit(
         id: "two-a-day", name: "Two-a-Day Strength",
         summary: "Two strength sessions a day — advanced, high volume.",
         specificity: .specialized, goalFit: [.strength, .sportsPrep],
@@ -1060,7 +1077,15 @@ public nonisolated enum WorkoutProgram {
         progression: [String: Int] = [:],
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
-        let dayCount = max(split.days.count, 1)
+        // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
+        // `max(count, 1)` made that trap on `days[0]` instead of degrading. Fall back to the same
+        // "just move" session the empty-render path below produces.
+        guard !split.days.isEmpty else {
+            return DayPlan(splitName: split.name, dayTitle: "Move",
+                           sessions: [Self.fallbackSession], droppedSlots: [],
+                           locationName: location.name)
+        }
+        let dayCount = split.days.count
         let day = split.days[((rotationIndex % dayCount) + dayCount) % dayCount]
         let style = WorkoutGoalStyle.style(for: goal, energy: intensity, sport: profile.sport)
         let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
@@ -1082,13 +1107,20 @@ public nonisolated enum WorkoutProgram {
         }
 
         if sessions.isEmpty {
-            sessions = [SessionSuggestion(
-                title: "Move", timeLabel: "", kind: .fullBody,
-                suggestion: WorkoutSuggestion(name: "Easy full body", exercises: "Full-body bodyweight circuit - 3 rounds", notes: "A simple option for today.")
-            )]
+            sessions = [Self.fallbackSession]
         }
 
         return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped, locationName: location.name)
+    }
+
+    /// The "there is always something to do" session used when a split renders nothing at all.
+    private static var fallbackSession: SessionSuggestion {
+        SessionSuggestion(
+            title: "Move", timeLabel: "", kind: .fullBody,
+            suggestion: WorkoutSuggestion(name: "Easy full body",
+                                          exercises: "Full-body bodyweight circuit - 3 rounds",
+                                          notes: "A simple option for today.")
+        )
     }
 
     private static func render(

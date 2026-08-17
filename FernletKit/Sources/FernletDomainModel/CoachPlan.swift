@@ -470,8 +470,18 @@ public nonisolated struct CoachExerciseDefinition: Codable, Equatable, Sendable 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
-        primaryMuscles = try c.decodeIfPresent([String].self, forKey: .primaryMuscles) ?? []
-        secondaryMuscles = try c.decodeIfPresent([String].self, forKey: .secondaryMuscles) ?? []
+        // R3: an untrusted plan can list any number of muscle tokens, and each list is retained on
+        // the definition. There are only so many muscles, so a list longer than the vocabulary is
+        // never legitimate — reject rather than hold it.
+        let decodedPrimary = try c.decodeIfPresent([String].self, forKey: .primaryMuscles) ?? []
+        let decodedSecondary = try c.decodeIfPresent([String].self, forKey: .secondaryMuscles) ?? []
+        let muscleCeiling = MuscleGroup.allCases.count
+        guard decodedPrimary.count <= muscleCeiling, decodedSecondary.count <= muscleCeiling else {
+            throw CoachPlanDecodeError.tooManyMuscles(
+                exerciseName: name, count: max(decodedPrimary.count, decodedSecondary.count))
+        }
+        primaryMuscles = decodedPrimary
+        secondaryMuscles = decodedSecondary
         equipment = try c.decodeIfPresent(String.self, forKey: .equipment) ?? ""
         movementPattern = try c.decodeIfPresent(String.self, forKey: .movementPattern) ?? ""
         inputKind = try c.decodeIfPresent(String.self, forKey: .inputKind)
@@ -584,7 +594,7 @@ public nonisolated enum CoachPlanTokens {
         switch fold(raw) {
         case "strength": .strength
         case "treadmill": .treadmill
-        case "none": .none
+        case "none": ExerciseInputKind.none
         default: nil
         }
     }
@@ -637,6 +647,8 @@ public nonisolated enum CoachPlanDecodeError: Error, Equatable, Sendable {
     case tooManyExercises(sessionTitle: String, count: Int)
     case tooManyNewExercises(Int)
     case tooManyEdits(Int)
+    /// A new-exercise definition listed more muscle tokens than the vocabulary has muscles.
+    case tooManyMuscles(exerciseName: String, count: Int)
 
     /// Copy shown to the user; every case names the actual number so the message is checkable.
     public var message: String {
@@ -651,6 +663,8 @@ public nonisolated enum CoachPlanDecodeError: Error, Equatable, Sendable {
             "This plan defines \(n) new exercises. Fernlet accepts up to \(CoachPlanLimits.maxNewExercises)."
         case .tooManyEdits(let n):
             "This plan changes \(n) workouts you'd already planned. Fernlet accepts up to \(CoachPlanLimits.maxEdits)."
+        case .tooManyMuscles(let exerciseName, let count):
+            "\"\(exerciseName)\" lists \(count) muscles. Fernlet knows \(MuscleGroup.allCases.count)."
         }
     }
 }
@@ -709,53 +723,141 @@ extension CoachPlan {
     /// - Returns: every issue found, blocking ones included. An empty result means the plan is
     ///   importable as-is; `.clamped` issues alone still mean importable, with the noted adjustments.
     public func validate(knownExerciseNames: Set<String>) -> [CoachPlanIssue] {
-        var issues: [CoachPlanIssue] = []
+        let envelope = envelopeIssues()
+        guard !envelope.stop else { return envelope.issues }
 
+        // Definitions must resolve before the undefined-name check, so a name that IS defined but
+        // whose definition is broken reports the real problem rather than "undefined exercise".
+        let (definedNames, definitionIssues) = resolvedDefinitionNames()
+        return envelope.issues
+            + textLengthIssues()
+            + dayIssues()
+            + definitionIssues
+            + editIssues()
+            + undefinedNameIssues(known: knownExerciseNames, defined: definedNames)
+    }
+
+    /// Envelope checks: schema version, format tag, emptiness, day count. `stop` is `true` when the
+    /// plan is unreadable enough that every later pass would be guesswork.
+    private func envelopeIssues() -> (issues: [CoachPlanIssue], stop: Bool) {
         if schemaVersion > CoachPlan.currentSchemaVersion {
-            issues.append(.init(kind: .blocking, subject: title,
-                                detail: "This plan uses a newer format (version \(schemaVersion)). Update Fernlet to open it."))
-            // A newer schema means every other check below is guesswork — stop here rather than
+            // A newer schema means every other check is guesswork — stop here rather than
             // producing a misleading list of "problems" caused by fields this build can't read.
-            return issues
+            return ([.init(kind: .blocking, subject: title,
+                           detail: "This plan uses a newer format (version \(schemaVersion)). Update Fernlet to open it.")],
+                    true)
         }
         if format != CoachPlan.formatTag {
-            issues.append(.init(kind: .blocking, subject: title,
-                                detail: "This doesn't look like a Fernlet workout plan."))
-            return issues
+            return ([.init(kind: .blocking, subject: title,
+                           detail: "This doesn't look like a Fernlet workout plan.")], true)
         }
         // A plan may legitimately carry NO new days — "adjust what I already have" is a whole plan
         // on its own. Only a paste that proposes nothing at all is empty.
         if days.isEmpty && edits.isEmpty {
-            issues.append(.init(kind: .blocking, subject: title,
-                                detail: "This plan has no days and changes nothing."))
-            return issues
+            return ([.init(kind: .blocking, subject: title,
+                           detail: "This plan has no days and changes nothing.")], true)
         }
         if days.count > CoachPlanLimits.maxDays {
-            issues.append(.init(kind: .blocking, subject: title,
-                                detail: "This plan has \(days.count) days. Fernlet accepts up to \(CoachPlanLimits.maxDays)."))
+            return ([.init(kind: .blocking, subject: title,
+                           detail: "This plan has \(days.count) days. Fernlet accepts up to \(CoachPlanLimits.maxDays).")],
+                    false)
         }
+        return ([], false)
+    }
 
+    /// Enforces ``CoachPlanLimits/maxNameCharacters`` and ``CoachPlanLimits/maxTextCharacters`` on
+    /// every free-text field the plan carries (R5: the plan is untrusted pasted text, and these
+    /// strings are projected into `PlannedWorkout` rows in the synced blob, so an unbounded `notes`
+    /// would be persisted and synced forever).
+    private func textLengthIssues() -> [CoachPlanIssue] {
+        var issues: [CoachPlanIssue] = []
+        issues += Self.nameIssues(title, subject: title, field: "plan title")
+        issues += Self.nameIssues(coachDisplayName, subject: title, field: "coach name")
+        issues += Self.textIssues(notes, subject: title, field: "plan notes")
+        for day in days {
+            let label = day.title.isEmpty ? "Day \(day.dayIndex)" : day.title
+            issues += Self.nameIssues(day.title, subject: label, field: "day title")
+            for session in day.sessions {
+                issues += Self.sessionTextIssues(session, label: label)
+            }
+        }
+        for edit in edits {
+            let label = edit.title ?? "a planned workout"
+            issues += Self.nameIssues(edit.title, subject: label, field: "workout title")
+            issues += Self.textIssues(edit.notes, subject: label, field: "notes")
+            issues += Self.textIssues(edit.conditioning, subject: label, field: "conditioning")
+            for exercise in edit.exercises ?? [] {
+                issues += Self.exerciseTextIssues(exercise)
+            }
+        }
+        return issues
+    }
+
+    /// Free-text length checks for one session and its exercises.
+    private static func sessionTextIssues(_ session: CoachSession, label: String) -> [CoachPlanIssue] {
+        var issues = nameIssues(session.title, subject: label, field: "session title")
+        issues += textIssues(session.notes, subject: label, field: "session notes")
+        issues += textIssues(session.conditioning, subject: label, field: "conditioning")
+        for exercise in session.exercises {
+            issues += exerciseTextIssues(exercise)
+        }
+        return issues
+    }
+
+    /// Free-text length checks for one prescribed exercise.
+    private static func exerciseTextIssues(_ exercise: CoachExercise) -> [CoachPlanIssue] {
+        let subject = exercise.name.isEmpty ? "an exercise" : exercise.name
+        var issues = nameIssues(exercise.name, subject: subject, field: "exercise name")
+        issues += textIssues(exercise.reps, subject: subject, field: "reps")
+        issues += textIssues(exercise.guidance, subject: subject, field: "guidance")
+        return issues
+    }
+
+    /// A blocking issue when `value` exceeds ``CoachPlanLimits/maxNameCharacters``.
+    private static func nameIssues(_ value: String?, subject: String, field: String) -> [CoachPlanIssue] {
+        guard let value, value.count > CoachPlanLimits.maxNameCharacters else { return [] }
+        return [.init(kind: .blocking, subject: subject,
+                      detail: "That \(field) is \(value.count) characters. Fernlet accepts up to "
+                      + "\(CoachPlanLimits.maxNameCharacters).")]
+    }
+
+    /// A blocking issue when `value` exceeds ``CoachPlanLimits/maxTextCharacters``.
+    private static func textIssues(_ value: String?, subject: String, field: String) -> [CoachPlanIssue] {
+        guard let value, value.count > CoachPlanLimits.maxTextCharacters else { return [] }
+        return [.init(kind: .blocking, subject: subject,
+                      detail: "That \(field) is \(value.count) characters. Fernlet accepts up to "
+                      + "\(CoachPlanLimits.maxTextCharacters).")]
+    }
+
+    /// Day numbering, duplicate days, empty non-rest days, and the per-session checks.
+    private func dayIssues() -> [CoachPlanIssue] {
+        var issues: [CoachPlanIssue] = []
         var seenIndices = Set<Int>()
         for day in days {
+            let label = day.title.isEmpty ? "Day \(day.dayIndex)" : day.title
             if day.dayIndex < 1 || day.dayIndex > CoachPlanLimits.maxDays {
-                issues.append(.init(kind: .blocking, subject: day.title.isEmpty ? "Day \(day.dayIndex)" : day.title,
+                issues.append(.init(kind: .blocking, subject: label,
                                     detail: "Day numbers must run from 1 to \(CoachPlanLimits.maxDays); found \(day.dayIndex)."))
             } else if !seenIndices.insert(day.dayIndex).inserted {
                 issues.append(.init(kind: .blocking, subject: "Day \(day.dayIndex)",
                                     detail: "Day \(day.dayIndex) appears more than once."))
             }
             if !day.isRestDay && day.sessions.isEmpty {
-                issues.append(.init(kind: .clamped, subject: day.title.isEmpty ? "Day \(day.dayIndex)" : day.title,
+                issues.append(.init(kind: .clamped, subject: label,
                                     detail: "Day \(day.dayIndex) has no sessions and isn't marked a rest day; it will be treated as rest."))
             }
             for session in day.sessions {
                 issues.append(contentsOf: Self.validate(session: session, dayIndex: day.dayIndex))
             }
         }
+        return issues
+    }
 
-        // Definitions must resolve before the undefined-name check, so a name that IS defined but
-        // whose definition is broken reports the real problem rather than "undefined exercise".
+    /// Resolves every ``newExercises`` definition, returning the normalized names that resolved and
+    /// an issue for each that did not.
+    private func resolvedDefinitionNames() -> (names: Set<String>, issues: [CoachPlanIssue]) {
         var definedNames = Set<String>()
+        var issues: [CoachPlanIssue] = []
         for definition in newExercises {
             switch definition.resolved() {
             case .success(let target):
@@ -764,9 +866,13 @@ extension CoachPlan {
                 issues.append(issue)
             }
         }
+        return (definedNames, issues)
+    }
 
-        // Edit shape. Whether a target actually EXISTS is checked store-side (this type has no view
-        // of the user's calendar); what's checkable here is that the instruction is coherent.
+    /// Edit shape. Whether a target actually EXISTS is checked store-side (this type has no view of
+    /// the user's calendar); what's checkable here is that the instruction is coherent.
+    private func editIssues() -> [CoachPlanIssue] {
+        var issues: [CoachPlanIssue] = []
         var seenTargets = Set<UUID>()
         for edit in edits {
             let label = edit.title ?? "a planned workout"
@@ -780,37 +886,49 @@ extension CoachPlan {
                 issues.append(.init(kind: .blocking, subject: label,
                                     detail: "Two changes target the same planned workout; Fernlet can't apply both."))
             }
-            if action == .replace, (edit.exercises ?? []).isEmpty, (edit.conditioning ?? "").isEmpty {
-                issues.append(.init(kind: .blocking, subject: label,
-                                    detail: "A replacement has to say what the workout becomes, and this one lists no exercises."))
-            }
-            if action != .delete, edit.exercises == nil, edit.title == nil, edit.notes == nil,
-               edit.kind == nil, edit.conditioning == nil {
-                issues.append(.init(kind: .clamped, subject: label,
-                                    detail: "A change to \"\(label)\" alters nothing; it will be skipped."))
-            }
-            for exercise in edit.exercises ?? [] {
-                if exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    issues.append(.init(kind: .blocking, subject: label,
-                                        detail: "A change to \"\(label)\" has an exercise with no name."))
-                }
-                if exercise.sets < 1 || exercise.sets > CoachPlanLimits.maxSets {
-                    issues.append(.init(kind: .clamped, subject: exercise.name,
-                                        detail: "\(exercise.name): \(exercise.sets) sets is outside 1-\(CoachPlanLimits.maxSets); it will be clamped."))
-                }
-            }
+            issues.append(contentsOf: Self.editContentIssues(edit, action: action, label: label))
         }
-
-        let known = Set(knownExerciseNames.map(CoachPlan.normalizedName))
-        for name in prescribedExerciseNames {
-            let key = CoachPlan.normalizedName(name)
-            guard !known.contains(key), !definedNames.contains(key) else { continue }
-            issues.append(.init(kind: .undefinedExercise, subject: name,
-                                detail: "\"\(name)\" isn't in your exercise list and the plan doesn't define it. "
-                                + "Ask for its muscles, equipment, and movement pattern, then paste again."))
-        }
-
         return issues
+    }
+
+    /// The per-edit content checks: a replacement must say what it becomes, a no-op change is
+    /// skipped, and each replacement exercise needs a name and a sane set count.
+    private static func editContentIssues(_ edit: CoachPlanEdit, action: CoachPlanEditAction,
+                                          label: String) -> [CoachPlanIssue] {
+        var issues: [CoachPlanIssue] = []
+        if action == .replace, (edit.exercises ?? []).isEmpty, (edit.conditioning ?? "").isEmpty {
+            issues.append(.init(kind: .blocking, subject: label,
+                                detail: "A replacement has to say what the workout becomes, and this one lists no exercises."))
+        }
+        if action != .delete, edit.exercises == nil, edit.title == nil, edit.notes == nil,
+           edit.kind == nil, edit.conditioning == nil {
+            issues.append(.init(kind: .clamped, subject: label,
+                                detail: "A change to \"\(label)\" alters nothing; it will be skipped."))
+        }
+        for exercise in edit.exercises ?? [] {
+            if exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                issues.append(.init(kind: .blocking, subject: label,
+                                    detail: "A change to \"\(label)\" has an exercise with no name."))
+            }
+            if exercise.sets < 1 || exercise.sets > CoachPlanLimits.maxSets {
+                issues.append(.init(kind: .clamped, subject: exercise.name,
+                                    detail: "\(exercise.name): \(exercise.sets) sets is outside 1-\(CoachPlanLimits.maxSets); it will be clamped."))
+            }
+        }
+        return issues
+    }
+
+    /// Names the plan prescribes that neither the user's catalog nor the plan itself defines.
+    private func undefinedNameIssues(known knownExerciseNames: Set<String>,
+                                     defined definedNames: Set<String>) -> [CoachPlanIssue] {
+        let known = Set(knownExerciseNames.map(CoachPlan.normalizedName))
+        return prescribedExerciseNames.compactMap { name in
+            let key = CoachPlan.normalizedName(name)
+            guard !known.contains(key), !definedNames.contains(key) else { return nil }
+            return .init(kind: .undefinedExercise, subject: name,
+                         detail: "\"\(name)\" isn't in your exercise list and the plan doesn't define it. "
+                         + "Ask for its muscles, equipment, and movement pattern, then paste again.")
+        }
     }
 
     /// Per-session checks: a title, and set/rep/rest values that mean something.

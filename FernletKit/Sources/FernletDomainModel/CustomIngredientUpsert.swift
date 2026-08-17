@@ -54,8 +54,12 @@ public nonisolated struct CustomIngredientUpsert {
         in foodItems: inout [FoodItem],
         verifiedAt: Date
     ) -> [RecipeIngredient] {
+        // R5: this is USER input (an editor form whose rows may all be blank), not a programmer
+        // invariant, so it gets a guard with an explicit recovery rather than a debug-only assert:
+        // an all-blank form yields no ingredients and mints no food items. The caller already
+        // refuses to save an empty recipe.
         let validIngredients = inputs.filter { !$0.trimmedName.isEmpty }
-        assert(!validIngredients.isEmpty, "recipe ingredients required")
+        guard !validIngredients.isEmpty else { return [] }
         let selectableFoodItems = selectionCatalog ?? foodItems
         var recipeIngredients: [RecipeIngredient] = []
         for ingredient in validIngredients {
