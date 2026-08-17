@@ -94,6 +94,11 @@ struct BreathingExerciseView: View {
     /// "Breathe in" visibly swells out of it (mockup rests ~168px against a 280px full).
     private let restingScale: CGFloat = 0.6
 
+    /// Hard iteration cap for the session loop. The real bound is wall clock (<= 3 minutes) and the
+    /// shortest preset cycle is 16 s, so 12 cycles is the most a legitimate session can run; 16 is
+    /// headroom that still keeps the loop's maximum visible at the loop.
+    private static let maxCycles = 16
+
     /// Top highlight stop of the core sphere gradient (mockup #AECC9F / #9DC08F) — a surface-local
     /// hue, so it's a plain constant rather than a shared token, per the GroundingView pattern.
     private static let mintHighlight = Color(light: Color(red: 0.682, green: 0.800, blue: 0.624),
@@ -443,7 +448,10 @@ struct BreathingExerciseView: View {
     // MARK: - Session
 
     private func startSession() {
-        guard !isRunning else { return }
+        // R5/R2: the loop below is bounded by wall clock, and that bound only holds because every
+        // iteration sleeps a non-empty preset. State both preconditions at entry rather than trusting
+        // the two curated presets and the 1–3 length pills to stay the only inputs.
+        guard !isRunning, !preset.phases.isEmpty, (1...3).contains(minutes) else { return }
         isRunning = true
         isFinished = false
         // Start from the small resting scale so the first "Breathe in" visibly swells outward.
@@ -455,7 +463,11 @@ struct BreathingExerciseView: View {
         sessionTask = Task { @MainActor in
             // Full cycles until the chosen length is reached; the cycle in progress when the
             // timer crosses the line finishes gently rather than cutting off mid-breath.
-            while Date().timeIntervalSince(start) < duration {
+            // R2: the wall-clock bound (<= 180 s, and every cycle sleeps >= 16 s of preset) is
+            // backed by a named iteration cap so the loop states its own maximum.
+            var cycles = 0
+            while cycles < Self.maxCycles, Date().timeIntervalSince(start) < duration {
+                cycles += 1
                 for phase in phases {
                     guard !Task.isCancelled else { return }
                     phaseLabel = phase.label
@@ -463,7 +475,13 @@ struct BreathingExerciseView: View {
                     withAnimation(.easeInOut(duration: phase.seconds)) {
                         circleScale = phase.targetScale
                     }
-                    try? await Task.sleep(for: .seconds(phase.seconds))
+                    do {
+                        try await Task.sleep(for: .seconds(phase.seconds))
+                    } catch {
+                        // A cancelled sleep IS the abandon signal (End early / background /
+                        // onDisappear): leave at the sleep rather than one phase later.
+                        return
+                    }
                 }
             }
             guard !Task.isCancelled else { return }

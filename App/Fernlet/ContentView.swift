@@ -73,65 +73,22 @@ struct ContentView: View {
     @State private var didAutoImportHealthContext = false
     @State private var discoveryTimeoutTask: Task<Void, Never>?
     @State private var healthRefreshTask: Task<Void, Never>?
+    /// The ONE in-flight period drain/load. Every trigger (lock transitions, `.logPeriod` dismissals)
+    /// cancels and replaces it, so completions can never land out of order and re-populate `entries`
+    /// after a scrub — the load captures its content key by value and cannot notice a later lock.
+    @State private var periodLoadTask: Task<Void, Never>?
+    /// Reentrancy latch for the hub-unlock sealed-backup settle. Unlock/lock/unlock used to run two
+    /// full CloudKit restore + re-upload passes concurrently; a second call is a no-op while one is in
+    /// flight (rather than a cancel, which must never interrupt a restore mid-write).
+    @State private var isSettlingSealedBackups = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
-        launchRoot
-            .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
-            .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
-                sheetContent(for: sheet)
-            }
-            .sheet(isPresented: $store.showConnectionInspector) {
-                ConnectionInspectorView(inspector: store.connectionInspector)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackgroundInteraction(.enabled)
-            }
-            .sheet(item: pendingRecipeShareBinding) { share in
-                ProximityRecipeShareReviewSheet(
-                    share: share,
-                    store: store,
-                    manager: store.recipeShareManager
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-            }
+        rootSheetHost
             .onChange(of: activeSheet?.id) { oldID, newID in
-                // Logging/editing a period event persists to HealthKit but doesn't mutate the in-memory
-                // entries, so reload + refresh when the period sheet dismisses to keep the chip/outlook/
-                // trends/score current (catches logging from Home or the period screen alike).
-                guard newID == nil, oldID == "logPeriod" else { return }
-                Task {
-                    await loadPeriodEntriesIfPossible()
-                    refreshPeriodContext()
-                }
+                handleActiveSheetIDChange(oldID: oldID, newID: newID)
             }
             .onChange(of: lockService.state) { _, newState in
-                store.lockState = newState
-                // The decoy's app half (P7): a duress unlock arrives as an ordinary `.unlocked`
-                // transition, so this is where the store learns the difference. Mirroring the flag
-                // rather than branching per view is the point — the sensitive-visibility getters
-                // AND it in, and the whole existing hide machinery follows from there.
-                store.duressSessionActive = lockService.isDuressSessionActive
-                Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
-                applySealedJournalActivation(for: newState)
-                worryBoxService.updateActivation(
-                    lockState: newState,
-                    contentKey: lockService.contentKey(for: .privateHub)
-                )
-                // Every paged sealed backup is sealed under the hub's content key, so turning one on
-                // from Settings (reached from Home, where the hub is always re-locked) can only ever
-                // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
-                // so the sealed stores are readable. No-op unless a deferral is actually outstanding.
-                //
-                // It is also the only moment a journal/intimacy RESTORE can decrypt what it pulls down,
-                // so the targeted restores run here too — and strictly BEFORE the re-uploads, because a
-                // re-upload from a not-yet-restored store would replace the good cloud backup with an
-                // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
-                if newState.isUnlocked(for: .privateHub) {
-                    Task { await settleSealedBackupsAfterHubUnlock() }
-                }
-                updateRecipeShareListener()
+                handleLockStateChange(newState)
             }
             .overlay(alignment: .top) {
                 if let mealLogNotification {
@@ -163,139 +120,12 @@ struct ContentView: View {
             .onChange(of: lockService.isDuressSessionActive) { _, active in
                 store.duressSessionActive = active
             }
-            .task {
-                periodStore.attachLockService(lockService)
-                // Before the visibility closures below are wired and before the first scrub, so no
-                // load can observe a stale `false` (the flag is process-lifetime and never
-                // persisted, so at launch this is only ever a mirror of `false` — it is here for
-                // the invariant, not for a case that exists today).
-                store.duressSessionActive = lockService.isDuressSessionActive
-                // Retire a duress-recovery enrollment this device's identity has outlived, before
-                // anything can arm or fire the response over it. Cheap (two keychain reads and a
-                // comparison when an enrollment exists, one when it does not) and idempotent; the
-                // delete-all funnel fires the same reconcile in-line via `identityRotatedHook`, and
-                // this is the backstop for a rotation from any other route — including a wipe whose
-                // process died before the hook ran.
-                DuressRecoveryCoordinator(
-                    identity: IdentityService(),
-                    lockService: lockService
-                ).reconcileEnrollmentWithLocalIdentity()
-                // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
-                // on every cold launch, so wiring this later would let one full decrypt + HealthKit
-                // read through before the gate existed.
-                periodStore.isVisible = { [store] in store.isPeriodTrackingVisible }
-                // Same hard gate for the intimacy sealed-notes seam. `IntimacyLogStore` funnels every
-                // decrypt/seal and is fail-closed by default, so wiring it here — before any read below —
-                // is what turns the gate from "reads nothing" into "reads exactly when visible".
-                intimacyStore.isVisible = { [store] in store.isIntimacyTrackingVisible }
-                // A day record written before the user hid a feature keeps its last cycle/intimate
-                // value (HealthDailyContext.merge coalesces), so scrub on load, not just on toggle.
-                store.scrubHiddenHealthContext()
-                if periodContext == nil {
-                    let bridge = PeriodContextBridge(source: periodStore)
-                    store.attachPeriodScoringContext(bridge)
-                    periodContext = bridge
-                }
-                // Set AFTER the bridge exists so the closure can capture it. Scrubbing the store alone
-                // is not enough: the bridge memoizes derived period-start dates and per-phase symptom
-                // trends of its own, and nothing else invalidates them on a preference change. `refresh`
-                // is its documented invalidation point — with entries now empty it collapses trends to
-                // [] and drops the cached starts. `unlocked: false` is the fail-closed reading of hidden.
-                let bridge = periodContext
-                store.periodScrubHook = { [periodStore, store] in
-                    periodStore.scrubCycleState()
-                    bridge?.refresh(unlocked: false, wellbeingByDay: store.periodWellbeingByDay)
-                }
-                // Body signals (opt-in): wire the stress service to the store + a fresh
-                // gateway fetch. Foreground-pull only — refreshed below and on scene-active.
-                stressService.attach(store: store, fetchMetricDays: { [storagePreferencesStore] daysBack in
-                    try await HealthKitService(preferencesStore: storagePreferencesStore).stressMetricDays(daysBack: daysBack)
-                })
-                store.attachStressScoringContext(stressService)
-                let initialLockState = lockService.state
-                store.lockState = initialLockState
-                applySealedJournalActivation(for: initialLockState)
-                worryBoxService.updateActivation(
-                    lockState: initialLockState,
-                    contentKey: lockService.contentKey(for: .privateHub)
-                )
-                // Worry "let go" counts are DEVICE-LOCAL (WorryBoxService owns them, incremented at the
-                // "let it go" write) — never the synced milestone ledger, so worry metadata honors the
-                // box's "never sync anywhere" promise. The store reads the count through this provider
-                // for MilestonesView, and purges the sealed rows + count on "Reset everything".
-                store.worriesLetGoProvider = { worryBoxService.lifetimeLetGoCount }
-                store.worryBoxResetHook = { worryBoxService.releaseAll() }
-                attachDeleteAllHooks()
-                #if DEBUG
-                // UX appearance tests: populate the diary so every tab renders real cards.
-                if UITestSupport.shouldSeedDemoContent {
-                    store.seedDemoContent()
-                    // Deterministic runs: never start with the companion already settled
-                    // from petting in a previous test on the same simulator.
-                    PetInteractionGovernor.clearPersistentState()
-                }
-                #endif
-                try? await Task.sleep(for: .milliseconds(120))
-                async let _ = autoImportHealthProfileIfAvailable()
-                async let _ = autoImportHealthContextIfAvailable()
-                await launcher.prepare(store: store)
-                store.markLaunchScreenDismissed()
-                #if DEBUG
-                // UX appearance tests: jump straight to a sheet by its FernletSheet.id
-                // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
-                if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
-                #endif
-                // A notification tapped during a cold launch stored its deep-link before this
-                // view finished preparing — open it now (live taps arrive via onReceive below).
-                consumePendingNotificationSheet()
-                store.meshNetworkManager.injectUITestStateIfNeeded()
-                updateRecipeShareListener()
-                store.deferredPostLaunchTasks()
-                store.ensureBundledFoodItemsSeeded()
-                // Widget bridge: wire the mirror, drain "+1 water" taps queued while the app was
-                // closed, and publish the first snapshot (store is fully loaded by this point).
-                store.activateWidgetBridge()
-                await store.processSharedRecipeImportQueue()
-                await loadPeriodEntriesIfPossible()
-                refreshPeriodContext()
-                await stressService.refreshIfNeeded()
-            }
+            .task { await performLaunchWiring() }
             .onChange(of: selectedTab) { oldTab, newTab in
-                tabResetTokens[oldTab, default: 0] += 1
-                isHomeTabBarCompact = false
-                if newTab == .social {
-                    startFriendsDiscovery()
-                } else if oldTab == .social {
-                    stopFriendsDiscovery()
-                }
-                updateRecipeShareListener()
-                healthRefreshTask?.cancel()
-                healthRefreshTask = Task { await refreshHealthContextForActiveTab(newTab) }
+                handleTabChange(from: oldTab, to: newTab)
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    // If the app stayed resident across local midnight, roll the store over to the new
-                    // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
-                    // coin refreshers below and any subsequent logging operate on the correct day.
-                    store.refreshCurrentDayIfNeeded()
-                    Task { await store.processSharedRecipeImportQueue() }
-                    // Apply widget "+1 water" taps that arrived while backgrounded (also refreshes
-                    // the mirrored snapshot across day rollovers).
-                    store.processPendingWidgetActions()
-                    // Credit any day that became active while backgrounded (or synced in from another
-                    // device). Idempotent, so a no-op when nothing new is logged.
-                    store.reconcileCoinLedger()
-                    // Body signals refresh (debounced to >= 30 min inside the service).
-                    Task { await stressService.refreshIfNeeded() }
-                    // Belt-and-braces for the foreground App Intent deep-link: the `requestNotification`
-                    // handler below is the primary path, but if a token is present when the scene reactivates
-                    // (and within its expiry window), honor it here too.
-                    consumePendingNotificationSheet()
-                    if selectedTab == .social { startFriendsDiscovery() }
-                } else if selectedTab == .social {
-                    stopFriendsDiscovery()
-                }
-                updateRecipeShareListener()
+                handleScenePhaseChange(phase)
             }
             .onReceive(NotificationCenter.default.publisher(for: FernletNotificationDelegate.pendingSheetRequestNotification)) { _ in
                 consumePendingNotificationSheet()
@@ -316,13 +146,7 @@ struct ContentView: View {
             // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
             // root — not the Social-tab layout (which is destroyed in the same transaction as
             // session teardown, the Phase-2 lesson) — and driven by observable store state.
-            .alert(
-                "Turn on Nearby Friends?",
-                isPresented: Binding(
-                    get: { store.presenceEnablePromptRequested },
-                    set: { if !$0 { store.presenceEnablePromptRequested = false } }
-                )
-            ) {
+            .alert("Turn on Nearby Friends?", isPresented: presenceEnablePromptBinding) {
                 Button("Turn on") {
                     store.setAllowNearbyPresence(true)
                     updatePresenceListener()
@@ -331,6 +155,256 @@ struct ContentView: View {
             } message: {
                 Text("See when friends you've kept are nearby. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable ID — and only while the app is open. You can change this anytime in Settings.")
             }
+    }
+
+    /// `launchRoot` plus the three root-presented sheet slots — the single `activeSheet` router, the
+    /// connection inspector, and an incoming proximity recipe share — in their original order.
+    ///
+    /// Split out of `body` for length only; the modifier chain is byte-for-byte the one `body` used
+    /// to carry, so presentation identity and ordering are unchanged.
+    private var rootSheetHost: some View {
+        launchRoot
+            .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
+            .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
+                sheetContent(for: sheet)
+            }
+            .sheet(isPresented: $store.showConnectionInspector) {
+                ConnectionInspectorView(inspector: store.connectionInspector)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled)
+            }
+            .sheet(item: pendingRecipeShareBinding) { share in
+                ProximityRecipeShareReviewSheet(
+                    share: share,
+                    store: store,
+                    manager: store.recipeShareManager
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+            }
+    }
+
+    /// One-time "first kept friend" presence offer (Phase 4a), driven by observable store state.
+    private var presenceEnablePromptBinding: Binding<Bool> {
+        Binding(
+            get: { store.presenceEnablePromptRequested },
+            set: { if !$0 { store.presenceEnablePromptRequested = false } }
+        )
+    }
+
+    /// Logging/editing a period event persists to HealthKit but doesn't mutate the in-memory entries,
+    /// so reload + refresh when the period sheet dismisses to keep the chip/outlook/trends/score
+    /// current (catches logging from Home or the period screen alike).
+    private func handleActiveSheetIDChange(oldID: String?, newID: String?) {
+        guard newID == nil, oldID == "logPeriod" else { return }
+        // Cancel-and-replace on the ONE period-load handle (R3): a dismissal per sheet used to spawn
+        // an un-deduplicated task, and the older one could land after a lock and re-populate entries.
+        periodLoadTask?.cancel()
+        periodLoadTask = Task {
+            await loadPeriodEntriesIfPossible()
+            settlePeriodEntriesAfterLoad()
+        }
+    }
+
+    private func handleLockStateChange(_ newState: FernletLockState) {
+        store.lockState = newState
+        // The decoy's app half (P7): a duress unlock arrives as an ordinary `.unlocked`
+        // transition, so this is where the store learns the difference. Mirroring the flag
+        // rather than branching per view is the point — the sensitive-visibility getters
+        // AND it in, and the whole existing hide machinery follows from there.
+        store.duressSessionActive = lockService.isDuressSessionActive
+        // One in-flight drain/load at a time (R3). Every lock transition used to add another
+        // unstructured task, and the loser of that race could write cycle plaintext AFTER a scrub.
+        periodLoadTask?.cancel()
+        periodLoadTask = Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
+        applySealedJournalActivation(for: newState)
+        worryBoxService.updateActivation(
+            lockState: newState,
+            contentKey: lockService.contentKey(for: .privateHub)
+        )
+        // Every paged sealed backup is sealed under the hub's content key, so turning one on
+        // from Settings (reached from Home, where the hub is always re-locked) can only ever
+        // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
+        // so the sealed stores are readable. No-op unless a deferral is actually outstanding.
+        //
+        // It is also the only moment a journal/intimacy RESTORE can decrypt what it pulls down,
+        // so the targeted restores run here too — and strictly BEFORE the re-uploads, because a
+        // re-upload from a not-yet-restored store would replace the good cloud backup with an
+        // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
+        if newState.isUnlocked(for: .privateHub) {
+            Task { await settleSealedBackupsAfterHubUnlock() }
+        }
+        updateRecipeShareListener()
+    }
+
+    private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
+        tabResetTokens[oldTab, default: 0] += 1
+        isHomeTabBarCompact = false
+        if newTab == .social {
+            startFriendsDiscovery()
+        } else if oldTab == .social {
+            stopFriendsDiscovery()
+        }
+        updateRecipeShareListener()
+        healthRefreshTask?.cancel()
+        healthRefreshTask = Task { await refreshHealthContextForActiveTab(newTab) }
+    }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        if phase == .active {
+            // If the app stayed resident across local midnight, roll the store over to the new
+            // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
+            // coin refreshers below and any subsequent logging operate on the correct day.
+            store.refreshCurrentDayIfNeeded()
+            Task { await store.processSharedRecipeImportQueue() }
+            // Apply widget "+1 water" taps that arrived while backgrounded (also refreshes
+            // the mirrored snapshot across day rollovers).
+            store.processPendingWidgetActions()
+            // Credit any day that became active while backgrounded (or synced in from another
+            // device). Idempotent, so a no-op when nothing new is logged.
+            store.reconcileCoinLedger()
+            // Body signals refresh (debounced to >= 30 min inside the service).
+            Task { await stressService.refreshIfNeeded() }
+            // Belt-and-braces for the foreground App Intent deep-link: the `requestNotification`
+            // handler is the primary path, but if a token is present when the scene reactivates
+            // (and within its expiry window), honor it here too.
+            consumePendingNotificationSheet()
+            if selectedTab == .social { startFriendsDiscovery() }
+        } else if selectedTab == .social {
+            stopFriendsDiscovery()
+        }
+        updateRecipeShareListener()
+    }
+
+    // MARK: - Launch wiring
+
+    /// Everything the root `.task` does, in its original order: the sensitive-surface gates and
+    /// scoring contexts first (before any load can observe a missing gate), then the lock / worry-box
+    /// activation and the delete-all hooks, then the post-launch sequence.
+    private func performLaunchWiring() async {
+        wireSensitiveGatesAndScoringContexts()
+        wireLockAndWorryBox()
+        await runPostLaunchSequence()
+    }
+
+    /// The hard visibility gates and the two scoring contexts (period bridge, body signals).
+    ///
+    /// Runs before ANY load: `PeriodTrackerStore`/`IntimacyLogStore` must never perform a decrypt or a
+    /// HealthKit read before their `isVisible` closures exist.
+    private func wireSensitiveGatesAndScoringContexts() {
+        periodStore.attachLockService(lockService)
+        // Before the visibility closures below are wired and before the first scrub, so no
+        // load can observe a stale `false` (the flag is process-lifetime and never
+        // persisted, so at launch this is only ever a mirror of `false` — it is here for
+        // the invariant, not for a case that exists today).
+        store.duressSessionActive = lockService.isDuressSessionActive
+        // Retire a duress-recovery enrollment this device's identity has outlived, before
+        // anything can arm or fire the response over it. Cheap (two keychain reads and a
+        // comparison when an enrollment exists, one when it does not) and idempotent; the
+        // delete-all funnel fires the same reconcile in-line via `identityRotatedHook`, and
+        // this is the backstop for a rotation from any other route — including a wipe whose
+        // process died before the hook ran.
+        DuressRecoveryCoordinator(
+            identity: IdentityService(),
+            lockService: lockService
+        ).reconcileEnrollmentWithLocalIdentity()
+        // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
+        // on every cold launch, so wiring this later would let one full decrypt + HealthKit
+        // read through before the gate existed.
+        periodStore.isVisible = { [store] in store.isPeriodTrackingVisible }
+        // Same hard gate for the intimacy sealed-notes seam. `IntimacyLogStore` funnels every
+        // decrypt/seal and is fail-closed by default, so wiring it here — before any read below —
+        // is what turns the gate from "reads nothing" into "reads exactly when visible".
+        intimacyStore.isVisible = { [store] in store.isIntimacyTrackingVisible }
+        // A day record written before the user hid a feature keeps its last cycle/intimate
+        // value (HealthDailyContext.merge coalesces), so scrub on load, not just on toggle.
+        store.scrubHiddenHealthContext()
+        if periodContext == nil {
+            let bridge = PeriodContextBridge(source: periodStore)
+            store.attachPeriodScoringContext(bridge)
+            periodContext = bridge
+        }
+        // Set AFTER the bridge exists so the closure can capture it. Scrubbing the store alone
+        // is not enough: the bridge memoizes derived period-start dates and per-phase symptom
+        // trends of its own, and nothing else invalidates them on a preference change. `refresh`
+        // is its documented invalidation point — with entries now empty it collapses trends to
+        // [] and drops the cached starts. `unlocked: false` is the fail-closed reading of hidden.
+        let bridge = periodContext
+        store.periodScrubHook = { [periodStore, store] in
+            periodStore.scrubCycleState()
+            bridge?.refresh(unlocked: false, wellbeingByDay: store.periodWellbeingByDay)
+        }
+        // Body signals (opt-in): wire the stress service to the store + a fresh
+        // gateway fetch. Foreground-pull only — refreshed below and on scene-active.
+        stressService.attach(store: store, fetchMetricDays: { [storagePreferencesStore] daysBack in
+            try await HealthKitService(preferencesStore: storagePreferencesStore).stressMetricDays(daysBack: daysBack)
+        })
+        store.attachStressScoringContext(stressService)
+    }
+
+    /// Mirrors the initial lock state into the store, activates the sealed journal / worry-box seams
+    /// for it, and attaches the delete-all hooks (plus the DEBUG demo seed).
+    private func wireLockAndWorryBox() {
+        let initialLockState = lockService.state
+        store.lockState = initialLockState
+        applySealedJournalActivation(for: initialLockState)
+        worryBoxService.updateActivation(
+            lockState: initialLockState,
+            contentKey: lockService.contentKey(for: .privateHub)
+        )
+        // Worry "let go" counts are DEVICE-LOCAL (WorryBoxService owns them, incremented at the
+        // "let it go" write) — never the synced milestone ledger, so worry metadata honors the
+        // box's "never sync anywhere" promise. The store reads the count through this provider
+        // for MilestonesView, and purges the sealed rows + count on "Reset everything".
+        store.worriesLetGoProvider = { worryBoxService.lifetimeLetGoCount }
+        store.worryBoxResetHook = { worryBoxService.releaseAll() }
+        attachDeleteAllHooks()
+        #if DEBUG
+        // UX appearance tests: populate the diary so every tab renders real cards.
+        if UITestSupport.shouldSeedDemoContent {
+            store.seedDemoContent()
+            // Deterministic runs: never start with the companion already settled
+            // from petting in a previous test on the same simulator.
+            PetInteractionGovernor.clearPersistentState()
+        }
+        #endif
+    }
+
+    /// The asynchronous half of launch: the brief settle, the optional Health auto-imports, launch
+    /// preparation, deep-link consumption, the listener/widget wiring, and the first period + body
+    /// signals refresh.
+    private func runPostLaunchSequence() async {
+        do {
+            try await Task.sleep(for: .milliseconds(120))
+        } catch {
+            // Cancelled with the view's `.task`: nothing below should wire a torn-down view.
+            return
+        }
+        async let _ = autoImportHealthProfileIfAvailable()
+        async let _ = autoImportHealthContextIfAvailable()
+        await launcher.prepare(store: store)
+        store.markLaunchScreenDismissed()
+        #if DEBUG
+        // UX appearance tests: jump straight to a sheet by its FernletSheet.id
+        // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
+        if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
+        #endif
+        // A notification tapped during a cold launch stored its deep-link before this
+        // view finished preparing — open it now (live taps arrive via the onReceive handlers).
+        consumePendingNotificationSheet()
+        store.meshNetworkManager.injectUITestStateIfNeeded()
+        updateRecipeShareListener()
+        store.deferredPostLaunchTasks()
+        store.ensureBundledFoodItemsSeeded()
+        // Widget bridge: wire the mirror, drain "+1 water" taps queued while the app was
+        // closed, and publish the first snapshot (store is fully loaded by this point).
+        store.activateWidgetBridge()
+        await store.processSharedRecipeImportQueue()
+        await loadPeriodEntriesIfPossible()
+        settlePeriodEntriesAfterLoad()
+        await stressService.refreshIfNeeded()
     }
 
     /// Opens the sheet a notification tap asked for (daily check-in → journal). Skipped while
@@ -567,138 +641,130 @@ struct ContentView: View {
         .padding(.bottom, isCompact ? 4 : 12)
     }
 
+    /// Routes a sheet case to its family builder. Split per family (not per case) because the flat
+    /// 22-case switch was one 128-line function; each family below keeps the exact view, anchor,
+    /// detents and environment injections the flat switch used.
     @ViewBuilder
     private func sheetContent(for sheet: FernletSheet) -> some View {
         switch sheet {
+        case .meal, .recipe, .water, .sleep, .journal, .quickExercise,
+             .workout, .workoutSuggestion, .goals, .hygiene:
+            loggingSheet(for: sheet)
+        case .settings, .recipeBook, .trends, .stressExplainer, .firstAid:
+            librarySheet(for: sheet)
+        case .logPeriod, .logIntimacy:
+            privateSheet(for: sheet)
+        case .editRecipe, .editSavedRecipe:
+            recipeEditorSheet(for: sheet)
+        }
+    }
+
+    /// The quick-log family: meal, recipe, water, sleep, journal, exercise, workout(s), goals, hygiene.
+    @ViewBuilder
+    private func loggingSheet(for sheet: FernletSheet) -> some View {
+        switch sheet {
         case .meal:
             MealSheet(store: store, onLogged: showMealLogNotification)
-                .uxScreenAnchor("sheet.meal")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.meal", detents: [.medium, .large])
         case .recipe:
             RecipeSheet(store: store)
-                .uxScreenAnchor("sheet.recipe")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.recipe", detents: [.large])
         case .water:
             WaterSheet(store: store)
-                .uxScreenAnchor("sheet.water")
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.water", detents: [.medium])
         case .sleep:
             SleepSheet(store: store)
-                .uxScreenAnchor("sheet.sleep")
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.sleep", detents: [.medium])
         case .journal:
             JournalSheet(store: store)
-                .uxScreenAnchor("sheet.journal")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.journal", detents: [.medium, .large])
                 .environment(captureProtection)
         case .quickExercise:
             QuickExerciseSheet(store: store)
-                .uxScreenAnchor("sheet.quickExercise")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.quickExercise", detents: [.medium, .large])
         case .workout:
             WorkoutSheet(store: store)
-                .uxScreenAnchor("sheet.workout")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.workout", detents: [.large])
         case .workoutSuggestion:
             WorkoutSuggestionSheet(store: store)
-                .uxScreenAnchor("sheet.workoutSuggestion")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.workoutSuggestion", detents: [.medium, .large])
         case .goals:
             GoalsSheet(store: store)
-                .uxScreenAnchor("sheet.goals")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.goals", detents: [.large])
         case .hygiene:
             HygieneSheet(store: store)
-                .uxScreenAnchor("sheet.hygiene")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.hygiene", detents: [.medium, .large])
+        default:
+            EmptyView()
+        }
+    }
+
+    /// The reference/library family: settings, recipe book, trends, the body-signals explainer, and
+    /// First Aid. (First Aid's corner radius matches the ~35 sibling sheets at 20; the first-aid
+    /// mockup's 30px is the inner content card, not the sheet presentation corner.)
+    @ViewBuilder
+    private func librarySheet(for sheet: FernletSheet) -> some View {
+        switch sheet {
         case .settings:
             SettingsSheet(store: store)
-                .uxScreenAnchor("sheet.settings")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.settings", detents: [.large])
                 .environment(lockService)
                 .environment(storagePreferencesStore)
         case .recipeBook:
             RecipeBookSheet(store: store, editingRecipe: $editingRecipeFromHome, editingSavedRecipe: $editingSavedRecipeFromHome)
-                .uxScreenAnchor("sheet.recipeBook")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.recipeBook", detents: [.large])
         case .trends:
             TrendsModal(signals: store.derivedSignals)
-                .uxScreenAnchor("sheet.trends")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.trends", detents: [.large])
         case .stressExplainer:
             StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
                 // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).
                 pendingFirstAidAfterDismiss = true
                 activeSheet = nil
             })
-                .uxScreenAnchor("sheet.stressExplainer")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.stressExplainer", detents: [.medium, .large])
         case .firstAid(let tool):
             FirstAidView(store: store, worryBox: worryBoxService, initialTool: tool)
-                .uxScreenAnchor("sheet.firstAid")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                // Match the ~35 sibling sheets (all 20); the outlier 28 read visibly rounder. The
-                // first-aid mockup's 30px is the inner content card, not the sheet presentation corner.
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.firstAid", detents: [.large])
                 .environment(storagePreferencesStore)
+        default:
+            EmptyView()
+        }
+    }
+
+    /// The Private-hub family: the two sealed logging sheets, which additionally carry the lock
+    /// service and the capture-friction state (a missing environment object here is a runtime crash).
+    @ViewBuilder
+    private func privateSheet(for sheet: FernletSheet) -> some View {
+        switch sheet {
         case .logPeriod(let targetDate, let editingEntry):
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
-                .uxScreenAnchor("sheet.logPeriod")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.logPeriod", detents: [.large])
                 .environment(lockService)
                 .environment(captureProtection)
         case .logIntimacy:
             LogIntimacySheet(intimacyStore: intimacyStore)
-                .uxScreenAnchor("sheet.logIntimacy")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.logIntimacy", detents: [.large])
                 .environment(lockService)
                 .environment(storagePreferencesStore)
                 .environment(captureProtection)
+        default:
+            EmptyView()
+        }
+    }
+
+    /// The recipe editor family, reached by the dismiss-then-represent chain from the recipe book.
+    @ViewBuilder
+    private func recipeEditorSheet(for sheet: FernletSheet) -> some View {
+        switch sheet {
         case .editRecipe(let recipe):
             RecipeSheet(store: store, recipe: recipe)
-                .uxScreenAnchor("sheet.editRecipe")
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.editRecipe", detents: [.large])
         case .editSavedRecipe(let recipe):
             SavedRecipeNotesSheet(store: store, recipe: recipe)
-                .uxScreenAnchor("sheet.editSavedRecipe")
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheetChrome(anchor: "sheet.editSavedRecipe", detents: [.medium, .large])
+        default:
+            EmptyView()
         }
     }
 
@@ -711,7 +777,9 @@ struct ContentView: View {
             guard healthProfile.appliedFieldCount > 0 else { return }
             store.settings.userProfile = healthProfile.applying(to: store.settings.userProfile)
         } catch {
-            // Health profile import is optional; manual settings remain the fallback.
+            // Health profile import is optional; manual settings remain the fallback. Event name plus
+            // the error only — never a health value.
+            FernletAuditLog.log("health.profileAutoImportSkipped", context: ["error": String(describing: error)])
         }
     }
 
@@ -727,6 +795,7 @@ struct ContentView: View {
             store.updateHealthContext(context)
         } catch {
             // Health context import is optional; manual app entries remain available.
+            FernletAuditLog.log("health.contextAutoImportSkipped", context: ["error": String(describing: error)])
         }
     }
 
@@ -762,8 +831,31 @@ struct ContentView: View {
             refreshPeriodContext()
             return
         }
-        try? await periodStore.drainPendingBuffer(contentKey: contentKey)
+        do {
+            try await periodStore.drainPendingBuffer(contentKey: contentKey)
+        } catch {
+            // Benign for THIS call — the callee purges the pending buffer only after every insert
+            // succeeds, so the notes are retained and re-drained at the next hub unlock. The audit
+            // line is the recovery: a persistently failing drain would otherwise be invisible forever.
+            FernletAuditLog.log("periodNarratives.pendingDrainFailed", context: ["error": String(describing: error)])
+        }
         await periodStore.loadEntries(unlockedContentKey: contentKey)
+        settlePeriodEntriesAfterLoad()
+    }
+
+    /// The post-`await` gate every period load runs through.
+    ///
+    /// `loadEntries` captures its content key BY VALUE and assigns `entries`/`prediction` after a
+    /// HealthKit round trip, so a lock that lands while it is suspended (auto-lock on background, a
+    /// manual re-lock, a duress wipe) would otherwise leave decrypted cycle plaintext resident — and
+    /// `prediction` feeds the ungated Home outlook card. Re-checking the LIVE lock state here scrubs
+    /// exactly that window. `.notConfigured` is untouched: with no lock, the entries are the user's
+    /// ordinary, ungated data.
+    private func settlePeriodEntriesAfterLoad() {
+        let state = lockService.state
+        if state != .notConfigured, !state.isUnlocked(for: .privateHub) {
+            periodStore.scrubCycleState()
+        }
         refreshPeriodContext()
     }
 
@@ -781,6 +873,12 @@ struct ContentView: View {
     /// has not restored into yet can never replace the cloud backup with the single empty head record
     /// `reconcileChunked` writes for a count of 0.
     private func settleSealedBackupsAfterHubUnlock() async {
+        // Bounded fan-out (R3): one settle pass at a time. The work is idempotent, so a second unlock
+        // arriving mid-pass has nothing to add — and cancelling the in-flight one would risk
+        // interrupting a restore rather than duplicating a round trip.
+        guard !isSettlingSealedBackups else { return }
+        isSettlingSealedBackups = true
+        defer { isSettlingSealedBackups = false }
         let preferences = storagePreferencesStore.preferences
         if preferences.iCloudSyncEnabled {
             if preferences.sealedBackupJournalEnabled {
@@ -864,70 +962,97 @@ struct ContentView: View {
                 )
                 return true
             } catch {
+                // The `false` is what the funnel surfaces as "your iCloud copy"; the log line is what
+                // makes the REASON (not signed in vs. network vs. CKError) recoverable afterwards.
+                FernletAuditLog.log("deleteAll.cloudCopyDeleteFailed", context: ["error": String(describing: error)])
                 return false
             }
         }
-        // Persists the period re-upload deferral so the obligation survives relaunch. Routed through the
-        // app's SINGLE StoragePreferencesStore instance — a second writer would leave its in-memory copy
-        // stale and the next `update` would clobber the flag. The no-change guard keeps a launch-time
-        // re-record from bumping `lastModifiedAt` (or minting a keychain row) for nothing.
+        // Both preference hooks forward to the static helpers below (see their docs for the
+        // single-writer and keep-what-a-retry-needs invariants).
         store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
-            let current = storagePreferencesStore.preferences
-            switch payloadType {
-            case .periodData:
-                guard current.sealedBackupPeriodReuploadDeferred != deferred else { return }
-                storagePreferencesStore.update { $0.sealedBackupPeriodReuploadDeferred = deferred }
-            case .journalNarratives:
-                guard current.sealedBackupJournalReuploadDeferred != deferred else { return }
-                storagePreferencesStore.update { $0.sealedBackupJournalReuploadDeferred = deferred }
-            case .intimacyLogs:
-                guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
-                storagePreferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
-            case .sensitiveNotes:
-                // No deferral exists for the whole-store overwrite payload — the store never records
-                // one, so this arm is unreachable and deliberately writes nothing.
-                return
-            }
+            Self.persistSealedBackupDeferral(deferred, payloadType: payloadType, in: storagePreferencesStore)
         }
         store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
-            // Two preferences survive the reset, both because erasing them would BREAK the delete rather
-            // than because they're worth keeping:
-            //
-            // - `iCloudSyncEnabled`: the local Core Data deletes reach the server by propagating over
-            //   the still-live sync session. Flipping sync off here would tear that down first and
-            //   strand the server copy, ready to sync straight back when the user next turned iCloud on.
-            // - the sealed-backup flags, ONLY when a backup delete just failed: they are how a retry
-            //   finds the backup again. Clearing them would make a transient network failure permanent.
-            //
-            // Everything else — Health access, per-capability grants, backup exclusion — goes back to
-            // first-launch defaults.
-            let current = storagePreferencesStore.preferences
-            var reset = StoragePreferences(iCloudSyncEnabled: current.iCloudSyncEnabled)
-            // Every payload flag, assigned in ONE place next to `hasSealedBackup` rather than
-            // open-coded here: the open-coded version silently dropped the journal and intimacy flags
-            // when Phase 3 added them, which would have abandoned those CKRecords after a failed
-            // delete (`hasSealedBackup` false → no retry, no later wipe, ever finds them again).
-            if keepSealedBackupFlags {
-                reset.copySealedBackupFlags(from: current)
-            }
-            // Same reasoning as the sealed-backup flags: keep `cloudCopyKept` only when the kept-copy
-            // delete FAILED, so the retry the alert invites still knows there is a copy in iCloud to
-            // remove. On success it clears to first-launch default (no copy left to point at).
-            if keepCloudCopyFlag {
-                reset.cloudCopyKept = current.cloudCopyKept
-            }
-            if reset == StoragePreferences(lastModifiedAt: reset.lastModifiedAt) {
-                // Nothing worth preserving: drop the keychain row entirely, so not even a
-                // `lastModifiedAt` survives as a trace of use.
-                storagePreferencesStore.resetToDefaults()
-            } else {
-                storagePreferencesStore.update { $0 = reset }
-            }
-            // The store's write paths don't report failure; `true` here means "the reset ran" — the
-            // hook's Bool exists so an UNWIRED funnel surfaces "your storage settings" instead of
-            // silently leaving Health grants and backup flags as they were.
-            return true
+            Self.resetStoragePreferencesAfterWipe(
+                keepSealedBackupFlags: keepSealedBackupFlags,
+                keepCloudCopyFlag: keepCloudCopyFlag,
+                in: storagePreferencesStore
+            )
         }
+    }
+
+    /// Persists the per-payload re-upload deferral so the obligation survives relaunch. Routed through
+    /// the app's SINGLE `StoragePreferencesStore` instance — a second writer would leave its in-memory
+    /// copy stale and the next `update` would clobber the flag. The no-change guard keeps a launch-time
+    /// re-record from bumping `lastModifiedAt` (or minting a keychain row) for nothing.
+    ///
+    /// `static` with an explicit store parameter so the escaping hook stored on `FernletStore` never
+    /// captures the `ContentView` value.
+    private static func persistSealedBackupDeferral(
+        _ deferred: Bool,
+        payloadType: SealedBackupPayloadType,
+        in preferencesStore: StoragePreferencesStore
+    ) {
+        let current = preferencesStore.preferences
+        switch payloadType {
+        case .periodData:
+            guard current.sealedBackupPeriodReuploadDeferred != deferred else { return }
+            preferencesStore.update { $0.sealedBackupPeriodReuploadDeferred = deferred }
+        case .journalNarratives:
+            guard current.sealedBackupJournalReuploadDeferred != deferred else { return }
+            preferencesStore.update { $0.sealedBackupJournalReuploadDeferred = deferred }
+        case .intimacyLogs:
+            guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
+            preferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
+        case .sensitiveNotes:
+            // No deferral exists for the whole-store overwrite payload — the store never records
+            // one, so this arm is unreachable and deliberately writes nothing.
+            return
+        }
+    }
+
+    /// Resets storage preferences to first-launch defaults after a wipe, preserving exactly the two
+    /// things whose erasure would BREAK the delete rather than complete it.
+    ///
+    /// - `iCloudSyncEnabled`: the local Core Data deletes reach the server by propagating over the
+    ///   still-live sync session. Flipping sync off here would tear that down first and strand the
+    ///   server copy, ready to sync straight back when the user next turned iCloud on.
+    /// - the sealed-backup flags, ONLY when a backup delete just failed: they are how a retry finds
+    ///   the backup again. Clearing them would make a transient network failure permanent.
+    ///
+    /// Everything else — Health access, per-capability grants, backup exclusion — goes back to
+    /// first-launch defaults. Returns `true` meaning "the reset ran": the store's write paths don't
+    /// report failure, and the hook's Bool exists so an UNWIRED funnel surfaces "your storage
+    /// settings" instead of silently leaving Health grants and backup flags as they were.
+    private static func resetStoragePreferencesAfterWipe(
+        keepSealedBackupFlags: Bool,
+        keepCloudCopyFlag: Bool,
+        in preferencesStore: StoragePreferencesStore
+    ) -> Bool {
+        let current = preferencesStore.preferences
+        var reset = StoragePreferences(iCloudSyncEnabled: current.iCloudSyncEnabled)
+        // Every payload flag, assigned in ONE place next to `hasSealedBackup` rather than
+        // open-coded here: the open-coded version silently dropped the journal and intimacy flags
+        // when Phase 3 added them, which would have abandoned those CKRecords after a failed
+        // delete (`hasSealedBackup` false → no retry, no later wipe, ever finds them again).
+        if keepSealedBackupFlags {
+            reset.copySealedBackupFlags(from: current)
+        }
+        // Same reasoning as the sealed-backup flags: keep `cloudCopyKept` only when the kept-copy
+        // delete FAILED, so the retry the alert invites still knows there is a copy in iCloud to
+        // remove. On success it clears to first-launch default (no copy left to point at).
+        if keepCloudCopyFlag {
+            reset.cloudCopyKept = current.cloudCopyKept
+        }
+        if reset == StoragePreferences(lastModifiedAt: reset.lastModifiedAt) {
+            // Nothing worth preserving: drop the keychain row entirely, so not even a
+            // `lastModifiedAt` survives as a trace of use.
+            preferencesStore.resetToDefaults()
+        } else {
+            preferencesStore.update { $0 = reset }
+        }
+        return true
     }
 
     /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
@@ -966,7 +1091,9 @@ struct ContentView: View {
             let context = try await HealthKitService(preferencesStore: storagePreferencesStore).loadDailyHealthContext(referenceDate: .now, capabilities: capabilities)
             store.updateHealthContext(context)
         } catch {
-            // Health context refresh is opportunistic and should never block tab navigation.
+            // Health context refresh is opportunistic and should never block tab navigation — but a
+            // tab that never refreshes has to be diagnosable.
+            FernletAuditLog.log("health.contextRefreshSkipped", context: ["tab": tab.title, "error": String(describing: error)])
         }
     }
 
@@ -977,7 +1104,13 @@ struct ContentView: View {
         selectedTab = .home
 
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                // Cancelled: leave the toast to whatever superseded this one (the id check below is
+                // the same supersede rule).
+                return
+            }
             if mealLogNotification?.id == notification.id {
                 mealLogNotification = nil
             }
@@ -1089,8 +1222,14 @@ struct ContentView: View {
         manager.startJoin()
         discoveryTimeoutTask?.cancel()
         discoveryTimeoutTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5 * 60))
-            guard !Task.isCancelled, !manager.isInSession else { return }
+            do {
+                try await Task.sleep(for: .seconds(5 * 60))
+            } catch {
+                // Cancellation means the timeout was superseded (`stopFriendsDiscovery`, or a new
+                // discovery start), so returning WITHOUT `stopJoin()` is the intended behavior.
+                return
+            }
+            guard !manager.isInSession else { return }
             manager.stopJoin()
         }
     }
@@ -1101,6 +1240,20 @@ struct ContentView: View {
         let manager = store.meshNetworkManager
         guard !manager.isInSession else { return }
         manager.stopJoin()
+    }
+}
+
+extension View {
+    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the detent set,
+    /// a visible drag indicator, and the house 20pt presentation corner radius.
+    ///
+    /// One modifier rather than the same four lines repeated per case — the values are identical
+    /// across all 22 sheets except the anchor and the detents.
+    func fernletSheetChrome(anchor: String, detents: Set<PresentationDetent>) -> some View {
+        uxScreenAnchor(anchor)
+            .presentationDetents(detents)
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
     }
 }
 

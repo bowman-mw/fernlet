@@ -89,7 +89,13 @@ final class StressService: StressScoringContextProviding {
         let directory = stateDirectory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            // Benign for this launch — the service simply runs in memory — but every later `persist`
+            // will fail too, so the reason has to reach the log once instead of vanishing.
+            FernletAuditLog.log("stress.sidecarDirectoryUnavailable", context: ["error": String(describing: error)])
+        }
         stateFileURL = directory.appendingPathComponent(Self.stateFileName)
         if let data = try? Data(contentsOf: stateFileURL),
            let state = try? JSONDecoder().decode(LocalState.self, from: data) {
@@ -121,7 +127,11 @@ final class StressService: StressScoringContextProviding {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        guard let store, store.settings.stressAwarenessEnabled else {
+        // Two separate preconditions, deliberately NOT one `guard`: an unattached service (no host
+        // yet) is a missing precondition, not withdrawn consent, and must never take the destructive
+        // branch that deletes the on-disk HRV/RHR baseline.
+        guard let store else { return }
+        guard store.settings.stressAwarenessEnabled else {
             scrubStressLocalState()
             return
         }
@@ -154,7 +164,15 @@ final class StressService: StressScoringContextProviding {
     func scrubStressLocalState() {
         assessment = nil
         lastRefreshedAt = nil
-        try? FileManager.default.removeItem(at: stateFileURL)
+        do {
+            try FileManager.default.removeItem(at: stateFileURL)
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // Nothing on disk — the scrub is already true. No recovery needed.
+        } catch {
+            // The consent-honoring delete failed: a clinical-adjacent series is still on disk after
+            // the user withdrew consent. Nothing here can force it, but it must not be invisible.
+            FernletAuditLog.log("stress.scrubFailed", context: ["error": String(describing: error)])
+        }
     }
 
     /// Joins the HealthKit day aggregates with diary confounders. Wrist-temperature deltas
@@ -179,9 +197,16 @@ final class StressService: StressScoringContextProviding {
     }
 
     private func persist(_ state: LocalState) {
-        guard let data = try? JSONEncoder().encode(state) else { return }
-        // Complete file protection: only ever written in the foreground, and the payload is
-        // a clinical-adjacent series that should stay sealed while the device is locked.
-        try? data.write(to: stateFileURL, options: [.atomic, .completeFileProtection])
+        do {
+            let data = try JSONEncoder().encode(state)
+            // Complete file protection: only ever written in the foreground, and the payload is
+            // a clinical-adjacent series that should stay sealed while the device is locked.
+            try data.write(to: stateFileURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            // Benign: the assessment stays in memory and the next debounced refresh re-persists.
+            // The log line is the recovery — a permanently unwritable sidecar loses the baseline
+            // on every relaunch, and that must be diagnosable.
+            FernletAuditLog.log("stress.persistFailed", context: ["error": String(describing: error)])
+        }
     }
 }

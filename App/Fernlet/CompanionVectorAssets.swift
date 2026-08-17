@@ -65,82 +65,23 @@ struct CompanionView: View {
             let bodyColor = appearance.resolvedBodyColor(for: state)
 
             ZStack {
-                if appearance.sideItem != .none {
-                    CompanionSideItemView(
-                        item: appearance.sideItem,
-                        color: appearance.resolvedSideItemColor(for: state),
-                        size: size
-                    )
-                    .offset(x: size * 0.58, y: size * 0.28)
-                }
-
-                CompanionBlobShape(style: appearance.bodyStyle, state: state, breath: breath)
-                    .fill(bodyColor)
-                    .frame(width: size, height: size)
-                    // Settled reads as a low relaxed slump — a touch wider than tall.
-                    .scaleEffect(
-                        x: (settled ? 1.06 : 1) + breath * state.horizontalBreath,
-                        y: (settled ? 0.94 : 1) + breath * state.verticalBreath
-                    )
-                    .offset(y: settled ? size * 0.05 : (state == .resting ? size * 0.04 : petBounce))
-                    .shadow(color: bodyColor.opacity(0.20), radius: size * 0.08, x: 0, y: size * 0.04)
-
-                Ellipse()
-                    .fill(.white.opacity(0.16))
-                    .frame(width: size * 0.34, height: size * 0.22)
-                    .offset(x: -size * 0.12, y: -size * 0.20 + petBounce)
-
-                CompanionAccessoryView(
-                    accessory: appearance.accessory,
-                    color: appearance.resolvedAccessoryColor(for: state),
-                    size: size
+                CompanionBaseLayers(
+                    appearance: appearance,
+                    state: state,
+                    size: size,
+                    breath: breath,
+                    petBounce: petBounce,
+                    bodyColor: bodyColor,
+                    settled: settled
                 )
-                .offset(y: petBounce)
 
-                CompanionClothingView(
-                    clothing: appearance.clothing,
-                    color: appearance.resolvedClothingColor(for: state),
-                    size: size
+                CompanionFaceLayers(
+                    state: state,
+                    size: size,
+                    facePetBounce: settled ? size * 0.05 : petBounce,
+                    settled: settled,
+                    showsCalmAccent: showsCalmAccent
                 )
-                .offset(y: petBounce)
-
-                let showsHappyArcEyes = settled || showsCalmAccent
-                let facePetBounce = settled ? size * 0.05 : petBounce
-
-                if settled || showsCalmAccent {
-                    // Warm blush cheeks that ride with the settled/calm face. Settled sits deeper in
-                    // the content beat, so its blush is a touch wider and warmer than the calm accent's.
-                    let blushOpacity = settled ? 0.42 : 0.38
-                    let blushWidth = settled ? size * 0.15 : size * 0.135
-                    HStack(spacing: size * 0.17) {
-                        Ellipse()
-                            .fill(Color.dustyRose.opacity(blushOpacity))
-                            .frame(width: blushWidth, height: size * 0.072)
-                        Ellipse()
-                            .fill(Color.dustyRose.opacity(blushOpacity))
-                            .frame(width: blushWidth, height: size * 0.072)
-                    }
-                    .offset(y: size * 0.02 + facePetBounce)
-                }
-
-                HStack(spacing: size * 0.18) {
-                    EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
-                    EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
-                }
-                .offset(y: -size * 0.08 + facePetBounce)
-
-                if settled {
-                    // A wide soft smile completes the droopy-happy "completely content" read.
-                    CompanionSettledMouth()
-                        .fill(.white.opacity(0.78))
-                        .frame(width: size * 0.30, height: size * 0.15)
-                        .offset(y: size * 0.14 + facePetBounce)
-                } else {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(.white.opacity(0.72))
-                        .frame(width: size * 0.18, height: state.mouthHeight(for: size))
-                        .offset(y: size * 0.14 + facePetBounce)
-                }
 
                 ForEach(equippedItems) { item in
                     CompanionCustomItemLayer(item: item, size: size)
@@ -148,40 +89,18 @@ struct CompanionView: View {
                         .zIndex(Self.itemPaintOrder(item.slot))
                 }
 
-                if showsStressAccent {
-                    // Frazzled / tense: a soft brow furrow, faint rising steam, and one cool
-                    // sweat bead that slides down and fades. Warm-neutral, never alarming.
-                    CompanionBrowFurrow(size: size)
-                        .offset(y: -size * 0.20 + petBounce)
-                        .zIndex(5)
-                        .transition(.opacity)
-
-                    CompanionSteam(size: size, elapsed: elapsed)
-                        .offset(x: -size * 0.02, y: -size * 0.52 + petBounce)
-                        .zIndex(5)
-                        .transition(.opacity)
-
-                    CompanionSweatBead(size: size, elapsed: elapsed)
-                        .offset(x: size * 0.30, y: -size * 0.24 + petBounce)
-                        .zIndex(6)
-                        .transition(.opacity)
-                }
-
-                if showsCalmAccent {
-                    // Calm / settled: two soft motes drifting up beside the companion.
-                    CompanionMotes(size: size, elapsed: elapsed)
-                        .offset(x: size * 0.36, y: -size * 0.30 + petBounce)
-                        .zIndex(5)
-                        .transition(.opacity)
-                }
-
-                if settled {
-                    // A single drifting "z" — a content, sleepy-happy beat.
-                    CompanionDriftingZ(size: size, elapsed: elapsed)
-                        .offset(x: size * 0.34, y: -size * 0.30)
-                        .zIndex(6)
-                        .transition(.opacity)
-                }
+                // The accents used to be flat siblings carrying zIndex 5/6, i.e. above every equipped
+                // custom item (paint order 1...4). Grouping them into one child would have dropped
+                // them to the container's implicit 0 — this keeps the original stacking.
+                CompanionAccentLayers(
+                    size: size,
+                    elapsed: elapsed,
+                    petBounce: petBounce,
+                    showsStressAccent: showsStressAccent,
+                    showsCalmAccent: showsCalmAccent,
+                    settled: settled
+                )
+                .zIndex(5)
             }
             .animation(.easeInOut(duration: 0.44), value: interactionLevel)
             .animation(.easeInOut(duration: 0.5), value: settled)
@@ -198,6 +117,171 @@ struct CompanionView: View {
         case .heldItem: 2
         case .face: 3
         case .hat: 4
+        }
+    }
+}
+
+/// The companion's base stack, back to front: the side-item badge, the breathing body blob, the
+/// specular highlight, and the built-in accessory + clothing layers.
+///
+/// A pure function of the values ``CompanionView`` computed for this animation frame — it owns no
+/// state and no clock — so the hero body stays one readable unit.
+private struct CompanionBaseLayers: View {
+    let appearance: CompanionAppearance
+    let state: CompanionState
+    let size: CGFloat
+    let breath: Double
+    let petBounce: CGFloat
+    let bodyColor: Color
+    let settled: Bool
+
+    var body: some View {
+        ZStack {
+            if appearance.sideItem != .none {
+                CompanionSideItemView(
+                    item: appearance.sideItem,
+                    color: appearance.resolvedSideItemColor(for: state),
+                    size: size
+                )
+                .offset(x: size * 0.58, y: size * 0.28)
+            }
+
+            CompanionBlobShape(style: appearance.bodyStyle, state: state, breath: breath)
+                .fill(bodyColor)
+                .frame(width: size, height: size)
+                // Settled reads as a low relaxed slump — a touch wider than tall.
+                .scaleEffect(
+                    x: (settled ? 1.06 : 1) + breath * state.horizontalBreath,
+                    y: (settled ? 0.94 : 1) + breath * state.verticalBreath
+                )
+                .offset(y: settled ? size * 0.05 : (state == .resting ? size * 0.04 : petBounce))
+                .shadow(color: bodyColor.opacity(0.20), radius: size * 0.08, x: 0, y: size * 0.04)
+
+            Ellipse()
+                .fill(.white.opacity(0.16))
+                .frame(width: size * 0.34, height: size * 0.22)
+                .offset(x: -size * 0.12, y: -size * 0.20 + petBounce)
+
+            CompanionAccessoryView(
+                accessory: appearance.accessory,
+                color: appearance.resolvedAccessoryColor(for: state),
+                size: size
+            )
+            .offset(y: petBounce)
+
+            CompanionClothingView(
+                clothing: appearance.clothing,
+                color: appearance.resolvedClothingColor(for: state),
+                size: size
+            )
+            .offset(y: petBounce)
+        }
+    }
+}
+
+/// The companion's face: the optional warm blush, the eyes, and the state-resolved mouth.
+///
+/// `facePetBounce` is the already-resolved vertical offset for the face (the settled pose sits
+/// lower than the pet bounce), so this view never re-derives the pose.
+private struct CompanionFaceLayers: View {
+    let state: CompanionState
+    let size: CGFloat
+    let facePetBounce: CGFloat
+    let settled: Bool
+    let showsCalmAccent: Bool
+
+    private var showsHappyArcEyes: Bool { settled || showsCalmAccent }
+
+    var body: some View {
+        ZStack {
+            if settled || showsCalmAccent {
+                // Warm blush cheeks that ride with the settled/calm face. Settled sits deeper in
+                // the content beat, so its blush is a touch wider and warmer than the calm accent's.
+                let blushOpacity = settled ? 0.42 : 0.38
+                let blushWidth = settled ? size * 0.15 : size * 0.135
+                HStack(spacing: size * 0.17) {
+                    Ellipse()
+                        .fill(Color.dustyRose.opacity(blushOpacity))
+                        .frame(width: blushWidth, height: size * 0.072)
+                    Ellipse()
+                        .fill(Color.dustyRose.opacity(blushOpacity))
+                        .frame(width: blushWidth, height: size * 0.072)
+                }
+                .offset(y: size * 0.02 + facePetBounce)
+            }
+
+            HStack(spacing: size * 0.18) {
+                EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
+                EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
+            }
+            .offset(y: -size * 0.08 + facePetBounce)
+
+            if settled {
+                // A wide soft smile completes the droopy-happy "completely content" read.
+                CompanionSettledMouth()
+                    .fill(.white.opacity(0.78))
+                    .frame(width: size * 0.30, height: size * 0.15)
+                    .offset(y: size * 0.14 + facePetBounce)
+            } else {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(.white.opacity(0.72))
+                    .frame(width: size * 0.18, height: state.mouthHeight(for: size))
+                    .offset(y: size * 0.14 + facePetBounce)
+            }
+        }
+    }
+}
+
+/// The presentation-only accent layers above the companion: the frazzled set (brow furrow, steam,
+/// sweat bead), the calm motes, and the settled drifting "z".
+///
+/// The three groups are mutually exclusive by construction — `showsStressAccent` and
+/// `showsCalmAccent` both require `!settled`, and the calm accent additionally requires no stress
+/// tint — so at most one renders at a time.
+private struct CompanionAccentLayers: View {
+    let size: CGFloat
+    let elapsed: Double
+    let petBounce: CGFloat
+    let showsStressAccent: Bool
+    let showsCalmAccent: Bool
+    let settled: Bool
+
+    var body: some View {
+        ZStack {
+            if showsStressAccent {
+                // Frazzled / tense: a soft brow furrow, faint rising steam, and one cool
+                // sweat bead that slides down and fades. Warm-neutral, never alarming.
+                CompanionBrowFurrow(size: size)
+                    .offset(y: -size * 0.20 + petBounce)
+                    .zIndex(5)
+                    .transition(.opacity)
+
+                CompanionSteam(size: size, elapsed: elapsed)
+                    .offset(x: -size * 0.02, y: -size * 0.52 + petBounce)
+                    .zIndex(5)
+                    .transition(.opacity)
+
+                CompanionSweatBead(size: size, elapsed: elapsed)
+                    .offset(x: size * 0.30, y: -size * 0.24 + petBounce)
+                    .zIndex(6)
+                    .transition(.opacity)
+            }
+
+            if showsCalmAccent {
+                // Calm / settled: two soft motes drifting up beside the companion.
+                CompanionMotes(size: size, elapsed: elapsed)
+                    .offset(x: size * 0.36, y: -size * 0.30 + petBounce)
+                    .zIndex(5)
+                    .transition(.opacity)
+            }
+
+            if settled {
+                // A single drifting "z" — a content, sleepy-happy beat.
+                CompanionDriftingZ(size: size, elapsed: elapsed)
+                    .offset(x: size * 0.34, y: -size * 0.30)
+                    .zIndex(6)
+                    .transition(.opacity)
+            }
         }
     }
 }
@@ -718,70 +802,87 @@ struct CompanionSideItemView: View {
         .frame(width: size * 0.34, height: size * 0.34)
     }
 
+    /// The badge's glyph size — every asset below is laid out as a fraction of it.
+    private var assetSize: CGFloat { size * 0.34 }
+
     @ViewBuilder
     private var sideItemAsset: some View {
-        let assetSize = size * 0.34
         switch item {
-        case .none:
-            Circle()
-                .stroke(color.opacity(0.72), lineWidth: max(2, size * 0.014))
-                .frame(width: assetSize * 0.42, height: assetSize * 0.42)
-                .overlay(
-                    Rectangle()
-                        .fill(color.opacity(0.72))
-                        .frame(width: assetSize * 0.52, height: max(2, size * 0.012))
-                        .rotationEffect(.degrees(-45))
-                )
-        case .mug:
-            ZStack(alignment: .trailing) {
-                RoundedRectangle(cornerRadius: assetSize * 0.12, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.42, height: assetSize * 0.44)
-                    .offset(x: -assetSize * 0.05)
-                Circle()
-                    .stroke(color.opacity(0.86), lineWidth: max(2, size * 0.018))
-                    .frame(width: assetSize * 0.22, height: assetSize * 0.24)
-                    .offset(x: assetSize * 0.08)
-            }
-        case .book:
-            ZStack {
-                RoundedRectangle(cornerRadius: assetSize * 0.08, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.54, height: assetSize * 0.42)
-                    .rotationEffect(.degrees(-6))
+        case .none: noneGlyph
+        case .mug: mugGlyph
+        case .book: bookGlyph
+        case .dumbbell: dumbbellGlyph
+        case .waterBottle: waterBottleGlyph
+        }
+    }
+
+    private var noneGlyph: some View {
+        Circle()
+            .stroke(color.opacity(0.72), lineWidth: max(2, size * 0.014))
+            .frame(width: assetSize * 0.42, height: assetSize * 0.42)
+            .overlay(
                 Rectangle()
-                    .fill(Color.cream.opacity(0.65))
-                    .frame(width: max(1, size * 0.010), height: assetSize * 0.32)
-                    .offset(x: -assetSize * 0.08)
-                    .rotationEffect(.degrees(-6))
-            }
-        case .dumbbell:
-            HStack(spacing: assetSize * 0.05) {
-                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.16, height: assetSize * 0.36)
-                Capsule()
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.36, height: max(3, size * 0.030))
-                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.16, height: assetSize * 0.36)
-            }
-            .rotationEffect(.degrees(-12))
-        case .waterBottle:
-            VStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.20, height: assetSize * 0.10)
-                RoundedRectangle(cornerRadius: assetSize * 0.11, style: .continuous)
-                    .fill(color.opacity(0.86))
-                    .frame(width: assetSize * 0.30, height: assetSize * 0.50)
-                    .overlay(
-                        Capsule()
-                            .fill(Color.cream.opacity(0.45))
-                            .frame(width: assetSize * 0.16, height: assetSize * 0.24)
-                    )
-            }
+                    .fill(color.opacity(0.72))
+                    .frame(width: assetSize * 0.52, height: max(2, size * 0.012))
+                    .rotationEffect(.degrees(-45))
+            )
+    }
+
+    private var mugGlyph: some View {
+        ZStack(alignment: .trailing) {
+            RoundedRectangle(cornerRadius: assetSize * 0.12, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.42, height: assetSize * 0.44)
+                .offset(x: -assetSize * 0.05)
+            Circle()
+                .stroke(color.opacity(0.86), lineWidth: max(2, size * 0.018))
+                .frame(width: assetSize * 0.22, height: assetSize * 0.24)
+                .offset(x: assetSize * 0.08)
+        }
+    }
+
+    private var bookGlyph: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: assetSize * 0.08, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.54, height: assetSize * 0.42)
+                .rotationEffect(.degrees(-6))
+            Rectangle()
+                .fill(Color.cream.opacity(0.65))
+                .frame(width: max(1, size * 0.010), height: assetSize * 0.32)
+                .offset(x: -assetSize * 0.08)
+                .rotationEffect(.degrees(-6))
+        }
+    }
+
+    private var dumbbellGlyph: some View {
+        HStack(spacing: assetSize * 0.05) {
+            RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.16, height: assetSize * 0.36)
+            Capsule()
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.36, height: max(3, size * 0.030))
+            RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.16, height: assetSize * 0.36)
+        }
+        .rotationEffect(.degrees(-12))
+    }
+
+    private var waterBottleGlyph: some View {
+        VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.20, height: assetSize * 0.10)
+            RoundedRectangle(cornerRadius: assetSize * 0.11, style: .continuous)
+                .fill(color.opacity(0.86))
+                .frame(width: assetSize * 0.30, height: assetSize * 0.50)
+                .overlay(
+                    Capsule()
+                        .fill(Color.cream.opacity(0.45))
+                        .frame(width: assetSize * 0.16, height: assetSize * 0.24)
+                )
         }
     }
 }

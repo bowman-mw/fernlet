@@ -82,38 +82,7 @@ struct SleepSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    SheetField("Quality") {
-                        VStack(spacing: 8) {
-                            ForEach(SleepQuality.allCases) { option in
-                                Button {
-                                    quality = option
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(option.label)
-                                                .font(.fernlet(.label))
-                                                .foregroundStyle(Color.bark)
-                                            Text(option.description)
-                                                .font(.fernlet(.bodySmall))
-                                                .foregroundStyle(Color.slate)
-                                        }
-                                        Spacer()
-                                        if quality == option {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(Color.moss)
-                                        }
-                                    }
-                                    .padding(14)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(quality == option ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08), lineWidth: 1)
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
+                    qualityPicker
 
                     HStack(alignment: .top, spacing: 12) {
                         SheetField("Hours (optional)") {
@@ -129,20 +98,72 @@ struct SleepSheet: View {
                 .padding(20)
                 .padding(.bottom, 10)
             }
-            .onAppear {
-                if let sleep = store.day.sleep {
-                    quality = sleep.quality
-                    note = sleep.note
-                    if let h = sleep.hours { hours = String(h) }
-                }
-            }
+            .onAppear(perform: prefillFromToday)
 
             SheetSaveBar {
-                store.setSleep(hours: Double(hours), quality: quality, note: note)
+                store.setSleep(hours: validatedHours, quality: quality, note: note)
                 dismiss()
             }
         }
         .background(Color.parchment)
+    }
+
+    /// The one-per-quality option rows (extracted so `body` stays readable).
+    private var qualityPicker: some View {
+        SheetField("Quality") {
+            VStack(spacing: 8) {
+                ForEach(SleepQuality.allCases) { option in
+                    Button {
+                        quality = option
+                    } label: {
+                        qualityRow(option)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func qualityRow(_ option: SleepQuality) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.label)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Text(option.description)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+            if quality == option {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.moss)
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(quality == option ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    /// Pre-fills the draft from today's existing sleep entry so reopening edits rather than resets.
+    private func prefillFromToday() {
+        guard let sleep = store.day.sleep else { return }
+        quality = sleep.quality
+        note = sleep.note
+        if let recorded = sleep.hours { hours = String(recorded) }
+    }
+
+    /// The typed hours, validated at this boundary (R5): `Double("nan")` is NaN and `Double("1e400")`
+    /// is infinity, and a non-finite value in the day record makes the snapshot's `JSONEncoder` throw
+    /// — losing the whole day's save. Out-of-range or unparseable text saves as "no hours recorded"
+    /// rather than as a number nothing downstream can use.
+    private var validatedHours: Double? {
+        guard let parsed = Double(hours.trimmingCharacters(in: .whitespaces)),
+              parsed.isFinite, (0...24).contains(parsed) else { return nil }
+        return parsed
     }
 }
 

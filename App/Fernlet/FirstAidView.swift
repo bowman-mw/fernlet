@@ -251,13 +251,27 @@ struct FirstAidView: View {
     /// inside `saveMindfulSession`; a closed gate or failed write stays silent — the exercise
     /// itself already happened and nothing should dampen that.
     private func handleBreathingComplete(start: Date, end: Date) {
+        // R5: an inverted or zero interval is not a session — never count it, and never offer it to
+        // Health (an ill-formed `.mindfulSession` interval is a write we could not defend).
+        guard end > start else {
+            FernletAuditLog.log("firstAid.invalidBreathingInterval")
+            return
+        }
         // Count the session in the milestone ledger (append-only, `event:breathing:<uuid>`).
         // Breathing isn't in the diary, so this live hook is the only place it's counted — a
         // session finished before the ledger existed simply isn't (undercount accepted).
         store.recordMilestoneEvent(.breathing, ref: UUID().uuidString)
         let preferencesStore = storagePreferencesStore
         Task {
-            try? await HealthKitService(preferencesStore: preferencesStore).saveMindfulSession(start: start, end: end)
+            do {
+                try await HealthKitService(preferencesStore: preferencesStore).saveMindfulSession(start: start, end: end)
+            } catch {
+                // Stays silent toward the USER by design — the exercise happened and nothing should
+                // dampen that — but the write failure still has to be named somewhere. A closed
+                // consent gate returns without throwing inside the service, so this logs real
+                // failures only.
+                FernletAuditLog.log("firstAid.mindfulSessionWriteFailed", context: ["error": String(describing: error)])
+            }
         }
     }
 }

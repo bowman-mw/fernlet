@@ -34,6 +34,11 @@ struct AmbientCardsView: View {
     @State private var weatherPrompt: String?
     @State private var walkComfort: WeatherComfort?
 
+    /// How far back the forgotten-good-workout scan reaches. The card compares "did this before" with
+    /// "haven't lately", so a year is plenty — and it keeps the name-count dictionary bounded by a
+    /// window instead of by the user's entire history.
+    private static let forgottenWorkoutLookbackDays = 365
+
     /// One resurfaced journal moment for the looking-back card: the window label ("A year ago
     /// today") plus the entry text.
     ///
@@ -337,9 +342,13 @@ struct AmbientCardsView: View {
         let days = store.loadDays()
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) else { return nil }
         let cutoffKey = FernletDate.dayKey(for: cutoff)
+        // R3: bound the scan (and therefore `counts`) to one year of history rather than the whole
+        // diary — this hint only compares recent-vs-earlier, so unbounded growth buys nothing.
+        guard let lookbackStart = Calendar.current.date(byAdding: .day, value: -Self.forgottenWorkoutLookbackDays, to: Date()) else { return nil }
+        let lookbackKey = FernletDate.dayKey(for: lookbackStart)
         var counts: [String: Int] = [:]
         var recent: Set<String> = []
-        for (key, day) in days {
+        for (key, day) in days where key >= lookbackKey {
             for workout in day.workouts {
                 let name = workout.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { continue }
