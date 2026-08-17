@@ -13,16 +13,20 @@ import FernletDomainModel
 /// (`00000000-0000-5000-8000-<12-digit fdcId>`) so catalog regenerations keep stable ids.
 /// Generation and test time only: the shipped app reads `FoodCatalog.sqlite`, never this decoder.
 struct USDAFoodItemRecord: Decodable {
+    // The non-optional fields carry defaults ONLY so `init(from:)` may call the two per-schema
+    // decode methods (R4: a 98-line initializer split by field group) — a struct initializer cannot
+    // touch `self` until every stored property is initialized. Both decode paths assign every one of
+    // them, so no default is ever the value of a decoded record; the optionals default to nil as usual.
     var id: UUID?
     var fdcId: Int?
-    var name: String
+    var name: String = ""
     var brandSource: String?
-    var servingSize: Double
-    var servingUnit: String
-    var protein: Double
-    var carbs: Double
-    var fat: Double
-    var category: String
+    var servingSize: Double = 100
+    var servingUnit: String = RecipeUnit.gram.rawValue
+    var protein: Double = 0
+    var carbs: Double = 0
+    var fat: Double = 0
+    var category: String = "USDA"
     var dataType: String?
     var tags: [String]?
     var portions: [FoodPortion]?
@@ -78,44 +82,60 @@ struct USDAFoodItemRecord: Decodable {
         // compact JSON does not — UPCs arrive only via a future re-derivation from raw FDC branded data).
         gtinUpc = try container.decodeIfPresent(String.self, forKey: .gtinUpc)
 
+        // R4: the two schemas decode in their own methods; the branch key is unchanged (the compact
+        // `name` key present ⇒ compact schema, else the raw FDC envelope).
         if let compactName = try container.decodeIfPresent(String.self, forKey: .name) {
-            name = compactName
-            brandSource = try container.decodeIfPresent(String.self, forKey: .brandSource)
-            servingSize = try container.decodeIfPresent(Double.self, forKey: .servingSize) ?? 100
-            servingUnit = try container.decodeIfPresent(String.self, forKey: .servingUnit) ?? RecipeUnit.gram.rawValue
-            protein = try container.decodeIfPresent(Double.self, forKey: .protein) ?? 0
-            carbs = try container.decodeIfPresent(Double.self, forKey: .carbs) ?? 0
-            fat = try container.decodeIfPresent(Double.self, forKey: .fat) ?? 0
-            category = try container.decodeIfPresent(String.self, forKey: .category) ?? "USDA"
-            dataType = try container.decodeIfPresent(String.self, forKey: .dataType)
-            tags = try container.decodeIfPresent([String].self, forKey: .tags)
-            portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions)
-            fiber = try container.decodeIfPresent(Double.self, forKey: .fiber)
-            sugar = try container.decodeIfPresent(Double.self, forKey: .sugar)
-            saturatedFat = try container.decodeIfPresent(Double.self, forKey: .saturatedFat)
-            cholesterol = try container.decodeIfPresent(Double.self, forKey: .cholesterol)
-            vitaminA = try container.decodeIfPresent(Double.self, forKey: .vitaminA)
-            vitaminC = try container.decodeIfPresent(Double.self, forKey: .vitaminC)
-            vitaminD = try container.decodeIfPresent(Double.self, forKey: .vitaminD)
-            vitaminE = try container.decodeIfPresent(Double.self, forKey: .vitaminE)
-            vitaminK = try container.decodeIfPresent(Double.self, forKey: .vitaminK)
-            vitaminB6 = try container.decodeIfPresent(Double.self, forKey: .vitaminB6)
-            vitaminB12 = try container.decodeIfPresent(Double.self, forKey: .vitaminB12)
-            thiamin = try container.decodeIfPresent(Double.self, forKey: .thiamin)
-            riboflavin = try container.decodeIfPresent(Double.self, forKey: .riboflavin)
-            niacin = try container.decodeIfPresent(Double.self, forKey: .niacin)
-            folate = try container.decodeIfPresent(Double.self, forKey: .folate)
-            calcium = try container.decodeIfPresent(Double.self, forKey: .calcium)
-            iron = try container.decodeIfPresent(Double.self, forKey: .iron)
-            magnesium = try container.decodeIfPresent(Double.self, forKey: .magnesium)
-            phosphorus = try container.decodeIfPresent(Double.self, forKey: .phosphorus)
-            potassium = try container.decodeIfPresent(Double.self, forKey: .potassium)
-            sodium = try container.decodeIfPresent(Double.self, forKey: .sodium)
-            zinc = try container.decodeIfPresent(Double.self, forKey: .zinc)
-            omega3 = try container.decodeIfPresent(Double.self, forKey: .omega3)
-            return
+            try decodeCompact(from: container, name: compactName)
+        } else {
+            try decodeFDC(from: container)
         }
+    }
 
+    /// Decodes the compact bundled schema: pre-flattened per-serving fields, read straight through.
+    private mutating func decodeCompact(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        name compactName: String
+    ) throws {
+        name = compactName
+        brandSource = try container.decodeIfPresent(String.self, forKey: .brandSource)
+        servingSize = try container.decodeIfPresent(Double.self, forKey: .servingSize) ?? 100
+        servingUnit = try container.decodeIfPresent(String.self, forKey: .servingUnit) ?? RecipeUnit.gram.rawValue
+        protein = try container.decodeIfPresent(Double.self, forKey: .protein) ?? 0
+        carbs = try container.decodeIfPresent(Double.self, forKey: .carbs) ?? 0
+        fat = try container.decodeIfPresent(Double.self, forKey: .fat) ?? 0
+        category = try container.decodeIfPresent(String.self, forKey: .category) ?? "USDA"
+        dataType = try container.decodeIfPresent(String.self, forKey: .dataType)
+        tags = try container.decodeIfPresent([String].self, forKey: .tags)
+        portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions)
+        fiber = try container.decodeIfPresent(Double.self, forKey: .fiber)
+        sugar = try container.decodeIfPresent(Double.self, forKey: .sugar)
+        saturatedFat = try container.decodeIfPresent(Double.self, forKey: .saturatedFat)
+        cholesterol = try container.decodeIfPresent(Double.self, forKey: .cholesterol)
+        vitaminA = try container.decodeIfPresent(Double.self, forKey: .vitaminA)
+        vitaminC = try container.decodeIfPresent(Double.self, forKey: .vitaminC)
+        vitaminD = try container.decodeIfPresent(Double.self, forKey: .vitaminD)
+        vitaminE = try container.decodeIfPresent(Double.self, forKey: .vitaminE)
+        vitaminK = try container.decodeIfPresent(Double.self, forKey: .vitaminK)
+        vitaminB6 = try container.decodeIfPresent(Double.self, forKey: .vitaminB6)
+        vitaminB12 = try container.decodeIfPresent(Double.self, forKey: .vitaminB12)
+        thiamin = try container.decodeIfPresent(Double.self, forKey: .thiamin)
+        riboflavin = try container.decodeIfPresent(Double.self, forKey: .riboflavin)
+        niacin = try container.decodeIfPresent(Double.self, forKey: .niacin)
+        folate = try container.decodeIfPresent(Double.self, forKey: .folate)
+        calcium = try container.decodeIfPresent(Double.self, forKey: .calcium)
+        iron = try container.decodeIfPresent(Double.self, forKey: .iron)
+        magnesium = try container.decodeIfPresent(Double.self, forKey: .magnesium)
+        phosphorus = try container.decodeIfPresent(Double.self, forKey: .phosphorus)
+        potassium = try container.decodeIfPresent(Double.self, forKey: .potassium)
+        sodium = try container.decodeIfPresent(Double.self, forKey: .sodium)
+        zinc = try container.decodeIfPresent(Double.self, forKey: .zinc)
+        omega3 = try container.decodeIfPresent(Double.self, forKey: .omega3)
+    }
+
+    /// Decodes the raw USDA FDC envelope: flattens `foodNutrients` by nutrient id, derives portions,
+    /// and — for branded labels — rescales the per-100 g values onto the label's per-serving basis so
+    /// macros and micronutrients share one basis.
+    private mutating func decodeFDC(from container: KeyedDecodingContainer<CodingKeys>) throws {
         let nutrients = try container.decodeIfPresent([FDCFoodNutrient].self, forKey: .foodNutrients) ?? []
         let nutrientValues = Dictionary(grouping: nutrients, by: \.nutrientId)
             .compactMapValues { $0.first?.amount }
@@ -155,6 +175,13 @@ struct USDAFoodItemRecord: Decodable {
         category = categoryDescription ?? dataType ?? "USDA"
         tags = [dataType, categoryDescription, "usda"].compactMap { $0 }
         portions = Self.portions(from: fdcPortions, labelServingSize: labelServingSize, labelServingUnit: labelServingUnit, labelServingText: labelServingText)
+        applyFDCMicronutrients(nutrientValues, scale: nutrientScale)
+    }
+
+    /// Assigns the micronutrient columns from the flattened FDC nutrient-id map, each already put on
+    /// the record's serving basis by `scale` (1.0 for a per-100 g record).
+    private mutating func applyFDCMicronutrients(_ nutrientValues: [Int: Double], scale: Double) {
+        func scaled(_ value: Double?) -> Double? { value.map { $0 * scale } }
         fiber = scaled(nutrientValues[1079])
         sugar = scaled(nutrientValues[2000] ?? nutrientValues[1063])
         saturatedFat = scaled(nutrientValues[1258])

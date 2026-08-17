@@ -301,6 +301,9 @@ public enum HealthKitServiceError: LocalizedError {
     /// `disableIntegration()` was invoked on a `HealthKitService` with no concrete cache clearer
     /// installed. Disable fails closed rather than silently leaving opted-out clinical data behind.
     case cacheClearerUnavailable
+    /// A body measurement offered for writing was zero, negative, or not finite. Refused at entry
+    /// rather than stored as a nonsense clinical sample under Fernlet's name.
+    case invalidMeasurement
 
     public var errorDescription: String? {
         switch self {
@@ -310,6 +313,8 @@ public enum HealthKitServiceError: LocalizedError {
             "Fernlet could not create the HealthKit type for \(identifier)."
         case .cacheClearerUnavailable:
             "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again."
+        case .invalidMeasurement:
+            "Those height and weight values do not look right, so Fernlet did not save them to Health."
         }
     }
 }
@@ -448,37 +453,83 @@ public struct HealthKitAnchorKeychain {
     }
 
     public static func delete(identifier: String) {
-        KeychainItem.delete(account: account(for: identifier), service: service)
+        deleteRow(account: account(for: identifier))
     }
 
     public static func deleteWorkoutAnchor() {
-        KeychainItem.delete(account: workoutAnchorKey, service: service)
+        deleteRow(account: workoutAnchorKey)
+    }
+
+    /// Deletes one anchor row, auditing a delete that did not take.
+    ///
+    /// R7: `disableIntegration()`'s contract is that a re-enable REPLAYS history rather than
+    /// resuming; a stale anchor left behind by a failed delete silently breaks that, so the failure
+    /// is named. Recovery is the caller's: the disable path continues (the anchors it could delete
+    /// are gone) and the audit line explains a later partial replay.
+    private static func deleteRow(account: String) {
+        let status = KeychainItem.deleteReportingStatus(account: account, service: service)
+        guard status != errSecSuccess else { return }
+        FernletAuditLog.log("healthkit.anchor.deleteFailed", context: ["account": account, "status": "\(status)"])
     }
 
     public static func loadWorkoutAnchor() -> HKQueryAnchor? {
-        KeychainItem.load(account: workoutAnchorKey, service: service).flatMap { data in
-            try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
-        }
+        decodeAnchor(account: workoutAnchorKey)
     }
 
     public static func storeWorkoutAnchor(_ anchor: HKQueryAnchor) {
-        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
-        KeychainItem.store(data, account: workoutAnchorKey, service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        storeAnchorRow(anchor, account: workoutAnchorKey)
     }
 
     public static func store(_ data: Data, identifier: String) {
-        KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        let account = account(for: identifier)
+        let status = KeychainItem.store(data, account: account, service: service,
+                                        accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        guard status != errSecSuccess else { return }
+        FernletAuditLog.log("healthkit.anchor.storeFailed", context: ["account": account, "status": "\(status)"])
     }
 
     public static func loadAnchor(for identifier: String) -> HKQueryAnchor? {
-        KeychainItem.load(account: account(for: identifier), service: service).flatMap { data in
-            try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
-        }
+        decodeAnchor(account: account(for: identifier))
     }
 
     public static func storeAnchor(_ anchor: HKQueryAnchor, for identifier: String) {
-        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
-        KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        storeAnchorRow(anchor, account: account(for: identifier))
+    }
+
+    /// Reads and unarchives one anchor row.
+    ///
+    /// R7: the unarchive error is caught rather than swallowed. A corrupt row is DELETED as the
+    /// recovery — otherwise the query restarts from scratch on every launch and re-decodes the same
+    /// corrupt bytes forever, with nothing in the audit trail explaining the repeated replay.
+    private static func decodeAnchor(account: String) -> HKQueryAnchor? {
+        guard let data = KeychainItem.load(account: account, service: service) else { return nil }
+        do {
+            return try NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+        } catch {
+            FernletAuditLog.log("healthkit.anchor.corrupt", context: [
+                "account": account, "error": String(describing: error)
+            ])
+            deleteRow(account: account)
+            return nil
+        }
+    }
+
+    /// Archives and stores one anchor row, auditing an archive or keychain failure.
+    ///
+    /// R7: a persistently failing anchor write means every launch replays the full history through
+    /// the observation handlers; without this line there is nothing to explain the churn.
+    private static func storeAnchorRow(_ anchor: HKQueryAnchor, account: String) {
+        do {
+            let data = try NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true)
+            let status = KeychainItem.store(data, account: account, service: service,
+                                            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            guard status != errSecSuccess else { return }
+            FernletAuditLog.log("healthkit.anchor.storeFailed", context: ["account": account, "status": "\(status)"])
+        } catch {
+            FernletAuditLog.log("healthkit.anchor.archiveFailed", context: [
+                "account": account, "error": String(describing: error)
+            ])
+        }
     }
 }
 
@@ -541,9 +592,13 @@ public final class HealthKitService: HealthKitServicing {
     /// silently skipping the purge of cached HealthKit-derived clinical values.
     public static var defaultCacheClearer: HealthKitCacheClearing?
 
-    /// The underlying Health store. Public because the `PeriodHealthKitServicing` conformance and
-    /// some one-shot queries use it directly (bypassing ``HealthKitStoreControlling``).
-    public let healthStore: HKHealthStore
+    /// The underlying Health store, used directly by the `PeriodHealthKitServicing` conformance and
+    /// a few one-shot queries (bypassing ``HealthKitStoreControlling``).
+    ///
+    /// R6: `private`, not `public` — every one of those consumers is an extension in THIS file, and
+    /// same-file extensions can read a private member. Nothing outside the file referenced it, so
+    /// exposing the raw store module-wide (and to every app target) bought nothing.
+    private let healthStore: HKHealthStore
     /// The seam all authorization/observation/save/delete traffic routes through (testable).
     private let storeController: HealthKitStoreControlling
     /// Optional: `nil` means "no clearer installed" → `disableIntegration()` throws rather than
@@ -556,6 +611,13 @@ public final class HealthKitService: HealthKitServicing {
     private var workoutObservationQuery: HKAnchoredObjectQuery?
     /// Every currently executing long-lived query, so disable can stop them all.
     private var activeQueries: [HKQuery] = []
+    /// The live per-type anchored query, keyed by sample-type identifier.
+    ///
+    /// R3: `startObserving` dedupes its REGISTRATIONS by type, but the query it launches used to be
+    /// appended unconditionally — so a second `startObserving` for a type (or an `enableIntegration()`
+    /// that restarts every registration) left the previous query running: `activeQueries` grew and
+    /// each sample arrived N times. Keying the live query by type makes the replacement explicit.
+    private var activeQueriesByType: [String: HKQuery] = [:]
     /// Registered per-type observation handlers, kept so ``enableIntegration()`` can restart the
     /// anchored queries after a disable/enable cycle.
     private var observationRegistrations: [String: (type: HKSampleType, handler: (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void)] = [:]
@@ -616,11 +678,22 @@ public final class HealthKitService: HealthKitServicing {
     /// Precedence when both occur: `.failed` wins — an unexpected error is retryable, and its generic
     /// label still tells the user Health entries remain.
     public func deleteAllAuthoredSamples() async -> AuthoredSampleDeleteOutcome {
-        let shareTypes = Set(HealthCapability.allCases.flatMap { capability in
-            (try? Self.types(for: capability).share) ?? []
-        })
-        let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
         var sawUnexpectedFailure = false
+        var shareTypes: Set<HKSampleType> = []
+        // R7: a capability whose types fail to resolve must NOT be silently dropped from the wipe —
+        // that is the "report success while data remains" mode this function exists to prevent. Its
+        // recovery is to fail the whole sweep as retryable, and to say which capability was skipped.
+        for capability in HealthCapability.allCases {
+            do {
+                shareTypes.formUnion(try Self.types(for: capability).share)
+            } catch {
+                FernletAuditLog.log("healthkit.deleteAll.typeUnavailable", context: [
+                    "capability": capability.rawValue, "error": String(describing: error)
+                ])
+                sawUnexpectedFailure = true
+            }
+        }
+        let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
         var sawRevokedAccess = false
         for type in shareTypes {
             do {
@@ -700,11 +773,11 @@ public final class HealthKitService: HealthKitServicing {
             anchor: anchor,
             limit: HKObjectQueryNoLimit
         ) { _, samples, deletedObjects, newAnchor, error in
-            guard error == nil else { return }
+            guard Self.isObservationDeliverable(error, type: workoutType.identifier) else { return }
             Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
         query.updateHandler = { _, samples, deletedObjects, newAnchor, error in
-            guard error == nil else { return }
+            guard Self.isObservationDeliverable(error, type: workoutType.identifier) else { return }
             Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
         workoutObservationQuery = query
@@ -830,6 +903,9 @@ public final class HealthKitService: HealthKitServicing {
     /// stress baseline reads a 60-day clinical series, so this path fails closed itself.
     /// Individual metric queries are best-effort (a type the user never authorized simply
     /// contributes empty days) but the gates throw so the caller can scrub cached derivatives.
+    ///
+    /// `daysBack` is clamped to `1...`` maxStressMetricDays`` (R5) — the window bounds four
+    /// statistics queries and the returned array.
     public func stressMetricDays(daysBack: Int = 60, referenceDate: Date = .now) async throws -> [StressMetricDay] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
@@ -837,9 +913,12 @@ public final class HealthKitService: HealthKitServicing {
             throw HealthKitServiceError.healthDataUnavailable
         }
 
+        // R3/R5: `daysBack` was only floored, never capped — four statistics queries and the `days`
+        // array scaled with whatever the caller passed. Clamp to a named window.
+        let window = min(max(daysBack, 1), Self.maxStressMetricDays)
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: referenceDate)
-        let anchor = calendar.date(byAdding: .day, value: -(max(daysBack, 1) - 1), to: todayStart) ?? todayStart
+        let anchor = calendar.date(byAdding: .day, value: -(window - 1), to: todayStart) ?? todayStart
 
         async let hrv = dailyAverages(.heartRateVariabilitySDNN, unit: HKUnit.secondUnit(with: .milli), anchor: anchor)
         async let restingHR = dailyAverages(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()), anchor: anchor)
@@ -848,7 +927,7 @@ public final class HealthKitService: HealthKitServicing {
         let (hrvByDay, restingHRByDay, respiratoryByDay, wristTempByDay) = await (hrv, restingHR, respiratory, wristTemp)
 
         var days: [StressMetricDay] = []
-        for offset in 0..<max(daysBack, 1) {
+        for offset in 0..<window {
             guard let dayStart = calendar.date(byAdding: .day, value: offset, to: anchor) else { continue }
             let key = FernletDate.dayKey(for: dayStart)
             days.append(StressMetricDay(
@@ -896,6 +975,12 @@ public final class HealthKitService: HealthKitServicing {
 
     public func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        // R5: a zero/negative/non-finite measurement would otherwise reach HealthKit and either
+        // throw opaquely or store a nonsense clinical sample under Fernlet's name.
+        guard profile.heightInches.isFinite, profile.heightInches > 0,
+              profile.weightPounds.isFinite, profile.weightPounds > 0 else {
+            throw HealthKitServiceError.invalidMeasurement
+        }
         let now = Date()
         let samples = try [
             HKQuantitySample(
@@ -1229,6 +1314,7 @@ public final class HealthKitService: HealthKitServicing {
                 storeController.stop(query)
             }
             activeQueries.removeAll()
+            activeQueriesByType.removeAll()
 
             for type in observedObjectTypes() {
                 try await storeController.disableBackgroundDelivery(for: type)
@@ -1352,18 +1438,49 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Whether an anchored-query callback carries results worth delivering.
+    ///
+    /// R7: a HealthKit query error (authorization revoked mid-session, store unavailable) used to be
+    /// dropped by a bare `guard error == nil`, making a silently dead observation indistinguishable
+    /// from "no new samples". The recovery is unchanged — skip this delivery, the query stays
+    /// registered — but the failure is now named. `nonisolated`: runs on the query's own queue.
+    nonisolated private static func isObservationDeliverable(_ error: Error?, type: String) -> Bool {
+        guard let error else { return true }
+        FernletAuditLog.log("healthkit.observe.failed", context: [
+            "type": type, "error": String(describing: error)
+        ])
+        return false
+    }
+
     /// Launches one persistent anchored query for a sample type, resuming from (and persisting) its
     /// keychain anchor; both the initial and update handlers hop to the main actor before touching
     /// the caller's handler.
+    ///
+    /// R3: the query carries BOTH bounds the workout observation already had — a
+    /// ``observationBackfillStartDate(referenceDate:)`` window predicate and a named
+    /// ``maxSamplesPerAnchoredBatch`` row limit. Without them, a first run (or any run after a
+    /// disable/enable, which wipes anchors) hands the initial-results handler the entire history of
+    /// the type — hundreds of thousands of step or heart-rate samples materialized in one array.
+    /// The anchor advances per batch, so the remainder still arrives through the update handler.
+    ///
+    /// One live query per type: a repeated `startObserving` (or an `enableIntegration()` that
+    /// restarts every registration) stops the previous query first, so `activeQueries` cannot grow
+    /// without bound and a sample cannot be delivered N times.
     private func startAnchoredQuery(for type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) {
+        if let previous = activeQueriesByType[type.identifier] {
+            storeController.stop(previous)
+            activeQueries.removeAll { $0 === previous }
+            activeQueriesByType[type.identifier] = nil
+        }
         let savedAnchor = HealthKitAnchorKeychain.loadAnchor(for: type.identifier)
+        let windowStart = Self.observationBackfillStartDate(referenceDate: .now)
         let query = HKAnchoredObjectQuery(
             type: type,
-            predicate: nil,
+            predicate: HKQuery.predicateForSamples(withStart: windowStart, end: nil, options: []),
             anchor: savedAnchor,
-            limit: HKObjectQueryNoLimit
+            limit: Self.maxSamplesPerAnchoredBatch
         ) { query, samples, deletedObjects, newAnchor, error in
-            guard error == nil else { return }
+            guard Self.isObservationDeliverable(error, type: type.identifier) else { return }
             let samplesCopy = samples ?? []
             let deletedCopy = deletedObjects ?? []
             Task { @MainActor in
@@ -1372,7 +1489,7 @@ public final class HealthKitService: HealthKitServicing {
             }
         }
         query.updateHandler = { query, samples, deletedObjects, newAnchor, error in
-            guard error == nil else { return }
+            guard Self.isObservationDeliverable(error, type: type.identifier) else { return }
             let samplesCopy = samples ?? []
             let deletedCopy = deletedObjects ?? []
             Task { @MainActor in
@@ -1381,6 +1498,7 @@ public final class HealthKitService: HealthKitServicing {
             }
         }
         activeQueries.append(query)
+        activeQueriesByType[type.identifier] = query
         storeController.execute(query)
     }
 
@@ -1523,6 +1641,29 @@ public final class HealthKitService: HealthKitServicing {
         case .activity:
             workout.activityType?.defaultDurationMinutes ?? 45
         }
+    }
+
+    /// The longest stress-baseline window ``stressMetricDays(daysBack:referenceDate:)`` will read.
+    ///
+    /// R3/R5: one year. The caller's `daysBack` is clamped to it, bounding both the statistics
+    /// queries and the returned array against an unvalidated caller value.
+    public static let maxStressMetricDays = 366
+
+    /// The largest number of samples one anchored-query batch may deliver.
+    ///
+    /// R3: the cap enforced where HealthKit's input enters. `HKObjectQueryNoLimit` on a per-type
+    /// anchored query hands the initial-results handler the ENTIRE history of the type on a first
+    /// run or after an anchor wipe. HealthKit keeps delivering the remainder through the update
+    /// handler as the anchor advances, so a batch limit costs nothing but bounds peak memory.
+    public static let maxSamplesPerAnchoredBatch = 5_000
+
+    /// Start of the generic per-type observation window: 30 days before the reference date, mirroring
+    /// ``workoutBackfillStartDate(referenceDate:calendar:)``.
+    ///
+    /// R3: the other half of the anchored query's bound. Observation exists to notice NEW samples;
+    /// nothing needs a decade of step counts replayed through the handlers.
+    public static func observationBackfillStartDate(referenceDate: Date, calendar: Calendar = .current) -> Date {
+        workoutBackfillStartDate(referenceDate: referenceDate, calendar: calendar)
     }
 
     /// Start of the workout import window: 30 days before the reference date. Shared by the

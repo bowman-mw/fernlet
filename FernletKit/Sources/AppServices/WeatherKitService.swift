@@ -1,4 +1,5 @@
 import Foundation
+import os
 import CoreLocation
 #if canImport(WeatherKit)
 import WeatherKit
@@ -82,9 +83,21 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     /// location + weather fetch per half hour (previously every appearance refetched).
     public static let cacheInterval: TimeInterval = 30 * 60
 
+    /// This module's unified-log sink. `AppServices` deliberately declares no `FernletFoundation`
+    /// edge (see `Package.swift`), so `os.Logger` — not `FernletAuditLog` — is the audit surface here.
+    private static let logger = Logger(subsystem: "com.fernlet", category: "weather")
+
     private let locationManager = CLLocationManager()
     private var authContinuation: CheckedContinuation<Bool, Never>?
     private var locationContinuation: CheckedContinuation<CLLocation?, Never>?
+
+    /// The single in-flight authorization request, shared by all concurrent callers.
+    ///
+    /// Without it a second caller arriving while the status is still `.notDetermined` overwrites
+    /// `authContinuation` and the first is never resumed (SWIFT TASK CONTINUATION MISUSE → a stuck
+    /// weather surface). Only the task stored here ever installs the continuation — the same
+    /// coalescing `locationRequest` already applies to the location fix.
+    private var authRequest: Task<Bool, Never>?
 
     /// The single in-flight location request, shared by all concurrent callers so a cold-launch
     /// burst of Home/ambient `.task`s issues one `requestLocation()` and awaits one continuation.
@@ -127,15 +140,26 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     /// Requests when-in-use authorization. Returns whether it ended up granted.
+    ///
+    /// Concurrent callers on `.notDetermined` coalesce onto one in-flight ``authRequest``, so a
+    /// cold-launch burst issues one system prompt and no caller's continuation is overwritten and
+    /// leaked.
     public func requestAuthorization() async -> Bool {
         switch locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: return true
         case .denied, .restricted: return false
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                authContinuation = continuation
-                locationManager.requestWhenInUseAuthorization()
+            if let authRequest { return await authRequest.value }
+            let request = Task<Bool, Never> { [weak self] in
+                guard let self else { return false }
+                defer { self.authRequest = nil }
+                return await withCheckedContinuation { continuation in
+                    self.authContinuation = continuation
+                    self.locationManager.requestWhenInUseAuthorization()
+                }
             }
+            authRequest = request
+            return await request.value
         @unknown default:
             return false
         }
@@ -240,6 +264,10 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
                 self.cachedConditions = snapshot
                 return snapshot
             } catch {
+                // Recovery: `nil` = "weather surface simply absent", which every caller handles.
+                // Logged so a missing WeatherKit entitlement or a persistent service failure is
+                // distinguishable from "the user never granted location".
+                Self.logger.notice("weather.fetchFailed (surface hidden): \(error.localizedDescription, privacy: .public)")
                 return nil
             }
         }
@@ -296,6 +324,9 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
 
     nonisolated public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
+            // Recovery: resume with no fix — the weather surfaces treat nil as "absent". Logged so a
+            // persistent CoreLocation failure is not indistinguishable from "no permission".
+            Self.logger.notice("weather.locationFailed (surface hidden): \(error.localizedDescription, privacy: .public)")
             guard let continuation = locationContinuation else { return }
             locationContinuation = nil
             continuation.resume(returning: nil)

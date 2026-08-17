@@ -1,4 +1,5 @@
 import Foundation
+import os
 import os.signpost
 
 /// Launch-performance instrumentation: `os_signpost` intervals for app-startup work.
@@ -17,8 +18,13 @@ import os.signpost
 public enum StartupTiming {
     private static let appLaunchLog = OSLog(subsystem: "com.fernlet", category: "startup")
     private static let appLaunchID = OSSignpostID(log: appLaunchLog)
-    private static let appLaunchLock = NSLock()
-    private static var appLaunchIsActive = false
+    /// The once-per-launch "App Launch interval is open" latch.
+    ///
+    /// R6/R9: an immutable `let` that owns its lock rather than a stored `static var` beside a
+    /// separate `NSLock` — the flag can only be read or written while the lock is held, so
+    /// repeated `beginAppLaunch()`/`endAppLaunch()` calls (scene reactivation) can never emit an
+    /// unbalanced signpost pair, whatever executor they arrive on.
+    private static let appLaunchIsActive = OSAllocatedUnfairLock(initialState: false)
 
     nonisolated private static var log: OSLog {
         OSLog(subsystem: "com.fernlet", category: "startup")
@@ -27,19 +33,23 @@ public enum StartupTiming {
     /// Opens the overall "App Launch" signpost interval; redundant calls while one is already
     /// active are ignored.
     public static func beginAppLaunch() {
-        appLaunchLock.lock()
-        defer { appLaunchLock.unlock() }
-        guard !appLaunchIsActive else { return }
-        appLaunchIsActive = true
+        let opened = appLaunchIsActive.withLock { isActive -> Bool in
+            guard !isActive else { return false }
+            isActive = true
+            return true
+        }
+        guard opened else { return }
         os_signpost(.begin, log: appLaunchLog, name: "App Launch", signpostID: appLaunchID)
     }
 
     /// Closes the overall "App Launch" signpost interval; a call with no interval open is ignored.
     public static func endAppLaunch() {
-        appLaunchLock.lock()
-        defer { appLaunchLock.unlock() }
-        guard appLaunchIsActive else { return }
-        appLaunchIsActive = false
+        let closed = appLaunchIsActive.withLock { isActive -> Bool in
+            guard isActive else { return false }
+            isActive = false
+            return true
+        }
+        guard closed else { return }
         os_signpost(.end, log: appLaunchLog, name: "App Launch", signpostID: appLaunchID)
     }
 

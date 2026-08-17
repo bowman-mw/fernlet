@@ -37,17 +37,36 @@ public nonisolated enum FernletDate {
         dayKeyFormatter.date(from: key)
     }
 
+    /// The largest number of day keys ``dayKeys(in:calendar:)`` will ever produce — ten years.
+    ///
+    /// R2/R3: the loop's bound and the array's cap in one named constant. Callers build the
+    /// interval from persisted or decoded dates, so a corrupt `.distantPast` start would otherwise
+    /// spin for ~10^14 iterations and grow the result without limit; no real cycle, journal, or
+    /// chart range spans a decade.
+    public static let maxDayKeySpan = 3_660
+
     /// Enumerates the day keys covering `interval`, inclusive of both endpoint days.
     ///
     /// Steps one calendar day at a time from `calendar.startOfDay` of the interval's start
     /// through the start of its end day, so a partial final day still contributes its key.
+    /// At most ``maxDayKeySpan`` keys are returned; a longer interval is truncated and audited
+    /// (a decade-long interval means the caller's dates are corrupt, not that the user has one).
     public static func dayKeys(in interval: DateInterval, calendar: Calendar = .current) -> [String] {
         var keys: [String] = []
         var day = calendar.startOfDay(for: interval.start)
         let end = calendar.startOfDay(for: interval.end)
-        while day <= end {
+        var budget = maxDayKeySpan
+        while day <= end, budget > 0 {
+            budget -= 1
             keys.append(dayKey(for: day))
             day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+        }
+        if day <= end {
+            FernletAuditLog.log("date.dayKeys.spanTruncated", context: [
+                "max": "\(maxDayKeySpan)",
+                "start": dayKey(for: interval.start),
+                "end": dayKey(for: interval.end)
+            ])
         }
         return keys
     }

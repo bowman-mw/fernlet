@@ -582,7 +582,8 @@ public struct WorkoutSuggestionLibrary {
     /// Templates matching the goal and intensity; falls back to all of the goal's templates, and
     /// to the `.wellness` set for goals without any.
     public static func suggestions(for goal: GoalType, intensity: WorkoutIntensity) -> [WorkoutSuggestion] {
-        let base = templates[goal] ?? templates[.wellness] ?? []
+        let table = templates
+        let base = table[goal] ?? table[.wellness] ?? []
         let matching = base.filter { $0.intensity == intensity }.map(\.suggestion)
         if matching.isEmpty {
             return base.map(\.suggestion)
@@ -590,10 +591,16 @@ public struct WorkoutSuggestionLibrary {
         return matching
     }
 
-    // Read-only constant lookup table; its element type (`WorkoutSuggestion` from FernletDomainModel) is
-    // not `Sendable`, so under the target's nonisolated default this immutable static needs the unsafe
-    // opt-out. It is never mutated, so the opt-out is sound.
-    nonisolated(unsafe) private static let templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] = [
+    /// The hand-written template table.
+    ///
+    /// R9: a COMPUTED property, not a stored `static let`. Its element type (`WorkoutSuggestion`,
+    /// from FernletDomainModel) is not `Sendable`, so as shared storage under this target's
+    /// nonisolated default it required a `nonisolated(unsafe)` opt-out — an unsafe seam bought
+    /// purely by a missing conformance in another module. A computed property is not shared mutable
+    /// state at all: each caller gets its own freshly built literal, so no opt-out is needed and the
+    /// values are identical. The one caller binds it once (`let table = templates`), and the library
+    /// is a small AI-free fallback table read on a suggestion miss, so rebuilding costs nothing.
+    private static var templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] { [
         .wellness: [
             (.light, WorkoutSuggestion(name: "Steady Care Walk", exercises: "Easy walk - 20 min\nGentle stretch - 5 min", notes: "A simple local fallback for a balanced day.")),
             (.moderate, WorkoutSuggestion(name: "Balanced Strength Circuit", exercises: "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8", notes: "Enough movement to feel grounded."))
@@ -618,5 +625,5 @@ public struct WorkoutSuggestionLibrary {
             (.light, WorkoutSuggestion(name: "Try Something Small", exercises: "Walk a new route - 15 min\nPick one mobility drill - 5 min", notes: "Gather information, not perfection.")),
             (.hard, WorkoutSuggestion(name: "Curious Challenge", exercises: "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min", notes: "A contained experiment for a high-energy day."))
         ]
-    ]
+    ] }
 }

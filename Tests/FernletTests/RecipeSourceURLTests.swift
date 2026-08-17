@@ -168,7 +168,7 @@ struct RecipeReimportTests {
         store.addSavedRecipe(makeSavedWebRecipe(url: "https://127.0.0.1/recipes/oats?id=2"))
 
         let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("match"))
-        queue.save([SharedRecipeImportRecord(url: URL(string: "HTTPS://127.0.0.1/recipes/oats?id=2#comments")!)])
+        #expect(queue.save([SharedRecipeImportRecord(url: URL(string: "HTTPS://127.0.0.1/recipes/oats?id=2#comments")!)]))
         store.sharedRecipeImportQueue = queue
 
         await store.processSharedRecipeImportQueue()
@@ -186,7 +186,7 @@ struct RecipeReimportTests {
         store.addSavedRecipe(makeSavedWebRecipe(url: "https://127.0.0.1/recipes/oats?id=2"))
 
         let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("nomatch"))
-        queue.save([SharedRecipeImportRecord(url: URL(string: "https://127.0.0.1/recipes/oats?id=3")!)])
+        #expect(queue.save([SharedRecipeImportRecord(url: URL(string: "https://127.0.0.1/recipes/oats?id=3")!)]))
         store.sharedRecipeImportQueue = queue
 
         await store.processSharedRecipeImportQueue()

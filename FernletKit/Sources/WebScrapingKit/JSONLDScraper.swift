@@ -24,7 +24,7 @@ public enum JSONLDScraper {
     /// `continue` past a parse failure. The tidier contract is kept.
     public static func scriptContents(from html: String) -> [String] {
         let pattern = #"(?is)<script\b([^>]*)>(.*?)</script>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        guard let regex = WebScrapingRegex.compiled(pattern) else { return [] }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
         return regex.matches(in: html, range: range).compactMap { match -> String? in
             guard match.numberOfRanges >= 3,
@@ -69,31 +69,39 @@ public enum JSONLDScraper {
     /// tried the next branch. This merged version falls through, so the recipe path can now find a
     /// recipe on pages where it previously found none. It can only ever find *more*, never something
     /// different: every object this returns satisfies the same `@type` test the old code applied.
+    ///
+    /// R1/R2: an explicit worklist with a named budget, not recursion. The tree is
+    /// attacker-controlled — a hostile page can nest `@graph`/`itemListElement` as deep as it likes —
+    /// so recursion put stack depth under the page's control. The traversal order is unchanged:
+    /// still depth-first, self before `@graph` before `itemListElement`, each list in order (the
+    /// stack is LIFO, so children are pushed reversed and `itemListElement` before `@graph`).
     public static func object(ofType schemaType: String, in json: Any) -> [String: Any]? {
         let wanted = schemaType.lowercased()
+        var work: [Any] = [json]
+        var budget = maxNodesVisited
 
-        if let dictionary = json as? [String: Any] {
-            if schemaTypes(in: dictionary).contains(wanted) {
-                return dictionary
-            }
-            if let graph = dictionary["@graph"] as? [Any] {
-                for item in graph {
-                    if let match = object(ofType: schemaType, in: item) { return match }
+        while budget > 0, let node = work.popLast() {
+            budget -= 1
+            if let dictionary = node as? [String: Any] {
+                if schemaTypes(in: dictionary).contains(wanted) {
+                    return dictionary
                 }
-            }
-            if let itemList = dictionary["itemListElement"] as? [Any] {
-                for item in itemList {
-                    if let match = object(ofType: schemaType, in: item) { return match }
+                if let itemList = dictionary["itemListElement"] as? [Any] {
+                    work.append(contentsOf: itemList.reversed())
                 }
-            }
-        }
-
-        if let array = json as? [Any] {
-            for item in array {
-                if let match = object(ofType: schemaType, in: item) { return match }
+                if let graph = dictionary["@graph"] as? [Any] {
+                    work.append(contentsOf: graph.reversed())
+                }
+            } else if let array = node as? [Any] {
+                work.append(contentsOf: array.reversed())
             }
         }
 
         return nil
     }
+
+    /// The traversal budget for ``object(ofType:in:)`` — the visible upper bound (R2) on a search
+    /// over a page's own JSON-LD. Real structured data is a handful of objects deep; ten thousand
+    /// nodes is far past any honest page and far short of anything that costs the user a stall.
+    private static let maxNodesVisited = 10_000
 }

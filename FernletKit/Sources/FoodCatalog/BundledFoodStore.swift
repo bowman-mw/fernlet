@@ -1,18 +1,26 @@
 import Foundation
 import SQLite3
+import FernletFoundation
 import FernletDomainModel
 
 // MARK: - Shared C helpers
 
 /// SQLite asks, via this sentinel destructor, that it copy bound text immediately so the Swift
 /// String backing the bind can be transient. Used by both the generator and the read path.
+///
+/// R7: the bind status is checked rather than implicitly discarded. A failed bind leaves the
+/// parameter unset and the query then matches nothing — indistinguishable, without this line, from
+/// "no such food".
 public nonisolated func sqliteBindText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
     let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    let status: Int32
     if let value {
-        sqlite3_bind_text(stmt, index, value, -1, transient)
+        status = sqlite3_bind_text(stmt, index, value, -1, transient)
     } else {
-        sqlite3_bind_null(stmt, index)
+        status = sqlite3_bind_null(stmt, index)
     }
+    guard status != SQLITE_OK else { return }
+    FernletAuditLog.log("foodCatalog.bind.failed", context: ["index": "\(index)", "status": "\(status)"])
 }
 
 /// Reads a TEXT column as a Swift `String`, or nil for SQL NULL. The companion read helper to
@@ -182,6 +190,9 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         skipPriorityOrder: Bool = false,
         candidateCap: Int = FoodCatalogSchema.candidateFetchLimit
     ) {
+        // R5: a non-positive cap is not a cap — SQLite reads `LIMIT -1` as NO limit, the exact
+        // opposite of what the parameter means.
+        guard candidateCap > 0 else { return nil }
         var handle: OpaquePointer?
         guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let handle else {
             sqlite3_close(handle)
@@ -248,17 +259,31 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, id.uuidString) }.first
     }
 
-    /// Batch point lookup — a single `IN` query; rows come back in SQLite's own order, not the
-    /// caller's `ids` order.
+    /// The largest number of ids one `IN (...)` query may carry.
+    ///
+    /// R5: SQLite's `SQLITE_MAX_VARIABLE_NUMBER` caps bound parameters; past it the prepare fails
+    /// and `fetchRows` returns `[]`, so every ingredient of a large recipe set would resolve to
+    /// nothing. 500 is comfortably inside SQLite's default (999) on every platform Fernlet ships to.
+    static let maxIDsPerQuery = 500
+
+    /// Batch point lookup — a single `IN` query per ``maxIDsPerQuery`` chunk; rows come back in
+    /// SQLite's own order, not the caller's `ids` order.
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
-        let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
-        let sql = "SELECT \(selectColumns) FROM food WHERE id IN (\(placeholders));"
-        return fetchRows(sql) { stmt in
-            for (offset, id) in ids.enumerated() {
-                sqliteBindText(stmt, Int32(offset + 1), id.uuidString)
+        var results: [FoodItem] = []
+        var remaining = ids[...]
+        while !remaining.isEmpty {
+            let chunk = Array(remaining.prefix(Self.maxIDsPerQuery))
+            remaining = remaining.dropFirst(chunk.count)
+            let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+            let sql = "SELECT \(selectColumns) FROM food WHERE id IN (\(placeholders));"
+            results += fetchRows(sql) { stmt in
+                for (offset, id) in chunk.enumerated() {
+                    sqliteBindText(stmt, Int32(offset + 1), id.uuidString)
+                }
             }
         }
+        return results
     }
 
     /// The alphabetically first row whose `normalized_name` equals `normalizedName` (deterministic
@@ -284,7 +309,13 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         queue.sync {
             guard let db else { return [] }
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            // R7: a prepare failure (schema mismatch, too many bound variables) turns every lookup
+            // into "no results"; the recovery is unchanged — an empty array — but it is now named.
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "unknown"
+                FernletAuditLog.log("foodCatalog.prepare.failed", context: ["error": message])
+                return []
+            }
             defer { sqlite3_finalize(stmt) }
             bind(stmt)
             var results: [FoodItem] = []

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Security
 
 /// The user's storage and privacy choices: iCloud sync, backup exclusion, HealthKit capability
 /// toggles, and the sealed-backup flags.
@@ -302,6 +303,14 @@ public final class StoragePreferencesStore {
     /// `lastModifiedAt` stamp stay in step.
     public private(set) var preferences: StoragePreferences
 
+    /// The `OSStatus` of the most recent keychain write or reset that did NOT succeed, else `nil`.
+    ///
+    /// ``preferences`` is published before it is persisted, so without this a failed write (most
+    /// often `errSecInteractionNotAllowed`, before the device's first unlock) would leave Settings
+    /// showing a privacy choice that never reached the keychain. Observed by settings surfaces that
+    /// need to tell the user the choice did not stick; cleared by the next successful write.
+    public private(set) var lastPersistError: OSStatus?
+
     /// The keychain service slot this store reads/writes. Exposed so long-lived
     /// consumers (e.g. HealthKitService) can re-read the live value via
     /// `currentPreferences(service:)` instead of trusting a stale in-memory copy.
@@ -340,14 +349,41 @@ public final class StoragePreferencesStore {
     ///
     /// Deletes the keychain row rather than writing defaults over it: a written default is still a
     /// stored value with a `lastModifiedAt`, which is itself a trace of use.
+    ///
+    /// R7: the delete's `OSStatus` is checked, not dropped — a failed `SecItemDelete` leaves the row
+    /// (with its `lastModifiedAt` trace of use) behind while the wipe reports complete, so it lands
+    /// in the audit log and in ``lastPersistError``.
     public func resetToDefaults() {
-        KeychainItem.delete(for: .storagePreferences, service: keychainService)
+        let status = KeychainItem.deleteReportingStatus(for: .storagePreferences, service: keychainService)
+        if status == errSecSuccess {
+            lastPersistError = nil
+        } else {
+            FernletAuditLog.log("storagePreferences.resetFailed", context: ["status": "\(status)"])
+            lastPersistError = status
+        }
         preferences = StoragePreferences()
     }
 
+    /// Persists `preferences` to the keychain, recording any failure in ``lastPersistError``.
+    ///
+    /// R7: neither the encode error nor the keychain `OSStatus` is swallowed. The in-memory value is
+    /// already published when this runs, so a silent write failure (`errSecInteractionNotAllowed`
+    /// before first unlock, `errSecNotAvailable`) would leave Settings showing a privacy choice that
+    /// was never stored — and the sealed-backup flags decide what "delete everything" erases.
     private func persist(_ preferences: StoragePreferences) {
-        guard let data = try? encoder.encode(preferences) else { return }
-        KeychainItem.store(data, for: .storagePreferences, service: keychainService)
+        do {
+            let data = try encoder.encode(preferences)
+            let status = KeychainItem.store(data, for: .storagePreferences, service: keychainService)
+            guard status == errSecSuccess else {
+                FernletAuditLog.log("storagePreferences.persistFailed", context: ["status": "\(status)"])
+                lastPersistError = status
+                return
+            }
+            lastPersistError = nil
+        } catch {
+            FernletAuditLog.log("storagePreferences.encodeFailed", context: ["error": String(describing: error)])
+            lastPersistError = errSecParam
+        }
     }
 
     /// Replaces the in-memory ``preferences`` with the live persisted value — a re-read, never a

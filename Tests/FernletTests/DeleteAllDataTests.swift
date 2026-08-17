@@ -298,7 +298,7 @@ struct DeleteAllDataTests {
     @Test func sharedRecipeInboxIsClearedSoItCannotDrainAfterTheWipe() async {
         let queueURL = temporaryDatabaseURL("delete-all-recipe-inbox")
         let queue = SharedRecipeImportQueue(fileURL: queueURL)
-        queue.save([SharedRecipeImportRecord(url: URL(string: "https://example.com/soup")!)])
+        #expect(queue.save([SharedRecipeImportRecord(url: URL(string: "https://example.com/soup")!)]))
         #expect(!queue.records().isEmpty, "precondition: the seeded queue row did not land")
 
         let store = makeStore("delete-all-recipe-store")
@@ -326,10 +326,10 @@ struct DeleteAllDataTests {
         let theirs = makeTestStore()   // its own helper-defaulted inbox file
 
         let queued = SharedRecipeImportRecord(url: URL(string: "https://example.com/stew")!)
-        mine.sharedRecipeImportQueue.save([queued])
-        theirs.sharedRecipeImportQueue.save([
+        #expect(mine.sharedRecipeImportQueue.save([queued]))
+        #expect(theirs.sharedRecipeImportQueue.save([
             SharedRecipeImportRecord(url: URL(string: "https://example.com/theirs")!)
-        ])
+        ]))
         #expect(!mine.sharedRecipeImportQueue.records().isEmpty, "precondition: the seeded row did not land")
 
         await theirs.deleteAllData(includingHealthKitSamples: false)
