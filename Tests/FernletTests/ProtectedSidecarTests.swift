@@ -105,7 +105,7 @@ struct ProtectedSidecarTests {
         #expect(diskValue(url) == ["precious"], "a refused mutation must leave the unreadable file untouched")
 
         io.failReads = false
-        #expect(sidecar.retryLoad())
+        sidecar.retryLoad()
         #expect(sidecar.state == .ready)
         #expect(sidecar.read() == ["precious"])
     }
@@ -159,8 +159,8 @@ struct ProtectedSidecarTests {
         #expect(sidecar.read() == ["a", "b", "c"])
 
         io.failWrites = false
-        #expect(sidecar.retryLoad(), "recovery re-persists the in-memory truth")
-        #expect(sidecar.state == .ready)
+        sidecar.retryLoad()
+        #expect(sidecar.state == .ready, "recovery re-persists the in-memory truth")
         #expect(diskValue(url) == ["a", "b", "c"])
     }
 
@@ -197,7 +197,7 @@ struct ProtectedSidecarTests {
         _ = sidecar.read()
         #expect(io.readCount == 2)
 
-        _ = sidecar.retryLoad() // the sync-pass / unlock-notification path skips the floor
+        sidecar.retryLoad() // the sync-pass / unlock-notification path skips the floor
         #expect(io.readCount == 3)
     }
 

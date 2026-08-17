@@ -614,7 +614,7 @@ struct HeartShareTests {
 
         let ledger = ProximityHeartLedger(fileURL: url, now: { clock })
         let heartID = UUID()
-        ledger.recordReceivedHeart(id: heartID, senderDisplayName: "Aisha", senderFingerprint: "fp-aisha")
+        _ = ledger.recordReceivedHeart(id: heartID, senderDisplayName: "Aisha", senderFingerprint: "fp-aisha")
         #expect(ledger.pendingBubbleHeart?.id == heartID)
 
         ledger.dismissBubble(id: heartID)
@@ -651,9 +651,9 @@ struct HeartShareTests {
     @Test func activeGlowUsesStrongestHeartNotASum() throws {
         var clock = baseDate
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { clock })
-        ledger.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha")
+        _ = ledger.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha")
         clock = baseDate.addingTimeInterval(12 * 60 * 60)
-        ledger.recordReceivedHeart(id: UUID(), senderDisplayName: "Robin", senderFingerprint: "fp-robin")
+        _ = ledger.recordReceivedHeart(id: UUID(), senderDisplayName: "Robin", senderFingerprint: "fp-robin")
 
         // Older heart is at 0.5, newer at 1.0 → the glow is the max (1.0), never 1.5.
         #expect(abs(ledger.activeGlow() - 1.0) < 0.001)
