@@ -259,6 +259,10 @@ public struct OwnPhotoKeyMigrator {
     /// Whether the migration has already been proven complete (see ``OwnPhotoMigrationLatch``).
     public var isComplete: Bool { latch.isComplete }
 
+    /// R2: the named maximum number of sweep passes ``run(maxPasses:)`` will fund — one to re-seal,
+    /// one to confirm the corpus is now clean.
+    public static let maxMigrationPasses = 2
+
     /// Runs passes until one comes back clean, then sets the latch.
     ///
     /// A pass that re-sealed files is by definition not proof — it FOUND legacy files — so a second
@@ -266,10 +270,14 @@ public struct OwnPhotoKeyMigrator {
     /// (leaving the latch closed) when a pass makes no forward progress, so a permanently
     /// unwritable file cannot spin.
     ///
-    /// - Returns: the latch state afterwards — true only when completion is now proven.
-    @discardableResult
-    public func run(maxPasses: Int = 2) -> Bool {
+    /// - Returns: the latch state afterwards — true only when completion is now proven. R7:
+    ///   deliberately not `@discardableResult` — this Bool gates an irreversible key binding
+    ///   downstream, so ignoring it is never safe.
+    public func run(maxPasses: Int = Self.maxMigrationPasses) -> Bool {
         if latch.isComplete { return true }
+        // R2: the named bound. `passesLeft` is decremented as the first statement of every
+        // iteration, and two early returns (a clean pass, or a pass with no forward progress) exit
+        // sooner.
         var passesLeft = max(1, maxPasses)
         while passesLeft > 0 {
             passesLeft -= 1
@@ -290,7 +298,9 @@ public struct OwnPhotoKeyMigrator {
     ///
     /// Never sets the latch — ``run(maxPasses:)`` owns that decision — so tests can drive passes
     /// directly and assert idempotence.
-    @discardableResult
+    ///
+    /// - Returns: the pass tally, which carries the pass's failure information
+    ///   (`abortedNoOwnKey`, `resealFailures`, `indeterminate`). R7: not `@discardableResult`.
     public func performPass() -> OwnPhotoKeyMigrationResult {
         let scan = candidateFiles()
         // Nothing on disk (a fresh install, or a corpus already wiped): trivially clean, and no

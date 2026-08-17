@@ -3,6 +3,7 @@ import UIKit
 import ImageIO
 import CryptoKit
 import FernletDomainModel
+import FernletFoundation
 
 /// On-device, at-rest-encrypted store for friend/mesh media (the photowall cache).
 ///
@@ -123,13 +124,32 @@ public struct PrivateMediaStore {
             // two-step (seal, then best-effort write) rather than `sealAndWrite`: a failed image
             // write still proceeds to the thumbnail write, while a nil key skips both.
             guard let sealedImage = keyProvider.gcmSeal(imageData) else { continue }
-            try? sealedImage.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
+            do {
+                try sealedImage.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
+            } catch {
+                // Recovery: continue to the thumbnail write (the documented behaviour) — but the
+                // failure is named, so a wall entry whose full-size bytes never persisted is not silent.
+                FernletAuditLog.log(
+                    "privateMedia.imageWriteFailed",
+                    context: ["id": photo.id.uuidString, "error": "\(error)"]
+                )
+            }
             if let thumbnailData = Self.safeThumbnailData(from: imageData) {
-                keyProvider.sealAndWrite(thumbnailData, to: thumbnailURL(for: photo.id))
+                keyProvider.sealAndWriteBestEffort(thumbnailData, to: thumbnailURL(for: photo.id), reason: "thumbnail")
             }
         }
         guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return }
-        try? data.write(to: indexURL, options: [.atomic, .completeFileProtection])
+        do {
+            try data.write(to: indexURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            // NEVER sweep against an index that was not committed: the on-disk index still names the
+            // OLD photo set, so a sweep keyed on the NEW set would delete files it still references.
+            FernletAuditLog.log(
+                "privateMedia.indexWriteFailed",
+                context: ["error": "\(error)", "recovery": "orphanSweepSkipped"]
+            )
+            return
+        }
         removeOrphanedFiles(keeping: Set(capped.map(\.id)))
     }
 
@@ -147,7 +167,7 @@ public struct PrivateMediaStore {
             return data
         case .legacyPlaintext(let data):
             // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
-            keyProvider.sealAndWrite(data, to: imageURL(for: photo.id))
+            keyProvider.sealAndWriteBestEffort(data, to: imageURL(for: photo.id), reason: "legacyPlaintextUpgrade")
             return data
         case .unreadable:
             return nil
@@ -165,7 +185,7 @@ public struct PrivateMediaStore {
             case .opened(let data):
                 return data
             case .legacyPlaintext(let data):
-                keyProvider.sealAndWrite(data, to: thumbnailURL(for: photo.id))
+                keyProvider.sealAndWriteBestEffort(data, to: thumbnailURL(for: photo.id), reason: "legacyThumbnailUpgrade")
                 return data
             case .unreadable:
                 break  // corrupt/unopenable thumbnail — regenerate from the full image below
@@ -173,7 +193,7 @@ public struct PrivateMediaStore {
         }
         guard let data = imageData(for: photo),
               let thumbnailData = Self.safeThumbnailData(from: data) else { return nil }
-        keyProvider.sealAndWrite(thumbnailData, to: thumbnailURL(for: photo.id))
+        keyProvider.sealAndWriteBestEffort(thumbnailData, to: thumbnailURL(for: photo.id), reason: "regeneratedThumbnail")
         return thumbnailData
     }
 
@@ -264,9 +284,19 @@ public struct PrivateMediaStore {
         return uiImage.jpegData(compressionQuality: 0.7)
     }
 
+    /// Creates the image and thumbnail directories. A failure is logged rather than dropped: every
+    /// later photo write would otherwise fail with a misleading error and no recorded root cause.
     private func createDirectories() {
-        try? FileManager.default.createDirectory(at: imageDirectoryURL, withIntermediateDirectories: true)
-        try? FileManager.default.createDirectory(at: thumbnailDirectoryURL, withIntermediateDirectories: true)
+        for directory in [imageDirectoryURL, thumbnailDirectoryURL] {
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                FernletAuditLog.log(
+                    "privateMedia.directoryCreateFailed",
+                    context: ["directory": directory.lastPathComponent, "error": "\(error)"]
+                )
+            }
+        }
     }
 
     private func imageURL(for id: UUID) -> URL {
@@ -277,13 +307,24 @@ public struct PrivateMediaStore {
         thumbnailDirectoryURL.appendingPathComponent("\(id.uuidString).jpg")
     }
 
+    /// Deletes files whose id is no longer in the committed index. Only ever called after the index
+    /// write succeeded (see ``save(_:)``). A file that cannot be removed is logged: it holds a friend
+    /// photo the wall has already evicted past its cap.
     private func removeOrphanedFiles(keeping ids: Set<UUID>) {
         for directoryURL in [imageDirectoryURL, thumbnailDirectoryURL] {
             guard let urls = try? FileManager.default.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil) else { continue }
             for url in urls {
                 guard let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
                       !ids.contains(id) else { continue }
-                try? FileManager.default.removeItem(at: url)
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    // Recovery: continue the sweep — one stuck file must not abandon the rest.
+                    FernletAuditLog.log(
+                        "privateMedia.orphanRemoveFailed",
+                        context: ["file": url.lastPathComponent, "error": "\(error)"]
+                    )
+                }
             }
         }
     }

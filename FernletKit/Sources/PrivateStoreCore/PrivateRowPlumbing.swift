@@ -45,6 +45,10 @@ public enum PrivateRowPlumbing {
     ///   - context: The sealed store's managed-object context.
     /// - Returns: `true` iff at least one row was deleted (and the save + prune succeeded).
     /// - Throws: Fetch, save, or history-prune errors, rethrown to the caller.
+    /// - Note: Safely ignorable, which is why `@discardableResult` is legitimate here under R7:
+    ///   failure is always a `throw`, never `false`. The Bool exists only for callers that latch on
+    ///   "something was actually removed" (`WorryNarrativeRepository.deleteAll()` has no such latch
+    ///   and ignores it deliberately).
     @discardableResult
     public static func deleteRows(
         entityName: String,

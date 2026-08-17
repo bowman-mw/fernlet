@@ -3,6 +3,7 @@ import UIKit
 import ImageIO
 import CryptoKit
 import FernletDomainModel
+import FernletFoundation
 
 /// On-device, at-rest-encrypted store for the user's OWN photos attached to logged meals (and, from
 /// here on, other private personal photos such as gym progress pictures — body photos, which is why
@@ -53,6 +54,10 @@ public struct MealPhotoStore {
     /// Refuse to even downscale a source whose dimensions are absurd (OOM guard), matching
     /// `PrivateMediaStore`. The user's own camera photos are far below this.
     private static let maxSourcePixelDimension = 20_000
+    /// R5: byte cap on anything entering this store. Photos now arrive from a library picker and from
+    /// an escrow restore, not only from the camera, so the incoming BYTE count is validated before
+    /// ImageIO is asked to look at it — mirroring `PrivateMediaStore.maxIncomingPhotoBytes`.
+    private static let maxIncomingPhotoBytes = 20 * 1024 * 1024
 
     /// Creates a store over `directory` (created if needed), sealing under `keyProvider`'s key.
     ///
@@ -76,7 +81,15 @@ public struct MealPhotoStore {
         self.keyProvider = keyProvider
         self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
         self.legacyKeyProvider = legacyKeyProvider
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            // Recovery: stay constructible (this is built on the main actor at launch) — `save` and
+            // `imageData` already fail closed. The failure is named so a later misleading write error
+            // has a recorded root cause. `withIntermediateDirectories: true` does not throw for an
+            // existing directory, so reaching here is a real permissions/disk failure.
+            FernletAuditLog.log("mealPhotoStore.directoryCreateFailed", context: ["error": "\(error)"])
+        }
     }
 
     /// Delete-all seam (Docs/PrivacyWipeCoverage.md): drops the provider-cached media key after
@@ -89,6 +102,7 @@ public struct MealPhotoStore {
     /// the bytes aren't a decodable image or no encryption key is available: a photo is dropped rather
     /// than persisted in the clear (fail-closed, as with the sealed peer store).
     public func save(_ data: Data) -> UUID? {
+        guard data.count <= Self.maxIncomingPhotoBytes else { return nil }
         guard let normalized = Self.normalizedJPEG(from: data) else { return nil }
         let id = UUID()
         guard keyProvider.sealAndWrite(normalized, to: url(for: id)) else { return nil }
@@ -99,7 +113,11 @@ public struct MealPhotoStore {
     /// that id), returning whether it was written. Used where the owning record already has a stable id —
     /// e.g. a recipe's own photo keyed by the recipe id — so there's no second id to track. Fail-closed
     /// like `save`: writes nothing on non-image bytes or no key.
-    @discardableResult public func save(_ data: Data, forID id: UUID) -> Bool {
+    ///
+    /// R7: not `@discardableResult` — the `Bool` IS the success/failure signal (false means NOTHING
+    /// was written), so every caller must act on it.
+    public func save(_ data: Data, forID id: UUID) -> Bool {
+        guard data.count <= Self.maxIncomingPhotoBytes else { return false }
         guard let normalized = Self.normalizedJPEG(from: data) else { return false }
         return keyProvider.sealAndWrite(normalized, to: url(for: id))
     }
@@ -128,7 +146,7 @@ public struct MealPhotoStore {
         // stays legacy (so the migration latch stays closed — which is exactly the fail-closed
         // signal that binding must not proceed yet).
         if let legacyKeyProvider, let opened = legacyKeyProvider.gcmOpen(stored) {
-            keyProvider.sealAndWrite(opened, to: url(for: id))
+            keyProvider.sealAndWriteBestEffort(opened, to: url(for: id), reason: "dualOpenUpgrade")
             return opened
         }
         // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for
@@ -138,7 +156,7 @@ public struct MealPhotoStore {
         // Stores with NO legacy plaintext generation (body/recipe photos) skip this branch entirely:
         // an unsealed file that merely parses as an image is refused, not trusted and re-sealed.
         if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) {
-            keyProvider.sealAndWrite(stored, to: url(for: id))
+            keyProvider.sealAndWriteBestEffort(stored, to: url(for: id), reason: "legacyPlaintextUpgrade")
             return stored
         }
         return nil
@@ -157,9 +175,11 @@ public struct MealPhotoStore {
     ///   that means opened from an escrow-sealed record whose manifest entry's content hash matched.
     ///   It is NOT a general write path and must never be handed unauthenticated input; the
     ///   image-bounds check below is a cheap backstop, not the authorization.
-    /// - Returns: whether the sealed bytes reached disk (false on non-image input, absurd
-    ///   dimensions, no key, or a write failure — fail-closed, nothing written).
-    @discardableResult public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
+    /// - Returns: whether the sealed bytes reached disk (false on oversize or non-image input, absurd
+    ///   dimensions, no key, or a write failure — fail-closed, nothing written). R7: deliberately not
+    ///   `@discardableResult` — a discarded false is a photo silently missing from a restore.
+    public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
+        guard normalizedJPEG.count <= Self.maxIncomingPhotoBytes else { return false }
         guard PrivateMediaStore.isWithinSafePixelBounds(normalizedJPEG) else { return false }
         return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id))
     }
@@ -263,8 +283,22 @@ public struct MealPhotoStore {
     }
 
     /// Removes the sealed file for `id` (best-effort; a missing file is a no-op).
+    ///
+    /// A failure is audit-logged rather than dropped: this is the ONLY deletion path for one
+    /// meal/recipe/progress photo, and ownership (`Meal.photoID`, the recipe id, the progress index)
+    /// has usually already been released by the caller — so an unremoved file is unreachable bytes
+    /// the user believes are gone.
     public func delete(id: UUID) {
-        try? FileManager.default.removeItem(at: url(for: id))
+        let target = url(for: id)
+        guard FileManager.default.fileExists(atPath: target.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: target)
+        } catch {
+            FernletAuditLog.log(
+                "mealPhotoStore.deleteFailed",
+                context: ["id": id.uuidString, "error": "\(error)"]
+            )
+        }
     }
 
     /// Deletes every stored photo file.
@@ -273,7 +307,10 @@ public struct MealPhotoStore {
     /// there is nothing left that knows these files exist, and per-id deletion can no longer reach them.
     /// A "delete everything" that skipped this would strand the user's food photos on disk permanently,
     /// unreferenced and invisible. Removing the directory itself also takes any stray non-.jpg contents.
-    @discardableResult public func deleteAll() -> Bool {
+    ///
+    /// R7: not `@discardableResult` — `false` means the user's photos survived "delete everything".
+    /// - Returns: whether the corpus is now empty.
+    public func deleteAll() -> Bool {
         guard FileManager.default.fileExists(atPath: directory.path) else { return true }
         do {
             try FileManager.default.removeItem(at: directory)

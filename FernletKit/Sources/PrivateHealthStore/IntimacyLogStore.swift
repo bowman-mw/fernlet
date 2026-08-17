@@ -43,17 +43,28 @@ public final class IntimacyLogStore {
         self.repository = repository
     }
 
-    /// Sealed intimacy logs, newest first — or `[]` while hidden, in which case nothing is decrypted.
+    /// The newest sealed intimacy logs, newest first (bounded by the repository's display cap, R3) —
+    /// or `[]` while hidden, in which case nothing is decrypted.
     public func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
         guard isVisible() else { return [] }
         return try repository.logs(contentKey: contentKey)
     }
 
+    /// R5/R3: longest note this funnel will seal, mirroring the 1000-character cap the cycle side
+    /// applies at the equivalent seam (`PeriodTrackerStore.logEvent`). Unbounded text would otherwise
+    /// spill into the store's `_SUPPORT` external-blob directory and into every sealed-backup chunk.
+    public static let maxNoteLength = 1_000
+
     /// Seals a new intimacy log. Refuses while hidden: closes the race where the derived gate flips to
     /// hidden while the log sheet is still open (the save then throws instead of sealing a new row).
+    /// The note is trimmed and capped at ``maxNoteLength`` characters before sealing.
     public func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
         guard isVisible() else { throw IntimacyTrackingHiddenError() }
-        try repository.insert(log, contentKey: contentKey)
+        var bounded = log
+        bounded.note = String(
+            log.note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxNoteLength)
+        )
+        try repository.insert(bounded, contentKey: contentKey)
     }
 
     /// Records a HealthKit external UUID on an already-saved log. Metadata only (it never decrypts or

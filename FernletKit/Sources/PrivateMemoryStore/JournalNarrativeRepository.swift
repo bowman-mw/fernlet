@@ -123,6 +123,13 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
     /// at-rest format and must never change.
     private let crypto = ColumnCrypto(label: "journal-narrative")
 
+    /// R5: upper bound on the caller-supplied day-key list of
+    /// ``narratives(forDayKeys:contentKey:)``, which becomes a `dayKey IN %@` predicate.
+    private static let maxDayKeys = 500
+    /// R3: upper bound on one page of ``narratives(offset:limit:contentKey:)``, so an absurd `limit`
+    /// cannot decrypt the whole table at once. Above the 250-row sealed-backup chunk size.
+    private static let maxPageSize = 500
+
     /// Device-local marker for "this install has written journal narratives at some point", used by the
     /// sealed-backup restore to tell TWO very different empty stores apart:
     ///
@@ -214,8 +221,9 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
                 throw error
             }
             // Prune history after an upsert so a re-sealed (edited) row leaves no prior ciphertext in
-            // the transaction log. Best-effort — a prune failure must not undo the write that succeeded.
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // the transaction log. Best-effort — a prune failure must not undo the write that
+            // succeeded — but it is audit-logged rather than discarded.
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.insert")
             // Latch AFTER a successful save, so a failed write never claims this device has diverged.
             markNarrativeStored()
         }
@@ -248,8 +256,8 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
                 throw error
             }
             // Prune history after the atomic restore so no per-record transaction lingers in the
-            // persistent-history transaction log (best-effort).
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // persistent-history transaction log (best-effort, and logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.insertAtomically")
             // Latch AFTER the transaction commits. A restore that populates the store also counts as
             // "this device has journal narratives", so a later delete-everything cannot re-pull them.
             markNarrativeStored()
@@ -274,8 +282,9 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
                 context.rollback()
                 throw error
             }
-            // Prune history so the prior ciphertext for this row is not retained (best-effort).
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // Prune history so the prior ciphertext for this row is not retained (best-effort, and
+            // logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "JournalNarrative.update")
             // An update proves a row existed — latch even when the ORIGINAL insert predates the latch
             // (an upgrading install), so a later empty store still reads as "diverged", not "fresh".
             markNarrativeStored()
@@ -343,14 +352,9 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
                 NSSortDescriptor(key: "id", ascending: true)
             ]
             request.fetchOffset = max(0, offset)
-            request.fetchLimit = limit
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
-            }
+            // R3/R5: clamp the caller's page size so `limit: .max` cannot decrypt the whole table.
+            request.fetchLimit = min(limit, Self.maxPageSize)
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
         }
     }
 
@@ -364,16 +368,10 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
             let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
             request.predicate = NSPredicate(format: "dayKey == %@", dayKey)
             request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
-            return try context.fetch(request).compactMap { object in
-                // Skip an individual undecryptable row rather than rethrowing, which would
-                // make every valid journal narrative for the day disappear because callers
-                // wrap this in `try?`. Mirrors Menstrual/Intimacy narrative repositories.
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
-            }
+            // Skip an individual undecryptable row rather than rethrowing, which would make every
+            // valid journal narrative for the day disappear because callers wrap this in `try?`.
+            // Mirrors Menstrual/Intimacy narrative repositories.
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
         }
     }
 
@@ -383,19 +381,41 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
     /// - Returns: `[]` when `contentKey` is `nil` or `dayKeys` is empty; undecryptable rows are skipped.
     public func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         guard let contentKey, !dayKeys.isEmpty else { return [] }
+        // R5: the day-key list is caller-supplied and becomes an `IN` predicate — bound it at entry
+        // rather than letting an unbounded array build an unbounded clause. Truncating (rather than
+        // refusing) keeps the hydrate path working: the extra keys simply hydrate on the next batch.
+        let boundedKeys = Array(dayKeys.prefix(Self.maxDayKeys))
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
-            request.predicate = NSPredicate(format: "dayKey IN %@", dayKeys)
+            request.predicate = NSPredicate(format: "dayKey IN %@", boundedKeys)
             request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
-            return try context.fetch(request).compactMap { object in
-                // Skip an individual undecryptable row rather than rethrowing (see above).
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
+            // Skip an individual undecryptable row rather than rethrowing (see above).
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
+        }
+    }
+
+    /// Decrypts a fetched row set, skipping rows whose sealed columns will not open and recording ONE
+    /// audit line per fetch (never per row, so a mass failure cannot spam the log).
+    ///
+    /// Skip-don't-fail is deliberate — one unopenable row must not blank a whole day — but an
+    /// authentication failure (tampering, a wrong key, bit-rot) may not read as "no entries" either.
+    private func decryptRows(_ objects: [NSManagedObject], contentKey: SymmetricKey) -> [JournalNarrative] {
+        var skipped = 0
+        let rows = objects.compactMap { object -> JournalNarrative? in
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                skipped += 1
+                return nil
             }
         }
+        if skipped > 0 {
+            FernletAuditLog.log(
+                "sealedRow.undecryptable",
+                context: ["entity": "JournalNarrative", "count": "\(skipped)"]
+            )
+        }
+        return rows
     }
 
     // MARK: - Private

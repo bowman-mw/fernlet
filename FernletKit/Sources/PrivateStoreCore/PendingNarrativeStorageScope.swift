@@ -44,11 +44,13 @@ public nonisolated struct PendingNarrativeStorageScope: Sendable, Equatable {
     /// exactly the path and service the buffer has always used. Nothing installed is migrated by
     /// the seam that made this injectable.
     public static var production: PendingNarrativeStorageScope {
-        PendingNarrativeStorageScope(
-            directory: FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-                .first!
-                .appendingPathComponent("Fernlet", isDirectory: true),
+        // R5: no force unwrap. `urls(for:in:)` returns the same directory `URL.applicationSupportDirectory`
+        // names, so the fallback resolves to the identical shipped path rather than trapping.
+        let applicationSupport = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? URL.applicationSupportDirectory
+        return PendingNarrativeStorageScope(
+            directory: applicationSupport.appendingPathComponent("Fernlet", isDirectory: true),
             keychainService: productionKeychainService
         )
     }

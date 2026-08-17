@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FernletFoundation
 
 /// One entry in the user's gym progress-photo timeline: a stored photo, when it was taken, and an
 /// optional short note.
@@ -43,6 +44,13 @@ public struct ProgressPhotoRecord: Codable, Identifiable, Hashable, Sendable {
 /// Owned by the app's `FernletStore` (main actor). Plain nonisolated struct: thread safety comes from
 /// the owner's isolation, shared with the inner photo store and key provider it constructs.
 public struct ProgressPhotoStore {
+    /// R3: hard cap on timeline entries. A capture past it is REFUSED (nothing is written) rather
+    /// than evicting the oldest — these are the user's own body photos, so silently dropping the
+    /// earliest ones would be the opposite of the promise the timeline makes.
+    public static let maxRecords = 2_000
+    /// R5: byte cap on a restored index payload, validated before it is decoded.
+    private static let maxIndexPayloadBytes = 4 * 1024 * 1024
+
     private let directory: URL
     private let photoStore: MealPhotoStore
     private let indexURL: URL
@@ -93,7 +101,13 @@ public struct ProgressPhotoStore {
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601
         self.decoder = dec
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            // Recovery: stay constructible — every write path already fails closed. The failure is
+            // named so a later sealed-index write error has a recorded root cause.
+            FernletAuditLog.log("progressPhotoStore.directoryCreateFailed", context: ["error": "\(error)"])
+        }
     }
 
     /// Delete-all seam (Docs/PrivacyWipeCoverage.md): one call covers both this store and its
@@ -114,10 +128,17 @@ public struct ProgressPhotoStore {
     /// with a single-record array, silently dropping the prior timeline AND orphaning its sealed photo
     /// files (nothing left references them, so per-id delete can never reach them). So we refuse rather
     /// than clobber, and remove the just-saved photo so the failure leaves no orphan bytes.
-    @discardableResult
+    ///
+    /// R7: not `@discardableResult` — `nil` IS the failure signal (nothing was written).
     public func add(_ data: Data, caption: String? = nil, capturedAt: Date) -> ProgressPhotoRecord? {
         guard let id = photoStore.save(data) else { return nil }
         guard var all = existingRecordsForWrite() else {
+            photoStore.delete(id: id)
+            return nil
+        }
+        // R3: refuse past the cap, rolling back the just-sealed bytes exactly as the other refusal
+        // paths do, so a refused capture strands nothing on disk.
+        guard all.count < Self.maxRecords else {
             photoStore.delete(id: id)
             return nil
         }
@@ -142,7 +163,15 @@ public struct ProgressPhotoStore {
         guard var all = existingRecordsForWrite(),
               let index = all.firstIndex(where: { $0.id == id }) else { return }
         all[index].caption = Self.normalizedCaption(caption)
-        _ = persist(all)
+        guard persist(all) else {
+            // Recovery: none possible here — the edit is lost. Name it, so a silently reverted
+            // caption is at least attributable.
+            FernletAuditLog.log(
+                "progressPhoto.indexPersistFailed",
+                context: ["op": "updateCaption", "id": id.uuidString]
+            )
+            return
+        }
     }
 
     /// Edits a photo's capture date so an imported/older picture isn't pinned to "today" (the timeline is
@@ -152,7 +181,13 @@ public struct ProgressPhotoStore {
         guard var all = existingRecordsForWrite(),
               let index = all.firstIndex(where: { $0.id == id }) else { return }
         all[index] = ProgressPhotoRecord(id: all[index].id, capturedAt: date, caption: all[index].caption)
-        _ = persist(all)
+        guard persist(all) else {
+            FernletAuditLog.log(
+                "progressPhoto.indexPersistFailed",
+                context: ["op": "updateCapturedAt", "id": id.uuidString]
+            )
+            return
+        }
     }
 
     /// Deletes one photo: the sealed bytes unconditionally, the index entry only when the index
@@ -163,12 +198,23 @@ public struct ProgressPhotoStore {
         // ...but only rewrite the index when it's readable, so a corrupt index isn't clobbered.
         guard var all = existingRecordsForWrite() else { return }
         all.removeAll { $0.id == id }
-        _ = persist(all)
+        guard persist(all) else {
+            // Worst of the three: the bytes are already gone, so a failed index write leaves a
+            // phantom record whose image can never load and a delete that looks like it never ran.
+            FernletAuditLog.log(
+                "progressPhoto.indexPersistFailed",
+                context: ["op": "delete", "id": id.uuidString]
+            )
+            return
+        }
     }
 
     /// Removes every progress photo and the index. Reached by "delete everything": progress photos are
     /// the user's own logged pictures (like meal photos), so a full wipe includes them.
-    @discardableResult
+    ///
+    /// R7: not `@discardableResult` — `false` means the photos or the sealed index survived
+    /// "delete everything".
+    /// - Returns: whether both the photo bytes and the index are now gone.
     public func deleteAll() -> Bool {
         let photosCleared = photoStore.deleteAll()
         let indexCleared: Bool
@@ -213,9 +259,13 @@ public struct ProgressPhotoStore {
     /// two apart — an unavailable key ALSO resolves `.undecodable`, and overwriting then would
     /// destroy a perfectly good timeline that is merely locked right now.
     ///
-    /// - Returns: whether the index was written (false = refused or the seal/write failed).
-    @discardableResult
+    /// - Returns: whether the index was written (false = refused or the seal/write failed). R7:
+    ///   deliberately not `@discardableResult` — ignoring it would let a restore report success
+    ///   while the timeline index was refused.
     public func restoreIndexPayload(_ payload: Data) -> Bool {
+        // R5: a restore boundary — validate the caller-supplied bytes before decoding them, and the
+        // decoded record count before sealing it back as the user's index.
+        guard payload.count <= Self.maxIndexPayloadBytes else { return false }
         switch readIndex() {
         case .absent:
             break
@@ -224,13 +274,17 @@ public struct ProgressPhotoStore {
         case .undecodable:
             guard keyProvider.mediaKey() != nil else { return false }
         }
-        guard let records = try? decoder.decode([ProgressPhotoRecord].self, from: payload) else { return false }
+        guard let records = try? decoder.decode([ProgressPhotoRecord].self, from: payload),
+              records.count <= Self.maxRecords else { return false }
         return persist(records)
     }
 
     /// Seals ALREADY-NORMALIZED restored bytes under `id` in the inner photo store — see
     /// ``MealPhotoStore/restoreSealedPhoto(_:forID:)`` for why the normalization pass is skipped.
-    @discardableResult
+    ///
+    /// R7: not `@discardableResult` — a discarded `false` is a body photo silently missing from the
+    /// restore.
+    /// - Returns: whether the sealed bytes reached disk.
     public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
         photoStore.restoreSealedPhoto(normalizedJPEG, forID: id)
     }
@@ -323,8 +377,9 @@ public struct ProgressPhotoStore {
            let opened = legacyKeyProvider.gcmOpen(stored),
            let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) {
             // Re-seal in place under the current (own) key; a failed write just leaves the index
-            // legacy for the migration pass to retry, which is the fail-closed direction.
-            keyProvider.sealAndWrite(opened, to: indexURL)
+            // legacy for the migration pass to retry, which is the fail-closed direction — now
+            // audit-logged instead of silently discarded.
+            keyProvider.sealAndWriteBestEffort(opened, to: indexURL, reason: "progressIndexUpgrade")
             return .records(records)
         }
         return .undecodable

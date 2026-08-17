@@ -55,6 +55,16 @@ public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable, 
     }
 }
 
+/// Refusal thrown by ``MenstrualNarrativeRepository/narratives(in:contentKey:)`` when the caller's
+/// date range would enumerate more day keys than the day-key `IN` predicate is designed for.
+///
+/// A named throw rather than `[]`, because silence there is indistinguishable from "this user has
+/// written no notes" — exactly the failure mode the Power-of-10 standard forbids.
+public nonisolated enum MenstrualNarrativeRangeError: Error, Equatable {
+    /// The requested interval spans `dayCount` days, above the supported `maximum`.
+    case rangeTooWide(dayCount: Int, maximum: Int)
+}
+
 /// Sealed at-rest CRUD for cycle-day narratives, plus the device-local "ever stored" divergence
 /// latch the sealed-backup restore depends on.
 ///
@@ -85,6 +95,13 @@ public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable, 
 public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "menstrual-narrative")
+
+    /// R5: widest range ``narratives(in:contentKey:)`` will enumerate into day keys — the store's
+    /// 240-day load window plus headroom.
+    private static let maxDateKeys = 400
+    /// R3: upper bound on one page of ``narratives(offset:limit:contentKey:)``, so an absurd `limit`
+    /// cannot decrypt the whole table at once. Above the 250-row sealed-backup chunk size.
+    private static let maxPageSize = 500
 
     /// Device-local marker for "this install has written cycle narratives at some point", used by the
     /// targeted sealed-backup restore to tell TWO very different empty stores apart:
@@ -186,8 +203,8 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
                 throw error
             }
             // Prune history after the atomic restore so no per-record transaction lingers in the
-            // persistent-history transaction log (best-effort).
-            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // persistent-history transaction log (best-effort, and logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "MenstrualNarrative.insertAtomically")
             // Latch AFTER the transaction commits. A restore that populates the store also counts as
             // "this device has narratives", so a later delete-everything + un-hide cannot re-pull them.
             markNarrativeStored()
@@ -271,14 +288,10 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
                 NSSortDescriptor(key: "hkExternalUUID", ascending: true)
             ]
             request.fetchOffset = max(0, offset)
-            request.fetchLimit = limit
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
-            }
+            // R3/R5: clamp the caller's page size so `limit: .max` cannot materialize and decrypt
+            // the whole table in one go.
+            request.fetchLimit = min(limit, Self.maxPageSize)
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
         }
     }
 
@@ -292,18 +305,43 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
         guard let contentKey else { return [] }
         let keys = Self.dateKeys(in: dateRange)
         guard !keys.isEmpty else { return [] }
+        // R5: the doc above says an unbounded range is catastrophic — enforce it instead of asking.
+        // A caller that passes `.distantPast` would otherwise materialize ~700k day-key strings and
+        // an `IN` clause of the same size. Reported as a throw, never as "no notes".
+        guard keys.count <= Self.maxDateKeys else {
+            throw MenstrualNarrativeRangeError.rangeTooWide(dayCount: keys.count, maximum: Self.maxDateKeys)
+        }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
             request.predicate = NSPredicate(format: "dateKey IN %@", keys)
             request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
-            return try context.fetch(request).compactMap { object in
-                do {
-                    return try decrypt(object, contentKey: contentKey)
-                } catch {
-                    return nil
-                }
+            return decryptRows(try context.fetch(request), contentKey: contentKey)
+        }
+    }
+
+    /// Decrypts a fetched row set, skipping rows whose sealed columns will not open and recording
+    /// ONE audit line per fetch (never per row, so a mass failure cannot spam the log).
+    ///
+    /// Skip-don't-fail is deliberate: one unopenable row must not blank a whole day. But an
+    /// authentication failure is the signature of tampering, a wrong key, or bit-rot, so it may not
+    /// be indistinguishable from "no notes" either.
+    private func decryptRows(_ objects: [NSManagedObject], contentKey: SymmetricKey) -> [MenstrualNarrative] {
+        var skipped = 0
+        let rows = objects.compactMap { object -> MenstrualNarrative? in
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                skipped += 1
+                return nil
             }
         }
+        if skipped > 0 {
+            FernletAuditLog.log(
+                "sealedRow.undecryptable",
+                context: ["entity": "MenstrualNarrative", "count": "\(skipped)"]
+            )
+        }
+        return rows
     }
 
     /// The decrypted narrative joined to one HealthKit external UUID, or `nil` when absent or the
