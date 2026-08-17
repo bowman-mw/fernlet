@@ -339,9 +339,14 @@ struct CreationStudioView: View {
                 .accessibilityIdentifier("studio.confirm.preview")
 
                 SheetField("Name") {
-                    TextField("Name your item", text: $name)
-                        .sheetTextInput()
-                        .accessibilityIdentifier("studio.confirm.name")
+                    // R3: bounded where the text enters, at the same length the shop's name
+                    // moderation enforces.
+                    TextField("Name your item", text: Binding(
+                        get: { name },
+                        set: { name = String($0.prefix(ItemNameModeration.maxNameLength)) }
+                    ))
+                    .sheetTextInput()
+                    .accessibilityIdentifier("studio.confirm.name")
                 }
 
                 if canSell {
@@ -509,6 +514,10 @@ struct CreationStudioView: View {
     /// so its own row (a session-wide id made it silently replace the previous slot's saved item).
     /// Internal (not private) so the dedup tests can drive it; `slot` is passed explicitly for the
     /// same reason.
+    ///
+    /// `@discardableResult` is safe here (R7): the returned value is an IDENTIFIER, not a
+    /// success/failure signal — `store.saveCustomItem` has already happened when this returns, and
+    /// only `save()` needs the id (to equip the new item).
     @discardableResult
     func persistDraftItem(named finalName: String, texture: ItemGridTexture, slot: ItemSlot) -> UUID {
         let item = CustomizationItem(
@@ -527,8 +536,11 @@ struct CreationStudioView: View {
     private func save() {
         guard canSave else { return }
         let texture = ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels)
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalName = trimmed.isEmpty ? slot.label : trimmed
+        // R5: the UNLISTED save also persists this name (the shop gate's moderation only runs when
+        // listing), and it later renders in the Wardrobe and on the companion — so apply the same
+        // charset/length sanitizer here, and fall back to the slot label when nothing survives.
+        let sanitized = ItemNameModeration.sanitizedName(name)
+        let finalName = sanitized.isEmpty ? slot.label : sanitized
         let itemID: UUID
 
         // Save the item UNLISTED first; the shop gate (cap + name moderation) decides whether it becomes

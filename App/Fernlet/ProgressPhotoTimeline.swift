@@ -96,7 +96,14 @@ struct ProgressPhotoSection: View {
                 // FernletLockGateModifier).
                 suppressRelockTask?.cancel()
                 suppressRelockTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(1500))
+                    do {
+                        try await Task.sleep(for: .milliseconds(1500))
+                    } catch {
+                        // Cancelled: a newer scene transition superseded this task and now owns
+                        // `suppressRelock`/`pendingRelock` — touch neither, or we would clear the
+                        // newer task's suppression early and run its deferred lock.
+                        return
+                    }
                     suppressRelock = false
                     // Execute a deferred genuine-departure lock if the section hasn't re-appeared.
                     if pendingRelock && !sectionIsVisible && !isCapturing {
@@ -306,7 +313,8 @@ private struct ProgressPhotoUnlockSheet: View {
 struct ProgressPhotoCard: View {
     let record: ProgressPhotoRecord
     let loadData: () -> Data?
-    var body_width: CGFloat = 132
+    /// The card's fixed width. Private and immutable: no caller ever customised it (R6).
+    private let cardWidth: CGFloat = 132
 
     @State private var image: UIImage?
 
@@ -314,7 +322,7 @@ struct ProgressPhotoCard: View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
-                .frame(width: body_width, height: 168)
+                .frame(width: cardWidth, height: 168)
                 .overlay {
                     if let image {
                         Image(uiImage: image)
@@ -342,7 +350,7 @@ struct ProgressPhotoCard: View {
                         .lineLimit(1)
                 }
             }
-            .frame(width: body_width, alignment: .leading)
+            .frame(width: cardWidth, alignment: .leading)
         }
         .task {
             // Decode off the main thread (`byPreparingForDisplay`) so scrolling a long strip doesn't
@@ -411,92 +419,15 @@ struct ProgressPhotoDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Group {
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    } else {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.parchment)
-                            .frame(height: 360)
-                            .overlay {
-                                Image(systemName: "figure.strengthtraining.traditional")
-                                    .font(.largeTitle)
-                                    .foregroundStyle(Color.slate.opacity(0.4))
-                            }
-                    }
-                }
-                .frame(maxWidth: .infinity)
+                photoHero
 
                 Text(capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.fernlet(.displayMedium))
                     .foregroundStyle(Color.bark)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Date taken")
-                    // Imported/older photos default to "today" (the app captures at the current moment and
-                    // library picks only recover a date when the EXIF carries one), so let the user correct
-                    // it — the timeline is about dates. Capped at today; edits persist through the same
-                    // sealed-index rewrite as the caption.
-                    DatePicker(
-                        "Date taken",
-                        selection: $capturedAt,
-                        in: ...Date(),
-                        displayedComponents: .date
-                    )
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .tint(Color.moss)
-                    .accessibilityIdentifier("progressPhoto.datePicker")
-                    .onChange(of: capturedAt) { _, newValue in
-                        store.updateProgressPhotoCapturedAt(id: record.id, date: newValue)
-                        onChanged()
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Note")
-                    TextField("A word about this one — optional", text: $caption, axis: .vertical)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .lineLimit(1...4)
-                        .focused($captionFocused)
-                        .padding(12)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.bark.opacity(0.10), lineWidth: 1)
-                        )
-                        // No `.onSubmit` here: a multiline (axis: .vertical) TextField treats Return as a
-                        // newline and never fires onSubmit, so the save affordance is the keyboard-toolbar
-                        // "Done" below (plus the onDisappear backstop).
-                        .accessibilityIdentifier("progressPhoto.caption")
-                }
-
-                Button(role: .destructive) {
-                    pendingDestructiveAction = DestructiveConfirmation(
-                        title: "Delete this progress photo?",
-                        message: "This removes it from your timeline and your device. Fernlet can't undo this.",
-                        confirmLabel: "Delete",
-                        auditEvent: "progressPhoto.deleteConfirmed",
-                        perform: {
-                            store.deleteProgressPhoto(id: record.id)
-                            onChanged()
-                            dismiss()
-                        }
-                    )
-                } label: {
-                    Label("Delete this photo", systemImage: "trash")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.dustyRose)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.dustyRose.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("progressPhoto.delete")
+                dateTakenField
+                noteField
+                deleteButton
             }
             .padding(20)
         }
@@ -506,17 +437,7 @@ struct ProgressPhotoDetailView: View {
         // caption (free text about the user's body) readable in the snapshot.
         .overlay {
             if redactForSnapshot {
-                ZStack {
-                    Color.parchment.ignoresSafeArea()
-                    VStack(spacing: 6) {
-                        Image(systemName: "lock.fill")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(Color.slate)
-                        Text("Hidden")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                    }
-                }
+                snapshotRedactionOverlay
             }
         }
         .navigationTitle("Progress photo")
@@ -555,10 +476,135 @@ struct ProgressPhotoDetailView: View {
         .fernletLockGate(scope: .progressPhotos, active: gateActive, shouldLockOnDisappear: shouldLockOnDisappear)
     }
 
+    /// The photo itself, or the calm placeholder while it is still sealed/decoding.
+    @ViewBuilder
+    private var photoHero: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.parchment)
+                    .frame(height: 360)
+                    .overlay {
+                        Image(systemName: "figure.strengthtraining.traditional")
+                            .font(.largeTitle)
+                            .foregroundStyle(Color.slate.opacity(0.4))
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The capture-date picker (capped at today), persisted on every change.
+    private var dateTakenField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Date taken")
+            // Imported/older photos default to "today" (the app captures at the current moment and
+            // library picks only recover a date when the EXIF carries one), so let the user correct
+            // it — the timeline is about dates. Capped at today; edits persist through the same
+            // sealed-index rewrite as the caption.
+            DatePicker(
+                "Date taken",
+                selection: $capturedAt,
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .tint(Color.moss)
+            .accessibilityIdentifier("progressPhoto.datePicker")
+            .onChange(of: capturedAt) { _, newValue in
+                store.updateProgressPhotoCapturedAt(id: record.id, date: newValue)
+                onChanged()
+            }
+        }
+    }
+
+    /// The optional note, capped where the text enters so the sealed index never sees more.
+    private var noteField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Note")
+            TextField("A word about this one — optional", text: limitedCaption, axis: .vertical)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .lineLimit(1...4)
+                .focused($captionFocused)
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.bark.opacity(0.10), lineWidth: 1)
+                )
+                // No `.onSubmit` here: a multiline (axis: .vertical) TextField treats Return as a
+                // newline and never fires onSubmit, so the save affordance is the keyboard-toolbar
+                // "Done" below (plus the onDisappear backstop).
+                .accessibilityIdentifier("progressPhoto.caption")
+        }
+    }
+
+    /// The delete affordance, routed through the shared destructive confirmation.
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Delete this progress photo?",
+                message: "This removes it from your timeline and your device. Fernlet can't undo this.",
+                confirmLabel: "Delete",
+                auditEvent: "progressPhoto.deleteConfirmed",
+                perform: {
+                    store.deleteProgressPhoto(id: record.id)
+                    onChanged()
+                    dismiss()
+                }
+            )
+        } label: {
+            Label("Delete this photo", systemImage: "trash")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.dustyRose)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.dustyRose.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("progressPhoto.delete")
+    }
+
+    /// The opaque cover shown in the app-switcher snapshot.
+    private var snapshotRedactionOverlay: some View {
+        ZStack {
+            Color.parchment.ignoresSafeArea()
+            VStack(spacing: 6) {
+                Image(systemName: "lock.fill")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+                Text("Hidden")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+    }
+
+    /// R3/R5: the note is free text about the user's body written into the sealed index on every
+    /// disappear — bounded where it enters, and again in ``saveCaption()``.
+    private static let maxCaptionLength = 200
+
+    private var limitedCaption: Binding<String> {
+        Binding(
+            get: { caption },
+            set: { caption = String($0.prefix(Self.maxCaptionLength)) }
+        )
+    }
+
     /// Persists the caption, then refreshes the parent timeline in the SAME step (save → refresh), so the
     /// card never shows a stale caption regardless of view-teardown ordering.
     private func saveCaption() {
-        store.updateProgressPhotoCaption(id: record.id, caption: caption)
+        // Fail closed: a detail that never revealed cannot have an edited caption, so it must not
+        // rewrite the sealed index on its way out.
+        guard canReveal else { return }
+        store.updateProgressPhotoCaption(id: record.id, caption: String(caption.prefix(Self.maxCaptionLength)))
         onChanged()
     }
 }

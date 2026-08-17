@@ -53,6 +53,9 @@ struct CycleTrackerView: View {
     @State private var intimacyEventsByDay: [String: Int] = [:]
     /// Decrypted intimacy logs resident for the day detail. Scrubbed with `intimacyEventsByDay`.
     @State private var intimacyLogs: [IntimacyLog] = []
+    /// Set when a day delete failed, so the detail stays open with an honest message instead of
+    /// popping as though the entry were gone.
+    @State private var deleteErrorMessage: String?
 
     /// Identity for the page's load task: any change restarts it. Folds the DERIVED
     /// `sensitiveSurfaceVisibility` in alongside the lock state, so flipping either half visible
@@ -67,60 +70,13 @@ struct CycleTrackerView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    if store.isPeriodTrackingVisible {
-                        periodAwarePrimer
-                        if showsPrediction {
-                            PredictionsCard(prediction: periodStore.prediction)
-                        }
-                        phaseTrendsCard
-                    }
-                    CycleCalendarCard(
-                        displayedMonth: $displayedMonth,
-                        entriesByKey: entriesByKey,
-                        intimacyDayKeys: intimacyDayKeys,
-                        todayKey: FernletDate.dayKey(for: Date()),
-                        prediction: store.isPeriodTrackingVisible && showsPrediction ? periodStore.prediction : nil,
-                        showsFlowLegend: store.isPeriodTrackingVisible,
-                        showsIntimacyLegend: store.isIntimacyTrackingVisible,
-                        onDayTapped: { date in selectedDay = SelectedCycleDay(date: date) }
-                    )
-                    privacyBanner
-                    if store.isPeriodTrackingVisible {
-                        recentEvents
-                        if showsPrediction, let prediction = periodStore.prediction {
-                            TrendsCard(prediction: prediction)
-                        }
-                    }
-                }
-                .padding(20)
+                pageContent
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(item: $selectedDay) { day in
-                let dayEntry = entry(for: day.date)
-                let dayKey = FernletDate.dayKey(for: day.date)
-                CycleDayDetailView(
-                    entry: dayEntry,
-                    showsPeriodHalf: store.isPeriodTrackingVisible,
-                    showsIntimacyHalf: store.isIntimacyTrackingVisible,
-                    intimacyLogs: store.isIntimacyTrackingVisible
-                        ? intimacyLogs.filter { $0.dayKey == dayKey }.sorted { $0.eventDate < $1.eventDate }
-                        : [],
-                    intimacyEventCount: store.isIntimacyTrackingVisible ? (intimacyEventsByDay[dayKey] ?? 0) : 0,
-                    onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingEntry: dayEntry) },
-                    onDelete: {
-                        Task {
-                            try? await periodStore.deleteEntry(dayEntry)
-                            // Keep the bridge's cached trends from outliving the deleted data (§5.3
-                            // "deliberate forgetfulness"): recompute from the now-smaller entry set.
-                            refreshContext()
-                            selectedDay = nil
-                        }
-                    }
-                )
+                dayDetail(for: day)
             }
             // Keyed on the DERIVED visibility gates alongside the lock state so un-hiding a half
             // while the page stays mounted (it survives via the other half) restarts the load —
@@ -145,6 +101,83 @@ struct CycleTrackerView: View {
             .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
                 if !visible { scrubIntimacyState() }
             }
+            .alert("Couldn't delete this day",
+                   isPresented: Binding(get: { deleteErrorMessage != nil },
+                                        set: { if !$0 { deleteErrorMessage = nil } })) {
+                Button("OK", role: .cancel) { deleteErrorMessage = nil }
+            } message: {
+                Text(deleteErrorMessage ?? "")
+            }
+        }
+    }
+
+    /// The scrolling page: header, the period-only cards, the calendar, and the privacy banner
+    /// (R4: `body` keeps only the NavigationStack and its modifiers).
+    private var pageContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            if store.isPeriodTrackingVisible {
+                periodAwarePrimer
+                if showsPrediction {
+                    PredictionsCard(prediction: periodStore.prediction)
+                }
+                phaseTrendsCard
+            }
+            CycleCalendarCard(
+                displayedMonth: $displayedMonth,
+                entriesByKey: entriesByKey,
+                intimacyDayKeys: intimacyDayKeys,
+                todayKey: FernletDate.dayKey(for: Date()),
+                prediction: store.isPeriodTrackingVisible && showsPrediction ? periodStore.prediction : nil,
+                showsFlowLegend: store.isPeriodTrackingVisible,
+                showsIntimacyLegend: store.isIntimacyTrackingVisible,
+                onDayTapped: { date in selectedDay = SelectedCycleDay(date: date) }
+            )
+            privacyBanner
+            if store.isPeriodTrackingVisible {
+                recentEvents
+                if showsPrediction, let prediction = periodStore.prediction {
+                    TrendsCard(prediction: prediction)
+                }
+            }
+        }
+        .padding(20)
+    }
+
+    /// The pushed day detail for a tapped calendar day, with both halves gated the same way the
+    /// calendar is.
+    private func dayDetail(for day: SelectedCycleDay) -> some View {
+        let dayEntry = entry(for: day.date)
+        let dayKey = FernletDate.dayKey(for: day.date)
+        return CycleDayDetailView(
+            entry: dayEntry,
+            showsPeriodHalf: store.isPeriodTrackingVisible,
+            showsIntimacyHalf: store.isIntimacyTrackingVisible,
+            intimacyLogs: store.isIntimacyTrackingVisible
+                ? intimacyLogs.filter { $0.dayKey == dayKey }.sorted { $0.eventDate < $1.eventDate }
+                : [],
+            intimacyEventCount: store.isIntimacyTrackingVisible ? (intimacyEventsByDay[dayKey] ?? 0) : 0,
+            onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingEntry: dayEntry) },
+            onDelete: { deleteDay(dayEntry, dayKey: dayKey) }
+        )
+    }
+
+    /// Deletes a day's cycle entry, keeping the detail open (and saying so) when the delete fails.
+    private func deleteDay(_ dayEntry: CycleDayEntry, dayKey: String) {
+        Task {
+            do {
+                try await periodStore.deleteEntry(dayEntry)
+            } catch {
+                // The entry (HealthKit sample and/or sealed narrative) is still there: leave the
+                // detail open rather than popping as if the day were gone.
+                FernletAuditLog.log("cycle.deleteEntry.failed", context: ["dayKey": dayKey])
+                deleteErrorMessage = "That day is still here — try again in a moment."
+                return
+            }
+            // Keep the bridge's cached trends from outliving the deleted data (§5.3
+            // "deliberate forgetfulness"): recompute from the now-smaller entry set.
+            refreshContext()
+            selectedDay = nil
         }
     }
 
@@ -314,7 +347,9 @@ struct CycleTrackerView: View {
     /// empty map keeps flow tints from rendering in that window. Internal so the gate is testable.
     var entriesByKey: [String: CycleDayEntry] {
         guard store.isPeriodTrackingVisible else { return [:] }
-        return Dictionary(uniqueKeysWithValues: periodStore.entries.map { ($0.dateKey, $0) })
+        // R5: `entries` is another module's `public var`, so a duplicate dateKey would TRAP here
+        // with `uniqueKeysWithValues`. Keeping the first entry degrades to a stale cell, not a crash.
+        return Dictionary(periodStore.entries.map { ($0.dateKey, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Days with at least one intimacy event, from the merged sealed + HealthKit counts. Empty
@@ -385,7 +420,15 @@ struct CycleTrackerView: View {
             return
         }
         let contentKey = lockService.contentKey(for: .privateHub)
-        let localLogs: [IntimacyLog] = (try? intimacyStore.logs(contentKey: contentKey)) ?? []
+        let localLogs: [IntimacyLog]
+        do {
+            localLogs = try intimacyStore.logs(contentKey: contentKey)
+        } catch {
+            // Fail closed (no plaintext fallback), but audited: without this line a failed decrypt
+            // renders as "no intimacy events this month", which is affirmatively wrong.
+            FernletAuditLog.log("intimacy.read.failed", context: [:])
+            localLogs = []
+        }
         intimacyLogs = localLogs
         let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
         do {
@@ -734,9 +777,11 @@ struct CycleMonthModel {
 
     private static func projectedLevelsByDay(for prediction: CyclePrediction?, calendar: Calendar) -> [String: PredictedFlowLevel] {
         guard let prediction else { return [:] }
-        let flowByDay = Dictionary(uniqueKeysWithValues: prediction.predictedFlow.map { day in
+        // R5: two predicted flow days could map to one day key (the uniqueness invariant lives in
+        // CyclePredictionEngine, another module) — keep the first rather than trapping.
+        let flowByDay = Dictionary(prediction.predictedFlow.map { day in
             (FernletDate.dayKey(for: day.date), day.level)
-        })
+        }, uniquingKeysWith: { first, _ in first })
         var result: [String: PredictedFlowLevel] = [:]
         let range = DateInterval(start: prediction.likelyStartRange.lowerBound, end: prediction.likelyStartRange.upperBound)
         for key in FernletDate.dayKeys(in: range, calendar: calendar) {

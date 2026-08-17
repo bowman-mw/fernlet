@@ -37,68 +37,15 @@ struct LogIntimacySheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    SheetField("Date and time") {
-                    DatePicker("Date and time", selection: $eventDate, in: ...Date())
-                            .labelsHidden()
-                            .tint(Color.moss)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
-
-                    SheetField("Private note") {
-                        SheetTextEditor(
-                            text: Binding(
-                                get: { note },
-                                set: { note = String($0.prefix(2000)) }
-                            ),
-                            placeholder: "Who was involved? Anything important to remember?",
-                            minHeight: 180
-                        )
-                    }
+                    dateField
+                    noteField
 
                     Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
 
-                    SheetField("Apple Health") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label(
-                                writesToHealthKit ? "Apple Health sync is on" : "Apple Health sync is off",
-                                systemImage: writesToHealthKit ? "heart.text.square.fill" : "heart.slash"
-                            )
-                            .font(.fernlet(.label))
-                            .foregroundStyle(writesToHealthKit ? Color.moss : Color.slate)
-
-                            if writesToHealthKit {
-                                FlowLayout(spacing: 8) {
-                                    Button("Not specified") { protectionUsed = nil }
-                                        .buttonStyle(ChipButtonStyle(selected: protectionUsed == nil))
-                                    Button("Protection used") { protectionUsed = true }
-                                        .buttonStyle(ChipButtonStyle(selected: protectionUsed == true))
-                                    Button("No protection") { protectionUsed = false }
-                                        .buttonStyle(ChipButtonStyle(selected: protectionUsed == false))
-                                }
-                            }
-
-                            Text(healthKitSummary)
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
-
-                    if let statusMessage {
-                        Text(statusMessage)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.terracotta)
-                            .fernletWrappingText()
-                    }
+                    appleHealthField
+                    statusText
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -114,6 +61,79 @@ struct LogIntimacySheet: View {
         .captureProtected(surface: "logIntimacy")
     }
 
+    /// The event's date and time, never in the future.
+    private var dateField: some View {
+        SheetField("Date and time") {
+            DatePicker("Date and time", selection: $eventDate, in: ...Date())
+                .labelsHidden()
+                .tint(Color.moss)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    /// The sealed note, capped at 2000 characters where the text enters.
+    private var noteField: some View {
+        SheetField("Private note") {
+            SheetTextEditor(
+                text: Binding(
+                    get: { note },
+                    set: { note = String($0.prefix(2000)) }
+                ),
+                placeholder: "Who was involved? Anything important to remember?",
+                minHeight: 180
+            )
+        }
+    }
+
+    /// The Apple Health card: sync status, the protection chips (only when syncing), and what the
+    /// sync does and does not send.
+    private var appleHealthField: some View {
+        SheetField("Apple Health") {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(
+                    writesToHealthKit ? "Apple Health sync is on" : "Apple Health sync is off",
+                    systemImage: writesToHealthKit ? "heart.text.square.fill" : "heart.slash"
+                )
+                .font(.fernlet(.label))
+                .foregroundStyle(writesToHealthKit ? Color.moss : Color.slate)
+
+                if writesToHealthKit {
+                    FlowLayout(spacing: 8) {
+                        Button("Not specified") { protectionUsed = nil }
+                            .buttonStyle(ChipButtonStyle(selected: protectionUsed == nil))
+                        Button("Protection used") { protectionUsed = true }
+                            .buttonStyle(ChipButtonStyle(selected: protectionUsed == true))
+                        Button("No protection") { protectionUsed = false }
+                            .buttonStyle(ChipButtonStyle(selected: protectionUsed == false))
+                    }
+                }
+
+                Text(healthKitSummary)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    /// The save outcome, when there is something to say.
+    @ViewBuilder
+    private var statusText: some View {
+        if let statusMessage {
+            Text(statusMessage)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.terracotta)
+                .fernletWrappingText()
+        }
+    }
+
     private var writesToHealthKit: Bool {
         storagePreferencesStore.preferences.healthKitMasterEnabled
             && (storagePreferencesStore.preferences.healthKitCapabilityEnabled[HealthCapability.intimateLogging.rawValue] ?? false)
@@ -127,6 +147,9 @@ struct LogIntimacySheet: View {
     }
 
     private func save() async {
+        // Single-flight: the save bar is disabled while saving, but the entry point states it too so
+        // a double invocation can never seal two rows for one sheet.
+        guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -150,7 +173,8 @@ struct LogIntimacySheet: View {
                 try intimacyStore.markSavedToHealthKit(id: log.id, externalUUID: externalUUID)
             } catch {
                 statusMessage = "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"
-                try? await Task.sleep(for: .seconds(1.8))
+                // Cancelled: the sheet is already gone; the note is saved either way.
+                do { try await Task.sleep(for: .seconds(1.8)) } catch { return }
             }
             dismiss()
         } catch is IntimacyTrackingHiddenError {

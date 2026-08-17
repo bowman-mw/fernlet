@@ -20,8 +20,14 @@ struct CameraPreviewView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
-        v.previewLayer.session = session
-        v.previewLayer.videoGravity = .resizeAspectFill
+        guard let previewLayer = v.previewLayer else {
+            // Unreachable: `layerClass` guarantees the layer's type. Degrade to a blank preview
+            // rather than trapping if UIKit ever hands back a different layer.
+            assertionFailure("PreviewView.layerClass guarantees an AVCaptureVideoPreviewLayer")
+            return v
+        }
+        previewLayer.session = session
+        previewLayer.videoGravity = .resizeAspectFill
         v.configureRotation()
         return v
     }
@@ -43,9 +49,13 @@ struct CameraPreviewView: UIViewRepresentable {
         private var rotationObservation: NSKeyValueObservation?
 
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-        var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        /// The backing preview layer. Optional by construction (R5: no silent trap) — the
+        /// `layerClass` override makes nil unreachable, and every caller degrades to "no preview"
+        /// instead of crashing if it ever happened.
+        var previewLayer: AVCaptureVideoPreviewLayer? { layer as? AVCaptureVideoPreviewLayer }
 
         func configureRotation() {
+            guard let previewLayer else { return }
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else { return }
             let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
             rotationCoordinator = coordinator
@@ -57,10 +67,11 @@ struct CameraPreviewView: UIViewRepresentable {
         func tearDown() {
             rotationObservation = nil
             rotationCoordinator = nil
-            previewLayer.session = nil
+            previewLayer?.session = nil
         }
 
         func updateRotation() {
+            guard let previewLayer else { return }
             guard let connection = previewLayer.connection,
                   let angle = rotationCoordinator?.videoRotationAngleForHorizonLevelPreview,
                   connection.isVideoRotationAngleSupported(angle) else { return }
@@ -139,12 +150,28 @@ final class CameraCaptureController: NSObject {
         session.sessionPreset = .photo
         defer { session.commitConfiguration() }
 
-        guard
-            let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-            let input = try? AVCaptureDeviceInput(device: device),
-            session.canAddInput(input),
-            session.canAddOutput(photoOutput)
-        else {
+        // Each failure step is named: "Camera off" with no record of WHY is unfixable in the field.
+        let log = Logger(subsystem: "com.fernlet", category: "camera")
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            log.error("session configure failed: no back wide-angle camera")
+            publishSessionConfigured(false)
+            return false
+        }
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: device)
+        } catch {
+            log.error("session configure failed: device input: \(error.localizedDescription, privacy: .public)")
+            publishSessionConfigured(false)
+            return false
+        }
+        guard session.canAddInput(input) else {
+            log.error("session configure failed: cannot add camera input")
+            publishSessionConfigured(false)
+            return false
+        }
+        guard session.canAddOutput(photoOutput) else {
+            log.error("session configure failed: cannot add photo output")
             publishSessionConfigured(false)
             return false
         }
@@ -547,7 +574,12 @@ struct DisposableCameraView: View {
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
+    /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
+    @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+
+    /// The cap on a session name typed here — it rides the mesh descriptor to every peer.
+    private static let maxMeshNameLength = 40
 
     // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
     // than a parchment card, so a couple of colors are literal rather than design-system tokens:
@@ -563,36 +595,7 @@ struct DisposableCameraView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                // The camera "hardware" scene lives in a full-screen (safe-area-ignoring) layer so
-                // one preview node can span both orientations and, on island devices, the housing can
-                // reach up to the true screen top to wrap the island. A single `CameraPreviewView`
-                // inside `cameraStage` keeps stable structural identity across rotation, so the live
-                // `AVCaptureSession` is never detached/reattached (the old freeze/black flash).
-                Color(red: 0.13, green: 0.10, blue: 0.08)
-                    .ignoresSafeArea()
-                    .overlay { cameraStage(geometry: geometry) }
-
-                // Corner + edge chrome lives in the safe-area coordinate space so buttons never tuck
-                // under the island or the home indicator.
-                topControls
-
-                if isLandscape {
-                    landscapeControls
-                } else {
-                    portraitControls
-                }
-
-                // Shutter flash — brief white wash over the whole surface on capture.
-                Color.white
-                    .opacity(flashOpacity)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
-            .onAppear { updateOrientation(for: geometry.size) }
-            .onChange(of: geometry.size) { _, newSize in
-                updateOrientation(for: newSize)
-            }
+            cameraSurface(geometry: geometry)
         }
         .onAppear { camera.startSession() }
         .onDisappear {
@@ -613,59 +616,47 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $showChat) {
             SessionChatPanel(manager: manager, onDone: { showChat = false })
         }
-        .sheet(isPresented: Binding(
-            get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
-            set: { isPresented in
-                if !isPresented {
-                    manager.pendingAdmissionRequests.forEach { manager.declineAdmission($0) }
-                }
+        .modifier(SessionPromptsModifier(
+            manager: manager,
+            activeRemovalProposal: $activeRemovalProposal,
+            leaveSessionConfirm: $leaveSessionConfirm,
+            showInfo: $showInfo,
+            beginDevelop: beginDevelop
+        ))
+    }
+
+    /// The full-screen camera "hardware" scene for the current geometry.
+    ///
+    /// The scene lives in a full-screen (safe-area-ignoring) layer so one preview node can span both
+    /// orientations and, on island devices, the housing can reach up to the true screen top to wrap
+    /// the island. A single `CameraPreviewView` inside `cameraStage` keeps stable structural
+    /// identity across rotation, so the live `AVCaptureSession` is never detached/reattached (the
+    /// old freeze/black flash).
+    private func cameraSurface(geometry: GeometryProxy) -> some View {
+        ZStack {
+            Color(red: 0.13, green: 0.10, blue: 0.08)
+                .ignoresSafeArea()
+                .overlay { cameraStage(geometry: geometry) }
+
+            // Corner + edge chrome lives in the safe-area coordinate space so buttons never tuck
+            // under the island or the home indicator.
+            topControls
+
+            if isLandscape {
+                landscapeControls
+            } else {
+                portraitControls
             }
-        )) {
-            if let mesh = manager.currentMesh {
-                JoinPromptSheet(
-                    requests: manager.pendingAdmissionRequests,
-                    targetName: mesh.name,
-                    displayName: { $0.requesterDisplayName },
-                    fingerprint: { $0.requesterFingerprint },
-                    accessibilityPrefix: "mesh.admission",
-                    allow: { manager.allowAdmission($0) },
-                    decline: { manager.declineAdmission($0) }
-                )
-            }
+
+            // Shutter flash — brief white wash over the whole surface on capture.
+            Color.white
+                .opacity(flashOpacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
-        .alert("Session", isPresented: Binding(
-            get: { manager.meshError != nil },
-            set: { if !$0 { manager.meshError = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(manager.meshError ?? "")
-        }
-        .alert(
-            activeRemovalProposal.map { "Remove \($0.targetDisplayName)?" } ?? "Remove participant?",
-            isPresented: $activeRemovalProposal.isPresent(),
-            presenting: activeRemovalProposal
-        ) { proposal in
-            if manager.canSecondRemoval(proposal) {
-                Button("Second Removal", role: .destructive) {
-                    manager.secondRemoval(proposal)
-                    activeRemovalProposal = nil
-                }
-            }
-            Button("Not Now", role: .cancel) {
-                activeRemovalProposal = nil
-            }
-        } message: { proposal in
-            Text("\(proposal.proposerDisplayName) asked to remove \(proposal.targetDisplayName) from this session. A different participant must second the decision.")
-        }
-        .alert("End session?", isPresented: $leaveSessionConfirm) {
-            Button("End Session", role: .destructive) {
-                showInfo = false
-                beginDevelop()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You will stop sharing with everyone in this session.")
+        .onAppear { updateOrientation(for: geometry.size) }
+        .onChange(of: geometry.size) { _, newSize in
+            updateOrientation(for: newSize)
         }
     }
 
@@ -1309,198 +1300,20 @@ struct DisposableCameraView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    HStack {
-                        if let mesh = manager.currentMesh {
-                            Button {
-                                newMeshName = mesh.name
-                                renamingMesh = true
-                            } label: {
-                                HStack(spacing: 7) {
-                                    Text(mesh.name)
-                                        .font(.fernlet(.display))
-                                    Image(systemName: "pencil")
-                                        .font(.body)
-                                }
-                                .foregroundStyle(Color.bark)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("sessionInfo.rename")
-                        } else {
-                            Text("Session")
-                                .font(.fernlet(.display))
-                                .foregroundStyle(Color.bark)
-                        }
-                        Spacer()
-                        Button("Done") { showInfo = false }
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
-                            .buttonStyle(.plain)
-                    }
-
-                    Text("\(manager.sessionParticipants.count) person(s) connected")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "film")
-                            .foregroundStyle(Color.slate)
-                        Text("\(manager.filmRemaining) shot(s) remaining")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.slate)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Session access")
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
-
-                        Picker("Session access", selection: Binding(
-                            get: { manager.isSessionOpen ? MeshMode.open : MeshMode.closed },
-                            set: { manager.setSessionOpen($0 == .open) }
-                        )) {
-                            Text("Open").tag(MeshMode.open)
-                            Text("Closed").tag(MeshMode.closed)
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("sessionInfo.mode")
-                    }
+                    sessionHeader
+                    sessionStats
+                    accessPicker
 
                     Text("People")
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
-                    VStack(spacing: 0) {
-                        ForEach(manager.sessionParticipants) { participant in
-                            HStack(spacing: 12) {
-                                Image(systemName: participant.isLocal ? "person.crop.circle.fill" : "person.crop.circle")
-                                    .foregroundStyle(Color.moss)
-                                Text(participant.displayName)
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                if !participant.isLocal, let vouchLabel = manager.vouchLabel(for: participant.fingerprint) {
-                                    Text(vouchLabel)
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                if participant.isLocal {
-                                    Text("You")
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                Spacer()
-                                if !participant.isLocal {
-                                    if let friend = trustedFriend(for: participant) {
-                                        sessionHeartButton(for: friend)
-                                    }
-                                    Menu {
-                                        Button {
-                                            manager.proposeRemoval(of: participant)
-                                        } label: {
-                                            Label("Ask to remove", systemImage: "person.badge.minus")
-                                        }
-                                        Button(role: .destructive) {
-                                            manager.block(participant)
-                                        } label: {
-                                            Label("Block", systemImage: "hand.raised")
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                            .foregroundStyle(Color.slate)
-                                    }
-                                    .accessibilityLabel("Options for \(participant.displayName)")
-                                }
-                            }
-                            .padding(.vertical, 13)
-                            .padding(.horizontal, 14)
-                            if participant.id != manager.sessionParticipants.last?.id {
-                                FernletRowDivider()
-                            }
-                        }
-                    }
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-                    // TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
-                    if let status = sessionHeartStatusText {
-                        Text(status)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.moss)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("sessionInfo.heartStatus")
-                    }
-
-                    // TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still
-                    // needs the presence radio (hearts on, Nearby Friends off). Hidden in the common
-                    // mesh path — replaces the old dead "Hearts travel in person for now" label.
-                    if sessionHeartsNeedPresence {
-                        Button {
-                            store.setAllowNearbyPresence(true)
-                        } label: {
-                            Text("Turn on Nearby Friends to send hearts")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.parchment)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("sessionInfo.enablePresence")
-                    }
-
-                    if store.settings.showProximityDebugTools {
-                        Button {
-                            store.showConnectionInspector = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "dot.radiowaves.left.and.right")
-                                    .foregroundStyle(Color.moss)
-                                Text("Connection Inspector")
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.bark)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(Color.slate)
-                            }
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("sessionInfo.inspectorButton")
-                    }
-
-                    if !manager.pendingRemovalProposals.isEmpty {
-                        Text("Removal Requests")
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
-
-                        ForEach(manager.pendingRemovalProposals) { proposal in
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("\(proposal.proposerDisplayName) asked to remove \(proposal.targetDisplayName).")
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                if manager.canSecondRemoval(proposal) {
-                                    Button("Second Removal", role: .destructive) {
-                                        manager.secondRemoval(proposal)
-                                    }
-                                    .font(.fernlet(.label))
-                                } else {
-                                    Text("Waiting for another participant to second this decision.")
-                                        .font(.fernlet(.bodySmall))
-                                        .foregroundStyle(Color.slate)
-                                }
-                            }
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                        }
-                    }
-
-                    Button("End session") {
-                        leaveSessionConfirm = true
-                    }
-                    .buttonStyle(ChipButtonStyle(selected: false))
-                    .accessibilityIdentifier("sessionInfo.endSession")
+                    participantList
+                    heartStatusRow
+                    presenceNudge
+                    debugInspectorButton
+                    removalRequestsSection
+                    endSessionButton
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
@@ -1509,6 +1322,241 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $renamingMesh) {
             renameMeshSheet
         }
+    }
+
+    /// The sheet's title row: the (renameable) mesh name and the Done button.
+    private var sessionHeader: some View {
+        HStack {
+            if let mesh = manager.currentMesh {
+                Button {
+                    newMeshName = mesh.name
+                    renamingMesh = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(mesh.name)
+                            .font(.fernlet(.display))
+                        Image(systemName: "pencil")
+                            .font(.body)
+                    }
+                    .foregroundStyle(Color.bark)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sessionInfo.rename")
+            } else {
+                Text("Session")
+                    .font(.fernlet(.display))
+                    .foregroundStyle(Color.bark)
+            }
+            Spacer()
+            Button("Done") { showInfo = false }
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+                .buttonStyle(.plain)
+        }
+    }
+
+    /// Participant count and remaining film.
+    private var sessionStats: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("\(manager.sessionParticipants.count) person(s) connected")
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+
+            HStack(spacing: 6) {
+                Image(systemName: "film")
+                    .foregroundStyle(Color.slate)
+                Text("\(manager.filmRemaining) shot(s) remaining")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+    }
+
+    /// Open vs closed session access.
+    private var accessPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Session access")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+
+            Picker("Session access", selection: Binding(
+                get: { manager.isSessionOpen ? MeshMode.open : MeshMode.closed },
+                set: { manager.setSessionOpen($0 == .open) }
+            )) {
+                Text("Open").tag(MeshMode.open)
+                Text("Closed").tag(MeshMode.closed)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("sessionInfo.mode")
+        }
+    }
+
+    /// The session roster, one row per participant.
+    private var participantList: some View {
+        VStack(spacing: 0) {
+            ForEach(manager.sessionParticipants) { participant in
+                participantRow(participant)
+                if participant.id != manager.sessionParticipants.last?.id {
+                    FernletRowDivider()
+                }
+            }
+        }
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// One roster row: name, vouch label, the heart button for trusted friends, and the row menu.
+    private func participantRow(_ participant: MeshSessionParticipant) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: participant.isLocal ? "person.crop.circle.fill" : "person.crop.circle")
+                .foregroundStyle(Color.moss)
+            Text(participant.displayName)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            if !participant.isLocal, let vouchLabel = manager.vouchLabel(for: participant.fingerprint) {
+                Text(vouchLabel)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+            if participant.isLocal {
+                Text("You")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+            if !participant.isLocal {
+                if let friend = trustedFriend(for: participant) {
+                    sessionHeartButton(for: friend)
+                }
+                participantMenu(participant)
+            }
+        }
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
+    }
+
+    /// The per-participant overflow menu: propose a removal, or block outright.
+    private func participantMenu(_ participant: MeshSessionParticipant) -> some View {
+        Menu {
+            Button {
+                manager.proposeRemoval(of: participant)
+            } label: {
+                Label("Ask to remove", systemImage: "person.badge.minus")
+            }
+            Button(role: .destructive) {
+                manager.block(participant)
+            } label: {
+                Label("Block", systemImage: "hand.raised")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .foregroundStyle(Color.slate)
+        }
+        .accessibilityLabel("Options for \(participant.displayName)")
+    }
+
+    /// TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
+    @ViewBuilder
+    private var heartStatusRow: some View {
+        if let status = sessionHeartStatusText {
+            Text(status)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .fernletWrappingText()
+                .accessibilityIdentifier("sessionInfo.heartStatus")
+        }
+    }
+
+    /// TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still needs the
+    /// presence radio (hearts on, Nearby Friends off). Hidden in the common mesh path — replaces the
+    /// old dead "Hearts travel in person for now" label.
+    @ViewBuilder
+    private var presenceNudge: some View {
+        if sessionHeartsNeedPresence {
+            Button {
+                store.setAllowNearbyPresence(true)
+            } label: {
+                Text("Turn on Nearby Friends to send hearts")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.parchment)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sessionInfo.enablePresence")
+        }
+    }
+
+    /// The Connection Inspector entry point, behind the proximity debug-tools setting.
+    @ViewBuilder
+    private var debugInspectorButton: some View {
+        if store.settings.showProximityDebugTools {
+            Button {
+                store.showConnectionInspector = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .foregroundStyle(Color.moss)
+                    Text("Connection Inspector")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.slate)
+                }
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sessionInfo.inspectorButton")
+        }
+    }
+
+    /// Pending removal proposals awaiting a second.
+    @ViewBuilder
+    private var removalRequestsSection: some View {
+        if !manager.pendingRemovalProposals.isEmpty {
+            Text("Removal Requests")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+
+            ForEach(manager.pendingRemovalProposals) { proposal in
+                removalRequestCard(proposal)
+            }
+        }
+    }
+
+    /// One pending removal proposal: what was asked, and this device's part in it.
+    private func removalRequestCard(_ proposal: MeshRemovalProposalPayload) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("\(proposal.proposerDisplayName) asked to remove \(proposal.targetDisplayName).")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            if manager.canSecondRemoval(proposal) {
+                Button("Second Removal", role: .destructive) {
+                    manager.secondRemoval(proposal)
+                }
+                .font(.fernlet(.label))
+            } else {
+                Text("Waiting for another participant to second this decision.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Ends the session (confirmed by the end-session alert).
+    private var endSessionButton: some View {
+        Button("End session") {
+            leaveSessionConfirm = true
+        }
+        .buttonStyle(ChipButtonStyle(selected: false))
+        .accessibilityIdentifier("sessionInfo.endSession")
     }
 
     // MARK: - Send good vibes (in-session)
@@ -1652,8 +1700,15 @@ struct DisposableCameraView: View {
         // The most recent inbound message drives the notification's sender name. It was already
         // sanitized by SessionMessageStore.receiveIncoming; NotificationService re-sanitizes defensively.
         guard let latest = manager.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
+        // R3: one in-flight post at a time. Peers drive this event, so an unbounded Task per inbound
+        // message would be peer-controlled fan-out; the notification is a nudge, not a log, so
+        // coalescing to the newest sender while one is posting is the right bound.
+        guard messageNotificationTask == nil else { return }
         let name = latest.senderDisplayName
-        Task { await NotificationService.postSessionMessage(from: name) }
+        messageNotificationTask = Task {
+            await NotificationService.postSessionMessage(from: name)
+            messageNotificationTask = nil
+        }
     }
 
     private var renameMeshSheet: some View {
@@ -1666,9 +1721,12 @@ struct DisposableCameraView: View {
                             .foregroundStyle(Color.bark)
 
                         SheetField("New name") {
-                            TextField("Session name", text: $newMeshName)
-                                .sheetTextInput()
-                                .accessibilityIdentifier("sessionInfo.renameField")
+                            TextField("Session name", text: Binding(
+                                get: { newMeshName },
+                                set: { newMeshName = String($0.prefix(Self.maxMeshNameLength)) }
+                            ))
+                            .sheetTextInput()
+                            .accessibilityIdentifier("sessionInfo.renameField")
                         }
                     }
                     .padding(20)
@@ -1679,7 +1737,10 @@ struct DisposableCameraView: View {
                     label: "Rename",
                     disabled: newMeshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ) {
-                    let trimmed = newMeshName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // R3/R5: the name is broadcast to every peer in the mesh descriptor, so it is
+                    // bounded here as well as at the field (the advertised copy caps separately).
+                    let trimmed = String(newMeshName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .prefix(Self.maxMeshNameLength))
                     guard !trimmed.isEmpty else { return }
                     manager.renameMesh(trimmed)
                     renamingMesh = false
@@ -1700,5 +1761,102 @@ struct DisposableCameraView: View {
         activeRemovalProposal = manager.pendingRemovalProposals.last {
             $0.proposerFingerprint != manager.localFingerprint
         }
+    }
+}
+
+/// The session's interruptive prompts, lifted out of ``DisposableCameraView``'s `body` (R4).
+///
+/// Applied as one modifier so the ordering of the admission sheet, the mesh-error alert, the
+/// removal-proposal alert and the end-session confirmation is identical to the inline version it
+/// replaced. State stays in the view; this only presents it.
+private struct SessionPromptsModifier: ViewModifier {
+    let manager: MeshNetworkManager
+    @Binding var activeRemovalProposal: MeshRemovalProposalPayload?
+    @Binding var leaveSessionConfirm: Bool
+    @Binding var showInfo: Bool
+    let beginDevelop: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: Binding(
+                get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        manager.pendingAdmissionRequests.forEach { manager.declineAdmission($0) }
+                    }
+                }
+            )) {
+                admissionSheet
+            }
+            .alert("Session", isPresented: Binding(
+                get: { manager.meshError != nil },
+                set: { if !$0 { manager.meshError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(manager.meshError ?? "")
+            }
+            .modifier(SessionRemovalPromptsModifier(
+                manager: manager,
+                activeRemovalProposal: $activeRemovalProposal,
+                leaveSessionConfirm: $leaveSessionConfirm,
+                showInfo: $showInfo,
+                beginDevelop: beginDevelop
+            ))
+    }
+
+    /// The pending join requests for the current mesh.
+    @ViewBuilder
+    private var admissionSheet: some View {
+        if let mesh = manager.currentMesh {
+            JoinPromptSheet(
+                requests: manager.pendingAdmissionRequests,
+                targetName: mesh.name,
+                displayName: { $0.requesterDisplayName },
+                fingerprint: { $0.requesterFingerprint },
+                accessibilityPrefix: "mesh.admission",
+                allow: { manager.allowAdmission($0) },
+                decline: { manager.declineAdmission($0) }
+            )
+        }
+    }
+}
+
+/// The two destructive session prompts: seconding a removal proposal, and ending the session.
+private struct SessionRemovalPromptsModifier: ViewModifier {
+    let manager: MeshNetworkManager
+    @Binding var activeRemovalProposal: MeshRemovalProposalPayload?
+    @Binding var leaveSessionConfirm: Bool
+    @Binding var showInfo: Bool
+    let beginDevelop: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                activeRemovalProposal.map { "Remove \($0.targetDisplayName)?" } ?? "Remove participant?",
+                isPresented: $activeRemovalProposal.isPresent(),
+                presenting: activeRemovalProposal
+            ) { proposal in
+                if manager.canSecondRemoval(proposal) {
+                    Button("Second Removal", role: .destructive) {
+                        manager.secondRemoval(proposal)
+                        activeRemovalProposal = nil
+                    }
+                }
+                Button("Not Now", role: .cancel) {
+                    activeRemovalProposal = nil
+                }
+            } message: { proposal in
+                Text("\(proposal.proposerDisplayName) asked to remove \(proposal.targetDisplayName) from this session. A different participant must second the decision.")
+            }
+            .alert("End session?", isPresented: $leaveSessionConfirm) {
+                Button("End Session", role: .destructive) {
+                    showInfo = false
+                    beginDevelop()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You will stop sharing with everyone in this session.")
+            }
     }
 }

@@ -239,8 +239,11 @@ struct FriendShopView: View {
 
     // MARK: - Behavior
 
+    /// The seller's display name, sanitized with the SAME rule the store applies before persisting
+    /// it (`DiaryStore.setKnownDesignerName`), so a hostile wire-claimed name — multi-kilobyte, or
+    /// carrying bidi overrides — can neither render raw here nor disagree with what is stored.
     private func sellerName(_ catalog: ProximityClothingCatalog) -> String {
-        let name = catalog.payload.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = ItemNameModeration.sanitizedName(catalog.payload.displayName)
         return name.isEmpty ? catalog.senderDisplayName : name
     }
 

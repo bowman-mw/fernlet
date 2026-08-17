@@ -209,7 +209,7 @@ struct WorryBoxServiceTests {
         try service.addWorry("let this one go")
         let id = try #require(service.worries.first?.id)
 
-        service.release(id)
+        #expect(service.release(id))
 
         #expect(service.worries.isEmpty)
         service.reload()
@@ -238,7 +238,7 @@ struct WorryBoxServiceTests {
         #expect(service.lifetimeLetGoCount == 2)
 
         let id = try #require(service.worries.first?.id)
-        service.release(id)
+        #expect(service.release(id))
         #expect(service.lifetimeLetGoCount == 2, "releasing a kept worry is not a new letting-go")
     }
 
@@ -251,7 +251,7 @@ struct WorryBoxServiceTests {
         try service.addWorry("kept b")
         #expect(service.lifetimeLetGoCount == 2)
 
-        service.releaseAll()
+        #expect(service.releaseAll())
 
         #expect(service.worries.isEmpty)
         #expect(service.lifetimeLetGoCount == 0)
