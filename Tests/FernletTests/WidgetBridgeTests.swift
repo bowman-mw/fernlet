@@ -100,8 +100,8 @@ struct WidgetBridgeTests {
             id: UUID(), dateKey: "2026-07-05", action: PendingWidgetAction.waterPlusOne,
             createdAt: Date(timeIntervalSince1970: 1_780_000_200)
         )
-        queue.append(action)
-        queue.append(action)  // duplicate row id → dropped (idempotent append)
+        #expect(queue.append(action))
+        #expect(queue.append(action))  // duplicate row id → dropped (idempotent append)
         #expect(queue.records() == [action])
 
         let claimed = queue.claimAll()
@@ -117,7 +117,7 @@ struct WidgetBridgeTests {
         let todayKey = store.todayKey
 
         for _ in 0..<2 {
-            store.pendingWidgetActionQueue.append(PendingWidgetAction(
+            _ = store.pendingWidgetActionQueue.append(PendingWidgetAction(
                 id: UUID(), dateKey: todayKey, action: PendingWidgetAction.waterPlusOne, createdAt: Date()
             ))
         }
@@ -138,7 +138,7 @@ struct WidgetBridgeTests {
         let yesterdayKey = FernletDate.dayKey(for: yesterday)
 
         // A tap that fired before midnight but is drained today must land on ITS day, not today.
-        store.pendingWidgetActionQueue.append(PendingWidgetAction(
+        _ = store.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: yesterdayKey, action: PendingWidgetAction.waterPlusOne, createdAt: Date()
         ))
         store.processPendingWidgetActions()
@@ -152,13 +152,13 @@ struct WidgetBridgeTests {
         let store = makeTestStore(date: testDate)
         store.pendingWidgetActionQueue = PendingWidgetActionQueue(directory: dir)
 
-        store.pendingWidgetActionQueue.append(PendingWidgetAction(
+        _ = store.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: store.todayKey, action: "someFutureAction", createdAt: Date()
         ))
-        store.pendingWidgetActionQueue.append(PendingWidgetAction(
+        _ = store.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: "not-a-day-key", action: PendingWidgetAction.waterPlusOne, createdAt: Date()
         ))
-        store.pendingWidgetActionQueue.append(PendingWidgetAction(
+        _ = store.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: "2999-01-01", action: PendingWidgetAction.waterPlusOne, createdAt: Date()
         ))
 
@@ -208,7 +208,7 @@ struct WidgetBridgeTests {
         #expect(queue.claimAll().isEmpty)
         // A corrupt file is cleared rather than wedging every future drain.
         #expect(queue.records().isEmpty)
-        queue.append(PendingWidgetAction(
+        _ = queue.append(PendingWidgetAction(
             id: UUID(), dateKey: "2026-07-05", action: PendingWidgetAction.waterPlusOne, createdAt: Date()
         ))
         #expect(queue.records().count == 1)
@@ -221,7 +221,7 @@ struct WidgetBridgeTests {
         let store = WidgetSnapshotFileStore(directory: dir)
         #expect(store.write(makeSnapshot(dateKey: "2026-07-05", bottleCount: 2)))
 
-        store.applyOptimisticWaterPlusOne(dayKey: "2026-07-05")
+        #expect(store.applyOptimisticWaterPlusOne(dayKey: "2026-07-05"))
 
         let bumped = try #require(store.read())
         #expect(bumped.dateKey == "2026-07-05")
@@ -237,7 +237,7 @@ struct WidgetBridgeTests {
         #expect(store.write(makeSnapshot(dateKey: "2026-07-05", bottleCount: 5)))
 
         // The widget/Siri "+1 water" fires on a NEW day, before the app republishes.
-        store.applyOptimisticWaterPlusOne(dayKey: "2026-07-06")
+        #expect(store.applyOptimisticWaterPlusOne(dayKey: "2026-07-06"))
 
         let rolled = try #require(store.read())
         #expect(rolled.dateKey == "2026-07-06")   // re-stamped to the fresh day

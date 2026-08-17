@@ -20,6 +20,7 @@
 
 import Foundation
 import WidgetKit
+import FernletFoundation
 
 /// The benign outbound snapshot mirrored to the app-group container for the widget.
 ///
@@ -126,8 +127,8 @@ struct WidgetSnapshotFileStore {
     }
 
     /// Coordinated atomic replace of the snapshot file.
-    /// - Returns: whether the write (and the coordination) succeeded.
-    @discardableResult
+    /// - Returns: whether the write (and the coordination) succeeded. R7: a success/failure value,
+    ///   so it carries no `@discardableResult` — every caller branches on it.
     func write(_ snapshot: WidgetSnapshot) -> Bool {
         var success = false
         var coordinatorError: NSError?
@@ -151,7 +152,11 @@ struct WidgetSnapshotFileStore {
     /// widget's own "+1" button (`WidgetSnapshotStore.applyOptimisticWaterPlusOne`). The app remains the
     /// source of truth and republishes the real snapshot on its next save/foreground. Kept byte-identical
     /// to the widget-side twin (same clamp, day-rollover branch, and write options).
-    func applyOptimisticWaterPlusOne(dayKey: String) {
+    /// - Returns: whether the bumped snapshot was written. `false` means the widget still shows the
+    ///   old count, so the caller must not claim the bump landed (the app's authoritative republish
+    ///   corrects the file on the next foreground — which is why the failure is benign).
+    func applyOptimisticWaterPlusOne(dayKey: String) -> Bool {
+        var success = false
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
@@ -177,8 +182,15 @@ struct WidgetSnapshotFileStore {
             }
             snapshot.computedAt = Date()
             guard let encoded = try? WidgetBridgeFiles.makeEncoder().encode(snapshot) else { return }
-            try? encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            do {
+                try encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                success = true
+            } catch {
+                FernletAuditLog.log("widget.optimisticWater.writeFailed",
+                                    context: ["errorType": "\(type(of: error))"])
+            }
         }
+        return success && coordinatorError == nil
     }
 
     /// Removes the mirrored snapshot file. Called by "delete everything": the widget renders straight
@@ -190,7 +202,7 @@ struct WidgetSnapshotFileStore {
     /// swipes the app away right after confirming (the expected behavior) would never reach it. These
     /// bytes also sit at `.completeFileProtectionUntilFirstUserAuthentication`, a weaker class than the
     /// app's own data, which is what makes leaving them behind worse than it looks.
-    @discardableResult
+    /// - Returns: whether the file is gone afterwards (R7: the wipe funnel reports a `false`).
     func delete() -> Bool {
         var success = false
         var coordinatorError: NSError?
@@ -218,6 +230,12 @@ struct WidgetSnapshotFileStore {
 /// tap — preferred over double-logging). `clear()` backs "delete everything" so a pre-wipe tap
 /// can't rebuild a day record on the next foreground. Directory is injectable for tests.
 struct PendingWidgetActionQueue {
+    /// R3: hard cap on the app-group queue. Rows arrive from OTHER processes (the widget's "+1"
+    /// button, the Siri intent), so without a bound a stuck intent or an automation could grow the
+    /// file without limit between two foregrounds. A full queue refuses the append (the Siri dialog
+    /// then says it couldn't log) rather than silently dropping an older, already-promised tap.
+    static let maxQueuedActions = 512
+
     private let fileManager: FileManager
     private let fileURL: URL
 
@@ -236,15 +254,17 @@ struct PendingWidgetActionQueue {
             guard fileManager.fileExists(atPath: url.path),
                   let data = try? Data(contentsOf: url),
                   let decoded = try? WidgetBridgeFiles.makeDecoder().decode([PendingWidgetAction].self, from: data) else { return }
-            result = decoded
+            // R3: a file grown past the cap (tampering, or rows written before the cap existed) is
+            // read back capped, so nothing downstream ever handles an unbounded array.
+            result = Array(decoded.prefix(Self.maxQueuedActions))
         }
         return result
     }
 
-    /// Idempotent by row id (a duplicate id is dropped) — mirrors the widget-side writer. Returns whether
-    /// the row is durably queued (an already-present id counts as success); callers that need to confirm
-    /// the log landed (the Siri intent) check it, everyone else ignores it via `@discardableResult`.
-    @discardableResult
+    /// Idempotent by row id (a duplicate id is dropped) — mirrors the widget-side writer.
+    /// - Returns: whether the row is durably queued (an already-present id counts as success). R7:
+    ///   a success/failure value, so every caller branches on it — the Siri intent only claims the
+    ///   log landed when this is `true`.
     func append(_ action: PendingWidgetAction) -> Bool {
         var success = false
         var coordinatorError: NSError?
@@ -260,6 +280,12 @@ struct PendingWidgetActionQueue {
             }
             guard !records.contains(where: { $0.id == action.id }) else {
                 success = true  // already durably queued
+                return
+            }
+            // R3: enforce the cap where the input enters (this file is written by other processes).
+            guard records.count < Self.maxQueuedActions else {
+                FernletAuditLog.log("widget.pendingActions.queueFull",
+                                    context: ["cap": "\(Self.maxQueuedActions)"])
                 return
             }
             records.append(action)
@@ -282,11 +308,21 @@ struct PendingWidgetActionQueue {
             guard let data = try? Data(contentsOf: readURL),
                   let decoded = try? WidgetBridgeFiles.makeDecoder().decode([PendingWidgetAction].self, from: data) else {
                 // Corrupt file: clear it so it can't wedge the queue forever (nothing recoverable).
-                write([], to: writeURL)
+                if !write([], to: writeURL) {
+                    FernletAuditLog.log("widget.pendingActions.clearFailed", context: ["cause": "corruptFile"])
+                }
                 return
             }
-            claimed = decoded
-            write([], to: writeURL)
+            // R3: never hand back more than the cap, whatever the file holds.
+            let capped = Array(decoded.prefix(Self.maxQueuedActions))
+            // The clearing write is what makes the claim atomic: if it fails, the rows are still on
+            // disk and WILL be re-claimed on the next drain, so returning them now would apply them
+            // twice. A lost tap beats a doubled one (this type's stated preference).
+            guard write([], to: writeURL) else {
+                FernletAuditLog.log("widget.pendingActions.clearFailed", context: ["cause": "writeFailed"])
+                return
+            }
+            claimed = capped
         }
         return claimed
     }
@@ -308,7 +344,7 @@ struct PendingWidgetActionQueue {
         return success && coordinatorError == nil
     }
 
-    @discardableResult
+    /// - Returns: whether the file now holds exactly `records` (R7: every caller branches on it).
     private func write(_ records: [PendingWidgetAction], to url: URL) -> Bool {
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -351,7 +387,7 @@ final class WidgetSnapshotMirror {
     /// Removes the mirrored snapshot and reloads the timelines so the widget re-renders from nothing.
     /// The reload runs even if the delete failed — a widget showing its placeholder is a better outcome
     /// than one still showing deleted data, and the caller reports the failure either way.
-    @discardableResult
+    /// - Returns: whether the mirrored file is gone (R7: the wipe funnel reports a `false`).
     func clear() -> Bool {
         let deleted = fileStore.delete()
         reloadTimelines()

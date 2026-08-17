@@ -48,8 +48,11 @@ struct LogWaterIntent: AppIntent {
         // Optimistically bump the mirrored snapshot exactly like the widget's own "+1" button, so the
         // count updates instantly instead of showing a stale value until the app is next foregrounded.
         // The app's authoritative store-drain publish overwrites this value, same as for widget taps.
-        WidgetSnapshotFileStore().applyOptimisticWaterPlusOne(dayKey: dayKey)
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
+        // A failed bump skips the reload — re-rendering the same stale bytes buys nothing, and the
+        // row IS durably queued, so the app corrects the widget on its next publish.
+        if WidgetSnapshotFileStore().applyOptimisticWaterPlusOne(dayKey: dayKey) {
+            WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
+        }
         return .result(dialog: "Logged a bottle of water.")
     }
 }

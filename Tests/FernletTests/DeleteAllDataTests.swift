@@ -73,7 +73,7 @@ struct DeleteAllDataTests {
             suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
         )
         mine.startGuidedRun(session)
-        mine.pendingWidgetActionQueue.append(PendingWidgetAction(
+        _ = mine.pendingWidgetActionQueue.append(PendingWidgetAction(
             id: UUID(), dateKey: mine.todayKey,
             action: PendingWidgetAction.waterPlusOne, createdAt: Date()
         ))
@@ -81,7 +81,7 @@ struct DeleteAllDataTests {
 
         // The other suite's "delete everything" — reaches resetAll's run-file clears AND the queue.
         theirs.startGuidedRun(session)
-        await theirs.deleteAllData(includingHealthKitSamples: false)
+        _ = await theirs.deleteAllData(includingHealthKitSamples: false)
 
         // Its own state really is gone, so the assertions below cannot pass against a wipe that
         // quietly stopped wiping.
@@ -174,7 +174,7 @@ struct DeleteAllDataTests {
         store.pendingNarrativeBufferPurgeHook = { called.insert("pendingBuffer"); return true }
         store.sealedStoreRebuildHook = { called.insert("sealedRebuild"); return true }
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(called == ["period", "intimacy", "journal", "worry", "pendingBuffer", "sealedRebuild"])
         // Exactly once: the funnel used to invoke the worry hook itself AND again via `resetAll()`.
@@ -194,7 +194,7 @@ struct DeleteAllDataTests {
         var purged = false
         store.pendingNarrativeBufferPurgeHook = { purged = true; return true }
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(purged, "the locked-note buffer survived the wipe and will re-insert on the next unlock")
     }
@@ -218,10 +218,10 @@ struct DeleteAllDataTests {
         var healthDeleted = false
         store.healthKitSampleDeleteHook = { healthDeleted = true; return .complete }
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
         #expect(!healthDeleted)
 
-        await store.deleteAllData(includingHealthKitSamples: true)
+        _ = await store.deleteAllData(includingHealthKitSamples: true)
         #expect(healthDeleted)
     }
 
@@ -232,7 +232,7 @@ struct DeleteAllDataTests {
         store.addBottle()
         #expect(store.day.bottleCount > 0)
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(store.day.bottleCount == 0)
         #expect(store.day.meals.isEmpty)
@@ -260,7 +260,7 @@ struct DeleteAllDataTests {
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
                                  aiQuotaDefaults: uniqueAIQuotaDefaults())
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         // A fresh repository over the same file is the next launch.
         let relaunched = LocalFernletRepository(fileURL: url)
@@ -283,7 +283,7 @@ struct DeleteAllDataTests {
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
                                  aiQuotaDefaults: uniqueAIQuotaDefaults())
         store.addBottle()   // schedules a debounced save
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         try await Task.sleep(for: .milliseconds(1_400))
 
@@ -303,7 +303,7 @@ struct DeleteAllDataTests {
 
         let store = makeStore("delete-all-recipe-store")
         store.sharedRecipeImportQueue = queue
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(queue.records().isEmpty)
     }
@@ -332,7 +332,7 @@ struct DeleteAllDataTests {
         ])
         #expect(!mine.sharedRecipeImportQueue.records().isEmpty, "precondition: the seeded row did not land")
 
-        await theirs.deleteAllData(includingHealthKitSamples: false)
+        _ = await theirs.deleteAllData(includingHealthKitSamples: false)
 
         // Their own inbox really is empty, so nothing below can pass against a wipe that quietly
         // stopped wiping.
@@ -389,7 +389,7 @@ struct DeleteAllDataTests {
         #expect(FileManager.default.fileExists(atPath: legacyURL.path), "precondition: the legacy file was not written")
 
         let store = makeStore("delete-all-legacy-export")
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext export survived the wipe")
     }
@@ -422,7 +422,7 @@ struct DeleteAllDataTests {
         #expect(FileManager.default.fileExists(atPath: legacyURL.path), "precondition: the legacy file was not written")
 
         let store = makeStore("delete-all-legacy-trainer-export")
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext trainer export survived the wipe")
     }
@@ -567,7 +567,7 @@ struct DeleteAllDataTests {
         store.startGuidedRun(s)
         #expect(store.guidedRunState != nil, "precondition: the guided run did not start")
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         // Cleared in memory…
         #expect(store.guidedRunState == nil, "the in-flight guided run survived the wipe in memory")
@@ -588,7 +588,7 @@ struct DeleteAllDataTests {
         let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
         store.periodBackupSettleTask = inFlight
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
     }
@@ -601,7 +601,7 @@ struct DeleteAllDataTests {
         let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
         store.intimacyBackupSettleTask = inFlight
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(inFlight.isCancelled, "the wipe left the intimacy-backup settle running")
     }
@@ -618,7 +618,7 @@ struct DeleteAllDataTests {
             store.recordSealedBackupReuploadDeferred(true, payloadType: payload)
         }
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(store.sealedBackupPeriodReuploadDeferred == false)
         #expect(store.sealedBackupJournalReuploadDeferred == false)
@@ -666,11 +666,11 @@ struct DeleteAllDataTests {
         wireSucceedingSealedHooks(store)
         store.sealedStoreRebuildHook = { rebuildCount += 1; return true }
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
         #expect(rebuildCount == 1)
 
         // The standalone "Reset everything" entry point keeps it too.
-        store.resetAll()
+        _ = store.resetAll()
         #expect(rebuildCount == 2)
     }
 

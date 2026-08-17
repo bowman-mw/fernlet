@@ -53,10 +53,15 @@ final class HealthSyncCoordinator {
         host.scheduleSnapshotSave()
     }
 
+    /// The largest sleep total one calendar day can carry. HealthKit sums overlapping samples from
+    /// several sources, so an ingested value above a full day is a defect in the sample set, not a
+    /// night's sleep — it is dropped rather than scored (R5: validate at the ingestion boundary).
+    private static let maxSleepHours: Double = 24
+
     /// Writes HealthKit-derived sleep hours (rounded to 0.1 h) into today's sleep log, preserving
-    /// any user-authored quality/note. Non-positive hours are ignored.
+    /// any user-authored quality/note. Non-finite, non-positive, or above-a-day hours are ignored.
     func setHealthSleepHours(_ hours: Double) {
-        guard hours > 0 else { return }
+        guard hours.isFinite, hours > 0, hours <= Self.maxSleepHours else { return }
         let roundedHours = (hours * 10).rounded() / 10
         let current = host.day.sleep
         host.day.sleep = SleepLog(

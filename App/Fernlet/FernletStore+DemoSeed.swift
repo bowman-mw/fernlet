@@ -18,13 +18,13 @@
 //  narratives are deliberately NOT seeded: they require an unlocked user content key.
 //
 
-#if DEBUG
+// R8: one combined condition instead of a nested `#if canImport(UIKit)` inside `#if DEBUG`
+// (nesting is banned; the app target is UIKit-only, so the combined guard is equivalent).
+#if DEBUG && canImport(UIKit)
 import Foundation
 import FernletDomainModel
 import DiaryStore
-#if canImport(UIKit)
 import UIKit
-#endif
 
 extension FernletStore {
     /// Populate today's diary with representative demo content. Invoked from
@@ -73,9 +73,7 @@ extension FernletStore {
         seedHydrationAndSleep()
         seedJournals()
         seedWorkout()
-        #if canImport(UIKit)
         seedProgressPhotos()
-        #endif
         seedHygiene()
         seedMemories()
 
@@ -112,7 +110,6 @@ extension FernletStore {
             diary.appendMeal(meal, date: todayKey)
         }
 
-        #if canImport(UIKit)
         // Attach photos to the first two meals so the "Recent bites" polaroid strip (#11) renders
         // populated in the appearance gallery rather than its empty state. Goes through the real sealed
         // MealPhotoStore via `saveMealPhoto`, so it also exercises the seal/normalize path end to end.
@@ -121,23 +118,34 @@ extension FernletStore {
                 attachMealPhoto(mealID: meal.id, photoID: photoID)
             }
         }
-        #endif
     }
 
-    #if canImport(UIKit)
     /// A warm gradient stand-in for a food photo (no bundled image assets in the test seed).
     private static func demoFoodImage(hue: CGFloat) -> UIImage {
         let size = CGSize(width: 480, height: 480)
-        return UIGraphicsImageRenderer(size: size).image { ctx in
-            let top = UIColor(hue: hue, saturation: 0.62, brightness: 0.86, alpha: 1).cgColor
-            let bottom = UIColor(hue: hue, saturation: 0.72, brightness: 0.58, alpha: 1).cgColor
-            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                      colors: [top, bottom] as CFArray, locations: [0, 1])!
-            ctx.cgContext.drawLinearGradient(gradient, start: .zero,
-                                             end: CGPoint(x: size.width, y: size.height), options: [])
+        return demoGradientImage(
+            size: size,
+            top: UIColor(hue: hue, saturation: 0.62, brightness: 0.86, alpha: 1),
+            bottom: UIColor(hue: hue, saturation: 0.72, brightness: 0.58, alpha: 1),
+            end: CGPoint(x: size.width, y: size.height)
+        )
+    }
+
+    /// Renders a two-stop linear gradient tile. R5: a `CGGradient` that fails to build falls back to a
+    /// solid fill (the demo tile stays visible) instead of trapping on a force unwrap.
+    private static func demoGradientImage(size: CGSize, top: UIColor, bottom: UIColor,
+                                          end: CGPoint) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { ctx in
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                            colors: [top.cgColor, bottom.cgColor] as CFArray,
+                                            locations: [0, 1]) else {
+                ctx.cgContext.setFillColor(top.cgColor)
+                ctx.cgContext.fill(CGRect(origin: .zero, size: size))
+                return
+            }
+            ctx.cgContext.drawLinearGradient(gradient, start: .zero, end: end, options: [])
         }
     }
-    #endif
 
     /// Recipes for the Food tab's Recipes section, which otherwise renders its empty state in every
     /// gallery run — the one section reviewers could never actually see. Two entries with different
@@ -200,7 +208,6 @@ extension FernletStore {
         addWorkout(workout, date: todayKey)
     }
 
-    #if canImport(UIKit)
     /// A few gym progress photos so the Move tab's timeline (#11) renders populated in the gallery
     /// rather than its empty state. Goes through the real sealed `ProgressPhotoStore` via
     /// `addProgressPhoto`, exercising the seal/normalize/dated-index path end to end.
@@ -219,27 +226,27 @@ extension FernletStore {
         for entry in entries {
             let image = Self.demoProgressImage(hue: entry.hue)
             guard let data = image.jpegData(compressionQuality: 0.9) else { continue }
-            seedProgressPhoto(
+            let seeded = seedProgressPhoto(
                 data,
                 caption: entry.caption,
                 capturedAt: calendar.date(byAdding: .weekOfYear, value: -entry.weeksAgo, to: Date()) ?? Date()
             )
+            if seeded == nil {
+                assertionFailure("demo progress photo failed to seal")
+            }
         }
     }
 
     /// A cool neutral gradient stand-in for a body photo (no bundled image assets in the test seed).
     private static func demoProgressImage(hue: CGFloat) -> UIImage {
         let size = CGSize(width: 480, height: 640)
-        return UIGraphicsImageRenderer(size: size).image { ctx in
-            let top = UIColor(hue: hue, saturation: 0.18, brightness: 0.82, alpha: 1).cgColor
-            let bottom = UIColor(hue: hue, saturation: 0.30, brightness: 0.52, alpha: 1).cgColor
-            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                      colors: [top, bottom] as CFArray, locations: [0, 1])!
-            ctx.cgContext.drawLinearGradient(gradient, start: .zero,
-                                             end: CGPoint(x: 0, y: size.height), options: [])
-        }
+        return demoGradientImage(
+            size: size,
+            top: UIColor(hue: hue, saturation: 0.18, brightness: 0.82, alpha: 1),
+            bottom: UIColor(hue: hue, saturation: 0.30, brightness: 0.52, alpha: 1),
+            end: CGPoint(x: 0, y: size.height)
+        )
     }
-    #endif
 
     // MARK: - Home (personal-care / hygiene)
 
