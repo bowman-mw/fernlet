@@ -67,8 +67,12 @@ struct MoveView: View {
             // A stale `.ready` that raced a day rollover or an equipment edit: the freshly committed
             // plan has nothing left to guide. Release the just-committed plan (safe — no session of it
             // is logged yet, so `reworkTodaysGuidedPlan` accepts it) so the card settles on its real
-            // state instead of leaving the day silently pinned behind a dead button.
-            store.reworkTodaysGuidedPlan()
+            // state instead of leaving the day silently pinned behind a dead button. R7: the claim in
+            // that parenthesis is now checkable rather than a comment.
+            if !store.reworkTodaysGuidedPlan() {
+                assertionFailure("rework refused for a plan with no logged session")
+                FernletAuditLog.log("workout.guided.reworkRefused", context: ["site": "startTodaysGuidedWorkout"])
+            }
         }
     }
 
@@ -99,117 +103,180 @@ struct MoveView: View {
         }
     }
 
+    /// The tab header: title plus the Log / Share actions.
+    private var headerRow: some View {
+        HStack(alignment: .top) {
+            ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
+            Spacer()
+            HStack(spacing: 10) {
+                HeaderActionButton(title: "Log") { activeSheet = .workout }
+                // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
+                // beside planning one, not in the tab header. The header slot it freed
+                // goes to the trainer/coach handoff, which is the tab's other top-level
+                // action and previously sat in a card halfway down the scroll.
+                HeaderActionButton(title: "Share") { showingTrainerShare = true }
+                    .accessibilityIdentifier("move.trainerShare")
+                    .accessibilityLabel("Share with a trainer")
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    /// Resume-a-run card, else the approved "Today's workout" card, else nothing.
+    ///
+    /// A run in progress takes precedence — it stays resumable even after an app kill (the run
+    /// survives in the app group though the in-memory committed plan doesn't), so this is driven by
+    /// `guidedRunState` alone, not the plan-based card.
+    @ViewBuilder private var guidedEntryCard: some View {
+        if let activeRun = store.guidedRunState, activeRun.isWorking || activeRun.isResting {
+            ResumeWorkoutCard(title: activeRun.title, isResting: activeRun.isResting) {
+                if let session = store.guidedSessionForResume() { guidedSession = session }
+            }
+        } else if let guidedCardState {
+            StartTodaysWorkoutCard(state: guidedCardState, onStart: startTodaysGuidedWorkout)
+        }
+    }
+
+    /// Today's planned rows then today's logged rows, divided.
+    private var todaysMovementSection: some View {
+        FernletScrollSection("Today's movement") {
+            if store.day.plannedWorkouts.isEmpty && store.day.workouts.isEmpty {
+                EmptyState(text: "No workouts today. No rush.")
+            } else {
+                ForEach(Array(store.day.plannedWorkouts.enumerated()), id: \.element.id) { index, plannedWorkout in
+                    PlannedWorkoutRow(
+                        plannedWorkout: plannedWorkout,
+                        showsPlanSourceTag: showsCoachPlanSourceTag,
+                        showsCompleteAction: true,
+                        onComplete: {
+                            store.completePlannedWorkout(plannedWorkout, date: store.todayKey)
+                            refreshAllDays()
+                        },
+                        onEdit: {
+                            path.append(store.todayKey)
+                        },
+                        onDelete: {
+                            store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
+                            refreshAllDays()
+                        }
+                    )
+                    if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
+                        FernletRowDivider()
+                    }
+                }
+                ForEach(Array(store.day.workouts.enumerated()), id: \.element.id) { index, workout in
+                    WorkoutRow(
+                        store: store,
+                        workout: workout,
+                        date: store.todayKey,
+                        onChanged: { refreshAllDays() }
+                    )
+                    if index < store.day.workouts.count - 1 {
+                        FernletRowDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    #if canImport(UIKit)
+    /// The progress-photo timeline. Every capture path reports its own failure — a photo that
+    /// couldn't be sealed must never vanish silently.
+    private var progressPhotoSection: some View {
+        ProgressPhotoSection(
+            records: progressPhotos,
+            loadData: { store.progressPhotoData(for: $0) },
+            onCapture: { image in
+                if store.addProgressPhoto(image) == nil {
+                    showPhotoSaveFailedAlert = true
+                }
+                progressPhotos = store.progressPhotoRecords()
+            },
+            onCaptureData: { data, capturedAt in
+                // Library pick: seal the raw bytes (bounded ImageIO decode) and stamp the
+                // photo's own date when EXIF carried one (clamped to now at the EXIF read —
+                // a wrong camera clock must not outrun the editor's today cap), else now.
+                if store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) == nil {
+                    showPhotoSaveFailedAlert = true
+                }
+                progressPhotos = store.progressPhotoRecords()
+            },
+            onCaptureFailed: { showPhotoSaveFailedAlert = true },
+            onOpen: { record in path.append(record) }
+        )
+    }
+    #endif
+
+    /// The Move root's scrolling column, in order.
+    private var scrollContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            headerRow
+
+            MoveContextStrip(
+                store: store,
+                onEditGoal: { activeSheet = .goals },
+                onEditSpace: { showingLocations = true }
+            )
+
+            guidedEntryCard
+
+            WorkoutCalendarCard(
+                displayedWeek: $displayedWeek,
+                allDays: allDays,
+                todayKey: store.todayKey,
+                selectedGoal: store.settings.selectedGoal,
+                goals: store.goals,
+                showsPlanSourceTag: showsCoachPlanSourceTag,
+                onDayTapped: { key in path.append(key) }
+            )
+
+            todaysMovementSection
+
+            #if canImport(UIKit)
+            progressPhotoSection
+            #endif
+        }
+        .padding(20)
+    }
+
+    /// The guided runner sheet for `session`, with the "other sessions remain" copy resolved.
+    private func guidedRunnerSheet(_ session: WorkoutProgram.SessionSuggestion) -> some View {
+        GuidedWorkoutSheet(
+            store: store,
+            session: session,
+            sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
+                // Route through the reconciliation seam (not an id-only check) so the done copy stays
+                // truthful after a relaunch, when the completed-id set is empty but the day record
+                // (by tagged name) still knows what's been guided.
+                plan.sessions.contains {
+                    $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                        $0, completed: store.guidedCompletedSessionIDs,
+                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+                    )
+                }
+            } ?? false
+        )
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
+    }
+
+    /// Day rollover + Live Activity reconciliation on every return to the foreground.
+    ///
+    /// The app can foreground across local midnight without re-firing `onAppear`. Rolls the store
+    /// over to the current day first (idempotent — ContentView does this too; a no-op when the day
+    /// hasn't changed), then picks up any guided-run progress made from the Live Activity.
+    private func handleSceneActive(_ phase: ScenePhase) {
+        guard phase == .active else { return }
+        store.refreshCurrentDayIfNeeded()
+        store.reconcileGuidedRunFromAppGroup()
+        refreshAllDays()
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
-                        Spacer()
-                        HStack(spacing: 10) {
-                            HeaderActionButton(title: "Log") { activeSheet = .workout }
-                            // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
-                            // beside planning one, not in the tab header. The header slot it freed
-                            // goes to the trainer/coach handoff, which is the tab's other top-level
-                            // action and previously sat in a card halfway down the scroll.
-                            HeaderActionButton(title: "Share") { showingTrainerShare = true }
-                                .accessibilityIdentifier("move.trainerShare")
-                                .accessibilityLabel("Share with a trainer")
-                        }
-                    }
-                    .padding(.top, 4)
-
-                    MoveContextStrip(
-                        store: store,
-                        onEditGoal: { activeSheet = .goals },
-                        onEditSpace: { showingLocations = true }
-                    )
-
-                    // A run in progress takes precedence — it stays resumable even after an app kill
-                    // (the run survives in the app group though the in-memory committed plan doesn't),
-                    // so this is driven by `guidedRunState` alone, not the plan-based card.
-                    if let activeRun = store.guidedRunState, activeRun.isWorking || activeRun.isResting {
-                        ResumeWorkoutCard(title: activeRun.title, isResting: activeRun.isResting) {
-                            if let session = store.guidedSessionForResume() { guidedSession = session }
-                        }
-                    } else if let guidedCardState {
-                        StartTodaysWorkoutCard(state: guidedCardState, onStart: startTodaysGuidedWorkout)
-                    }
-
-                    WorkoutCalendarCard(
-                        displayedWeek: $displayedWeek,
-                        allDays: allDays,
-                        todayKey: store.todayKey,
-                        selectedGoal: store.settings.selectedGoal,
-                        goals: store.goals,
-                        showsPlanSourceTag: showsCoachPlanSourceTag,
-                        onDayTapped: { key in path.append(key) }
-                    )
-
-                    FernletScrollSection("Today's movement") {
-                        if store.day.plannedWorkouts.isEmpty && store.day.workouts.isEmpty {
-                            EmptyState(text: "No workouts today. No rush.")
-                        } else {
-                            ForEach(Array(store.day.plannedWorkouts.enumerated()), id: \.element.id) { index, plannedWorkout in
-                                PlannedWorkoutRow(
-                                    plannedWorkout: plannedWorkout,
-                                    showsPlanSourceTag: showsCoachPlanSourceTag,
-                                    showsCompleteAction: true,
-                                    onComplete: {
-                                        store.completePlannedWorkout(plannedWorkout, date: store.todayKey)
-                                        refreshAllDays()
-                                    },
-                                    onEdit: {
-                                        path.append(store.todayKey)
-                                    },
-                                    onDelete: {
-                                        store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
-                                        refreshAllDays()
-                                    }
-                                )
-                                if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
-                                    FernletRowDivider()
-                                }
-                            }
-                            ForEach(Array(store.day.workouts.enumerated()), id: \.element.id) { index, workout in
-                                WorkoutRow(
-                                    store: store,
-                                    workout: workout,
-                                    date: store.todayKey,
-                                    onChanged: { refreshAllDays() }
-                                )
-                                if index < store.day.workouts.count - 1 {
-                                    FernletRowDivider()
-                                }
-                            }
-                        }
-                    }
-
-                    #if canImport(UIKit)
-                    ProgressPhotoSection(
-                        records: progressPhotos,
-                        loadData: { store.progressPhotoData(for: $0) },
-                        onCapture: { image in
-                            if store.addProgressPhoto(image) == nil {
-                                showPhotoSaveFailedAlert = true
-                            }
-                            progressPhotos = store.progressPhotoRecords()
-                        },
-                        onCaptureData: { data, capturedAt in
-                            // Library pick: seal the raw bytes (bounded ImageIO decode) and stamp the
-                            // photo's own date when EXIF carried one (clamped to now at the EXIF read —
-                            // a wrong camera clock must not outrun the editor's today cap), else now.
-                            if store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) == nil {
-                                showPhotoSaveFailedAlert = true
-                            }
-                            progressPhotos = store.progressPhotoRecords()
-                        },
-                        onCaptureFailed: { showPhotoSaveFailedAlert = true },
-                        onOpen: { record in path.append(record) }
-                    )
-                    #endif
-                }
-                .padding(20)
+                scrollContent
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
@@ -263,24 +330,7 @@ struct MoveView: View {
                 .presentationCornerRadius(20)
         }
         .sheet(item: $guidedSession) { session in
-            GuidedWorkoutSheet(
-                store: store,
-                session: session,
-                sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
-                    // Route through the reconciliation seam (not an id-only check) so the done copy stays
-                    // truthful after a relaunch, when the completed-id set is empty but the day record
-                    // (by tagged name) still knows what's been guided.
-                    plan.sessions.contains {
-                        $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
-                            $0, completed: store.guidedCompletedSessionIDs,
-                            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                        )
-                    }
-                } ?? false
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+            guidedRunnerSheet(session)
         }
         .task {
             await store.refreshWorkoutsFromHealth()
@@ -288,15 +338,7 @@ struct MoveView: View {
         }
         .onChange(of: store.day.workouts.count) { refreshAllDays() }
         .onChange(of: store.day.plannedWorkouts.count) { refreshAllDays() }
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            // The app can foreground across local midnight without re-firing `onAppear`. Roll the store
-            // over to the current day first (idempotent — ContentView does this too; a no-op when the
-            // day hasn't changed), then pick up any guided-run progress made from the Live Activity.
-            store.refreshCurrentDayIfNeeded()
-            store.reconcileGuidedRunFromAppGroup()
-            refreshAllDays()
-        }
+        .onChange(of: scenePhase) { _, phase in handleSceneActive(phase) }
     }
 }
 
@@ -591,6 +633,75 @@ struct WorkoutSheet: View {
         dateKey ?? store.todayKey
     }
 
+    /// The strength / activity mode chips.
+    private var kindField: some View {
+        SheetField("Kind") {
+            FlowLayout(spacing: 8) {
+                ForEach(WorkoutMode.allCases) { mode in
+                    Button(mode.label) { logMode = mode }
+                        .buttonStyle(ChipButtonStyle(selected: logMode == mode))
+                        .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
+                }
+            }
+        }
+    }
+
+    /// The exercise builder plus the rows already added — strength mode only.
+    @ViewBuilder private var strengthSection: some View {
+        WorkoutExerciseBuilder(
+            selectedExercise: $draft.exercise,
+            sets: $draft.sets,
+            reps: $draft.reps,
+            weight: $draft.weight,
+            speed: $draft.speed,
+            incline: $draft.incline,
+            details: $draft.details,
+            resetToken: $draft.resetToken,
+            pickerTitle: logMode.pickerTitle,
+            searchPlaceholder: logMode.searchPlaceholder,
+            mode: logMode,
+            addLabel: logMode.addLabel,
+            onAdd: addDraftExercise
+        )
+
+        if !exerciseRows.isEmpty {
+            SheetField("Workout exercises") {
+                VStack(spacing: 8) {
+                    ForEach(exerciseRows) { entry in
+                        LoggedExerciseRow(entry: entry) {
+                            exerciseRows.removeAll { $0.id == entry.id }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// RPE + duration, side by side — strength mode only.
+    private var strengthMetricsRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            SheetField("RPE (1–10)") {
+                TextField("7", text: $rpe)
+                    .sheetTextInput()
+            }
+            SheetField("Duration (min)") {
+                TextField("45", text: $duration)
+                    .sheetTextInput()
+            }
+        }
+    }
+
+    /// The free-text notes field.
+    private var notesField: some View {
+        SheetField("Workout notes") {
+            SheetTextEditor(
+                text: $notes,
+                placeholder: "Pain, form issues, stopped early...",
+                minHeight: 100
+            )
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SheetCancelBar { attemptCancel() }
@@ -607,44 +718,10 @@ struct WorkoutSheet: View {
 
                     WorkoutCategoryPreview(category: inferredCategory)
 
-                    SheetField("Kind") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(WorkoutMode.allCases) { mode in
-                                Button(mode.label) { logMode = mode }
-                                    .buttonStyle(ChipButtonStyle(selected: logMode == mode))
-                                    .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
-                            }
-                        }
-                    }
+                    kindField
 
                     if logMode == .strengthTraining {
-                        WorkoutExerciseBuilder(
-                            selectedExercise: $draft.exercise,
-                            sets: $draft.sets,
-                            reps: $draft.reps,
-                            weight: $draft.weight,
-                            speed: $draft.speed,
-                            incline: $draft.incline,
-                            details: $draft.details,
-                            resetToken: $draft.resetToken,
-                            pickerTitle: logMode.pickerTitle,
-                            searchPlaceholder: logMode.searchPlaceholder,
-                            mode: logMode,
-                            addLabel: logMode.addLabel,
-                            onAdd: addDraftExercise
-                        )
-
-                        if !exerciseRows.isEmpty {
-                            SheetField("Workout exercises") {
-                                VStack(spacing: 8) {
-                                    ForEach(exerciseRows) { entry in
-                                        LoggedExerciseRow(entry: entry) {
-                                            exerciseRows.removeAll { $0.id == entry.id }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        strengthSection
                     } else {
                         ActivityPickerSection(
                             selectedActivityType: $selectedActivityType,
@@ -656,56 +733,16 @@ struct WorkoutSheet: View {
                     }
 
                     if logMode == .strengthTraining {
-                        HStack(alignment: .top, spacing: 12) {
-                            SheetField("RPE (1–10)") {
-                                TextField("7", text: $rpe)
-                                    .sheetTextInput()
-                            }
-                            SheetField("Duration (min)") {
-                                TextField("45", text: $duration)
-                                    .sheetTextInput()
-                            }
-                        }
+                        strengthMetricsRow
                     }
 
-                    SheetField("Workout notes") {
-                        SheetTextEditor(
-                            text: $notes,
-                            placeholder: "Pain, form issues, stopped early...",
-                            minHeight: 100
-                        )
-                    }
+                    notesField
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(disabled: saveDisabled) {
-                // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
-                // fold it into the rows first (guarded by the same validity addDraftExercise uses).
-                if logMode == .strengthTraining, draft.hasExercise {
-                    addDraftExercise()
-                }
-                var workout = Workout(
-                    name: workoutName,
-                    type: inferredCategory,
-                    mode: logMode,
-                    activityType: logMode == .activity ? selectedActivityType : nil,
-                    exercises: logMode == .strengthTraining ? exerciseText : "",
-                    rpe: logMode == .strengthTraining ? Double(rpe) : nil,
-                    notes: notes,
-                    duration: Int(duration),
-                    distanceMiles: logMode == .activity ? Double(distance) : nil,
-                    activeEnergyKcal: logMode == .activity ? Double(energyKcal) : nil,
-                    effort: logMode == .activity ? Int(effort) : nil,
-                    muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
-                    intensity: intensity
-                )
-                workout.completedAt = completedAtDate
-                workout.loggedAt = completedAtDate
-                store.addWorkout(workout, date: targetDateKey)
-                dismiss()
-            }
+            SheetSaveBar(disabled: saveDisabled) { saveWorkout() }
         }
         .background(Color.parchment)
         .keyboardDoneToolbar()
@@ -714,6 +751,37 @@ struct WorkoutSheet: View {
         .onChange(of: logMode) { _, _ in
             draft.clear()
         }
+    }
+
+    /// Builds the workout from the sheet's fields and logs it against the target day.
+    private func saveWorkout() {
+        // The save bar is disabled in this state; guarding here too means the mutation itself
+        // states its precondition rather than trusting the button.
+        guard !saveDisabled else { return }
+        // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
+        // fold it into the rows first (guarded by the same validity addDraftExercise uses).
+        if logMode == .strengthTraining, draft.hasExercise {
+            addDraftExercise()
+        }
+        var workout = Workout(
+            name: workoutName,
+            type: inferredCategory,
+            mode: logMode,
+            activityType: logMode == .activity ? selectedActivityType : nil,
+            exercises: logMode == .strengthTraining ? exerciseText : "",
+            rpe: logMode == .strengthTraining ? Double(rpe) : nil,
+            notes: notes,
+            duration: Int(duration),
+            distanceMiles: logMode == .activity ? Double(distance) : nil,
+            activeEnergyKcal: logMode == .activity ? Double(energyKcal) : nil,
+            effort: logMode == .activity ? Int(effort) : nil,
+            muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
+            intensity: intensity
+        )
+        workout.completedAt = completedAtDate
+        workout.loggedAt = completedAtDate
+        store.addWorkout(workout, date: targetDateKey)
+        dismiss()
     }
 
     /// Any user-visible field filled in, a row already added, or a draft exercise typed. Deliberately
@@ -768,7 +836,9 @@ struct WorkoutSheet: View {
     /// a silent behaviour change rather than a simplification. The plan sheet has no such guard, which is
     /// exactly why the shared draft takes it as a parameter instead of assuming one side's answer.
     private func addDraftExercise() {
-        draft.commit(into: &exerciseRows, includingSetsAndReps: logMode == .strengthTraining)
+        // R7: `commit` returns false and leaves the rows untouched when no exercise is chosen —
+        // consume it (mirroring ``WorkoutPlanSheet``, which already guards the same call).
+        guard draft.commit(into: &exerciseRows, includingSetsAndReps: logMode == .strengthTraining) else { return }
     }
 }
 
@@ -1015,7 +1085,11 @@ struct WorkoutSuggestionSheet: View {
         if store.canReworkTodaysGuidedPlan {
             VStack(alignment: .leading, spacing: 6) {
                 Button {
-                    store.reworkTodaysGuidedPlan()
+                    // R7: the button is only shown while `canReworkTodaysGuidedPlan`, so a refusal
+                    // means the plan changed under us — name it rather than dropping it.
+                    if !store.reworkTodaysGuidedPlan() {
+                        FernletAuditLog.log("workout.guided.reworkRefused", context: ["site": "reworkPlanAffordance"])
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.triangle.2.circlepath")
@@ -1094,31 +1168,41 @@ struct WorkoutSuggestionSheet: View {
                 .accessibilityIdentifier("workout.approvePlan")
             }
             if !remainingSessions.isEmpty {
-                Button {
-                    // Retroactive log for a workout done outside the app — logs the remaining sessions to
-                    // the committed day at the committed intensity, tagged as guided so reconciliation
-                    // recognizes them after a relaunch.
-                    let intensity = store.committedGuidedIntensity ?? energy
-                    for session in remainingSessions {
-                        store.addWorkout(session.workout(intensity: intensity, loggedFromGuidedSession: true))
-                        store.recordCompletedExercises(session.catalogExerciseNames)
-                        store.markGuidedSessionCompleted(session.id)
-                    }
-                    dismiss()
-                } label: {
-                    Text("Log as already done")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                        .padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("workout.logAlreadyDone")
+                logAlreadyDoneButton(remainingSessions)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 20)
         .background(Color.parchment)
+    }
+
+    /// The gentle retroactive "Log as already done" link under the committed-plan bar.
+    private func logAlreadyDoneButton(_ sessions: [WorkoutProgram.SessionSuggestion]) -> some View {
+        Button {
+            logRemainingSessions(sessions)
+        } label: {
+            Text("Log as already done")
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workout.logAlreadyDone")
+    }
+
+    /// Retroactive log for a workout done outside the app — logs the still-unlogged sessions to the
+    /// committed day at the committed intensity, tagged as guided so reconciliation recognizes them
+    /// after a relaunch.
+    private func logRemainingSessions(_ sessions: [WorkoutProgram.SessionSuggestion]) {
+        guard !sessions.isEmpty else { return }
+        let intensity = store.committedGuidedIntensity ?? energy
+        for session in sessions {
+            store.addWorkout(session.workout(intensity: intensity, loggedFromGuidedSession: true))
+            store.recordCompletedExercises(session.catalogExerciseNames)
+            store.markGuidedSessionCompleted(session.id)
+        }
+        dismiss()
     }
 
     /// The configurator bottom bar: **Suggest**, with a loading state while the plan is generated.
@@ -1156,10 +1240,205 @@ struct WorkoutSuggestionSheet: View {
         let requestContext = context
         Task {
             await Task.yield()
-            try? await Task.sleep(for: .milliseconds(450))
+            do {
+                try await Task.sleep(for: .milliseconds(450))
+            } catch {
+                // Cancelled (the sheet closed): abandon the suggest rather than committing a plan
+                // for a screen that is gone.
+                isSuggesting = false
+                return
+            }
             store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext)
             isSuggesting = false
         }
+    }
+
+    /// One session card in the committed plan: name, exercise lines, and the session note.
+    private func sessionCard(_ session: WorkoutProgram.SessionSuggestion) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(session.suggestion.name)
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+            Text(session.suggestion.exercises)
+                .foregroundStyle(Color.bark)
+            Text(session.suggestion.notes)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// "Start now" plus the copy that explains what starting does — only when a session is guidable.
+    @ViewBuilder private func startNowButton(_ guidable: WorkoutProgram.SessionSuggestion) -> some View {
+        Button {
+            // Starting now also approves the plan, so the Move-root "Today's
+            // workout" card surfaces it if the user backs out and returns.
+            store.approveTodaysGuidedPlan()
+            guidedSession = guidable
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "play.circle.fill")
+                    .font(.body.weight(.semibold))
+                Text("Start now")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workout.startGuided")
+
+        Text("We'll walk you through it set by set and time your rests — with a Live Activity on your Lock Screen. Approve it below to start from your Move tab whenever you're ready, or edit it first.")
+            .font(.fernlet(.bubble))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
+    /// The natural-language "Adjust with AI" field over a committed plan.
+    private var aiAdjustField: some View {
+        SheetField("Adjust") {
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("e.g. swap the squat, 30 minutes, no barbell", text: $adjustRequest)
+                    .sheetTextInput()
+                    .disabled(isAdjusting)
+                Button {
+                    runAdjustment()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isAdjusting { ProgressView().controlSize(.small) }
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption.weight(.semibold))
+                        Text(isAdjusting ? "Adjusting…" : "Adjust with AI")
+                            .font(.fernlet(.label))
+                    }
+                    .foregroundStyle(Color.moss)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.moss.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isAdjusting || adjustRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    /// The committed-plan reading pane: split label, session cards, start, adjust, equipment, rework.
+    private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("\(dayPlan.splitName) · \(dayPlan.dayTitle)")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.moss)
+            ForEach(dayPlan.sessions) { session in
+                sessionCard(session)
+            }
+
+            if let guidable = guidableSession(in: dayPlan) {
+                startNowButton(guidable)
+            }
+
+            if aiAdjustAvailable {
+                aiAdjustField
+            }
+
+            equipmentLimitsButton
+            reworkPlanAffordance
+        }
+    }
+
+    /// The pre-plan configurator: readiness, goal, free-text context, and equipment.
+    @ViewBuilder private var configuratorContent: some View {
+        SheetField("How are you feeling?") {
+            VStack(alignment: .leading, spacing: 8) {
+                if let rec = recommendedIntensity {
+                    Text("Today's readiness suggests \(rec.rawValue.lowercased()).")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                }
+                FlowLayout(spacing: 8) {
+                    ForEach(WorkoutIntensity.allCases) { intensity in
+                        Button(intensity.rawValue.capitalized) { energy = intensity }
+                            .buttonStyle(ChipButtonStyle(selected: energy == intensity))
+                    }
+                }
+            }
+            .onAppear { seedIntensityOnce(preferCommitted: false) }
+        }
+
+        SheetField("Goal") {
+            Text(store.settings.selectedGoal.displayName)
+                .sheetTextInput()
+                .foregroundStyle(Color.bark)
+        }
+
+        SheetField("Anything else?") {
+            TextField("e.g. sore left knee, short on time", text: $context)
+                .sheetTextInput()
+        }
+
+        equipmentLimitsButton
+
+        Text("Built from your \(store.settings.selectedGoal.displayName.lowercased()) split, your equipment, and anything you note here.")
+            .font(.fernlet(.bubble))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
+    /// Seeds the intensity chips exactly once per presentation.
+    ///
+    /// With `preferCommitted`, a committed plan's own intensity wins — the configurator that would
+    /// set this isn't shown then, and the readiness signal drifts across the day, so anything logged
+    /// here reflects how the plan was actually built. Otherwise today's readiness recommendation.
+    private func seedIntensityOnce(preferCommitted: Bool) {
+        guard !didApplyReadiness else { return }
+        didApplyReadiness = true
+        if preferCommitted, let committed = store.committedGuidedIntensity {
+            energy = committed
+        } else if let rec = recommendedIntensity {
+            energy = rec
+        }
+    }
+
+    /// The runner sheet presented from this (already nested) sheet.
+    private func guidedRunnerSheet(_ session: WorkoutProgram.SessionSuggestion) -> some View {
+        GuidedWorkoutSheet(
+            store: store,
+            session: session,
+            sessionsRemain: dayPlan.map { plan in
+                // Reconciliation seam, not an id-only check — truthful done copy after a relaunch.
+                plan.sessions.contains {
+                    $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                        $0, completed: guidedCompletedSessionIDs,
+                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+                    )
+                }
+            } ?? false,
+            // "Go back to it" (declining to replace a live run) must land on the Move-root Resume
+            // card; from THIS nested presentation that means closing the Suggest flow too.
+            onExitToResumeCard: { dismiss() }
+        )
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
+    }
+
+    /// Closes the whole Suggest flow once every session of the plan is accounted for.
+    ///
+    /// Always the case on a single-session day once it's guided → nothing left to mark done. Routed
+    /// through the reconciliation seam (not an id-only check) so it stays correct after a relaunch.
+    private func dismissIfPlanFullyLogged() {
+        guard let plan = dayPlan, !plan.sessions.isEmpty else { return }
+        let allLogged = plan.sessions.allSatisfy {
+            GuidedWorkoutAvailability.isAlreadyLogged(
+                $0, completed: guidedCompletedSessionIDs,
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+            )
+        }
+        if allLogged { dismiss() }
     }
 
     var body: some View {
@@ -1171,123 +1450,9 @@ struct WorkoutSuggestionSheet: View {
                         .foregroundStyle(Color.bark)
 
                     if let dayPlan {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("\(dayPlan.splitName) · \(dayPlan.dayTitle)")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                            ForEach(dayPlan.sessions) { session in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text(session.suggestion.name)
-                                        .font(.fernlet(.headerMedium))
-                                        .foregroundStyle(Color.bark)
-                                    Text(session.suggestion.exercises)
-                                        .foregroundStyle(Color.bark)
-                                    Text(session.suggestion.notes)
-                                        .font(.fernlet(.bubble))
-                                        .foregroundStyle(Color.slate)
-                                        .fernletWrappingText()
-                                }
-                                .padding(16)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                            }
-
-                            if let guidable = guidableSession(in: dayPlan) {
-                                Button {
-                                    // Starting now also approves the plan, so the Move-root "Today's
-                                    // workout" card surfaces it if the user backs out and returns.
-                                    store.approveTodaysGuidedPlan()
-                                    guidedSession = guidable
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "play.circle.fill")
-                                            .font(.body.weight(.semibold))
-                                        Text("Start now")
-                                            .font(.fernlet(.label))
-                                    }
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 15)
-                                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("workout.startGuided")
-
-                                Text("We'll walk you through it set by set and time your rests — with a Live Activity on your Lock Screen. Approve it below to start from your Move tab whenever you're ready, or edit it first.")
-                                    .font(.fernlet(.bubble))
-                                    .foregroundStyle(Color.slate)
-                                    .fernletWrappingText()
-                            }
-
-                            if aiAdjustAvailable {
-                                SheetField("Adjust") {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        TextField("e.g. swap the squat, 30 minutes, no barbell", text: $adjustRequest)
-                                            .sheetTextInput()
-                                            .disabled(isAdjusting)
-                                        Button {
-                                            runAdjustment()
-                                        } label: {
-                                            HStack(spacing: 8) {
-                                                if isAdjusting { ProgressView().controlSize(.small) }
-                                                Image(systemName: "wand.and.stars")
-                                                    .font(.caption.weight(.semibold))
-                                                Text(isAdjusting ? "Adjusting…" : "Adjust with AI")
-                                                    .font(.fernlet(.label))
-                                            }
-                                            .foregroundStyle(Color.moss)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 9)
-                                            .background(Color.moss.opacity(0.12), in: Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(isAdjusting || adjustRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                    }
-                                }
-                            }
-
-                            equipmentLimitsButton
-                            reworkPlanAffordance
-                        }
+                        committedPlanContent(dayPlan)
                     } else {
-                        SheetField("How are you feeling?") {
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let rec = recommendedIntensity {
-                                    Text("Today's readiness suggests \(rec.rawValue.lowercased()).")
-                                        .font(.fernlet(.bodySmall))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                FlowLayout(spacing: 8) {
-                                    ForEach(WorkoutIntensity.allCases) { intensity in
-                                        Button(intensity.rawValue.capitalized) { energy = intensity }
-                                            .buttonStyle(ChipButtonStyle(selected: energy == intensity))
-                                    }
-                                }
-                            }
-                            .onAppear {
-                                guard !didApplyReadiness else { return }
-                                didApplyReadiness = true
-                                if let rec = recommendedIntensity { energy = rec }
-                            }
-                        }
-
-                        SheetField("Goal") {
-                            Text(store.settings.selectedGoal.displayName)
-                                .sheetTextInput()
-                                .foregroundStyle(Color.bark)
-                        }
-
-                        SheetField("Anything else?") {
-                            TextField("e.g. sore left knee, short on time", text: $context)
-                                .sheetTextInput()
-                        }
-
-                        equipmentLimitsButton
-
-                        Text("Built from your \(store.settings.selectedGoal.displayName.lowercased()) split, your equipment, and anything you note here.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
+                        configuratorContent
                     }
                 }
                 .padding(20)
@@ -1301,58 +1466,15 @@ struct WorkoutSuggestionSheet: View {
             }
         }
         .background(Color.parchment)
-        .onAppear {
-            // Seed the intensity UI once. Prefer the committed plan's own intensity when one exists —
-            // the configurator that would set this isn't shown then, and the readiness signal drifts
-            // across the day — so anything logged here reflects how the plan was actually built. Fall
-            // back to today's readiness recommendation when there's no committed plan yet.
-            guard !didApplyReadiness else { return }
-            didApplyReadiness = true
-            if let committed = store.committedGuidedIntensity {
-                energy = committed
-            } else if let rec = recommendedIntensity {
-                energy = rec
-            }
-        }
+        .onAppear { seedIntensityOnce(preferCommitted: true) }
         .sheet(isPresented: $showingSetup) {
             WorkoutSetupSheet(store: store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
-        .sheet(item: $guidedSession, onDismiss: {
-            // Every session in the plan is accounted for (always the case on a single-session day once
-            // it's guided) → nothing left to mark done, so close the whole Suggest flow. Routed through
-            // the reconciliation seam (not an id-only check) so it stays correct after a relaunch.
-            if let plan = dayPlan, !plan.sessions.isEmpty,
-               plan.sessions.allSatisfy({
-                   GuidedWorkoutAvailability.isAlreadyLogged(
-                       $0, completed: guidedCompletedSessionIDs,
-                       loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                   )
-               }) {
-                dismiss()
-            }
-        }) { session in
-            GuidedWorkoutSheet(
-                store: store,
-                session: session,
-                sessionsRemain: dayPlan.map { plan in
-                    // Reconciliation seam, not an id-only check — truthful done copy after a relaunch.
-                    plan.sessions.contains {
-                        $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
-                            $0, completed: guidedCompletedSessionIDs,
-                            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                        )
-                    }
-                } ?? false,
-                // "Go back to it" (declining to replace a live run) must land on the Move-root Resume
-                // card; from THIS nested presentation that means closing the Suggest flow too.
-                onExitToResumeCard: { dismiss() }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+        .sheet(item: $guidedSession, onDismiss: dismissIfPlanFullyLogged) { session in
+            guidedRunnerSheet(session)
         }
         .sheet(item: $editingSession) { session in
             GuidedWorkoutEditorSheet(store: store, session: session)
@@ -1433,82 +1555,104 @@ struct WorkoutRow: View {
         return parts.joined(separator: " ")
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Text(workout.name).font(.fernlet(.headerMedium))
-                Spacer()
-                if let rpe = workout.rpe {
-                    Text("RPE \(rpe, specifier: "%.1g")")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(rpe >= 8 ? Color.terracotta : Color.moss)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background((rpe >= 8 ? Color.terracotta : Color.moss).opacity(0.12), in: Capsule())
+    /// Name plus the RPE capsule.
+    private var titleRow: some View {
+        HStack(alignment: .top) {
+            Text(workout.name).font(.fernlet(.headerMedium))
+            Spacer()
+            if let rpe = workout.rpe {
+                Text("RPE \(rpe, specifier: "%.1g")")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(rpe >= 8 ? Color.terracotta : Color.moss)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((rpe >= 8 ? Color.terracotta : Color.moss).opacity(0.12), in: Capsule())
+            }
+        }
+    }
+
+    /// Category, duration, and intensity.
+    private var metaRow: some View {
+        HStack(spacing: 12) {
+            Text(category.rawValue)
+                .foregroundStyle(category.color)
+            if let duration = workout.duration { Text("\(duration) min") }
+            Text(workout.intensity.rawValue)
+        }
+        .font(.fernlet(.labelSmall))
+        .foregroundStyle(Color.slate)
+    }
+
+    /// The logged exercise lines, the target summary, and any note.
+    @ViewBuilder private var detailLines: some View {
+        if !workout.exerciseLines.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(Array(workout.exerciseLines.enumerated()), id: \.offset) { _, exercise in
+                    WorkoutExerciseRow(exercise: exercise)
                 }
             }
-            HStack(spacing: 12) {
-                Text(category.rawValue)
-                    .foregroundStyle(category.color)
-                if let duration = workout.duration { Text("\(duration) min") }
-                Text(workout.intensity.rawValue)
-            }
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
-            if !workout.exerciseLines.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(Array(workout.exerciseLines.enumerated()), id: \.offset) { _, exercise in
-                        WorkoutExerciseRow(exercise: exercise)
-                    }
-                }
-            }
-            if !targetSummary.isEmpty {
-                Text("Targets: \(targetSummary)")
+        }
+        if !targetSummary.isEmpty {
+            Text("Targets: \(targetSummary)")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+        }
+        if !workout.notes.isEmpty {
+            Text(workout.notes)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    /// Edit / Remove, or the gentle "manage it in Health" note for a genuine import.
+    @ViewBuilder private var footerActions: some View {
+        if isHealthImported {
+            HStack(spacing: 8) {
+                Image(systemName: "heart.text.square")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                Text("This came from Health — manage it in the Health app.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
             }
-            if !workout.notes.isEmpty {
-                Text(workout.notes)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
+            .padding(.top, 2)
+        } else {
+            HStack(spacing: 10) {
+                Button("Edit") { showEditSheet = true }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .accessibilityIdentifier("workout.log.edit")
+                Button("Remove", role: .destructive) { showRemoveConfirm = true }
+                    .font(.fernlet(.label))
+                    .accessibilityIdentifier("workout.log.remove")
             }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        }
+    }
 
-            if isHealthImported {
-                HStack(spacing: 8) {
-                    Image(systemName: "heart.text.square")
-                        .font(.caption)
-                        .foregroundStyle(Color.slate)
-                    Text("This came from Health — manage it in the Health app.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                .padding(.top, 2)
-            } else {
-                HStack(spacing: 10) {
-                    Button("Edit") { showEditSheet = true }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .accessibilityIdentifier("workout.log.edit")
-                    Button("Remove", role: .destructive) { showRemoveConfirm = true }
-                        .font(.fernlet(.label))
-                        .accessibilityIdentifier("workout.log.remove")
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 2)
-            }
+    /// Removes the row, consuming the store's refusal Bool: on a refusal (a genuine Health import —
+    /// defensive here, since Remove is hidden for those) show the gentle Health note instead of
+    /// reporting success.
+    private func removeTapped() {
+        guard store.removeWorkout(id: workout.id, date: date) else {
+            showHealthRefusalAlert = true
+            return
+        }
+        onChanged()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            titleRow
+            metaRow
+            detailLines
+            footerActions
         }
         .padding(.vertical, 4)
         .confirmationDialog("Remove this workout?", isPresented: $showRemoveConfirm, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) {
-                // Consume the store's refusal Bool: on a refusal (a genuine Health import — defensive here,
-                // since Remove is hidden for those) show the gentle Health note instead of reporting success.
-                if store.removeWorkout(id: workout.id, date: date) {
-                    onChanged()
-                } else {
-                    showHealthRefusalAlert = true
-                }
-            }
+            Button("Remove", role: .destructive) { removeTapped() }
             Button("Keep it", role: .cancel) {}
         } message: {
             Text(removeConfirmMessage)
@@ -1579,6 +1723,55 @@ struct EditWorkoutSheet: View {
     /// (the store also pins it as a fail-closed backstop). The field is shown disabled with a gentle note.
     private var isGuided: Bool { workout.loggedFromGuidedSession == true }
 
+    /// The name field, disabled with a note for a guided-logged row.
+    private var nameField: some View {
+        SheetField("Workout") {
+            TextField("e.g. Upper strength", text: $name)
+                .sheetTextInput()
+                .disabled(isGuided)
+                .opacity(isGuided ? 0.55 : 1)
+                .accessibilityIdentifier("workout.edit.name")
+            if isGuided {
+                Text("Name stays put — it's how your guided plan keeps track of this one.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+        }
+    }
+
+    /// The intensity chip row.
+    private var intensityField: some View {
+        SheetField("Intensity") {
+            FlowLayout(spacing: 8) {
+                ForEach(WorkoutIntensity.allCases) { level in
+                    Button(level.rawValue.capitalized) { intensity = level }
+                        .buttonStyle(ChipButtonStyle(selected: intensity == level))
+                        .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
+                }
+            }
+        }
+    }
+
+    /// Writes the edited fields back through the store.
+    ///
+    /// Consumes the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet open
+    /// and explain, rather than dismissing as if the edit saved.
+    private func saveEdits() {
+        guard !trimmedName.isEmpty else { return }
+        var updated = workout
+        updated.name = trimmedName
+        updated.intensity = intensity
+        updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
+        updated.notes = notes
+        guard store.updateWorkout(updated, date: date) else {
+            showHealthRefusalAlert = true
+            return
+        }
+        onSaved()
+        dismiss()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SheetCancelBar { attemptCancel() }
@@ -1588,29 +1781,9 @@ struct EditWorkoutSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    SheetField("Workout") {
-                        TextField("e.g. Upper strength", text: $name)
-                            .sheetTextInput()
-                            .disabled(isGuided)
-                            .opacity(isGuided ? 0.55 : 1)
-                            .accessibilityIdentifier("workout.edit.name")
-                        if isGuided {
-                            Text("Name stays put — it's how your guided plan keeps track of this one.")
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                        }
-                    }
+                    nameField
 
-                    SheetField("Intensity") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(WorkoutIntensity.allCases) { level in
-                                Button(level.rawValue.capitalized) { intensity = level }
-                                    .buttonStyle(ChipButtonStyle(selected: intensity == level))
-                                    .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
-                            }
-                        }
-                    }
+                    intensityField
 
                     SheetField("Duration (min)") {
                         TextField("45", text: $duration)
@@ -1630,21 +1803,7 @@ struct EditWorkoutSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(disabled: trimmedName.isEmpty) {
-                var updated = workout
-                updated.name = trimmedName
-                updated.intensity = intensity
-                updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
-                updated.notes = notes
-                // Consume the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet
-                // open and explain, rather than dismissing as if the edit saved.
-                if store.updateWorkout(updated, date: date) {
-                    onSaved()
-                    dismiss()
-                } else {
-                    showHealthRefusalAlert = true
-                }
-            }
+            SheetSaveBar(disabled: trimmedName.isEmpty) { saveEdits() }
         }
         .background(Color.parchment)
         .keyboardDoneToolbar()
@@ -1934,7 +2093,8 @@ struct WorkoutExerciseDraft {
     /// - Returns: `false` (and leaves `rows` untouched) when no exercise is chosen, so a caller with
     ///   follow-up work — the plan sheet re-folds its rows into the free-text plan — can bail on the
     ///   same condition the old `guard let draftExercise else { return }` used.
-    @discardableResult
+    ///
+    /// Not `@discardableResult`: this is a success/failure signal (R7), so every caller consumes it.
     mutating func commit(into rows: inout [WorkoutExerciseEntry], includingSetsAndReps: Bool = true) -> Bool {
         guard let entry = entry(includingSetsAndReps: includingSetsAndReps) else { return false }
         rows.append(entry)
@@ -1981,6 +2141,68 @@ struct WorkoutExerciseBuilder: View {
         selectedExercise?.inputKind ?? .strength
     }
 
+    /// Sets / reps / weight / details — the strength prescription fields.
+    @ViewBuilder private var strengthFields: some View {
+        HStack(alignment: .top, spacing: 12) {
+            SheetField("Sets") {
+                TextField("3", text: $sets)
+                    .keyboardType(.numberPad)
+                    .sheetTextInput()
+            }
+            SheetField("Reps") {
+                TextField("8", text: $reps)
+                    .keyboardType(.numberPad)
+                    .sheetTextInput()
+            }
+        }
+
+        SheetField("Weight") {
+            TextField("30 lb", text: $weight)
+                .sheetTextInput()
+        }
+
+        SheetField("Details") {
+            TextField("tempo, form note", text: $details)
+                .sheetTextInput()
+        }
+    }
+
+    /// Speed / incline / details — the treadmill prescription fields.
+    @ViewBuilder private var treadmillFields: some View {
+        HStack(alignment: .top, spacing: 12) {
+            SheetField("Speed") {
+                TextField("5.5 mph", text: $speed)
+                    .keyboardType(.decimalPad)
+                    .sheetTextInput()
+            }
+            SheetField("Incline") {
+                TextField("2", text: $incline)
+                    .keyboardType(.decimalPad)
+                    .sheetTextInput()
+            }
+        }
+
+        SheetField("Details") {
+            TextField("intervals, distance, notes", text: $details)
+                .sheetTextInput()
+        }
+    }
+
+    /// The Add button, disabled until an exercise is chosen.
+    private var addButton: some View {
+        Button(action: onAdd) {
+            Label(addLabel, systemImage: "plus.circle.fill")
+                .font(.fernlet(.label))
+                .foregroundStyle(selectedExercise == nil ? Color.slate.opacity(0.45) : Color.moss)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedExercise == nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ExerciseSearchPicker(
@@ -1992,62 +2214,15 @@ struct WorkoutExerciseBuilder: View {
 
             switch inputKind {
             case .strength:
-                HStack(alignment: .top, spacing: 12) {
-                    SheetField("Sets") {
-                        TextField("3", text: $sets)
-                            .keyboardType(.numberPad)
-                            .sheetTextInput()
-                    }
-                    SheetField("Reps") {
-                        TextField("8", text: $reps)
-                            .keyboardType(.numberPad)
-                            .sheetTextInput()
-                    }
-                }
-
-                SheetField("Weight") {
-                    TextField("30 lb", text: $weight)
-                        .sheetTextInput()
-                }
-
-                SheetField("Details") {
-                    TextField("tempo, form note", text: $details)
-                        .sheetTextInput()
-                }
+                strengthFields
             case .treadmill:
-                HStack(alignment: .top, spacing: 12) {
-                    SheetField("Speed") {
-                        TextField("5.5 mph", text: $speed)
-                            .keyboardType(.decimalPad)
-                            .sheetTextInput()
-                    }
-                    SheetField("Incline") {
-                        TextField("2", text: $incline)
-                            .keyboardType(.decimalPad)
-                            .sheetTextInput()
-                    }
-                }
-
-                SheetField("Details") {
-                    TextField("intervals, distance, notes", text: $details)
-                        .sheetTextInput()
-                }
+                treadmillFields
             case .none:
                 EmptyView()
             }
 
             if showAddButton {
-                Button(action: onAdd) {
-                    Label(addLabel, systemImage: "plus.circle.fill")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(selectedExercise == nil ? Color.slate.opacity(0.45) : Color.moss)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(selectedExercise == nil)
+                addButton
             }
         }
     }
@@ -2531,108 +2706,116 @@ struct MoveDayDetailView: View {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
+    /// One planned row, wired to the reload-token nudge past days need.
+    private func plannedRow(_ workout: PlannedWorkout) -> some View {
+        PlannedWorkoutRow(
+            plannedWorkout: workout,
+            showsPlanSourceTag: showsPlanSourceTag,
+            showsCompleteAction: !isFuture,
+            // Past-day reads aren't observed — bump the reload token so the list
+            // re-reads `day` after a complete/delete (a stale row otherwise allows a
+            // second tap).
+            onComplete: {
+                store.completePlannedWorkout(workout, date: dateKey)
+                reloadToken += 1
+            },
+            onEdit: {
+                editingPlannedWorkout = workout
+                showPlanSheet = true
+            },
+            onDelete: {
+                store.deletePlannedWorkout(workout, date: dateKey)
+                reloadToken += 1
+            }
+        )
+    }
+
+    /// The day's plan: an empty-state that opens the planner, or the planned rows.
+    private var planSection: some View {
+        FernletScrollSection("Plan") {
+            if day.plannedWorkouts.isEmpty {
+                Button {
+                    editingPlannedWorkout = nil
+                    showPlanSheet = true
+                } label: {
+                    EmptyState(text: "No workouts planned")
+                }
+                .buttonStyle(.plain)
+            } else {
+                ForEach(Array(day.plannedWorkouts.enumerated()), id: \.element.id) { index, workout in
+                    plannedRow(workout)
+                    if index < day.plannedWorkouts.count - 1 { FernletRowDivider() }
+                }
+            }
+        }
+    }
+
+    /// The day's logged workouts — hidden on future days (you can plan ahead, not log ahead).
+    @ViewBuilder private var workoutsSection: some View {
+        if !isFuture {
+            FernletScrollSection("Workouts") {
+                if day.workouts.isEmpty {
+                    EmptyState(text: "No workouts logged")
+                } else {
+                    ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
+                        WorkoutRow(
+                            store: store,
+                            workout: workout,
+                            date: dateKey,
+                            onChanged: { reloadToken += 1 }
+                        )
+                        if index < day.workouts.count - 1 { FernletRowDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One toolbar capsule — the Plan and Log entries are the same chrome.
+    private func toolbarCapsule(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                Text(title)
+            }
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.bark)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.cream.opacity(0.9), in: Capsule())
+            .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Plan (always) and Log (past/today only).
+    @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 8) {
+                toolbarCapsule("Plan", systemImage: "calendar.badge.plus") {
+                    editingPlannedWorkout = nil
+                    showPlanSheet = true
+                }
+                if !isFuture {
+                    toolbarCapsule("Log", systemImage: "plus") { showWorkoutSheet = true }
+                }
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ScreenHeader(title: navigationTitle, subtitle: "Movement only.")
-
-                FernletScrollSection("Plan") {
-                    if day.plannedWorkouts.isEmpty {
-                        Button {
-                            editingPlannedWorkout = nil
-                            showPlanSheet = true
-                        } label: {
-                            EmptyState(text: "No workouts planned")
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        ForEach(Array(day.plannedWorkouts.enumerated()), id: \.element.id) { index, workout in
-                            PlannedWorkoutRow(
-                                plannedWorkout: workout,
-                                showsPlanSourceTag: showsPlanSourceTag,
-                                showsCompleteAction: !isFuture,
-                                // Past-day reads aren't observed — bump the reload token so the list
-                                // re-reads `day` after a complete/delete (a stale row otherwise allows a
-                                // second tap).
-                                onComplete: {
-                                    store.completePlannedWorkout(workout, date: dateKey)
-                                    reloadToken += 1
-                                },
-                                onEdit: {
-                                    editingPlannedWorkout = workout
-                                    showPlanSheet = true
-                                },
-                                onDelete: {
-                                    store.deletePlannedWorkout(workout, date: dateKey)
-                                    reloadToken += 1
-                                }
-                            )
-                            if index < day.plannedWorkouts.count - 1 { FernletRowDivider() }
-                        }
-                    }
-                }
-
-                if !isFuture {
-                    FernletScrollSection("Workouts") {
-                        if day.workouts.isEmpty {
-                            EmptyState(text: "No workouts logged")
-                        } else {
-                            ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
-                                WorkoutRow(
-                                    store: store,
-                                    workout: workout,
-                                    date: dateKey,
-                                    onChanged: { reloadToken += 1 }
-                                )
-                                if index < day.workouts.count - 1 { FernletRowDivider() }
-                            }
-                        }
-                    }
-                }
+                planSection
+                workoutsSection
             }
             .padding(20)
         }
         .background(Color.parchment)
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 8) {
-                    Button {
-                        editingPlannedWorkout = nil
-                        showPlanSheet = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "calendar.badge.plus")
-                            Text("Plan")
-                        }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.cream.opacity(0.9), in: Capsule())
-                        .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-
-                    if !isFuture {
-                        Button { showWorkoutSheet = true } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "plus")
-                                Text("Log")
-                            }
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Color.cream.opacity(0.9), in: Capsule())
-                            .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
+        .toolbar { toolbarItems }
         .sheet(isPresented: $showWorkoutSheet) {
             WorkoutSheet(store: store, dateKey: dateKey)
                 .presentationDetents([.large])
@@ -2673,74 +2856,92 @@ struct PlannedWorkoutRow: View {
             .filter { !$0.isEmpty }
     }
 
+    /// The complete button, or the faded dot a future day shows in its place.
+    @ViewBuilder private var leadingMarker: some View {
+        if showsCompleteAction {
+            Button(action: onComplete) {
+                ZStack {
+                    Circle()
+                        .fill(plannedWorkout.workoutType.color.opacity(0.14))
+                        .frame(width: 34, height: 34)
+                    Circle()
+                        .stroke(plannedWorkout.workoutType.color, lineWidth: 2)
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(plannedWorkout.workoutType.color)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Mark \(plannedWorkout.name) complete")
+        } else {
+            Circle()
+                .fill(plannedWorkout.workoutType.color.opacity(0.42))
+                .frame(width: 18, height: 18)
+                .padding(.top, 6)
+        }
+    }
+
+    /// Name plus the split / source / duration line.
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(plannedWorkout.name)
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+            HStack(spacing: 8) {
+                Text(plannedWorkout.split.title)
+                if showsPlanSourceTag {
+                    Text(plannedWorkout.source.title)
+                }
+                if let duration = plannedWorkout.duration {
+                    Text("\(duration) min")
+                }
+            }
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+        }
+    }
+
+    /// The first few plan steps, and the plan note.
+    @ViewBuilder private var stepPreview: some View {
+        if !stepLines.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.bark.opacity(0.82))
+                        .lineLimit(2)
+                }
+            }
+        }
+
+        if !plannedWorkout.notes.isEmpty {
+            Text(plannedWorkout.notes)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    /// Edit / Remove.
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            Button("Edit", action: onEdit)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+            Button("Remove", role: .destructive, action: onDelete)
+                .font(.fernlet(.label))
+        }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            if showsCompleteAction {
-                Button(action: onComplete) {
-                    ZStack {
-                        Circle()
-                            .fill(plannedWorkout.workoutType.color.opacity(0.14))
-                            .frame(width: 34, height: 34)
-                        Circle()
-                            .stroke(plannedWorkout.workoutType.color, lineWidth: 2)
-                            .frame(width: 34, height: 34)
-                        Image(systemName: "checkmark")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(plannedWorkout.workoutType.color)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Mark \(plannedWorkout.name) complete")
-            } else {
-                Circle()
-                    .fill(plannedWorkout.workoutType.color.opacity(0.42))
-                    .frame(width: 18, height: 18)
-                    .padding(.top, 6)
-            }
+            leadingMarker
 
             VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(plannedWorkout.name)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    HStack(spacing: 8) {
-                        Text(plannedWorkout.split.title)
-                        if showsPlanSourceTag {
-                            Text(plannedWorkout.source.title)
-                        }
-                        if let duration = plannedWorkout.duration {
-                            Text("\(duration) min")
-                        }
-                    }
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                }
-
-                if !stepLines.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.bark.opacity(0.82))
-                                .lineLimit(2)
-                        }
-                    }
-                }
-
-                if !plannedWorkout.notes.isEmpty {
-                    Text(plannedWorkout.notes)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-
-                HStack(spacing: 10) {
-                    Button("Edit", action: onEdit)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                    Button("Remove", role: .destructive, action: onDelete)
-                        .font(.fernlet(.label))
-                }
+                titleBlock
+                stepPreview
+                actionRow
             }
             Spacer(minLength: 0)
         }
@@ -2886,209 +3087,235 @@ struct WorkoutPlanSheet: View {
         editingPlan == nil && dateKey == store.todayKey
     }
 
+    /// Title, target day, and the "User plan" tag when coach-sourced plans exist.
+    private var planHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(editingPlan == nil ? "Plan workout" : "Edit plan")
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.bark)
+            Text(targetDateTitle)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.slate)
+            if showsPlanSourceTag {
+                Text("User plan")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.moss.opacity(0.12), in: Capsule())
+            }
+        }
+    }
+
+    /// The shared chrome behind "Copy previous week" and "Suggest a workout".
+    private func entryCard(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.moss)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    Text(subtitle)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(12)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The split chip row. Choosing "workout" switches the sheet to activity logging.
+    private var splitField: some View {
+        SheetField("Split") {
+            FlowLayout(spacing: 8) {
+                ForEach(WorkoutSplit.allCases) { option in
+                    Button(option.title) {
+                        split = option
+                        logMode = option == .workout ? .activity : .strengthTraining
+                    }
+                        .buttonStyle(ChipButtonStyle(selected: split == option))
+                }
+            }
+        }
+    }
+
+    /// The strength / activity chip row, kept consistent with the chosen split.
+    private var kindField: some View {
+        SheetField("Kind") {
+            FlowLayout(spacing: 8) {
+                ForEach(WorkoutMode.allCases) { mode in
+                    Button(mode.label) {
+                        logMode = mode
+                        if mode == .activity {
+                            split = .workout
+                        } else if split == .workout {
+                            split = .fullBody
+                        }
+                    }
+                        .buttonStyle(ChipButtonStyle(selected: logMode == mode))
+                }
+            }
+        }
+    }
+
+    /// Exercise builder, the editable planned rows, and the free-text plan steps they stay in sync with.
+    @ViewBuilder private var strengthPlanFields: some View {
+        WorkoutExerciseBuilder(
+            selectedExercise: $draft.exercise,
+            sets: $draft.sets,
+            reps: $draft.reps,
+            weight: $draft.weight,
+            speed: $draft.speed,
+            incline: $draft.incline,
+            details: $draft.details,
+            resetToken: $draft.resetToken,
+            pickerTitle: logMode.pickerTitle,
+            searchPlaceholder: logMode.searchPlaceholder,
+            mode: logMode,
+            addLabel: logMode.addLabel,
+            onAdd: addDraftExercise
+        )
+
+        if !exerciseRows.isEmpty {
+            SheetField("Planned exercises") {
+                VStack(spacing: 8) {
+                    ForEach($exerciseRows) { $entry in
+                        EditablePlannedExerciseRow(entry: $entry) {
+                            exerciseRows.removeAll { $0.id == entry.id }
+                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+                        } onChange: {
+                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+                        }
+                    }
+                }
+            }
+        }
+
+        SheetField("Plan steps") {
+            SheetTextEditor(
+                text: $plannedExerciseText,
+                placeholder: "Exercises, sets, reps, or trainer cues...",
+                minHeight: 100
+            )
+        }
+    }
+
+    /// The activity fields, for a non-strength plan.
+    private var activityFields: some View {
+        ActivityPickerSection(
+            selectedActivityType: $selectedActivityType,
+            duration: $duration,
+            distance: $distance,
+            energyKcal: $energyKcal,
+            effort: $effort
+        )
+    }
+
+    /// The free-text plan note.
+    private var notesField: some View {
+        SheetField("Plan notes") {
+            SheetTextEditor(
+                text: $notes,
+                placeholder: "Exercises, coach cues, target pace, or recovery focus...",
+                minHeight: 120
+            )
+        }
+    }
+
+    /// The scrolling form, in order.
+    private var planForm: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            planHeader
+
+            if let previousWeekPlan {
+                entryCard(icon: "arrow.turn.down.right",
+                          title: "Copy previous week",
+                          subtitle: previousWeekPlan.name) {
+                    copyPreviousWeekPlan(previousWeekPlan)
+                }
+            }
+
+            if showsSuggestEntry {
+                entryCard(icon: "wand.and.stars",
+                          title: "Suggest a workout",
+                          subtitle: "Built from your split, equipment, and limits") {
+                    showingSuggestion = true
+                }
+                .accessibilityIdentifier("plan.suggest")
+            }
+
+            splitField
+            kindField
+
+            SheetField("Workout") {
+                TextField("\(split.title) workout", text: $name)
+                    .sheetTextInput()
+            }
+
+            if logMode == .strengthTraining {
+                strengthPlanFields
+            } else {
+                activityFields
+            }
+
+            if logMode == .strengthTraining {
+                SheetField("Duration (min)") {
+                    TextField("45", text: $duration)
+                        .keyboardType(.numberPad)
+                        .sheetTextInput()
+                }
+            }
+
+            notesField
+        }
+        .padding(20)
+        .padding(.bottom, 10)
+    }
+
+    /// Writes the planned workout for `dateKey`, folding in a typed-but-unadded draft first.
+    private func savePlan() {
+        // Fold a typed-but-not-yet-added exercise draft into the plan so Save doesn't drop it.
+        if logMode == .strengthTraining, draft.hasExercise {
+            addDraftExercise()
+        }
+        store.planWorkout(
+            PlannedWorkout(
+                id: editingPlan?.id ?? UUID(),
+                name: plannedName,
+                split: split,
+                source: editingPlan?.source ?? .user,
+                mode: logMode,
+                activityType: selectedActivityType,
+                exercises: exerciseText,
+                muscleGroups: plannedMuscleGroups,
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                duration: Int(duration),
+                targetDistanceMiles: Double(distance),
+                targetEnergyKcal: Double(energyKcal),
+                targetEffort: Int(effort),
+                createdAt: editingPlan?.createdAt ?? Date()
+            ),
+            date: dateKey
+        )
+        dismiss()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SheetCancelBar { attemptCancel() }
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(editingPlan == nil ? "Plan workout" : "Edit plan")
-                            .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
-                        Text(targetDateTitle)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.slate)
-                        if showsPlanSourceTag {
-                            Text("User plan")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.moss.opacity(0.12), in: Capsule())
-                        }
-                    }
-
-                    if let previousWeekPlan {
-                        Button {
-                            copyPreviousWeekPlan(previousWeekPlan)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "arrow.turn.down.right")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(Color.moss)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Copy previous week")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.bark)
-                                    Text(previousWeekPlan.name)
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.slate)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                            }
-                            .padding(12)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    if showsSuggestEntry {
-                        Button {
-                            showingSuggestion = true
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "wand.and.stars")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(Color.moss)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Suggest a workout")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.bark)
-                                    Text("Built from your split, equipment, and limits")
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.slate)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                            }
-                            .padding(12)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("plan.suggest")
-                    }
-
-                    SheetField("Split") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(WorkoutSplit.allCases) { option in
-                                Button(option.title) {
-                                    split = option
-                                    logMode = option == .workout ? .activity : .strengthTraining
-                                }
-                                    .buttonStyle(ChipButtonStyle(selected: split == option))
-                            }
-                        }
-                    }
-
-                    SheetField("Kind") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(WorkoutMode.allCases) { mode in
-                                Button(mode.label) {
-                                    logMode = mode
-                                    if mode == .activity {
-                                        split = .workout
-                                    } else if split == .workout {
-                                        split = .fullBody
-                                    }
-                                }
-                                    .buttonStyle(ChipButtonStyle(selected: logMode == mode))
-                            }
-                        }
-                    }
-
-                    SheetField("Workout") {
-                        TextField("\(split.title) workout", text: $name)
-                            .sheetTextInput()
-                    }
-
-                    if logMode == .strengthTraining {
-                        WorkoutExerciseBuilder(
-                            selectedExercise: $draft.exercise,
-                            sets: $draft.sets,
-                            reps: $draft.reps,
-                            weight: $draft.weight,
-                            speed: $draft.speed,
-                            incline: $draft.incline,
-                            details: $draft.details,
-                            resetToken: $draft.resetToken,
-                            pickerTitle: logMode.pickerTitle,
-                            searchPlaceholder: logMode.searchPlaceholder,
-                            mode: logMode,
-                            addLabel: logMode.addLabel,
-                            onAdd: addDraftExercise
-                        )
-
-                        if !exerciseRows.isEmpty {
-                            SheetField("Planned exercises") {
-                                VStack(spacing: 8) {
-                                    ForEach($exerciseRows) { $entry in
-                                        EditablePlannedExerciseRow(entry: $entry) {
-                                            exerciseRows.removeAll { $0.id == entry.id }
-                                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
-                                        } onChange: {
-                                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        SheetField("Plan steps") {
-                            SheetTextEditor(
-                                text: $plannedExerciseText,
-                                placeholder: "Exercises, sets, reps, or trainer cues...",
-                                minHeight: 100
-                            )
-                        }
-                    } else {
-                        ActivityPickerSection(
-                            selectedActivityType: $selectedActivityType,
-                            duration: $duration,
-                            distance: $distance,
-                            energyKcal: $energyKcal,
-                            effort: $effort
-                        )
-                    }
-
-                    if logMode == .strengthTraining {
-                        SheetField("Duration (min)") {
-                            TextField("45", text: $duration)
-                                .keyboardType(.numberPad)
-                                .sheetTextInput()
-                        }
-                    }
-
-                    SheetField("Plan notes") {
-                        SheetTextEditor(
-                            text: $notes,
-                            placeholder: "Exercises, coach cues, target pace, or recovery focus...",
-                            minHeight: 120
-                        )
-                    }
-                }
-                .padding(20)
-                .padding(.bottom, 10)
+                planForm
             }
 
-            SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") {
-                // Fold a typed-but-not-yet-added exercise draft into the plan so Save doesn't drop it.
-                if logMode == .strengthTraining, draft.hasExercise {
-                    addDraftExercise()
-                }
-                store.planWorkout(
-                    PlannedWorkout(
-                        id: editingPlan?.id ?? UUID(),
-                        name: plannedName,
-                        split: split,
-                        source: editingPlan?.source ?? .user,
-                        mode: logMode,
-                        activityType: selectedActivityType,
-                        exercises: exerciseText,
-                        muscleGroups: plannedMuscleGroups,
-                        notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                        duration: Int(duration),
-                        targetDistanceMiles: Double(distance),
-                        targetEnergyKcal: Double(energyKcal),
-                        targetEffort: Int(effort),
-                        createdAt: editingPlan?.createdAt ?? Date()
-                    ),
-                    date: dateKey
-                )
-                dismiss()
-            }
+            SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") { savePlan() }
         }
         .background(Color.parchment)
         .keyboardDoneToolbar()

@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletUI
 
 /// Manual editor for a suggested workout session: adjust sets / reps / rest per exercise, remove,
@@ -16,6 +17,7 @@ struct GuidedWorkoutEditorSheet: View {
     @State private var pickerSelection: ExerciseTarget?
     @State private var pickerResetToken = 0
     @State private var showDiscardConfirm = false
+    @State private var showCouldNotSave = false
 
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion) {
         self.store = store
@@ -38,8 +40,8 @@ struct GuidedWorkoutEditorSheet: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, _ in
-                        exerciseCard(index: index)
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        exerciseCard(index: index, row: row)
                     }
 
                     addExerciseSection
@@ -58,6 +60,11 @@ struct GuidedWorkoutEditorSheet: View {
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        .alert("Couldn't save those changes", isPresented: $showCouldNotSave) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("That workout has already started or changed. Close this and open it again to edit.")
+        }
     }
 
     // MARK: Header
@@ -93,50 +100,23 @@ struct GuidedWorkoutEditorSheet: View {
 
     // MARK: Exercise card
 
-    @ViewBuilder private func exerciseCard(index: Int) -> some View {
-        let row = rows[index]
+    @ViewBuilder private func exerciseCard(index: Int, row: PrescribedExercise) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
                 Text(row.name)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                // Reorder + remove.
-                Button {
-                    move(from: index, by: -1)
-                } label: {
-                    Image(systemName: "chevron.up")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(index == 0 ? Color.slate.opacity(0.3) : Color.moss)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .disabled(index == 0)
-                .accessibilityIdentifier("workout.editor.moveUp")
-                Button {
-                    move(from: index, by: 1)
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(index == rows.count - 1 ? Color.slate.opacity(0.3) : Color.moss)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .disabled(index == rows.count - 1)
-                .accessibilityIdentifier("workout.editor.moveDown")
-                Button(role: .destructive) {
-                    rows.remove(at: index)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(rows.count <= 1 ? Color.terracotta.opacity(0.3) : Color.terracotta)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                // Keep at least one exercise — an empty session isn't guidable and would leave a
-                // contradictory plan (no exercises, but stale display text).
-                .disabled(rows.count <= 1)
-                .accessibilityIdentifier("workout.editor.remove")
+                GuidedEditorRowControls(
+                    canMoveUp: index > 0,
+                    canMoveDown: index < rows.count - 1,
+                    // Keep at least one exercise — an empty session isn't guidable and would leave a
+                    // contradictory plan (no exercises, but stale display text).
+                    canRemove: rows.count > 1,
+                    onMoveUp: { move(from: index, by: -1) },
+                    onMoveDown: { move(from: index, by: 1) },
+                    onRemove: { removeRow(at: index) }
+                )
             }
 
             if row.fromCatalog {
@@ -207,16 +187,23 @@ struct GuidedWorkoutEditorSheet: View {
 
     private var addExerciseSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ExerciseSearchPicker(
-                selectedExercise: $pickerSelection,
-                resetToken: $pickerResetToken,
-                title: "Add exercise",
-                placeholder: "Search exercise or muscle"
-            )
+            if rows.count >= Self.maxExercises {
+                Text("This workout is full at \(Self.maxExercises) exercises — remove one to add another.")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            } else {
+                ExerciseSearchPicker(
+                    selectedExercise: $pickerSelection,
+                    resetToken: $pickerResetToken,
+                    title: "Add exercise",
+                    placeholder: "Search exercise or muscle"
+                )
+            }
         }
         .onChange(of: pickerSelection) { _, newValue in
             guard let target = newValue else { return }
-            rows.append(makeRow(from: target))
+            appendRow(from: target)
             // Clear the selection so the picker is ready for another add.
             pickerSelection = nil
             pickerResetToken += 1
@@ -224,6 +211,22 @@ struct GuidedWorkoutEditorSheet: View {
     }
 
     // MARK: Mutations
+
+    /// R3: a hand-edited session is capped at the same size an imported one is, so repeated picker
+    /// selections cannot grow the persisted plan (and its app-group run state) without bound.
+    private static let maxExercises = CoachPlanLimits.maxExercisesPerSession
+
+    /// Adds a catalog pick, refusing once the session is at ``maxExercises``.
+    private func appendRow(from target: ExerciseTarget) {
+        guard rows.count < Self.maxExercises else { return }
+        rows.append(makeRow(from: target))
+    }
+
+    /// Removes a row, keeping at least one exercise and never indexing out of range.
+    private func removeRow(at index: Int) {
+        guard rows.count > 1, rows.indices.contains(index) else { return }
+        rows.remove(at: index)
+    }
 
     private func move(from index: Int, by delta: Int) {
         let target = index + delta
@@ -288,7 +291,64 @@ struct GuidedWorkoutEditorSheet: View {
         // Rebuild the display list so the sheet card and the logged workout reflect the edits.
         let lines = rows.map(\.line).joined(separator: "\n")
         updated.suggestion.exercises = lines.isEmpty ? session.suggestion.exercises : lines
-        store.updateGuidedSession(updated)
+        // R7: the store refuses the save when the plan moved on or the session already started —
+        // say so instead of dismissing as if the edits landed.
+        guard store.updateGuidedSession(updated) else {
+            FernletAuditLog.log("workout.guided.editRefused")
+            showCouldNotSave = true
+            return
+        }
         dismiss()
+    }
+}
+
+/// The reorder-up / reorder-down / remove chips on one exercise card in ``GuidedWorkoutEditorSheet``.
+///
+/// Split out of the card body so it stays inside the Power-of-10 length budget; the enclosing
+/// `HStack` still lays the three chips out exactly as before.
+private struct GuidedEditorRowControls: View {
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let canRemove: Bool
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        Group {
+            Button {
+                onMoveUp()
+            } label: {
+                Image(systemName: "chevron.up")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(canMoveUp ? Color.moss : Color.slate.opacity(0.3))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canMoveUp)
+            .accessibilityIdentifier("workout.editor.moveUp")
+            Button {
+                onMoveDown()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(canMoveDown ? Color.moss : Color.slate.opacity(0.3))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canMoveDown)
+            .accessibilityIdentifier("workout.editor.moveDown")
+            Button(role: .destructive) {
+                onRemove()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(canRemove ? Color.terracotta : Color.terracotta.opacity(0.3))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canRemove)
+            .accessibilityIdentifier("workout.editor.remove")
+        }
     }
 }

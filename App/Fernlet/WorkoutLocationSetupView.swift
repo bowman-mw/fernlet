@@ -73,12 +73,20 @@ struct WorkoutLocationSetupView: View {
                         }
                     }
 
-                    sectionHeader("Add a location")
-                    LazyVGrid(columns: twoColumns, spacing: 14) {
-                        ForEach(LocationTemplate.all) { template in
-                            templateCard(template)
+                    if locations.count >= Self.maxLocations {
+                        sectionHeader("Add a location")
+                        Text("You've saved \(Self.maxLocations) locations — remove one to add another.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    } else {
+                        sectionHeader("Add a location")
+                        LazyVGrid(columns: twoColumns, spacing: 14) {
+                            ForEach(LocationTemplate.all) { template in
+                                templateCard(template)
+                            }
+                            addLocationCard
                         }
-                        addLocationCard
                     }
 
                     if addingCustom {
@@ -118,39 +126,19 @@ struct WorkoutLocationSetupView: View {
                     // Delete used to be context-menu-only — a long-press with no affordance, sitting next
                     // to a clearly visible pencil, so it read as "you can edit but not delete".
                     if locations.count > 1 {
-                        Button { confirmRemoveLocation(index: index) } label: {
-                            Image(systemName: "trash")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.terracotta)
-                                .padding(6)
-                                .background(Color.parchment.opacity(0.8), in: Circle())
-                                // The glyph stays ~26pt; the frame + contentShape expand only the tap
-                                // target to Apple's 44pt minimum, so a near-miss no longer falls through
-                                // to the card button underneath and navigates instead of deleting.
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
+                        LocationCardChip(systemImage: "trash", tint: Color.terracotta) {
+                            confirmRemoveLocation(index: index)
                         }
-                        .buttonStyle(.plain)
                         .accessibilityLabel("Delete \(location.name)")
                         .accessibilityIdentifier("workout.location.delete")
                     }
-                    Button {
+                    LocationCardChip(systemImage: "pencil", tint: Color.slate) {
                         // Edit equipment/name only — deliberately does NOT set `activeID`. It used to,
                         // and because a later delete persists `activeID`, peeking at one location and
                         // then deleting an unrelated one silently switched the user's active gym.
                         editingIndex = index
                         step = .equipment
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.slate)
-                            .padding(6)
-                            .background(Color.parchment.opacity(0.8), in: Circle())
-                            // Same 44pt tap target as its sibling trash chip.
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                     .accessibilityLabel("Edit \(location.name)")
                 }
                 VStack(alignment: .leading, spacing: 3) {
@@ -236,57 +224,7 @@ struct WorkoutLocationSetupView: View {
 
     private var equipmentStep: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Button { commitEdits(); step = .location } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.bark)
-                            .frame(width: 34, height: 34)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
-                            // Visual stays 34pt; only the tap target grows to the 44pt minimum.
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Back to locations")
-                    .accessibilityIdentifier("workout.location.back")
-                    // Editable, not a label: the model has always had `name` and the creator lets you set
-                    // it once, but nothing could ever rename a saved location — so a typo lived forever.
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.caption2)
-                        TextField("Location", text: editingNameBinding)
-                            .font(.fernlet(.labelSmall))
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.done)
-                            // Bounded width, not .fixedSize(): fixedSize grows the chip to the full text
-                            // width, so a long name pushed the trailing pencil and the caret off-screen.
-                            // A frame lets the field scroll its own content and keeps the row on-screen.
-                            .frame(maxWidth: 180)
-                            .accessibilityIdentifier("workout.location.name")
-                        Image(systemName: "pencil")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Color.slate)
-                    }
-                    .foregroundStyle(Color.bark)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.moss.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
-                    Spacer()
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("What's available?")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
+            equipmentHeader
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -317,6 +255,61 @@ struct WorkoutLocationSetupView: View {
                 commitEdits()
             }
         }
+    }
+
+    /// The equipment step's chrome: back chevron, the editable location-name chip, and the count.
+    private var equipmentHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Button { commitEdits(); step = .location } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                        .frame(width: 34, height: 34)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
+                        // Visual stays 34pt; only the tap target grows to the 44pt minimum.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to locations")
+                .accessibilityIdentifier("workout.location.back")
+                // Editable, not a label: the model has always had `name` and the creator lets you set
+                // it once, but nothing could ever rename a saved location — so a typo lived forever.
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.caption2)
+                    TextField("Location", text: editingNameBinding)
+                        .font(.fernlet(.labelSmall))
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        // Bounded width, not .fixedSize(): fixedSize grows the chip to the full text
+                        // width, so a long name pushed the trailing pencil and the caret off-screen.
+                        // A frame lets the field scroll its own content and keeps the row on-screen.
+                        .frame(maxWidth: 180)
+                        .accessibilityIdentifier("workout.location.name")
+                    Image(systemName: "pencil")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.slate)
+                }
+                .foregroundStyle(Color.bark)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.moss.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("What's available?")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
     }
 
     private func equipmentCategorySection(_ category: EquipmentCategory) -> some View {
@@ -437,7 +430,12 @@ struct WorkoutLocationSetupView: View {
         }
     }
 
+    /// R3: the saved-location list is fed by repeated user adds and persisted, so it carries an
+    /// explicit cap at the point the input enters (both adders guard on it, and the add cards hide).
+    private static let maxLocations = 12
+
     private func addFromTemplate(_ template: LocationTemplate) {
+        guard locations.count < Self.maxLocations else { return }
         let location = template.makeLocation()
         locations.append(location)
         editingIndex = locations.count - 1
@@ -447,7 +445,7 @@ struct WorkoutLocationSetupView: View {
 
     private func addCustomLocation() {
         let name = customName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard name.isEmpty == false else { return }
+        guard name.isEmpty == false, locations.count < Self.maxLocations else { return }
         let location = WorkoutLocation(name: name, ownedEquipment: [])
         locations.append(location)
         editingIndex = locations.count - 1
@@ -496,5 +494,29 @@ struct WorkoutLocationSetupView: View {
         // believes it's gone. Add/edit still commit at their save bars, where the user has an explicit
         // "I'm finished" moment; a delete's moment is the confirm they just tapped.
         store.setWorkoutLocations(locations, activeID: activeID)
+    }
+}
+
+/// One trailing action chip on a saved-location card (delete / edit).
+///
+/// The glyph stays ~26pt; the frame + contentShape expand only the tap target to Apple's 44pt
+/// minimum, so a near-miss doesn't fall through to the card button underneath. Accessibility label
+/// and identifier stay at the call site, where each chip names itself.
+private struct LocationCardChip: View {
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .padding(6)
+                .background(Color.parchment.opacity(0.8), in: Circle())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

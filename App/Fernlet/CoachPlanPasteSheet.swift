@@ -89,6 +89,13 @@ struct CoachPlanPasteSheet: View {
                 guard let pasted = strings.first else { return }
                 // PasteButton hands values off the main actor.
                 Task { @MainActor in
+                    // R3: bound the clipboard where it enters, not after the editor has already laid
+                    // out the blob — the same 512 KB limit the decode applies, reported the same way.
+                    let bytes = pasted.utf8.count
+                    guard bytes <= CoachPlanLimits.maxPastedBytes else {
+                        failure = .tooLarge(bytes: bytes)
+                        return
+                    }
                     text = pasted
                     failure = nil
                 }

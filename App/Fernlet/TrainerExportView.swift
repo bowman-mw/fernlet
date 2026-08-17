@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletUI
 #if canImport(UIKit)
 import UIKit
@@ -54,6 +55,29 @@ struct TrainerExportView: View {
         }
     }
 
+    /// The body of whichever sheet ``TrainerSheet`` is presenting: file share, paste, or review.
+    ///
+    /// Split out of `body` so the screen's own body stays within the Power-of-10 length budget; the
+    /// owning screen keeps every piece of `@State` and receives each outcome through a closure.
+    private struct SheetContent: View {
+        let store: FernletStore
+        let presented: TrainerSheet
+        let onShareFinished: (URL) -> Void
+        let onDecoded: (CoachPlan) -> Void
+        let onImported: (CoachPlanImportResult) -> Void
+
+        var body: some View {
+            switch presented {
+            case .share(let payload):
+                ActivityShareView(items: [payload.url]) { onShareFinished(payload.url) }
+            case .paste:
+                CoachPlanPasteSheet { plan in onDecoded(plan) }
+            case .review(let plan):
+                CoachPlanReviewView(store: store, plan: plan) { result in onImported(result) }
+            }
+        }
+    }
+
     /// How many days the current options would export.
     ///
     /// Cached in state rather than recomputed in `body`: building the bundle now walks every logged
@@ -79,19 +103,24 @@ struct TrainerExportView: View {
         )
     }
 
+    /// The scrolling body of the screen: intro, prepare/share, and the coach-exchange cards.
+    private var sections: some View {
+        VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
+            intro
+            prepareSection
+            if coachExchangeEnabled {
+                aiCoachCard
+                importCard
+            }
+            comingSoonNote
+        }
+        .padding(20)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
-                    intro
-                    prepareSection
-                    if coachExchangeEnabled {
-                        aiCoachCard
-                        importCard
-                    }
-                    comingSoonNote
-                }
-                .padding(20)
+                sections
             }
             .background(Color.parchment)
             .navigationTitle("Share with a trainer")
@@ -110,23 +139,19 @@ struct TrainerExportView: View {
                     sheet = .review(plan)
                 }
             }) { presented in
-                switch presented {
-                case .share(let payload):
-                    ActivityShareView(items: [payload.url]) {
-                        // The summary is plaintext training + nutrition data (and, when opted in,
-                        // sickness days and wellbeing scores). Delete it here — after the chosen
-                        // activity has finished reading the file, on both the shared and cancelled
-                        // paths — instead of letting it linger until the next launch/pre-export/
-                        // delete-everything sweep. Only THIS file: a full data export may be prepared
-                        // or in flight in Privacy & Data, and `purgeDataExports()` would take that too.
-                        store.discardExportedFile(at: payload.url)
-                        preparedFile = nil
-                    }
-                case .paste:
-                    CoachPlanPasteSheet { plan in pendingPlan = plan }
-                case .review(let plan):
-                    CoachPlanReviewView(store: store, plan: plan) { result in importResult = result }
-                }
+                SheetContent(
+                    store: store,
+                    presented: presented,
+                    // Delete the plaintext summary as soon as the chosen activity has finished reading
+                    // it — on both the shared and cancelled paths — rather than letting it linger
+                    // until the next sweep. A failed delete keeps the file on screen so it can be
+                    // retried. Only THIS file: a full data export may be in flight in Privacy & Data.
+                    onShareFinished: { url in
+                        if discardExportedFile(at: url) { preparedFile = nil }
+                    },
+                    onDecoded: { plan in pendingPlan = plan },
+                    onImported: { result in importResult = result }
+                )
             }
             .alert("Copy your training summary?", isPresented: $showCopyConfirm) {
                 Button("Cancel", role: .cancel) {}
@@ -158,9 +183,23 @@ struct TrainerExportView: View {
     }
 
     /// Removes the prepared plaintext summary and returns the screen to its "Prepare summary" state.
+    ///
+    /// A delete that fails leaves `preparedFile` set: the screen keeps offering Share/Done so the
+    /// user can try again, rather than showing the file as gone while plaintext sits on disk.
     private func discardPreparedFile() {
-        if let url = preparedFile { store.discardExportedFile(at: url) }
+        guard let url = preparedFile else { return }
+        guard discardExportedFile(at: url) else { return }
         preparedFile = nil
+    }
+
+    /// Deletes one prepared export, naming a failure instead of dropping it. The launch / pre-export
+    /// / delete-everything sweeps remain the backstop.
+    private func discardExportedFile(at url: URL) -> Bool {
+        guard store.discardExportedFile(at: url) else {
+            FernletAuditLog.log("trainerExport.discardFailed")
+            return false
+        }
+        return true
     }
 
     /// Puts the prompt + data blob on the clipboard, after the user has confirmed the alert.

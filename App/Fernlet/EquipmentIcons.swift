@@ -219,96 +219,142 @@ enum SVGMarkupParser {
 
     // MARK: Path-data ("d") parsing
 
+    /// The pen state threaded through one path-data ("d") walk: where the pen is, where the current
+    /// subpath began (for `z`), and the last bézier control point (for the smooth `s`/`t` commands).
+    private struct PathCursor {
+        var current: CGPoint = .zero
+        var subpathStart: CGPoint = .zero
+        var lastControl: CGPoint?
+    }
+
+    /// Commands whose operands may implicitly repeat — each repeat consumes at least one number, so
+    /// repeating them cannot spin the walk (R2). `z` is deliberately absent: it consumes nothing.
+    private static let repeatableCommands: Set<Character> = ["m", "l", "h", "v", "c", "s", "q", "t", "a"]
+
     private static func appendPathData(_ d: String, to path: inout Path) {
         var scanner = NumberScanner(d)
-        var current = CGPoint.zero
-        var subpathStart = CGPoint.zero
-        var lastControl: CGPoint?
+        var cursor = PathCursor()
         var command: Character = " "
+        // R2: every iteration consumes at least one character or returns, so the character count is
+        // an upper bound on the number of iterations — stated at the loop rather than in the data.
+        var budget = d.count + 1
 
-        while true {
-            scanner.skipSeparators()
-            guard let peek = scanner.peek() else { break }
+        while budget > 0, let peek = scanner.peekAfterSeparators() {
+            budget -= 1
             if peek.isLetter {
-                command = scanner.readCharacter()!
-            } else {
-                // Implicit repeat: a moveto's extra coordinate pairs become linetos.
-                if command == "M" { command = "L" } else if command == "m" { command = "l" }
+                guard let next = scanner.readCharacter() else { return }
+                command = next
+            } else if command == "M" {
+                command = "L"           // implicit repeat: a moveto's extra coordinate pairs are linetos
+            } else if command == "m" {
+                command = "l"
+            } else if !repeatableCommands.contains(Character(command.lowercased())) {
+                return                  // nothing to repeat (no command yet, or `z`) — stop
             }
-
-            let relative = command.isLowercase
-            switch Character(command.lowercased()) {
-            case "m":
-                guard let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                current = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.move(to: current)
-                subpathStart = current
-                lastControl = nil
-            case "l":
-                guard let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                current = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.addLine(to: current)
-                lastControl = nil
-            case "h":
-                guard let x = scanner.readNumber() else { return }
-                current = CGPoint(x: relative ? current.x + x : x, y: current.y)
-                path.addLine(to: current)
-                lastControl = nil
-            case "v":
-                guard let y = scanner.readNumber() else { return }
-                current = CGPoint(x: current.x, y: relative ? current.y + y : y)
-                path.addLine(to: current)
-                lastControl = nil
-            case "c":
-                guard let x1 = scanner.readNumber(), let y1 = scanner.readNumber(),
-                      let x2 = scanner.readNumber(), let y2 = scanner.readNumber(),
-                      let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                let c1 = relative ? CGPoint(x: current.x + x1, y: current.y + y1) : CGPoint(x: x1, y: y1)
-                let c2 = relative ? CGPoint(x: current.x + x2, y: current.y + y2) : CGPoint(x: x2, y: y2)
-                let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.addCurve(to: end, control1: c1, control2: c2)
-                lastControl = c2
-                current = end
-            case "s":
-                guard let x2 = scanner.readNumber(), let y2 = scanner.readNumber(),
-                      let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                let c1 = reflectedControl(lastControl, around: current)
-                let c2 = relative ? CGPoint(x: current.x + x2, y: current.y + y2) : CGPoint(x: x2, y: y2)
-                let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.addCurve(to: end, control1: c1, control2: c2)
-                lastControl = c2
-                current = end
-            case "q":
-                guard let x1 = scanner.readNumber(), let y1 = scanner.readNumber(),
-                      let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                let c = relative ? CGPoint(x: current.x + x1, y: current.y + y1) : CGPoint(x: x1, y: y1)
-                let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.addQuadCurve(to: end, control: c)
-                lastControl = c
-                current = end
-            case "t":
-                guard let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                let c = reflectedControl(lastControl, around: current)
-                let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                path.addQuadCurve(to: end, control: c)
-                lastControl = c
-                current = end
-            case "a":
-                guard let rx = scanner.readNumber(), let ry = scanner.readNumber(),
-                      let rot = scanner.readNumber(), let large = scanner.readFlag(),
-                      let sweep = scanner.readFlag(), let x = scanner.readNumber(), let y = scanner.readNumber() else { return }
-                let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
-                addArc(to: &path, start: current, rx: rx, ry: ry, xRotDeg: rot, largeArc: large, sweep: sweep, end: end)
-                current = end
-                lastControl = nil
-            case "z":
-                path.closeSubpath()
-                current = subpathStart
-                lastControl = nil
-            default:
-                return
-            }
+            guard applyCommand(command, scanner: &scanner, cursor: &cursor, path: &path) else { return }
         }
+    }
+
+    /// Applies one path-data command, returning false when its operands are missing or the command
+    /// is unknown — the walk stops on false.
+    private static func applyCommand(_ command: Character, scanner: inout NumberScanner,
+                                     cursor: inout PathCursor, path: inout Path) -> Bool {
+        let relative = command.isLowercase
+        let lowered = Character(command.lowercased())
+        switch lowered {
+        case "m", "l", "h", "v":
+            return applyLinear(lowered, relative: relative, scanner: &scanner, cursor: &cursor, path: &path)
+        case "c", "s":
+            return applyCubic(lowered, relative: relative, scanner: &scanner, cursor: &cursor, path: &path)
+        case "q", "t":
+            return applyQuad(lowered, relative: relative, scanner: &scanner, cursor: &cursor, path: &path)
+        case "a":
+            return applyArcCommand(relative: relative, scanner: &scanner, cursor: &cursor, path: &path)
+        case "z":
+            path.closeSubpath()
+            cursor.current = cursor.subpathStart
+            cursor.lastControl = nil
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// The straight-line family: `m` (moveto), `l` (lineto), `h`/`v` (axis-aligned linetos).
+    private static func applyLinear(_ command: Character, relative: Bool, scanner: inout NumberScanner,
+                                    cursor: inout PathCursor, path: inout Path) -> Bool {
+        switch command {
+        case "m", "l":
+            guard let x = scanner.readNumber(), let y = scanner.readNumber() else { return false }
+            cursor.current = relative ? CGPoint(x: cursor.current.x + x, y: cursor.current.y + y) : CGPoint(x: x, y: y)
+            if command == "m" {
+                path.move(to: cursor.current)
+                cursor.subpathStart = cursor.current
+            } else {
+                path.addLine(to: cursor.current)
+            }
+        case "h":
+            guard let x = scanner.readNumber() else { return false }
+            cursor.current = CGPoint(x: relative ? cursor.current.x + x : x, y: cursor.current.y)
+            path.addLine(to: cursor.current)
+        default:
+            guard let y = scanner.readNumber() else { return false }
+            cursor.current = CGPoint(x: cursor.current.x, y: relative ? cursor.current.y + y : y)
+            path.addLine(to: cursor.current)
+        }
+        cursor.lastControl = nil
+        return true
+    }
+
+    /// The cubic family: `c` (explicit first control) and `s` (first control reflected).
+    private static func applyCubic(_ command: Character, relative: Bool, scanner: inout NumberScanner,
+                                   cursor: inout PathCursor, path: inout Path) -> Bool {
+        let control1: CGPoint
+        if command == "c" {
+            guard let x1 = scanner.readNumber(), let y1 = scanner.readNumber() else { return false }
+            control1 = relative ? CGPoint(x: cursor.current.x + x1, y: cursor.current.y + y1) : CGPoint(x: x1, y: y1)
+        } else {
+            control1 = reflectedControl(cursor.lastControl, around: cursor.current)
+        }
+        guard let x2 = scanner.readNumber(), let y2 = scanner.readNumber(),
+              let x = scanner.readNumber(), let y = scanner.readNumber() else { return false }
+        let control2 = relative ? CGPoint(x: cursor.current.x + x2, y: cursor.current.y + y2) : CGPoint(x: x2, y: y2)
+        let end = relative ? CGPoint(x: cursor.current.x + x, y: cursor.current.y + y) : CGPoint(x: x, y: y)
+        path.addCurve(to: end, control1: control1, control2: control2)
+        cursor.lastControl = control2
+        cursor.current = end
+        return true
+    }
+
+    /// The quadratic family: `q` (explicit control) and `t` (control reflected).
+    private static func applyQuad(_ command: Character, relative: Bool, scanner: inout NumberScanner,
+                                  cursor: inout PathCursor, path: inout Path) -> Bool {
+        let control: CGPoint
+        if command == "q" {
+            guard let x1 = scanner.readNumber(), let y1 = scanner.readNumber() else { return false }
+            control = relative ? CGPoint(x: cursor.current.x + x1, y: cursor.current.y + y1) : CGPoint(x: x1, y: y1)
+        } else {
+            control = reflectedControl(cursor.lastControl, around: cursor.current)
+        }
+        guard let x = scanner.readNumber(), let y = scanner.readNumber() else { return false }
+        let end = relative ? CGPoint(x: cursor.current.x + x, y: cursor.current.y + y) : CGPoint(x: x, y: y)
+        path.addQuadCurve(to: end, control: control)
+        cursor.lastControl = control
+        cursor.current = end
+        return true
+    }
+
+    /// The elliptical-arc command (`a`): seven operands, two of them single-character flags.
+    private static func applyArcCommand(relative: Bool, scanner: inout NumberScanner,
+                                        cursor: inout PathCursor, path: inout Path) -> Bool {
+        guard let rx = scanner.readNumber(), let ry = scanner.readNumber(),
+              let rot = scanner.readNumber(), let large = scanner.readFlag(),
+              let sweep = scanner.readFlag(), let x = scanner.readNumber(), let y = scanner.readNumber() else { return false }
+        let end = relative ? CGPoint(x: cursor.current.x + x, y: cursor.current.y + y) : CGPoint(x: x, y: y)
+        addArc(to: &path, start: cursor.current, rx: rx, ry: ry, xRotDeg: rot, largeArc: large, sweep: sweep, end: end)
+        cursor.current = end
+        cursor.lastControl = nil
+        return true
     }
 
     private static func reflectedControl(_ last: CGPoint?, around current: CGPoint) -> CGPoint {
@@ -389,6 +435,13 @@ private struct NumberScanner {
     init(_ string: String) { characters = Array(string) }
 
     func peek() -> Character? { index < characters.count ? characters[index] : nil }
+
+    /// Skips separators, then peeks the next meaningful character without consuming it — the shape
+    /// the path-data walk needs so its exit condition can live in the `while` (R2).
+    mutating func peekAfterSeparators() -> Character? {
+        skipSeparators()
+        return peek()
+    }
 
     mutating func skipSeparators() {
         while index < characters.count {

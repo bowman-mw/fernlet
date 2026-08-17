@@ -445,7 +445,15 @@ extension FernletStore {
     /// coach send). Encodes through the shared `makeExportJSONEncoder()`, so the bytes are the same
     /// stable dialect as the Phase-1 data export.
     func encodeTrainerExport(_ bundle: TrainerExportBundle) -> Data? {
-        try? Self.makeExportJSONEncoder().encode(bundle)
+        do {
+            return try Self.makeExportJSONEncoder().encode(bundle)
+        } catch {
+            // Callers treat nil as "couldn't prepare the export" and say so; name the reason here so
+            // a failure that never should happen leaves a trace.
+            FernletAuditLog.log("trainerExport.encodeFailed",
+                                context: ["error": String(describing: type(of: error))])
+            return nil
+        }
     }
 
     /// Writes the reviewed bundle to a protected temp JSON file and returns its URL — the interim way to
@@ -460,7 +468,15 @@ extension FernletStore {
     /// changes the included options or leaves the screen without sharing).
     func writeTrainerExportFile(options: TrainerExportOptions) -> URL? {
         guard let data = encodeTrainerExport(buildTrainerExport(options: options)) else { return nil }
-        return try? writeProtectedExport(data, kind: "training")
+        do {
+            return try writeProtectedExport(data, kind: "training")
+        } catch {
+            // The screen surfaces nil as "couldn't prepare the file"; a protected-write failure
+            // (disk full, protection class unavailable) is now recorded rather than dropped.
+            FernletAuditLog.log("trainerExport.writeFailed",
+                                context: ["error": String(describing: type(of: error))])
+            return nil
+        }
     }
 
     /// The user's daily hydration goal in bottles (mirrors the Phase-1 export's `settings.hydrationTarget`).
@@ -567,22 +583,7 @@ extension FernletStore {
     /// caller surfaces it in the export.
     static func rollUpExerciseHistory(days: [FernletDay]) -> (entries: [TrainerExportBundle.ExerciseHistoryEntry],
                                                               unparsedLines: Int) {
-        /// Mutable accumulator; converted to the immutable export entry once every day is folded in.
-        struct Accumulator {
-            var name: String
-            var dayKeys: Set<String> = []
-            var totalSets = 0
-            var firstLogged: String
-            var lastLogged: String
-            var lastSets: Int?
-            var lastReps: String?
-            var lastWeight: Double?
-            var bestWeight: Double?
-            var bestWeightReps: Int?
-            var weightUnit: String?
-        }
-
-        var byExercise: [String: Accumulator] = [:]
+        var byExercise: [String: ExerciseAccumulator] = [:]
         var unparsed = 0
 
         // Oldest first, so "last" genuinely means the most recent day rather than whichever day the
@@ -599,19 +600,9 @@ extension FernletStore {
                         unparsed += 1
                         continue
                     }
-                    var entry = byExercise[key] ?? Accumulator(
+                    var entry = byExercise[key] ?? ExerciseAccumulator(
                         name: parsed.name, firstLogged: day.date, lastLogged: day.date)
-                    entry.dayKeys.insert(day.date)
-                    entry.totalSets += parsed.sets ?? 0
-                    entry.lastLogged = day.date
-                    entry.lastSets = parsed.sets
-                    entry.lastReps = parsed.reps
-                    entry.lastWeight = parsed.weight ?? entry.lastWeight
-                    if let weight = parsed.weight, weight > (entry.bestWeight ?? 0) {
-                        entry.bestWeight = weight
-                        entry.bestWeightReps = parsed.repsCount
-                    }
-                    entry.weightUnit = entry.weightUnit ?? parsed.weightUnit
+                    entry.fold(parsed, dayKey: day.date)
                     byExercise[key] = entry
                 }
             }
@@ -620,30 +611,62 @@ extension FernletStore {
         let entries = byExercise.values
             // Most-recently-trained first, then by frequency — the order a coach reads in.
             .sorted { ($0.lastLogged, $0.dayKeys.count) > ($1.lastLogged, $1.dayKeys.count) }
-            .map { acc -> TrainerExportBundle.ExerciseHistoryEntry in
-                var oneRepMax: Double?
-                if let weight = acc.bestWeight, let reps = acc.bestWeightReps, reps > 0 {
-                    // Epley. Meaningless past ~12 reps, so don't publish an estimate there rather
-                    // than publishing a number a coach might load off.
-                    if reps <= 12 {
-                        oneRepMax = ((weight * (1 + Double(reps) / 30)) * 10).rounded() / 10
-                    }
-                }
-                return .init(
-                    name: acc.name,
-                    sessions: acc.dayKeys.count,
-                    totalSets: acc.totalSets,
-                    firstLogged: acc.firstLogged,
-                    lastLogged: acc.lastLogged,
-                    lastSets: acc.lastSets,
-                    lastReps: acc.lastReps,
-                    lastWeight: acc.lastWeight,
-                    bestWeight: acc.bestWeight,
-                    bestWeightReps: acc.bestWeightReps,
-                    estimatedOneRepMax: oneRepMax,
-                    weightUnit: acc.weightUnit)
-            }
+            .map { $0.entry() }
         return (entries, unparsed)
+    }
+}
+
+/// Mutable per-exercise rollup state; converted to the immutable export entry once every logged day
+/// has been folded in.
+private struct ExerciseAccumulator {
+    var name: String
+    var dayKeys: Set<String> = []
+    var totalSets = 0
+    var firstLogged: String
+    var lastLogged: String
+    var lastSets: Int?
+    var lastReps: String?
+    var lastWeight: Double?
+    var bestWeight: Double?
+    var bestWeightReps: Int?
+    var weightUnit: String?
+
+    /// Folds one parsed line from `dayKey` in. Days arrive oldest-first, so "last" stays honest.
+    mutating func fold(_ parsed: ExerciseLineParser.Parsed, dayKey: String) {
+        dayKeys.insert(dayKey)
+        totalSets += parsed.sets ?? 0
+        lastLogged = dayKey
+        lastSets = parsed.sets
+        lastReps = parsed.reps
+        lastWeight = parsed.weight ?? lastWeight
+        if let weight = parsed.weight, weight > (bestWeight ?? 0) {
+            bestWeight = weight
+            bestWeightReps = parsed.repsCount
+        }
+        weightUnit = weightUnit ?? parsed.weightUnit
+    }
+
+    /// The export row, including the Epley one-rep-max estimate where it is meaningful.
+    func entry() -> TrainerExportBundle.ExerciseHistoryEntry {
+        var oneRepMax: Double?
+        // Epley. Meaningless past ~12 reps, so don't publish an estimate there rather than
+        // publishing a number a coach might load off.
+        if let weight = bestWeight, let reps = bestWeightReps, reps > 0, reps <= 12 {
+            oneRepMax = ((weight * (1 + Double(reps) / 30)) * 10).rounded() / 10
+        }
+        return .init(
+            name: name,
+            sessions: dayKeys.count,
+            totalSets: totalSets,
+            firstLogged: firstLogged,
+            lastLogged: lastLogged,
+            lastSets: lastSets,
+            lastReps: lastReps,
+            lastWeight: lastWeight,
+            bestWeight: bestWeight,
+            bestWeightReps: bestWeightReps,
+            estimatedOneRepMax: oneRepMax,
+            weightUnit: weightUnit)
     }
 }
 
