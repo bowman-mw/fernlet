@@ -150,68 +150,19 @@ enum MealDecompositionResolver {
         catalog: FoodCatalog
     ) -> ResolvedMeal? {
         let gramBounds = DishTemplateLexicon.componentGramBounds(description: payload.mealDescription)
-        var minBindScore = Int.max
-        var droppedComponents = 0
-        var weakComponents = 0
-
-        var resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = []
-        for component in decomposition.components {
-            let ing = component.ingredient.trimmingCharacters(in: .whitespaces)
-            guard !ing.isEmpty else { continue }
-            let prep = component.preparation.trimmingCharacters(in: .whitespaces)
-            let query = (prep.isEmpty || prep.caseInsensitiveCompare("none") == .orderedSame)
-                ? ing
-                : "\(prep) \(ing)"
-            // Bind to the best catalog hit, but drop the component when even the top match is junk
-            // (matched only via category/tags with no real name signal).
-            guard let match = catalog.scoredResults(for: query, limit: 1).first,
-                  match.score >= FoodItemSearch.minimumBindScore else {
-                droppedComponents += 1
-                continue
-            }
-            minBindScore = min(minBindScore, match.score)
-            if match.score < FoodItemSearch.confidentBindScore { weakComponents += 1 }
-            if MealResolutionConfidence.fromModelWord(component.confidence) == .low { weakComponents += 1 }
-            let foodItem = match.item
-            let boundedGrams = boundedComponentGrams(component.grams, query: query, gramBounds: gramBounds)
-            let clampedGrams = max(1, min(1500, boundedGrams))
-            let ingredient = FoodSelectionIngredient(
-                candidateId: 0,
-                foodName: foodItem.name,
-                quantity: clampedGrams,
-                unit: RecipeUnit.gram.rawValue
-            )
-            resolvedIngredients.append((ingredient, foodItem))
-        }
+        let binding = bindComponents(decomposition.components, catalog: catalog, gramBounds: gramBounds)
 
         // Collapse components that bound to the same catalog item (defends against the model
         // emitting e.g. yolk + white + whole that all resolve to one egg row).
-        let deduped = dedupedByFoodItem(resolvedIngredients)
+        let deduped = dedupedByFoodItem(binding.pairs)
         guard !deduped.isEmpty else { return nil }
-
-        // Sanity check: total caloric density must be plausible (0.3–9 kcal/g).
-        let totalGrams = deduped.reduce(0.0) { $0 + $1.0.quantity }
-        let totalCalories = deduped.reduce(0.0) { cal, pair in
-            let ri = RecipeIngredient(foodItemId: pair.1.id, quantity: pair.0.quantity, unit: pair.0.unit)
-            let m = ri.scaledMacros(using: pair.1)
-            return cal + Double(m.calories)
-        }
-        let caloriesPerGram = totalCalories / max(totalGrams, 1)
-        guard caloriesPerGram >= 0.3 && caloriesPerGram <= 9 else { return nil }
-
-        // Total-plausibility sanity check: the per-ingredient gram cap (max 1500) and the caloric-
-        // density check above can BOTH pass while the summed decomposition still runs to tens of
-        // thousands of calories (the "2 burger patties" → 81,688 kcal bug). A single logged dish
-        // above ~4000 kcal / 3 kg is almost certainly a bad multi-ingredient decomposition, so
-        // return nil and let the cascade fall through to a saner tier rather than logging it.
-        guard totalCalories <= Double(MealPlausibility.maxSingleLogCalories),
-              totalGrams <= MealPlausibility.maxSingleLogGrams else { return nil }
+        guard passesTotalPlausibility(deduped) else { return nil }
 
         let confidence = resolutionConfidence(
             model: decomposition.overallConfidence,
-            minBindScore: minBindScore == Int.max ? 0 : minBindScore,
-            droppedComponents: droppedComponents,
-            weakComponents: weakComponents
+            minBindScore: binding.minBindScore == Int.max ? 0 : binding.minBindScore,
+            droppedComponents: binding.dropped,
+            weakComponents: binding.weak
         )
 
         let dishName = decomposition.name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -239,6 +190,79 @@ enum MealDecompositionResolver {
             )
             : nil
         return ResolvedMeal(meal: meal, confidence: confidence, suggestedRecipe: suggestedRecipe)
+    }
+
+    /// R3: the prompt asks for 2–6 components; this is the cap the resolver actually enforces on the
+    /// model-emitted array, since each extra component costs a catalog search and a resolved row.
+    private static let maxModelComponents = 8
+
+    /// The outcome of binding model components to catalog items: the resolved pairs plus the bind
+    /// signals (weakest score, how many were dropped or weak) the confidence blend needs.
+    private struct ComponentBinding {
+        var pairs: [(FoodSelectionIngredient, FoodItem)] = []
+        var minBindScore = Int.max
+        var dropped = 0
+        var weak = 0
+    }
+
+    /// Binds each model-emitted component to its best catalog hit (dropping junk matches) and clamps
+    /// its grams into the dish-template bounds, then 1–1500 g. Capped at ``maxModelComponents``.
+    @available(iOS 26.0, *)
+    private static func bindComponents(
+        _ components: [FoundationDishComponent],
+        catalog: FoodCatalog,
+        gramBounds: [String: ClosedRange<Double>]
+    ) -> ComponentBinding {
+        var binding = ComponentBinding()
+        for component in components.prefix(maxModelComponents) {
+            let ing = component.ingredient.trimmingCharacters(in: .whitespaces)
+            guard !ing.isEmpty else { continue }
+            let prep = component.preparation.trimmingCharacters(in: .whitespaces)
+            let query = (prep.isEmpty || prep.caseInsensitiveCompare("none") == .orderedSame)
+                ? ing
+                : "\(prep) \(ing)"
+            // Bind to the best catalog hit, but drop the component when even the top match is junk
+            // (matched only via category/tags with no real name signal).
+            guard let match = catalog.scoredResults(for: query, limit: 1).first,
+                  match.score >= FoodItemSearch.minimumBindScore else {
+                binding.dropped += 1
+                continue
+            }
+            binding.minBindScore = min(binding.minBindScore, match.score)
+            if match.score < FoodItemSearch.confidentBindScore { binding.weak += 1 }
+            if MealResolutionConfidence.fromModelWord(component.confidence) == .low { binding.weak += 1 }
+            let foodItem = match.item
+            let boundedGrams = boundedComponentGrams(component.grams, query: query, gramBounds: gramBounds)
+            let clampedGrams = max(1, min(1500, boundedGrams))
+            let ingredient = FoodSelectionIngredient(
+                candidateId: 0,
+                foodName: foodItem.name,
+                quantity: clampedGrams,
+                unit: RecipeUnit.gram.rawValue
+            )
+            binding.pairs.append((ingredient, foodItem))
+        }
+        return binding
+    }
+
+    /// Whether the deduped totals are plausible for ONE logged dish: caloric density 0.3–9 kcal/g plus
+    /// the shared `MealPlausibility` single-log caps.
+    ///
+    /// The per-ingredient gram cap (1500) and the density check can BOTH pass while the summed
+    /// decomposition still runs to tens of thousands of calories (the "2 burger patties" → 81,688 kcal
+    /// bug), so a dish above ~4000 kcal / 3 kg is rejected and the cascade falls to a saner tier.
+    @available(iOS 26.0, *)
+    private static func passesTotalPlausibility(_ deduped: [(FoodSelectionIngredient, FoodItem)]) -> Bool {
+        let totalGrams = deduped.reduce(0.0) { $0 + $1.0.quantity }
+        let totalCalories = deduped.reduce(0.0) { cal, pair in
+            let ri = RecipeIngredient(foodItemId: pair.1.id, quantity: pair.0.quantity, unit: pair.0.unit)
+            let m = ri.scaledMacros(using: pair.1)
+            return cal + Double(m.calories)
+        }
+        let caloriesPerGram = totalCalories / max(totalGrams, 1)
+        guard caloriesPerGram >= 0.3, caloriesPerGram <= 9 else { return false }
+        return totalCalories <= Double(MealPlausibility.maxSingleLogCalories)
+            && totalGrams <= MealPlausibility.maxSingleLogGrams
     }
 
     /// Merges resolved components that point at the same catalog item, summing their grams.

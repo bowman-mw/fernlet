@@ -2,6 +2,7 @@ import Foundation
 import AIContext
 import AIProviders
 import FernletDomainModel
+import FernletFoundation
 import FernletScoring
 import FoodCatalog
 import HealthKitGateway
@@ -90,6 +91,12 @@ final class MealResolutionService {
     func resolveMeals(from rawDescription: String, type: MealType? = nil, date: String? = nil) async -> MealResolution {
         let targetDate = date ?? host.todayKey
         assert(!targetDate.isEmpty, "meal date required")
+        // R5: an empty description has nothing to resolve — return the keyword fallback (always
+        // reviewed) rather than dispatching, and charging, the AI gate on an empty prompt.
+        guard rawDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            let empty = MealParser.parse(rawDescription, fallbackType: type)
+            return MealResolution(meals: [empty], createdRecipes: [], confidence: .low, isFallback: true)
+        }
         // Rewrite colloquial ingredient phrasing to the catalog's vocabulary before matching, so the
         // resolver binds the MEAT rather than an assembled fast-food dish ("burger patties" → "beef
         // patties", which the FNDDS "hamburger, on wheat bun" entries can't match).
@@ -110,7 +117,14 @@ final class MealResolutionService {
                 ) {
                     return Self.plausibilityGated(MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false, suggestedRecipe: resolved.suggestedRecipe))
                 }
-            } catch {}
+            } catch {
+                // Recovery: the cascade continues to the next tier; name the fall-through so a model
+                // failure is not indistinguishable from "the tier had nothing to say".
+                FernletAuditLog.log(
+                    "mealResolution.decomposeTier.failed",
+                    context: ["error": error.localizedDescription]
+                )
+            }
 
             // Secondary AI: candidate-constrained selection (catalog-grounded, high confidence).
             let candidates = host.foodCatalog.candidates(for: description)
@@ -121,7 +135,13 @@ final class MealResolutionService {
                 ), let resolution = highConfidenceResolution(from: plan, candidates: candidates) {
                     return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }
-            } catch {}
+            } catch {
+                // Recovery: fall through to the deterministic tiers below.
+                FernletAuditLog.log(
+                    "mealResolution.selectionTier.failed",
+                    context: ["error": error.localizedDescription]
+                )
+            }
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.

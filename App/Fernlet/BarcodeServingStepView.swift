@@ -14,6 +14,10 @@ import FernletDomainModel
 enum BarcodeServingMemory {
     static let defaultsKey = "fernlet.barcodeLastServings.v1"
 
+    /// R3: one entry appears per distinct scanned product, so the dictionary is explicitly capped —
+    /// at the cap a newly scanned product evicts the lowest-sorted remembered key.
+    static let maxRememberedBarcodes = 500
+
     /// Last serving count recorded for `barcode`, or `nil` when the code is unrecognizable (e.g. the
     /// empty barcode of a label-scanned item) or nothing has been logged for it yet. Only positive
     /// counts are returned.
@@ -27,8 +31,11 @@ enum BarcodeServingMemory {
     /// Records `servings` as the last count for `barcode`. No-ops for unrecognizable codes or a
     /// non-positive count (those carry no useful prefill).
     static func setLastServings(_ servings: Double, for barcode: String?, defaults: UserDefaults = .standard) {
-        guard let key = FoodBarcode.normalized(barcode), servings > 0 else { return }
+        guard let key = FoodBarcode.normalized(barcode), servings.isFinite, servings > 0 else { return }
         var map = defaults.dictionary(forKey: defaultsKey) ?? [:]
+        if map[key] == nil, map.count >= maxRememberedBarcodes, let evicted = map.keys.sorted().first {
+            map.removeValue(forKey: evicted)
+        }
         map[key] = servings
         defaults.set(map, forKey: defaultsKey)
     }
@@ -76,8 +83,17 @@ struct BarcodeServingStepView: View {
         _servings = State(initialValue: initialServings > 0 ? initialServings : 1)
     }
 
-    /// Clamped, log-safe count (a typed-in negative or blank collapses to zero, which disables Log).
-    private var sanitizedServings: Double { max(servings, 0) }
+    /// The Stepper's upper bound, applied to the TYPED value too: `Macros.scaled(by:)` converts with
+    /// `Int(Double)`, which traps on an out-of-range product — and `scaledMacros` is evaluated in
+    /// `body` while the user is still typing (R5).
+    private static let maxServings = 99.0
+
+    /// Clamped, log-safe count (a typed-in negative or blank collapses to zero, which disables Log; a
+    /// huge or non-finite entry is clamped to ``maxServings``).
+    private var sanitizedServings: Double {
+        guard servings.isFinite else { return 0 }
+        return min(max(servings, 0), Self.maxServings)
+    }
 
     private var scaledMacros: Macros { foodItem.macros.scaled(by: sanitizedServings) }
 

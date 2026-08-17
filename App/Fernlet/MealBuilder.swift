@@ -119,7 +119,11 @@ struct MealBuilder {
             .joined(separator: ", ")
 
         return Meal(
-            name: itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? resolvedIngredients[0].1.name : itemName.capitalized,
+            // R5: the non-empty precondition is stated here rather than trusted — an empty pair list
+            // falls back to the same generic name `createRecipe` uses instead of trapping on [0].
+            name: itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? (resolvedIngredients.first?.1.name ?? "Meal item")
+                : itemName.capitalized,
             mealType: mealType,
             macros: Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat),
             macroSnapshot: Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat),
