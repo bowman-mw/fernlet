@@ -98,6 +98,9 @@ public nonisolated enum FoodImageTaxonomy {
         confidenceFloor: Double = FoodImageTaxonomy.confidenceFloor,
         maxLabels: Int = FoodImageTaxonomy.maxLabels
     ) -> String? {
+        // R5: `prefix` traps on a negative length; a caller asking for no labels gets the same
+        // "couldn't tell" fallback an empty classification set produces.
+        guard maxLabels > 0 else { return nil }
         var seen = Set<String>()
         let labels = classifications
             .filter { $0.confidence >= confidenceFloor && isFoodIdentifier($0.identifier) }

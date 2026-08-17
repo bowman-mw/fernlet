@@ -112,6 +112,11 @@ public final class WorkoutHealthKitSync {
     private weak var context: WorkoutSyncContext?
     /// The HealthKit gateway used for all sample reads/writes/observation.
     private let service: any HealthKitServicing
+    /// Workout ids whose tombstone delete is already running.
+    ///
+    /// R3: bounds task fan-out to one in-flight delete per id, so a batch that redelivers the same
+    /// resurrected samples (HealthKit replays until the anchor advances) cannot re-issue deletes.
+    private var inFlightTombstoneDeletes: Set<UUID> = []
 
     public init(context: WorkoutSyncContext, service: any HealthKitServicing) {
         self.context = context
@@ -170,7 +175,17 @@ public final class WorkoutHealthKitSync {
     public func resyncAuthoredWorkoutInHealth(_ workout: Workout, date: String) async {
         guard Self.isWorkoutLoggingAuthorized(service.currentAuthorizationSnapshot()) else { return }
         do {
-            _ = try await service.deleteWorkout(fernletWorkoutID: workout.id)
+            // R7: the Bool is "a prior sample was found and deleted". `false` is legitimate for a
+            // row that was never stamped, but it is ALSO what a predicate mismatch on a real old
+            // sample returns — after which the save below leaves two samples in Health. Recovery is
+            // to proceed (the new sample is the truth), with an audit line so the duplicate is
+            // diagnosable instead of unexplained.
+            let deleted = try await service.deleteWorkout(fernletWorkoutID: workout.id)
+            if !deleted {
+                FernletAuditLog.log("healthkit.workout.resync.noPriorSample", context: [
+                    "workoutID": workout.id.uuidString
+                ])
+            }
         } catch {
             FernletAuditLog.log("healthkit.workout.resyncDelete.failed", context: ["error": error.localizedDescription])
         }
@@ -307,6 +322,9 @@ public final class WorkoutHealthKitSync {
             stopObservation()
             return
         }
+        // R3: the tombstoned ids are collected here and deleted by ONE task after the loop, instead
+        // of one detached Task per sample (unbounded fan-out on a resurrected batch).
+        var tombstoned: [UUID] = []
         for sample in samples {
             let externalID = sample.metadata?["fernlet.workoutID"] as? String
             let syncID = sample.metadata?[HKMetadataKeySyncIdentifier] as? String
@@ -316,8 +334,9 @@ public final class WorkoutHealthKitSync {
             // resurfaced (its in-flight save landed after the row was gone). Delete it from Health and
             // skip the import so it can't come back as a new, untagged, unremovable Health row.
             if let knownUUID, context.isWorkoutTombstoned(fernletWorkoutID: knownUUID) {
-                Task { [weak self] in
-                    await self?.removeAuthoredWorkoutFromHealth(fernletWorkoutID: knownUUID)
+                if !inFlightTombstoneDeletes.contains(knownUUID) {
+                    inFlightTombstoneDeletes.insert(knownUUID)
+                    tombstoned.append(knownUUID)
                 }
                 continue
             }
@@ -343,6 +362,13 @@ public final class WorkoutHealthKitSync {
             let workout = Self.makeWorkout(from: sample, authoredFernletID: authoredID)
             let dayKey = FernletDate.dayKey(for: sample.endDate)
             context.upsertWorkout(workout, date: dayKey)
+        }
+        guard !tombstoned.isEmpty else { return }
+        Task { [weak self] in
+            for id in tombstoned {
+                await self?.removeAuthoredWorkoutFromHealth(fernletWorkoutID: id)
+                self?.inFlightTombstoneDeletes.remove(id)
+            }
         }
     }
 

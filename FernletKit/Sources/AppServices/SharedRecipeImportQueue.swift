@@ -1,4 +1,5 @@
 import Foundation
+import os
 import FernletDomainModel
 import AIProviders
 
@@ -88,6 +89,22 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 public struct SharedRecipeImportQueue {
     static let appGroupIdentifier = "group.MBO.Fernlet"
 
+    /// R3: the cap on how many queued imports the app will ever carry, applied where the external
+    /// input enters (``records()`` and the read half of `modifyRecords`). The file is written by a
+    /// SEPARATE process (the share extension) and can be refilled while the app is backgrounded, so
+    /// without this the drain's work — one web fetch per record — is unbounded. Oldest-first, which
+    /// matches the extension's append order.
+    public static let maxQueuedImports = 200
+
+    /// R2: the named retry cap a record self-destructs at, so a permanently broken page cannot
+    /// retry forever. **Twin note:** the extension never writes `attemptCount`, so this constant is
+    /// app-side only.
+    public static let maxImportAttempts = 5
+
+    /// This module's unified-log sink. `AppServices` deliberately declares no `FernletFoundation`
+    /// edge (see `Package.swift`), so `os.Logger` — not `FernletAuditLog` — is the audit surface here.
+    private static let logger = Logger(subsystem: "com.fernlet", category: "recipeImportQueue")
+
     private let fileManager: FileManager
     private let fileURL: URL
     private let encoder: JSONEncoder
@@ -100,24 +117,48 @@ public struct SharedRecipeImportQueue {
         self.decoder = Self.makeDecoder()
     }
 
-    /// The current queue contents under a coordinated read. Missing, unreadable, or corrupt files
-    /// all read as an empty queue — the drain never throws.
+    /// The current queue contents under a coordinated read, capped at ``maxQueuedImports``
+    /// (oldest-first). Missing, unreadable, or corrupt files all read as an empty queue — the drain
+    /// never throws — but each of those outcomes is now named in the log rather than being
+    /// indistinguishable from "nothing queued".
     public func records() -> [SharedRecipeImportRecord] {
         var result: [SharedRecipeImportRecord] = []
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &coordinatorError) { url in
-            guard fileManager.fileExists(atPath: url.path),
-                  let data = try? Data(contentsOf: url),
-                  let decoded = try? decoder.decode([SharedRecipeImportRecord].self, from: data) else { return }
-            result = decoded
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let decoded = decodeRecords(at: url) else { return }
+            result = Array(decoded.prefix(Self.maxQueuedImports))   // R3: cap where the input enters.
+        }
+        if let coordinatorError {
+            Self.logger.error("recipeImportQueue.coordinateReadFailed: \(coordinatorError.localizedDescription, privacy: .public)")
         }
         return result
     }
 
+    /// Decodes the queue file at `url`, or `nil` when it is unreadable/corrupt (logged once, with
+    /// the reason — a corrupt queue file is otherwise silently permanent).
+    private func decodeRecords(at url: URL) -> [SharedRecipeImportRecord]? {
+        do {
+            return try decoder.decode([SharedRecipeImportRecord].self, from: try Data(contentsOf: url))
+        } catch {
+            Self.logger.error("recipeImportQueue.corrupt: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Removes a record by id — the success path after an import lands in the store.
     public func remove(_ record: SharedRecipeImportRecord) {
-        modifyRecords { $0.removeAll { $0.id == record.id } }
+        logIfRewriteFailed(modifyRecords { $0.removeAll { $0.id == record.id } }, operation: "remove")
+    }
+
+    /// R7: names the recovery when a queue rewrite does not land. A failed rewrite after `remove`
+    /// re-imports the recipe on the next foreground (a duplicate saved recipe); after `markAttempt`
+    /// it means a broken page never reaches its self-destruct. Neither is recoverable here — the
+    /// next drain retries — so the recovery is a log line that makes the duplicate diagnosable.
+    private func logIfRewriteFailed(_ didWrite: Bool, operation: String) {
+        guard !didWrite else { return }
+        Self.logger.error("recipeImportQueue.writeFailed: \(operation, privacy: .public)")
     }
 
     /// Discards every queued import without running it. Called by "delete everything".
@@ -132,34 +173,44 @@ public struct SharedRecipeImportQueue {
     /// destroying records it cannot parse, which is right for an edit and exactly wrong for a wipe. Here
     /// an unreadable file must still be cleared — unparseable is not the same as absent, and the drain
     /// would keep retrying it.
-    @discardableResult
+    ///
+    /// R7: the `Bool` is NOT discardable — it is the "the file was actually emptied" signal, and a
+    /// wipe that ignores it lets a recipe shared before the wipe import itself back afterwards.
     public func clear() -> Bool { save([]) }
 
-    /// Records a failed import attempt (timestamp + error text). A record that reaches 5 attempts
-    /// is removed outright, so a permanently broken page cannot retry forever.
+    /// Records a failed import attempt (timestamp + error text). A record that reaches
+    /// ``maxImportAttempts`` attempts is removed outright, so a permanently broken page cannot
+    /// retry forever.
     public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
-        modifyRecords { records in
+        let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].attemptCount += 1
             records[index].lastAttemptAt = Date()
             records[index].lastErrorDescription = errorDescription
-            if records[index].attemptCount >= 5 {
+            if records[index].attemptCount >= Self.maxImportAttempts {
                 records.remove(at: index)
             }
         }
+        logIfRewriteFailed(didWrite, operation: "markAttempt")
     }
 
     /// Stamps a record as deferred-for-budget on `dayKey` (the drain hit `aiBudgetExhausted`). Unlike
     /// `markAttempt`, this does NOT burn an attempt or remove the record — a budget miss is transient and
     /// not the page's fault; it only tells the drain to stop re-fetching this page today.
     public func markBudgetDeferred(_ record: SharedRecipeImportRecord, dayKey: String) {
-        modifyRecords { records in
+        let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].budgetDeferredDayKey = dayKey
         }
+        logIfRewriteFailed(didWrite, operation: "markBudgetDeferred")
     }
 
-    private func modifyRecords(_ transform: (inout [SharedRecipeImportRecord]) -> Void) {
+    /// Applies `transform` to the queue under one coordinated read+write, returning whether the
+    /// rewrite actually landed. `false` means the mutation was NOT persisted: the coordinator
+    /// refused, the file exists but is corrupt (aborted deliberately, to preserve records it cannot
+    /// parse), or the write failed.
+    private func modifyRecords(_ transform: (inout [SharedRecipeImportRecord]) -> Void) -> Bool {
+        var didWrite = false
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
@@ -167,20 +218,26 @@ public struct SharedRecipeImportQueue {
                                error: &coordinatorError) { readURL, writeURL in
             var current: [SharedRecipeImportRecord] = []
             if fileManager.fileExists(atPath: readURL.path) {
-                guard let data = try? Data(contentsOf: readURL),
-                      let decoded = try? decoder.decode([SharedRecipeImportRecord].self, from: data) else {
+                guard let decoded = decodeRecords(at: readURL) else {
                     return  // File exists but corrupt — abort mutation to preserve data.
                 }
-                current = decoded
+                current = Array(decoded.prefix(Self.maxQueuedImports))   // R3: cap where the input enters.
             }
             transform(&current)
-            writeRecords(current, to: writeURL)
+            didWrite = writeRecords(current, to: writeURL)
         }
+        if let coordinatorError {
+            Self.logger.error("recipeImportQueue.coordinateWriteFailed: \(coordinatorError.localizedDescription, privacy: .public)")
+            return false
+        }
+        return didWrite
     }
 
     /// Replaces the whole file with `records` under a coordinated write, ignoring current contents.
     /// Internal: production code mutates via `modifyRecords`; this backs ``clear()`` and tests.
-    @discardableResult
+    ///
+    /// R7: the write-success `Bool` is not discardable — ``clear()``'s delete-everything contract
+    /// rests on it.
     func save(_ records: [SharedRecipeImportRecord]) -> Bool {
         var success = false
         var coordinatorError: NSError?
@@ -191,7 +248,11 @@ public struct SharedRecipeImportQueue {
         return success && coordinatorError == nil
     }
 
-    @discardableResult
+    /// Encodes and atomically writes `records`, returning whether the write landed.
+    ///
+    /// R7: the result is not discardable — every caller acts on it. The failure is logged rather
+    /// than asserted so it survives Release, where an `assertionFailure` compiles out and left a
+    /// failed rewrite with no trace at all.
     private func writeRecords(_ records: [SharedRecipeImportRecord], to url: URL) -> Bool {
         do {
             try fileManager.createDirectory(
@@ -202,7 +263,7 @@ public struct SharedRecipeImportQueue {
             try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             return true
         } catch {
-            assertionFailure("shared recipe import queue write failed")
+            Self.logger.error("recipeImportQueue.writeRecordsFailed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

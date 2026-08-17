@@ -150,7 +150,7 @@ struct SharedRecipeImportQueueMirrorTests {
         let queue = SharedRecipeImportQueue(fileURL: fileURL)
 
         let deferred = SharedRecipeImportRecord(url: URL(string: "https://example.com/deferred")!)
-        queue.save([deferred])
+        #expect(queue.save([deferred]))
         queue.markBudgetDeferred(deferred, dayKey: "2026-08-09")
         #expect(queue.records().first?.budgetDeferredDayKey == "2026-08-09", "precondition: the stamp did not land")
 

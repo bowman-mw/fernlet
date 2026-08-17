@@ -109,6 +109,9 @@ public nonisolated enum KeychainItem {
         synchronizable: Bool = false,
         replacing: SynchronizableScope = .any
     ) -> OSStatus {
+        // R5: an empty account/service/payload is a caller bug, not a keychain condition — SecItemAdd
+        // would happily file a row under an empty key that no typed load ever finds again.
+        guard !account.isEmpty, !service.isEmpty, !data.isEmpty else { return errSecParam }
         delete(account: account, service: service, synchronizable: replacing)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -125,6 +128,7 @@ public nonisolated enum KeychainItem {
     /// Loads the data of the single item matching `service` + `account` within `synchronizable`
     /// scope, or `nil` when no item matches (or the keychain call fails).
     public static func load(account: String, service: String, synchronizable: SynchronizableScope = .any) -> Data? {
+        guard !account.isEmpty, !service.isEmpty else { return nil }   // R5: no row is ever filed under an empty key.
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -152,6 +156,9 @@ public nonisolated enum KeychainItem {
         service: String,
         synchronizable: SynchronizableScope = .any
     ) -> ReadResult {
+        // R5: an empty key can never have been stored, but it is a caller bug rather than a clean
+        // absence — report it as unreadable so mint-on-absent callers fail closed instead of minting.
+        guard !account.isEmpty, !service.isEmpty else { return .unreadable(errSecParam) }
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -181,6 +188,7 @@ public nonisolated enum KeychainItem {
     /// enumerate to discover the full set (a fresh device does not know the account name a priori). Query
     /// `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no match/error.
     public static func loadAll(service: String, synchronizable: SynchronizableScope = .any) -> [(account: String, data: Data)] {
+        guard !service.isEmpty else { return [] }   // R5: an empty service slot holds nothing of Fernlet's.
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -202,7 +210,29 @@ public nonisolated enum KeychainItem {
 
     /// Deletes the item matching `service` + `account` within `synchronizable` scope. A no-match
     /// result is silently ignored, so the call is safe to make unconditionally.
+    ///
+    /// R7: `SecItemDelete`'s status is inspected rather than dropped. `errSecItemNotFound` is the
+    /// documented benign outcome; anything else (`errSecInteractionNotAllowed` before first unlock,
+    /// `errSecNotAvailable`) means a row the lock-reset / delete-everything flows believe they
+    /// removed is still there, so it is audited. Use ``deleteReportingStatus(account:service:synchronizable:)``
+    /// where the caller must act on that.
     public static func delete(account: String, service: String, synchronizable: SynchronizableScope = .any) {
+        let status = deleteReportingStatus(account: account, service: service, synchronizable: synchronizable)
+        guard status != errSecSuccess else { return }
+        FernletAuditLog.log("keychain.delete.failed", context: [
+            "service": service, "account": account, "status": "\(status)"
+        ])
+    }
+
+    /// ``delete(account:service:synchronizable:)`` reporting its outcome: `errSecSuccess` when the
+    /// row is gone (including the `errSecItemNotFound` "was never there" case, normalized), else the
+    /// failing `OSStatus`. For callers whose contract depends on the row actually being removed.
+    public static func deleteReportingStatus(
+        account: String,
+        service: String,
+        synchronizable: SynchronizableScope = .any
+    ) -> OSStatus {
+        guard !account.isEmpty, !service.isEmpty else { return errSecParam }   // R5: nothing is filed under an empty key.
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -210,19 +240,33 @@ public nonisolated enum KeychainItem {
             kSecAttrSynchronizable as String: synchronizable.queryValue,
             kSecUseDataProtectionKeychain as String: true
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecItemNotFound ? errSecSuccess : status
     }
 
     /// Deletes EVERY item under `service`, both synced and device-only variants. Used by the
     /// lock-reset and delete-everything flows to clear a whole service slot at once.
+    ///
+    /// R7: a non-benign `SecItemDelete` status is audited rather than dropped — these flows promise
+    /// the slot is empty afterwards.
     public static func deleteAll(service: String) {
+        let status = deleteAllReportingStatus(service: service)
+        guard status != errSecSuccess else { return }
+        FernletAuditLog.log("keychain.deleteAll.failed", context: ["service": service, "status": "\(status)"])
+    }
+
+    /// ``deleteAll(service:)`` reporting its outcome, with `errSecItemNotFound` normalized to
+    /// `errSecSuccess` (an empty slot is a cleared slot).
+    public static func deleteAllReportingStatus(service: String) -> OSStatus {
+        guard !service.isEmpty else { return errSecParam }   // R5: refuse to sweep an unnamed slot.
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecUseDataProtectionKeychain as String: true
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecItemNotFound ? errSecSuccess : status
     }
 
     // MARK: - Account typed convenience (AfterFirstUnlockThisDeviceOnly)
@@ -245,20 +289,43 @@ public nonisolated enum KeychainItem {
         delete(account: account.rawValue, service: service)
     }
 
+    /// ``delete(for:service:)`` reporting its outcome, for the wipe flows that must know whether the
+    /// row is genuinely gone (`errSecItemNotFound` normalized to `errSecSuccess`).
+    public static func deleteReportingStatus(for account: Account, service: String) -> OSStatus {
+        deleteReportingStatus(account: account.rawValue, service: service)
+    }
+
     /// Loads the device-bound `SymmetricKey` stored for a well-known ``Account``, minting and
     /// persisting a fresh 256-bit key on first use.
     ///
-    /// Goes through the typed ``load(for:service:)`` / ``store(_:for:service:)`` overloads, so the
-    /// row is pinned to `AfterFirstUnlockThisDeviceOnly` accessibility (device-bound, never
-    /// iCloud-synced) and a failed store is silently discarded — exactly the semantics of the
-    /// historical per-caller copies this replaces (the journal and Worry Box device keys).
+    /// Goes through the typed ``store(_:for:service:)`` overload, so the row is pinned to
+    /// `AfterFirstUnlockThisDeviceOnly` accessibility (device-bound, never iCloud-synced).
+    ///
+    /// R7: the read distinguishes absence from unreadability (``loadDistinguishingAbsence(account:service:synchronizable:)``)
+    /// and BOTH failure legs are audited rather than dropped — `keychain.deviceKey.unreadable` when a
+    /// pre-first-unlock read hides an existing key (the returned fresh key then seals content the
+    /// stored key cannot open), and `keychain.deviceKey.storeFailed` when the fresh key could not be
+    /// persisted (content sealed with it is unopenable next launch). The signature stays
+    /// non-throwing so the existing callers are unchanged; the audit trail is what makes either
+    /// event diagnosable instead of invisible.
     public static func loadOrCreateSymmetricKey(for account: Account, service: String) -> SymmetricKey {
-        if let data = load(for: account, service: service) {
+        switch loadDistinguishingAbsence(account: account.rawValue, service: service) {
+        case .found(let data):
             return SymmetricKey(data: data)
+        case .unreadable(let status):
+            FernletAuditLog.log("keychain.deviceKey.unreadable", context: [
+                "account": account.rawValue, "status": "\(status)"
+            ])
+        case .absent:
+            break
         }
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }
-        store(keyData, for: account, service: service)
+        let status = store(keyData, for: account, service: service)
+        guard status != errSecSuccess else { return key }
+        FernletAuditLog.log("keychain.deviceKey.storeFailed", context: [
+            "account": account.rawValue, "status": "\(status)"
+        ])
         return key
     }
 }

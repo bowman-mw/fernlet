@@ -392,113 +392,164 @@ public final class NutritionLabelScanner {
     ///   - matchIndex: Which numeric token on a line to read — 0 = first (left) column,
     ///     1 = second (right) column. Defaults to 0 so all existing callers are unaffected.
     public static func parse(lines: [String], matchIndex: Int = 0) -> NutritionLabelResult {
+        // R5: OCR callers pick the column; a negative index passes the `matches.count > matchIndex`
+        // guards in the extractors and then subscripts `matches[matchIndex]`. Nothing to read.
+        guard matchIndex >= 0 else { return NutritionLabelResult() }
         var result = NutritionLabelResult()
         let normalized = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+        // The three appliers below preserve the original single if/else-if chain's ORDER exactly —
+        // each returns true for the same label match that used to claim the line.
         for line in normalized {
             let lower = line.lowercased()
-
-            if lower.hasPrefix("serving size") {
-                result.servingSize = extractTrailingText(from: line, after: "serving size")
-                continue
-            }
-
-            if lower.contains("servings per container") || lower.contains("servings per package") {
-                result.servingsPerContainer = extractInt(from: lower, matchIndex: matchIndex)
-                continue
-            }
-
-            if lower.hasPrefix("calories") && lower.contains("from fat") == false {
-                result.calories = extractInt(from: lower, matchIndex: matchIndex)
-                continue
-            }
-
-            // Daily-Value back-solve references come from the single shared
-            // `FDADailyValues` table (21 CFR 101.9) that `MicronutrientGapAnalyzer`
-            // also reads — the scanner already used the FDA figures (calcium 1,300 /
-            // potassium 4,700), so this is a source-consolidation, not a value change.
-            if matchesLabel(lower, "total fat") {
-                result.fat = extractGrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.totalFatGrams, matchIndex: matchIndex).map { Int($0.rounded()) }
-            } else if matchesLabel(lower, "saturated fat") {
-                result.saturatedFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.saturatedFatGrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "trans fat") {
-                result.transFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "total carbohydrate") || matchesLabel(lower, "total carb") {
-                result.carbs = extractGrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.totalCarbohydrateGrams, matchIndex: matchIndex).map { Int($0.rounded()) }
-            } else if matchesLabel(lower, "dietary fiber") {
-                result.fiber = extractGramsDouble(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.fiberGrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "added sugars") || matchesLabel(lower, "added sugar") {
-                result.addedSugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.addedSugarsGrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "total sugars") || matchesLabel(lower, "sugars") {
-                result.sugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "protein") {
-                result.protein = extractGrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.proteinGrams, matchIndex: matchIndex).map { Int($0.rounded()) }
-            } else if matchesLabel(lower, "cholesterol") {
-                result.cholesterol = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.cholesterolMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "sodium") {
-                result.sodium = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.sodiumLimitMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "vitamin d") {
-                result.vitaminD = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminDMicrograms, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "vitamin a") {
-                result.vitaminA = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminAMicrogramsRAE, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "vitamin c") {
-                result.vitaminC = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminCMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "vitamin e") {
-                result.vitaminE = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminEMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "vitamin b12") || matchesLabel(lower, "vitamin b-12") {
-                result.vitaminB12 = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminB12Micrograms, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "thiamin") || matchesLabel(lower, "thiamine") {
-                result.thiamin = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.thiaminMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "riboflavin") {
-                result.riboflavin = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.riboflavinMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "niacin") {
-                result.niacin = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.niacinMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "folate") || matchesLabel(lower, "folic acid") {
-                result.folate = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.folateMicrogramsDFE, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "calcium") {
-                result.calcium = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.calciumMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "iron") {
-                result.iron = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.ironMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "potassium") {
-                result.potassium = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.potassiumMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "magnesium") {
-                result.magnesium = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.magnesiumMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "phosphorus") {
-                result.phosphorus = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.phosphorusMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "zinc") {
-                result.zinc = extractMilligrams(from: lower, matchIndex: matchIndex)
-                    ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.zincMilligrams, matchIndex: matchIndex)
-            } else if matchesLabel(lower, "omega-3") || matchesLabel(lower, "omega 3") || matchesLabel(lower, "dha") || matchesLabel(lower, "epa") {
-                result.omega3 = extractGramsOrMilligramsAsGrams(from: lower, matchIndex: matchIndex)
-            }
+            if applyHeaderLine(lower, line: line, matchIndex: matchIndex, into: &result) { continue }
+            if applyMacroLine(lower, matchIndex: matchIndex, into: &result) { continue }
+            if applyVitaminLine(lower, matchIndex: matchIndex, into: &result) { continue }
+            _ = applyMineralLine(lower, matchIndex: matchIndex, into: &result)
         }
 
         recoverSplitLineValues(from: normalized, into: &result)
         applySanityLimits(to: &result)
 
         return result
+    }
+
+    /// Serving/calories header lines. Returns true when `lower` was one of them.
+    private static func applyHeaderLine(
+        _ lower: String,
+        line: String,
+        matchIndex: Int,
+        into result: inout NutritionLabelResult
+    ) -> Bool {
+        if lower.hasPrefix("serving size") {
+            result.servingSize = extractTrailingText(from: line, after: "serving size")
+            return true
+        }
+        if lower.contains("servings per container") || lower.contains("servings per package") {
+            result.servingsPerContainer = extractInt(from: lower, matchIndex: matchIndex)
+            return true
+        }
+        if lower.hasPrefix("calories") && lower.contains("from fat") == false {
+            result.calories = extractInt(from: lower, matchIndex: matchIndex)
+            return true
+        }
+        return false
+    }
+
+    /// Macro rows plus the two macro-adjacent minerals that follow them on a Nutrition Facts panel
+    /// (cholesterol, sodium). Returns true when `lower` matched one of them.
+    ///
+    /// Daily-Value back-solve references come from the single shared `FDADailyValues` table
+    /// (21 CFR 101.9) that `MicronutrientGapAnalyzer` also reads.
+    private static func applyMacroLine(
+        _ lower: String,
+        matchIndex: Int,
+        into result: inout NutritionLabelResult
+    ) -> Bool {
+        if matchesLabel(lower, "total fat") {
+            result.fat = extractGrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.totalFatGrams, matchIndex: matchIndex).flatMap { clampedInt($0) }
+        } else if matchesLabel(lower, "saturated fat") {
+            result.saturatedFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.saturatedFatGrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "trans fat") {
+            result.transFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "total carbohydrate") || matchesLabel(lower, "total carb") {
+            result.carbs = extractGrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.totalCarbohydrateGrams, matchIndex: matchIndex).flatMap { clampedInt($0) }
+        } else if matchesLabel(lower, "dietary fiber") {
+            result.fiber = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.fiberGrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "added sugars") || matchesLabel(lower, "added sugar") {
+            result.addedSugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.addedSugarsGrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "total sugars") || matchesLabel(lower, "sugars") {
+            result.sugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "protein") {
+            result.protein = extractGrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.proteinGrams, matchIndex: matchIndex).flatMap { clampedInt($0) }
+        } else if matchesLabel(lower, "cholesterol") {
+            result.cholesterol = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.cholesterolMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "sodium") {
+            result.sodium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.sodiumLimitMilligrams, matchIndex: matchIndex)
+        } else {
+            return false
+        }
+        return true
+    }
+
+    /// Vitamin rows, in the same order the original chain tested them. Returns true on a match.
+    private static func applyVitaminLine(
+        _ lower: String,
+        matchIndex: Int,
+        into result: inout NutritionLabelResult
+    ) -> Bool {
+        if matchesLabel(lower, "vitamin d") {
+            result.vitaminD = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminDMicrograms, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "vitamin a") {
+            result.vitaminA = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminAMicrogramsRAE, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "vitamin c") {
+            result.vitaminC = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminCMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "vitamin e") {
+            result.vitaminE = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminEMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "vitamin b12") || matchesLabel(lower, "vitamin b-12") {
+            result.vitaminB12 = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.vitaminB12Micrograms, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "thiamin") || matchesLabel(lower, "thiamine") {
+            result.thiamin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.thiaminMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "riboflavin") {
+            result.riboflavin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.riboflavinMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "niacin") {
+            result.niacin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.niacinMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "folate") || matchesLabel(lower, "folic acid") {
+            result.folate = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.folateMicrogramsDFE, matchIndex: matchIndex)
+        } else {
+            return false
+        }
+        return true
+    }
+
+    /// Mineral rows (plus omega-3), in the same order the original chain tested them. Returns true
+    /// on a match.
+    private static func applyMineralLine(
+        _ lower: String,
+        matchIndex: Int,
+        into result: inout NutritionLabelResult
+    ) -> Bool {
+        if matchesLabel(lower, "calcium") {
+            result.calcium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.calciumMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "iron") {
+            result.iron = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.ironMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "potassium") {
+            result.potassium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.potassiumMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "magnesium") {
+            result.magnesium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.magnesiumMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "phosphorus") {
+            result.phosphorus = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.phosphorusMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "zinc") {
+            result.zinc = extractMilligrams(from: lower, matchIndex: matchIndex)
+                ?? extractFromDailyValue(from: lower, dvReference: FDADailyValues.zincMilligrams, matchIndex: matchIndex)
+        } else if matchesLabel(lower, "omega-3") || matchesLabel(lower, "omega 3") || matchesLabel(lower, "dha") || matchesLabel(lower, "epa") {
+            result.omega3 = extractGramsOrMilligramsAsGrams(from: lower, matchIndex: matchIndex)
+        } else {
+            return false
+        }
+        return true
     }
 
     private static func matchesLabel(_ line: String, _ label: String) -> Bool {
@@ -678,14 +729,29 @@ public final class NutritionLabelScanner {
         return after.isEmpty ? nil : after
     }
 
+    /// The largest label value the parser will believe. Anything past it is OCR garbage (a lot
+    /// number, a misread barcode, a digit run the `\d+` number pattern happily accepts).
+    private static let maxPlausibleLabelValue = 1_000_000.0
+
+    /// `Int(value.rounded())` with the trap removed.
+    ///
+    /// R5: OCR text is external input and the number pattern accepts any digit run, so a 20-digit
+    /// token would overflow `Int` and crash the scan. A value that is not finite, or beyond
+    /// ``maxPlausibleLabelValue``, reads as "not recognized" — the same `nil` every other
+    /// unparseable field produces.
+    private static func clampedInt(_ value: Double) -> Int? {
+        guard value.isFinite, abs(value) <= maxPlausibleLabelValue else { return nil }
+        return Int(value.rounded())
+    }
+
     private static func extractInt(from text: String, matchIndex: Int = 0) -> Int? {
         guard let value = extractFirstBareNumber(from: text, matchIndex: matchIndex) else { return nil }
-        return Int(value.rounded())
+        return clampedInt(value)
     }
 
     private static func extractGrams(from text: String, matchIndex: Int = 0) -> Int? {
         guard let value = extractGramsDouble(from: text, matchIndex: matchIndex) else { return nil }
-        return Int(value.rounded())
+        return clampedInt(value)
     }
 
     private static func extractGramsDouble(from text: String, matchIndex: Int = 0) -> Double? {

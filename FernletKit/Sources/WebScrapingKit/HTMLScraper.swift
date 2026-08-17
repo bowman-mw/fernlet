@@ -1,4 +1,28 @@
 import Foundation
+import os
+
+/// Compiles this module's regex patterns, naming a compile failure instead of silently reporting
+/// "no match".
+///
+/// R7: every pattern in `WebScrapingKit` is a compile-time literal, so a pattern that does not
+/// compile is a programmer error — and a bare `try?` turned it into "this extraction quietly never
+/// matches again". The nil-return contract is unchanged (a caller cannot recover from a bad
+/// pattern), but the failure now reaches the unified log. `os.Logger`, not `FernletAuditLog`:
+/// `WebScrapingKit` has ZERO in-package dependencies and must stay that way (see `Package.swift` —
+/// the walled `AIProviders` inherits every edge added here).
+enum WebScrapingRegex {
+    private static let logger = Logger(subsystem: "com.fernlet", category: "webscraping")
+
+    /// Compiles `pattern`, or logs and returns nil when it does not compile.
+    static func compiled(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression? {
+        do {
+            return try NSRegularExpression(pattern: pattern, options: options)
+        } catch {
+            logger.error("webscraping.regex.invalidPattern: \(pattern, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+}
 
 /// Pure HTML text-extraction helpers shared by the product and recipe web importers: regex capture
 /// reads, HTML-entity decoding, and the "reduce a page to model-ready plain text" pass.
@@ -21,7 +45,7 @@ public enum HTMLScraper {
     /// A pattern that fails to compile, a match with no capture group, or a group that did not
     /// participate all contribute nothing rather than trapping.
     public static func allLastCaptures(in text: String, pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        guard let regex = WebScrapingRegex.compiled(pattern) else { return [] }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.matches(in: text, range: range).compactMap { match -> String? in
             guard match.numberOfRanges > 1,
@@ -44,7 +68,7 @@ public enum HTMLScraper {
     /// This is also the cheaper read: it stops at the first match instead of scanning the whole
     /// document, which matters on a 3 MB page.
     public static func firstMatchLastCapture(in text: String, pattern: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        guard let regex = WebScrapingRegex.compiled(pattern) else { return nil }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         guard let match = regex.firstMatch(in: text, range: range),
               match.numberOfRanges > 1,
@@ -123,7 +147,7 @@ public enum HTMLScraper {
         pattern: String,
         transform: (String) -> UInt32?
     ) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        guard let regex = WebScrapingRegex.compiled(pattern) else { return text }
         let nsText = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length)).reversed()
         var result = text
@@ -185,6 +209,9 @@ public enum HTMLScraper {
         decodingNumericEntities: Bool,
         characterLimit: Int = 12_000
     ) -> String? {
+        // R5: `prefix` traps on a negative length, and this is a public entry point taking a caller's
+        // budget. "No budget" reads the same as "the page reduced to nothing".
+        guard characterLimit > 0 else { return nil }
         let bodyHTML = firstMatchLastCapture(in: html, pattern: #"(?is)<body\b[^>]*>(.*?)</body>"#) ?? html
         let withoutNoise = removingElements(noiseElementNames, from: bodyHTML)
         let text = htmlDecoded(
