@@ -48,8 +48,11 @@ struct LogWaterIntent: AppIntent {
         // Optimistically bump the mirrored snapshot exactly like the widget's own "+1" button, so the
         // count updates instantly instead of showing a stale value until the app is next foregrounded.
         // The app's authoritative store-drain publish overwrites this value, same as for widget taps.
-        WidgetSnapshotFileStore().applyOptimisticWaterPlusOne(dayKey: dayKey)
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
+        // A failed bump skips the reload — re-rendering the same stale bytes buys nothing, and the
+        // row IS durably queued, so the app corrects the widget on its next publish.
+        if WidgetSnapshotFileStore().applyOptimisticWaterPlusOne(dayKey: dayKey) {
+            WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
+        }
         return .result(dialog: "Logged a bottle of water.")
     }
 }
@@ -92,7 +95,12 @@ struct OpenJournalIntent: AppIntent {
 /// Backed by `UserDefaults.standard` because a foreground App Intent and the app UI don't share
 /// in-memory state reliably across the launch. `ContentView.consumePendingNotificationSheet()`
 /// honors a consumed token before the notification deep-link path.
-enum PendingIntentSheet {
+///
+/// `nonisolated` (overriding the app target's MainActor default): it holds no state of its own —
+/// `UserDefaults` is thread-safe and the wake-up notification is explicitly hopped to the main
+/// queue — so `request`/`consume` are callable from anywhere, including the `AppIntentsTests`
+/// harness's `deinit`, which drains the token so a failing test can never leak one into the next.
+nonisolated enum PendingIntentSheet {
     /// The sheets a foreground intent can request; raw values are the persisted token strings.
     ///
     /// `ContentView` switches on the consumed target to present the matching `FernletSheet`.

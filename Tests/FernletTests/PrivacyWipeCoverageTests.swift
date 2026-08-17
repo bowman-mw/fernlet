@@ -146,10 +146,23 @@ struct PrivacyWipeCoverageTests {
         "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
     ]
 
-    /// The two functions that together ARE the wipe path, keyed by a unique substring of their
+    /// The functions that together ARE the wipe path, keyed by a unique substring of their
     /// declaration line.
+    ///
+    /// `deleteAllData` is the ordered funnel; the `…ForWipe` / `delete…` / `clear…` helpers below are
+    /// its numbered legs, split out of the funnel body for the Power-of-10 60-line rule (R4) — the
+    /// wipe path is the funnel PLUS every leg it calls, so the scan must cover all of them or a
+    /// deleted wipe call inside a leg would go unnoticed.
     private static let wipeFunctionSignatures = [
         "func deleteAllData(includingHealthKitSamples",
+        "func stopWritersForWipe()",
+        "func deleteSealedCloudBackups(",
+        "func deleteSealedRows(",
+        "func deleteHealthSamplesIfRequested(",
+        "func deletePhotoCorpora(",
+        "func clearInboxesAndExports(",
+        "func clearDeviceLocalLedgers(",
+        "func rotateProximityIdentityAndPurgeDeadDrop(",
         "func resetAll() -> [String]"
     ]
 
@@ -613,7 +626,7 @@ struct PrivacyWipeMediaKeySurvivalTests {
                                  proximitySupportDirectory: uniqueProximityDirectory(),
                                  heartDropKeychainService: uniqueHeartDropKeychainService(),
                                  aiQuotaDefaults: uniqueAIQuotaDefaults())
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         // A FRESH provider holds no cached key, so this is the next launch reading the keychain —
         // exactly the path that used to mint a brand-new key and strand every retained photo.
@@ -666,7 +679,7 @@ struct PrivacyWipeAttemptMemoryRemovalTests {
         #expect(RecipeWebImageAttemptMemory.hasAttempted(recipeID, defaults: store.webImageAttemptDefaults),
                 "precondition: the attempt was not recorded")
 
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(
             !RecipeWebImageAttemptMemory.hasAttempted(recipeID, defaults: store.webImageAttemptDefaults),

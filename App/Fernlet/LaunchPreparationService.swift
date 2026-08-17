@@ -97,7 +97,9 @@ enum WeightedPhotowallOrdering {
         favoriteWeight: Double,
         using generator: inout R
     ) -> [UUID] {
-        let favoriteWeight = favoriteWeight > 0 ? favoriteWeight : 1
+        // R5: a non-finite weight would make `total` infinite and `Double.random(in: 0..<total)` a
+        // trap, so an unusable weight degrades to the uniform-shuffle default rather than crashing.
+        let favoriteWeight = (favoriteWeight.isFinite && favoriteWeight > 0) ? favoriteWeight : 1
         var remaining = ids
         var result: [UUID] = []
         result.reserveCapacity(remaining.count)
@@ -259,10 +261,12 @@ final class LaunchPreparationService {
 
         // Cycle status messages while async work runs.
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.55))
+            // `Task.sleep` throws only on cancellation, and a cancelled cycler must stop mutating
+            // `statusMessage` — returning IS the recovery.
+            do { try await Task.sleep(for: .seconds(0.55)) } catch { return }
             guard !isDone else { return }
             statusMessage = "Preparing your day summary..."
-            try? await Task.sleep(for: .seconds(0.55))
+            do { try await Task.sleep(for: .seconds(0.55)) } catch { return }
             guard !isDone else { return }
             statusMessage = "Getting Fernlet ready..."
         }
@@ -271,7 +275,13 @@ final class LaunchPreparationService {
         let elapsed = Date().timeIntervalSince(startedAt)
         let minimumSeconds = 1.4
         if elapsed < minimumSeconds {
-            try? await Task.sleep(for: .seconds(minimumSeconds - elapsed))
+            do {
+                try await Task.sleep(for: .seconds(minimumSeconds - elapsed))
+            } catch {
+                // `Task.sleep` throws only CancellationError: the launch task was torn down. Fall
+                // through and still set `isDone` below — a re-fired `.task` must not re-run
+                // reconcile/backfill.
+            }
         }
 
         isDone = true

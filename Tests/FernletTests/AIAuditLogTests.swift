@@ -351,7 +351,7 @@ struct AIAuditLogTests {
             heartDropKeychainService: uniqueHeartDropKeychainService(),
             aiQuotaDefaults: uniqueAIQuotaDefaults()
         )
-        await store.deleteAllData(includingHealthKitSamples: false)
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
         #expect(sink.load().isEmpty, "delete-all left the AI audit log on disk")
     }
 
@@ -371,7 +371,7 @@ struct AIAuditLogTests {
         mine.aiCallQuotaStore.recordCall()
         theirs.aiCallQuotaStore.recordCall()
 
-        await theirs.deleteAllData(includingHealthKitSamples: false)
+        _ = await theirs.deleteAllData(includingHealthKitSamples: false)
 
         #expect(theirs.aiCallQuotaStore.currentQuota().effectiveCount() == 0,
                 "precondition: the other store's wipe did not reset its own quota")

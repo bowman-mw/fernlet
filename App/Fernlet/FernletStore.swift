@@ -651,29 +651,19 @@ final class FernletStore {
         let activeRepository = StartupTiming.timed("CoreDataFernletRepository.init") {
             repository ?? CoreDataFernletRepository()
         }
-        let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
-            SavedRecipeService(repository: savedRecipeRepository ?? SavedRecipeRepository())
-        }
         let snapshot = StartupTiming.timed("FernletRepository.loadSnapshot") {
             activeRepository.loadSnapshot(todayKey: key)
         }
-        savedRecipeService.loadSync()
-        self.savedRecipeService = savedRecipeService
-        let customItemService = StartupTiming.timed("CustomItemService.init") {
-            CustomItemService(repository: customItemRepository ?? CustomItemRepository())
-        }
-        customItemService.loadSync()
-        self.customItemService = customItemService
-        let coinLedgerService = StartupTiming.timed("CoinLedgerService.init") {
-            CoinLedgerService(repository: coinLedgerRepository ?? CoinLedgerRepository())
-        }
-        coinLedgerService.loadSync()
-        self.coinLedgerService = coinLedgerService
-        let milestoneLedgerService = StartupTiming.timed("MilestoneLedgerService.init") {
-            MilestoneLedgerService(repository: milestoneLedgerRepository ?? MilestoneLedgerRepository())
-        }
-        milestoneLedgerService.loadSync()
-        self.milestoneLedgerService = milestoneLedgerService
+        let services = Self.loadPerRowServicesSync(
+            savedRecipeRepository: savedRecipeRepository,
+            customItemRepository: customItemRepository,
+            coinLedgerRepository: coinLedgerRepository,
+            milestoneLedgerRepository: milestoneLedgerRepository
+        )
+        self.savedRecipeService = services.savedRecipe
+        self.customItemService = services.customItem
+        self.coinLedgerService = services.coinLedger
+        self.milestoneLedgerService = services.milestoneLedger
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -690,6 +680,42 @@ final class FernletStore {
             scheduleSnapshotSave: { },
             periodAdjustment: { _ in .none }
         )
+        completeDiaryWiring()
+        rebuildDerivedSignals()
+        finishCommonWiring()
+    }
+
+    /// Builds and synchronously loads the four per-row services both initializers need (nil
+    /// repository = the production default). Extracted so the two inits cannot drift.
+    private static func loadPerRowServicesSync(
+        savedRecipeRepository: SavedRecipeRepository?,
+        customItemRepository: (any CustomItemRepositoring)?,
+        coinLedgerRepository: (any CoinLedgerRepositoring)?,
+        milestoneLedgerRepository: (any MilestoneLedgerRepositoring)?
+    ) -> (savedRecipe: SavedRecipeService, customItem: CustomItemService,
+          coinLedger: CoinLedgerService, milestoneLedger: MilestoneLedgerService) {
+        let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
+            SavedRecipeService(repository: savedRecipeRepository ?? SavedRecipeRepository())
+        }
+        savedRecipeService.loadSync()
+        let customItemService = StartupTiming.timed("CustomItemService.init") {
+            CustomItemService(repository: customItemRepository ?? CustomItemRepository())
+        }
+        customItemService.loadSync()
+        let coinLedgerService = StartupTiming.timed("CoinLedgerService.init") {
+            CoinLedgerService(repository: coinLedgerRepository ?? CoinLedgerRepository())
+        }
+        coinLedgerService.loadSync()
+        let milestoneLedgerService = StartupTiming.timed("MilestoneLedgerService.init") {
+            MilestoneLedgerService(repository: milestoneLedgerRepository ?? MilestoneLedgerRepository())
+        }
+        milestoneLedgerService.loadSync()
+        return (savedRecipeService, customItemService, coinLedgerService, milestoneLedgerService)
+    }
+
+    /// Post-construction wiring shared by BOTH initializers, part 1: hooks the freshly built diary
+    /// onto the facade and reconciles the sensitive surfaces before any UI can read them.
+    private func completeDiaryWiring() {
         // Wire the two diary closures to the facade now that `self` exists. (Set after the diary is
         // built so the closures can capture `self` weakly without an initialization-order cycle.)
         self.diary.rewireHooks(
@@ -712,9 +738,13 @@ final class FernletStore {
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
-        rebuildDerivedSignals()
-        // Credit any active day not yet in the coin ledger (reuses the warm `loadDays()` cache from the
-        // derived-signals rebuild just above). Idempotent — re-running never double-grants.
+    }
+
+    /// Post-construction wiring shared by BOTH initializers, part 2: the ledger reconcile, the
+    /// remote-change subscription and the AI audit sink. Runs last in either init.
+    private func finishCommonWiring() {
+        // Credit any active day not yet in the coin ledger (in the sync init this reuses the warm
+        // `loadDays()` cache from the derived-signals rebuild). Idempotent — never double-grants.
         reconcileCoinLedger()
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
@@ -774,27 +804,8 @@ final class FernletStore {
             scheduleSnapshotSave: { },
             periodAdjustment: { _ in .none }
         )
-        self.diary.rewireHooks(
-            scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
-            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
-            stressModifier: { [weak self] key in self?.stressModifier(for: key) ?? 0 },
-            sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
-        )
-        // The 16+ intimacy gate. A closure rather than a cached `Bool` so it re-reads the observable
-        // record on every call — that is what lets a view consulting `isIntimateLoggingAllowed` in its
-        // body re-render when the verdict changes. `?? false` keeps a deallocated facade fail-closed.
-        self.diary.isAdultVerified = { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
-        self.diary.ensureLocalDesignerID()
-        reconcileSensitiveSurfaceVisibility()
-        syncCustomExerciseCatalog()
-        self.connectionInspector.attachStore(self)
-        proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
-        aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
-        reconcileCoinLedger()
-        snapshotSaveCoordinator.subscribeRemote { [weak self] in
-            await self?.reloadFromRepository()
-        }
-        configureAIAuditLog()
+        completeDiaryWiring()
+        finishCommonWiring()
     }
 
     /// Wires the device-local AI audit-log sink into `AIAuditLog.shared` and adopts whatever survived
@@ -983,7 +994,11 @@ final class FernletStore {
             }
             guard !Task.isCancelled else { return }
             if reuploadDeferred, sealedBackupCoordinator.periodNarrativeCount() > 0 {
-                await setSealedBackupEnabled(true, payloadType: .periodData)
+                // R7: the re-upload is a success/failure signal. The coordinator's deferral flag keeps
+                // the Settings banner honest on failure, so the audit line is the recovery here.
+                if await !setSealedBackupEnabled(true, payloadType: .periodData) {
+                    FernletAuditLog.log("sealedBackup.period.reuploadAfterUnhide.failed")
+                }
             }
         }
     }
@@ -1275,7 +1290,9 @@ final class FernletStore {
     ///
     /// `ref` is REQUIRED (no default): the idempotency guarantee is entirely on the caller-supplied ref, so
     /// a fresh-UUID default would silently make every call non-idempotent and let a retried buy debit twice.
-    @discardableResult
+    ///
+    /// R7: the returned refusal is not discardable — a caller that grants goods must know whether the
+    /// ledger actually debited (or had provably debited before).
     func spendCoins(_ amount: Int, ref: String) -> Bool {
         coinLedgerService.spend(amount: amount, ref: ref)
     }
@@ -1411,7 +1428,6 @@ final class FernletStore {
     /// idempotently keyed by the item id, and lands the item in the closet with the SELLER's designer id
     /// preserved (provenance — it shows "designed by <friend>", never "You"). The bought copy is unlisted
     /// and not auto-equipped.
-    @discardableResult
     func buyClothingItem(_ rawItem: CustomizationItem, fromDesignerID designerID: UUID, sellerName: String,
                          sellerFingerprint: String? = nil) -> ClothingPurchaseResult {
         // See another device's spends / synced-in purchases before guarding (multi-device reconciliation).
@@ -1452,7 +1468,12 @@ final class FernletStore {
         // paid, `spendCoins` is a no-op (returns false) and we re-grant for free. Either way the item lands
         // in the closet, so the outcome is `.bought` — `.alreadyOwned` is reserved for the early return
         // above (item still present), never for a fresh re-grant.
-        spendCoins(price, ref: item.id.uuidString)
+        //
+        // R7: the debit result is a decision, not a formality. The item is granted only when the ledger
+        // actually debited OR the ref was provably paid before; any other refusal (a balance that moved
+        // under the reload above) declines the purchase rather than handing out a free item.
+        let debited = spendCoins(price, ref: item.id.uuidString)
+        guard debited || alreadyPaid else { return .insufficientCoins }
         var bought = item
         bought.isShareable = false
         // Provenance is the SELLER's declared designer id — NOT the raw per-item `designer` field, which a
@@ -1495,7 +1516,6 @@ final class FernletStore {
 
     /// List one of the user's OWN items for sale at `price`. Enforces the cap (a flagged name keeps the
     /// item unlisted with a notice; an over-cap attempt is refused). Records today for the gentle throttle.
-    @discardableResult
     func listCustomItemForSale(id: UUID, price: Int) -> ShopListingResult {
         if moderationBanStore.isSelfBanned { return .storeBanned }
         guard let item = customItems.first(where: { $0.id == id }), isSelfDesigned(item) else { return .notAllowed }
@@ -1573,7 +1593,7 @@ final class FernletStore {
             // `heartsAwayPurgePending` reads the consent flag, so it is already false.
             heartDropService.syncNow()
         } else {
-            Task { [weak self] in await self?.purgeHeartDropRecords() }
+            _ = startHeartDropPurgeIfNeeded()
         }
         snapshotSaveCoordinator.schedule()
     }
@@ -1602,6 +1622,12 @@ final class FernletStore {
     /// the service's purge generation — so an unguarded second call would supersede the first
     /// mid-flight and multiply the delete round trips instead of finishing the one already running.
     @ObservationIgnored private var isPurgingHeartDropRecords = false
+
+    /// The in-flight dead-drop purge, held so a retry can AWAIT it rather than spin on
+    /// `isPurgingHeartDropRecords`. R2: the wait's bound is then that task's completion (a CloudKit
+    /// round trip with its own timeouts), visible at the `await` — a yield-spin had no bound at all.
+    /// Cleared by the task itself before it completes.
+    @ObservationIgnored private var heartDropPurgeTask: Task<Void, Never>?
 
     /// Set when a WIPE-time purge failed: this device knowingly left sealed hearts on the CloudKit
     /// public database and, after `wipeForDeleteAll()`, can no longer name them. See the delete-all
@@ -1637,10 +1663,25 @@ final class FernletStore {
     /// successors.
     @discardableResult
     func retryHeartsAwayPurgeNow() async -> Bool {
-        while isPurgingHeartDropRecords { await Task.yield() }
+        // Wait out an in-flight purge by awaiting ITS task (R2) instead of spinning on the flag:
+        // the bound is that task's completion, and the wait now also covers the window between a
+        // purge being scheduled and the flag being set — which the spin could slip through.
+        await heartDropPurgeTask?.value
         guard heartsAwayPurgePending else { return false }
-        await purgeHeartDropRecords()
+        await startHeartDropPurgeIfNeeded().value
         return true
+    }
+
+    /// Starts the dead-drop purge (or returns the one already running) as a held task, so callers can
+    /// await its completion. The task clears the handle before it finishes.
+    private func startHeartDropPurgeIfNeeded() -> Task<Void, Never> {
+        if let existing = heartDropPurgeTask { return existing }
+        let task = Task { [weak self] in
+            await self?.purgeHeartDropRecords()
+            self?.heartDropPurgeTask = nil
+        }
+        heartDropPurgeTask = task
+        return task
     }
 
     private func purgeHeartDropRecords() async {
@@ -1895,9 +1936,21 @@ final class FernletStore {
             localSigningKey: meshNetworkManager.localSigningPublicKey)
     }
 
+    /// R3: most peer-supplied moderation rows accepted from ONE relay batch. Defense in depth at the
+    /// store seam — a chatty verified peer must not be able to grow the device-local ledger without
+    /// bound; the definitive per-reporter cap belongs in `ModerationLedger.ingestForeign`.
+    static let maxForeignModerationRowsPerBatch = 256
+
     /// Stores peers' verified moderation reports (from the one-hop relay) and re-evaluates bans.
+    /// Oversized batches are truncated at this seam (R3).
     func ingestModerationRows(_ rows: [ModerationLedgerEntry]) {
-        moderationLedger.ingestForeign(rows)
+        if rows.count > Self.maxForeignModerationRowsPerBatch {
+            FernletAuditLog.log("moderation.foreignRows.batchTruncated", context: [
+                "received": String(rows.count),
+                "cap": String(Self.maxForeignModerationRowsPerBatch)
+            ])
+        }
+        moderationLedger.ingestForeign(Array(rows.prefix(Self.maxForeignModerationRowsPerBatch)))
         reconcileModerationBans()
     }
 
@@ -2163,7 +2216,7 @@ final class FernletStore {
     }
 
     #if canImport(UIKit)
-    @discardableResult func saveMealPhoto(_ image: UIImage) -> UUID? {
+    func saveMealPhoto(_ image: UIImage) -> UUID? {
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         return mealPhotoStore.save(data)
     }
@@ -2174,7 +2227,7 @@ final class FernletStore {
     /// This is the double-JPEG-encode fix (§2.5) for the library-pick path — the ~190 MB / generation-
     /// loss landmine on the iPhone-11 floor that F1 makes photo→recipe fire far more often. Fail-closed
     /// (nil on non-image bytes or no key). Returns the new photo id.
-    @discardableResult func saveMealPhoto(data: Data) -> UUID? {
+    func saveMealPhoto(data: Data) -> UUID? {
         mealPhotoStore.save(data)
     }
     #endif
@@ -2222,7 +2275,7 @@ final class FernletStore {
     /// forces. A 48 MP pick would otherwise materialise a ~190 MB bitmap and risk jetsam on the iPhone-11
     /// floor. `capturedAt` carries the photo's real (best-effort recovered) date so imports aren't pinned
     /// to "now". Returns the stored record, or nil when the bytes can't be sealed (fail-closed).
-    @discardableResult func addProgressPhoto(data: Data, capturedAt: Date) -> ProgressPhotoRecord? {
+    func addProgressPhoto(data: Data, capturedAt: Date) -> ProgressPhotoRecord? {
         progressPhotoStore.add(data, capturedAt: capturedAt)
     }
 
@@ -2237,7 +2290,7 @@ final class FernletStore {
     #if canImport(UIKit)
     /// Seals a new progress photo taken now. Returns the stored record (nil if the image couldn't be
     /// encoded/sealed). JPEG-encodes at source quality; the store downscales + re-encodes on the way in.
-    @discardableResult func addProgressPhoto(_ image: UIImage, caption: String? = nil) -> ProgressPhotoRecord? {
+    func addProgressPhoto(_ image: UIImage, caption: String? = nil) -> ProgressPhotoRecord? {
         guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
         return progressPhotoStore.add(data, caption: caption, capturedAt: Date())
     }
@@ -2247,7 +2300,7 @@ final class FernletStore {
     /// DEBUG-only seam for the demo/appearance seed: seals a progress photo with an EXPLICIT capture
     /// date so the seeded timeline shows a real spread rather than three photos stamped "now". Not on
     /// the shipping path — the app always captures at the current moment.
-    @discardableResult func seedProgressPhoto(_ data: Data, caption: String?, capturedAt: Date) -> ProgressPhotoRecord? {
+    func seedProgressPhoto(_ data: Data, caption: String?, capturedAt: Date) -> ProgressPhotoRecord? {
         progressPhotoStore.add(data, caption: caption, capturedAt: capturedAt)
     }
     #endif
@@ -2263,7 +2316,12 @@ final class FernletStore {
             foodItems: foodCatalog.items(forRecipe: recipe)
         )
         batchSnapshotPersistence {
-            diary.mutateDay(date: targetDate) { $0.meals.append(meal) }
+            // R7: today's branch always succeeds; a PAST-day repository write can fail, and a
+            // dropped meal must not be invisible.
+            if !diary.mutateDay(date: targetDate, { $0.meals.append(meal) }) {
+                FernletAuditLog.log("diary.pastDayWriteFailed",
+                                    context: ["op": "logRecipe", "dayKey": targetDate])
+            }
             diary.invalidateDaySummary(for: targetDate)
             recentMeals.insert(meal, at: 0)
             recentMeals = Array(recentMeals.prefix(50))
@@ -2320,6 +2378,10 @@ final class FernletStore {
         savedRecipeService.recipe(matchingSourceURL: url.absoluteString)
     }
 
+    /// R2: the per-record retry cap for the share-extension import queue, named rather than a bare
+    /// literal at the comparison — a record that fails this many times is dropped, not retried forever.
+    private static let sharedRecipeImportMaxAttempts = 3
+
     func processSharedRecipeImportQueue() async {
         guard !isProcessingSharedRecipeImportQueue else { return }
         isProcessingSharedRecipeImportQueue = true
@@ -2332,7 +2394,8 @@ final class FernletStore {
                 queue.remove(record)
                 continue
             }
-            if record.attemptCount >= 3 || Date().timeIntervalSince(record.queuedAt) > maxAge {
+            if record.attemptCount >= Self.sharedRecipeImportMaxAttempts
+                || Date().timeIntervalSince(record.queuedAt) > maxAge {
                 queue.remove(record)
                 continue
             }
@@ -2474,7 +2537,6 @@ final class FernletStore {
     /// - records a tombstone + fires a targeted Health delete by `fernlet.workoutID`, so an app-authored
     ///   sample that lands (or already landed) can't come back as a new untagged row (see the tombstone
     ///   note below).
-    @discardableResult
     func removeWorkout(id: UUID, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         guard let workout = diary.loadDay(for: date).workouts.first(where: { $0.id == id }) else { return false }
@@ -2511,7 +2573,6 @@ final class FernletStore {
     /// editable — another app owns them). A Fernlet-*authored* row IS editable — its immutable Health
     /// sample is re-synced (delete-old + save-new) so the Health copy never silently diverges from the
     /// edit. Returns `false` when the id isn't on `date` or the row is a Health import.
-    @discardableResult
     func updateWorkout(_ workout: Workout, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         guard let existing = diary.loadDay(for: date).workouts.first(where: { $0.id == workout.id }) else { return false }
@@ -2800,7 +2861,6 @@ final class FernletStore {
 
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
     /// succeeded. Delegates to `SealedBackupCoordinator`.
-    @discardableResult
     func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
         await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType)
     }
@@ -2874,7 +2934,6 @@ final class FernletStore {
     /// The gate is asked with the pass's COMMIT PROOF, never with the preference. "The switch is on"
     /// is intent; "a manifest reached iCloud" is a route. Binding is irreversible, so it may only
     /// follow the second — see `OwnPhotoEscrowCommitLedger`.
-    @discardableResult
     func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
         let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
         if succeeded && enabled {
@@ -2894,14 +2953,12 @@ final class FernletStore {
     /// Deletes every own-photo escrow record (all three corpora, bodies + manifests) and clears the
     /// photo generation namespace — the "delete everything" leg for the photo route
     /// (Docs/PrivacyWipeCoverage.md). Returns whether every corpus cleared.
-    @discardableResult
     func deleteOwnPhotoEscrowBackups() async -> Bool {
         await ownPhotoBackupCoordinator.tearDownForDeleteAll()
     }
 
     /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
     /// enabled backups. Delegates to `SealedBackupCoordinator`.
-    @discardableResult
     func resolveSealedBackupEscrowConflict() async -> Bool {
         await sealedBackupCoordinator.adoptSyncedEscrowAndReupload()
     }
@@ -2909,7 +2966,6 @@ final class FernletStore {
     /// Fetches/decrypts/writes a single sealed-backup payload into the local stores; returns whether
     /// records were restored. Delegates to `SealedBackupCoordinator`; kept as a wrapper for the
     /// restore tests.
-    @discardableResult
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
         await sealedBackupCoordinator.restoreSealedBackup(payloadType: payloadType)
     }
@@ -2917,14 +2973,12 @@ final class FernletStore {
     /// Fetches/decrypts/writes a single sealed-backup payload AND records the rich outcome on the
     /// observable status so the UI can surface a non-silent, retryable result (WS-4). Delegates to
     /// `SealedBackupCoordinator`.
-    @discardableResult
     func restoreSealedBackupOutcome(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
         await sealedBackupCoordinator.restoreSealedBackupOutcome(payloadType: payloadType)
     }
 
     /// Targeted period-only restore (un-hide + explicit Retry) — the compensating restore path for the
     /// fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
-    @discardableResult
     func restorePeriodBackupTargeted(
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) async -> SealedBackupRestoreOutcome {
@@ -2933,7 +2987,6 @@ final class FernletStore {
 
     /// Targeted journal-only restore (the `.privateHub` unlock + explicit Retry) — the compensating
     /// restore path for the fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
-    @discardableResult
     func restoreJournalBackupTargeted(
         journalRepository: JournalNarrativeRepository? = nil
     ) async -> SealedBackupRestoreOutcome {
@@ -2943,7 +2996,6 @@ final class FernletStore {
     /// Targeted intimacy-only restore (un-hide, `.privateHub` unlock, explicit Retry) — the
     /// compensating restore path for the fresh-install-only launch pass. Delegates to
     /// `SealedBackupCoordinator`.
-    @discardableResult
     func restoreIntimacyBackupTargeted(
         intimacyStore: IntimacyLogStore? = nil
     ) async -> SealedBackupRestoreOutcome {
@@ -3032,7 +3084,12 @@ final class FernletStore {
     private func appendJournalEntry(_ entry: JournalEntry, date: String) {
         assert(!date.isEmpty, "journal date required")
         journalSealingCoordinator.seal(entry, dayKey: date)
-        diary.mutateDay(date: date) { $0.journals.append(entry) }
+        // R7: the narrative is already sealed above. If the past-day row write fails, the sealed
+        // text exists with no journal skeleton pointing at it — log rather than lose it silently.
+        if !diary.mutateDay(date: date, { $0.journals.append(entry) }) {
+            FernletAuditLog.log("diary.pastDayWriteFailed",
+                                context: ["op": "journalAppend", "dayKey": date])
+        }
         guard date == todayKey else { return }
         previousJournals.insert(entry, at: 0)
         previousJournals = Array(previousJournals.prefix(30))
@@ -3065,9 +3122,13 @@ final class FernletStore {
         }
 
         batchSnapshotPersistence {
-            diary.mutateDay(date: date) { targetDay in
+            let written = diary.mutateDay(date: date) { targetDay in
                 guard let index = targetDay.journals.firstIndex(where: { $0.id == entry.id }) else { return }
                 targetDay.journals[index] = updatedEntry
+            }
+            if !written {
+                FernletAuditLog.log("diary.pastDayWriteFailed",
+                                    context: ["op": "journalUpdate", "dayKey": date])
             }
             if let index = previousJournals.firstIndex(where: { $0.id == entry.id }) {
                 previousJournals[index] = updatedEntry
@@ -3079,7 +3140,10 @@ final class FernletStore {
         assert(!date.isEmpty, "journal date required")
         journalSealingCoordinator.deleteSealed(id: entry.id)
         batchSnapshotPersistence {
-            diary.mutateDay(date: date) { $0.journals.removeAll { $0.id == entry.id } }
+            if !diary.mutateDay(date: date, { $0.journals.removeAll { $0.id == entry.id } }) {
+                FernletAuditLog.log("diary.pastDayWriteFailed",
+                                    context: ["op": "journalDelete", "dayKey": date])
+            }
             previousJournals.removeAll { $0.id == entry.id }
         }
     }
@@ -3805,7 +3869,7 @@ final class FernletStore {
         savedRecipeService.add(recipe)
     }
 
-    @discardableResult func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
+    func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         diary.saveCustomIngredient(ingredient)
     }
 
@@ -3870,7 +3934,7 @@ final class FernletStore {
     #if canImport(UIKit)
     /// Seals the user's own photo for a recipe. Keyed by
     /// the recipe id so there's no separate id to thread through `RecipeDefinition`.
-    @discardableResult func saveRecipePhoto(_ image: UIImage, for recipeID: UUID) -> Bool {
+    func saveRecipePhoto(_ image: UIImage, for recipeID: UUID) -> Bool {
         guard let data = image.jpegData(compressionQuality: 0.85) else { return false }
         return recipePhotoStore.save(data, forID: recipeID)
     }
@@ -3879,7 +3943,7 @@ final class FernletStore {
     /// Library-pick entry point mirroring `addProgressPhoto(data:)`: seals the picked JPEG `Data` straight
     /// through the store's bounded ImageIO downscale, so a full-resolution library pick isn't decoded into
     /// a giant bitmap just to be re-encoded. Fail-closed (false on non-image bytes or no key).
-    @discardableResult func saveRecipePhoto(data: Data, for recipeID: UUID) -> Bool {
+    func saveRecipePhoto(data: Data, for recipeID: UUID) -> Bool {
         recipePhotoStore.save(data, forID: recipeID)
     }
 
@@ -3941,7 +4005,9 @@ final class FernletStore {
               let current = savedRecipeService.savedRecipes.first(where: { $0.id == recipe.id }),
               current.webImport?.webImageSuppressed != true,
               recipePhotoData(for: recipe.id) == nil else { return nil }
-        saveRecipePhoto(data: downloaded, for: recipe.id)
+        // R7: a failed seal means there is no photo to hand back — say so rather than re-reading the
+        // store and returning whatever happens to be there.
+        guard saveRecipePhoto(data: downloaded, for: recipe.id) else { return nil }
         return recipePhotoData(for: recipe.id)
     }
 
@@ -4036,6 +4102,19 @@ final class FernletStore {
         return payload
     }
 
+    /// R3/R5 bounds for recipe payloads that arrive from OUTSIDE the app — pasted clipboard text and
+    /// mesh shares. Each imported ingredient becomes a `foodItems` row inside the synced snapshot, so
+    /// the count is the growth cap; the servings/quantity bounds keep a hostile payload from turning
+    /// every later macro computation into a nonsense (or non-finite) number.
+    enum RecipeImportLimits {
+        /// Most ingredients one imported recipe may carry (extras are refused / dropped).
+        static let maxIngredients = 60
+        /// Most servings one imported recipe may claim.
+        static let maxServings = 100
+        /// Largest per-ingredient quantity accepted from a share.
+        static let maxQuantity: Double = 10_000
+    }
+
     /// What accepting a proximity recipe share did — surfaced by the review sheet so the user
     /// learns whether a new recipe landed or their existing copy was kept.
     enum ProximityRecipeImportOutcome: Equatable {
@@ -4054,6 +4133,15 @@ final class FernletStore {
         }
     }
 
+    /// What the `.saved` arm of a proximity share produced: either the user's existing recipe was
+    /// kept (the owner's duplicate decision) or a new one was added.
+    private enum SavedProximityImport {
+        /// The shared source page was already in the book; the local recipe was left untouched.
+        case keptExisting(name: String)
+        /// A new recipe was built from the payload and added to the book.
+        case added(RecipeDefinition)
+    }
+
     @discardableResult func importProximityRecipeShare(_ payload: ProximityRecipeSharePayload,
                                                        fromFingerprint fingerprint: String? = nil) throws -> ProximityRecipeImportOutcome {
         guard payload.format == "fernlet.proximity.recipe", payload.version == 1 else {
@@ -4064,86 +4152,107 @@ final class FernletStore {
         let importedRecipeID: UUID
         switch payload.recipe.kind {
         case .local:
-            guard let localPayload = payload.recipe.local else { throw RecipeImportError.invalidPayload }
-            let data = try JSONEncoder().encode(localPayload)
-            guard let text = String(data: data, encoding: .utf8) else { throw RecipeImportError.invalidPayload }
-            let imported = try importRecipe(from: text)
+            let imported = try importLocalProximityRecipe(payload.recipe.local)
             importedName = imported.name
             importedRecipeID = imported.id
         case .saved:
-            guard let savedPayload = payload.recipe.saved else {
-                throw RecipeImportError.invalidPayload
-            }
-            let trimmedName = savedPayload.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedName.isEmpty else { throw RecipeImportError.emptyRecipe }
-            // Sanitize the shared source link in place rather than rejecting the whole recipe (matching how
-            // the name/summary are trimmed above). A peer can send any string here — a file:///, javascript:,
-            // tel:, or schemeless value would later crash the in-app Safari sheet (SFSafariViewController
-            // only accepts http/https). Anything that isn't a real web link is blanked to "no source"; an
-            // empty/absent string was always allowed and stays allowed.
-            let sanitizedSourceURLString: String = {
-                let trimmed = savedPayload.sourceURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty,
-                      let url = URL(string: trimmed),
-                      url.isSafariPresentable else { return "" }
-                return trimmed
-            }()
-            // The owner's duplicate decision (2026-08-09) applies to the mesh path exactly as it
-            // does to the paste-import and queue-drain paths: a share whose source page is already
-            // in the book KEEPS the user's existing recipe. Without this, addSavedRecipe's
-            // supersede would permanently delete the user's own sealed photo and replace their
-            // edited notes with the sender's copy — an accept tap must never be destructive. The
-            // closeness signal still records: the friend did share, the user did accept.
-            if !sanitizedSourceURLString.isEmpty,
-               let existing = savedRecipeService.recipe(matchingSourceURL: sanitizedSourceURLString) {
+            switch try importSavedProximityRecipe(payload.recipe.saved) {
+            case .keptExisting(let name):
+                // The closeness signal still records: the friend did share, the user did accept.
                 if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
-                return .alreadySaved(name: existing.name)
+                return .alreadySaved(name: name)
+            case .added(let recipe):
+                importedName = recipe.name
+                importedRecipeID = recipe.id
             }
-            let now = Date()
-            let recipe = RecipeDefinition(
-                name: trimmedName,
-                servings: max(savedPayload.servings, 1),
-                ingredients: [],
-                notes: savedPayload.summary.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: MealLogSource.webImport,
-                createdAt: now,
-                updatedAt: now,
-                webImport: RecipeWebImport(
-                    sourceURLString: sanitizedSourceURLString,
-                    ingredientLines: savedPayload.ingredients,
-                    macros: Macros(
-                        protein: max(savedPayload.protein, 0),
-                        carbs: max(savedPayload.carbs, 0),
-                        fat: max(savedPayload.fat, 0)
-                    ),
-                    micronutrients: savedPayload.micronutrients,
-                    // A mesh-received recipe must never web-fetch: the wire carries no image URL
-                    // (imageURLString stays nil) AND the fetch is pre-suppressed, so even a
-                    // future field addition can't quietly turn receivers into fetchers.
-                    imageURLString: nil,
-                    webImageSuppressed: true
-                ),
-                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
-                steps: Self.sanitizedSharedSteps(savedPayload.steps)
-            )
-            addSavedRecipe(recipe)
-            importedName = recipe.name
-            importedRecipeID = recipe.id
         }
         // The picture rides the mesh so the receiver does NO web fetch: seal the sender's
         // downscaled JPEG into this device's own private recipe-photo store, keyed by the freshly
         // created recipe. Bytes above the wire cap are dropped before a single pixel is decoded
         // (a hostile peer doesn't get to pick our decode cost); the sealed store's normalize
         // pipeline bounds and re-encodes whatever is accepted. Best-effort — a bad image never
-        // fails the recipe import.
+        // fails the recipe import, but a seal that fails is logged rather than vanishing.
         if let imageData = payload.imageJPEGData,
            imageData.count <= ProximityRecipeSharePayload.maxImageBytes,
-           recipePhotoData(for: importedRecipeID) == nil {
-            saveRecipePhoto(data: imageData, for: importedRecipeID)
+           recipePhotoData(for: importedRecipeID) == nil,
+           !saveRecipePhoto(data: imageData, for: importedRecipeID) {
+            FernletAuditLog.log("recipe.proximityShare.imageSealFailed")
         }
         // Accepting a friend's shared recipe feeds the closeness "share accepted" signal (day-capped).
         if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
         return .imported(name: importedName)
+    }
+
+    /// The `.local` arm of a proximity share: re-encodes the payload and routes it through the
+    /// shared `importRecipe(from:)` validation (caps + numeric sanity live there).
+    private func importLocalProximityRecipe(_ localPayload: SharedRecipePayload?) throws -> RecipeDefinition {
+        guard let localPayload else { throw RecipeImportError.invalidPayload }
+        let data = try JSONEncoder().encode(localPayload)
+        guard let text = String(data: data, encoding: .utf8) else { throw RecipeImportError.invalidPayload }
+        return try importRecipe(from: text)
+    }
+
+    /// The `.saved` (web-import) arm of a proximity share: validates the peer-supplied payload,
+    /// keeps an existing recipe for the same source page, otherwise builds and adds the recipe.
+    private func importSavedProximityRecipe(_ savedPayload: SharedSavedRecipePayload?) throws -> SavedProximityImport {
+        guard let savedPayload else { throw RecipeImportError.invalidPayload }
+        let trimmedName = savedPayload.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { throw RecipeImportError.emptyRecipe }
+        // R5: every number below is peer-controlled. The macro fields are `Int` (no NaN reachable),
+        // so clamping at or above zero and capping servings/ingredient count is the whole contract.
+        let sanitizedSourceURLString = Self.sanitizedSharedSourceURLString(savedPayload.sourceURLString)
+        // The owner's duplicate decision (2026-08-09) applies to the mesh path exactly as it
+        // does to the paste-import and queue-drain paths: a share whose source page is already
+        // in the book KEEPS the user's existing recipe. Without this, addSavedRecipe's
+        // supersede would permanently delete the user's own sealed photo and replace their
+        // edited notes with the sender's copy — an accept tap must never be destructive.
+        if !sanitizedSourceURLString.isEmpty,
+           let existing = savedRecipeService.recipe(matchingSourceURL: sanitizedSourceURLString) {
+            return .keptExisting(name: existing.name)
+        }
+        let now = Date()
+        let recipe = RecipeDefinition(
+            name: trimmedName,
+            servings: min(max(savedPayload.servings, 1), RecipeImportLimits.maxServings),
+            ingredients: [],
+            notes: savedPayload.summary.trimmingCharacters(in: .whitespacesAndNewlines),
+            source: MealLogSource.webImport,
+            createdAt: now,
+            updatedAt: now,
+            webImport: RecipeWebImport(
+                sourceURLString: sanitizedSourceURLString,
+                // R3: a peer's ingredient list is unbounded input riding into the synced snapshot.
+                ingredientLines: Array(savedPayload.ingredients.prefix(RecipeImportLimits.maxIngredients)),
+                macros: Macros(
+                    protein: max(savedPayload.protein, 0),
+                    carbs: max(savedPayload.carbs, 0),
+                    fat: max(savedPayload.fat, 0)
+                ),
+                micronutrients: savedPayload.micronutrients,
+                // A mesh-received recipe must never web-fetch: the wire carries no image URL
+                // (imageURLString stays nil) AND the fetch is pre-suppressed, so even a
+                // future field addition can't quietly turn receivers into fetchers.
+                imageURLString: nil,
+                webImageSuppressed: true
+            ),
+            // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
+            steps: Self.sanitizedSharedSteps(savedPayload.steps)
+        )
+        addSavedRecipe(recipe)
+        return .added(recipe)
+    }
+
+    /// Sanitizes a shared source link in place rather than rejecting the whole recipe (matching how
+    /// the name/summary are trimmed). A peer can send any string here — a file:///, javascript:,
+    /// tel:, or schemeless value would later crash the in-app Safari sheet
+    /// (SFSafariViewController only accepts http/https). Anything that isn't a real web link is
+    /// blanked to "no source"; an empty/absent string was always allowed and stays allowed.
+    private static func sanitizedSharedSourceURLString(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              url.isSafariPresentable else { return "" }
+        return trimmed
     }
 
     /// Normalizes cooking steps arriving over a share/mesh wire (F5) via the shared domain sanitizer:
@@ -4159,19 +4268,30 @@ final class FernletStore {
         guard !trimmedName.isEmpty, payload.servings > 0, !payload.ingredients.isEmpty else {
             throw RecipeImportError.emptyRecipe
         }
+        // R3/R5: the text is pasted clipboard content or a mesh `.local` payload — unbounded and
+        // unvalidated. Refuse an oversized payload at the entry point (each ingredient becomes a
+        // `foodItems` row riding the synced snapshot), and refuse a non-finite quantity, which
+        // `max(_:0.01)` would otherwise pass straight through into every serving computation.
+        guard payload.ingredients.count <= RecipeImportLimits.maxIngredients,
+              payload.servings <= RecipeImportLimits.maxServings,
+              payload.ingredients.allSatisfy({ $0.quantity.isFinite }) else {
+            throw RecipeImportError.invalidPayload
+        }
 
         let now = Date()
         return batchSnapshotPersistence {
             let recipeIngredients = payload.ingredients.map { ingredient in
                 let trimmedIngredientName = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 let unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
-                let quantity = max(ingredient.quantity, 0.01)
+                let quantity = min(max(ingredient.quantity, 0.01), RecipeImportLimits.maxQuantity)
                 let foodItem = FoodItem(
                     name: trimmedIngredientName.isEmpty ? "Imported ingredient" : trimmedIngredientName,
                     brandSource: "Imported recipe",
                     servingSize: quantity,
                     servingUnit: unit,
-                    macros: Macros(protein: ingredient.protein, carbs: ingredient.carbs, fat: ingredient.fat),
+                    macros: Macros(protein: max(ingredient.protein, 0),
+                                   carbs: max(ingredient.carbs, 0),
+                                   fat: max(ingredient.fat, 0)),
                     micronutrients: Micronutrients(),
                     category: "recipe ingredient",
                     source: .manual,
@@ -4241,11 +4361,19 @@ final class FernletStore {
                 return
             }
             let description = meal.name
-            aiRetryQueueService.clearForSourceID(meal.id)
+            // R7: the past-day write can fail. If the fallback meal is not actually removed, adding
+            // the resolved meal below would leave BOTH rows on that day — so a failed removal aborts
+            // the retry (the record is re-queued) instead of duplicating the meal.
+            var removed = false
             batchSnapshotPersistence {
-                _ = diary.mutateDay(date: dayKey) { $0.meals.removeAll { $0.id == meal.id } }
+                removed = diary.mutateDay(date: dayKey) { $0.meals.removeAll { $0.id == meal.id } }
                 diary.invalidateDaySummary(for: dayKey)
             }
+            guard removed else {
+                FernletAuditLog.log("meal.retry.pastDayRemoveFailed", context: ["dayKey": dayKey])
+                return
+            }
+            aiRetryQueueService.clearForSourceID(meal.id)
             await addResolvedMeals(from: description, date: dayKey)
         }
     }
@@ -4393,14 +4521,85 @@ final class FernletStore {
     /// that will happily rebuild what it deletes, so the writers are stopped BEFORE anything is removed
     /// and the pending-save cancel is repeated at the END — `resetAll()` schedules a fresh save of its
     /// own on the way past.
-    @discardableResult
     func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async -> DeleteAllOutcome {
         var outcome = DeleteAllOutcome()
 
-        // 1. Stop the writers first. A debounced save fires one second from now and a HealthKit workout
-        // notification can arrive at any moment; either one lands mid-wipe and re-creates day rows from
-        // samples that still exist. `stopHealthKitWorkoutObservation` matters most when the user chose
-        // to KEEP their Health samples — that is precisely when the observer still has data to re-import.
+        // 1. Stop the writers first (see `stopWritersForWipe`).
+        stopWritersForWipe()
+
+        // 2. Sealed iCloud backups + the kept cloud copy, BEFORE the preference reset that would gate
+        // them off (see `deleteSealedCloudBackups`).
+        let preferences = StoragePreferencesStore.currentPreferences()
+        let backupFailures = await deleteSealedCloudBackups(preferences: preferences, into: &outcome)
+        let sealedBackupDeleteFailed = backupFailures.sealedFailed
+        let cloudCopyDeleteFailed = backupFailures.cloudCopyFailed
+
+        // 3. Sealed rows + the locked-note buffer (see `deleteSealedRows`).
+        deleteSealedRows(into: &outcome)
+
+        await deleteHealthSamplesIfRequested(deleteHealthSamples, into: &outcome)
+
+        // 4. Photo bytes before the days that reference them (see `deletePhotoCorpora`).
+        deletePhotoCorpora(into: &outcome)
+
+        // 5-7b. The share-extension inbox, the plaintext export dump, and the session-scoped social
+        // surfaces (see `clearInboxesAndExports`).
+        clearInboxesAndExports(into: &outcome)
+
+        // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
+        // left on disk to re-sync) plus the Worry Box purge. Those used to be discarded, so a failed
+        // delete there looked complete.
+        outcome.incompleteStores.append(contentsOf: resetAll())
+
+        // 8. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
+        // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
+        // exactly what "Reset everything" did before.
+        //
+        // Tier-two memories live inside the blob record, so the purge takes them; the old explicit
+        // `replaceTierTwoMemories([])` here was worse than redundant — it is load-then-SAVE, so it
+        // re-created the blob (and a fresh CloudKit record) microseconds after the purge deleted it.
+        if !repository.purgeAllPersistedData() {
+            outcome.incompleteStores.append("your day history")
+        }
+
+        // 9. Re-cancel: `resetAll` scheduled a debounced save on its way past (via
+        // `batchSnapshotPersistence`), which would fire one second from now and re-create today's row
+        // and the blob. Nothing between the purge and here suspends, so no save can slip in.
+        snapshotSaveCoordinator.cancelPending()
+
+        // 10. The widget's app-group files and the device-local AI ledgers, LAST — after the cancel
+        // (see `clearDeviceLocalLedgers`).
+        await clearDeviceLocalLedgers(into: &outcome)
+
+        // 11. Proximity identity, the away-hearts dead drop, and the orphaned at-rest keys
+        // (see `rotateProximityIdentityAndPurgeDeadDrop`).
+        await rotateProximityIdentityAndPurgeDeadDrop(into: &outcome)
+
+        if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
+            outcome.incompleteStores.append("your storage settings")
+        }
+
+        // A single store can be named by two independent legs — the sealed cycle-notes rows and the
+        // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
+        // before the failure alert formats them, or it would read "…and your cycle notes and your cycle
+        // notes". `isComplete` (empty vs not) is unaffected by the dedupe.
+        var seenStores = Set<String>()
+        outcome.incompleteStores = outcome.incompleteStores.filter { seenStores.insert($0).inserted }
+
+        FernletAuditLog.log("settings.deleteAll.completed", context: [
+            "healthSamples": deleteHealthSamples ? "deleted" : "kept",
+            "complete": outcome.isComplete ? "true" : "false"
+        ])
+        return outcome
+    }
+
+    /// Wipe leg 1: stop every background writer that could rebuild what the wipe removes.
+    ///
+    /// A debounced save fires one second from now and a HealthKit workout notification can arrive at
+    /// any moment; either one lands mid-wipe and re-creates day rows from samples that still exist.
+    /// `stopHealthKitWorkoutObservation` matters most when the user chose to KEEP their Health
+    /// samples — that is precisely when the observer still has data to re-import.
+    private func stopWritersForWipe() {
         snapshotSaveCoordinator.cancelPending()
         stopHealthKitWorkoutObservation()
         // The un-hide settle is a third writer: suspended in its CloudKit fetch it would resume AFTER
@@ -4410,8 +4609,18 @@ final class FernletStore {
         periodBackupSettleTask?.cancel()
         // The intimacy un-hide settle is the same class of writer, added with the intimacy payload.
         intimacyBackupSettleTask?.cancel()
+    }
 
-        // 2. Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
+    /// Wipe leg 2: the sealed iCloud backups, the own-photo escrow backup, every re-upload deferral,
+    /// the rollback generation mark, and the "stop syncing, keep cloud data" copy.
+    ///
+    /// - Returns: whether the sealed-backup deletes and the kept-cloud-copy delete failed — the two
+    ///   flags `storagePreferencesResetHook` needs at the end of the funnel.
+    private func deleteSealedCloudBackups(
+        preferences: StoragePreferences,
+        into outcome: inout DeleteAllOutcome
+    ) async -> (sealedFailed: Bool, cloudCopyFailed: Bool) {
+        // Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
         // pref off only stops the restore while it stays off; the CKRecords survive and re-appear the
         // moment the user re-enables the backup — a wipe the user's own journal outlives. Disabling
         // deletes the chunk set for real, and needs no escrow key, so it works while locked.
@@ -4420,7 +4629,6 @@ final class FernletStore {
         // false when there is no provisioned identity — the common case for someone who never used
         // proximity — so attempting it unconditionally would report a failure to delete a backup that
         // was never uploaded, on the one dialog whose whole value is that its promises are true.
-        let preferences = StoragePreferencesStore.currentPreferences()
         var sealedBackupDeleteFailed = false
         for payloadType in SealedBackupPayloadType.allCases where Self.hasSealedBackup(payloadType, preferences) {
             if await !setSealedBackupEnabled(false, payloadType: payloadType) {
@@ -4475,8 +4683,12 @@ final class FernletStore {
                 outcome.incompleteStores.append("your iCloud copy")
             }
         }
+        return (sealedBackupDeleteFailed, cloudCopyDeleteFailed)
+    }
 
-        // 3. Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
+    /// Wipe leg 3: the sealed rows (cycle notes, intimate logs, journals) and the locked-note buffer.
+    private func deleteSealedRows(into outcome: inout DeleteAllOutcome) {
+        // Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
         // drops rows WITHOUT decrypting, so this works while the app is locked and while a surface is
         // hidden — deleting data must not require the ability to read it.
         //
@@ -4493,7 +4705,11 @@ final class FernletStore {
         // under a separate device key — and its next drain re-inserts every payload into the store we
         // just emptied, so skipping it turns "delete everything" into "delete until the next unlock".
         if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+    }
 
+    /// Wipe leg 3b: the HealthKit samples Fernlet itself authored, when the user asked for them too.
+    private func deleteHealthSamplesIfRequested(_ deleteHealthSamples: Bool,
+                                                into outcome: inout DeleteAllOutcome) async {
         if deleteHealthSamples {
             switch await healthKitSampleDeleteHook?() {
             case .complete:
@@ -4509,8 +4725,11 @@ final class FernletStore {
                 outcome.incompleteStores.append("your Apple Health entries")
             }
         }
+    }
 
-        // 4. Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
+    /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe).
+    private func deletePhotoCorpora(into outcome: inout DeleteAllOutcome) {
+        // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
         // the days are gone nothing knows these files exist and they can never be reached again.
         if !mealPhotoStore.deleteAll() {
             outcome.incompleteStores.append("meal photos")
@@ -4526,8 +4745,12 @@ final class FernletStore {
         if !recipePhotoStore.deleteAll() {
             outcome.incompleteStores.append("recipe photos")
         }
+    }
 
-        // 5. The share-extension inbox, which is drained on the next foreground. A recipe shared into
+    /// Wipe legs 5-7b: the share-extension inbox, the plaintext export dump, and the session-scoped
+    /// social surfaces (friends' clothing catalogs, temp messages, the presence radio).
+    private func clearInboxesAndExports(into outcome: inout DeleteAllOutcome) {
+        // The share-extension inbox, which is drained on the next foreground. A recipe shared into
         // Fernlet before the wipe would otherwise import itself back into the emptied store — and the
         // extension can refill this file while the app is backgrounded, so the drain has to find it
         // empty rather than the app remembering not to drain.
@@ -4554,29 +4777,12 @@ final class FernletStore {
         // advertising/matching until stopped.
         meshNetworkManager.sessionMessages.clear()
         presenceManager.stop()
+    }
 
-        // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
-        // left on disk to re-sync) plus the Worry Box purge. Those used to be discarded, so a failed
-        // delete there looked complete.
-        outcome.incompleteStores.append(contentsOf: resetAll())
-
-        // 8. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
-        // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
-        // exactly what "Reset everything" did before.
-        //
-        // Tier-two memories live inside the blob record, so the purge takes them; the old explicit
-        // `replaceTierTwoMemories([])` here was worse than redundant — it is load-then-SAVE, so it
-        // re-created the blob (and a fresh CloudKit record) microseconds after the purge deleted it.
-        if !repository.purgeAllPersistedData() {
-            outcome.incompleteStores.append("your day history")
-        }
-
-        // 9. Re-cancel: `resetAll` scheduled a debounced save on its way past (via
-        // `batchSnapshotPersistence`), which would fire one second from now and re-create today's row
-        // and the blob. Nothing between the purge and here suspends, so no save can slip in.
-        snapshotSaveCoordinator.cancelPending()
-
-        // 10. The widget's app-group files, LAST — after the cancel, so the debounced save's
+    /// Wipe leg 10: the widget's app-group files and the device-local AI ledgers (call quota + audit
+    /// log). Runs after the funnel's second `cancelPending`, so no debounced save can rewrite them.
+    private func clearDeviceLocalLedgers(into outcome: inout DeleteAllOutcome) async {
+        // The widget's app-group files, LAST — after the cancel, so the debounced save's
         // `publishWidgetSnapshot` can't write the file back moments later. Until this runs the user's
         // score, water and macros keep rendering on the Home and Lock Screen.
         if let widgetSnapshotMirror, !widgetSnapshotMirror.clear() {
@@ -4606,8 +4812,12 @@ final class FernletStore {
             outcome.incompleteStores.append("AI activity log")
         }
         await AIAuditLog.shared.clear()
+    }
 
-        // 11. Proximity identity + sealed-content device keys (bitchat adoptions Increment 1,
+    /// Wipe leg 11: rotate the proximity identity, purge the away-hearts dead drop (remote BEFORE
+    /// local, since only this device can name those records), and drop the orphaned at-rest keys.
+    private func rotateProximityIdentityAndPurgeDeadDrop(into outcome: inout DeleteAllOutcome) async {
+        // Proximity identity + sealed-content device keys (bitchat adoptions Increment 1,
         // Docs/PrivacyWipeCoverage.md). `IdentityService.wipe()` had ZERO call sites before this, so
         // the Ed25519/X25519 identity — which even survives an app reinstall via the keychain —
         // outlived "Delete everything", leaving a post-wipe "fresh start" recognizable to every
@@ -4695,30 +4905,13 @@ final class FernletStore {
         mealPhotoStore.invalidateEncryptionKeyCache()
         progressPhotoStore.invalidateEncryptionKeyCache()
         recipePhotoStore.invalidateEncryptionKeyCache()
-
-        if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
-            outcome.incompleteStores.append("your storage settings")
-        }
-
-        // A single store can be named by two independent legs — the sealed cycle-notes rows and the
-        // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
-        // before the failure alert formats them, or it would read "…and your cycle notes and your cycle
-        // notes". `isComplete` (empty vs not) is unaffected by the dedupe.
-        var seenStores = Set<String>()
-        outcome.incompleteStores = outcome.incompleteStores.filter { seenStores.insert($0).inserted }
-
-        FernletAuditLog.log("settings.deleteAll.completed", context: [
-            "healthSamples": deleteHealthSamples ? "deleted" : "kept",
-            "complete": outcome.isComplete ? "true" : "false"
-        ])
-        return outcome
     }
 
     /// Returns the human-readable names of any per-row store whose persisted delete failed, so the
-    /// "delete everything" funnel can fold them into its failure alert. Empty on a clean reset. Still
-    /// safe to call in a Void context (`@discardableResult`) — the standalone "Reset everything" callers
-    /// ignore the value.
-    @discardableResult
+    /// "delete everything" funnel can fold them into its failure alert. Empty on a clean reset.
+    ///
+    /// R7: the list is failure information, so it is NOT discardable — a standalone "Reset
+    /// everything" caller must surface or audit-log whatever failed to delete.
     func resetAll() -> [String] {
         var incompleteStores: [String] = []
         batchSnapshotPersistence {
@@ -5198,18 +5391,28 @@ extension FernletStore: JournalSealingContext {
         guard defaults.integer(forKey: Self.pastDayJournalScrubFlagKey) < Self.pastDayJournalScrubVersion
         else { return }
         let outcome = journalSealingCoordinator.scrubbedLeakedPastDayJournals(in: repository.loadAllDays())
+        // R7: a failed re-persist leaves that day's plaintext journal in the (synced) blob. Counting
+        // the failures is what keeps the run-once flag from being advanced over a leak that is still
+        // there — a discarded result would mark the scrub clean and it would NEVER re-run.
+        var persistFailures = 0
         for (dayKey, day) in outcome.changedDays {
-            _ = repository.updateDay(
+            let persisted = repository.updateDay(
                 SanitizedDay.sanitizing(day, sealedJournalIDs: journalSealingCoordinator.sealedJournalIDs),
                 for: dayKey, todayKey: todayKey
             )
+            if !persisted { persistFailures += 1 }
+        }
+        if persistFailures > 0 {
+            FernletAuditLog.log("journal.pastDayScrub.persistFailed", context: [
+                "days": String(persistFailures)
+            ])
         }
 
         // No journal key was active, so the scan could not actually run. Do NOT advance the run-once flag —
         // a no-op pass must not be mistaken for a genuine clean pass and permanently disable the scrub (#3).
         guard outcome.keyActive else { return }
 
-        guard outcome.unsealedFailureCount > 0 else {
+        guard outcome.unsealedFailureCount + persistFailures > 0 else {
             // Clean pass: every leaked past-day journal is sealed. Mark complete; the bulk scan never re-runs.
             defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
             defaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
@@ -5233,7 +5436,8 @@ extension FernletStore: JournalSealingContext {
             // through — not just stdout.
             FernletAuditLog.log("journal.pastDayScrub.gaveUp", context: [
                 "attempts": String(attempts),
-                "unsealed": String(outcome.unsealedFailureCount)
+                "unsealed": String(outcome.unsealedFailureCount),
+                "persistFailed": String(persistFailures)
             ])
         } else {
             defaults.set(attempts, forKey: Self.pastDayJournalScrubAttemptsKey)
@@ -5271,7 +5475,6 @@ extension FernletStore: JournalSealingContext {
 extension FernletStore {
     /// Mutates the day for the given date key (forwards to DiaryStore, which owns the day +
     /// repository round-trip). Kept as a facade member so existing call sites resolve.
-    @discardableResult
     func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
         diary.mutateDay(date: date, change)
     }
@@ -5448,7 +5651,7 @@ extension FernletStore: SealedBackupContext {
     func reinstateJournalEntries(from narratives: [JournalNarrative]) {
         guard !narratives.isEmpty else { return }
         for (dayKey, rows) in Dictionary(grouping: narratives, by: \.dayKey) {
-            diary.mutateDay(date: dayKey) { day in
+            let written = diary.mutateDay(date: dayKey) { day in
                 var known = Set(day.journals.map(\.id))
                 for row in rows where !known.contains(row.id) {
                     day.journals.append(
@@ -5457,6 +5660,12 @@ extension FernletStore: SealedBackupContext {
                     known.insert(row.id)
                 }
                 day.journals.sort { $0.date < $1.date }
+            }
+            // R7: a failed past-day write leaves restored narratives with no skeleton to render
+            // through; the restore still proceeds for the other days, but the gap is recorded.
+            if !written {
+                FernletAuditLog.log("diary.pastDayWriteFailed",
+                                    context: ["op": "reinstateJournals", "dayKey": dayKey])
             }
         }
         scheduleSnapshotSave()

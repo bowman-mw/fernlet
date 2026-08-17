@@ -1,5 +1,6 @@
 import Foundation
 import AIContext
+import FernletFoundation
 
 /// The device-local, NON-SYNCED persistence sink for the AI audit log (Ladder §7.2), backed by a
 /// single JSON file in Application Support — the same "per-device ledger" stance as
@@ -37,18 +38,33 @@ final class FileAIAuditLogStore: AIAuditLogPersisting {
             create: true
         )) ?? FileManager.default.temporaryDirectory
         var directory = base.appendingPathComponent("FernletAIAudit", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        Self.excludeFromBackup(&directory)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            // Benign: `save` re-creates the directory on every write, so a failure here only delays
+            // the first persist. Logged so a permanently uncreatable directory is visible.
+            FernletAuditLog.log("aiAudit.directoryCreateFailed",
+                                context: ["stage": "init", "errorType": "\(type(of: error))"])
+        }
+        if !Self.excludeFromBackup(&directory) {
+            FernletAuditLog.log("aiAudit.backupExclusionFailed", context: ["stage": "init"])
+        }
         self.fileURL = directory.appendingPathComponent("ai-audit-log.json")
     }
 
     /// Keeps the audit directory out of the encrypted iCloud / Finder device backup so a "what left my
     /// device" ledger cannot itself leave the device via a backup. Best-effort (a failure to set the
     /// flag never blocks logging); re-applied after any directory recreate in `save`.
-    private static func excludeFromBackup(_ directory: inout URL) {
+    /// - Returns: `false` when the exclusion flag could not be written — the caller logs it.
+    private static func excludeFromBackup(_ directory: inout URL) -> Bool {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
-        try? directory.setResourceValues(values)
+        do {
+            try directory.setResourceValues(values)
+            return true
+        } catch {
+            return false
+        }
     }
 
     func load() -> [AIAuditEntry] {
@@ -69,18 +85,33 @@ final class FileAIAuditLogStore: AIAuditLogPersisting {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(capped) else { return }
         var directory = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
+        do {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            // The write below cannot succeed without the directory: give up this round (the next
+            // `save` retries the whole capped array, which the in-memory actor still holds).
+            FernletAuditLog.log("aiAudit.directoryCreateFailed",
+                                context: ["stage": "save", "errorType": "\(type(of: error))"])
+            return
+        }
         // Re-assert the backup exclusion in case the directory was just recreated (post delete-all).
-        Self.excludeFromBackup(&directory)
+        if !Self.excludeFromBackup(&directory) {
+            FernletAuditLog.log("aiAudit.backupExclusionFailed", context: ["stage": "save"])
+        }
         // Metadata only (no prompt text / user values), but written with file protection anyway; the
         // "until first user authentication" class keeps it writable from background AI work.
-        try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        do {
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            // Benign: the `AIAuditLog` actor still holds this session's entries and the next `save`
+            // rewrites the whole capped array; only survival across relaunch is lost.
+            FernletAuditLog.log("aiAudit.saveFailed", context: ["errorType": "\(type(of: error))"])
+        }
     }
 
-    @discardableResult
     func clear() -> Bool {
         lock.lock(); defer { lock.unlock() }
         // Nothing on disk is a clean sweep, not a failure — and it is the common case here because the

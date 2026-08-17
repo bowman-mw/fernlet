@@ -298,7 +298,7 @@ struct MilestoneLedgerTests {
         #expect(store.milestoneCounts[.journal] == 1)
         #expect(store.coinBalance > 0)  // active-day earn + milestone award
 
-        store.resetAll()
+        _ = store.resetAll()
         // Milestone EVENTS survive the reset (deliberate: lifetime memories of care)…
         #expect(store.milestoneCounts[.journal] == 1)
         // …but milestone COINS follow coin reset semantics: the wiped ledger + boundary stay zero,

@@ -164,7 +164,16 @@ struct FernletApp: App {
                     // cause is the device auto-locking mid-wipe, and writing anything again means
                     // unlocking the device, which lands here. Without this the coordinator stays
                     // storeless for the whole session and every sealed write fails.
-                    try? PrivatePersistenceController.shared.reloadStoreIfNeeded()
+                    do {
+                        try PrivatePersistenceController.shared.reloadStoreIfNeeded()
+                    } catch {
+                        // Benign in isolation — the next foreground activation retries — but a
+                        // chronically storeless session (every sealed write failing) must be visible.
+                        FernletAuditLog.log("privatePersistence.reloadStoreIfNeeded.failed", context: [
+                            "trigger": "sceneActive",
+                            "errorType": "\(type(of: error))"
+                        ])
+                    }
                     // Pick up a guided-workout finish or set/rest advance made from the Live Activity
                     // while the app was backgrounded — even if the Move tab isn't the one on screen.
                     // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
@@ -327,8 +336,13 @@ struct FernletApp: App {
         didScheduleStartupCloudSync = true
 
         guard storagePreferencesStore.preferences.iCloudSyncEnabled else { return }
-        try? await Task.sleep(for: .seconds(5))
-        guard !Task.isCancelled else { return }
+        do {
+            try await Task.sleep(for: .seconds(5))
+        } catch {
+            // `Task.sleep` throws only on cancellation: the scene task was torn down, and a
+            // cancelled launch must not go on to activate sync.
+            return
+        }
         let current = storagePreferencesStore.preferences
         guard current.iCloudSyncEnabled else { return }
         await reloadPersistenceForPreferenceChange(current)
@@ -375,30 +389,48 @@ struct FernletApp: App {
         LocalFernletRepository().applyBackupExclusion(excluded: excluded)
     }
 
+    /// R1/R2: how many parked preference reloads one call may replay before it stops and leaves the
+    /// remainder for the next change to pick up. Replaces the former self-`await` chain, whose depth
+    /// followed user behaviour.
+    private static let maxChainedPreferenceReloads = 4
+
     /// Reloads the Core Data stack for a storage-preference change (iCloud sync on/off, backup
     /// exclusion). If a reload is already in flight the request is parked in
-    /// `pendingPreferenceReload` and replayed afterwards; a failed reload is audit-logged rather
+    /// `pendingPreferenceReload` and replayed afterwards — as a bounded loop, at most
+    /// ``maxChainedPreferenceReloads`` replays per call; a failed reload is audit-logged rather
     /// than crashing the scene.
     @MainActor
     private func reloadPersistenceForPreferenceChange(_ preferences: StoragePreferences) async {
-        // The sealed store is local-only and never reloads, and the local JSON day blob has no
-        // reload at all — re-apply both here so a runtime toggle covers them immediately instead
-        // of lagging until the next launch.
-        applyLocalBackupExclusionNow(preferences.localBackupExcludedFromiOSBackup)
-        guard !PersistenceController.shared.isReloading else {
-            pendingPreferenceReload = preferences
-            return
-        }
-        do {
-            try await PersistenceController.shared.reload(with: preferences)
-            if let pending = pendingPreferenceReload {
-                pendingPreferenceReload = nil
-                await reloadPersistenceForPreferenceChange(pending)
+        var next: StoragePreferences? = preferences
+        var budget = Self.maxChainedPreferenceReloads
+        while let current = next, budget > 0 {
+            budget -= 1
+            next = nil
+            // The sealed store is local-only and never reloads, and the local JSON day blob has no
+            // reload at all — re-apply both here so a runtime toggle covers them immediately instead
+            // of lagging until the next launch.
+            applyLocalBackupExclusionNow(current.localBackupExcludedFromiOSBackup)
+            guard !PersistenceController.shared.isReloading else {
+                pendingPreferenceReload = current
+                return
             }
-        } catch {
-            FernletAuditLog.log("persistence.reload.failed", context: [
-                "trigger": "appPreferencesChanged",
-                "errorType": "\(type(of: error))"
+            do {
+                try await PersistenceController.shared.reload(with: current)
+                next = pendingPreferenceReload
+                pendingPreferenceReload = nil
+            } catch {
+                FernletAuditLog.log("persistence.reload.failed", context: [
+                    "trigger": "appPreferencesChanged",
+                    "errorType": "\(type(of: error))"
+                ])
+            }
+        }
+        if let leftover = next {
+            // Budget exhausted with work still parked: leave it parked so the next preference
+            // change (or the startup sync activation) replays it.
+            pendingPreferenceReload = leftover
+            FernletAuditLog.log("persistence.reload.chainBudgetExhausted", context: [
+                "budget": "\(Self.maxChainedPreferenceReloads)"
             ])
         }
     }
@@ -406,12 +438,23 @@ struct FernletApp: App {
 
 #if canImport(UIKit)
 private extension UIView {
+    /// R1/R2 bound on the subtree walk below: a UIKit window tree is orders of magnitude smaller,
+    /// so exhausting the budget means a pathological (or cyclic) hierarchy — return what was found.
+    static let maxNavigationBarTraversal = 4096
+
     /// Every `UINavigationBar` in this view's subtree — used to push a re-scaled appearance onto
     /// bars that already exist (the appearance proxy only reaches bars created after it changes).
+    /// Walks an explicit worklist (R1: no recursion) with a named node budget (R2).
     func navigationBars() -> [UINavigationBar] {
-        var found = subviews.compactMap { $0 as? UINavigationBar }
-        for subview in subviews {
-            found.append(contentsOf: subview.navigationBars())
+        var found: [UINavigationBar] = []
+        var work: [UIView] = subviews
+        var budget = Self.maxNavigationBarTraversal
+        while let view = work.popLast(), budget > 0 {
+            budget -= 1
+            if let bar = view as? UINavigationBar {
+                found.append(bar)
+            }
+            work.append(contentsOf: view.subviews)
         }
         return found
     }

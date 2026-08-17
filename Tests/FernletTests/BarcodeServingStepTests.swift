@@ -177,7 +177,7 @@ struct BarcodeServingStepTests {
         BarcodeServingMemory.setLastServings(3, for: "0012345678905")
 
         let store = makeTestStore()
-        store.resetAll()
+        _ = store.resetAll()
 
         #expect(BarcodeServingMemory.lastServings(for: "0012345678905") == nil)
         #expect(UserDefaults.standard.dictionary(forKey: key) == nil)

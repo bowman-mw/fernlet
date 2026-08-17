@@ -169,8 +169,8 @@ struct BackupExclusionLaunchGate {
     /// - Returns: ``LaunchResolution/resolved(needsPrompt:)`` — `true` when the existing-install
     ///   prompt must be shown (the gate itself never presents UI) — or
     ///   ``LaunchResolution/deferredKeychainUnreadable`` when nothing could safely happen this
-    ///   launch and the caller must retry on the next foreground activation.
-    @discardableResult
+    ///   launch and the caller must retry on the next foreground activation. R7: the caller MUST
+    ///   act on it (present the prompt / retry later), so it carries no `@discardableResult`.
     func resolveAtLaunch(store: StoragePreferencesStore, applyExclusionNow: (Bool) -> Void = { _ in }) -> LaunchResolution {
         // Classify over the LIVE blob, never `store.preferences`: the in-memory copy is loaded
         // exactly once at process launch, and a pre-first-unlock launch (prewarming, background

@@ -149,7 +149,7 @@ struct FernletPersistenceTests {
         let store = makePopulatedTestStore()
         #expect(store.day.meals.isEmpty == false)
 
-        store.resetAll()
+        _ = store.resetAll()
 
         #expect(store.day.meals.isEmpty)
         #expect(store.day.journals.isEmpty)
@@ -174,7 +174,7 @@ struct FernletPersistenceTests {
         store.day.bottleCount = 3
         store.flushPendingSnapshotSave()
 
-        store.resetAll()
+        _ = store.resetAll()
         store.flushPendingSnapshotSave()
 
         let reloaded = makeStore(controller: controller)

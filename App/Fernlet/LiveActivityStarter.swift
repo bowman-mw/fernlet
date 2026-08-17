@@ -8,6 +8,7 @@
 
 import ActivityKit
 import Foundation
+import FernletFoundation
 
 /// The shared generic requester behind ``WorkoutLiveActivityController`` and
 /// ``CookingLiveActivityController`` — the app-target-only half of the Live Activity flow.
@@ -35,7 +36,12 @@ enum LiveActivityStarter {
                 content: ActivityContent(state: state.contentState, staleDate: state.staleDate(postedAt: Date()))
             )
         } catch {
-            // Silent degrade: the in-app surface remains the full experience.
+            // Silent degrade for the user: the in-app surface remains the full experience. The audit
+            // line is the recovery trail — a Live Activity that never appears (entitlement, per-app
+            // cap, OS refusal) otherwise leaves no trace at all.
+            FernletAuditLog.log("liveActivity.request.failed",
+                                context: ["kind": String(describing: S.Attributes.self),
+                                          "errorType": "\(type(of: error))"])
         }
     }
 }
