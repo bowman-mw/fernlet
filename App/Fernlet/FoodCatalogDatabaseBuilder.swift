@@ -36,10 +36,10 @@ enum FoodCatalogDatabaseBuilder {
     /// Writes a fresh database at `url` (overwriting any existing file) containing one `food` row per
     /// item plus an FTS5 index over the normalized name/category/tags used by the search gate.
     static func build(items: [FoodItem], to url: URL) throws {
-        try? FileManager.default.removeItem(at: url)
+        try removeIfPresent(url)
         // A stale -wal/-shm pair from a previous crash would otherwise corrupt the fresh file.
-        try? FileManager.default.removeItem(at: url.appendingPathExtension("wal"))
-        try? FileManager.default.removeItem(at: url.appendingPathExtension("shm"))
+        try removeIfPresent(url.appendingPathExtension("wal"))
+        try removeIfPresent(url.appendingPathExtension("shm"))
 
         var db: OpaquePointer?
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK,
@@ -62,11 +62,25 @@ enum FoodCatalogDatabaseBuilder {
             try insertRows(db, items: items)
             try exec(db, "COMMIT;")
         } catch {
-            try? exec(db, "ROLLBACK;")
+            // A failed rollback leaves the file in a state the insert error alone would not describe,
+            // so it is named in the error the generation test sees rather than dropped.
+            do {
+                try exec(db, "ROLLBACK;")
+            } catch let rollbackError {
+                throw BuildError.exec("insert failed: \(error) — rollback also failed: \(rollbackError)")
+            }
             throw error
         }
         try exec(db, "INSERT INTO food_fts(food_fts) VALUES('optimize');")
         try exec(db, "VACUUM;")
+    }
+
+    /// Deletes `url` when a file is there. "Not present" is the benign case and is decided explicitly;
+    /// any other removal failure propagates out of `build(items:to:)` so a stale database can never be
+    /// silently written into (which is exactly the corruption the -wal/-shm removal exists to prevent).
+    private static func removeIfPresent(_ url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
     }
 
     private static func insertRows(_ db: OpaquePointer, items: [FoodItem]) throws {
@@ -92,9 +106,14 @@ enum FoodCatalogDatabaseBuilder {
             let normalizedName = FoodItemSearch.normalized(item.name)
             let normalizedCategory = FoodItemSearch.normalized(item.category)
             let normalizedTags = item.tags.map { FoodItemSearch.normalized($0) }.joined(separator: " ")
-            let micros = (try? encoder.encode(item.micronutrients)).flatMap { String(data: $0, encoding: .utf8) }
-            let tags = (try? encoder.encode(item.tags)).flatMap { String(data: $0, encoding: .utf8) }
-            let portions = (try? encoder.encode(item.portions)).flatMap { String(data: $0, encoding: .utf8) }
+            // An encode failure must fail the generation loudly — swallowing it would ship a catalog
+            // row with a silently NULL micronutrient/tag/portion column.
+            let microsData = try encoder.encode(item.micronutrients)
+            let tagsData = try encoder.encode(item.tags)
+            let portionsData = try encoder.encode(item.portions)
+            let micros = String(data: microsData, encoding: .utf8)
+            let tags = String(data: tagsData, encoding: .utf8)
+            let portions = String(data: portionsData, encoding: .utf8)
 
             sqlite3_reset(foodStmt)
             sqlite3_clear_bindings(foodStmt)
@@ -133,12 +152,11 @@ enum FoodCatalogDatabaseBuilder {
 
     // MARK: - C helpers
 
+    /// Runs one statement, reading any failure message off the connection (`sqlite3_errmsg`) exactly as
+    /// `prepare`/`step` do — no `errmsg` out-parameter, so the file carries no unsafe-pointer seam.
     private static func exec(_ db: OpaquePointer, _ sql: String) throws {
-        var errmsg: UnsafeMutablePointer<CChar>?
-        guard sqlite3_exec(db, sql, nil, nil, &errmsg) == SQLITE_OK else {
-            let message = errmsg.map { String(cString: $0) } ?? "unknown"
-            sqlite3_free(errmsg)
-            throw BuildError.exec("\(message) — \(sql.prefix(80))")
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw BuildError.exec("\(String(cString: sqlite3_errmsg(db))) — \(sql.prefix(80))")
         }
     }
 

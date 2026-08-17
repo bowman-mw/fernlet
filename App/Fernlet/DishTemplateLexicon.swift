@@ -1,5 +1,6 @@
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 import FernletScoring
 import FoodCatalog
 
@@ -69,14 +70,25 @@ private struct DishTemplateFile: Decodable {
 /// ``MealBuilder``. It also supplies per-component gram bounds that ``MealDecompositionResolver``
 /// uses to sanity-clamp the AI tier's estimates, and default yields for auto-minted recipes. A
 /// missing or undecodable JSON degrades to an empty lexicon (every lookup misses).
-public enum DishTemplateLexicon {
+enum DishTemplateLexicon {
     /// Single lazy load — both templates and the name index built together.
     private static let catalog: (templates: [DishTemplate], index: [String: DishTemplateMatch]) = {
-        guard
-            let url = Bundle.main.url(forResource: "DishTemplates", withExtension: "json"),
-            let data = try? Data(contentsOf: url),
-            let file = try? JSONDecoder().decode(DishTemplateFile.self, from: data)
-        else { return ([], [:]) }
+        guard let url = Bundle.main.url(forResource: "DishTemplates", withExtension: "json") else {
+            // Recovery: an empty lexicon — every lookup misses and the cascade falls to its next tier.
+            FernletAuditLog.log("dishTemplates.load.failed", context: ["reason": "bundled resource missing"])
+            return ([], [:])
+        }
+        let file: DishTemplateFile
+        do {
+            let data = try Data(contentsOf: url)
+            file = try JSONDecoder().decode(DishTemplateFile.self, from: data)
+        } catch {
+            // A bundled resource that won't decode is a build error, not a runtime condition — name it
+            // in DEBUG and log it in Release, then degrade to an empty lexicon (M2 tier disabled).
+            assertionFailure("DishTemplates.json failed to load: \(error)")
+            FernletAuditLog.log("dishTemplates.load.failed", context: ["error": error.localizedDescription])
+            return ([], [:])
+        }
 
         var index: [String: DishTemplateMatch] = [:]
         for template in file.dishes {
@@ -96,6 +108,10 @@ public enum DishTemplateLexicon {
         return (file.dishes, index)
     }()
 
+    /// Upper bound on a typed leading count ("6 pieces nigiri"): a plausible number of natural units of
+    /// one dish. R5 — the count is user input and scales every component's grams.
+    static let maxLeadingCount = 100.0
+
     // MARK: Lookup
 
     /// Returns the best-matching template and the count extracted from the item name.
@@ -114,14 +130,11 @@ public enum DishTemplateLexicon {
             return (match, count ?? match.template.defaultCount)
         }
         // Longest-substring match (avoids "roll" matching "roll" in "spring roll blend")
-        var best: (length: Int, match: DishTemplateMatch)?
-        for (key, match) in catalog.index where norm.contains(key) {
-            if best == nil || key.count > best!.length {
-                best = (key.count, match)
-            }
-        }
-        if let (_, match) = best {
-            return (match, count ?? match.template.defaultCount)
+        let best = catalog.index
+            .filter { norm.contains($0.key) }
+            .max { $0.key.count < $1.key.count }
+        if let best {
+            return (best.value, count ?? best.value.template.defaultCount)
         }
         return (nil, 1)
     }
@@ -137,7 +150,7 @@ public enum DishTemplateLexicon {
     /// Plausible gram ranges (0.5×–1.75× of the template amount) for each component of every dish the
     /// description names, keyed by normalized search term. Used by `MealDecompositionResolver` to
     /// clamp the AI tier's per-component gram estimates toward template reality.
-    public static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
+    static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
         var bounds: [String: ClosedRange<Double>] = [:]
         for itemName in MealItemSplitter.items(from: description) {
             let (match, count) = matchDetailsWithCount(itemName)
@@ -161,7 +174,7 @@ public enum DishTemplateLexicon {
     ///
     /// All items split from the description must be found in the lexicon for this to return non-nil;
     /// if any item is unrecognised the whole call returns nil so the next fallback tier can handle it.
-    public static func resolve(
+    static func resolve(
         description: String,
         mealType: MealType?,
         catalog: FoodCatalog
@@ -200,7 +213,9 @@ public enum DishTemplateLexicon {
             let prep = component.preparation ?? ""
             let query = prep.isEmpty ? component.search : "\(prep) \(component.search)"
             guard let foodItem = catalog.results(for: query, limit: 1).first else { return nil }
-            let grams = component.gramsPerUnit * count
+            // R3/R5: no single template component may exceed the shared single-log gram cap, however
+            // large a count the user typed.
+            let grams = min(component.gramsPerUnit * count, MealPlausibility.maxSingleLogGrams)
             let ingredient = FoodSelectionIngredient(
                 candidateId: 0,
                 foodName: foodItem.name,
@@ -225,9 +240,14 @@ public enum DishTemplateLexicon {
     // MARK: Count extraction
 
     /// Extracts a leading numeric count from a normalised item name, e.g. "6 pieces" → 6.
+    ///
+    /// The value comes straight from typed user text and is multiplied by `gramsPerUnit` downstream,
+    /// so it is validated (finite, positive) and clamped to ``maxLeadingCount`` at this boundary —
+    /// unclamped, "99999999999999999999 nigiri" would overflow the `Int(Double)` conversion inside
+    /// `Macros.scaled(by:)` and trap.
     private static func extractLeadingCount(from normalized: String) -> Double? {
         guard let firstToken = normalized.split(separator: " ").first.map(String.init),
-              let count = Double(firstToken), count > 0 else { return nil }
-        return count
+              let count = Double(firstToken), count.isFinite, count > 0 else { return nil }
+        return min(count, maxLeadingCount)
     }
 }

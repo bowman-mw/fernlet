@@ -32,6 +32,9 @@ struct NutritionLabelCameraSheet: View {
     @State private var dualColumnResult: DualColumnScanResult?
     @State private var selectedDualColumn = 0
     @State private var isFlashOn = false
+    /// The single in-flight label scan (see `handlePickedImage`); cancelled when a new image is picked
+    /// and when the sheet goes away.
+    @State private var scanTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,123 +45,19 @@ struct NutritionLabelCameraSheet: View {
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
-                    HStack(spacing: 12) {
-                        Button {
-                            showingCamera = true
-                        } label: {
-                            Label("Camera", systemImage: "camera.fill")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.cream)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                    sourceButtons
 
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                            Label("Library", systemImage: "photo.on.rectangle")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.bark)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            isFlashOn.toggle()
-                        } label: {
-                            Image(systemName: isFlashOn ? "bolt.fill" : "bolt.slash.fill")
-                                .font(.headline)
-                                .foregroundStyle(isFlashOn ? Color.cream : Color.bark)
-                                .frame(width: 48, height: 48)
-                                .background(isFlashOn ? Color.moss : Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(hasCameraFlash == false)
-                    }
-
-                    if let selectedImage {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Image(uiImage: selectedImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxHeight: 260)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                .frame(maxWidth: .infinity)
-
-                            if isScanning {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                    Text("Reading label...")
-                                        .font(.fernlet(.bubble))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            }
-
-                            if shouldShowScanTips {
-                                scanTips
-                            }
-                        }
-                    }
+                    imagePreview
 
                     if let dual = dualColumnResult {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TWO-COLUMN LABEL DETECTED")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                                .tracking(0.8)
-
-                            HStack(spacing: 0) {
-                                ForEach([0, 1], id: \.self) { index in
-                                    let label = index == 0 ? dual.col1Header : dual.col2Header
-                                    let isSelected = selectedDualColumn == index
-                                    Button {
-                                        selectedDualColumn = index
-                                        scanResult = index == 0 ? dual.col1 : dual.col2
-                                    } label: {
-                                        Text(label)
-                                            .font(.fernlet(.label))
-                                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(isSelected ? Color.cream : Color.clear)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
+                        dualColumnPicker(dual)
                     }
 
                     if let scanResult {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("DETECTED VALUES")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                                .tracking(0.8)
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                detectedValues(for: scanResult)
-                            }
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
+                        detectedValuesCard(scanResult)
                     }
 
-                    if let scanError {
-                        Text(scanError)
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.terracotta)
-                            .fernletWrappingText()
-                    }
+                    errorLine
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -180,6 +79,138 @@ struct NutritionLabelCameraSheet: View {
             flashMode: isFlashOn ? .on : .off,
             onCameraImage: handlePickedImage
         )
+        .onDisappear { scanTask?.cancel() }
+    }
+
+    /// Camera / library / flash — the three ways a label image gets here.
+    private var sourceButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                showingCamera = true
+            } label: {
+                Label("Camera", systemImage: "camera.fill")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                Label("Library", systemImage: "photo.on.rectangle")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                isFlashOn.toggle()
+            } label: {
+                Image(systemName: isFlashOn ? "bolt.fill" : "bolt.slash.fill")
+                    .font(.headline)
+                    .foregroundStyle(isFlashOn ? Color.cream : Color.bark)
+                    .frame(width: 48, height: 48)
+                    .background(isFlashOn ? Color.moss : Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(hasCameraFlash == false)
+        }
+    }
+
+    /// The picked image with its scanning spinner and (on a weak read) the framing/glare tips.
+    @ViewBuilder
+    private var imagePreview: some View {
+        if let selectedImage {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(uiImage: selectedImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    .frame(maxWidth: .infinity)
+
+                if isScanning {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Reading label...")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+
+                if shouldShowScanTips {
+                    scanTips
+                }
+            }
+        }
+    }
+
+    /// The per-serving / per-container column picker shown for a two-column label.
+    private func dualColumnPicker(_ dual: DualColumnScanResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("TWO-COLUMN LABEL DETECTED")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .tracking(0.8)
+
+            HStack(spacing: 0) {
+                ForEach([0, 1], id: \.self) { index in
+                    let label = index == 0 ? dual.col1Header : dual.col2Header
+                    let isSelected = selectedDualColumn == index
+                    Button {
+                        selectedDualColumn = index
+                        scanResult = index == 0 ? dual.col1 : dual.col2
+                    } label: {
+                        Text(label)
+                            .font(.fernlet(.label))
+                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(isSelected ? Color.cream : Color.clear)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    /// The "DETECTED VALUES" card wrapping the three value groups.
+    private func detectedValuesCard(_ result: NutritionLabelResult) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DETECTED VALUES")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .tracking(0.8)
+
+            VStack(alignment: .leading, spacing: 6) {
+                detectedValues(for: result)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    /// The calm inline scan-failure line.
+    @ViewBuilder
+    private var errorLine: some View {
+        if let scanError {
+            Text(scanError)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.terracotta)
+                .fernletWrappingText()
+        }
     }
 
     private var hasCameraFlash: Bool {
@@ -202,107 +233,101 @@ struct NutritionLabelCameraSheet: View {
         .fernletWrappingText()
     }
 
+    /// One row of the detected-values tables: its label, where to read the value, and its unit.
+    ///
+    /// Data, not code — the label's Double-valued fields are near-identical rows, so they live in the
+    /// two static tables below and render through one `ForEach`.
+    private struct DetectedValueRow {
+        let label: String
+        let keyPath: KeyPath<NutritionLabelResult, Double?>
+        let unit: String
+    }
+
+    /// The Double-valued "Label details" rows, in display order.
+    private static let labelDetailRows: [DetectedValueRow] = [
+        DetectedValueRow(label: "Saturated fat", keyPath: \.saturatedFat, unit: "g"),
+        DetectedValueRow(label: "Trans fat", keyPath: \.transFat, unit: "g"),
+        DetectedValueRow(label: "Cholesterol", keyPath: \.cholesterol, unit: "mg"),
+        DetectedValueRow(label: "Sodium", keyPath: \.sodium, unit: "mg"),
+        DetectedValueRow(label: "Fiber", keyPath: \.fiber, unit: "g"),
+        DetectedValueRow(label: "Sugar", keyPath: \.sugar, unit: "g"),
+        DetectedValueRow(label: "Added sugar", keyPath: \.addedSugar, unit: "g")
+    ]
+
+    /// The "Vitamins & minerals" rows, in display order.
+    private static let vitaminRows: [DetectedValueRow] = [
+        DetectedValueRow(label: "Vitamin A", keyPath: \.vitaminA, unit: "mcg"),
+        DetectedValueRow(label: "Vitamin C", keyPath: \.vitaminC, unit: "mg"),
+        DetectedValueRow(label: "Vitamin D", keyPath: \.vitaminD, unit: "mcg"),
+        DetectedValueRow(label: "Vitamin E", keyPath: \.vitaminE, unit: "mg"),
+        DetectedValueRow(label: "Vitamin B12", keyPath: \.vitaminB12, unit: "mcg"),
+        DetectedValueRow(label: "Thiamin", keyPath: \.thiamin, unit: "mg"),
+        DetectedValueRow(label: "Riboflavin", keyPath: \.riboflavin, unit: "mg"),
+        DetectedValueRow(label: "Niacin", keyPath: \.niacin, unit: "mg"),
+        DetectedValueRow(label: "Folate", keyPath: \.folate, unit: "mcg"),
+        DetectedValueRow(label: "Calcium", keyPath: \.calcium, unit: "mg"),
+        DetectedValueRow(label: "Iron", keyPath: \.iron, unit: "mg"),
+        DetectedValueRow(label: "Magnesium", keyPath: \.magnesium, unit: "mg"),
+        DetectedValueRow(label: "Phosphorus", keyPath: \.phosphorus, unit: "mg"),
+        DetectedValueRow(label: "Potassium", keyPath: \.potassium, unit: "mg"),
+        DetectedValueRow(label: "Zinc", keyPath: \.zinc, unit: "mg"),
+        DetectedValueRow(label: "Omega-3", keyPath: \.omega3, unit: "g")
+    ]
+
     @ViewBuilder
     private func detectedValues(for scanResult: NutritionLabelResult) -> some View {
         if hasMacroValues(in: scanResult) {
-            detectedGroup("Macros") {
-                if showCalories, let calories = scanResult.calories {
-                    detectedRow("Calories", "\(calories)")
-                }
-                if let protein = scanResult.protein {
-                    detectedRow("Protein", "\(protein)g")
-                }
-                if let carbs = scanResult.carbs {
-                    detectedRow("Carbs", "\(carbs)g")
-                }
-                if let fat = scanResult.fat {
-                    detectedRow("Fat", "\(fat)g")
-                }
-            }
+            macroGroup(scanResult)
         }
 
         if hasLabelDetailValues(in: scanResult) {
-            detectedGroup("Label details") {
-                if let servingSize = scanResult.servingSize {
-                    detectedRow("Serving size", servingSize)
-                }
-                if let servings = scanResult.servingsPerContainer {
-                    detectedRow("Servings", "\(servings)")
-                }
-                if let saturatedFat = scanResult.saturatedFat {
-                    detectedRow("Saturated fat", formatted(saturatedFat, unit: "g"))
-                }
-                if let transFat = scanResult.transFat {
-                    detectedRow("Trans fat", formatted(transFat, unit: "g"))
-                }
-                if let cholesterol = scanResult.cholesterol {
-                    detectedRow("Cholesterol", formatted(cholesterol, unit: "mg"))
-                }
-                if let sodium = scanResult.sodium {
-                    detectedRow("Sodium", formatted(sodium, unit: "mg"))
-                }
-                if let fiber = scanResult.fiber {
-                    detectedRow("Fiber", formatted(fiber, unit: "g"))
-                }
-                if let sugar = scanResult.sugar {
-                    detectedRow("Sugar", formatted(sugar, unit: "g"))
-                }
-                if let addedSugar = scanResult.addedSugar {
-                    detectedRow("Added sugar", formatted(addedSugar, unit: "g"))
-                }
-            }
+            labelDetailGroup(scanResult)
         }
 
         if hasVitaminAndMineralValues(in: scanResult) {
             detectedGroup("Vitamins & minerals") {
-                if let vitaminA = scanResult.vitaminA {
-                    detectedRow("Vitamin A", formatted(vitaminA, unit: "mcg"))
-                }
-                if let vitaminC = scanResult.vitaminC {
-                    detectedRow("Vitamin C", formatted(vitaminC, unit: "mg"))
-                }
-                if let vitaminD = scanResult.vitaminD {
-                    detectedRow("Vitamin D", formatted(vitaminD, unit: "mcg"))
-                }
-                if let vitaminE = scanResult.vitaminE {
-                    detectedRow("Vitamin E", formatted(vitaminE, unit: "mg"))
-                }
-                if let vitaminB12 = scanResult.vitaminB12 {
-                    detectedRow("Vitamin B12", formatted(vitaminB12, unit: "mcg"))
-                }
-                if let thiamin = scanResult.thiamin {
-                    detectedRow("Thiamin", formatted(thiamin, unit: "mg"))
-                }
-                if let riboflavin = scanResult.riboflavin {
-                    detectedRow("Riboflavin", formatted(riboflavin, unit: "mg"))
-                }
-                if let niacin = scanResult.niacin {
-                    detectedRow("Niacin", formatted(niacin, unit: "mg"))
-                }
-                if let folate = scanResult.folate {
-                    detectedRow("Folate", formatted(folate, unit: "mcg"))
-                }
-                if let calcium = scanResult.calcium {
-                    detectedRow("Calcium", formatted(calcium, unit: "mg"))
-                }
-                if let iron = scanResult.iron {
-                    detectedRow("Iron", formatted(iron, unit: "mg"))
-                }
-                if let magnesium = scanResult.magnesium {
-                    detectedRow("Magnesium", formatted(magnesium, unit: "mg"))
-                }
-                if let phosphorus = scanResult.phosphorus {
-                    detectedRow("Phosphorus", formatted(phosphorus, unit: "mg"))
-                }
-                if let potassium = scanResult.potassium {
-                    detectedRow("Potassium", formatted(potassium, unit: "mg"))
-                }
-                if let zinc = scanResult.zinc {
-                    detectedRow("Zinc", formatted(zinc, unit: "mg"))
-                }
-                if let omega3 = scanResult.omega3 {
-                    detectedRow("Omega-3", formatted(omega3, unit: "g"))
-                }
+                rows(Self.vitaminRows, of: scanResult)
+            }
+        }
+    }
+
+    /// Calories (only behind the opt-in) plus the three macros — all Int-typed on the label.
+    private func macroGroup(_ result: NutritionLabelResult) -> some View {
+        detectedGroup("Macros") {
+            if showCalories, let calories = result.calories {
+                detectedRow("Calories", "\(calories)")
+            }
+            if let protein = result.protein {
+                detectedRow("Protein", "\(protein)g")
+            }
+            if let carbs = result.carbs {
+                detectedRow("Carbs", "\(carbs)g")
+            }
+            if let fat = result.fat {
+                detectedRow("Fat", "\(fat)g")
+            }
+        }
+    }
+
+    /// Serving size / servings (their own types) plus the Double-valued detail table.
+    private func labelDetailGroup(_ result: NutritionLabelResult) -> some View {
+        detectedGroup("Label details") {
+            if let servingSize = result.servingSize {
+                detectedRow("Serving size", servingSize)
+            }
+            if let servings = result.servingsPerContainer {
+                detectedRow("Servings", "\(servings)")
+            }
+            rows(Self.labelDetailRows, of: result)
+        }
+    }
+
+    /// Renders the rows of a table whose value is present on `result`.
+    @ViewBuilder
+    private func rows(_ table: [DetectedValueRow], of result: NutritionLabelResult) -> some View {
+        ForEach(table, id: \.label) { row in
+            if let value = result[keyPath: row.keyPath] {
+                detectedRow(row.label, formatted(value, unit: row.unit))
             }
         }
     }
@@ -363,12 +388,17 @@ struct NutritionLabelCameraSheet: View {
         selectedDualColumn = 0
         isScanning = true
 
-        Task {
+        // R3: exactly one scan in flight — picking a second label cancels the first, so its result
+        // can never land after the reset and be shown for the wrong image.
+        scanTask?.cancel()
+        scanTask = Task {
             do {
                 let (primary, dual) = try await NutritionLabelScanner.scanAll(image: image)
+                guard !Task.isCancelled else { return }
                 dualColumnResult = dual
                 scanResult = primary
             } catch {
+                guard !Task.isCancelled else { return }
                 scanError = (error as? LocalizedError)?.errorDescription ?? "Could not read that label."
             }
             isScanning = false

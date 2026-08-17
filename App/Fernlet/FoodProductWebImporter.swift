@@ -64,8 +64,14 @@ enum FoodProductWebSearch {
     /// ``ProductPagePreview``.
     /// - Throws: ``FoodProductWebImportError/productNotFound`` when no usable result parses.
     static func preview(for query: String) async throws -> ProductPagePreview {
+        // R5: nothing egresses for an empty/whitespace query — a blank search would return whatever
+        // the engine's front page lists.
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            throw FoodProductWebImportError.productNotFound
+        }
         var components = URLComponents(string: "https://html.duckduckgo.com/html/")
-        components?.queryItems = [URLQueryItem(name: "q", value: "\(query) nutrition facts")]
+        components?.queryItems = [URLQueryItem(name: "q", value: "\(trimmedQuery) nutrition facts")]
         guard let url = components?.url else {
             throw FoodProductWebImportError.invalidURL
         }
@@ -472,7 +478,7 @@ enum FoodProductWebImporter {
             name: name,
             brand: brandName(from: dictionary["brand"]),
             servingSize: stringValue(nutrition["servingSize"]) ?? "1 serving",
-            calories: nutritionDoubleValue(nutrition["calories"]).map { Int($0.rounded()) },
+            calories: nutritionDoubleValue(nutrition["calories"]).flatMap { Int(exactly: $0.rounded()) },
             protein: nutritionDoubleValue(nutrition["proteinContent"]),
             carbs: nutritionDoubleValue(nutrition["carbohydrateContent"]),
             fat: nutritionDoubleValue(nutrition["fatContent"]),
@@ -498,13 +504,20 @@ enum FoodProductWebImporter {
         micronutrients: Micronutrients
     ) -> ImportedFoodProduct? {
         guard let protein, let carbs, let fat else { return nil }
+        // R5: the macros arrive from untrusted page JSON-LD / model output, where `Int(Double)` would
+        // trap on an out-of-range magnitude. A value that cannot be represented is no product at all.
+        guard let proteinGrams = Int(exactly: protein.rounded()),
+              let carbGrams = Int(exactly: carbs.rounded()),
+              let fatGrams = Int(exactly: fat.rounded()) else {
+            return nil
+        }
         return ImportedFoodProduct(
             sourceURL: sourceURL,
             name: name,
             brand: brand,
             servingSize: servingSize,
             calories: calories,
-            macros: Macros(protein: Int(protein.rounded()), carbs: Int(carbs.rounded()), fat: Int(fat.rounded())),
+            macros: Macros(protein: proteinGrams, carbs: carbGrams, fat: fatGrams),
             micronutrients: micronutrients
         )
     }
@@ -538,8 +551,11 @@ enum FoodProductWebImporter {
     }
 
     #if canImport(UIKit)
+    /// R3: how many scraped candidate images the OCR tier will fetch, however many the page carries.
+    private static let maxLabelImagesToScan = 8
+
     private static func productFromNutritionLabelImages(in html: String, fallbackName: String, sourceURL: URL) async -> ImportedFoodProduct? {
-        for imageURL in candidateImageURLs(from: html, sourceURL: sourceURL).prefix(8) {
+        for imageURL in candidateImageURLs(from: html, sourceURL: sourceURL).prefix(maxLabelImagesToScan) {
             if let product = await productFromNutritionLabelImage(
                 at: imageURL,
                 fallbackName: fallbackName,
@@ -642,17 +658,8 @@ enum FoodProductWebImporter {
                 guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
                     throw FoodProductWebImportError.nutritionNotFound
                 }
-                // Plausibility: per-field bounds + macro-calorie consistency
-                let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
-                let macroCalories = product.macros.calories
-                if let reportedCalories = product.calories {
-                    let allowedLow = max(0, reportedCalories / 2 - 50)
-                    let allowedHigh = reportedCalories * 2 + 100
-                    guard reportedCalories >= 0 && reportedCalories <= 5000,
-                          p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
-                          macroCalories >= allowedLow && macroCalories <= allowedHigh else {
-                        throw FoodProductWebImportError.nutritionNotFound
-                    }
+                guard isPlausibleModelExtraction(product) else {
+                    throw FoodProductWebImportError.nutritionNotFound
                 }
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
@@ -675,6 +682,22 @@ enum FoodProductWebImporter {
         }
         #endif
         throw FoodProductWebImportError.modelUnavailable
+    }
+
+    /// Whether a model-extracted product may be believed: per-field macro bounds always, plus a
+    /// macro-calorie consistency check when the model also reported calories (R5).
+    ///
+    /// The field bounds are deliberately outside the calories branch — a calorie-less answer is still
+    /// model output and must clear the same per-field checks.
+    private static func isPlausibleModelExtraction(_ product: ImportedFoodProduct) -> Bool {
+        let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
+        guard p >= 0, p <= 500, c >= 0, c <= 1000, f >= 0, f <= 500 else { return false }
+        guard let reportedCalories = product.calories else { return true }
+        let allowedLow = max(0, reportedCalories / 2 - 50)
+        let allowedHigh = reportedCalories * 2 + 100
+        let macroCalories = product.macros.calories
+        return reportedCalories >= 0 && reportedCalories <= 5000
+            && macroCalories >= allowedLow && macroCalories <= allowedHigh
     }
 
     /// Reduces the page to model-ready plain text for the last-resort model tier.
@@ -823,24 +846,34 @@ enum FoodProductWebImporter {
         }
     }
 
+    /// R1/R2: the JSON-LD comes from an arbitrary page, so the walk is an explicitly bounded worklist
+    /// — this is the maximum number of nodes visited, whatever nesting the page ships.
+    private static let maxJSONLDNodes = 4_096
+
+    /// Every image-ish string value reachable from a JSON-LD node (`image`, `@graph`, and an
+    /// `ImageObject`'s `url`), collected by a bounded worklist rather than recursion.
+    ///
+    /// Pushing children reversed keeps the left-to-right, depth-first order the recursive form had.
     private static func imageValues(in object: Any) -> [String] {
-        if let string = object as? String {
-            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? [] : [trimmed]
-        }
-        if let array = object as? [Any] {
-            return array.flatMap { imageValues(in: $0) }
-        }
-        guard let dictionary = object as? [String: Any] else { return [] }
+        var work: [Any] = [object]
         var values: [String] = []
-        if let image = dictionary["image"] {
-            values.append(contentsOf: imageValues(in: image))
-        }
-        if let graph = dictionary["@graph"] {
-            values.append(contentsOf: imageValues(in: graph))
-        }
-        if JSONLDScraper.schemaTypes(in: dictionary).contains("imageobject"), let url = dictionary["url"] {
-            values.append(contentsOf: imageValues(in: url))
+        var budget = maxJSONLDNodes
+        while let node = work.popLast(), budget > 0 {
+            budget -= 1
+            if let string = node as? String {
+                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { values.append(trimmed) }
+            } else if let array = node as? [Any] {
+                work.append(contentsOf: array.reversed())
+            } else if let dictionary = node as? [String: Any] {
+                var children: [Any] = []
+                if let image = dictionary["image"] { children.append(image) }
+                if let graph = dictionary["@graph"] { children.append(graph) }
+                if JSONLDScraper.schemaTypes(in: dictionary).contains("imageobject"), let url = dictionary["url"] {
+                    children.append(url)
+                }
+                work.append(contentsOf: children.reversed())
+            }
         }
         return values
     }
@@ -909,11 +942,20 @@ enum FoodProductWebImporter {
         HTMLScraper.metaContent(named: property, in: html)
     }
 
+    /// The largest nutrition magnitude a real label can carry (per serving, in the label's own unit).
+    /// R5: page/model text is untrusted, and anything past this is a parsing artifact — rejecting it
+    /// here keeps every downstream `Int(...)` conversion inside range.
+    private static let maxPlausibleNutrientValue = 100_000.0
+
     fileprivate static func nutritionDoubleValue(_ value: Any?) -> Double? {
         guard let string = stringValue(value) else { return nil }
         let normalized = Self.normalizeDecimalSeparator(string)
         let numeric = normalized.prefix(while: { $0.isNumber || $0 == "." })
-        return Double(numeric)
+        guard let parsed = Double(numeric), parsed.isFinite,
+              parsed >= 0, parsed <= Self.maxPlausibleNutrientValue else {
+            return nil
+        }
+        return parsed
     }
 
     private static func normalizeDecimalSeparator(_ string: String) -> String {
@@ -992,7 +1034,7 @@ private struct ExtractedFoodProduct {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackName : name,
             brand: brand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : brand,
             servingSize: servingSize.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "1 serving" : servingSize,
-            calories: FoodProductWebImporter.nutritionDoubleValue(calories).map { Int($0.rounded()) },
+            calories: FoodProductWebImporter.nutritionDoubleValue(calories).flatMap { Int(exactly: $0.rounded()) },
             protein: FoodProductWebImporter.nutritionDoubleValue(protein),
             carbs: FoodProductWebImporter.nutritionDoubleValue(carbs),
             fat: FoodProductWebImporter.nutritionDoubleValue(fat),

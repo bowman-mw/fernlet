@@ -3,6 +3,7 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import FernletFoundation
 import AppServices
 
 /// Read-side context the photo recognizer needs from the app store.
@@ -50,7 +51,18 @@ struct MealPhotoRecognizer {
     ///   found, or `.resolved` carrying the description plus the cascade's resolution for review.
     func identify(photo: UIImage, type: MealType?, host: any MealPhotoRecognitionHost) async -> MealPhotoRecognitionOutcome {
         guard host.settings.aiStatus != .off else { return .aiOff }
-        let classifications = (try? await classifier.classifications(in: photo)) ?? []
+        let classifications: [FoodImageClassification]
+        do {
+            classifications = try await classifier.classifications(in: photo)
+        } catch {
+            // Recovery: the same gentle "want to type it?" path as an empty plate — but a broken
+            // classifier is named in the audit log instead of looking like "nothing recognized".
+            FernletAuditLog.log(
+                "mealPhoto.classification.failed",
+                context: ["error": error.localizedDescription]
+            )
+            return .nothingRecognized
+        }
         guard let description = FoodImageTaxonomy.mealDescription(from: classifications) else {
             return .nothingRecognized
         }

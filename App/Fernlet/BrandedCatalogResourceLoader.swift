@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 import FoodCatalog
 
 /// Loads the full branded food database (~364k products, `FoodCatalogBranded.sqlite`) and attaches it to
@@ -36,12 +37,28 @@ final class BrandedCatalogResourceLoader {
     /// is only called when we deliberately detach (`purge`).
     private var request: NSBundleResourceRequest?
     private var attached = false
+    /// The single in-flight load. R3 (task fan-out): overlapping calls await this one instead of each
+    /// creating an `NSBundleResourceRequest`, where the loser's resource hold would be leaked when the
+    /// winner overwrote `request`.
+    private var inFlight: Task<Void, Never>?
 
-    /// Best-effort attach of the branded catalog. Safe to call more than once (no-op once attached), never
-    /// throws, never blocks launch. Leaves the catalog on base + user items on any failure.
+    /// Best-effort attach of the branded catalog. Safe to call more than once (no-op once attached, and
+    /// a concurrent call joins the one in flight), never throws, never blocks launch. Leaves the catalog
+    /// on base + user items on any failure.
     func loadBrandedCatalog(into catalog: FoodCatalog) async {
+        if let inFlight {
+            await inFlight.value
+            return
+        }
         guard !attached, !catalog.hasBrandedSource else { return }
+        let task = Task { await self.performLoad(into: catalog) }
+        inFlight = task
+        await task.value
+        inFlight = nil
+    }
 
+    /// The actual acquisition, run inside the single in-flight task (see `loadBrandedCatalog`).
+    private func performLoad(into catalog: FoodCatalog) async {
         // 1) Bundle-first (dev / QA / tests): the DB embedded directly, not ODR-tagged.
         if let url = Bundle.main.url(forResource: Self.resourceName, withExtension: Self.resourceExtension),
            attach(from: url, into: catalog) {
@@ -60,10 +77,12 @@ final class BrandedCatalogResourceLoader {
             }
             request = req   // keep the access alive for the session
         } catch {
-            // Not downloaded yet, offline, or purged — stay on base coverage, quietly.
-            #if DEBUG
-            print("[BrandedCatalog] ODR asset unavailable, using base catalog: \(error.localizedDescription)")
-            #endif
+            // Recovery: not downloaded yet, offline, or purged — stay on base coverage. Logged
+            // unconditionally so a Release install can say WHY it is on the base catalog.
+            FernletAuditLog.log(
+                "brandedCatalog.odr.unavailable",
+                context: ["error": error.localizedDescription]
+            )
         }
     }
 
