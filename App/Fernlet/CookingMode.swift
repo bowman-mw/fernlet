@@ -684,16 +684,28 @@ struct CookingModeView: View {
             timerFired = false
             return
         }
-        let remaining = end.timeIntervalSinceNow
-        if remaining <= 0 {
+        // The window comes back from the shared app-group run state (written by the app AND by the
+        // Live Activity / intent extension), so validate it here like every other timer input:
+        // a non-finite end date is "no timer", and the wait is clamped to the editor's own maximum.
+        let untilEnd = end.timeIntervalSinceNow
+        guard untilEnd.isFinite else {
+            timerFired = false
+            return
+        }
+        if untilEnd <= 0 {
             // Resumed after the timer already elapsed: highlight Next, but don't fire a late haptic.
             timerFired = true
             return
         }
+        let remaining = min(untilEnd, Self.maxTimerWindowSeconds)
         timerFired = false
         timerTask = Task {
-            try? await Task.sleep(for: .seconds(remaining))
-            if Task.isCancelled { return }
+            do {
+                try await Task.sleep(for: .seconds(remaining))
+            } catch {
+                // Re-armed, or the cover disappeared: the newer arm (or nothing) owns the haptic.
+                return
+            }
             await MainActor.run {
                 guard !Task.isCancelled else { return }
                 timerFired = true
@@ -701,6 +713,11 @@ struct CookingModeView: View {
             }
         }
     }
+
+    /// The longest passive countdown this view will wait out — the same 240-minute ceiling the
+    /// recipe editor's ``StepTimerControl`` stepper enforces, applied again to the app-group run
+    /// state so an absurd `timerEndsAt` can't schedule an unbounded sleep.
+    private static let maxTimerWindowSeconds: TimeInterval = 240 * 60
 
     private func fireHaptic() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)

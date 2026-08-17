@@ -1,10 +1,39 @@
 import ProximityKit
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 #if canImport(UIKit)
 import UIKit
 import PrivateMediaStore
 #endif
+
+/// The named size bounds a recipe must satisfy wherever one ENTERS the app (Power-of-10 R3/R5):
+/// the manual editor's "Add ingredient" / "Add step" buttons and the pasted-share decoder.
+///
+/// One set of constants for every entry path, so a recipe typed by hand and a recipe pasted from a
+/// share can never disagree about how large a recipe is allowed to get. The decoder rejects any
+/// payload that breaks one of these; the editor disables the button that would break it.
+enum RecipeLimits {
+    /// Largest pasted share text accepted, in UTF-8 bytes — the paste path's frame bound (the mesh
+    /// path is bounded by `SealedPayloadFraming` instead).
+    static let maxShareTextUTF8Bytes = 64 * 1024
+    /// Largest ingredient count in one recipe (each imported ingredient persists one `FoodItem`).
+    static let maxIngredients = 100
+    /// Largest cooking-step count in one recipe.
+    static let maxSteps = 60
+    /// Largest recipe name, in characters.
+    static let maxNameLength = 200
+    /// Largest recipe notes blob, in characters.
+    static let maxNotesLength = 4_000
+    /// Largest single step's text, in characters.
+    static let maxStepTextLength = 2_000
+    /// Largest per-ingredient quantity (any unit).
+    static let maxQuantity: Double = 10_000
+    /// Largest per-step timer window, in seconds — matches `StepTimerControl`'s 1...240 minute stepper.
+    static let maxStepDurationSeconds = 240 * 60
+    /// Largest serving count — matches the recipe editor's `Stepper(in: 1...24)`.
+    static let maxServings = 24
+}
 
 /// Encodes and decodes recipes for sharing — the human-readable share text with its embedded
 /// machine-readable JSON payload, and the proximity-mesh wire payload.
@@ -99,9 +128,17 @@ struct RecipeShareCodec {
 
     /// Decodes a pasted share back into a payload: accepts either the bare JSON or the full share
     /// text (the first `{`-line after the "Fernlet recipe data:" marker), then validates the
-    /// `fernlet.recipe` v1 format.
+    /// `fernlet.recipe` v1 format, the ``RecipeLimits`` size bounds, and the payload's values.
+    ///
+    /// This is the app's one *external* recipe boundary (pasteboard / share sheet text), so it caps
+    /// growth and validates every value at entry (Power-of-10 R3/R5): the importer downstream
+    /// persists one `FoodItem` per ingredient, so an unbounded payload is unbounded storage.
     /// - Throws: `RecipeImportError.missingPayload` / `.invalidPayload` / `.unsupportedFormat`.
     static func decodePayload(from text: String) throws -> SharedRecipePayload {
+        // R3: cap the input where it enters — an oversize paste is rejected before any parsing work.
+        guard text.utf8.count <= RecipeLimits.maxShareTextUTF8Bytes else {
+            throw RecipeImportError.invalidPayload
+        }
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonText: String
         if trimmedText.hasPrefix("{") {
@@ -126,14 +163,52 @@ struct RecipeShareCodec {
         guard payload.format == "fernlet.recipe", payload.version == 1 else {
             throw RecipeImportError.unsupportedFormat
         }
+        try validate(payload)
         return payload
+    }
+
+    /// Entry validation for a decoded share payload (Power-of-10 R3/R5): the ``RecipeLimits`` growth
+    /// caps plus the value ranges nothing downstream re-checks — a negative macro, a non-finite or
+    /// absurd quantity, or an unbounded step timer would otherwise persist verbatim.
+    /// - Throws: `RecipeImportError.invalidPayload` when any bound is broken.
+    private static func validate(_ payload: SharedRecipePayload) throws {
+        guard payload.servings >= 1, payload.servings <= RecipeLimits.maxServings,
+              payload.name.count <= RecipeLimits.maxNameLength,
+              payload.notes.count <= RecipeLimits.maxNotesLength,
+              payload.ingredients.count <= RecipeLimits.maxIngredients,
+              (payload.steps?.count ?? 0) <= RecipeLimits.maxSteps else {
+            throw RecipeImportError.invalidPayload
+        }
+        let ingredientsValid = payload.ingredients.allSatisfy { ingredient in
+            ingredient.quantity.isFinite && ingredient.quantity > 0
+                && ingredient.quantity <= RecipeLimits.maxQuantity
+                && ingredient.protein >= 0 && ingredient.carbs >= 0 && ingredient.fat >= 0
+        }
+        let stepsValid = (payload.steps ?? []).allSatisfy { step in
+            step.text.count <= RecipeLimits.maxStepTextLength
+                && (step.durationSeconds ?? 0) <= RecipeLimits.maxStepDurationSeconds
+        }
+        guard ingredientsValid, stepsValid else {
+            throw RecipeImportError.invalidPayload
+        }
     }
 
     private static func sharedRecipeJSON(for payload: SharedRecipePayload) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(payload) else { return nil }
-        return String(data: data, encoding: .utf8)
+        do {
+            let data = try encoder.encode(payload)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            // The only realistic failure is a non-finite quantity, which the editor and the decoder
+            // both rule out. Name it rather than dropping it: the share text still goes out (readable
+            // but not importable), so the sender sees a share and the log says why it lost its payload.
+            FernletAuditLog.log(
+                "recipe.share.payloadEncode.failed",
+                context: ["error": error.localizedDescription, "recipe": payload.name]
+            )
+            return nil
+        }
     }
 
     #if canImport(UIKit)
@@ -144,6 +219,9 @@ struct RecipeShareCodec {
     /// store is `PrivateMediaStore`, which `ProximityKit` must never import (S3 wall) — the store
     /// decrypts, this downscales, and only the bounded JPEG reaches the wire payload.
     static func wireImageJPEG(fromPhotoData data: Data, maxBytes: Int = ProximityRecipeSharePayload.maxImageBytes) -> Data? {
+        // Validate at entry: a zero/negative budget or empty bytes can never produce a fitting JPEG,
+        // so say so up front instead of walking the whole 4x2 encode ladder to return nil anyway.
+        guard maxBytes > 0, !data.isEmpty else { return nil }
         guard let image = UIImage(data: data) else { return nil }
         // Stored recipe photos are already normalized to <=1600 px JPEG, so the first rung almost
         // always fits; the ladder exists for pathological (dense, noisy) images.

@@ -38,213 +38,23 @@ struct FoodView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        foodLifecycle(foodSheets(foodRoot))
+    }
+
+    /// The Food root's scrolling content: header, macro card, the cooking-resume and pending-retry
+    /// cards, today's meals grouped by type, and the recent-recipes preview.
+    private var foodRoot: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
-                        Spacer()
-                        HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
-                    }
-                    .padding(.top, 4)
+                    headerRow
 
                     MacroCard(totals: store.macroTotals, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
 
-                    // A cooking session in progress takes precedence — it stays resumable even after an
-                    // app kill (the run survives in the app group though this view's state doesn't), so
-                    // this is driven by `cookingRunState` alone. Mirrors the Move-root Resume card.
-                    if let run = store.cookingRunState, !run.isFinished {
-                        CookingResumeCard(
-                            recipeName: run.recipeName,
-                            stepNumber: run.stepNumber,
-                            stepCount: run.stepCount,
-                            onResume: {
-                                if let recipe = store.recipeForActiveCookingRun(),
-                                   let isSaved = store.activeCookingRunIsSavedRecipe() {
-                                    cookingResume = CookingResumeTarget(recipe: recipe, isSaved: isSaved)
-                                } else {
-                                    // The recipe was deleted while the run outlived it — nothing to
-                                    // resume, so clear the run + any orphan Live Activity.
-                                    store.endCookingRun()
-                                }
-                            },
-                            onDiscard: { store.endCookingRun() }
-                        )
-                    }
-
-                    if store.pendingRetryCount > 0 {
-                        FernletScrollSection {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack {
-                                    Label("\(store.pendingRetryCount) pending", systemImage: "clock.arrow.circlepath")
-                                        .font(.fernlet(.header))
-                                        .foregroundStyle(Color.bark)
-                                    Spacer()
-                                }
-                                Text(FernletVoice.message(for: .retryAvailable))
-                                    .font(.fernlet(.bubble))
-                                    .foregroundStyle(Color.slate)
-                                Button("Retry oldest") {
-                                    Task { await store.retryOldestMeal() }
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-
-                    if store.day.meals.isEmpty {
-                        FernletScrollSection("Today") {
-                            EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
-                        }
-                    } else {
-                        // Each meal type is its OWN section card, titled by a distinct small-caps
-                        // SectionLabel (not the meal-name font) — separate boxes rather than one long list.
-                        ForEach(mealsByType) { group in
-                            FernletScrollSection(group.type.rawValue) {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
-                                        MealRow(
-                                            meal: meal,
-                                            showCalories: store.settings.showCalories,
-                                            onDelete: { store.deleteMeal(meal) },
-                                            onCorrect: { correctingMeal = meal },
-                                            loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
-                                            hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
-                                            showsMealTypeBadge: false
-                                        )
-                                        if rowIndex < group.meals.count - 1 {
-                                            FernletRowDivider()
-                                        }
-                                    }
-                                    mealTypeSubtotal(group.meals)
-                                }
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            SectionLabel("Recipes")
-                            Spacer()
-                            Button("Recipe book") { showingRecipeBook = true }
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.fern)
-                        }
-                        if recentRecipePreviews.isEmpty {
-                            FernletCard {
-                                EmptyState(text: "No recipes yet. Open the recipe book to create one.")
-                            }
-                        } else {
-                            FernletCard {
-                                VStack(spacing: 0) {
-                                    ForEach(Array(recentRecipePreviews.enumerated()), id: \.element.id) { index, preview in
-                                        if index > 0 { FernletRowDivider() }
-                                        switch preview {
-                                        case .local(let recipe):
-                                            // Controls sit on their own trailing line rather than beside the
-                                            // row. In one HStack they claimed ~88pt of the card, so the row's
-                                            // own trailing edge — and the servings label right-aligned to it —
-                                            // stopped ~65% across and read as centered. Costs row height; the
-                                            // smaller title above pays some of it back.
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                #if canImport(UIKit)
-                                                // Tapping a recipe pushes the read-only detail (photo,
-                                                // per-serving macros, ingredients, notes); the editor is
-                                                // reachable only via the detail's Edit button.
-                                                NavigationLink {
-                                                    RecipeDetailView(
-                                                        store: store,
-                                                        recipe: recipe,
-                                                        onEdit: { editingRecipe = recipe },
-                                                        onSaveFork: { store.addForkedRecipe($0) },
-                                                        onLog: { current, mealType in store.logRecipe(current, mealType: mealType) },
-                                                        onShare: { current in
-                                                            recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: current.name,
-                                                                shareText: store.recipeShareText(for: current),
-                                                                payload: store.proximityRecipeSharePayload(for: current)
-                                                            )
-                                                        },
-                                                        onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
-                                                    )
-                                                } label: {
-                                                    RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
-                                                }
-                                                .buttonStyle(.plain)
-                                                #else
-                                                Button { editingRecipe = recipe } label: {
-                                                    RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
-                                                }
-                                                .buttonStyle(.plain)
-                                                #endif
-                                                HStack(spacing: 12) {
-                                                    Spacer()
-                                                    RecipeMealTypeMenu { mealType in
-                                                        store.logRecipe(recipe, mealType: mealType)
-                                                    }
-                                                    RecipeShareButton {
-                                                        recipeShareDraft = ProximityRecipeShareDraft(
-                                                            title: recipe.name,
-                                                            shareText: store.recipeShareText(for: recipe),
-                                                            payload: store.proximityRecipeSharePayload(for: recipe)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        case .saved(let recipe):
-                                            // Same trailing-controls layout as `.local` above — the two row
-                                            // types interleave in one list and must not disagree.
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                #if canImport(UIKit)
-                                                // Same read-only detail as manual recipes; for a saved/web
-                                                // recipe Edit opens its notes/delete sheet (web imports have
-                                                // no structured ingredients to edit).
-                                                NavigationLink {
-                                                    RecipeDetailView(
-                                                        store: store,
-                                                        recipe: recipe,
-                                                        onEdit: { editingSavedRecipe = recipe },
-                                                        onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                        onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
-                                                        onShare: { current in
-                                                            recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: current.name,
-                                                                shareText: store.savedRecipeShareText(for: current),
-                                                                payload: store.proximityRecipeSharePayload(for: current)
-                                                            )
-                                                        },
-                                                        onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
-                                                    )
-                                                } label: {
-                                                    SavedRecipeRow(recipe: recipe)
-                                                }
-                                                .buttonStyle(.plain)
-                                                #else
-                                                Button { editingSavedRecipe = recipe } label: {
-                                                    SavedRecipeRow(recipe: recipe)
-                                                }
-                                                .buttonStyle(.plain)
-                                                #endif
-                                                HStack(spacing: 12) {
-                                                    Spacer()
-                                                    RecipeMealTypeMenu { mealType in
-                                                        store.logSavedRecipe(recipe, mealType: mealType)
-                                                    }
-                                                    RecipeShareButton {
-                                                        recipeShareDraft = ProximityRecipeShareDraft(
-                                                            title: recipe.name,
-                                                            shareText: store.savedRecipeShareText(for: recipe),
-                                                            payload: store.proximityRecipeSharePayload(for: recipe)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    cookingResumeSection
+                    pendingRetrySection
+                    todayMealsSection
+                    recentRecipesSection
                 }
                 .padding(20)
                 .padding(.bottom, 24)
@@ -253,63 +63,295 @@ struct FoodView: View {
             .background(Color.parchment)
             .navigationTitle("")
         }
-        .sheet(item: $editingRecipe) { recipe in
-            RecipeSheet(store: store, recipe: recipe)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+    }
+
+    private var headerRow: some View {
+        HStack(alignment: .top) {
+            ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
+            Spacer()
+            HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
         }
-        .sheet(item: $editingSavedRecipe) { recipe in
-            SavedRecipeNotesSheet(store: store, recipe: recipe)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-        }
-        .sheet(item: $correctingMeal) { meal in
-            MealCorrectionSheet(store: store, meal: meal)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-        }
-        .sheet(isPresented: $showingRecipeBook) {
-            RecipeBookSheet(store: store, editingRecipe: $editingRecipe, editingSavedRecipe: $editingSavedRecipe)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-        }
-        .sheet(item: $recipeShareDraft) { draft in
-            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-        }
-        .onAppear {
-            store.markLaunchScreenDismissed()
-            store.ensureBundledFoodItemsSeeded()
-            // Surface a resume card / retire an orphan cooking activity after a cold launch, and pick up
-            // any step advance made entirely from the Live Activity / Siri.
-            store.reconcileCookingRunFromAppGroup()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            store.reconcileCookingRunFromAppGroup()
-        }
-        #if canImport(UIKit)
-        .fullScreenCover(item: $cookingResume) { target in
-            CookingModeView(
-                store: store,
-                recipe: target.recipe,
-                resuming: true,
-                onLogToDay: { mealType, day in
-                    if target.isSaved {
-                        store.logSavedRecipe(target.recipe, mealType: mealType, date: day)
-                    } else {
-                        store.logRecipe(target.recipe, mealType: mealType, date: day)
-                    }
-                }
+        .padding(.top, 4)
+    }
+
+    /// A cooking session in progress takes precedence — it stays resumable even after an app kill
+    /// (the run survives in the app group though this view's state doesn't), so this is driven by
+    /// `cookingRunState` alone. Mirrors the Move-root Resume card.
+    @ViewBuilder private var cookingResumeSection: some View {
+        if let run = store.cookingRunState, !run.isFinished {
+            CookingResumeCard(
+                recipeName: run.recipeName,
+                stepNumber: run.stepNumber,
+                stepCount: run.stepCount,
+                onResume: { resumeCookingRun() },
+                onDiscard: { store.endCookingRun() }
             )
         }
-        #endif
+    }
+
+    /// Re-opens the in-progress run's recipe in cooking mode, or retires the run when the recipe it
+    /// walks no longer exists.
+    private func resumeCookingRun() {
+        guard let recipe = store.recipeForActiveCookingRun(),
+              let isSaved = store.activeCookingRunIsSavedRecipe() else {
+            // The recipe was deleted while the run outlived it — nothing to resume, so clear the run
+            // + any orphan Live Activity.
+            store.endCookingRun()
+            return
+        }
+        cookingResume = CookingResumeTarget(recipe: recipe, isSaved: isSaved)
+    }
+
+    @ViewBuilder private var pendingRetrySection: some View {
+        if store.pendingRetryCount > 0 {
+            FernletScrollSection {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("\(store.pendingRetryCount) pending", systemImage: "clock.arrow.circlepath")
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                        Spacer()
+                    }
+                    Text(FernletVoice.message(for: .retryAvailable))
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(Color.slate)
+                    Button("Retry oldest") {
+                        Task { await store.retryOldestMeal() }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var todayMealsSection: some View {
+        if store.day.meals.isEmpty {
+            FernletScrollSection("Today") {
+                EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
+            }
+        } else {
+            // Each meal type is its OWN section card, titled by a distinct small-caps
+            // SectionLabel (not the meal-name font) — separate boxes rather than one long list.
+            ForEach(mealsByType) { group in
+                FernletScrollSection(group.type.rawValue) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
+                            MealRow(
+                                meal: meal,
+                                showCalories: store.settings.showCalories,
+                                onDelete: { store.deleteMeal(meal) },
+                                onCorrect: { correctingMeal = meal },
+                                loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
+                                hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
+                                showsMealTypeBadge: false
+                            )
+                            if rowIndex < group.meals.count - 1 {
+                                FernletRowDivider()
+                            }
+                        }
+                        mealTypeSubtotal(group.meals)
+                    }
+                }
+            }
+        }
+    }
+
+    private var recentRecipesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel("Recipes")
+                Spacer()
+                Button("Recipe book") { showingRecipeBook = true }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.fern)
+            }
+            if recentRecipePreviews.isEmpty {
+                FernletCard {
+                    EmptyState(text: "No recipes yet. Open the recipe book to create one.")
+                }
+            } else {
+                FernletCard {
+                    VStack(spacing: 0) {
+                        ForEach(Array(recentRecipePreviews.enumerated()), id: \.element.id) { index, preview in
+                            if index > 0 { FernletRowDivider() }
+                            recentRecipeRow(preview)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One recent-recipe row, dispatching a manual recipe and a saved/web recipe to the same layout
+    /// with the store half (`isSaved`) that owns it.
+    @ViewBuilder private func recentRecipeRow(_ preview: RecentRecipePreview) -> some View {
+        switch preview {
+        case .local(let recipe):
+            recentRecipeCard(recipe: recipe, isSaved: false) {
+                RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
+            }
+        case .saved(let recipe):
+            // Same trailing-controls layout as `.local` — the two row types interleave in one list
+            // and must not disagree.
+            recentRecipeCard(recipe: recipe, isSaved: true) {
+                SavedRecipeRow(recipe: recipe)
+            }
+        }
+    }
+
+    /// The shared recent-recipe row: the tappable summary (pushing the read-only detail) above its
+    /// own trailing control line.
+    ///
+    /// Controls sit on their own trailing line rather than beside the row. In one HStack they claimed
+    /// ~88pt of the card, so the row's own trailing edge — and the servings label right-aligned to it —
+    /// stopped ~65% across and read as centered. Costs row height; the smaller title above pays some
+    /// of it back.
+    private func recentRecipeCard<Label: View>(
+        recipe: RecipeDefinition,
+        isSaved: Bool,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            #if canImport(UIKit)
+            // Tapping a recipe pushes the read-only detail (photo, per-serving macros, ingredients,
+            // notes); the editor is reachable only via the detail's Edit button — and for a saved/web
+            // recipe that Edit opens its notes/delete sheet (no structured ingredients to edit).
+            NavigationLink {
+                recipeDetail(for: recipe, isSaved: isSaved)
+            } label: {
+                label()
+            }
+            .buttonStyle(.plain)
+            #else
+            Button { beginEditing(recipe, isSaved: isSaved) } label: {
+                label()
+            }
+            .buttonStyle(.plain)
+            #endif
+            HStack(spacing: 12) {
+                Spacer()
+                RecipeMealTypeMenu { mealType in
+                    logRecipe(recipe, mealType: mealType, isSaved: isSaved)
+                }
+                RecipeShareButton {
+                    recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+                }
+            }
+        }
+    }
+
+    #if canImport(UIKit)
+    /// The read-only detail for a recent-recipe row, wired to the store half the row came from.
+    private func recipeDetail(for recipe: RecipeDefinition, isSaved: Bool) -> some View {
+        RecipeDetailView(
+            store: store,
+            recipe: recipe,
+            onEdit: { beginEditing(recipe, isSaved: isSaved) },
+            onSaveFork: { fork in
+                if isSaved { store.addForkedSavedRecipe(fork) } else { store.addForkedRecipe(fork) }
+            },
+            onLog: { current, mealType in logRecipe(current, mealType: mealType, isSaved: isSaved) },
+            onShare: { current in recipeShareDraft = shareDraft(for: current, isSaved: isSaved) },
+            onCookLog: { current, mealType, day in
+                if isSaved {
+                    store.logSavedRecipe(current, mealType: mealType, date: day)
+                } else {
+                    store.logRecipe(current, mealType: mealType, date: day)
+                }
+            }
+        )
+    }
+    #endif
+
+    /// Routes an edit request to the sheet that owns that recipe's store half.
+    private func beginEditing(_ recipe: RecipeDefinition, isSaved: Bool) {
+        if isSaved { editingSavedRecipe = recipe } else { editingRecipe = recipe }
+    }
+
+    /// Logs a recipe through the store method that matches its half (manual vs saved/web).
+    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType, isSaved: Bool) {
+        if isSaved {
+            store.logSavedRecipe(recipe, mealType: mealType)
+        } else {
+            store.logRecipe(recipe, mealType: mealType)
+        }
+    }
+
+    /// The proximity share draft for a recipe, using its half's share-text builder.
+    private func shareDraft(for recipe: RecipeDefinition, isSaved: Bool) -> ProximityRecipeShareDraft {
+        ProximityRecipeShareDraft(
+            title: recipe.name,
+            shareText: isSaved ? store.savedRecipeShareText(for: recipe) : store.recipeShareText(for: recipe),
+            payload: store.proximityRecipeSharePayload(for: recipe)
+        )
+    }
+
+    /// The Food root's five editor/share sheets, in their original application order.
+    private func foodSheets<V: View>(_ content: V) -> some View {
+        content
+            .sheet(item: $editingRecipe) { recipe in
+                RecipeSheet(store: store, recipe: recipe)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
+            .sheet(item: $editingSavedRecipe) { recipe in
+                SavedRecipeNotesSheet(store: store, recipe: recipe)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
+            .sheet(item: $correctingMeal) { meal in
+                MealCorrectionSheet(store: store, meal: meal)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
+            .sheet(isPresented: $showingRecipeBook) {
+                RecipeBookSheet(store: store, editingRecipe: $editingRecipe, editingSavedRecipe: $editingSavedRecipe)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
+            .sheet(item: $recipeShareDraft) { draft in
+                ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
+    }
+
+    /// Appear/foreground reconciliation plus the cooking-mode cover, applied after the sheets so the
+    /// modifier order matches what shipped.
+    private func foodLifecycle<V: View>(_ content: V) -> some View {
+        content
+            .onAppear {
+                store.markLaunchScreenDismissed()
+                store.ensureBundledFoodItemsSeeded()
+                // Surface a resume card / retire an orphan cooking activity after a cold launch, and
+                // pick up any step advance made entirely from the Live Activity / Siri.
+                store.reconcileCookingRunFromAppGroup()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                store.reconcileCookingRunFromAppGroup()
+            }
+            #if canImport(UIKit)
+            .fullScreenCover(item: $cookingResume) { target in
+                CookingModeView(
+                    store: store,
+                    recipe: target.recipe,
+                    resuming: true,
+                    onLogToDay: { mealType, day in
+                        if target.isSaved {
+                            store.logSavedRecipe(target.recipe, mealType: mealType, date: day)
+                        } else {
+                            store.logRecipe(target.recipe, mealType: mealType, date: day)
+                        }
+                    }
+                )
+            }
+            #endif
     }
 
     private var recentRecipePreviews: [RecentRecipePreview] {
@@ -490,7 +532,7 @@ struct NutritionPill: View {
 /// Text imports decode through `FernletStore.importRecipe(from:)` (the ``RecipeShareCodec`` payload);
 /// the Paste-URL button runs `RecipeWebImporter` and lands the result in the saved-recipe store.
 /// Reached from ``RecipeCreationOptionsView``.
-struct RecipeImportSheet: View {
+private struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     @State private var importText = ""
@@ -511,6 +553,10 @@ struct RecipeImportSheet: View {
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
 
     var body: some View {
+        importPresentations(importContent)
+    }
+
+    private var importContent: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -518,18 +564,7 @@ struct RecipeImportSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    Button {
-                        importFromPasteboardURL()
-                    } label: {
-                        Label(isImportingURL ? "Importing URL" : "Paste URL", systemImage: isImportingURL ? "hourglass" : "link.badge.plus")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.cream)
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isImportingURL)
+                    pasteURLButton
 
                     SheetField("Shared recipe text") {
                         SheetTextEditor(
@@ -558,34 +593,63 @@ struct RecipeImportSheet: View {
             }
 
             SheetSaveBar(label: "Import", disabled: importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
-                do {
-                    try store.importRecipe(from: importText)
-                    dismiss()
-                } catch let error as RecipeImportError {
-                    notice = error.message
-                } catch {
-                    notice = RecipeImportError.invalidPayload.message
-                }
+                importSharedText()
             }
         }
         .background(Color.parchment)
+    }
+
+    /// The pasteboard-URL import affordance; disabled (and relabelled) while a fetch is in flight so
+    /// only one import task can ever be in flight.
+    private var pasteURLButton: some View {
+        Button {
+            importFromPasteboardURL()
+        } label: {
+            Label(isImportingURL ? "Importing URL" : "Paste URL", systemImage: isImportingURL ? "hourglass" : "link.badge.plus")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.cream)
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .disabled(isImportingURL)
+    }
+
+    /// Decodes the pasted share text through the store, dismissing on success and surfacing the
+    /// import error's own message otherwise.
+    private func importSharedText() {
+        do {
+            try store.importRecipe(from: importText)
+            dismiss()
+        } catch let error as RecipeImportError {
+            notice = error.message
+        } catch {
+            notice = RecipeImportError.invalidPayload.message
+        }
+    }
+
+    /// The pushed detail for a matched already-saved recipe plus this sheet's own local editor/share
+    /// sheets, in their original application order.
+    private func importPresentations<V: View>(_ content: V) -> some View {
+        content
         #if canImport(UIKit)
-        .navigationDestination(isPresented: $showingExistingRecipe) {
-            if let existingRecipe {
-                existingRecipeDetail(existingRecipe)
+            .navigationDestination(isPresented: $showingExistingRecipe) {
+                if let existingRecipe {
+                    existingRecipeDetail(existingRecipe)
+                }
             }
-        }
-        .sheet(item: $editingSavedRecipe) { recipe in
-            SavedRecipeNotesSheet(store: store, recipe: recipe)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $recipeShareDraft) { draft in
-            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
-        }
+            .sheet(item: $editingSavedRecipe) { recipe in
+                SavedRecipeNotesSheet(store: store, recipe: recipe)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $recipeShareDraft) { draft in
+                ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(20)
+            }
         #endif
     }
 
@@ -674,7 +738,14 @@ struct RecipeImportSheet: View {
                 Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
-                try? await Task.sleep(for: .seconds(1.2))
+                do {
+                    // A beat so the "added to your recipes" line can be read before the sheet goes.
+                    try await Task.sleep(for: .seconds(1.2))
+                } catch {
+                    // Cancelled: the presenting sheet is already being torn down, so there is
+                    // nothing left to dismiss.
+                    return
+                }
                 dismiss()
             } catch {
                 notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
@@ -692,7 +763,7 @@ struct RecipeImportSheet: View {
 ///
 /// Interleaves with ``RecipeRow`` in the Food root's recipe preview and in the recipe book, so its
 /// title typography deliberately matches that row's.
-struct SavedRecipeRow: View {
+private struct SavedRecipeRow: View {
     var recipe: RecipeDefinition
 
     private var webImport: RecipeWebImport? { recipe.webImport }
@@ -776,90 +847,17 @@ struct SavedRecipeNotesSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(recipe.name)
-                            .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-                        if let sourceURL = webImport?.sourceURL {
-                            if sourceURL.isSafariPresentable {
-                                Button {
-                                    showingSafari = true
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "safari")
-                                            .font(.caption)
-                                        Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                            .font(.fernlet(.labelSmall))
-                                            .underline()
-                                    }
-                                    .foregroundStyle(Color.fern)
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                // A non-web source link (e.g. a file URL) can't open in an in-app Safari
-                                // sheet, so it's shown as calm, non-tappable text rather than a dead button.
-                                Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                    .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
+                    titleAndSourceSection
 
-                    if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                                .tracking(0.8)
-                            HStack(spacing: 14) {
-                                Text("P \(macros.protein)g").foregroundStyle(Color.moss)
-                                Text("C \(macros.carbs)g")
-                                Text("F \(macros.fat)g")
-                                Spacer()
-                                if recipe.servings > 1 {
-                                    Text("\(recipe.servings) servings")
-                                        .font(.fernlet(.stat))
-                                        .foregroundStyle(Color.slate)
-                                }
-                            }
-                            .font(.fernlet(.stat))
-                            .foregroundStyle(Color.bark)
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
+                    macrosCard
 
                     SheetField("Notes") {
                         SheetTextEditor(text: $recipe.notes, placeholder: "cooking notes, substitutions, tips", minHeight: 120)
                     }
 
-                    if let ingredientLines = webImport?.ingredientLines, !ingredientLines.isEmpty {
-                        SheetField("Ingredients") {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(ingredientLines, id: \.self) { ingredient in
-                                    Text("• \(ingredient)")
-                                        .font(.fernlet(.body))
-                                        .foregroundStyle(Color.bark)
-                                }
-                            }
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
-                    }
+                    ingredientLinesCard
 
-                    Button(role: .destructive) {
-                        store.deleteSavedRecipe(recipe)
-                        dismiss()
-                    } label: {
-                        Label("Delete recipe", systemImage: "trash")
-                            .font(.fernlet(.label))
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                    }
+                    deleteButton
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -884,6 +882,110 @@ struct SavedRecipeNotesSheet: View {
             }
         }
     }
+
+    private var titleAndSourceSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(recipe.name)
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            if let sourceURL = webImport?.sourceURL {
+                SourceLinkRow(url: sourceURL) { showingSafari = true }
+            }
+        }
+    }
+
+    @ViewBuilder private var macrosCard: some View {
+        if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .tracking(0.8)
+                HStack(spacing: 14) {
+                    Text("P \(macros.protein)g").foregroundStyle(Color.moss)
+                    Text("C \(macros.carbs)g")
+                    Text("F \(macros.fat)g")
+                    Spacer()
+                    if recipe.servings > 1 {
+                        Text("\(recipe.servings) servings")
+                            .font(.fernlet(.stat))
+                            .foregroundStyle(Color.slate)
+                    }
+                }
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.bark)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    @ViewBuilder private var ingredientLinesCard: some View {
+        if let ingredientLines = webImport?.ingredientLines, !ingredientLines.isEmpty {
+            SheetField("Ingredients") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(ingredientLines, id: \.self) { ingredient in
+                        Text("• \(ingredient)")
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                    }
+                }
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            }
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            store.deleteSavedRecipe(recipe)
+            dismiss()
+        } label: {
+            Label("Delete recipe", systemImage: "trash")
+                .font(.fernlet(.label))
+                .frame(maxWidth: .infinity)
+                .padding(14)
+        }
+    }
+}
+
+/// A web-imported recipe's source-link line: a Safari button when the URL can open in the in-app
+/// browser, calm non-tappable host text when it can't.
+///
+/// One definition shared by ``SavedRecipeNotesSheet`` and ``RecipeDetailView``'s ingredients card —
+/// the two used to carry byte-identical copies of the branch. Call sites gate on a non-nil source
+/// URL themselves, so a recipe without one contributes no row (and no stack spacing).
+private struct SourceLinkRow: View {
+    /// The recipe's source URL.
+    let url: URL
+    /// Invoked when a Safari-presentable link is tapped (the owner presents its own Safari sheet).
+    let onOpen: () -> Void
+
+    var body: some View {
+        if url.isSafariPresentable {
+            Button(action: onOpen) {
+                HStack(spacing: 4) {
+                    Image(systemName: "safari")
+                        .font(.caption)
+                    Text(url.host() ?? url.absoluteString)
+                        .font(.fernlet(.labelSmall))
+                        .underline()
+                }
+                .foregroundStyle(Color.fern)
+            }
+            .buttonStyle(.plain)
+        } else {
+            // A non-web source link (e.g. a file URL) can't open in an in-app Safari sheet, so
+            // it's shown as calm, non-tappable text rather than a dead button.
+            Text(url.host() ?? url.absoluteString)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .lineLimit(1)
+        }
+    }
 }
 
 /// Navigation destinations inside ``MealSheet``'s log-meal `NavigationStack`.
@@ -891,7 +993,7 @@ struct SavedRecipeNotesSheet: View {
 /// Covers the barcode scanner, the embedded recipe editor, web product import/search, and the
 /// auto-router landings for a captured photo. `Hashable` so the cases can drive
 /// `navigationDestination(for:)` path values.
-enum MealFlowDestination: Hashable {
+private enum MealFlowDestination: Hashable {
     case scanBarcode
     case recipeSearch
     case productPageImport
@@ -977,147 +1079,21 @@ struct RecipeSheet: View {
                         SheetTextEditor(text: $notes, placeholder: "prep notes, substitutions, storage", minHeight: 82)
                     }
 
-                    SheetField("Ingredients") {
-                        VStack(spacing: 8) {
-                            ForEach($ingredients) { $ingredient in
-                                if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
-                                    RecipeIngredientEditor(
-                                        ingredient: $ingredient,
-                                        catalog: store.foodCatalog,
-                                        onSaveCustomIngredient: { store.saveCustomIngredient($0) },
-                                        onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
-                                        onRemove: { removeIngredient(ingredient.id) }
-                                    )
-                                    .padding(14)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                } else {
-                                    CollapsedIngredientRow(
-                                        ingredient: ingredient,
-                                        catalog: store.foodCatalog,
-                                        showCalories: store.settings.showCalories,
-                                        onExpand: { expandedId = ingredient.id },
-                                        onRemove: { removeIngredient(ingredient.id) }
-                                    )
-                                }
-                            }
-                            HStack(spacing: 8) {
-                                Button {
-                                    let new = ManualRecipeIngredientInput()
-                                    ingredients.append(new)
-                                    expandedId = new.id
-                                } label: {
-                                    Label("Add ingredient", systemImage: "plus")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.moss)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(12)
-                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
+                    ingredientsSection
 
-                                #if canImport(UIKit)
-                                Button {
-                                    showingBarcodeScanner = true
-                                } label: {
-                                    Label("Scan barcode", systemImage: "barcode.viewfinder")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.moss)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(12)
-                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                                #endif
-                            }
-                        }
-                    }
+                    perServingCard
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("PER SERVING")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .tracking(0.8)
-                        HStack {
-                            Text("P \(perServingTotals.protein)g · C \(perServingTotals.carbs)g · F \(perServingTotals.fat)g")
-                                .font(.fernlet(.stat))
-                                .foregroundStyle(Color.bark)
-                            Spacer()
-                            // Macros-first: calories render only behind the explicit opt-in.
-                            if store.settings.showCalories {
-                                Text("\(perServingTotals.calories) cal")
-                                    .font(.fernlet(.stat))
-                                    .foregroundStyle(Color.slate)
-                            }
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    SheetField("Servings") {
-                        Stepper("\(servings)", value: $servings, in: 1...24)
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
+                    servingsField
 
                     stepsSection
 
-                    if let editingRecipe {
-                        Button(role: .destructive) {
-                            store.deleteRecipe(editingRecipe)
-                            dismiss()
-                        } label: {
-                            Label("Delete recipe", systemImage: "trash")
-                                .font(.fernlet(.label))
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                        }
-                    }
+                    deleteRecipeButton
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
 
-            if editingRecipe == nil {
-                HStack(spacing: 12) {
-                    Button("Save recipe") {
-                        store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-                        dismiss()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.moss.opacity(0.3), lineWidth: 1))
-                    .disabled(!canSave)
-                    .opacity(canSave ? 1 : 0.4)
-
-                    Button("Log & save") {
-                        let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-                        store.logRecipe(recipe)
-                        dismiss()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(canSave ? Color.moss : Color.moss.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
-                    .disabled(!canSave)
-                }
-                .padding(20)
-                .background(Color.parchment)
-            } else {
-                SheetSaveBar(disabled: !canSave) {
-                    store.updateRecipe(editingRecipe!, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-                    dismiss()
-                }
-            }
+            saveBar
         }
         .background(Color.parchment)
         .navigationDestination(isPresented: $scannerPath) {
@@ -1138,6 +1114,166 @@ struct RecipeSheet: View {
             didStartScanner = true
             scannerPath = true
         }
+    }
+
+    private var ingredientsSection: some View {
+        SheetField("Ingredients") {
+            VStack(spacing: 8) {
+                ForEach($ingredients) { $ingredient in
+                    if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
+                        RecipeIngredientEditor(
+                            ingredient: $ingredient,
+                            catalog: store.foodCatalog,
+                            onSaveCustomIngredient: { store.saveCustomIngredient($0) },
+                            onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
+                            onRemove: { removeIngredient(ingredient.id) }
+                        )
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    } else {
+                        CollapsedIngredientRow(
+                            ingredient: ingredient,
+                            catalog: store.foodCatalog,
+                            showCalories: store.settings.showCalories,
+                            onExpand: { expandedId = ingredient.id },
+                            onRemove: { removeIngredient(ingredient.id) }
+                        )
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        addIngredient()
+                    } label: {
+                        ingredientActionLabel("Add ingredient", systemImage: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    // R3: the list is bounded where it grows — the same ceiling the paste decoder uses.
+                    .disabled(ingredients.count >= RecipeLimits.maxIngredients)
+
+                    #if canImport(UIKit)
+                    Button {
+                        showingBarcodeScanner = true
+                    } label: {
+                        ingredientActionLabel("Scan barcode", systemImage: "barcode.viewfinder")
+                    }
+                    .buttonStyle(.plain)
+                    #endif
+                }
+            }
+        }
+    }
+
+    /// The shared cream-card label used by both ingredient action buttons (their styling is identical).
+    private func ingredientActionLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(12)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    /// Appends one blank ingredient row, refusing past ``RecipeLimits/maxIngredients`` (R3: the cap
+    /// is enforced where the input enters, not only on the button's disabled state).
+    private func addIngredient() {
+        guard ingredients.count < RecipeLimits.maxIngredients else { return }
+        let new = ManualRecipeIngredientInput()
+        ingredients.append(new)
+        expandedId = new.id
+    }
+
+    private var perServingCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PER SERVING")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .tracking(0.8)
+            HStack {
+                Text("P \(perServingTotals.protein)g · C \(perServingTotals.carbs)g · F \(perServingTotals.fat)g")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.bark)
+                Spacer()
+                // Macros-first: calories render only behind the explicit opt-in.
+                if store.settings.showCalories {
+                    Text("\(perServingTotals.calories) cal")
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(Color.slate)
+                }
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private var servingsField: some View {
+        SheetField("Servings") {
+            Stepper("\(servings)", value: $servings, in: 1...RecipeLimits.maxServings)
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+
+    @ViewBuilder private var deleteRecipeButton: some View {
+        if let editingRecipe {
+            Button(role: .destructive) {
+                store.deleteRecipe(editingRecipe)
+                dismiss()
+            } label: {
+                Label("Delete recipe", systemImage: "trash")
+                    .font(.fernlet(.label))
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+            }
+        }
+    }
+
+    /// Create mode offers Save / Log & save; edit mode a single Done bar. Binding `editingRecipe`
+    /// here is what lets the update call take the recipe by value instead of force-unwrapping it.
+    @ViewBuilder private var saveBar: some View {
+        if let editingRecipe {
+            SheetSaveBar(disabled: !canSave) {
+                store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                dismiss()
+            }
+        } else {
+            createButtons
+        }
+    }
+
+    private var createButtons: some View {
+        HStack(spacing: 12) {
+            Button("Save recipe") {
+                store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                dismiss()
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.moss.opacity(0.3), lineWidth: 1))
+            .disabled(!canSave)
+            .opacity(canSave ? 1 : 0.4)
+
+            Button("Log & save") {
+                let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                store.logRecipe(recipe)
+                dismiss()
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(canSave ? Color.moss : Color.moss.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+            .disabled(!canSave)
+        }
+        .padding(20)
+        .background(Color.parchment)
     }
 
     /// Lands a barcode-resolved food (catalog hit or just-remembered user item) in the ingredient
@@ -1193,67 +1329,85 @@ struct RecipeSheet: View {
                 // Identity is the step id (stable under reorder/delete); the display index is recomputed
                 // per render so "Step N" and the up/down enable-state always reflect current position.
                 ForEach(steps) { step in
-                    let index = steps.firstIndex(where: { $0.id == step.id }) ?? 0
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Step \(index + 1)")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                            Spacer()
-                            Button { moveStep(step.id, by: -1) } label: {
-                                Image(systemName: "chevron.up")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(index == 0 ? Color.slate.opacity(0.3) : Color.moss)
-                                    .frame(minWidth: 34, minHeight: 34)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(index == 0)
-                            .accessibilityLabel("Move step \(index + 1) up")
-                            Button { moveStep(step.id, by: 1) } label: {
-                                Image(systemName: "chevron.down")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(index == steps.count - 1 ? Color.slate.opacity(0.3) : Color.moss)
-                                    .frame(minWidth: 34, minHeight: 34)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(index == steps.count - 1)
-                            .accessibilityLabel("Move step \(index + 1) down")
-                            Button { removeStep(step.id) } label: {
-                                Image(systemName: "xmark")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color.slate)
-                                    .frame(minWidth: 34, minHeight: 34)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Remove step \(index + 1)")
-                        }
-                        SheetTextEditor(text: bindingForStepText(step.id), placeholder: "what to do in this step", minHeight: 60)
-                        StepTimerControl(durationSeconds: bindingForStepDuration(step.id))
-                    }
-                    .padding(14)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("recipeEditor.step.\(index)")
+                    stepEditorCard(step, index: steps.firstIndex(where: { $0.id == step.id }) ?? 0)
                 }
-                Button {
-                    steps.append(RecipeStep(text: ""))
-                } label: {
-                    Label("Add step", systemImage: "plus")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("recipeEditor.addStep")
+                addStepButton
             }
         }
+    }
+
+    /// One step's editor card: position label + move/remove controls, the text editor, and the
+    /// optional per-step timer.
+    private func stepEditorCard(_ step: RecipeStep, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Step \(index + 1)")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                Spacer()
+                stepControlButton(systemImage: "chevron.up", enabled: index > 0, label: "Move step \(index + 1) up") {
+                    moveStep(step.id, by: -1)
+                }
+                stepControlButton(systemImage: "chevron.down", enabled: index < steps.count - 1, label: "Move step \(index + 1) down") {
+                    moveStep(step.id, by: 1)
+                }
+                stepControlButton(systemImage: "xmark", enabled: true, tint: Color.slate, label: "Remove step \(index + 1)") {
+                    removeStep(step.id)
+                }
+            }
+            SheetTextEditor(text: bindingForStepText(step.id), placeholder: "what to do in this step", minHeight: 60)
+            StepTimerControl(durationSeconds: bindingForStepDuration(step.id))
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("recipeEditor.step.\(index)")
+    }
+
+    /// One 34pt glyph control on a step card — the up/down/remove buttons share this styling exactly.
+    private func stepControlButton(
+        systemImage: String,
+        enabled: Bool,
+        tint: Color = Color.moss,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(enabled ? tint : Color.slate.opacity(0.3))
+                .frame(minWidth: 34, minHeight: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+    }
+
+    private var addStepButton: some View {
+        Button {
+            addStep()
+        } label: {
+            Label("Add step", systemImage: "plus")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity)
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        // R3: bounded by the same step ceiling the paste decoder enforces.
+        .disabled(steps.count >= RecipeLimits.maxSteps)
+        .accessibilityIdentifier("recipeEditor.addStep")
+    }
+
+    /// Appends one blank step, refusing past ``RecipeLimits/maxSteps`` (R3: the cap is enforced where
+    /// the input enters, not only on the button's disabled state).
+    private func addStep() {
+        guard steps.count < RecipeLimits.maxSteps else { return }
+        steps.append(RecipeStep(text: ""))
     }
 
     /// A by-id text binding (safe under reorder/delete — an index binding would target a shifted row).
@@ -1352,7 +1506,7 @@ struct RecipeSheet: View {
 ///
 /// Tapping the row re-expands it into ``RecipeIngredientEditor``; the trailing x removes it. The
 /// calorie figure in the summary renders only behind the explicit calorie opt-in.
-struct CollapsedIngredientRow: View {
+private struct CollapsedIngredientRow: View {
     var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
     /// Macros-first: the trailing calorie figure renders only behind the explicit opt-in.
@@ -1412,7 +1566,7 @@ struct CollapsedIngredientRow: View {
 /// unbinds it, and the editor deliberately never auto-binds on an exact name match so branded products
 /// can't hijack common words like "chicken". "Save custom ingredient" persists manual macros as a user
 /// `FoodItem` via the injected closure.
-struct RecipeIngredientEditor: View {
+private struct RecipeIngredientEditor: View {
     @Binding var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
     var onSaveCustomIngredient: (ManualRecipeIngredientInput) -> FoodItem?
@@ -1426,104 +1580,11 @@ struct RecipeIngredientEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(Color.slate)
-                    TextField("Search ingredient", text: $ingredient.name)
-                        .font(.fernlet(.body))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                        .textContentType(.none)
-                }
-                if let onCollapse, !ingredient.trimmedName.isEmpty {
-                    Button("Done", action: onCollapse)
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                }
-                Button(action: onRemove) {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(Color.slate)
-                }
-                .buttonStyle(.plain)
-            }
-            if !matchingFoodItems.isEmpty && selectedFoodItem == nil {
-                VStack(spacing: 4) {
-                    ForEach(matchingFoodItems) { foodItem in
-                        Button {
-                            select(foodItem)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 6) {
-                                        Text(foodItem.name)
-                                            .font(.fernlet(.body))
-                                            .foregroundStyle(Color.bark)
-                                        Text(foodItem.dataSourceLabel)
-                                            .font(.fernlet(.labelSmall))
-                                            .foregroundStyle(Color.slate)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 1)
-                                            .background(Color.parchment, in: Capsule())
-                                    }
-                                    Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                                        .font(.fernlet(.stat))
-                                        .foregroundStyle(Color.slate)
-                                }
-                                Spacer()
-                                Image(systemName: "plus.circle")
-                                    .foregroundStyle(Color.moss)
-                            }
-                            .padding(10)
-                            .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            if canSaveCustomIngredient {
-                Button {
-                    if let foodItem = onSaveCustomIngredient(ingredient) {
-                        select(foodItem)
-                    }
-                } label: {
-                    Label("Save custom ingredient", systemImage: "plus.circle")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-            }
-            HStack(spacing: 12) {
-                TextField("Qty", value: $ingredient.quantity, format: .number)
-                    .keyboardType(.decimalPad)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                    .textContentType(.none)
-                    .frame(maxWidth: 80)
-                Picker("Unit", selection: $ingredient.unit) {
-                    ForEach(RecipeUnit.allCases) { unit in
-                        Text(unit.label).tag(unit.rawValue)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if let selectedFoodItem {
-                LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))) {
-                    ingredient.selectedFoodItemId = nil
-                    ingredient.protein = selectedFoodItem.macros.protein
-                    ingredient.carbs = selectedFoodItem.macros.carbs
-                    ingredient.fat = selectedFoodItem.macros.fat
-                }
-            } else {
-                MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0...250)
-                MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0...300)
-                MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0...200)
-            }
+            searchHeaderRow
+            suggestionList
+            saveCustomIngredientButton
+            quantityUnitRow
+            macroSection
         }
         .padding(.vertical, 6)
         .onChange(of: ingredient.name) { _, newValue in
@@ -1534,26 +1595,152 @@ struct RecipeIngredientEditor: View {
         // in-flight task; the cancellation on a new keystroke is what prevents stale/duplicate
         // writes, so the body only ever reads the already-settled `matchingFoodItems` state.
         .task(id: ingredient.name) {
-            let text = ingredient.trimmedName
-            // Mirror the render gating: nothing to show when a food is chosen or the field is empty.
-            guard selectedFoodItem == nil, !text.isEmpty else {
-                matchingFoodItems = []
-                return
-            }
-            // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
-            do {
-                try await Task.sleep(for: .milliseconds(220))
-            } catch {
-                return
-            }
-            // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
-            let hits = await Task.detached { [catalog] in
-                catalog.results(for: text)
-            }.value
-            // Drop the result if this task was superseded while the query was running.
-            guard !Task.isCancelled else { return }
-            matchingFoodItems = hits
+            await refreshTypeahead()
         }
+    }
+
+    private var searchHeaderRow: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Color.slate)
+                TextField("Search ingredient", text: $ingredient.name)
+                    .font(.fernlet(.body))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .textContentType(.none)
+            }
+            if let onCollapse, !ingredient.trimmedName.isEmpty {
+                Button("Done", action: onCollapse)
+                    .buttonStyle(.plain)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .foregroundStyle(Color.slate)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder private var suggestionList: some View {
+        if !matchingFoodItems.isEmpty && selectedFoodItem == nil {
+            VStack(spacing: 4) {
+                ForEach(matchingFoodItems) { foodItem in
+                    suggestionRow(foodItem)
+                }
+            }
+        }
+    }
+
+    /// One catalog typeahead suggestion: name + provenance badge over the reference serving/macros.
+    private func suggestionRow(_ foodItem: FoodItem) -> some View {
+        Button {
+            select(foodItem)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(foodItem.name)
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                        Text(foodItem.dataSourceLabel)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.parchment, in: Capsule())
+                    }
+                    Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(Color.slate)
+                }
+                Spacer()
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(Color.moss)
+            }
+            .padding(10)
+            .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var saveCustomIngredientButton: some View {
+        if canSaveCustomIngredient {
+            Button {
+                if let foodItem = onSaveCustomIngredient(ingredient) {
+                    select(foodItem)
+                }
+            } label: {
+                Label("Save custom ingredient", systemImage: "plus.circle")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var quantityUnitRow: some View {
+        HStack(spacing: 12) {
+            TextField("Qty", value: $ingredient.quantity, format: .number)
+                .keyboardType(.decimalPad)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .textContentType(.none)
+                .frame(maxWidth: 80)
+            Picker("Unit", selection: $ingredient.unit) {
+                ForEach(RecipeUnit.allCases) { unit in
+                    Text(unit.label).tag(unit.rawValue)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Locked catalog macros (with the "Manual" escape hatch) when the ingredient is bound to a food
+    /// item; the three editable macro rows when it isn't.
+    @ViewBuilder private var macroSection: some View {
+        if let selectedFoodItem {
+            LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))) {
+                ingredient.selectedFoodItemId = nil
+                ingredient.protein = selectedFoodItem.macros.protein
+                ingredient.carbs = selectedFoodItem.macros.carbs
+                ingredient.fat = selectedFoodItem.macros.fat
+            }
+        } else {
+            MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0...250)
+            MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0...300)
+            MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0...200)
+        }
+    }
+
+    /// The debounced typeahead query behind `.task(id: ingredient.name)`: settle the keystroke, run
+    /// the catalog search off the main actor, and drop the result if a newer keystroke superseded it.
+    private func refreshTypeahead() async {
+        let text = ingredient.trimmedName
+        // Mirror the render gating: nothing to show when a food is chosen or the field is empty.
+        guard selectedFoodItem == nil, !text.isEmpty else {
+            matchingFoodItems = []
+            return
+        }
+        // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
+        do {
+            try await Task.sleep(for: .milliseconds(220))
+        } catch {
+            return
+        }
+        // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
+        let hits = await Task.detached { [catalog] in
+            catalog.results(for: text)
+        }.value
+        // Drop the result if this task was superseded while the query was running.
+        guard !Task.isCancelled else { return }
+        matchingFoodItems = hits
     }
 
     private var selectedFoodItem: FoodItem? {
@@ -1592,7 +1779,7 @@ struct RecipeIngredientEditor: View {
 ///
 /// Displays the resolved macros and the item's reference serving, with a "Manual" escape hatch that
 /// unbinds the ingredient and seeds the editable fields from the item's macros.
-struct LockedMacroSummary: View {
+private struct LockedMacroSummary: View {
     var foodItem: FoodItem
     var macros: Macros
     var onUseManual: () -> Void
@@ -1690,64 +1877,16 @@ struct MealSheet: View {
     #endif
 
     var body: some View {
+        mealPresentations(mealNavigation)
+    }
+
+    /// The log-meal stack itself: the composer plus its seven flow destinations, and the modifiers
+    /// that guard a resolve in flight.
+    private var mealNavigation: some View {
         NavigationStack(path: $path) {
             mealContent
                 .navigationDestination(for: MealFlowDestination.self) { destination in
-                    switch destination {
-                    case .recipeSearch:
-                        RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
-                    case .scanBarcode:
-                        #if canImport(UIKit)
-                        // Barcode hit (or a just-remembered product): hand off to the quick serving
-                        // step, which logs once the count is confirmed (prefilled from last time, so
-                        // accepting is a single tap).
-                        BarcodeResolveFlowView(store: store) { foodItem in
-                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
-                        }
-                        #else
-                        EmptyView()
-                        #endif
-                    #if canImport(UIKit)
-                    case .captureBarcode(let payload):
-                        // The auto-router already read this barcode from the captured photo — resolve
-                        // it through the same catalog-hit / name-&-remember path as a live scan.
-                        BarcodePayloadResolveView(store: store, payload: payload) { foodItem in
-                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
-                        }
-                    case .captureLabel(let result):
-                        // The auto-router parsed a nutrition label — hand off to the existing
-                        // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
-                        // Log via the label-scan path so provenance is truthful: this meal came from a
-                        // scanned nutrition label, not a barcode. The serving step confirms the count.
-                        BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
-                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .label)
-                        }
-                    #else
-                    case .captureBarcode, .captureLabel:
-                        EmptyView()
-                    #endif
-                    case .productPageImport:
-                        FoodProductPageImportView(store: store) { product in
-                            description = product.name
-                            notice = "\(product.name) was saved. Review the meal description, then save your meal."
-                            path.removeLast()
-                        }
-                    case .productSearch(let query):
-                        FoodProductPageImportView(
-                            store: store,
-                            initialLookup: query,
-                            onLogAsTyped: {
-                                // Web lookup dead-end escape: pop back to the composer and log what the
-                                // user originally typed through the normal resolve cascade.
-                                if path.isEmpty == false { path.removeLast() }
-                                resolveTypedMeal(query, type: mealType)
-                            }
-                        ) { product in
-                            description = product.name
-                            notice = "\(product.name) was saved. Review the meal description, then save your meal."
-                            path.removeLast()
-                        }
-                    }
+                    flowDestination(for: destination)
                 }
         }
         .background(Color.parchment)
@@ -1770,110 +1909,210 @@ struct MealSheet: View {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
         }
-        .sheet(item: $reviewContext) { context in
-            MealReviewSheet(
-                resolution: context.resolution,
-                store: store,
-                onConfirm: { reviewedMeals, confirmedRecipe in
-                    // User reviewed it: commit their version, never re-queue an AI retry over it. Any
-                    // legacy auto-mint recipes ride along as before; the decomposition tier's reviewed
-                    // recipe (confirmedRecipe) is minted here — and ONLY here — through the same
-                    // diary.recipes path, so it never reaches the book without an explicit confirm.
-                    let recipesToMint = context.resolution.createdRecipes + (confirmedRecipe.map { [$0] } ?? [])
-                    let committed = store.commitResolution(
-                        MealResolution(
-                            meals: reviewedMeals,
-                            createdRecipes: recipesToMint,
-                            confidence: context.resolution.confidence,
-                            isFallback: false
-                        )
-                    )
-                    #if canImport(UIKit)
-                    let photoAttached = attachPhoto(context.photo, data: context.photoData, to: committed)
-                    #else
-                    let photoAttached = true
-                    #endif
-                    reviewContext = nil
-                    onLogged(committed)
-                    if photoAttached {
-                        dismiss()
-                    } else {
-                        // Same disarm as the direct resolve path: the meal is in, only the photo failed.
-                        didLogMeal = true
-                        notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-                    }
-                },
-                onDiscard: {
-                    // Leave the log sheet open with the original text so the user can adjust and retry.
-                    reviewContext = nil
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
-        }
-        #if canImport(UIKit)
-        .sheet(item: $captureChooser) { context in
-            CaptureChooserSheet(
-                aiEnabled: store.settings.aiStatus != .off,
-                onBarcode: {
-                    captureChooser = nil
-                    mealPhoto = context.image
-                    lookUpBarcode(in: context.image, alreadyDetected: context.detectedBarcode)
-                },
-                onLabel: {
-                    captureChooser = nil
-                    routeCapturedLabel(context.parsedLabel, from: context.image)
-                },
-                onMeal: {
-                    captureChooser = nil
-                    mealPhoto = context.image
-                    mealPhotoData = nil
-                },
-                onTypeInstead: {
-                    captureChooser = nil
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
-        }
-        .sheet(item: $pendingScannedFood, onDismiss: {
-            // The serving step closed — whether the user tapped Log, tapped Cancel, or swiped it away.
-            // In every case the scan-log flow is finished, so exit the scanner instead of returning the
-            // user to the now-paused (frozen) viewfinder behind it. Its only re-arm is `onAppear`, which
-            // never fires while it sits under a sheet, so a bare sheet-dismiss would strand them. This is
-            // the single exit point mirroring the previous post-log `dismiss()`, now shared by every path.
-            dismiss()
-        }) { pending in
-            BarcodeServingStepView(
-                foodItem: pending.item,
-                initialServings: BarcodeServingMemory.lastServings(for: pending.item.barcode) ?? 1,
-                onCancel: {
-                    // Abandon the log: drop the pending food. Clearing it dismisses this sheet, and the
-                    // sheet's `onDismiss` above then exits the scan-log flow.
-                    pendingScannedFood = nil
-                }
-            ) { servings in
-                let meal: Meal
-                switch pending.kind {
-                case .barcode:
-                    meal = store.logBarcodeScannedFoodItem(pending.item, mealType: mealType, servings: servings)
-                case .label:
-                    meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
-                }
-                BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
-                onLogged([meal])
-                // Clearing the pending food dismisses this sheet; the sheet's `onDismiss` then exits the
-                // scan-log flow (same net effect as the old explicit `dismiss()` here).
-                pendingScannedFood = nil
+    }
+
+    /// One pushed destination in the log-meal flow (scanner, embedded recipe editor, web import /
+    /// search, and the auto-router landings for a captured photo).
+    @ViewBuilder private func flowDestination(for destination: MealFlowDestination) -> some View {
+        switch destination {
+        case .recipeSearch:
+            RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
+        case .scanBarcode:
+            #if canImport(UIKit)
+            // Barcode hit (or a just-remembered product): hand off to the quick serving
+            // step, which logs once the count is confirmed (prefilled from last time, so
+            // accepting is a single tap).
+            BarcodeResolveFlowView(store: store) { foodItem in
+                pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
             }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+            #else
+            EmptyView()
+            #endif
+        #if canImport(UIKit)
+        case .captureBarcode(let payload):
+            // The auto-router already read this barcode from the captured photo — resolve
+            // it through the same catalog-hit / name-&-remember path as a live scan.
+            BarcodePayloadResolveView(store: store, payload: payload) { foodItem in
+                pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
+            }
+        case .captureLabel(let result):
+            // The auto-router parsed a nutrition label — hand off to the existing
+            // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
+            // Log via the label-scan path so provenance is truthful: this meal came from a
+            // scanned nutrition label, not a barcode. The serving step confirms the count.
+            BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
+                pendingScannedFood = PendingScannedFood(item: foodItem, kind: .label)
+            }
+        #else
+        case .captureBarcode, .captureLabel:
+            EmptyView()
+        #endif
+        case .productPageImport:
+            FoodProductPageImportView(store: store) { product in
+                description = product.name
+                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                path.removeLast()
+            }
+        case .productSearch(let query):
+            FoodProductPageImportView(
+                store: store,
+                initialLookup: query,
+                onLogAsTyped: {
+                    // Web lookup dead-end escape: pop back to the composer and log what the
+                    // user originally typed through the normal resolve cascade.
+                    if path.isEmpty == false { path.removeLast() }
+                    resolveTypedMeal(query, type: mealType)
+                }
+            ) { product in
+                description = product.name
+                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                path.removeLast()
+            }
         }
+    }
+
+    /// The three sheets layered over the composer — pre-log review, the capture chooser, and the
+    /// scanned-food serving step — in their original application order.
+    private func mealPresentations<V: View>(_ content: V) -> some View {
+        content
+            .sheet(item: $reviewContext) { context in
+                reviewSheet(context)
+            }
+        #if canImport(UIKit)
+            .sheet(item: $captureChooser) { context in
+                captureChooserSheet(context)
+            }
+            .sheet(item: $pendingScannedFood, onDismiss: {
+                // The serving step closed — whether the user tapped Log, tapped Cancel, or swiped it away.
+                // In every case the scan-log flow is finished, so exit the scanner instead of returning the
+                // user to the now-paused (frozen) viewfinder behind it. Its only re-arm is `onAppear`, which
+                // never fires while it sits under a sheet, so a bare sheet-dismiss would strand them. This is
+                // the single exit point mirroring the previous post-log `dismiss()`, now shared by every path.
+                dismiss()
+            }) { pending in
+                servingStepSheet(pending)
+            }
         #endif
     }
+
+    /// The pre-log review sheet for a low-confidence resolution.
+    private func reviewSheet(_ context: MealReviewContext) -> some View {
+        MealReviewSheet(
+            resolution: context.resolution,
+            store: store,
+            onConfirm: { reviewedMeals, confirmedRecipe in
+                confirmReviewedMeals(reviewedMeals, confirmedRecipe: confirmedRecipe, context: context)
+            },
+            onDiscard: {
+                // Leave the log sheet open with the original text so the user can adjust and retry.
+                reviewContext = nil
+            }
+        )
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
+    }
+
+    /// Commits the user's reviewed meals (and any confirmed recipe), attaches the held photo, and
+    /// either dismisses or disarms Save when only the photo failed.
+    private func confirmReviewedMeals(
+        _ reviewedMeals: [Meal],
+        confirmedRecipe: RecipeDefinition?,
+        context: MealReviewContext
+    ) {
+        // User reviewed it: commit their version, never re-queue an AI retry over it. Any
+        // legacy auto-mint recipes ride along as before; the decomposition tier's reviewed
+        // recipe (confirmedRecipe) is minted here — and ONLY here — through the same
+        // diary.recipes path, so it never reaches the book without an explicit confirm.
+        let recipesToMint = context.resolution.createdRecipes + (confirmedRecipe.map { [$0] } ?? [])
+        let committed = store.commitResolution(
+            MealResolution(
+                meals: reviewedMeals,
+                createdRecipes: recipesToMint,
+                confidence: context.resolution.confidence,
+                isFallback: false
+            )
+        )
+        #if canImport(UIKit)
+        let photoAttached = attachPhoto(context.photo, data: context.photoData, to: committed)
+        #else
+        let photoAttached = true
+        #endif
+        reviewContext = nil
+        onLogged(committed)
+        if photoAttached {
+            dismiss()
+        } else {
+            // Same disarm as the direct resolve path: the meal is in, only the photo failed.
+            didLogMeal = true
+            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        }
+    }
+
+    #if canImport(UIKit)
+    /// The gentle Barcode · Label · Meal chooser for an ambiguous capture; each branch reuses the
+    /// reading the router already made instead of re-scanning the photo.
+    private func captureChooserSheet(_ context: CaptureChooserContext) -> some View {
+        CaptureChooserSheet(
+            aiEnabled: store.settings.aiStatus != .off,
+            onBarcode: {
+                captureChooser = nil
+                mealPhoto = context.image
+                lookUpBarcode(in: context.image, alreadyDetected: context.detectedBarcode)
+            },
+            onLabel: {
+                captureChooser = nil
+                routeCapturedLabel(context.parsedLabel, from: context.image)
+            },
+            onMeal: {
+                captureChooser = nil
+                mealPhoto = context.image
+                mealPhotoData = nil
+            },
+            onTypeInstead: {
+                captureChooser = nil
+            }
+        )
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
+    }
+
+    /// The quick serving-count confirm for a scanned/label-parsed food, before it is logged.
+    private func servingStepSheet(_ pending: PendingScannedFood) -> some View {
+        BarcodeServingStepView(
+            foodItem: pending.item,
+            initialServings: BarcodeServingMemory.lastServings(for: pending.item.barcode) ?? 1,
+            onCancel: {
+                // Abandon the log: drop the pending food. Clearing it dismisses this sheet, and the
+                // sheet's `onDismiss` then exits the scan-log flow.
+                pendingScannedFood = nil
+            }
+        ) { servings in
+            logPendingScannedFood(pending, servings: servings)
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
+    }
+
+    /// Logs a confirmed scanned food through the path that keeps its provenance truthful (barcode vs
+    /// nutrition label), remembers the serving count, and closes the scan-log flow.
+    private func logPendingScannedFood(_ pending: PendingScannedFood, servings: Double) {
+        let meal: Meal
+        switch pending.kind {
+        case .barcode:
+            meal = store.logBarcodeScannedFoodItem(pending.item, mealType: mealType, servings: servings)
+        case .label:
+            meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
+        }
+        BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
+        onLogged([meal])
+        // Clearing the pending food dismisses this sheet; the sheet's `onDismiss` then exits the
+        // scan-log flow (same net effect as the old explicit `dismiss()` here).
+        pendingScannedFood = nil
+    }
+    #endif
 
     private var mealContent: some View {
         VStack(spacing: 0) {
@@ -1883,92 +2122,17 @@ struct MealSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    #if canImport(UIKit)
-                    if let photo = mealPhoto {
-                        mealPhotoPreview(photo)
-                        // On-device photo recognition, gated like every other inference path.
-                        if store.settings.aiStatus != .off {
-                            mealSecondaryButton(
-                                isIdentifyingPhoto ? "Identifying..." : "Identify from photo",
-                                icon: "sparkle.magnifyingglass"
-                            ) {
-                                identifyMealPhoto(photo)
-                            }
-                            .disabled(isIdentifyingPhoto)
-                        }
-                    }
-                    #endif
+                    photoAndIdentifySection
 
                     SheetField("What did you eat?") {
                         SheetTextEditor(text: $description, placeholder: "scrambled eggs and toast", minHeight: 100)
                     }
 
-                    // One primary, quiet helpers. "Capture" opens the camera as the delightful
-                    // default; barcode Scan, Recent history, and Import stay reachable but demoted.
-                    VStack(spacing: 10) {
-                        #if canImport(UIKit)
-                        // A camera shot goes through the auto-detect front door; a library pick is just
-                        // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
-                        PhotoCaptureControl(
-                            onCameraCapture: { handleCapturedPhoto($0) },
-                            onLibraryPickData: { data, _ in setLibraryPickedMealPhoto(data) }
-                        ) {
-                            mealCapturePrimaryLabel
-                        }
-                        .accessibilityLabel("Capture food")
+                    captureButtonsSection
 
-                        HStack(spacing: 8) {
-                            mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
-                                path.append(.scanBarcode)
-                            }
-                            if !store.recentMeals.isEmpty {
-                                Menu {
-                                    ForEach(store.recentMeals.prefix(8)) { meal in
-                                        Button(meal.name) {
-                                            let copiedMeal = store.copyMeal(meal)
-                                            onLogged([copiedMeal])
-                                            dismiss()
-                                        }
-                                    }
-                                } label: {
-                                    mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
-                                }
-                            }
-                            mealSecondaryButton("Import", icon: "link.badge.plus") {
-                                path.append(.productPageImport)
-                            }
-                        }
-                        #else
-                        mealSecondaryButton("Import", icon: "link.badge.plus") {
-                            path.append(.productPageImport)
-                        }
-                        #endif
-                    }
+                    mealTypeChips
 
-                    SheetField("Meal type") {
-                        FlowLayout(spacing: 8) {
-                            Button("Auto") { mealType = nil }
-                                .buttonStyle(ChipButtonStyle(selected: mealType == nil))
-                            ForEach(MealType.allCases) { type in
-                                Button(type.rawValue) { mealType = type }
-                                    .buttonStyle(ChipButtonStyle(selected: mealType == type))
-                            }
-                        }
-                    }
-
-                    if let notice {
-                        Text(notice)
-                            .font(.fernlet(.bodySmall))
-                            .italic()
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-
-                    #if canImport(UIKit)
-                    if let captureError {
-                        captureCouldntReadBanner(captureError)
-                    }
-                    #endif
+                    noticeSection
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -1978,33 +2142,139 @@ struct MealSheet: View {
                 label: didLogMeal ? "Done" : (isResolvingMeal ? "Matching" : "Save"),
                 disabled: !didLogMeal && (description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal)
             ) {
-                if didLogMeal {
-                    // The meal already logged (only its photo failed) — never log it a second time.
-                    dismiss()
-                    return
-                }
-                let mealDescription = description
-                let selectedMealType = mealType
-                if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
-                    if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
-                        let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
-                        onLogged([meal])
-                        dismiss()
-                        return
-                    }
-                    if store.allowsWebNutritionLookup {
-                        // No audit here: this only navigates to the product-search view, which auto-runs
-                        // the lookup on appear and records it at completion with the real outcome.
-                        // Recording at this navigation would double-log and pre-stamp `.succeeded` on a
-                        // lookup that hasn't happened yet.
-                        path.append(.productSearch(mealDescription))
-                        return
-                    }
-                }
-                resolveTypedMeal(mealDescription, type: selectedMealType)
+                saveTapped()
             }
         }
         .background(Color.parchment)
+    }
+
+    /// The captured/picked meal photo plus the gated "Identify from photo" action.
+    @ViewBuilder private var photoAndIdentifySection: some View {
+        #if canImport(UIKit)
+        if let photo = mealPhoto {
+            mealPhotoPreview(photo)
+            // On-device photo recognition, gated like every other inference path.
+            if store.settings.aiStatus != .off {
+                mealSecondaryButton(
+                    isIdentifyingPhoto ? "Identifying..." : "Identify from photo",
+                    icon: "sparkle.magnifyingglass"
+                ) {
+                    identifyMealPhoto(photo)
+                }
+                .disabled(isIdentifyingPhoto)
+            }
+        }
+        #endif
+    }
+
+    /// One primary, quiet helpers. "Capture" opens the camera as the delightful default; barcode
+    /// Scan, Recent history, and Import stay reachable but demoted.
+    private var captureButtonsSection: some View {
+        VStack(spacing: 10) {
+            #if canImport(UIKit)
+            // A camera shot goes through the auto-detect front door; a library pick is just
+            // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
+            PhotoCaptureControl(
+                onCameraCapture: { handleCapturedPhoto($0) },
+                onLibraryPickData: { data, _ in setLibraryPickedMealPhoto(data) }
+            ) {
+                mealCapturePrimaryLabel
+            }
+            .accessibilityLabel("Capture food")
+
+            HStack(spacing: 8) {
+                mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
+                    path.append(.scanBarcode)
+                }
+                recentMealsMenu
+                mealSecondaryButton("Import", icon: "link.badge.plus") {
+                    path.append(.productPageImport)
+                }
+            }
+            #else
+            mealSecondaryButton("Import", icon: "link.badge.plus") {
+                path.append(.productPageImport)
+            }
+            #endif
+        }
+    }
+
+    #if canImport(UIKit)
+    /// The "Recent" one-tap re-log menu (the store caps `recentMeals`; this shows the newest eight).
+    @ViewBuilder private var recentMealsMenu: some View {
+        if !store.recentMeals.isEmpty {
+            Menu {
+                ForEach(store.recentMeals.prefix(8)) { meal in
+                    Button(meal.name) {
+                        let copiedMeal = store.copyMeal(meal)
+                        onLogged([copiedMeal])
+                        dismiss()
+                    }
+                }
+            } label: {
+                mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
+            }
+        }
+    }
+    #endif
+
+    private var mealTypeChips: some View {
+        SheetField("Meal type") {
+            FlowLayout(spacing: 8) {
+                Button("Auto") { mealType = nil }
+                    .buttonStyle(ChipButtonStyle(selected: mealType == nil))
+                ForEach(MealType.allCases) { type in
+                    Button(type.rawValue) { mealType = type }
+                        .buttonStyle(ChipButtonStyle(selected: mealType == type))
+                }
+            }
+        }
+    }
+
+    /// The calm inline notice line plus the "couldn't read that one" capture banner.
+    @ViewBuilder private var noticeSection: some View {
+        if let notice {
+            Text(notice)
+                .font(.fernlet(.bodySmall))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+
+        #if canImport(UIKit)
+        if let captureError {
+            captureCouldntReadBanner(captureError)
+        }
+        #endif
+    }
+
+    /// The Save bar's action: a no-op re-tap after a photo-only failure, then the cached-product /
+    /// web-search / typed-resolve cascade.
+    private func saveTapped() {
+        if didLogMeal {
+            // The meal already logged (only its photo failed) — never log it a second time.
+            dismiss()
+            return
+        }
+        let mealDescription = description
+        let selectedMealType = mealType
+        if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
+            if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
+                let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
+                onLogged([meal])
+                dismiss()
+                return
+            }
+            if store.allowsWebNutritionLookup {
+                // No audit here: this only navigates to the product-search view, which auto-runs
+                // the lookup on appear and records it at completion with the real outcome.
+                // Recording at this navigation would double-log and pre-stamp `.succeeded` on a
+                // lookup that hasn't happened yet.
+                path.append(.productSearch(mealDescription))
+                return
+            }
+        }
+        resolveTypedMeal(mealDescription, type: selectedMealType)
     }
 
     /// Runs the normal free-text resolve cascade for a typed description: a low-confidence result
@@ -2012,6 +2282,10 @@ struct MealSheet: View {
     /// button and the web-import "log what you typed instead" escape hatch, so the web path is never a
     /// one-way street.
     private func resolveTypedMeal(_ mealDescription: String, type: MealType?) {
+        // At most one resolve in flight, enforced HERE rather than only by the Save button's disabled
+        // state: the web-import "log what you typed instead" escape calls this after popping the path,
+        // and a second tap during that pop would otherwise start a second resolve and commit twice.
+        guard !isResolvingMeal else { return }
         #if canImport(UIKit)
         let capturedPhoto = mealPhoto
         let capturedPhotoData = mealPhotoData
@@ -2053,7 +2327,7 @@ struct MealSheet: View {
     ///
     /// Identifiable with a fresh `id` per presentation so `sheet(item:)` re-presents even for an
     /// identical resolution.
-    struct MealReviewContext: Identifiable {
+    private struct MealReviewContext: Identifiable {
         let id = UUID()
         let resolution: MealResolution
         #if canImport(UIKit)
@@ -2068,7 +2342,9 @@ struct MealSheet: View {
     /// Attaches the captured photo to the just-logged meals. Returns false ONLY when a photo was present
     /// but couldn't be sealed (fail-closed `saveMealPhoto` returned nil) — the meal still logged, but its
     /// photo was dropped, so the caller surfaces a gentle notice instead of dismissing on a silent loss.
-    @discardableResult
+    ///
+    /// The result is a success/failure signal, so it is deliberately NOT `@discardableResult` (R7):
+    /// every caller must decide between dismissing and showing the notice.
     private func attachPhoto(_ photo: UIImage?, data: Data?, to meals: [Meal]) -> Bool {
         // Prefer the byte path (single bounded normalize, no double encode) when a library pick handed
         // back raw bytes; fall back to the UIImage overload for the camera path, which has no bytes.
@@ -2139,7 +2415,7 @@ struct MealSheet: View {
     ///
     /// Carries the captured image plus the router's best-effort label parse and detected barcode, so
     /// the chooser branches reuse those readings instead of re-scanning the same photo.
-    struct CaptureChooserContext: Identifiable {
+    private struct CaptureChooserContext: Identifiable {
         let id = UUID()
         let image: UIImage
         /// The best-effort label parse (may be nil) so "Read the label" can prefill instead of rescan.
@@ -2320,7 +2596,7 @@ struct MealSheet: View {
 /// Resolution goes through ``FoodProductWebSearch``/``FoodProductWebImporter``, is confirmed in
 /// ``FoodProductReviewSheet``, and `onLogAsTyped` offers an escape back to the normal typed-meal
 /// resolve when the web can't help.
-struct FoodProductPageImportView: View {
+private struct FoodProductPageImportView: View {
     var store: FernletStore
     var onSaved: (ImportedFoodProduct) -> Void
     /// Optional escape hatch offered when the web lookup fails or is disabled: log what the user typed
@@ -2355,44 +2631,11 @@ struct FoodProductPageImportView: View {
                     urlEntry
 
                     if isLoading {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                                .tint(Color.moss)
-                            Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
-                                .font(.fernlet(.body))
-                                .italic()
-                                .foregroundStyle(Color.slate)
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        loadingRow
                     }
 
                     if let notice {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(notice)
-                                .font(.fernlet(.bodySmall))
-                                .italic()
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                            // When the web lookup can't help, don't strand the user here — let them log
-                            // what they typed through the normal meal flow instead.
-                            if let onLogAsTyped {
-                                Button {
-                                    onLogAsTyped()
-                                } label: {
-                                    Label("Log what you typed instead", systemImage: "square.and.pencil")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.moss)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(12)
-                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                        noticeSection(notice)
                     }
                 }
                 .padding(20)
@@ -2419,6 +2662,49 @@ struct FoodProductPageImportView: View {
             guard !initialLookup.isEmpty, !didStartInitialLookup else { return }
             didStartInitialLookup = true
             loadPreview()
+        }
+    }
+
+    /// The calm progress card shown while the search / label read is running.
+    private var loadingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(Color.moss)
+            Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
+                .font(.fernlet(.body))
+                .italic()
+                .foregroundStyle(Color.slate)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    /// The outcome line, with the "log what you typed instead" escape when the web can't help.
+    private func noticeSection(_ notice: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(notice)
+                .font(.fernlet(.bodySmall))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            // When the web lookup can't help, don't strand the user here — let them log
+            // what they typed through the normal meal flow instead.
+            if let onLogAsTyped {
+                Button {
+                    onLogAsTyped()
+                } label: {
+                    Label("Log what you typed instead", systemImage: "square.and.pencil")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -2671,7 +2957,7 @@ struct FoodProductReviewSheet: View {
 /// distinguish a photo on another device from one that's here but unreadable (see
 /// ``MealPhotoPresence``). The meal-type capsule is suppressed when the row already sits under a
 /// meal-type section header.
-struct MealRow: View {
+private struct MealRow: View {
     var meal: Meal
     var showCalories: Bool
     var onDelete: () -> Void
@@ -2692,61 +2978,75 @@ struct MealRow: View {
             }
             #endif
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(meal.name).font(.fernlet(.header))
-                            if showsMealTypeBadge {
-                                Text(meal.mealType.rawValue)
-                                    .font(.fernlet(.labelSmall))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(meal.mealType.color.opacity(0.25), in: Capsule())
-                            }
-                        }
-                        Text(displayNote)
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        if showCalories {
-                            Text("\(meal.calories) cal").font(.fernlet(.stat))
-                        }
-                        Button(role: .destructive, action: onDelete) {
-                            Image(systemName: "xmark")
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Delete meal")
-                    }
-                }
+                titleRow
                 if let breakdownText {
-                    Text(breakdownText)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.cream.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+                    breakdownCard(breakdownText)
                 }
-                HStack(spacing: 14) {
-                    Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
-                    Text("C \(meal.macros.carbs)g")
-                    Text("F \(meal.macros.fat)g")
-                    Text(meal.confidence).foregroundStyle(Color.goldenrod)
-                    Spacer(minLength: 0)
-                    Button("Looks off?", action: onCorrect)
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.fern)
-                }
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+                macrosRow
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Name, optional meal-type badge and note on the left; calories and delete on the right.
+    private var titleRow: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(meal.name).font(.fernlet(.header))
+                    if showsMealTypeBadge {
+                        Text(meal.mealType.rawValue)
+                            .font(.fernlet(.labelSmall))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(meal.mealType.color.opacity(0.25), in: Capsule())
+                    }
+                }
+                Text(displayNote)
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+            VStack(alignment: .trailing) {
+                if showCalories {
+                    Text("\(meal.calories) cal").font(.fernlet(.stat))
+                }
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "xmark")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete meal")
+            }
+        }
+    }
+
+    /// The matched-components breakdown line, when the meal has one.
+    private func breakdownCard(_ text: String) -> some View {
+        Text(text)
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.slate)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+    }
+
+    private var macrosRow: some View {
+        HStack(spacing: 14) {
+            Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
+            Text("C \(meal.macros.carbs)g")
+            Text("F \(meal.macros.fat)g")
+            Text(meal.confidence).foregroundStyle(Color.goldenrod)
+            Spacer(minLength: 0)
+            Button("Looks off?", action: onCorrect)
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.fern)
+        }
+        .font(.fernlet(.stat))
+        .foregroundStyle(Color.slate)
     }
 
     private var displayNote: String {
@@ -2775,7 +3075,7 @@ struct MealRow: View {
 /// Only `quantity` is mutable; `snapshot` rebuilds the component with its macros and micronutrients
 /// scaled proportionally from the captured base quantity, so re-quantifying never invents nutrition
 /// data. `nonisolated` so review state can be constructed off the main actor.
-nonisolated struct MealComponentCorrectionInput: Identifiable {
+private nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
     let name: String
@@ -2815,7 +3115,7 @@ nonisolated struct MealComponentCorrectionInput: Identifiable {
 /// Edits the meal's name, type, and either its raw macros (when it has no components) or its matched
 /// component quantities, then persists through `FernletStore.updateMealCorrection` with totals
 /// recomputed from the corrected snapshots.
-struct MealCorrectionSheet: View {
+private struct MealCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     var meal: Meal
@@ -2899,7 +3199,7 @@ struct MealCorrectionSheet: View {
 ///
 /// Shared by ``MealCorrectionSheet`` and ``MealReviewSheet`` so post-log correction and pre-log
 /// review edit macros identically.
-struct MealMacroEditorRows: View {
+private struct MealMacroEditorRows: View {
     @Binding var protein: Int
     @Binding var carbs: Int
     @Binding var fat: Int
@@ -2920,7 +3220,7 @@ struct MealMacroEditorRows: View {
 ///
 /// Shared by ``MealCorrectionSheet`` and ``MealReviewSheet``; the footer totals recompute through
 /// `MealBuilder.totals` so they always match what would be logged.
-struct MealComponentEditorRows: View {
+private struct MealComponentEditorRows: View {
     @Binding var components: [MealComponentCorrectionInput]
 
     var body: some View {
@@ -3047,7 +3347,7 @@ private nonisolated struct EditableReviewMeal: Identifiable {
 /// so the caller commits both through the same `commitResolution` path — the recipe is minted only on
 /// this confirm, never at resolve time. `isLogging` one-shots the button so a fast double-tap can't
 /// log the meal twice.
-struct MealReviewSheet: View {
+private struct MealReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     private let confidence: MealResolutionConfidence
@@ -3301,8 +3601,15 @@ private struct MealPhotoThumb: View {
                 bytesAvailable = false
                 return
             }
+            // A sealed file that's here but won't decode is `.unavailable`, not the neutral "no photo
+            // yet" placeholder — classify it honestly instead of continuing past the failed decode.
+            guard let decoded = UIImage(data: data) else {
+                sealedFileExists = true
+                bytesAvailable = false
+                return
+            }
             bytesAvailable = true
-            if let img = UIImage(data: data) { image = img }
+            image = decoded
         }
     }
 }
@@ -3313,7 +3620,7 @@ private struct MealPhotoThumb: View {
 ///
 /// Rendered at `.headerMedium` — a deliberate step down from `MealRow`'s title, since recipes are a
 /// shortcut list beneath the meal log rather than the log itself.
-struct RecipeRow: View {
+private struct RecipeRow: View {
     var recipe: RecipeDefinition
     var totals: MacroTotals
     var showCalories: Bool
@@ -3522,31 +3829,15 @@ struct RecipeDetailView: View {
     }
 
     var body: some View {
+        detailPresentations(detailScroll)
+    }
+
+    private var detailScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 photoSection
-                if let photoNotice {
-                    Text(photoNotice)
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                if let reimportNotice {
-                    Text(reimportNotice)
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(recipe.name)
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                }
+                noticeLines
+                titleBlock
                 macrosCard
                 yieldControl
                 ingredientsCard
@@ -3563,23 +3854,7 @@ struct RecipeDetailView: View {
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
         .prewarmsSourceLinkConnection(to: recipe.webImport?.sourceURL)
-        .toolbar {
-            // Explicit refresh for a web-imported recipe (owner decision 2026-08-09): repeat
-            // imports of the same URL now skip the network and surface the saved recipe, so THIS
-            // is the one way to re-fetch the page. Photo and notes are preserved (same-id
-            // replace — see FernletStore.reimportSavedRecipeFromSource).
-            if recipe.webImport?.sourceURL?.isSafariPresentable == true {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        reimportFromSource()
-                    } label: {
-                        Label("Re-import from source", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(isReimporting)
-                    .accessibilityIdentifier("recipeDetail.reimport")
-                }
-            }
-        }
+        .toolbar { reimportToolbar }
         // Resolve the manual recipe's structured ingredients (a FoodCatalog SQLite read) into a cached
         // dictionary, keyed on the ingredient ids so an edit-and-save under this detail (the editor
         // presents over a pushed detail) re-resolves — a once-guard here left added/swapped ingredients
@@ -3587,59 +3862,123 @@ struct RecipeDetailView: View {
         // detail left on screen still doesn't hit SQLite on every store mutation. Web imports have no
         // structured ingredients — they render free-text lines instead.
         .task(id: recipe.ingredients.map(\.foodItemId)) {
-            let ingredientIDs = recipe.ingredients.map(\.foodItemId)
-            if !ingredientIDs.isEmpty {
-                resolvedItems = Dictionary(
-                    store.foodCatalog.items(ids: ingredientIDs).map { ($0.id, $0) },
-                    uniquingKeysWith: { first, _ in first }
-                )
-            }
+            await resolveIngredients()
         }
         .task {
-            // The photo load keeps its own once-guard — it's a separate cache from the ingredient
-            // resolution and shouldn't re-decode when ingredients change.
-            guard !didLoadPhoto else { return }
-            didLoadPhoto = true
-            if let data = store.recipePhotoData(for: recipe.id) {
-                photo = await UIImage(data: data)?.byPreparingForDisplay()
-            } else if let fetched = await store.fetchRecipeWebImageIfNeeded(for: recipe) {
-                // Lazy web-image path (owner decision 2026-08-09): a share-extension-imported
-                // recipe stored only the page's image URL — download it on this first open (the
-                // user is present), sealed and one-attempt-per-device inside the store method.
-                // Recipes whose fetch this device already attempted, whose picture is suppressed
-                // (photo deleted), or that arrived over the mesh all no-op there.
-                let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
-                // Adopt the fetched bytes only while the user hasn't picked their own photo
-                // mid-download — the store re-validates the same race on disk; this mirrors it
-                // on screen so a pick during the fetch is never visually clobbered.
-                if photo == nil { photo = prepared }
+            await loadPhotoIfNeeded()
+        }
+    }
+
+    /// The photo-save and re-import outcome lines.
+    @ViewBuilder private var noticeLines: some View {
+        if let photoNotice {
+            Text(photoNotice)
+                .font(.fernlet(.bodySmall))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        if let reimportNotice {
+            Text(reimportNotice)
+                .font(.fernlet(.bodySmall))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(recipe.name)
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.bark)
+            Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    /// Explicit refresh for a web-imported recipe (owner decision 2026-08-09): repeat imports of the
+    /// same URL now skip the network and surface the saved recipe, so THIS is the one way to re-fetch
+    /// the page. Photo and notes are preserved (same-id replace — see
+    /// `FernletStore.reimportSavedRecipeFromSource`).
+    @ToolbarContentBuilder private var reimportToolbar: some ToolbarContent {
+        if recipe.webImport?.sourceURL?.isSafariPresentable == true {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    reimportFromSource()
+                } label: {
+                    Label("Re-import from source", systemImage: "arrow.clockwise")
+                }
+                .disabled(isReimporting)
+                .accessibilityIdentifier("recipeDetail.reimport")
             }
         }
-        .destructiveConfirmation($pendingDestructiveAction)
-        .sheet(isPresented: $showingSafari) {
-            if let sourceURL = recipe.webImport?.sourceURL, sourceURL.isSafariPresentable {
-                SafariView(url: sourceURL)
-                    .ignoresSafeArea()
+    }
+
+    /// Caches the recipe's structured ingredients resolved through the catalog (see the `.task(id:)`
+    /// note above for why this is keyed on the ingredient ids).
+    private func resolveIngredients() async {
+        let ingredientIDs = recipe.ingredients.map(\.foodItemId)
+        guard !ingredientIDs.isEmpty else { return }
+        resolvedItems = Dictionary(
+            store.foodCatalog.items(ids: ingredientIDs).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// Loads the recipe's sealed photo once per presentation, falling back to the lazy web-image
+    /// fetch for a share-extension import that stored only the page's image URL.
+    private func loadPhotoIfNeeded() async {
+        // The photo load keeps its own once-guard — it's a separate cache from the ingredient
+        // resolution and shouldn't re-decode when ingredients change.
+        guard !didLoadPhoto else { return }
+        didLoadPhoto = true
+        if let data = store.recipePhotoData(for: recipe.id) {
+            photo = await UIImage(data: data)?.byPreparingForDisplay()
+        } else if let fetched = await store.fetchRecipeWebImageIfNeeded(for: recipe) {
+            // Lazy web-image path (owner decision 2026-08-09): a share-extension-imported
+            // recipe stored only the page's image URL — download it on this first open (the
+            // user is present), sealed and one-attempt-per-device inside the store method.
+            // Recipes whose fetch this device already attempted, whose picture is suppressed
+            // (photo deleted), or that arrived over the mesh all no-op there.
+            let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
+            // Adopt the fetched bytes only while the user hasn't picked their own photo
+            // mid-download — the store re-validates the same race on disk; this mirrors it
+            // on screen so a pick during the fetch is never visually clobbered.
+            if photo == nil { photo = prepared }
+        }
+    }
+
+    /// The detail's confirmation + three presentations (source Safari, ingredient swap, cooking
+    /// mode), in their original application order.
+    private func detailPresentations<V: View>(_ content: V) -> some View {
+        content
+            .destructiveConfirmation($pendingDestructiveAction)
+            .sheet(isPresented: $showingSafari) {
+                if let sourceURL = recipe.webImport?.sourceURL, sourceURL.isSafariPresentable {
+                    SafariView(url: sourceURL)
+                        .ignoresSafeArea()
+                }
             }
-        }
-        .sheet(item: $substitutionTarget) { target in
-            IngredientSubstitutionSheet(
-                store: store,
-                recipe: recipe,
-                original: target,
-                originalFoodItem: resolvedItems[target.foodItemId],
-                onSaveFork: onSaveFork
-            )
-        }
-        .fullScreenCover(isPresented: $showingCookingMode) {
-            // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that yield
-            // instead of re-defaulting to the base (nil → base yield inside CookingModeView).
-            // The completion log routes through onCookLog with the definition on screen at cook
-            // start, mirroring onLog's currency rule.
-            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: { mealType, day in
-                onCookLog(recipe, mealType, day)
-            })
-        }
+            .sheet(item: $substitutionTarget) { target in
+                IngredientSubstitutionSheet(
+                    store: store,
+                    recipe: recipe,
+                    original: target,
+                    originalFoodItem: resolvedItems[target.foodItemId],
+                    onSaveFork: onSaveFork
+                )
+            }
+            .fullScreenCover(isPresented: $showingCookingMode) {
+                // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that
+                // yield instead of re-defaulting to the base (nil → base yield inside CookingModeView).
+                // The completion log routes through onCookLog with the definition on screen at cook
+                // start, mirroring onLog's currency rule.
+                CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: { mealType, day in
+                    onCookLog(recipe, mealType, day)
+                })
+            }
     }
 
     @ViewBuilder private var photoSection: some View {
@@ -3758,91 +4097,84 @@ struct RecipeDetailView: View {
 
     @ViewBuilder private var ingredientsCard: some View {
         if let webImport = recipe.webImport {
-            // Web imports keep free-text ingredient lines (no structured food-item resolution) plus the
-            // source URL as a provenance line where a manual recipe's resolved list would be.
-            FernletCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Ingredients")
-                    if webImport.ingredientLines.isEmpty {
-                        Text("No ingredients listed.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                    } else {
-                        ForEach(webImport.ingredientLines, id: \.self) { line in
-                            HStack(alignment: .top, spacing: 8) {
-                                Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-                                Text(line)
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                    .fernletWrappingText()
-                            }
+            webImportIngredientsCard(webImport)
+        } else {
+            structuredIngredientsCard
+        }
+    }
+
+    /// Web imports keep free-text ingredient lines (no structured food-item resolution) plus the
+    /// source URL as a provenance line where a manual recipe's resolved list would be.
+    private func webImportIngredientsCard(_ webImport: RecipeWebImport) -> some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Ingredients")
+                if webImport.ingredientLines.isEmpty {
+                    Text("No ingredients listed.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                } else {
+                    ForEach(webImport.ingredientLines, id: \.self) { line in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+                            Text(line)
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
                         }
                     }
-                    if let sourceURL = webImport.sourceURL {
-                        if sourceURL.isSafariPresentable {
-                            Button {
-                                showingSafari = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "safari").font(.caption)
-                                    Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                        .font(.fernlet(.labelSmall))
-                                        .underline()
-                                }
-                                .foregroundStyle(Color.fern)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.top, 2)
-                        } else {
-                            // Non-web source (e.g. a file URL) can't open in Safari — show it as plain text.
-                            Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                                .lineLimit(1)
-                                .padding(.top, 2)
-                        }
+                }
+                if let sourceURL = webImport.sourceURL {
+                    SourceLinkRow(url: sourceURL) { showingSafari = true }
+                        .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private var structuredIngredientsCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Ingredients")
+                if recipe.ingredients.isEmpty {
+                    Text("No ingredients listed.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                } else {
+                    ForEach(displayIngredients) { ingredient in
+                        structuredIngredientRow(ingredient)
                     }
                 }
             }
-        } else {
-            FernletCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Ingredients")
-                    if recipe.ingredients.isEmpty {
-                        Text("No ingredients listed.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                    } else {
-                        ForEach(displayIngredients) { ingredient in
-                            HStack(alignment: .top, spacing: 8) {
-                                Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-                                Text(ingredientLine(ingredient))
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                    .fernletWrappingText()
-                                // Swap targets the STORED base ingredient (matched by id), not the scaled
-                                // display copy — a fork is built from saved quantities. Structured recipes
-                                // only; web imports have no swappable structured ingredients.
-                                if RecipeScaling.isScalable(recipe) {
-                                    Spacer(minLength: 6)
-                                    Button {
-                                        substitutionTarget = recipe.ingredients.first(where: { $0.id == ingredient.id }) ?? ingredient
-                                    } label: {
-                                        Label("Swap", systemImage: "arrow.triangle.2.circlepath")
-                                            .labelStyle(.iconOnly)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(Color.moss)
-                                            .frame(minWidth: 44, minHeight: 44)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
-                                    .accessibilityIdentifier("recipeDetail.swapIngredient")
-                                }
-                            }
-                        }
-                    }
+        }
+    }
+
+    /// One resolved ingredient line, with the Swap affordance for structured (scalable) recipes.
+    private func structuredIngredientRow(_ ingredient: RecipeIngredient) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+            Text(ingredientLine(ingredient))
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            // Swap targets the STORED base ingredient (matched by id), not the scaled
+            // display copy — a fork is built from saved quantities. Structured recipes
+            // only; web imports have no swappable structured ingredients.
+            if RecipeScaling.isScalable(recipe) {
+                Spacer(minLength: 6)
+                Button {
+                    substitutionTarget = recipe.ingredients.first(where: { $0.id == ingredient.id }) ?? ingredient
+                } label: {
+                    Label("Swap", systemImage: "arrow.triangle.2.circlepath")
+                        .labelStyle(.iconOnly)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
+                .accessibilityIdentifier("recipeDetail.swapIngredient")
             }
         }
     }
@@ -4000,7 +4332,7 @@ struct RecipeDetailView: View {
 ///
 /// Commits on focus loss (clamped to `range`); nudging the stepper while editing commits its value
 /// and closes the field. Used across the ingredient, correction, and review editors.
-struct MacroInputRow: View {
+private struct MacroInputRow: View {
     let label: String
     let unit: String
     @Binding var value: Int
@@ -4063,7 +4395,7 @@ struct MacroInputRow: View {
 ///
 /// Pushed from the recipe book's Create button. Nutrition-label scanning is deliberately absent here —
 /// it belongs to the barcode-not-found handoff, not to recipe creation.
-struct RecipeCreationOptionsView: View {
+private struct RecipeCreationOptionsView: View {
     var store: FernletStore
 
     var body: some View {
@@ -4110,7 +4442,7 @@ struct RecipeCreationOptionsView: View {
 /// One tappable option card (icon, title, subtitle, chevron) in ``RecipeCreationOptionsView``.
 ///
 /// Purely presentational — the wrapping `NavigationLink` provides the behavior.
-struct RecipeCreationOptionRow: View {
+private struct RecipeCreationOptionRow: View {
     var title: String
     var subtitle: String
     var systemImage: String
@@ -4253,175 +4585,24 @@ struct RecipeBookSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ScreenHeader(title: "Recipe book", subtitle: "Recipes and saved products, A\u{2013}Z.", subtitleFirst: false)
-                    NavigationLink {
-                        RecipeCreationOptionsView(store: store)
-                    } label: {
-                        Label("Create recipe", systemImage: "plus")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.cream)
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-
-                    // F3 grocery list: a weekly planner (persists a per-day plan) and a one-off list
-                    // builder. Both aggregate through the shared Phase A pipeline and share to Notes.
-                    HStack(spacing: 12) {
-                        NavigationLink {
-                            WeeklyMealPlannerView(store: store)
-                        } label: {
-                            Label("Meal planner", systemImage: "calendar")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.moss)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        NavigationLink {
-                            ShoppingListBuilderView(store: store)
-                        } label: {
-                            Label("Shopping list", systemImage: "cart")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.moss)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    createAndPlannerButtons
 
                     TextField("Search recipes and products", text: $searchText)
                         .sheetTextInput()
                     let allManual = filteredManualRecipes
                     if !allManual.isEmpty {
-                        FernletCard {
-                            VStack(spacing: 0) {
-                                ForEach(Array(allManual.enumerated()), id: \.element.id) { index, recipe in
-                                    if index > 0 { FernletRowDivider() }
-                                    HStack(spacing: 12) {
-                                        #if canImport(UIKit)
-                                        // Tapping a recipe now opens a read-only detail view (photo,
-                                        // per-serving macros, ingredients, notes) rather than jumping
-                                        // straight into the editor — the detail view offers edit/log/share.
-                                        NavigationLink {
-                                            RecipeDetailView(
-                                                store: store,
-                                                recipe: recipe,
-                                                onEdit: { editingRecipe = recipe; dismiss() },
-                                                onSaveFork: { store.addForkedRecipe($0) },
-                                                onLog: { current, mealType in store.logRecipe(current, mealType: mealType); dismiss() },
-                                                onShare: { current in
-                                                    recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: current.name,
-                                                        shareText: store.recipeShareText(for: current),
-                                                        payload: store.proximityRecipeSharePayload(for: current)
-                                                    )
-                                                },
-                                                onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
-                                            )
-                                        } label: {
-                                            RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
-                                        }
-                                        .buttonStyle(.plain)
-                                        #else
-                                        Button { editingRecipe = recipe; dismiss() } label: {
-                                            RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
-                                        }
-                                        .buttonStyle(.plain)
-                                        #endif
-                                        RecipeMealTypeMenu { mealType in
-                                            store.logRecipe(recipe, mealType: mealType)
-                                            dismiss()
-                                        }
-                                        RecipeShareButton {
-                                            recipeShareDraft = ProximityRecipeShareDraft(
-                                                title: recipe.name,
-                                                shareText: store.recipeShareText(for: recipe),
-                                                payload: store.proximityRecipeSharePayload(for: recipe)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        recipesCard(allManual, isSaved: false)
                     }
                     let allSaved = filteredSavedRecipes
                     if !allSaved.isEmpty {
-                        FernletCard {
-                            VStack(spacing: 0) {
-                                ForEach(Array(allSaved.enumerated()), id: \.element.id) { index, recipe in
-                                    if index > 0 { FernletRowDivider() }
-                                    HStack(spacing: 12) {
-                                        #if canImport(UIKit)
-                                        // Saved/web recipes push the same read-only detail as manual rows;
-                                        // Edit opens their notes/delete sheet (no structured ingredients).
-                                        NavigationLink {
-                                            RecipeDetailView(
-                                                store: store,
-                                                recipe: recipe,
-                                                onEdit: { editingSavedRecipe = recipe; dismiss() },
-                                                onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType); dismiss() },
-                                                onShare: { current in
-                                                    recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: current.name,
-                                                        shareText: store.savedRecipeShareText(for: current),
-                                                        payload: store.proximityRecipeSharePayload(for: current)
-                                                    )
-                                                },
-                                                onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
-                                            )
-                                        } label: {
-                                            SavedRecipeRow(recipe: recipe)
-                                        }
-                                        .buttonStyle(.plain)
-                                        #else
-                                        Button { editingSavedRecipe = recipe; dismiss() } label: {
-                                            SavedRecipeRow(recipe: recipe)
-                                        }
-                                        .buttonStyle(.plain)
-                                        #endif
-                                        RecipeMealTypeMenu { mealType in
-                                            store.logSavedRecipe(recipe, mealType: mealType)
-                                            dismiss()
-                                        }
-                                        RecipeShareButton {
-                                            recipeShareDraft = ProximityRecipeShareDraft(
-                                                title: recipe.name,
-                                                shareText: store.savedRecipeShareText(for: recipe),
-                                                payload: store.proximityRecipeSharePayload(for: recipe)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        recipesCard(allSaved, isSaved: true)
                     }
                     let allProducts = filteredWebImportedProducts
                     if !allProducts.isEmpty {
-                        Text("Imported products")
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
-                        FernletCard {
-                            VStack(spacing: 0) {
-                                ForEach(Array(allProducts.enumerated()), id: \.element.id) { index, product in
-                                    if index > 0 { FernletRowDivider() }
-                                    HStack(spacing: 12) {
-                                        WebImportedFoodRow(foodItem: product)
-                                        RecipeMealTypeMenu { mealType in
-                                            store.logWebImportedFoodProduct(product, mealType: mealType)
-                                            dismiss()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        importedProductsCard(allProducts)
                     }
                     if allManual.isEmpty && allSaved.isEmpty && allProducts.isEmpty && !searchText.isEmpty {
-                        EmptyState(text: "No recipes or products match \u{201C}\(searchText)\u{201D}.")
-                            .frame(maxWidth: .infinity)
+                        emptySearchState
                     }
                 }
                 .padding(20)
@@ -4437,6 +4618,176 @@ struct RecipeBookSheet: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+    }
+
+    /// Create-recipe plus the F3 grocery entry points: a weekly planner (persists a per-day plan)
+    /// and a one-off list builder. Both aggregate through the shared Phase A pipeline and share to
+    /// Notes.
+    private var createAndPlannerButtons: some View {
+        VStack(spacing: 16) {
+            NavigationLink {
+                RecipeCreationOptionsView(store: store)
+            } label: {
+                Label("Create recipe", systemImage: "plus")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 12) {
+                NavigationLink {
+                    WeeklyMealPlannerView(store: store)
+                } label: {
+                    plannerLabel("Meal planner", systemImage: "calendar")
+                }
+                .buttonStyle(.plain)
+                NavigationLink {
+                    ShoppingListBuilderView(store: store)
+                } label: {
+                    plannerLabel("Shopping list", systemImage: "cart")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func plannerLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// One A–Z card of recipes. `isSaved` selects the saved/web store's methods (edit sheet, log,
+    /// share text) over the manual store's — the rows are otherwise identical.
+    private func recipesCard(_ recipes: [RecipeDefinition], isSaved: Bool) -> some View {
+        FernletCard {
+            VStack(spacing: 0) {
+                ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
+                    if index > 0 { FernletRowDivider() }
+                    recipeRow(recipe, isSaved: isSaved)
+                }
+            }
+        }
+    }
+
+    /// A recipe-book row: the tappable summary (pushing the read-only detail), the log menu and the
+    /// share button.
+    private func recipeRow(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
+        HStack(spacing: 12) {
+            #if canImport(UIKit)
+            // Tapping a recipe opens a read-only detail view (photo, per-serving macros, ingredients,
+            // notes) rather than jumping straight into the editor — the detail offers edit/log/share.
+            // For a saved/web recipe, Edit opens its notes/delete sheet (no structured ingredients).
+            NavigationLink {
+                recipeDetail(for: recipe, isSaved: isSaved)
+            } label: {
+                recipeRowLabel(recipe, isSaved: isSaved)
+            }
+            .buttonStyle(.plain)
+            #else
+            Button { beginEditing(recipe, isSaved: isSaved); dismiss() } label: {
+                recipeRowLabel(recipe, isSaved: isSaved)
+            }
+            .buttonStyle(.plain)
+            #endif
+            RecipeMealTypeMenu { mealType in
+                logRecipe(recipe, mealType: mealType, isSaved: isSaved)
+                dismiss()
+            }
+            RecipeShareButton {
+                recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+            }
+        }
+    }
+
+    @ViewBuilder private func recipeRowLabel(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
+        if isSaved {
+            SavedRecipeRow(recipe: recipe)
+        } else {
+            RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
+        }
+    }
+
+    #if canImport(UIKit)
+    /// The read-only detail for a recipe-book row, wired to the store half the row came from.
+    private func recipeDetail(for recipe: RecipeDefinition, isSaved: Bool) -> some View {
+        RecipeDetailView(
+            store: store,
+            recipe: recipe,
+            onEdit: { beginEditing(recipe, isSaved: isSaved); dismiss() },
+            onSaveFork: { fork in
+                if isSaved { store.addForkedSavedRecipe(fork) } else { store.addForkedRecipe(fork) }
+            },
+            onLog: { current, mealType in
+                logRecipe(current, mealType: mealType, isSaved: isSaved)
+                dismiss()
+            },
+            onShare: { current in recipeShareDraft = shareDraft(for: current, isSaved: isSaved) },
+            onCookLog: { current, mealType, day in
+                if isSaved {
+                    store.logSavedRecipe(current, mealType: mealType, date: day)
+                } else {
+                    store.logRecipe(current, mealType: mealType, date: day)
+                }
+            }
+        )
+    }
+    #endif
+
+    /// Routes an edit request back to ``FoodView``'s binding for that recipe's store half.
+    private func beginEditing(_ recipe: RecipeDefinition, isSaved: Bool) {
+        if isSaved { editingSavedRecipe = recipe } else { editingRecipe = recipe }
+    }
+
+    /// Logs a recipe through the store method that matches its half (manual vs saved/web).
+    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType, isSaved: Bool) {
+        if isSaved {
+            store.logSavedRecipe(recipe, mealType: mealType)
+        } else {
+            store.logRecipe(recipe, mealType: mealType)
+        }
+    }
+
+    /// The proximity share draft for a recipe, using its half's share-text builder.
+    private func shareDraft(for recipe: RecipeDefinition, isSaved: Bool) -> ProximityRecipeShareDraft {
+        ProximityRecipeShareDraft(
+            title: recipe.name,
+            shareText: isSaved ? store.savedRecipeShareText(for: recipe) : store.recipeShareText(for: recipe),
+            payload: store.proximityRecipeSharePayload(for: recipe)
+        )
+    }
+
+    private func importedProductsCard(_ products: [FoodItem]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Imported products")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+            FernletCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(products.enumerated()), id: \.element.id) { index, product in
+                        if index > 0 { FernletRowDivider() }
+                        HStack(spacing: 12) {
+                            WebImportedFoodRow(foodItem: product)
+                            RecipeMealTypeMenu { mealType in
+                                store.logWebImportedFoodProduct(product, mealType: mealType)
+                                dismiss()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptySearchState: some View {
+        EmptyState(text: "No recipes or products match \u{201C}\(searchText)\u{201D}.")
+            .frame(maxWidth: .infinity)
     }
 
     private var filteredManualRecipes: [RecipeDefinition] {

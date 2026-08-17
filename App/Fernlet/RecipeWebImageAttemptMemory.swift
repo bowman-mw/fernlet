@@ -19,6 +19,12 @@ enum RecipeWebImageAttemptMemory {
     /// The single defaults key: an array of recipe-id UUID strings whose attempt is consumed here.
     static let defaultsKey = "fernlet.recipeWebImageAttempts.v1"
 
+    /// Power-of-10 R3 growth cap: the newest N attempts are remembered, oldest evicted first.
+    /// The list is otherwise pruned only by local deletion and the wipe paths, so a recipe deleted
+    /// by a sync from another device would leave its id here forever. Evicting an ancient entry
+    /// costs at most one re-armed image download for a recipe last seen hundreds of imports ago.
+    static let maxRememberedAttempts = 500
+
     /// Whether this device has already spent its one automatic download attempt for `recipeID`.
     static func hasAttempted(_ recipeID: UUID, defaults: UserDefaults = .standard) -> Bool {
         storedIDs(defaults: defaults).contains(recipeID.uuidString)
@@ -28,6 +34,10 @@ enum RecipeWebImageAttemptMemory {
     static func recordAttempt(_ recipeID: UUID, defaults: UserDefaults = .standard) {
         var ids = storedIDs(defaults: defaults)
         guard !ids.contains(recipeID.uuidString) else { return }
+        // R3: bounded growth at the point the entry is added — oldest-out, never append-only.
+        if ids.count >= maxRememberedAttempts {
+            ids.removeFirst(ids.count - maxRememberedAttempts + 1)
+        }
         ids.append(recipeID.uuidString)
         defaults.set(ids, forKey: defaultsKey)
     }

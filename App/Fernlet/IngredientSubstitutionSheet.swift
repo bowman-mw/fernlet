@@ -88,8 +88,13 @@ struct IngredientSubstitutionSheet: View {
             guard didSeed else { return }
             let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { searchResults = []; return }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !Task.isCancelled else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(200))
+            } catch {
+                // Superseded by a newer keystroke (or the sheet went away): the replacement task
+                // owns the query from here, so this one must not write stale results.
+                return
+            }
             let catalog = store.foodCatalog
             let results = await Task.detached(priority: .userInitiated) {
                 catalog.candidates(for: trimmed, limit: 12)
@@ -282,7 +287,7 @@ struct IngredientSubstitutionSheet: View {
     ///
     /// Built by `selectSubstitute` as a pure value transform — nothing is persisted until the
     /// explicit "Save as new recipe" tap hands `fork` to `onSaveFork`.
-    struct PendingFork {
+    private struct PendingFork {
         let substitute: FoodItem
         let newIngredient: RecipeIngredient
         let fork: RecipeDefinition
