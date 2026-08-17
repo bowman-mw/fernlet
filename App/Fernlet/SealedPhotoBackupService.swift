@@ -149,11 +149,19 @@ enum SealedPhotoCrypto {
         aad += Data(corpus.rawValue.utf8) + Data([0])
         aad += signingPublicKey + Data([0])
         aad += Data(slot.recordNameSuffix.utf8) + Data([0])
-        aad += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        aad += photoBigEndianBytes(UInt64(bitPattern: generation))
         let seconds = Int64(updatedAt.timeIntervalSince1970.rounded(.down))
-        aad += withUnsafeBytes(of: UInt64(bitPattern: seconds).bigEndian) { Data($0) }
+        aad += photoBigEndianBytes(UInt64(bitPattern: seconds))
         return aad
     }
+}
+
+/// The eight big-endian bytes of `value`, without an unsafe raw-buffer copy (Power-of-10 R9).
+///
+/// Byte-identical to `withUnsafeBytes(of: value.bigEndian) { Data($0) }`; the v3 AAD layout it feeds
+/// is at-rest format, pinned byte-for-byte by `SealedBackupFormatPinTests`.
+private func photoBigEndianBytes(_ value: UInt64) -> Data {
+    Data((0..<8).map { UInt8(truncatingIfNeeded: value >> (8 * (7 - $0))) })
 }
 
 /// What one own-photo upload pass actually did, so the caller can audit it instead of logging a
@@ -303,11 +311,85 @@ final class SealedPhotoBackupService {
             (existing?.manifest.entries ?? []).map { ($0.id, $0.contentHash) },
             uniquingKeysWith: { first, _ in first }
         )
-        let presentIDs = (try? await cloudDataService.existingSealedPhotoIDs(corpus: corpus)) ?? []
+        // A transport failure on the id listing is NOT the same fact as "no records present", and
+        // reading it as the empty set is a data-loss path: every id below would look absent, so the
+        // whole corpus would be re-uploaded AND — worse — a photo whose LOCAL bytes cannot be read
+        // right now would lose its `presentIDs.contains(id)` keep and drop out of the manifest,
+        // breaking the "an unreadable local file must never delete a good cloud copy" invariant. So
+        // it throws, exactly like the manifest read four lines up: the caller
+        // (`OwnPhotoBackupCoordinator.reconcile`) turns it into a visible, retryable upload-failed
+        // status, and refusing to write preserves the committed manifest untouched.
+        let presentIDs = try await cloudDataService.existingSealedPhotoIDs(corpus: corpus)
 
         let generation = generationStore.mintNextPhoto(for: corpus)
         let keySalt = Self.mintKeySalt()
 
+        var entries = try await sealChangedPhotos(
+            ids: ids,
+            existingHashes: existingHashes,
+            presentIDs: presentIDs,
+            verifyingContentHashes: verifyingContentHashes,
+            corpus: corpus,
+            generation: generation,
+            keySalt: keySalt,
+            photo: photo,
+            summary: &summary
+        )
+        let committed = carryForwardCommittedEntries(
+            &entries,
+            from: existing,
+            excluding: prunableIDs
+        )
+
+        try await writeManifest(
+            // Same union reasoning for the sidecar: a caller that has none to offer must not erase
+            // the committed one. (Today only the progress corpus carries one, and its coordinator
+            // skips the whole upload rather than passing nil for an unreadable index — this is the
+            // belt to that braces.)
+            SealedPhotoManifest(
+                corpus: corpus,
+                entries: entries,
+                sidecar: sidecar ?? existing?.manifest.sidecar
+            ),
+            generation: generation,
+            keySalt: keySalt
+        )
+
+        summary.pruned = await pruneOrphans(
+            presentIDs: presentIDs,
+            committed: committed,
+            prunableIDs: prunableIDs,
+            corpus: corpus
+        )
+        FernletAuditLog.log("sealedPhoto.reconciled", context: [
+            "corpus": corpus.rawValue,
+            "uploaded": String(summary.uploaded),
+            "skipped": String(summary.skipped),
+            "unreadable": String(summary.unreadable),
+            "pruned": String(summary.pruned),
+            "generation": String(generation)
+        ])
+        return summary
+    }
+
+    /// Seals and uploads every id whose bytes are new or changed, returning this device's manifest
+    /// entries (one per id it can vouch for) and tallying the pass into `summary`.
+    ///
+    /// The per-id ladder, in order: an already-committed id with a present record is skipped without
+    /// reading its bytes when this pass is not verifying hashes; an id whose local bytes cannot be
+    /// read KEEPS its existing entry (an unreadable local file must never delete a good cloud copy);
+    /// an unchanged hash is skipped; anything else is sealed and uploaded.
+    private func sealChangedPhotos(
+        ids: [UUID],
+        existingHashes: [UUID: Data],
+        presentIDs: Set<UUID>,
+        verifyingContentHashes: Bool,
+        corpus: SealedPhotoCorpus,
+        generation: Int64,
+        keySalt: Data,
+        photo: (UUID) throws -> Data?,
+        summary: inout SealedPhotoUploadSummary
+    ) async throws -> [SealedPhotoManifest.Entry] {
         var entries: [SealedPhotoManifest.Entry] = []
         for id in ids {
             // Cheap path first: this id is already committed AND its record is really there, and
@@ -337,49 +419,54 @@ final class SealedPhotoBackupService {
             entries.append(SealedPhotoManifest.Entry(id: id, contentHash: hash))
             summary.uploaded += 1
         }
+        return entries
+    }
 
-        // UNION: keep every committed id this device does not have, unless this device is the one
-        // that uploaded it and has since deleted it. See rule 4 above — own photos do not sync
-        // between devices, so an unknown id is another phone's, not a deletion.
+    /// UNION step: appends every committed id this device does not have — unless this device is the
+    /// one that uploaded it and has since deleted it (`prunableIDs`) — and returns the id set the
+    /// manifest about to be written commits to.
+    ///
+    /// See rule 4 on ``reconcile(corpus:ids:sidecar:verifyingContentHashes:prunableIDs:photo:)``:
+    /// own photos do not sync between devices, so an unknown id is another phone's, not a deletion.
+    private func carryForwardCommittedEntries(
+        _ entries: inout [SealedPhotoManifest.Entry],
+        from existing: (manifest: SealedPhotoManifest, generation: Int64)?,
+        excluding prunableIDs: Set<UUID>
+    ) -> Set<UUID> {
         var committed = Set(entries.map(\.id))
         for entry in existing?.manifest.entries ?? [] where !committed.contains(entry.id) {
             guard !prunableIDs.contains(entry.id) else { continue }
             entries.append(entry)
             committed.insert(entry.id)
         }
+        return committed
+    }
 
-        try await writeManifest(
-            // Same union reasoning for the sidecar: a caller that has none to offer must not erase
-            // the committed one. (Today only the progress corpus carries one, and its coordinator
-            // skips the whole upload rather than passing nil for an unreadable index — this is the
-            // belt to that braces.)
-            SealedPhotoManifest(
-                corpus: corpus,
-                entries: entries,
-                sidecar: sidecar ?? existing?.manifest.sidecar
-            ),
-            generation: generation,
-            keySalt: keySalt
-        )
-
+    /// Deletes the records the freshly committed manifest no longer names, and returns how many went.
+    ///
+    /// Best-effort: an orphan that survives is ignored on restore (the manifest is the authority on
+    /// membership), so a failed delete costs quota, never correctness — but it is audited rather
+    /// than dropped. Scoped to `prunableIDs` for the same reason the union exists: a body whose
+    /// owner this device cannot vouch for is left alone.
+    private func pruneOrphans(
+        presentIDs: Set<UUID>,
+        committed: Set<UUID>,
+        prunableIDs: Set<UUID>,
+        corpus: SealedPhotoCorpus
+    ) async -> Int {
+        var pruned = 0
         for orphan in presentIDs.subtracting(committed) where prunableIDs.contains(orphan) {
-            // Best-effort: an orphan that survives is ignored on restore (the manifest is the
-            // authority on membership), so a failed delete costs quota, never correctness. Scoped to
-            // `prunableIDs` for the same reason the union above exists — a body whose owner this
-            // device cannot vouch for is left alone.
-            if (try? await cloudDataService.deleteSealedPhoto(corpus: corpus, id: orphan)) != nil {
-                summary.pruned += 1
+            do {
+                try await cloudDataService.deleteSealedPhoto(corpus: corpus, id: orphan)
+                pruned += 1
+            } catch {
+                FernletAuditLog.log("sealedPhoto.pruneFailed", context: [
+                    "corpus": corpus.rawValue,
+                    "error": error.localizedDescription
+                ])
             }
         }
-        FernletAuditLog.log("sealedPhoto.reconciled", context: [
-            "corpus": corpus.rawValue,
-            "uploaded": String(summary.uploaded),
-            "skipped": String(summary.skipped),
-            "unreadable": String(summary.unreadable),
-            "pruned": String(summary.pruned),
-            "generation": String(generation)
-        ])
-        return summary
+        return pruned
     }
 
     /// The **incremental add**: uploads one new photo record, then rewrites the (small) manifest.
@@ -444,7 +531,18 @@ final class SealedPhotoBackupService {
             generation: generation,
             keySalt: Self.mintKeySalt()
         )
-        try? await cloudDataService.deleteSealedPhoto(corpus: corpus, id: id)
+        do {
+            try await cloudDataService.deleteSealedPhoto(corpus: corpus, id: id)
+        } catch {
+            // Benign but never silent: the manifest above is the membership authority, so the photo
+            // is already logically removed. The surviving record is an orphan — ignored on restore
+            // and swept by the next `reconcile` prune — but the failure is named on the audit trail
+            // so `sealedPhoto.deleted` is not the only line describing this pass.
+            FernletAuditLog.log("sealedPhoto.orphanDeleteFailed", context: [
+                "corpus": corpus.rawValue,
+                "error": error.localizedDescription
+            ])
+        }
         FernletAuditLog.log("sealedPhoto.deleted", context: [
             "corpus": corpus.rawValue, "generation": String(generation)
         ])
@@ -585,16 +683,26 @@ final class SealedPhotoBackupService {
         Data(SHA256.hash(data: plaintext))
     }
 
-    /// Mints one write's HKDF salt: 32 CSPRNG bytes. Never empty — an empty salt is not a valid
-    /// spelling of this record type (``SealedPhotoCrypto/seal`` refuses it).
+    /// Mints one write's HKDF salt: 32 CSPRNG bytes from `SystemRandomNumberGenerator`
+    /// (`UInt8.random`), the platform CSPRNG — no unsafe buffer access (Power-of-10 R9). Never empty
+    /// — an empty salt is not a valid spelling of this record type (``SealedPhotoCrypto/seal``
+    /// refuses it).
     private static func mintKeySalt() -> Data {
-        SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+        let salt = Data((0..<Self.keySaltByteCount).map { _ in UInt8.random(in: .min ... .max) })
+        assert(salt.count == Self.keySaltByteCount)
+        return salt
     }
+
+    /// The per-write HKDF salt width; ``SealedPhotoCrypto/seal`` guards on exactly this count.
+    private static let keySaltByteCount = 32
 }
 
 private extension AES.GCM.Nonce {
     /// The nonce's raw bytes, for storage in a ``SealedPhotoRecord``.
+    ///
+    /// `AES.GCM.Nonce` is a `Sequence` of `UInt8`, so `Data.init(_:)` copies it with no unsafe
+    /// buffer access (Power-of-10 R9).
     var data: Data {
-        withUnsafeBytes { Data($0) }
+        Data(self)
     }
 }

@@ -151,11 +151,15 @@ nonisolated enum DuressCeremonyQR {
                   let signature = data("g"), signature.count == signatureByteCount else { return nil }
             return .response(challengeNonce: challengeNonce, signature: signature)
         case "duress-request":
+            // The carrier states the frame maximum too, so an oversize payload is refused before it
+            // reaches the coordinator's own `maxSealedHopBytes` guard (R3/R5).
             guard let key = data("k"), key.count == publicKeyByteCount,
-                  let sealed = data("d"), !sealed.isEmpty else { return nil }
+                  let sealed = data("d"), !sealed.isEmpty,
+                  sealed.count <= DuressRecoveryCoordinator.maxSealedHopBytes else { return nil }
             return .request(senderKeyAgreementPublicKey: key, sealed: sealed)
         case "duress-reply":
-            guard let sealed = data("d"), !sealed.isEmpty else { return nil }
+            guard let sealed = data("d"), !sealed.isEmpty,
+                  sealed.count <= DuressRecoveryCoordinator.maxSealedHopBytes else { return nil }
             return .reply(sealed: sealed)
         default:
             return nil
@@ -494,6 +498,10 @@ private struct DuressCeremonyPrimaryFlow: View {
     @State private var newKind: FernletLockCredentialKind = .pin6
     @State private var showScanner = false
     @State private var errorMessage: String?
+    /// True while an enrolment/recovery await is in flight — the one-at-a-time guard for Continue
+    /// (R3: at most one in-flight task per action; a duplicate tap would spend an already-consumed
+    /// round and land `.noRoundInProgress` on top of a step that had just succeeded).
+    @State private var isSubmitting = false
 
     var body: some View {
         ScrollView {
@@ -624,6 +632,7 @@ private struct DuressCeremonyPrimaryFlow: View {
                 .sheetTextInput()
                 .accessibilityIdentifier(identifier)
             CeremonyButton(title: "Continue", identifier: identifier + ".continue") { submit() }
+                .disabled(isSubmitting)
         }
     }
 
@@ -700,6 +709,8 @@ private struct DuressCeremonyPrimaryFlow: View {
 
     private func completeEnrollment() {
         guard let peerSigningPublicKey, let response = pendingResponse else { return }
+        guard !isSubmitting else { return }
+        isSubmitting = true
         let entered = passcode
         // Captured BEFORE the call: `enrollRecoveryCustodian` returns silently on a DURESS match —
         // it presents the decoy and seals nothing — so "no error was thrown" is not proof that an
@@ -707,6 +718,7 @@ private struct DuressCeremonyPrimaryFlow: View {
         // enrolled (where `hasRecoveryCustodian` would have been true either way).
         let blobBefore = lockService.custodianRecoveryBlob
         Task { @MainActor in
+            defer { isSubmitting = false }
             do {
                 try await coordinator.completeCustodianEnrollment(
                     response: response,
@@ -730,8 +742,11 @@ private struct DuressCeremonyPrimaryFlow: View {
 
     private func completeRecovery() {
         guard let sealedReply else { return }
+        guard !isSubmitting else { return }
+        isSubmitting = true
         let credential = FernletLockCredential(kind: newKind, rawValue: passcode)
         Task { @MainActor in
+            defer { isSubmitting = false }
             do {
                 // `.appLockSettings`, deliberately, and NOT `.privateHub`: the recovery runs from a
                 // settings screen, and that scope never receives the content key. The rebuilt lock

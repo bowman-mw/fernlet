@@ -359,7 +359,9 @@ final class SealedBackupCoordinator {
     ///
     /// The injected repository/store are for tests only: they let the EXPORT half be driven against an
     /// isolated sealed store, which is the half that decides what actually reaches iCloud.
-    @discardableResult
+    ///
+    /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7): this is a success/failure
+    ///   signal, and every caller has to decide what a `false` means for it.
     func setSealedBackupEnabled(
         _ enabled: Bool,
         payloadType: SealedBackupPayloadType,
@@ -445,45 +447,54 @@ final class SealedBackupCoordinator {
     /// with a single empty chunk — destroying the history the deferral exists to preserve. When the
     /// guard skips, the deferral flag is deliberately LEFT SET so it self-heals on the launch after a
     /// real restore.
-    @discardableResult
+    /// - Note: returns `Void` rather than a discardable `Bool` (Power-of-10 R7). The old Bool
+    ///   conflated "nothing was outstanding" with "the re-upload ran and FAILED", and every caller
+    ///   dropped it; the recovery for a real failure lives inside `setSealedBackupEnabled` (the
+    ///   deferral flag stays set and `sealedBackup.reconcileFailed` is audited), so there is nothing
+    ///   for a caller to decide.
     func retryDeferredReuploadIfNeeded(
         payloadType: SealedBackupPayloadType,
         journalRepository: JournalNarrativeRepository? = nil,
         intimacyStore: IntimacyLogStore? = nil
-    ) async -> Bool {
+    ) async {
         let prefs = StoragePreferencesStore.currentPreferences()
-        guard prefs.iCloudSyncEnabled else { return false }
+        guard prefs.iCloudSyncEnabled else { return }
         switch payloadType {
         case .sensitiveNotes:
             // No deferral exists for the whole-store overwrite payload: it needs neither a content key
             // nor a visible surface, so its reconcile can never be postponed.
-            return false
+            return
         case .periodData:
             guard prefs.sealedBackupPeriodEnabled,
                   prefs.sealedBackupPeriodReuploadDeferred,
                   host.isPeriodTrackingVisible,
-                  periodNarrativeCount() > 0 else { return false }
+                  periodNarrativeCount() > 0 else { return }
         case .journalNarratives:
             guard prefs.sealedBackupJournalEnabled,
                   prefs.sealedBackupJournalReuploadDeferred,
-                  mayReuploadFromLocalStore(.journalNarratives, journalRepository: journalRepository) else { return false }
+                  mayReuploadFromLocalStore(.journalNarratives, journalRepository: journalRepository) else { return }
         case .intimacyLogs:
             guard prefs.sealedBackupIntimacyEnabled,
                   prefs.sealedBackupIntimacyReuploadDeferred,
-                  mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: intimacyStore) else { return false }
+                  mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: intimacyStore) else { return }
         }
-        return await setSealedBackupEnabled(
+        if await !setSealedBackupEnabled(
             true,
             payloadType: payloadType,
             journalRepository: journalRepository,
             intimacyStore: intimacyStore
-        )
+        ) {
+            // The deferral flag is left set by the failing path, so the next launch/unlock retries it;
+            // name the failed discharge so the audit trail does not imply it was cleared.
+            FernletAuditLog.log("sealedBackup.deferredReuploadRetryFailed", context: [
+                "payload": payloadType.rawValue
+            ])
+        }
     }
 
     /// The period-specific spelling of ``retryDeferredReuploadIfNeeded(payloadType:journalRepository:intimacyStore:)``,
     /// kept because the lock-state observer and the `FernletStore` wrapper name it directly.
-    @discardableResult
-    func retryDeferredPeriodReuploadIfNeeded() async -> Bool {
+    func retryDeferredPeriodReuploadIfNeeded() async {
         await retryDeferredReuploadIfNeeded(payloadType: .periodData)
     }
 
@@ -745,7 +756,9 @@ final class SealedBackupCoordinator {
     /// authoritative, then re-upload this device's enabled backups under it. The caller (UI) MUST warn
     /// the user first that device-only backups may need re-uploading. Returns whether a synced key was
     /// adopted; the conflict status is cleared on success.
-    @discardableResult
+    ///
+    /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7). A `false` means the conflict
+    ///   banner the user just acted on is still there, and only the caller can say so.
     func adoptSyncedEscrowAndReupload() async -> Bool {
         let identity = identityFactory?() ?? IdentityService()
         do { try identity.ensureProvisioned() } catch {
@@ -761,7 +774,12 @@ final class SealedBackupCoordinator {
         // Re-seal + re-upload whatever the user has enabled so the cloud copy matches the adopted key.
         let prefs = StoragePreferencesStore.currentPreferences()
         if prefs.sealedBackupSensitiveNotesEnabled {
-            _ = await setSealedBackupEnabled(true, payloadType: .sensitiveNotes)
+            // This payload has no deferral flag (it needs no content key and no visible surface), so
+            // the audit line IS the recovery: a failed re-seal leaves the cloud chunk sealed to the
+            // key this adopt just replaced, and the next restore surfaces it as `.notRecognized`.
+            if await !setSealedBackupEnabled(true, payloadType: .sensitiveNotes) {
+                FernletAuditLog.log("sealedBackup.escrowAdoptSensitiveNotesReuploadFailed")
+            }
         }
         if prefs.sealedBackupPeriodEnabled {
             if host.isPeriodTrackingVisible {
@@ -797,7 +815,12 @@ final class SealedBackupCoordinator {
         // TERMINALLY with `keyAgreementIdentityMismatch` → `.notRecognized`.
         if prefs.sealedBackupJournalEnabled {
             if mayReuploadFromLocalStore(.journalNarratives) {
-                _ = await setSealedBackupEnabled(true, payloadType: .journalNarratives)
+                // Mirror the period branch above: a FAILED re-seal leaves the cloud chunk sealed to
+                // the key we just replaced, so record the deferral instead of dropping the failure —
+                // the banner surfaces it and the launch/unlock retry discharges it.
+                if await !setSealedBackupEnabled(true, payloadType: .journalNarratives) {
+                    host.recordSealedBackupReuploadDeferred(true, payloadType: .journalNarratives)
+                }
             } else {
                 host.recordSealedBackupReuploadDeferred(true, payloadType: .journalNarratives)
                 FernletAuditLog.log("sealedBackup.escrowAdoptJournalSkippedEmptyStore")
@@ -805,7 +828,11 @@ final class SealedBackupCoordinator {
         }
         if prefs.sealedBackupIntimacyEnabled {
             if mayReuploadFromLocalStore(.intimacyLogs) {
-                _ = await setSealedBackupEnabled(true, payloadType: .intimacyLogs)
+                // Same as the journal branch: a failed re-seal is recorded as still-deferred rather
+                // than silently claimed done.
+                if await !setSealedBackupEnabled(true, payloadType: .intimacyLogs) {
+                    host.recordSealedBackupReuploadDeferred(true, payloadType: .intimacyLogs)
+                }
             } else {
                 host.recordSealedBackupReuploadDeferred(true, payloadType: .intimacyLogs)
                 FernletAuditLog.log("sealedBackup.escrowAdoptIntimacySkipped", context: [
@@ -955,7 +982,9 @@ final class SealedBackupCoordinator {
     /// Bool-returning restore kept for the restore tests and the `FernletStore` wrapper. Does NOT record
     /// a UI status (the launch/retry path uses `restoreSealedBackupOutcome` for that); returns whether
     /// records were actually written.
-    @discardableResult
+    ///
+    /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7). This wrapper records nothing
+    ///   on the host, so the return value is the ONLY place its outcome exists.
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
         await performRestore(payloadType: payloadType).didRestore
     }

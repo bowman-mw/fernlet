@@ -28,12 +28,31 @@ import FernletDomainModel
 @MainActor
 @Observable
 final class ConnectionInspector: ProximityInspectorRecording {
+    // R3 (bounded growth): every peer-driven collection here has a NAMED cap, applied where the
+    // input enters — the live log trims after each append, ranging samples are additionally
+    // subsampled 1-in-3, and history is both count-capped and time-purged.
+
+    /// Rolling cap on the live log's timestamped events.
+    private static let maxLiveEvents = 250
+    /// Rolling cap on the live log's envelope records.
+    private static let maxLiveEnvelopes = 250
+    /// Rolling cap on the live log's error records.
+    private static let maxLiveErrors = 100
+    /// Rolling cap on retained UWB distance samples for one session.
+    private static let maxRangingSamples = 600
+    /// How many finished sessions history keeps (newest first).
+    private static let maxHistoricalSessions = 50
+    /// How long a finished session survives in history before ``purgeOld()`` drops it.
+    private static let historyRetention: TimeInterval = 60 * 24 * 60 * 60
+
     /// The log of the session currently being recorded; nil outside a session (or when disabled).
     private(set) var liveLog: ConnectionSessionLog?
     /// Finished session logs, newest first — capped at 50 and purged past 60 days.
     private(set) var historicalLogs: [ConnectionSessionLog] = []
 
-    @ObservationIgnored weak var store: FernletStore?
+    /// The host store — write-only from the outside via ``attachStore(_:)``, so nothing can swap it
+    /// mid-session (R6: smallest scope that still lets the launch path late-bind it).
+    @ObservationIgnored private(set) weak var store: FernletStore?
     @ObservationIgnored private var sampleSubsamplingCounter = 0
     @ObservationIgnored private let sampleSubsamplingStride = 3
     @ObservationIgnored private let now: () -> Date
@@ -83,7 +102,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         guard sampleSubsamplingCounter % sampleSubsamplingStride == 0 else { return }
         let meters = sample.meters
         log.ranging.samples.append(sample)
-        log.ranging.samples = Array(log.ranging.samples.suffix(600))
+        log.ranging.samples = Array(log.ranging.samples.suffix(Self.maxRangingSamples))
         if let currentMin = log.ranging.minDistanceMeters {
             log.ranging.minDistanceMeters = min(currentMin, meters)
         } else {
@@ -149,7 +168,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         liveLog = nil
         guard store?.settings.connectionInspectorMode != .disabled else { return }
         historicalLogs.insert(log, at: 0)
-        historicalLogs = Array(historicalLogs.sorted { $0.startedAt > $1.startedAt }.prefix(50))
+        historicalLogs = Array(historicalLogs.sorted { $0.startedAt > $1.startedAt }.prefix(Self.maxHistoricalSessions))
         persistHistoricalLogs()
     }
 
@@ -177,7 +196,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
 
     /// Drops history older than 60 days; persists only when something was actually removed.
     func purgeOld() {
-        let cutoff = now().addingTimeInterval(-60 * 24 * 60 * 60)
+        let cutoff = now().addingTimeInterval(-Self.historyRetention)
         let filtered = historicalLogs.filter { $0.startedAt >= cutoff }
         guard filtered != historicalLogs else { return }
         historicalLogs = filtered
@@ -209,9 +228,9 @@ final class ConnectionInspector: ProximityInspectorRecording {
 
     private func trimLiveLog() {
         guard var log = liveLog else { return }
-        log.events = Array(log.events.suffix(250))
-        log.envelopes = Array(log.envelopes.suffix(250))
-        log.errors = Array(log.errors.suffix(100))
+        log.events = Array(log.events.suffix(Self.maxLiveEvents))
+        log.envelopes = Array(log.envelopes.suffix(Self.maxLiveEnvelopes))
+        log.errors = Array(log.errors.suffix(Self.maxLiveErrors))
         liveLog = log
     }
 

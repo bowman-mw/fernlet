@@ -9,6 +9,7 @@
 import SwiftUI
 import LinkPresentation
 import UIKit
+import FernletFoundation
 
 // `nonisolated` keeps the UIActivityItemSource conformance legal if the target ever adopts
 // default MainActor isolation; if your build setting rejects the keyword, just delete it.
@@ -24,6 +25,31 @@ nonisolated struct LinkMetadataTestCase: Identifiable, Sendable {
     let url: URL
     let customTitle: String?    // nil = baseline share with no custom metadata
     let attachImage: Bool
+
+    /// Builds a matrix row from its URL **string**, returning nil when the string is not a URL.
+    ///
+    /// Failable rather than force-unwrapping (Power-of-10 R5): row E interpolates the ~2 KB
+    /// base64url fragment payload, so its URL is not a compile-time literal, and a row that cannot
+    /// be built drops out of the matrix with an audit line instead of trapping the app.
+    init?(
+        id: String,
+        name: String,
+        question: String,
+        urlString: String,
+        customTitle: String?,
+        attachImage: Bool
+    ) {
+        guard let url = URL(string: urlString) else {
+            FernletAuditLog.log("d11.linkMetadata.invalidTestURL", context: ["case": id])
+            return nil
+        }
+        self.id = id
+        self.name = name
+        self.question = question
+        self.url = url
+        self.customTitle = customTitle
+        self.attachImage = attachImage
+    }
 }
 
 /// The fixed A–G test matrix for the D11 prototype, from a no-metadata baseline through custom
@@ -31,11 +57,15 @@ nonisolated struct LinkMetadataTestCase: Identifiable, Sendable {
 ///
 /// Pure data — the results table these cases feed lives in Docs/D11-LinkMetadata-Prototype.md.
 nonisolated enum LinkMetadataTestMatrix {
+    /// The payload's target size — the loop below is bounded by it (each pass adds ≥ 31 bytes, so at
+    /// most 67 iterations).
+    static let fragmentPayloadBytes = 2_048
+
     /// ~2 KB of deterministic base64url noise standing in for a sealed inline plan payload.
     static let fragmentPayload: String = {
         var s = ""
         var i = 0
-        while s.utf8.count < 2_048 {
+        while s.utf8.count < fragmentPayloadBytes {
             s += "fernlet-d11-prototype-payload-\(i)-"
             i += 1
         }
@@ -45,43 +75,45 @@ nonisolated enum LinkMetadataTestMatrix {
             .replacingOccurrences(of: "=", with: "")
     }()
 
+    /// The matrix rows that could be built. `compactMap` rather than force-unwrapped URLs
+    /// (Power-of-10 R5) — a malformed row is dropped and audited, never a trap.
     static let all: [LinkMetadataTestCase] = [
         LinkMetadataTestCase(
             id: "A", name: "Baseline fetch",
             question: "No custom metadata — bubble should show the page's own title (“Example Domain”). Confirms the fetch path.",
-            url: URL(string: "https://example.com/")!,
+            urlString: "https://example.com/",
             customTitle: nil, attachImage: false),
         LinkMetadataTestCase(
             id: "B", name: "Custom title vs plain page",
             question: "THE core test: does the sent bubble show “7/19–7/26 Workouts” or “Example Domain”?",
-            url: URL(string: "https://example.com/")!,
+            urlString: "https://example.com/",
             customTitle: "7/19–7/26 Workouts", attachImage: false),
         LinkMetadataTestCase(
             id: "C", name: "Custom title + image",
             question: "Does custom card artwork survive into the bubble alongside the title?",
-            url: URL(string: "https://example.com/")!,
+            urlString: "https://example.com/",
             customTitle: "7/19–7/26 Workouts", attachImage: true),
         LinkMetadataTestCase(
             id: "D", name: "Custom vs rich page",
             question: "Page with full OG tags — does the fetched rich preview beat the custom metadata? (Our real /plan pages will have OG tags.)",
-            url: URL(string: "https://www.apple.com/")!,
+            urlString: "https://www.apple.com/",
             customTitle: "7/19–7/26 Workouts", attachImage: true),
         LinkMetadataTestCase(
             id: "E", name: "Fragment payload",
             question: "Realistic ~2 KB #fragment — does the bubble stay clean, and does the FULL fragment survive to the tap (check Safari's address bar on the recipient)?",
-            url: URL(string: "https://example.com/plan#v1.\(fragmentPayload)")!,
+            urlString: "https://example.com/plan#v1.\(fragmentPayload)",
             customTitle: "7/19–7/26 Workouts", attachImage: false),
         LinkMetadataTestCase(
             id: "F", name: "404 page",
             question: "Fetch finds no usable metadata — does the custom title still render?",
-            url: URL(string: "https://example.com/plan/fernlet-d11-does-not-exist")!,
+            urlString: "https://example.com/plan/fernlet-d11-does-not-exist",
             customTitle: "7/19–7/26 Workouts", attachImage: false),
         LinkMetadataTestCase(
             id: "G", name: "Unfetchable domain",
             question: "“.invalid” never resolves (RFC 2606) — does a styled bubble with the custom title send at all?",
-            url: URL(string: "https://fernlet-prototype.invalid/plan#v1.abc123")!,
+            urlString: "https://fernlet-prototype.invalid/plan#v1.abc123",
             customTitle: "7/19–7/26 Workouts", attachImage: false),
-    ]
+    ].compactMap { $0 }
 }
 
 /// The `UIActivityItemSource` that shares a test case's URL while supplying sender-side

@@ -35,22 +35,7 @@ struct ProximityRecipeShareReviewSheet: View {
                             subtitleFirst: false
                         )
 
-                        FernletCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label(recipeKindLabel, systemImage: recipeKindIcon)
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.moss)
-                                HStack(spacing: 12) {
-                                    NutritionPill(title: "Servings", value: "\(share.payload.recipe.servings)")
-                                    NutritionPill(title: "Ingredients", value: "\(share.payload.recipe.ingredientCount)")
-                                }
-                                if let macrosText {
-                                    Text(macrosText)
-                                        .font(.fernlet(.stat))
-                                        .foregroundStyle(Color.slate)
-                                }
-                            }
-                        }
+                        summaryCard
 
                         if let duplicateWarning {
                             Text(duplicateWarning)
@@ -59,25 +44,9 @@ struct ProximityRecipeShareReviewSheet: View {
                                 .fernletWrappingText()
                         }
 
-                        if let notesText, !notesText.isEmpty {
-                            SheetField("Notes") {
-                                Text(notesText)
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                    .fernletWrappingText()
-                            }
-                        }
+                        notesField
 
-                        SheetField("Ingredients") {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(Array(ingredientLines.enumerated()), id: \.offset) { _, line in
-                                    Text("- \(line)")
-                                        .font(.fernlet(.body))
-                                        .foregroundStyle(Color.bark)
-                                        .fernletWrappingText()
-                                }
-                            }
-                        }
+                        ingredientsField
 
                         if let notice {
                             Text(notice)
@@ -101,6 +70,53 @@ struct ProximityRecipeShareReviewSheet: View {
                         manager.dismissRecipeShare(share)
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+
+    /// Kind, servings, ingredient count and macros — the at-a-glance card above the details.
+    private var summaryCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(recipeKindLabel, systemImage: recipeKindIcon)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                HStack(spacing: 12) {
+                    NutritionPill(title: "Servings", value: "\(share.payload.recipe.servings)")
+                    NutritionPill(title: "Ingredients", value: "\(share.payload.recipe.ingredientCount)")
+                }
+                if let macrosText {
+                    Text(macrosText)
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(Color.slate)
+                }
+            }
+        }
+    }
+
+    /// The sender's notes, when the payload carries any.
+    @ViewBuilder
+    private var notesField: some View {
+        if let notesText, !notesText.isEmpty {
+            SheetField("Notes") {
+                Text(notesText)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+            }
+        }
+    }
+
+    /// The ingredient list exactly as shared.
+    private var ingredientsField: some View {
+        SheetField("Ingredients") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(ingredientLines.enumerated()), id: \.offset) { _, line in
+                    Text("- \(line)")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
                 }
             }
         }

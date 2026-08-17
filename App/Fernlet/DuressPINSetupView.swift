@@ -240,32 +240,7 @@ struct DuressPINSetupView: View {
     @State private var didSeedSelection = false
 
     var body: some View {
-        let availability = DuressSetupAvailability(lockService: lockService)
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    introCard
-                    statusCard(availability)
-                    if let errorMessage { errorBanner(errorMessage) }
-                    responseCard(availability)
-                    recoveryDeviceCard(availability)
-                    commitCard(availability)
-                    if availability.hasDuressConfigured { removeCard }
-                }
-                .padding(20)
-                .padding(.bottom, 20)
-            }
-            .scrollContentBackground(.hidden)
-            .background(Color.parchment)
-            .navigationTitle("Duress code")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Color.slate)
-                }
-            }
-        }
+        content
         .tint(Color.moss)
         .onAppear {
             guard !didSeedSelection else { return }
@@ -306,18 +281,7 @@ struct DuressPINSetupView: View {
             isPresented: $showRemoveConfirm,
             titleVisibility: .visible
         ) {
-            Button("Remove duress code", role: .destructive) {
-                // The service refuses this during a duress session (a coercer who worked out that a
-                // duress code exists must not be able to delete it), so surface its refusal rather
-                // than a copy of it.
-                do {
-                    try lockService.removeDuress()
-                    errorMessage = nil
-                    selectedMode = .decoy
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-            }
+            Button("Remove duress code", role: .destructive) { removeDuress() }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Your duress code stops working. Your passcode and your data are untouched.")
@@ -331,6 +295,49 @@ struct DuressPINSetupView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("That phone can no longer recover this one. Your data is untouched — but if you arm the recovery lock again you will need to enrol a device first.")
+        }
+    }
+
+    /// The screen itself: the scrolling stack of cards inside its navigation chrome. Split out of
+    /// `body` so the sheets and confirmation dialogs read as one modifier chain (Power-of-10 R4).
+    private var content: some View {
+        let availability = DuressSetupAvailability(lockService: lockService)
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    introCard
+                    statusCard(availability)
+                    if let errorMessage { errorBanner(errorMessage) }
+                    responseCard(availability)
+                    recoveryDeviceCard(availability)
+                    commitCard(availability)
+                    if availability.hasDuressConfigured { removeCard }
+                }
+                .padding(20)
+                .padding(.bottom, 20)
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.parchment)
+            .navigationTitle("Duress code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Color.slate)
+                }
+            }
+        }
+    }
+
+    /// Removes the duress code, surfacing the service's own refusal (it declines during a duress
+    /// session, so a coercer who worked out that a duress code exists cannot delete it).
+    private func removeDuress() {
+        do {
+            try lockService.removeDuress()
+            errorMessage = nil
+            selectedMode = .decoy
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -651,6 +658,8 @@ private struct DuressPINEntrySheet: View {
     @State private var confirmation = ""
     @State private var step: Step = .enter
     @State private var errorMessage: String?
+    /// True while a `configureDuress` call is in flight — the one-at-a-time guard for Continue.
+    @State private var isSubmitting = false
 
     var body: some View {
         NavigationStack {
@@ -711,6 +720,7 @@ private struct DuressPINEntrySheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .disabled(isSubmitting)
                     .accessibilityIdentifier("duress.entry.continue")
             }
         } else {
@@ -745,8 +755,13 @@ private struct DuressPINEntrySheet: View {
     }
 
     private func commit() {
+        // R3 (bounded task fan-out): one commit in flight at a time. A second Continue before the
+        // first `await` returns would call `configureDuress` — and `onFinish`/`dismiss` — twice.
+        guard !isSubmitting else { return }
+        isSubmitting = true
         let pin = entry
         Task { @MainActor in
+            defer { isSubmitting = false }
             do {
                 try await lockService.configureDuress(pin: pin, mode: mode)
                 entry = ""
