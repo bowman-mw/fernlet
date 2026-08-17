@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import Synchronization
 
 /// The per-install random identifier that device-binds new sealed-column ciphertext.
 ///
@@ -25,8 +26,8 @@ import Security
 /// dependency) so `FernletCrypto` keeps its zero-in-package-dependency layering.
 ///
 /// Concurrency: `nonisolated` (this module defaults to MainActor isolation, but the sealed-store
-/// repositories call ``ColumnCrypto`` from nonisolated `performAndWait` closures). The cache is
-/// guarded by a lock; the keychain itself is thread-safe. ``testOverride`` is a `@TaskLocal`, so
+/// repositories call ``ColumnCrypto`` from nonisolated `performAndWait` closures). The cache is a
+/// `Mutex` that owns its slot; the keychain itself is thread-safe. ``testOverride`` is a `@TaskLocal`, so
 /// concurrent test suites can each pin their own binding without touching the real keychain.
 public nonisolated enum DeviceBindingID {
     /// Keychain service namespace for the install-binding row.
@@ -70,12 +71,14 @@ public nonisolated enum DeviceBindingID {
     /// The task-local test override consulted before the keychain; always `nil` in production.
     @TaskLocal static var testOverride: TestOverride?
 
-    /// Lock guarding ``cached`` (the keychain result is immutable once minted, so a plain
-    /// read-through cache is sufficient).
-    private static let cacheLock = NSLock()
     /// The durably-stored install ID, cached after the first successful read or mint.
-    /// `nonisolated(unsafe)`: all access is through ``cacheLock``.
-    nonisolated(unsafe) private static var cached: Data?
+    ///
+    /// A `Mutex` that OWNS the value rather than a mutable static guarded by a separate lock: the
+    /// keychain row is immutable once minted, so a read-through cache is sufficient, and holding
+    /// the slot inside the lock makes the access discipline a property the compiler checks instead
+    /// of a convention repeated at three call sites (Power of 10 R6 — no stored `static var` — and
+    /// R9 — no `nonisolated(unsafe)`).
+    private static let cache = Mutex<Data?>(nil)
 
     /// Returns this install's binding ID, minting and durably persisting one on first use.
     ///
@@ -89,24 +92,24 @@ public nonisolated enum DeviceBindingID {
             case .unavailable, .readError: return nil
             }
         }
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        if let cached { return cached }
-        if case .found(let existing) = load() {
-            cached = existing
-            return existing
+        return cache.withLock { slot -> Data? in
+            if let slot { return slot }
+            if case .found(let existing) = load() {
+                slot = existing
+                return existing
+            }
+            var bytes = [UInt8](repeating: 0, count: idByteCount)
+            guard SecRandomCopyBytes(kSecRandomDefault, idByteCount, &bytes) == errSecSuccess else { return nil }
+            let minted = Data(bytes)
+            let addStatus = add(minted)
+            if addStatus != errSecSuccess && addStatus != errSecDuplicateItem { return nil }
+            // Durability gate: only trust (and cache) an ID the keychain reads back. Sealing under an
+            // unpersisted AAD would make the ciphertext unopenable after relaunch. The read-back also
+            // resolves an add/add race (errSecDuplicateItem): whichever row won is the ID.
+            guard case .found(let stored) = load() else { return nil }
+            slot = stored
+            return stored
         }
-        var bytes = [UInt8](repeating: 0, count: idByteCount)
-        guard SecRandomCopyBytes(kSecRandomDefault, idByteCount, &bytes) == errSecSuccess else { return nil }
-        let minted = Data(bytes)
-        let addStatus = add(minted)
-        if addStatus != errSecSuccess && addStatus != errSecDuplicateItem { return nil }
-        // Durability gate: only trust (and cache) an ID the keychain reads back. Sealing under an
-        // unpersisted AAD would make the ciphertext unopenable after relaunch. The read-back also
-        // resolves an add/add race (errSecDuplicateItem): whichever row won is the ID.
-        guard case .found(let stored) = load() else { return nil }
-        cached = stored
-        return stored
     }
 
     /// Returns the binding ID for *opening* an existing v2 blob, distinguishing an absent row
@@ -131,26 +134,24 @@ public nonisolated enum DeviceBindingID {
             case .readError: throw ReadError(status: errSecIO)
             }
         }
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        if let cached { return cached }
-        switch load() {
-        case .found(let existing):
-            cached = existing
-            return existing
-        case .absent:
-            return nil
-        case .failure(let status):
-            throw ReadError(status: status)
+        return try cache.withLock { slot -> Data? in
+            if let slot { return slot }
+            switch load() {
+            case .found(let existing):
+                slot = existing
+                return existing
+            case .absent:
+                return nil
+            case .failure(let status):
+                throw ReadError(status: status)
+            }
         }
     }
 
     /// Drops the in-memory cache so the next ``current()`` re-reads the keychain (test hygiene
     /// after a test deletes the row; production never needs it — the row is immutable).
     static func invalidateCacheForTesting() {
-        cacheLock.lock()
-        cached = nil
-        cacheLock.unlock()
+        cache.withLock { $0 = nil }
     }
 
     /// Outcome of one keychain read of the install-ID row, distinguishing "no row" from "the

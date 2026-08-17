@@ -53,6 +53,14 @@ public struct FernletLockSetupView: View {
     @State private var showDisclosure = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
+    /// True when `configure` succeeded but the requested biometric enable did not — the toast then
+    /// says so instead of reporting a success the user did not get.
+    @State private var biometricSetupFailed = false
+    /// One `configure()` in flight at a time (R3). Two taps on "I understand — set up lock" during
+    /// the sheet's dismiss animation would otherwise run two concurrent configures that interleave
+    /// at the scrypt awaits, and the second mint would replace the content key the first installed
+    /// and sealed under.
+    @State private var isFinalizing = false
 
     public init(grantingScope: FernletLockScope) {
         self.grantingScope = grantingScope
@@ -341,7 +349,7 @@ public struct FernletLockSetupView: View {
 
                     Spacer()
 
-                    actionButton("I understand — set up lock") {
+                    actionButton("I understand — set up lock", disabled: isFinalizing) {
                         showDisclosure = false
                         finalizeSetup()
                     }
@@ -360,13 +368,23 @@ public struct FernletLockSetupView: View {
         .tint(Color.moss)
     }
 
+    /// How long the success toast dwells before the sheet dismisses itself.
+    private static let successToastDwell: Duration = .seconds(1.5)
+
     /// Commits the configuration after the disclosure is acknowledged: builds the
     /// `FernletLockCredential` for the chosen kind, calls the lock service's
     /// `configure(credential:)`, optionally enables biometrics, then shows the success
     /// toast and dismisses. On a `configure` error the flow rewinds to the entry step
     /// with both fields cleared.
+    ///
+    /// At most ONE configure runs at a time (``isFinalizing``): concurrent configures would each
+    /// mint a content key, and the loser's key is the one anything sealed in between was encrypted
+    /// under.
     private func finalizeSetup() {
+        guard !isFinalizing else { return }
+        isFinalizing = true
         Task { @MainActor in
+            defer { isFinalizing = false }
             do {
                 let credential: FernletLockCredential
                 switch selectedKind {
@@ -377,11 +395,23 @@ public struct FernletLockSetupView: View {
                 try await lockService.configure(credential: credential, grantingScope: grantingScope)
 
                 if biometricEnabled {
-                    try? await lockService.setBiometricEnabled(true, passcode: passcode)
+                    do {
+                        try await lockService.setBiometricEnabled(true, passcode: passcode)
+                    } catch {
+                        // The lock itself IS configured, so the flow still completes — but the user
+                        // asked for Face ID/Touch ID and did not get it, and a toast that says
+                        // otherwise is a lie the user would only discover at the next unlock.
+                        biometricSetupFailed = true
+                        FernletAuditLog.log("lock.setup.biometricEnableFailed")
+                    }
                 }
 
                 withAnimation { showSuccess = true }
-                try? await Task.sleep(for: .seconds(1.5))
+                do {
+                    try await Task.sleep(for: Self.successToastDwell)
+                } catch {
+                    // Cancelled: skip the toast dwell and dismiss immediately.
+                }
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -417,16 +447,24 @@ public struct FernletLockSetupView: View {
             .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 
+    /// The toast copy. The lock is always configured by the time it appears; an opt-in biometric
+    /// enable that FAILED is named here rather than hidden behind an unqualified success.
+    private var successToastMessage: String {
+        guard biometricSetupFailed else { return "App lock is set up." }
+        return "App lock is set up. \(biometricName(lockService.biometricType)) couldn't be turned on — you can enable it in Settings → App lock."
+    }
+
     private var successToast: some View {
         VStack {
             Spacer()
             HStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: biometricSetupFailed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                Text("App lock is set up.")
+                    .foregroundStyle(biometricSetupFailed ? Color.goldenrod : Color.moss)
+                Text(successToastMessage)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
                 Spacer()
             }
             .padding(16)
@@ -530,22 +568,7 @@ public struct FernletLockView: View {
             VStack(spacing: 28) {
                 Spacer()
 
-                // Header
-                VStack(spacing: 10) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 72, height: 72)
-                        .background(Color.moss.opacity(0.10), in: Circle())
-
-                    Text("Fernlet Lock")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-
-                    Text("Enter your \(credentialLabel) to continue.")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                }
+                header
 
                 // Error / cooldown feedback
                 if let msg = errorMessage {
@@ -601,24 +624,58 @@ public struct FernletLockView: View {
         }
         .onAppear {
             refreshCooldown()
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(80))
-                // isBiometricUnlockAvailable includes passcodeUnlockedThisProcess, so a
-                // cold-launched locked app never auto-prompts Face ID before the process's
-                // first passcode success (the service guard is the fail-closed backstop).
-                guard lockService.isBiometricUnlockAvailable,
-                      !lockService.requiresReset,
-                      !isInputDisabled,
-                      lockService.consumeAutoBiometricPromptOpportunity() else { return }
-                triggerBiometric()
-            }
+            autoPromptBiometricIfEligible()
         }
         .onReceive(timer) { _ in refreshCooldown() }
         .animation(.easeInOut(duration: 0.2), value: errorMessage)
         .animation(.easeInOut(duration: 0.2), value: isInputDisabled)
     }
 
+    /// How long the auto-prompt waits for the overlay to settle before presenting Face ID.
+    private static let autoBiometricPromptDelay: Duration = .milliseconds(80)
+
+    /// Presents the once-per-lock-session automatic biometric prompt, after a short settle delay.
+    ///
+    /// `isBiometricUnlockAvailable` includes `passcodeUnlockedThisProcess`, so a cold-launched
+    /// locked app never auto-prompts Face ID before the process's first passcode success (the
+    /// service guard is the fail-closed backstop).
+    private func autoPromptBiometricIfEligible() {
+        Task { @MainActor in
+            do {
+                try await Task.sleep(for: Self.autoBiometricPromptDelay)
+            } catch {
+                // Cancelled: neither spend the session's single auto-prompt opportunity nor raise
+                // Face ID from a task that was asked to stop.
+                return
+            }
+            guard lockService.isBiometricUnlockAvailable,
+                  !lockService.requiresReset,
+                  !isInputDisabled,
+                  lockService.consumeAutoBiometricPromptOpportunity() else { return }
+            triggerBiometric()
+        }
+    }
+
     // MARK: Sub-views
+
+    /// The lock glyph, title and "enter your <credential>" line at the top of the unlock screen.
+    private var header: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 36, weight: .semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 72, height: 72)
+                .background(Color.moss.opacity(0.10), in: Circle())
+
+            Text("Fernlet Lock")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+
+            Text("Enter your \(credentialLabel) to continue.")
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+        }
+    }
 
     private var inputSection: some View {
         Group {
