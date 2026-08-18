@@ -51,6 +51,10 @@ public enum PersistenceStoreLoadError: LocalizedError, Equatable {
 /// - **Protection and backup**: stores use `FileProtectionType.complete`, persistent history and
 ///   remote-change notifications are always on, and iOS-backup exclusion follows the user's
 ///   preference (including the CloudKit `_SUPPORT` sidecar directory).
+/// - **Local-only history prune**: when a store loads WITHOUT CloudKit mirroring (sync off, or no
+///   iCloud account) nothing consumes the persistent-history log, so every successful load deletes
+///   history older than ``localOnlyHistoryRetention`` (7 days) on a background context — best-effort,
+///   audit-logged on failure, never on a mirrored store (its delegate owns that history).
 /// - **DEBUG schema deploy**: the `INITIALIZE_CLOUDKIT_SCHEMA` launch argument (see
 ///   ``CloudKitSchemaDeploy``) pushes the model to the CloudKit development schema against a
 ///   throwaway scratch store on a background queue — compiled out of Release entirely.
@@ -99,7 +103,22 @@ nonisolated public final class PersistenceController {
     /// Test hook: overrides the store URL used by the next `reload(with:)`. DEBUG-only (R6) — a
     /// shipping build must not expose a way to redirect the next store load.
     @ObservationIgnored public var reloadStoreURLOverrideForTesting: URL?
+
+    /// DEBUG-only: overrides ``localOnlyHistoryRetention`` for the next `reload(with:)`, so a test can
+    /// prove the load path prunes un-consumed history (a real 7-day window is untestable — persistent
+    /// history cannot be backdated). Instance state, not a static (R6). Absent from Release.
+    @ObservationIgnored public var localOnlyHistoryRetentionOverrideForTesting: TimeInterval?
     #endif
+
+    /// The history-retention window the next `reload(with:)` uses — the DEBUG test override when set,
+    /// otherwise ``localOnlyHistoryRetention``. One accessor so the `#if DEBUG` fork lives in one place.
+    private var reloadHistoryRetention: TimeInterval {
+        #if DEBUG
+        return localOnlyHistoryRetentionOverrideForTesting ?? Self.localOnlyHistoryRetention
+        #else
+        return Self.localOnlyHistoryRetention
+        #endif
+    }
 
     /// The store URL the next `reload(with:)` uses — the DEBUG test override when set, otherwise
     /// the controller's own. One accessor so the `#if DEBUG` fork lives in a single place.
@@ -143,7 +162,8 @@ nonisolated public final class PersistenceController {
         self.didFailToLoad = Self.loadPersistentStores(
             for: configuration.container,
             preferences: preferences,
-            inMemory: inMemory
+            inMemory: inMemory,
+            historyRetention: Self.localOnlyHistoryRetention
         )
         configureViewContext(for: configuration.container)
         bindRemoteChanges(to: configuration.container)
@@ -189,7 +209,8 @@ nonisolated public final class PersistenceController {
             try await Self.loadPersistentStoresAsync(
                 for: configuration.container,
                 preferences: preferences,
-                inMemory: inMemory
+                inMemory: inMemory,
+                historyRetention: reloadHistoryRetention
             )
             configureViewContext(for: configuration.container)
 
@@ -278,7 +299,8 @@ nonisolated public final class PersistenceController {
     private static func loadPersistentStores(
         for container: NSPersistentContainer,
         preferences: StoragePreferences,
-        inMemory: Bool
+        inMemory: Bool,
+        historyRetention: TimeInterval
     ) -> Bool {
         var loadFailed = false
         let signpostID = StartupTiming.begin("PersistenceController.loadPersistentStores")
@@ -298,10 +320,12 @@ nonisolated public final class PersistenceController {
                             loadFailed = true
                             print("[Fernlet] Local-only fallback load failed: \(retryError)")
                         } else {
-                            applyBackupExclusionIfNeeded(
+                            finishSuccessfulLoad(
+                                container: container,
                                 preferences: preferences,
                                 storeDescription: retryDescription,
-                                inMemory: inMemory
+                                inMemory: inMemory,
+                                historyRetention: historyRetention
                             )
                         }
                         endSignpost()
@@ -313,10 +337,12 @@ nonisolated public final class PersistenceController {
                 endSignpost()
                 return
             } else {
-                applyBackupExclusionIfNeeded(
+                finishSuccessfulLoad(
+                    container: container,
                     preferences: preferences,
                     storeDescription: storeDescription,
-                    inMemory: inMemory
+                    inMemory: inMemory,
+                    historyRetention: historyRetention
                 )
                 endSignpost()
             }
@@ -327,7 +353,8 @@ nonisolated public final class PersistenceController {
     private static func loadPersistentStoresAsync(
         for container: NSPersistentContainer,
         preferences: StoragePreferences,
-        inMemory: Bool
+        inMemory: Bool,
+        historyRetention: TimeInterval
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             container.loadPersistentStores { storeDescription, error in
@@ -340,10 +367,12 @@ nonisolated public final class PersistenceController {
                             if let retryError {
                                 continuation.resume(throwing: retryError)
                             } else {
-                                applyBackupExclusionIfNeeded(
+                                finishSuccessfulLoad(
+                                    container: container,
                                     preferences: preferences,
                                     storeDescription: retryDescription,
-                                    inMemory: inMemory
+                                    inMemory: inMemory,
+                                    historyRetention: historyRetention
                                 )
                                 continuation.resume()
                             }
@@ -354,15 +383,69 @@ nonisolated public final class PersistenceController {
                     return
                 }
 
-                applyBackupExclusionIfNeeded(
+                finishSuccessfulLoad(
+                    container: container,
                     preferences: preferences,
                     storeDescription: storeDescription,
-                    inMemory: inMemory
+                    inMemory: inMemory,
+                    historyRetention: historyRetention
                 )
                 continuation.resume()
             }
         }
     }
+
+    /// Every successful store load (first load, no-account retry, and both reload variants) funnels
+    /// here: backup exclusion, then the local-only history prune.
+    private static func finishSuccessfulLoad(
+        container: NSPersistentContainer,
+        preferences: StoragePreferences,
+        storeDescription: NSPersistentStoreDescription,
+        inMemory: Bool,
+        historyRetention: TimeInterval
+    ) {
+        applyBackupExclusionIfNeeded(
+            preferences: preferences,
+            storeDescription: storeDescription,
+            inMemory: inMemory
+        )
+        // Persistent history is always ON (remote-change notifications need it), but only an
+        // NSPersistentCloudKitContainer mirroring delegate ever CONSUMES and trims it. On a store
+        // loaded without CloudKit options (sync off — the cold-launch default and the local-only
+        // user's steady state — or no iCloud account) nothing does, so the ATRANSACTION/ACHANGE
+        // tables grew for the life of the install. Prune everything older than the retention
+        // window; the in-memory `/dev/null` store records nothing durable and is skipped.
+        guard !inMemory, storeDescription.cloudKitContainerOptions == nil else { return }
+        pruneUnconsumedHistory(before: Date().addingTimeInterval(-historyRetention), in: container)
+    }
+
+    /// Retention window for persistent history on a store loaded WITHOUT CloudKit mirroring (R2 — a
+    /// named bound). Seven days keeps recent transactions available across a sync-off→on
+    /// transition (the mirroring delegate treats an expired token by re-exporting, a one-time cost).
+    static let localOnlyHistoryRetention: TimeInterval = 7 * 24 * 60 * 60
+
+    /// Best-effort delete of persistent history older than `cutoff`, on a background context so the
+    /// load path never stalls. A prune failure must not fail the store load, so it is audit-logged and
+    /// never thrown (R7).
+    private static func pruneUnconsumedHistory(before cutoff: Date, in container: NSPersistentContainer) {
+        let context = container.newBackgroundContext()
+        context.perform {
+            do {
+                try context.execute(NSPersistentHistoryChangeRequest.deleteHistory(before: cutoff))
+            } catch {
+                FernletAuditLog.log("persistence.historyPruneFailed", context: ["error": "\(error)"])
+            }
+        }
+    }
+
+    #if DEBUG
+    /// DEBUG-only: runs the local-only history pruner against the CURRENT container with an explicit
+    /// cutoff, so a test can prove history is recorded and then removed without waiting out the
+    /// retention window. Absent from Release.
+    public func pruneUnconsumedHistoryForTesting(before cutoff: Date) {
+        Self.pruneUnconsumedHistory(before: cutoff, in: container)
+    }
+    #endif
 
     #if DEBUG
     /// One-shot latch so a second flagged, non-inMemory `PersistenceController` init in the same

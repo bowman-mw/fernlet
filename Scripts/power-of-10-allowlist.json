@@ -64,6 +64,6 @@
  {
   "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift",
-  "reason": "ActivityKit seam: Activity's update(_:) / end(_:dismissalPolicy:) are nonisolated async and documented callable from any context, and there is no actor-isolated alternative API. Invariant: the local is created on the MainActor from self.activity, used for exactly ONE call, and stop() claims ownership (self.activity = nil) before its await, so no second reference to the same activity is ever live."
+  "reason": "ActivityKit seam: Activity's update(_:) / end(_:dismissalPolicy:) are nonisolated async and documented callable from any context, and there is no actor-isolated alternative API. Invariant: the local is created on the MainActor from self.activity, used for exactly ONE call, and stop() claims ownership (self.activity = nil) before its await, so no second reference to the same activity is ever live. ProximityLiveActivityReaper.endOrphans holds the same invariant per iteration: one local per stranded activity from the launch-time enumeration, one end(_:dismissalPolicy:) call, and it runs before any anchor exists so no anchor can hold a second reference."
  }
 ]

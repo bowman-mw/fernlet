@@ -315,14 +315,17 @@ struct ProgressPhotoCard: View {
     let loadData: () -> Data?
     /// The card's fixed width. Private and immutable: no caller ever customised it (R6).
     private let cardWidth: CGFloat = 132
+    /// The card's fixed picture height — the thumbnail is decoded to exactly this footprint.
+    private let cardHeight: CGFloat = 168
 
+    @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
-                .frame(width: cardWidth, height: 168)
+                .frame(width: cardWidth, height: cardHeight)
                 .overlay {
                     if let image {
                         Image(uiImage: image)
@@ -353,10 +356,13 @@ struct ProgressPhotoCard: View {
             .frame(width: cardWidth, alignment: .leading)
         }
         .task {
-            // Decode off the main thread (`byPreparingForDisplay`) so scrolling a long strip doesn't
-            // jank; only the finished image is assigned back on the MainActor.
+            // Decode off the main thread straight to the card's own pixel size (mirrors the meal
+            // polaroid): the sealed bytes are ~1600px, and `byPreparingForDisplay` retained that full
+            // ~8 MB bitmap behind a 132pt thumbnail — one per card scrolled past, for as long as the
+            // strip lived. These are decrypted body photos, so the footprint matters twice.
             guard image == nil, let data = loadData() else { return }
-            image = await UIImage(data: data)?.byPreparingForDisplay()
+            let pixelSize = CGSize(width: cardWidth * displayScale, height: cardHeight * displayScale)
+            image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Progress photo from \(record.capturedAt.formatted(.dateTime.month(.wide).day().year()))")

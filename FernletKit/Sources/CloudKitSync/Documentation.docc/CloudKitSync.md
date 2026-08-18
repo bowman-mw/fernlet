@@ -21,7 +21,10 @@ The stack has three tiers. At the bottom, ``PersistenceController`` owns the
 blob, saved recipes, custom items, coin and milestone ledgers, day rows — never a sealed entity).
 CloudKit mirroring is opt-in twice: the stored preference must enable it *and* an iCloud account
 must be present, and the `shared` singleton forces sync off at cold launch until the app reloads
-with real preferences. On top of it, ``CoreDataFernletRepository`` implements the app's
+with real preferences. Persistent history is always on (remote-change notifications need it), but
+only a mirroring delegate ever consumes it — so a store loaded *without* CloudKit options prunes
+history older than `PersistenceController.localOnlyHistoryRetention` (7 days) on every successful
+load, best-effort on a background context; a mirrored store is never pruned by the app. On top of it, ``CoreDataFernletRepository`` implements the app's
 `FernletRepository` contract by splitting state between a single aggregate blob record (settings,
 memories, recipes, derived tables) and the per-row `DayRecord` store — one CloudKit record per day,
 which is what removed the old 370-day cap and lets different-day edits from different devices merge

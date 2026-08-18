@@ -1,10 +1,13 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// The observable launch state machine that loads ``FernletStore`` off the first frame.
 ///
-/// Owned by ``FernletApp`` and driven from the scene's `.task`: `startIfNeeded()` runs
+/// Owned by ``FernletApp`` and driven from the scene's `.task`: `startIfNeeded()` first reaps any
+/// proximity Live Activity a killed previous process stranded (`ProximityLiveActivityReaper` —
+/// this is the once-per-process seam, before any manager can exist), then runs
 /// `FernletStore.load` (async Core Data snapshot + per-row service loads) exactly once per
 /// process, streaming human-readable progress into `statusMessage` for `LaunchScreen`, then opens
 /// the bundled food catalog and kicks the detached best-effort sealed-backup restore before
@@ -35,6 +38,11 @@ final class FernletStoreLoader {
     func startIfNeeded() async {
         guard !didStart else { return }
         didStart = true
+        // Before the store (and its lazily-created proximity managers) exists: end any proximity
+        // Live Activity a killed previous process stranded. This is the once-per-process seam
+        // (`didStart`), so the reaper can never run while a manager in this process is live —
+        // `retry()` re-enters only from `.failed`, when no store was ever built.
+        await ProximityLiveActivityReaper.endOrphans()
         await loadStore()
     }
 
