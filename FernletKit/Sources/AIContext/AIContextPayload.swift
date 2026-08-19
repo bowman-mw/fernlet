@@ -89,6 +89,11 @@ public struct WebNutritionLookupPayload: AIContextPayload {
 ///
 /// Built by the app's `LaunchPreparationService` for the ambient day-summary task — names and labels
 /// only. Forbidden: journal text, period data, TierTwo memories, symptom flags, narratives.
+///
+/// The two name lists are EXTERNALLY AUTHORED — a recipe name can come from a scraped web page or a
+/// peer's mesh share, a workout name from a pasted coach plan — and they are interpolated into a
+/// free-text prompt. Sanitizing in `init` rather than at the call site makes that unbypassable: a
+/// name can no longer carry a line break and forge a prompt section, nor run unbounded.
 public struct DaySummaryPayload: AIContextPayload {
     public let payloadKind = "day-summary"
     public let mealNames: [String]
@@ -102,6 +107,7 @@ public struct DaySummaryPayload: AIContextPayload {
         ["mealNames", "workoutNames", "sleepQualityLabel", "sleepHours", "journalTagLabel"]
     }
 
+
     public init(
         mealNames: [String],
         workoutNames: [String],
@@ -109,8 +115,14 @@ public struct DaySummaryPayload: AIContextPayload {
         sleepHours: Double?,
         journalTagLabel: String?
     ) {
-        self.mealNames = mealNames
-        self.workoutNames = workoutNames
+        // Sleep/journal labels are app-generated enum labels and stay verbatim; only these two
+        // lists carry externally authored text.
+        self.mealNames = mealNames.map {
+            ItemNameModeration.sanitizedName($0, maxLength: AIPromptTextLimits.maxNameCharacters)
+        }
+        self.workoutNames = workoutNames.map {
+            ItemNameModeration.sanitizedName($0, maxLength: AIPromptTextLimits.maxNameCharacters)
+        }
         self.sleepQualityLabel = sleepQualityLabel
         self.sleepHours = sleepHours
         self.journalTagLabel = journalTagLabel
@@ -212,13 +224,30 @@ public struct IngredientSubstitutionPayload: AIContextPayload {
 
     public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace"] }
 
+    /// Both fields are EXTERNALLY AUTHORED — they come from an imported recipe, which may have been
+    /// scraped from a web page or shared by a mesh peer — and each is interpolated onto its own line
+    /// of a labelled prompt (`Recipe:` / `Replace this ingredient:`). Sanitizing in `init` is what
+    /// stops a newline inside a name from forging the other line, and is unbypassable at the call site.
     public init(recipeName: String, ingredientToReplace: String) {
-        self.recipeName = recipeName
-        self.ingredientToReplace = ingredientToReplace
+        self.recipeName = ItemNameModeration.sanitizedName(
+            recipeName, maxLength: AIPromptTextLimits.maxNameCharacters)
+        self.ingredientToReplace = ItemNameModeration.sanitizedName(
+            ingredientToReplace, maxLength: AIPromptTextLimits.maxNameCharacters)
     }
 }
 
 // MARK: - Web page extraction payloads
+
+/// Shared bounds for externally authored text that reaches an on-device model prompt.
+///
+/// One source of truth so the payload types cannot drift apart: a name that is safe to interpolate
+/// into a labelled, newline-delimited prompt is the same shape whether it came from a meal, a
+/// workout session, or a recipe being substituted into.
+public enum AIPromptTextLimits {
+    /// Per-name cap for prompt use. Far above a real recipe, session or ingredient title, but a
+    /// bound: a 200 KB "name" is not a name. Prompt-only — the stored name is never changed.
+    public static let maxNameCharacters = 80
+}
 
 /// Fields allowed for on-device nutrition extraction from a product webpage.
 ///

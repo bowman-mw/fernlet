@@ -40,3 +40,24 @@ public nonisolated protocol HeartDropTransporting: Sendable {
     /// records in a public database — they dedup instead).
     func deleteOwnRecords(recordNames: [String]) async throws
 }
+
+/// Wire-size bounds for the heart dead-drop, shared by the three parties that must agree on them:
+/// ProximityKit's sealer (which enforces them when writing), CloudKitSync's ferry (which must not
+/// upload or ingest more), and the receiver's pre-decrypt gate.
+///
+/// They live HERE rather than on `HeartDropSealer` because CloudKitSync must never import
+/// ProximityKit — that pair is a hard S3-wall failure (Tests/FernletTests/S3BoundaryTests.swift),
+/// and FernletDomainModel is the one module both sides already depend on.
+public nonisolated enum HeartDropWireLimits {
+    /// Hard cap on ONE record's sealed wire bytes. A heart is ~256 B of payload by construction and
+    /// the framed inner envelope pads to the 1–2 KiB bucket, so this leaves roughly 4× headroom.
+    public static let maxRecordByteCount = 8 * 1024
+    /// Ceiling on ONE record's INFLATED plaintext. DEFLATE reaches ~1032:1, so without this the
+    /// 8 KiB wire cap still admits an ~8 MB main-actor inflate — the wire cap alone is not a bound
+    /// on the work a hostile record can cost the receiver.
+    public static let maxInflatedByteCount = maxRecordByteCount * 8
+    /// Safety cap on records pulled in one fetch pass.
+    public static let maxRecordsPerFetch = 500
+    /// The byte volume those two together permit — the ferry's own per-fetch download budget.
+    public static let maxBytesPerFetch = maxRecordByteCount * maxRecordsPerFetch
+}

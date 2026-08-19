@@ -72,9 +72,15 @@ cookie sending, the URL cache, cache reads, and the credential store. Several of
 under `.ephemeral`; they are set anyway, each with a comment saying why, so the guarantee stays legible
 and cannot silently regress if a future edit swaps the base configuration.
 
-What this module does **not** own is per-caller request policy. Timeouts, `Accept` and `User-Agent`
-headers, redirect handling (the recipe importer attaches an SSRF-revalidating per-task delegate),
-content-type checks, and body caps all stay in the importers, because they differ on purpose.
+What this module does **not** own is per-caller request policy. Per-request (idle) timeouts,
+`Accept` and `User-Agent` headers, redirect handling (the recipe importer attaches an
+SSRF-revalidating per-task delegate), content-type checks, and body caps all stay in the importers,
+because they differ on purpose.
+
+The one exception is the **whole-transfer** ceiling: `timeoutIntervalForResource` is set on the
+shared configuration here, because a trickling server defeats a per-request idle timeout entirely
+(bytes keep arriving, so the idle clock never fires) and no importer can opt out of a bound it does
+not own. Per-request idle timeouts still belong to each caller and still apply.
 
 **Position relative to the walls.** On the S3 wall: Layer 0, no dependencies, imported by
 `AIProviders` and by the app target through the `FernletKit` umbrella product. On the no-tracking

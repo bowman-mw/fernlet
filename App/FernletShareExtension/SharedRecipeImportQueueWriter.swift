@@ -80,8 +80,9 @@ struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 ///
 /// Only `http`/`https` URLs are accepted; re-sharing a URL already in the queue replaces its old
 /// record with a fresh one (restarting its retry budget). Failure modes: a non-web URL throws
-/// `QueueWriterError.invalidURL`; directory-creation, encoding, and coordination errors propagate
-/// to the caller, which cancels the share.
+/// `QueueWriterError.invalidURL`; an over-long URL throws `QueueWriterError.urlTooLong`;
+/// directory-creation, encoding, and coordination errors propagate to the caller, which cancels
+/// the share.
 struct SharedRecipeImportQueueWriter {
     /// The shared container identifier; must match the extension and app entitlements and the
     /// app-side `SharedRecipeImportQueue.appGroupIdentifier`.
@@ -94,6 +95,19 @@ struct SharedRecipeImportQueueWriter {
     /// entire array inside the extension's small memory budget, where a jetsam is a visibly failed
     /// share. 100 pending pages is far beyond any real backlog; the newest shares always survive.
     static let maxQueuedRecords = 100
+
+    /// The largest shared URL this queue will persist, in UTF-8 bytes.
+    ///
+    /// R3 (bounded growth, byte half): ``maxQueuedRecords`` bounds the record COUNT but nothing
+    /// bounds a single record's size, so a hostile or broken provider can hand the extension a
+    /// multi-megabyte "URL" string that is decoded and re-encoded on every later enqueue inside the
+    /// extension's small memory budget. 2048 is the classic browser/CDN ceiling; real recipe URLs are
+    /// two orders of magnitude under it.
+    ///
+    /// **Twin note:** must equal `SharedRecipeImportQueue.maxURLByteCount`. A smaller value on the
+    /// app side silently deletes rows the extension considers valid; `SharedRecipeImportQueueMirrorTests`
+    /// pins the two literals together.
+    static let maxURLByteCount = 2048
 
     private let fileManager: FileManager
     private let fileURL: URL
@@ -125,11 +139,17 @@ struct SharedRecipeImportQueueWriter {
     /// this call never touches are still decoded and re-encoded through the mirror type.
     ///
     /// - Parameter url: The shared page URL; only `http` and `https` schemes are accepted.
-    /// - Throws: `QueueWriterError.invalidURL` for a non-web scheme, any encoding / file-system
-    ///   error from the rewrite, or the `NSFileCoordinator` failure when coordination itself fails.
+    /// - Throws: `QueueWriterError.invalidURL` for a non-web scheme, `QueueWriterError.urlTooLong`
+    ///   for a URL past the length cap, any encoding / file-system error from the rewrite, or the
+    ///   `NSFileCoordinator` failure when coordination itself fails.
     func enqueue(_ url: URL) throws {
         guard url.scheme == "http" || url.scheme == "https" else {
             throw QueueWriterError.invalidURL
+        }
+        // R3: reject oversize input up front, so an unbounded string is never written to a file every
+        // later enqueue must decode and re-encode.
+        guard url.absoluteString.utf8.count <= Self.maxURLByteCount else {
+            throw QueueWriterError.urlTooLong
         }
 
         let urlString = url.absoluteString
@@ -216,11 +236,18 @@ struct SharedRecipeImportQueueWriter {
 /// Failure raised when a shared URL is not an importable web URL.
 ///
 /// Thrown by ``SharedRecipeImportQueueWriter/enqueue(_:)`` for any scheme other than `http` or
-/// `https`; the `errorDescription` is the user-facing copy shown when the share is cancelled.
+/// `https`, and for a URL over ``SharedRecipeImportQueueWriter/maxURLByteCount`` bytes; the
+/// `errorDescription` is the user-facing copy shown when the share is cancelled.
 private enum QueueWriterError: LocalizedError {
+    /// The shared item is not an `http`/`https` URL.
     case invalidURL
+    /// The shared URL is longer than the queue will persist (R3).
+    case urlTooLong
 
     var errorDescription: String? {
-        "Fernlet can only import web recipe URLs."
+        switch self {
+        case .invalidURL: "Fernlet can only import web recipe URLs."
+        case .urlTooLong: "That link is too long for Fernlet to import."
+        }
     }
 }

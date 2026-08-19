@@ -155,12 +155,14 @@ struct ProximityWireOffMainDecodeTests {
             expiresAt: grantedAt.addingTimeInterval(3600)
         )
         let joinerKey = joiner.localSigningPublicKey
+        let admitterKey = admitter.localSigningPublicKey
         let now = grantedAt.addingTimeInterval(60)
 
         // `MeshAdmissionToken.verify` is `nonisolated` (pure signature math) — call it off the main actor.
         let result = await Task.detached { () -> Bool in
             do {
-                try token.verify(joinerSigningPublicKey: joinerKey, expectedMeshID: meshID, now: now)
+                try token.verify(joinerSigningPublicKey: joinerKey, expectedMeshID: meshID,
+                                 expectedAdmitterSigningPublicKey: admitterKey, now: now)
                 return true
             } catch {
                 return false
@@ -198,11 +200,13 @@ struct ProximityWireOffMainDecodeTests {
             admitterSignature: token.admitterSignature
         )
         let joinerKey = joiner.localSigningPublicKey
+        let admitterKey = admitter.localSigningPublicKey
         let now = grantedAt.addingTimeInterval(60)
 
         let threwSignatureInvalid = await Task.detached { () -> Bool in
             do {
-                try tampered.verify(joinerSigningPublicKey: joinerKey, expectedMeshID: meshID, now: now)
+                try tampered.verify(joinerSigningPublicKey: joinerKey, expectedMeshID: meshID,
+                                    expectedAdmitterSigningPublicKey: admitterKey, now: now)
                 return false
             } catch let error as MeshAdmissionToken.VerifyError {
                 return error == .signatureInvalid

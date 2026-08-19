@@ -221,6 +221,44 @@ struct SharedRecipeImportQueueMirrorTests {
         #expect(!appSource.contains("prefix(Self.maxQueuedImports)"))
     }
 
+    /// The byte half of R3, and the same twin hazard as the record cap: the app DELETES a row whose
+    /// URL exceeds its own limit, so a smaller value on the app side would silently drop rows the
+    /// extension considered valid. Pins the two literals to the same number.
+    @Test func bothSidesDeclareTheSameURLByteCap() throws {
+        let mirrorSource = try source(Self.extensionSourcePath)
+        let declaration = "static let maxURLByteCount = "
+        let range = try #require(
+            mirrorSource.range(of: declaration),
+            "the extension no longer declares maxURLByteCount — the twins have drifted"
+        )
+        let digits = mirrorSource[range.upperBound...]
+            .prefix { $0.isNumber || $0 == "_" }
+            .replacingOccurrences(of: "_", with: "")
+        let mirrorCap = try #require(Int(digits), "maxURLByteCount is no longer an integer literal")
+        #expect(
+            mirrorCap == SharedRecipeImportQueue.maxURLByteCount,
+            "extension URL cap \(mirrorCap) != app URL cap \(SharedRecipeImportQueue.maxURLByteCount)"
+        )
+    }
+
+    /// The cap has to be enforced where the external input ENTERS — before the oversize string is
+    /// written to a file every later enqueue must decode and re-encode inside the extension's small
+    /// memory budget. Pins the guard to `enqueue` and its named error.
+    @Test func extensionRejectsAnOversizedURLBeforeWriting() throws {
+        let mirrorSource = try source(Self.extensionSourcePath)
+        let enqueueRange = try #require(
+            mirrorSource.range(of: "func enqueue("),
+            "the extension no longer declares enqueue — the byte guard's anchor is gone"
+        )
+        let enqueueBody = mirrorSource[enqueueRange.upperBound...].prefix(1200)
+        #expect(
+            enqueueBody.contains("Self.maxURLByteCount"),
+            "enqueue must reject an oversize URL before writing it to the shared file"
+        )
+        #expect(mirrorSource.contains("case urlTooLong"),
+                "the oversize rejection must be a named error, not a silent drop")
+    }
+
     /// The two sides must degrade to the SAME path when the App-Group container is unavailable, or the
     /// hand-off silently splits: the extension keeps enqueueing into a file the app never reads.
     @Test func bothSidesShareTheSameContainerFallbackChain() throws {
@@ -239,5 +277,69 @@ struct SharedRecipeImportQueueMirrorTests {
                 "\(path) must fall back to Application Support BEFORE tmp — tmp is the purgeable last resort"
             )
         }
+    }
+
+    // MARK: - Retry-budget durability (2026-08-18 security round, findings M10 + L26)
+
+    /// The drain used to spend a retry attempt only in its `catch`, so a record whose page killed the
+    /// app — a watchdog kill on a pathological page, or a fetch that never returned — spent nothing
+    /// and was retried on every single launch, forever. The attempt is now spent BEFORE the import.
+    ///
+    /// The second half is the part that is easy to get wrong: the transient `aiBudgetExhausted` arm
+    /// must still not consume the budget, or three resting days silently delete a good queued recipe.
+    @Test func attemptIsSpentBeforeTheImportAndRefundedOnBudgetDeferral() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shared-recipe-queue-\(UUID().uuidString)")
+            .appendingPathComponent("SharedRecipeImports", isDirectory: true)
+            .appendingPathComponent("PendingRecipeURLs.json")
+        let queue = SharedRecipeImportQueue(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent().deletingLastPathComponent()) }
+
+        guard let url = URL(string: "https://example.com/recipe") else {
+            Issue.record("bad fixture URL")
+            return
+        }
+        let record = SharedRecipeImportRecord(url: url)
+        #expect(queue.save([record]))
+
+        // 1. The attempt is durable the moment it starts — the state a process that never returns
+        //    leaves behind.
+        #expect(queue.markAttemptStarted(record))
+        #expect(queue.records().first?.attemptCount == 1)
+        #expect(queue.records().first?.lastAttemptAt != nil)
+
+        // 2. Recording the failure must NOT count a second time, or the retry budget halves.
+        #expect(queue.noteFailure(record, errorDescription: "Could not import that recipe."))
+        #expect(queue.records().first?.attemptCount == 1, "noteFailure burned a second attempt")
+        #expect(queue.records().first?.lastErrorDescription == "Could not import that recipe.")
+
+        // 3. A budget deferral gives the started attempt back: transient, and not the page's fault.
+        #expect(queue.markAttemptStarted(record))
+        #expect(queue.records().first?.attemptCount == 2, "precondition: the second attempt did not land")
+        #expect(queue.markBudgetDeferred(record, dayKey: "2026-08-18", refundingStartedAttempt: true))
+        #expect(queue.records().first?.attemptCount == 1, "a budget miss must not consume a retry attempt")
+        #expect(queue.records().first?.budgetDeferredDayKey == "2026-08-18")
+    }
+
+    /// `markAttemptStarted` deliberately does not self-destruct at the cap the way `markAttempt` does:
+    /// removing the record before the import runs would delete one that is about to succeed. The
+    /// drain's own attempt-cap check removes it on the next pass, before any fetch.
+    @Test func startingAnAttemptNeverDeletesTheRecord() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shared-recipe-queue-\(UUID().uuidString)")
+            .appendingPathComponent("SharedRecipeImports", isDirectory: true)
+            .appendingPathComponent("PendingRecipeURLs.json")
+        let queue = SharedRecipeImportQueue(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent().deletingLastPathComponent()) }
+
+        guard let url = URL(string: "https://example.com/recipe") else {
+            Issue.record("bad fixture URL")
+            return
+        }
+        let record = SharedRecipeImportRecord(url: url, attemptCount: SharedRecipeImportQueue.maxImportAttempts - 1)
+        #expect(queue.save([record]))
+        #expect(queue.markAttemptStarted(record))
+        #expect(queue.records().count == 1, "the record must survive its own attempt stamp")
+        #expect(queue.records().first?.attemptCount == SharedRecipeImportQueue.maxImportAttempts)
     }
 }

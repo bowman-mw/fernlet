@@ -74,12 +74,22 @@ struct FriendShopView: View {
                     store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint,
                                              sellerSigningPublicKey: target.sellerSigningPublicKey, reason: reason)
                     reportTarget = nil
-                    feedback = "Thanks for letting us know. We've hidden this item and blocked its sender on your device."
+                    // Disclosure (L21): the row we relay is SIGNED by this device and goes to friends
+                    // we meet in person — including the person reported, who is the only party that
+                    // can act on it as a self-ban. Saying only "on your device" understated that.
+                    feedback = "Thanks for letting us know. We've hidden this item and blocked its sender on "
+                        + "your device. Your report is signed by your device and travels to friends you meet "
+                        + "in person, including the person you reported."
                 }
             }
             Button("Cancel", role: .cancel) { reportTarget = nil }
         } message: { _ in
-            Text("Reporting hides this item and blocks the sender on your device.")
+            // Disclosure (L21): stated BEFORE the report is made, because the report is not
+            // anonymous and not device-local — it is signed and handed to friends met in person,
+            // the person reported among them.
+            Text("Reporting hides this item and blocks the sender on your device. Your report is also "
+                 + "signed by your device and shared with friends you meet in person — including the "
+                 + "person reported — so several reports of the same item can be counted together.")
         }
     }
 

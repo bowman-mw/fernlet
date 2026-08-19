@@ -261,11 +261,31 @@ public final class NutritionLabelScanner {
     ///     has no backing `CGImage`.
     ///   - workDidStart: Optional hook invoked on the detached task just before the heavy work —
     ///     used by UI callers to flip a "scanning…" indicator only once work truly begins.
+    /// Absolute per-axis pixel ceiling for OCR. Above any real camera or library photo (a 48 MP
+    /// iPhone capture is 8 000 x 6 000) and far below anything that would allocate gigabytes.
+    nonisolated private static let maxOCRPixelDimension = 12_000
+
+    /// Absolute total-pixel ceiling for OCR (80 MP). The per-axis bound alone admits 144 MP; this is
+    /// the clause that closes it. R5: safe from overflow because both axes are proven <= 12 000
+    /// first, in the same guard chain — do not reorder those clauses.
+    nonisolated private static let maxOCRPixelCount = 80_000_000
+
     nonisolated public static func recognizeText(
         in image: UIImage,
         workDidStart: (@Sendable () -> Void)? = nil
     ) async throws -> [String] {
         guard let rawCGImage = image.cgImage else {
+            throw NutritionLabelScanError.imageConversionFailed
+        }
+        // Belt and braces behind the entry-side probe on untrusted web images: `preprocessImage`
+        // renders this through CoreImage and Vision renders it again, so an absurd bitmap that
+        // reached here anyway must not become two more full-size allocations. The bounds are
+        // deliberately FAR above the untrusted-image policy (6 000 px / 24 MP) — the camera sheet
+        // and the food-view re-scan hand `scanAll` an UN-downscaled picked image, and a 48 MP
+        // library photo of a label must still scan.
+        guard rawCGImage.width <= maxOCRPixelDimension,
+              rawCGImage.height <= maxOCRPixelDimension,
+              rawCGImage.width * rawCGImage.height <= maxOCRPixelCount else {
             throw NutritionLabelScanError.imageConversionFailed
         }
 

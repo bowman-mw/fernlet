@@ -7,13 +7,19 @@
      exclusion, duress PIN, journal text removed from the plaintext-sync list, no-backdoor
      statement; intimacy age gate corrected to 16+ to match the shipped gate), and again
      2026-08-12 (§7 manual plan exchange: the opt-in clipboard export of a training summary to an
-     outside assistant). Before
+     outside assistant), and 2026-08-19 (§9 moderation-report disclosure: a report is signed and
+     relayed to friends met in person — the reported maker among them — not merely device-local;
+     finding L21), and 2026-08-19 (§6/§12 away-hearts disclosure: the opt-in "deliver hearts when
+     apart" setting leaves sealed hearts in our CloudKit public database, deletable only by the
+     sending device and with no server-side expiry, so "no friend server" is now scoped to the
+     default configuration and "they age out on their own" is removed as false; §7 the clipboard
+     copy is device-local — findings I32, L18). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** August 12, 2026
+**Effective date:** August 19, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -153,13 +159,19 @@ Keychain — a new phone starts with a fresh identity, and you re-add friends in
 **public key** is the only persistent identifier shared with friends; your private keys never
 leave your device.
 
-The friend features work **only when two people are physically near each other**, over a short-range,
-encrypted, peer-to-peer connection — there is no friend server and no remote friend activity. When
-you add a friend in person, your devices exchange your display names, public keys, avatar
+By default the friend features work **only when two people are physically near each other**, over a
+short-range, encrypted, peer-to-peer connection — no friend server, and no remote friend activity.
+When you add a friend in person, your devices exchange your display names, public keys, avatar
 appearances, and a **fuzzy** wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends **never**
 see your numeric score, your goals, your cycle information, or any raw health data. You can send
 "hearts," share recipes, and share custom companion clothing with nearby friends. All of this stays
 device-to-device.
+
+There is one **optional exception**, and it is off unless you turn it on. If you switch on
+**Deliver hearts when apart**, a heart you send to a friend you already added in person is sealed end to end
+and left in a shared iCloud drop-off area under a rotating, meaningless tag, so their phone can pick
+it up later. Only sealed hearts go there — never your own data, and nothing that names either of you.
+We cannot read them. Turning the setting off deletes the ones still waiting.
 
 Optional coarse (approximate) location may be used only for gentle weather-based prompts and, if you
 choose, to tag an in-person group activity. Location is never tracked over time and never attached to
@@ -188,7 +200,8 @@ to your clipboard as plain text, so you can paste it into an assistant of your c
 paste the workout plan it writes back into Fernlet.
 
 This is off unless you switch it on, and Fernlet still sends nothing anywhere: the copying and the
-pasting are both actions you take. But once you paste that text into another app, that app has it,
+pasting are both actions you take. The copy is marked device-local, so it is not shared to your other
+Apple devices through Universal Clipboard. But once you paste that text into another app, that app has it,
 under its own privacy policy and not ours — Fernlet cannot reach it or take it back. The summary
 never includes your journal, period or cycle data, intimate data, photos, friends, location, or
 your private keys. A plan you paste back is shown to you day by day, and checked against the
@@ -215,8 +228,12 @@ If you create custom companion clothing and share it with friends in person, tha
 governed by our in-app rules against objectionable content. You can **report** and **block** content
 and the people who share it; reporting hides the content on your device and blocks that person, and
 Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer,
-moderation actions take effect on-device. The full content rules are shown in the app, and use of
-the app is governed by Apple's standard Licensed Application End User License Agreement.
+moderation works device to device: when you report an item, a signed record of that report — the
+item, the reason, the maker's key and your key — is passed to friends you meet in person so their
+devices can hide repeatedly reported content. The maker you reported is one of those friends, so a
+report is not anonymous to them. It never reaches us or any server. The full content rules are shown
+in the app, and use of the app is governed by Apple's standard Licensed Application End User License
+Agreement.
 
 ## 10. Your controls and rights
 
@@ -257,7 +274,16 @@ who indicate they are 16 or older and are hidden and off by default.
 
 Data is retained on your device until you delete it or delete the app. iCloud copies are retained in
 your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no
-copy to retain or delete.
+copy we can read.
+
+One thing does sit outside your own iCloud storage, and only if you turned it on: **away hearts**
+(Section 6). A heart you send while your friend is elsewhere is stored, sealed, in a shared area of
+our iCloud database until their phone picks it up or your phone cleans it up. It is unreadable to us
+and carries no name. Only the device that wrote a heart can delete it — so if you delete Fernlet
+without first using **Delete Everything**, or turn the setting off, the hearts you already sent stay
+there, because the information needed to delete them lived only on your phone. They remain sealed,
+unreadable ciphertext that is never linked to you by name. Use Delete Everything, or turn away hearts
+off, before you uninstall, and Fernlet clears them for you.
 
 If you configured a duress PIN (Section 10), its responses have specific retention consequences:
 
@@ -266,8 +292,10 @@ If you configured a duress PIN (Section 10), its responses have specific retenti
 - **Silent wipe** immediately destroys every key that can open sealed data on this device — an
   instant, irreversible **crypto-erasure** — and then deletes the remaining local data, your iCloud
   copies, and the samples Fernlet wrote to Apple Health, on a best-effort basis. Encrypted backup
-  data or in-transit "hearts" stored off the device may persist briefly, but they are unopenable
-  ciphertext, and they are removed when the purge completes or when they age out on their own.
+  data or in-transit "hearts" stored off the device may persist, but they are unopenable ciphertext.
+  They are removed when the purge completes; if the purge cannot run — no network at that moment, or
+  the app was already deleted — they stay where they are, sealed and unreadable, and nothing can
+  address them afterwards to remove them.
 - **Recovery lock** is **not** deletion. It destroys this device's unlock keys, so everything
   sealed stays on the phone as unreadable ciphertext — a lock-out, not an erase. The data can be
   recovered only in person, through a mutual QR ceremony with a second device **you** previously

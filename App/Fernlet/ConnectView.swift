@@ -367,7 +367,10 @@ struct FriendsView: View {
                                 // slot may answer it, so the manager binds the nonce to slot.id.
                                 onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
                                 onDismissVerifyQR: { manager.clearActiveVerifyQR() },
-                                onScanVerified: { url in manager.beginQRVerification(with: url) }
+                                // Bound to THIS row, exactly like the QR we mint above: a valid
+                                // code belonging to a different nearby peer is refused, not
+                                // searched for.
+                                onScanVerified: { url in manager.beginQRVerification(with: url, slotID: slot.id) }
                             )
                         }
                     }

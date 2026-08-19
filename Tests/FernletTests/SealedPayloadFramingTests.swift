@@ -102,6 +102,20 @@ struct SealedPayloadFramingTests {
         }
     }
 
+    /// The 16 MiB default is a DEFAULT, not the only ceiling: a caller whose plaintext is bounded
+    /// by construction passes its own. Pins the defaulted-parameter contract so a later refactor
+    /// cannot quietly drop the argument at the heart-drop call site and restore the ~1000:1 gap
+    /// between an 8 KiB wire cap and what it can inflate to.
+    @Test func unframeHonoursACallerSuppliedCeiling() throws {
+        let payload = Data(count: 200 * 1024)
+        let framed = SealedPayloadFraming.frame(payload)
+        #expect(framed.count < 64 * 1024, "a deflate bomb must be small on the wire for this to test anything")
+        #expect(try SealedPayloadFraming.unframe(framed) == payload)
+        #expect(throws: SealedPayloadFraming.FramingError.inflatedTooLarge) {
+            try SealedPayloadFraming.unframe(framed, maxInflated: 64 * 1024)
+        }
+    }
+
     @Test func frameTagDetection() {
         #expect(!SealedPayloadFraming.hasFrameTag(Data(#"{"a":1}"#.utf8)))
         #expect(!SealedPayloadFraming.hasFrameTag(Data()))

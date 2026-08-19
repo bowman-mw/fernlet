@@ -48,9 +48,13 @@ struct ProximityRecipeShareReviewSheet: View {
                                 .fernletWrappingText()
                         }
 
+                        sourceHostField
+
                         notesField
 
                         ingredientsField
+
+                        stepsField
 
                         if let notice {
                             Text(notice)
@@ -112,6 +116,38 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
+    /// The source page's HOST for a saved (web) recipe, so the user can judge where the share came
+    /// from before importing it. Plain text, deliberately NOT tappable: this is a stranger's URL and
+    /// the recipe is not imported yet — naming the host informs the decision, opening it doesn't.
+    @ViewBuilder
+    private var sourceHostField: some View {
+        if let sourceHost {
+            SheetField("Source") {
+                Text(sourceHost)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+            }
+        }
+    }
+
+    /// The cooking steps exactly as shared (F5) — the sheet previously imported them unseen.
+    @ViewBuilder
+    private var stepsField: some View {
+        if !sharedSteps.isEmpty {
+            SheetField("Steps") {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(sharedSteps.enumerated()), id: \.offset) { index, step in
+                        Text("\(index + 1). \(step.text)")
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                    }
+                }
+            }
+        }
+    }
+
     /// The ingredient list exactly as shared.
     private var ingredientsField: some View {
         SheetField("Ingredients") {
@@ -151,6 +187,22 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
+    private var sourceHost: String? {
+        guard case .saved = share.payload.recipe.kind,
+              let saved = share.payload.recipe.saved,
+              let host = URL(string: saved.sourceURLString)?.host() else { return nil }
+        return host
+    }
+
+    private var sharedSteps: [RecipeStep] {
+        switch share.payload.recipe.kind {
+        case .local:
+            share.payload.recipe.local?.steps ?? []
+        case .saved:
+            share.payload.recipe.saved?.steps ?? []
+        }
+    }
+
     private var notesText: String? {
         switch share.payload.recipe.kind {
         case .local:
@@ -164,16 +216,36 @@ struct ProximityRecipeShareReviewSheet: View {
         switch share.payload.recipe.kind {
         case .local:
             guard let ingredients = share.payload.recipe.local?.ingredients else { return nil }
-            let protein = ingredients.reduce(0) { $0 + $1.protein }
-            let carbs = ingredients.reduce(0) { $0 + $1.carbs }
-            let fat = ingredients.reduce(0) { $0 + $1.fat }
+            let protein = Self.boundedMacroSum(ingredients, \.protein)
+            let carbs = Self.boundedMacroSum(ingredients, \.carbs)
+            let fat = Self.boundedMacroSum(ingredients, \.fat)
             guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
             return "Macros: P \(protein)g · C \(carbs)g · F \(fat)g"
         case .saved:
-            guard let saved = share.payload.recipe.saved,
-                  saved.protein > 0 || saved.carbs > 0 || saved.fat > 0 else { return nil }
-            return "Macros: P \(saved.protein)g · C \(saved.carbs)g · F \(saved.fat)g"
+            guard let saved = share.payload.recipe.saved else { return nil }
+            let protein = Self.boundedMacro(saved.protein)
+            let carbs = Self.boundedMacro(saved.carbs)
+            let fat = Self.boundedMacro(saved.fat)
+            guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
+            return "Macros: P \(protein)g · C \(carbs)g · F \(fat)g"
         }
+    }
+
+    /// Sums a peer's per-ingredient macros without trusting them: every term is clamped into
+    /// `[0, SharedRecipeLimits.maxMacroGrams]` and the list to `maxIngredients`, so the worst case
+    /// (100 * 10_000) cannot overflow the trapping `+` while this sheet is rendering.
+    ///
+    /// The sheet deliberately does NOT lean on the wire decoder's bounds: a payload can also be
+    /// built in-process (tests, the send-side preview), and this view renders before import.
+    static func boundedMacroSum(_ ingredients: [SharedRecipeIngredient],
+                                _ macro: (SharedRecipeIngredient) -> Int) -> Int {
+        ingredients.prefix(SharedRecipeLimits.maxIngredients)
+            .reduce(0) { $0 + boundedMacro(macro($1)) }
+    }
+
+    /// One displayed macro, clamped the same way ``boundedMacroSum(_:_:)`` clamps its terms.
+    static func boundedMacro(_ value: Int) -> Int {
+        min(max(value, 0), SharedRecipeLimits.maxMacroGrams)
     }
 
     private var duplicateWarning: String? {

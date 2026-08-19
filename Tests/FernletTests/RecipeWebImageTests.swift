@@ -368,6 +368,49 @@ struct RecipeWebImageTests {
         #expect(savedSharePayload(imageJPEGData: nil).droppingOversizeImage().imageJPEGData == nil)
     }
 
+    /// M7: the wire cap bounds the total bytes, but the REVIEW SHEET still has to lay the strings
+    /// out. The saved variant has no bounded decode of its own (unlike `SharedRecipePayload`), so
+    /// its strings and lists are clamped at the door to the same `SharedRecipeLimits` the import
+    /// path enforces.
+    @Test func clampedForReviewBoundsTheRenderedStringsAndLists() {
+        let huge = String(repeating: "x", count: 10_000)
+        let payload = ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(
+                kind: .saved,
+                saved: SharedSavedRecipePayload(
+                    name: huge,
+                    sourceURLString: "https://example.com/recipes/oats",
+                    ingredients: Array(repeating: huge, count: 500),
+                    summary: huge,
+                    servings: 9_999,
+                    protein: 10, carbs: 30, fat: 5,
+                    micronutrients: Micronutrients(),
+                    steps: (0..<500).map { _ in RecipeStep(text: huge) }
+                )
+            ),
+            imageJPEGData: nil
+        )
+
+        let clamped = payload.clampedForReview()
+        let saved = clamped.recipe.saved
+        #expect(saved?.name.count == SharedRecipeLimits.maxNameCharacters)
+        #expect(saved?.summary.count == SharedRecipeLimits.maxNotesCharacters)
+        #expect(saved?.ingredients.count == SharedRecipeLimits.maxIngredients)
+        #expect(saved?.ingredients.allSatisfy { $0.count <= SharedRecipeLimits.maxNameCharacters } == true)
+        #expect(saved?.steps?.count == SharedRecipeLimits.maxSteps)
+        #expect(saved?.servings == SharedRecipeLimits.maxServings)
+    }
+
+    /// The clamp is a no-op on an honest share — over-tightening must fail loudly.
+    @Test func clampedForReviewLeavesAnHonestShareUntouched() {
+        let payload = savedSharePayload(imageJPEGData: Data([0xFF, 0xD8, 0xFF, 0xE0]))
+        let clamped = payload.clampedForReview()
+        #expect(clamped.recipe.saved?.name == "Shared Oats")
+        #expect(clamped.recipe.saved?.ingredients == ["1 cup oats"])
+        #expect(clamped.recipe.saved?.summary == "Cook the oats.")
+        #expect(clamped.imageJPEGData == payload.imageJPEGData)
+    }
+
     // MARK: - Sender-side downscale
 
     /// The wire JPEG helper honors the byte cap and rejects non-image bytes.

@@ -428,6 +428,51 @@ struct DeleteAllDataTests {
         #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext trainer export survived the wipe")
     }
 
+    /// The connection-history export is a proximity peer-identity dossier — display names,
+    /// advertised/confirmed fingerprints, signing keys, first/last-seen times — so it lands in the
+    /// same exports directory and is swept by the same wipe.
+    @Test func connectionLogExportFileIsSweptByTheWipe() async throws {
+        let store = makeStore("delete-all-connection-log-export")
+        wireSucceedingSealedHooks(store)
+        let exportURL = try store.writeProtectedExport(Data("[]".utf8), kind: "connection-logs")
+        #expect(FileManager.default.fileExists(atPath: exportURL.path),
+                "precondition: the connection-log export file was not written")
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!FileManager.default.fileExists(atPath: exportURL.path),
+                "the exported peer-identity dossier survived the wipe")
+        #expect(outcome.isComplete)
+    }
+
+    /// A connection-history export written flat into tmp/ by a build before the writer moved into the
+    /// exports directory (lowercase `fernlet-connection-logs-*.json`) is still swept, so a tester who
+    /// exported once does not keep the dossier forever.
+    @Test func legacyFlatConnectionLogExportIsSweptByTheWipe() async throws {
+        let legacyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet-connection-logs-2026-08-01.json")
+        try Data("[]".utf8).write(to: legacyURL, options: [.atomic, .completeFileProtection])
+        #expect(FileManager.default.fileExists(atPath: legacyURL.path),
+                "precondition: the legacy file was not written")
+
+        let store = makeStore("delete-all-legacy-connection-log")
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path),
+                "the legacy plaintext connection-log export survived the wipe")
+    }
+
+    /// The load-bearing half: the behavioural tests above only prove `writeProtectedExport` output is
+    /// swept. This pins that the VIEW routes through it, so the dossier can never drift back to the
+    /// tmp/ root where no sweep names it.
+    @Test func connectionHistoryExportDoesNotWriteToTheTmpRoot() throws {
+        let url = RepoRoot.url.appending(path: "App/Fernlet/Proximity/UI/ConnectionInspectorHistoryView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        #expect(source.contains("writeProtectedExport"))
+        #expect(!source.contains("temporaryDirectory"),
+                "the connection-history export must route through writeProtectedExport, not the tmp/ root")
+    }
+
     /// A clean wipe reports success, so the caller can dismiss rather than cry wolf.
     @Test func outcomeIsCompleteWhenEveryStoreClears() async {
         let store = makeStore("delete-all-clean")

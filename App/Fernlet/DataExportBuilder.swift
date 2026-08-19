@@ -425,8 +425,11 @@ extension FernletStore {
 
         // Legacy sweep: exports used to be written straight into tmp/ — data exports as
         // `Fernlet-data-<day>.json`, trainer summaries as `Fernlet-training-<day>.json` (before the
-        // trainer writer moved into `dataExportsDirectory`). Exactly those two prefixes, deliberately NOT
-        // a blanket `Fernlet-` match: other tmp/ files are not this sweep's to delete.
+        // trainer writer moved into `dataExportsDirectory`), and the connection-history dossier as
+        // lowercase `fernlet-connection-logs-<day>.json` (before that writer moved in too — the
+        // spelling is the literal name shipped builds wrote, and `hasPrefix` is case-sensitive).
+        // Exactly those three prefixes, deliberately NOT a blanket `Fernlet-`/`fernlet-` match:
+        // other tmp/ files are not this sweep's to delete.
         let tmp = fileManager.temporaryDirectory
         let strays: [URL]
         do {
@@ -441,7 +444,9 @@ extension FernletStore {
         }
         for stray in strays
         where (stray.lastPathComponent.hasPrefix("Fernlet-data-")
-               || stray.lastPathComponent.hasPrefix("Fernlet-training-")) && stray.pathExtension == "json" {
+               || stray.lastPathComponent.hasPrefix("Fernlet-training-")
+               || stray.lastPathComponent.hasPrefix("fernlet-connection-logs-"))
+            && stray.pathExtension == "json" {
             do { try fileManager.removeItem(at: stray) }
             catch { ok = false }
         }

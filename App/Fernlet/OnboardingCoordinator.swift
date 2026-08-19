@@ -19,6 +19,10 @@ protocol ExistingCloudDataDetecting {
 
 extension CloudKitDataService: ExistingCloudDataDetecting {}
 
+// DEBUG-only: this double fabricates the answer the storage step keys its durable
+// `cloudCopyKept` decision off, so in a shipping binary it must be ABSENT, not merely unreachable.
+// Its only reference is `OnboardingCloudDataDetectorFactory.makeDetector`, itself inside `#if DEBUG`.
+#if DEBUG
 /// Test double for ``ExistingCloudDataDetecting`` that returns a canned summary without touching CloudKit.
 ///
 /// Built by ``OnboardingCloudDataDetectorFactory`` when the UI-test launch environment asks for a
@@ -30,6 +34,7 @@ private struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
         summary
     }
 }
+#endif
 
 /// Namespace for the `UserDefaults` keys onboarding writes and the rest of the app reads.
 ///
@@ -50,6 +55,9 @@ enum OnboardingDefaults {
 struct OnboardingCloudDataDetectorFactory {
     /// - Returns: A mock detector when the UI-test environment requests one, else the live CloudKit service.
     static func makeDetector() -> any ExistingCloudDataDetecting {
+        // The `environment` binding lives INSIDE the region with its only readers: left outside it
+        // would be unused in Release, and warnings are errors on every target.
+        #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if environment["FERNLET_UI_TEST_DISABLE_CLOUD_DETECTION"] == "1" {
             return MockExistingCloudDataDetector(summary: nil)
@@ -67,6 +75,9 @@ struct OnboardingCloudDataDetectorFactory {
             hydrationLogCount: 0,
             sleepRecordCount: 0
         ))
+        #else
+        return CloudKitDataService()
+        #endif
     }
 }
 

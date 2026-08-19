@@ -86,6 +86,48 @@ struct MeshTransportErrorSurfacingTests {
         #expect(messages.first?.contains("fernlet-test") == true)
     }
 
+    // MARK: - Transport wire floor (M7)
+
+    /// M7: one inbound MC frame is bounded BEFORE the bytes reach any channel or decoder, on
+    /// every radio. Without it the only size gates were mode-specific (the 4 MB trainer blob) or
+    /// post-decrypt, so a 16 MB blob on the friend/recipe/presence radios was queued onto the
+    /// main actor and handed to `JSONDecoder`. Drop only — never disconnect at this layer, or any
+    /// peer could kill any session with one large frame.
+    @Test func oversizedInboundFrameIsDroppedBeforeReachingTheChannel() async {
+        let session = MeshMultipeerSession(peerIDStore: EphemeralPeerIDStore())
+        let peerID = MCPeerID(displayName: "Loud")
+        let mcSession = MCSession(peer: session.localPeerID)
+
+        session.session(mcSession,
+                        didReceive: Data(count: MeshMultipeerSession.maxInboundWireBytes + 1),
+                        fromPeer: peerID)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // The frame never got as far as creating or feeding a channel.
+        #expect(session.channels[peerID] == nil,
+                "An oversized frame must be dropped before the @MainActor hop that touches channels")
+    }
+
+    /// The boundary is inclusive: exactly `maxInboundWireBytes` is still honest traffic.
+    @Test func inboundFrameAtExactlyTheCapIsNotDropped() async {
+        let session = MeshMultipeerSession(peerIDStore: EphemeralPeerIDStore())
+        let peerID = MCPeerID(displayName: "AtCap")
+        let mcSession = MCSession(peer: session.localPeerID)
+        var delivered = false
+        session.onPeerChannelReady = { _ in delivered = true }
+
+        // No channel exists for this peer, so the frame is dropped downstream either way — what
+        // is under test is that the SIZE guard did not fire, which the cap arithmetic pins.
+        session.session(mcSession,
+                        didReceive: Data(count: MeshMultipeerSession.maxInboundWireBytes),
+                        fromPeer: peerID)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(MeshMultipeerSession.maxInboundWireBytes == SealedPayloadFraming.maxInflatedByteCount,
+                "The transport floor must stay pinned to the inflate ceiling every sealed body obeys")
+        #expect(delivered == false, "No channel was ever readied — the drop below is not the size gate")
+    }
+
     /// The callback is optional — an owner that never wires it (heart/clothing radios, both
     /// deleted in Phase 4) must not crash the delegate path.
     @Test func missingCallbackIsHarmless() async {

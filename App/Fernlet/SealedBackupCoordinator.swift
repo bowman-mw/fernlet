@@ -644,12 +644,15 @@ final class SealedBackupCoordinator {
     /// Called once at launch (after the store is ready), and again from the user's "Retry" action, to
     /// reconcile the escrow key and pull any sealed iCloud backups into the local stores. No-ops unless
     /// iCloud sync is on. Best-effort and non-fatal: failures are surfaced as a retryable status (WS-4),
-    /// audited, and retried next launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
+    /// audited, and retried next launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt
+    /// out — DEBUG-only, so it cannot be triggered in a shipping binary.
     ///
     /// `userInitiated` marks the user's explicit Retry (as opposed to the ambient launch pass) and lets
     /// every paged payload fall back to its targeted, payload-scoped restore — see below.
     func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
+        #if DEBUG
         guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return }
+        #endif
         let prefs = StoragePreferencesStore.currentPreferences()
         guard prefs.iCloudSyncEnabled else { return }
         // Reconcile the escrow key BEFORE restoring so any open() runs under the authoritative key and a

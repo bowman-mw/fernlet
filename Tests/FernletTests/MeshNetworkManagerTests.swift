@@ -42,6 +42,25 @@ struct MeshNetworkManagerTests {
         #expect(info["memberCount"] == nil, "Closed mesh must not leak memberCount in discoveryInfo")
     }
 
+    /// Identifier hygiene (L29): the friend radio's cleartext Bonjour TXT must never carry the
+    /// user's proximity display name. `sid` is a per-launch random UUID (unlinkable); a display
+    /// name is stable across launches and locations, so a passive scanner could link sightings of
+    /// one person. A peer learns our name only from the signed identity introduction.
+    @Test func discoveryInfo_neverAdvertisesTheDisplayName() {
+        store.settings.proximityDisplayName = "Alexandra Quimby"
+        let manager = MeshNetworkManager(store: store)
+
+        #expect(Set(manager.currentDiscoveryInfo().keys) == ["v", "sid"],
+                "Pairwise advertisement must be version + session id only")
+
+        manager.currentMesh = makeTestMesh(name: "Sunrise Meadow", mode: .open)
+        let open = manager.currentDiscoveryInfo()
+        #expect(Set(open.keys) == ["v", "sid", "meshID", "meshName", "memberCount"],
+                "Open mesh adds only the mesh identifiers — still no display name")
+        #expect(!open.values.contains { $0.contains("Alexandra") },
+                "No advertised value may contain the user's display name")
+    }
+
     /// Toggling from open to closed removes mesh identifiers from discoveryInfo.
     @Test func discoveryInfo_modeToggleUpdatesAdvertisedIdentifiers() {
         let manager = MeshNetworkManager(store: store)
@@ -369,6 +388,431 @@ struct MeshNetworkManagerTests {
         manager.addSlotForTesting(coordinator: pending, peer: makePeer(name: "Pending"), fingerprint: nil)
         manager.proximityCoordinator(pending, didReceive: envelope, plaintext: Data(), from: nil)
         #expect(handlerCalled == false, "An uncommitted slot must never reach a feature handler")
+    }
+
+    // MARK: - Committed-slot gate: photos and descriptors (M5)
+
+    /// M5: the friend-photo family reaches the PERSISTENT wall, so it is member business. The
+    /// coordinator dispatches with `connectedIdentity ?? pendingPeerIdentity`, so without a
+    /// committed-slot gate a peer that has only introduced itself can write the wall.
+    @Test func preCommitFriendPhotoIsDropped() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Pending"), fingerprint: nil)
+
+        let payload = makePhotoPayload(author: authorIdentity)
+        let plaintext = try! JSONEncoder().encode(payload)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .friendPhoto, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: peerIdentity(for: authorIdentity))
+
+        #expect(manager.meshPhotos.isEmpty, "An uncommitted slot must never reach the photo wall")
+    }
+
+    /// The positive control for the gate above — over-tightening must fail loudly.
+    @Test func committedSlotFriendPhotoIsCached() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        let author = authorIdentity
+        let fingerprint = IdentityService.fingerprint(of: author.localSigningPublicKey)
+        manager.addSlotForTesting(coordinator: coordinator,
+                                  peer: makePeer(name: "Committed"),
+                                  fingerprint: fingerprint)
+
+        let payload = makePhotoPayload(author: author)
+        let plaintext = try! JSONEncoder().encode(payload)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .friendPhoto, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: peerIdentity(for: author))
+
+        #expect(manager.meshPhotos.contains { $0.id == payload.id },
+                "A committed slot's own photo must still reach the wall")
+    }
+
+    /// M5: a descriptor adopts a whole mesh identity, so it too requires a committed slot.
+    @Test func preCommitMeshDescriptorIsNotAdopted() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Pending"), fingerprint: nil)
+
+        let plaintext = try! JSONEncoder().encode(MeshStateChangePayload(descriptor: makeTestMesh(mode: .open)))
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshDescriptor, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: nil)
+
+        #expect(manager.currentMesh == nil, "An uncommitted slot must not be able to hand us a mesh")
+    }
+
+    /// The positive control for the descriptor gate — a joiner that never adopts a descriptor
+    /// never sends an admission request, so over-tightening this breaks every join.
+    @Test func committedSlotMeshDescriptorIsAdopted() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Committed"), fingerprint: "fp-peer")
+
+        let mesh = makeTestMesh(name: "Sunrise Meadow", mode: .open)
+        let plaintext = try! JSONEncoder().encode(MeshStateChangePayload(descriptor: mesh))
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshDescriptor, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: nil)
+
+        #expect(manager.currentMesh?.meshID == mesh.meshID, "A committed slot's descriptor must still be adopted")
+    }
+
+    // MARK: - Peer display-name sanitisation (M15)
+
+    /// M15: `requesterDisplayName` is peer-supplied and reaches the ADMISSION PROMPT — the one
+    /// screen where the user decides to admit a stranger. Sanitize at ingest so neither the prompt
+    /// nor the admitter's roster can be spoofed by a zero-width homoglyph or reversed by an RLO.
+    @Test func admissionRequestDisplayNameIsSanitizedBeforeItReachesThePrompt() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        let requester = makeAdmitter()
+        let requesterFP = IdentityService.fingerprint(of: requester.localSigningPublicKey)
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Requester"), fingerprint: requesterFP)
+        manager.currentMesh = makeTestMesh(mode: .open)
+
+        deliverAdmissionRequest(named: "Ma\u{200B}ya", from: requester, to: manager,
+                                on: coordinator, meshID: manager.currentMesh!.meshID)
+        #expect(manager.pendingAdmissionRequests.first?.requesterDisplayName == "Maya",
+                "A zero-width joiner must be stripped before the prompt renders the name")
+
+        manager.pendingAdmissionRequests.removeAll()
+        deliverAdmissionRequest(named: String(repeating: "A", count: 10_000), from: requester, to: manager,
+                                on: coordinator, meshID: manager.currentMesh!.meshID)
+        #expect((manager.pendingAdmissionRequests.first?.requesterDisplayName.count ?? 0) <= 24,
+                "A multi-kilobyte name must be capped, not queued whole")
+    }
+
+    /// `allowAdmission` is `public` and takes an arbitrary payload, so it must not depend on the
+    /// queue's copy having been sanitized. (`moderatedPeerDisplayName` is idempotent.)
+    @Test func allowAdmissionStoresASanitizedMemberName() {
+        let manager = MeshNetworkManager(store: store)
+        let mesh = makeTestMesh(mode: .open)
+        manager.currentMesh = mesh
+        let requester = makeAdmitter()
+
+        manager.allowAdmission(MeshAdmissionRequestPayload(
+            meshID: mesh.meshID,
+            requesterFingerprint: IdentityService.fingerprint(of: requester.localSigningPublicKey),
+            requesterDisplayName: "Ma\u{200B}ya" + String(repeating: "!", count: 100),
+            requesterSigningPublicKey: requester.localSigningPublicKey,
+            requesterKeyAgreementPublicKey: requester.localKeyAgreementPublicKey))
+
+        let name = manager.currentMesh?.members.last?.displayName ?? ""
+        #expect(!name.unicodeScalars.contains { $0.value == 0x200B }, "No zero-width scalar may survive")
+        #expect(name.count <= 24, "The stored member name must be capped")
+    }
+
+    /// `recordSessionParticipant` is the SINGLE roster ingest, so coercing there covers both the
+    /// verified-identity caller and `promoteToMesh`'s raw MC transport name.
+    @Test func sessionRosterNamesAreSanitizedAtTheSingleIngest() {
+        let manager = MeshNetworkManager(store: store)
+        let peer = makeAdmitter()
+
+        manager.recordSessionParticipant(
+            displayName: "Ma\u{200B}ya",
+            fingerprint: "fp-roster",
+            signingPublicKey: peer.localSigningPublicKey,
+            keyAgreementPublicKey: peer.localKeyAgreementPublicKey)
+
+        #expect(manager.sessionRoster.first?.displayName == "Maya")
+    }
+
+    private func deliverAdmissionRequest(
+        named name: String,
+        from requester: IdentityService,
+        to manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator,
+        meshID: UUID
+    ) {
+        let request = MeshAdmissionRequestPayload(
+            meshID: meshID,
+            requesterFingerprint: IdentityService.fingerprint(of: requester.localSigningPublicKey),
+            requesterDisplayName: name,
+            requesterSigningPublicKey: requester.localSigningPublicKey,
+            requesterKeyAgreementPublicKey: requester.localKeyAgreementPublicKey)
+        let plaintext = try! JSONEncoder().encode(request)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshAdmissionRequest, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: peerIdentity(for: requester))
+    }
+
+    // MARK: - Admission-grant authorization (H2)
+
+    /// H2: `MeshAdmissionToken` is rooted in the admitter key carried INSIDE it, so a self-signed
+    /// token from a total stranger verifies. Without the authorization guards, that stranger's
+    /// grant hands us a group key and a joined epoch.
+    @Test func selfSignedAdmissionGrantFromNonMemberIsRejected() throws {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Stranger"), fingerprint: "fp-stranger")
+
+        let stranger = makeAdmitter()
+        let meshID = UUID()
+        let grant = try makeGrant(meshID: meshID, admitter: stranger, manager: manager, epoch: 5)
+        deliverGrant(grant, to: manager, on: coordinator, sender: stranger)
+
+        #expect(manager.currentGroupKey == nil, "A grant we never asked for must not install a group key")
+        #expect(manager.localJoinedEpoch == 0, "…nor move the joined epoch")
+    }
+
+    /// Even a genuine member's grant is only ever the answer to a request WE sent on THAT slot.
+    @Test func unsolicitedAdmissionGrantIsRejected() throws {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Member"), fingerprint: "fp-member")
+
+        let admitter = makeAdmitter()
+        let mesh = makeMesh(with: admitter)
+        manager.currentMesh = mesh        // adopted directly: no admission request was ever sent
+
+        let grant = try makeGrant(meshID: mesh.meshID, admitter: admitter, manager: manager, epoch: 5)
+        deliverGrant(grant, to: manager, on: coordinator, sender: admitter)
+
+        #expect(manager.currentGroupKey == nil, "An unsolicited grant must be dropped even from a member")
+    }
+
+    /// The positive control: descriptor → request → grant is the real join flow, and it must
+    /// still work end to end. This is the test that catches an over-tightened guard.
+    @Test func solicitedAdmissionGrantFromMemberIsAccepted() throws {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Member"), fingerprint: "fp-member")
+
+        let admitter = makeAdmitter()
+        let mesh = makeMesh(with: admitter)
+        deliverDescriptor(mesh, to: manager, on: coordinator)
+        #expect(manager.currentMesh?.meshID == mesh.meshID, "precondition: descriptor adopted, request sent")
+
+        let grant = try makeGrant(meshID: mesh.meshID, admitter: admitter, manager: manager, epoch: 5)
+        deliverGrant(grant, to: manager, on: coordinator, sender: admitter)
+
+        #expect(manager.currentGroupKey?.epoch == 5, "The real join flow must still install the group key")
+        #expect(manager.localJoinedEpoch == 5)
+    }
+
+    /// Epochs only move forward — a replayed grant must not roll a joined member back onto a
+    /// retired key, exactly as `handleKeyRotation` requires.
+    @Test func admissionGrantWithStaleEpochIsRejected() throws {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Member"), fingerprint: "fp-member")
+
+        let admitter = makeAdmitter()
+        let mesh = makeMesh(with: admitter)
+        deliverDescriptor(mesh, to: manager, on: coordinator)
+        deliverGrant(try makeGrant(meshID: mesh.meshID, admitter: admitter, manager: manager, epoch: 5),
+                     to: manager, on: coordinator, sender: admitter)
+        let established = manager.currentGroupKey
+        #expect(established?.epoch == 5, "precondition: epoch 5 established")
+
+        // Re-solicit (the grant above spent the outstanding request), then replay an older epoch.
+        deliverDescriptor(mesh, to: manager, on: coordinator)
+        deliverGrant(try makeGrant(meshID: mesh.meshID, admitter: admitter, manager: manager, epoch: 3),
+                     to: manager, on: coordinator, sender: admitter)
+
+        #expect(manager.currentGroupKey?.epoch == 5, "The epoch-5 key must survive a stale grant")
+        #expect(manager.currentGroupKey?.keyBytes == established?.keyBytes)
+        #expect(manager.localJoinedEpoch == 5)
+    }
+
+    // MARK: - Admission-grant fixtures
+
+    private func makeAdmitter() -> IdentityService {
+        let identity = IdentityService(keychainService: "test.mesh.admitter.\(UUID().uuidString)")
+        try? identity.ensureProvisioned()
+        return identity
+    }
+
+    private func makeMesh(with admitter: IdentityService) -> MeshDescriptor {
+        let now = Date()
+        let member = MeshMember(
+            fingerprint: IdentityService.fingerprint(of: admitter.localSigningPublicKey),
+            displayName: "Admitter",
+            signingPublicKey: admitter.localSigningPublicKey,
+            keyAgreementPublicKey: admitter.localKeyAgreementPublicKey,
+            joinedAt: now)
+        return MeshDescriptor(meshID: UUID(), name: "Joinable", mode: .open, members: [member],
+                              nameSetAt: now, nameSetBy: member.fingerprint,
+                              modeSetAt: now, modeSetBy: member.fingerprint, createdAt: now)
+    }
+
+    private func makeGrant(
+        meshID: UUID,
+        admitter: IdentityService,
+        manager: MeshNetworkManager,
+        epoch: Int
+    ) throws -> MeshAdmissionGrantPayload {
+        let token = try MeshAdmissionToken.signed(
+            meshID: meshID,
+            joinerFingerprint: manager.localFingerprint,
+            joinerSigningPublicKey: manager.localSigningPublicKey,
+            admitterIdentity: admitter)
+        var keyBytes = Data(count: 32)
+        keyBytes.withUnsafeMutableBytes { _ = SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+        let bundle = try admitter.encryptGroupKey(keyBytes, for: manager.localKeyAgreementPublicKey)
+        return MeshAdmissionGrantPayload(meshID: meshID,
+                                         requesterFingerprint: manager.localFingerprint,
+                                         token: token,
+                                         encryptedCurrentKey: bundle,
+                                         currentKeyEpoch: epoch)
+    }
+
+    private func deliverDescriptor(_ mesh: MeshDescriptor, to manager: MeshNetworkManager, on coordinator: ProximityCoordinator) {
+        let plaintext = try! JSONEncoder().encode(MeshStateChangePayload(descriptor: mesh))
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshDescriptor, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: nil)
+    }
+
+    private func deliverGrant(
+        _ grant: MeshAdmissionGrantPayload,
+        to manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator,
+        sender: IdentityService
+    ) {
+        let plaintext = try! JSONEncoder().encode(grant)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshAdmissionGrant, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: peerIdentity(for: sender))
+    }
+
+    // MARK: - Photo author binding (M6)
+
+    /// The envelope signature authenticates only the RELAYER; the author fields are an unsigned
+    /// claim. A photo with no claim at all is un-attributable — it can be neither blocked nor
+    /// honestly displayed — so it is rejected rather than displayed under the relayer's name.
+    @Test func photoWithNilSenderFingerprintIsRejected() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
+
+        let payload = FriendPhotoPayload(imageData: makeTinyJPEG(), senderName: "Mallory",
+                                         senderFingerprint: nil, senderSigningPublicKey: nil)
+        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
+
+        #expect(manager.meshPhotos.isEmpty, "An un-attributable photo must never reach the wall")
+    }
+
+    /// A relayer must not be able to launder a blocked peer's photo by claiming it for them.
+    @Test func photoClaimingABlockedAuthorIsRejected() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
+
+        let author = authorIdentity
+        store.proximityTrustVault.block(signingPublicKey: author.localSigningPublicKey)
+
+        deliverPhoto(makePhotoPayload(author: author), to: manager, on: coordinator, relayer: "fp-relayer")
+
+        #expect(manager.meshPhotos.isEmpty, "A photo claiming a blocked author must be dropped")
+    }
+
+    /// The claim has to be internally consistent, or the block list keys on nothing: the claimed
+    /// fingerprint must be the hash of the claimed signing key.
+    @Test func photoWhoseClaimedKeyDoesNotHashToItsFingerprintIsRejected() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
+
+        let payload = FriendPhotoPayload(imageData: makeTinyJPEG(), senderName: "Mallory",
+                                         senderFingerprint: "fp-relayer",
+                                         senderSigningPublicKey: authorIdentity.localSigningPublicKey)
+        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
+
+        #expect(manager.meshPhotos.isEmpty, "A fingerprint that does not hash from the claimed key is a forged claim")
+    }
+
+    /// A well-formed claim about somebody this session has never heard of is still a claim about
+    /// a stranger — there is nothing to attribute it to.
+    @Test func photoClaimingAnUnknownAuthorIsRejected() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
+
+        deliverPhoto(makePhotoPayload(author: authorIdentity), to: manager, on: coordinator, relayer: "fp-relayer")
+
+        #expect(manager.meshPhotos.isEmpty, "An author absent from the mesh, roster and manifests is unknown")
+    }
+
+    /// The relay positive control: A's photo relayed by B is cached WITH A's original attribution,
+    /// once A is a roster participant. Stamping the relayer over the fields would be a correctness
+    /// regression on the wall, not a fix.
+    @Test func relayedPhotoFromAKnownMeshMemberIsCachedWithItsOriginalAttribution() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Relayer"), fingerprint: "fp-relayer")
+
+        let author = authorIdentity
+        let authorFP = IdentityService.fingerprint(of: author.localSigningPublicKey)
+        manager.recordSessionParticipant(displayName: "Author",
+                                         fingerprint: authorFP,
+                                         signingPublicKey: author.localSigningPublicKey,
+                                         keyAgreementPublicKey: author.localKeyAgreementPublicKey)
+
+        let payload = makePhotoPayload(author: author)
+        deliverPhoto(payload, to: manager, on: coordinator, relayer: "fp-relayer")
+
+        let cached = manager.meshPhotos.first { $0.id == payload.id }
+        #expect(cached != nil, "A relayed photo from a known author must still reach the wall")
+        #expect(cached?.senderFingerprint == authorFP,
+                "The relay must keep the AUTHOR's attribution, not the relayer's")
+    }
+
+    // MARK: - Photo/author test fixtures
+
+    /// A throwaway signing identity used as a photo AUTHOR. Not provisioned through the app's
+    /// keychain service, so it leaves nothing behind.
+    private var authorIdentity: IdentityService {
+        let identity = IdentityService(keychainService: "test.mesh.photoauthor.shared")
+        try? identity.ensureProvisioned()
+        return identity
+    }
+
+    private func peerIdentity(for identity: IdentityService) -> ProximityCoordinator.PeerIdentity {
+        ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Author",
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            fingerprint: IdentityService.fingerprint(of: identity.localSigningPublicKey),
+            rangingMode: .rssi,
+            firstSeenAt: Date()
+        )
+    }
+
+    private func makePhotoPayload(author: IdentityService) -> FriendPhotoPayload {
+        FriendPhotoPayload(
+            imageData: makeTinyJPEG(),
+            senderName: "Author",
+            senderFingerprint: IdentityService.fingerprint(of: author.localSigningPublicKey),
+            senderSigningPublicKey: author.localSigningPublicKey
+        )
+    }
+
+    private func deliverPhoto(
+        _ payload: FriendPhotoPayload,
+        to manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator,
+        relayer: String
+    ) {
+        let plaintext = try! JSONEncoder().encode(payload)
+        let relayerIdentity = ProximityCoordinator.PeerIdentity(
+            id: UUID(), displayName: "Relayer",
+            signingPublicKey: Data([0xAA]), keyAgreementPublicKey: Data([0xBB]),
+            fingerprint: relayer, rangingMode: .rssi, firstSeenAt: Date())
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .friendPhoto, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: relayerIdentity)
     }
 
     /// An unregistered non-core type keeps the pre-registry silent drop — a handler registered

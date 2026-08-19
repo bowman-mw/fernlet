@@ -90,6 +90,38 @@ final class ModerationBanTests: XCTestCase {
         store.clearAllForTesting()
     }
 
+    /// The self-ban's ONLY evidence source is foreign rows naming this device's own key as subject.
+    ///
+    /// L21 anti-regression. Because the relay is strictly one-hop (`verifiedRows` forces
+    /// `reporterSigningPublicKey == senderSigningKey`), no third party ever forwards such a row — the
+    /// reporter hands it to the person reported directly, which is why
+    /// `ModerationReportRelay.buildPayload` deliberately does NOT filter rows whose subject is the
+    /// recipient. A reviewer proposing that "obvious" privacy filter deletes the 30-day shop pause
+    /// with nothing else in the build to notice; this test is what fails instead. The peer branch is
+    /// covered by `testServedBanDoesNotReMintFromSameEvidenceButNewArtworkReArms` (subject != localKey).
+    func testForeignRowsNamingLocalKeySelfBanTheShop() {
+        let service = uniqueService()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = ModerationBanStore(service: service, clock: MockMonotonicClock(100), date: { now })
+        let localKey = Data([0])
+        func foreignReport(_ reporter: UInt8, _ hash: UInt8) -> ModerationLedgerEntry {
+            ModerationLedgerEntry(
+                id: "report:\(reporter):\(hash)", kind: .report,
+                reporterSigningPublicKey: Data([reporter]), subjectSigningPublicKey: localKey,
+                itemID: UUID(), contentHash: Data([hash]), reasonToken: "offensive",
+                reporterSeq: 1, createdAt: now)
+        }
+        XCTAssertFalse(store.isSelfBanned)
+        // 3 of OUR items, each flagged by 2 distinct foreign reporters, spread within the per-reporter cap.
+        let rows = [foreignReport(1, 1), foreignReport(2, 1),
+                    foreignReport(1, 2), foreignReport(3, 2),
+                    foreignReport(2, 3), foreignReport(3, 3)]
+        store.reconcile(rows: rows, localSigningKey: localKey)
+        XCTAssertTrue(store.isSelfBanned,
+                      "rows naming the local key as subject must self-ban — they are its only evidence")
+        store.clearAllForTesting()
+    }
+
     /// A served 30-day ban must NOT re-mint from the same still-non-decayed reports (reports live 180d).
     /// Only a genuinely new offending artwork re-arms it. Regression for the ~210-day runaway ban.
     func testServedBanDoesNotReMintFromSameEvidenceButNewArtworkReArms() {

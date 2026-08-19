@@ -4,6 +4,7 @@ import FernletFoundation
 import FernletUI
 #if canImport(UIKit)
 import UIKit
+import UniformTypeIdentifiers
 #endif
 
 /// The Trainer / Nutritionist export screen (Phase 7), and — when the manual coach exchange is switched
@@ -168,7 +169,8 @@ struct TrainerExportView: View {
             } message: {
                 Text("This copies your training data as plain text so you can paste it somewhere else. "
                      + "Once you paste it into another app, that app has it — Fernlet can't take it back. "
-                     + "It never leaves your device on its own.")
+                     + "The copy stays on this iPhone — it isn't shared to your other Apple devices. "
+                     + "To get it onto another device, use Prepare summary instead.")
             }
             .alert("Plan added", isPresented: Binding(
                 get: { importResult != nil },
@@ -218,7 +220,14 @@ struct TrainerExportView: View {
             return
         }
         #if canImport(UIKit)
-        UIPasteboard.general.string = text
+        // The general pasteboard is Handoff-synced to every device on the same Apple Account unless
+        // the item is written localOnly. A blob carrying injury notes and eight weeks of training is
+        // not something to advertise to a shared family Mac, and the alert above now promises the
+        // copy stays here. No `expirationDate` on purpose: a summary that silently
+        // vanishes mid-flow makes the user paste their PREVIOUS clipboard into a chatbot — a worse
+        // leak than the one the expiry would close, and a silent one.
+        UIPasteboard.general.setItems([[UTType.utf8PlainText.identifier: text]],
+                                      options: [.localOnly: true])
         #endif
         didCopy = true
     }

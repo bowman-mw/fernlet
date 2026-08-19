@@ -315,4 +315,79 @@ struct RecipeWebImporterTests {
         )
         #expect(RecipeDefinition(importedRecipe: imported).webImport?.imageURLString == nil)
     }
+
+    // MARK: - Hostile page numbers (M9) and over-long page strings (M16)
+
+    /// R5: `Int(d.rounded())` traps for a `Double` outside `Int`'s range, and `recipeYield` is a
+    /// page-controlled field. A yield that cannot be read means one serving — the default this
+    /// parser already had — and an enormous one is clamped, because servings is a DIVISOR and a
+    /// bogus one must not fail an otherwise-good import.
+    @Test func recipeYieldBeyondIntRangeFallsBackToOneServing() {
+        #expect(RecipeWebImporter.parseServings(from: 1e300) == 1)
+        #expect(RecipeWebImporter.parseServings(from: [[1e300]]) == 1)
+        #expect(RecipeWebImporter.parseServings(from: Double.infinity) == 1)
+        #expect(RecipeWebImporter.parseServings(from: 999_999_999) == RecipeWebImporter.maxImportedServings)
+        #expect(RecipeWebImporter.parseServings(from: "4 servings") == 4)
+        #expect(RecipeWebImporter.parseServings(from: 6) == 6)
+    }
+
+    /// A long digit run parses to `+infinity` and a 27-digit one to ~1e27; both would have trapped
+    /// in `Int(_:)`. Unreadable reads as nil, which falls the import back to USDA estimation.
+    @Test func nutritionValueRejectsAstronomicalAndInfiniteStrings() {
+        let astronomical = String(repeating: "9", count: 30)
+        let overflowing = String(repeating: "9", count: 400)
+
+        #expect(RecipeWebImporter.nutritionMacros(from: label(protein: astronomical))?.protein == nil)
+        #expect(RecipeWebImporter.nutritionMacros(from: label(protein: overflowing))?.protein == nil)
+        #expect(RecipeWebImporter.nutritionMacros(from: label(protein: "-5"))?.protein == nil)
+
+        let honest = RecipeWebImporter.nutritionMacros(from: label(protein: "25 g"))
+        #expect(honest?.protein == 25)
+        #expect(honest?.carbs == 40)
+        #expect(honest?.fat == 12)
+    }
+
+    /// One absurd field costs the WHOLE label (the existing all-or-nothing guard), which is the safe
+    /// direction: the caller estimates from ingredients instead of crashing.
+    @Test func jsonLDNutritionWithHostileNumbersFallsBackToUSDAEstimation() {
+        #expect(RecipeWebImporter.nutritionMacros(from: label(protein: 1e300))?.protein == nil)
+    }
+
+    /// M11's web half: a finite-but-absurd micronutrient is dropped to "not measured" at the door.
+    @Test func pageMicronutrientsAreSanitized() {
+        var nutrition = label(protein: "25 g")
+        var inner = (nutrition["nutrition"] as? [String: Any]) ?? [:]
+        inner["sodiumContent"] = 1e300
+        inner["fiberContent"] = 6.0
+        nutrition["nutrition"] = inner
+
+        let macros = RecipeWebImporter.nutritionMacros(from: nutrition)
+
+        #expect(macros?.micronutrients.sodium == nil)
+        #expect(macros?.micronutrients.fiber == 6)
+    }
+
+    /// M16, web path: page text carries no authorship contract, so it is TRUNCATED, never rejected —
+    /// failing a whole import over one long step would be bad UX.
+    @Test func longPageStringsAreTruncatedNotRejected() {
+        let huge = String(repeating: "x", count: 10_000)
+
+        let steps = RecipeWebImporter.orderedSteps(from: [huge, huge])
+
+        #expect(steps.count == 2, "The steps survive...")
+        #expect(steps.allSatisfy { $0.text.count == RecipeWebImporter.maxImportedStepTextCharacters },
+                "...at the cap, rather than the import failing")
+    }
+
+    /// A JSON-LD nutrition label with the three required macro fields.
+    private func label(protein: Any) -> [String: Any] {
+        [
+            "nutrition": [
+                "@type": "NutritionInformation",
+                "proteinContent": protein,
+                "carbohydrateContent": "40 g",
+                "fatContent": "12 g"
+            ] as [String: Any]
+        ]
+    }
 }

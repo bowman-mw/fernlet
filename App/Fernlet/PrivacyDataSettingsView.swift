@@ -283,7 +283,9 @@ struct PrivacyDataSettingsView: View {
     /// themselves, so the automatic pass stands down under the mock-services environment.
     private var shouldVerifyOnAppear: Bool {
         guard isLockConfigured, !hasFreshVerification, !isVerifying, verificationError == nil else { return false }
+        #if DEBUG
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" { return false }
+        #endif
         return true
     }
 
@@ -1370,11 +1372,16 @@ struct PrivacyDataSettingsView: View {
     }
 
     private var uiTestLockConfiguredOverride: Bool? {
+        #if DEBUG
         guard ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1",
               let value = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_LOCK_CONFIGURED"] else {
             return nil
         }
         return value == "1"
+        #else
+        // Absent from a shipping binary: the real lock state is the only answer there.
+        return nil
+        #endif
     }
 
     private var iCloudBinding: Binding<Bool> {
@@ -1797,11 +1804,13 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func reloadPersistence(with preferences: StoragePreferences) async throws {
+        #if DEBUG
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_SLOW_RELOAD"] == "1" {
             // Propagates: this function is `async throws` and both callers already surface the error,
             // so a cancelled reload ends the wait instead of vanishing into a `try?`.
             try await Task.sleep(for: .milliseconds(1500))
         }
+        #endif
         do {
             try await persistenceController.reload(with: preferences)
         } catch {
@@ -1852,9 +1861,11 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func makeHealthKitService() -> any PrivacyHealthKitServicing {
+        #if DEBUG
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
             return MockPrivacyHealthKitService(preferencesStore: storagePreferencesStore)
         }
+        #endif
         return HealthKitService(preferencesStore: storagePreferencesStore)
     }
 }
@@ -1868,6 +1879,9 @@ struct PrivacyDataSettingsView: View {
 private enum PrivacyDataServiceFactory {
     /// - Returns: A `MockPrivacyCloudDataService` under the UI-test environment, else the live service.
     static func makeCloudDataService() -> any PrivacyCloudDataManaging {
+        // The `environment` binding lives INSIDE the region with its only reader: left outside it
+        // would be unused in Release, and warnings are errors on every target.
+        #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
             return MockPrivacyCloudDataService(summary: ExistingDataSummary(
@@ -1879,17 +1893,26 @@ private enum PrivacyDataServiceFactory {
                 sleepRecordCount: 1
             ))
         }
+        #endif
         return CloudKitDataService()
     }
 
     /// - Returns: A `MockPrivacyPersistenceReloader` under the UI-test environment, else the shared controller.
     static func makePersistenceReloader() -> any PrivacyPersistenceReloading {
+        #if DEBUG
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
             return MockPrivacyPersistenceReloader()
         }
+        #endif
         return PersistenceController.shared
     }
 }
+
+// DEBUG-only: these doubles fabricate privacy answers (a canned `DeletionResult`, a lock state, a
+// HealthKit flip). In a shipping binary they must not merely be unreachable — they must be ABSENT,
+// so nothing in the app can be talked into them. Their only references are the factories above,
+// which are themselves inside `#if DEBUG` regions.
+#if DEBUG
 
 /// Test double for ``PrivacyCloudDataManaging`` that returns a canned summary and simulates the
 /// type-DELETE-to-confirm contract without touching CloudKit.
@@ -1948,3 +1971,5 @@ private struct MockPrivacyHealthKitService: PrivacyHealthKitServicing {
 
     func openHealthPrivacySettings() async { }
 }
+
+#endif

@@ -20,6 +20,7 @@ import Foundation
 import MultipeerConnectivity
 import Testing
 import FernletDomainModel
+import AIProviders
 @testable import Fernlet
 
 private final class RecipeCapTestHost: ProximityHost {
@@ -411,6 +412,257 @@ struct ProximityRecipeShareCapTests {
 
         #expect(manager.isRunningForTesting)
         #expect(manager.connectionCountForTesting == 1)
+    }
+
+    // MARK: - Wire-boundary coercion of peer text (M7 / M15)
+
+    /// An inbound envelope shell — the receive path takes post-verification envelopes, so a
+    /// dummy signature is fine here.
+    private func recipeEnvelope(senderDisplayName: String, plaintext: Data) -> FernletIdentityEnvelope {
+        FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: Data(),
+            senderKeyAgreementPublicKey: Data(),
+            senderDisplayName: senderDisplayName,
+            recipientFingerprint: nil,
+            payloadType: .recipeShare,
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Recipe"),
+            payload: plaintext,
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+    }
+
+    private func deliverShare(
+        _ payload: ProximityRecipeSharePayload,
+        senderDisplayName: String,
+        to manager: ProximityRecipeShareManager
+    ) {
+        let plaintext = try! JSONEncoder().encode(payload)
+        manager.proximityCoordinator(
+            throwawayRecipeCoordinator(),
+            didReceive: recipeEnvelope(senderDisplayName: senderDisplayName, plaintext: plaintext),
+            plaintext: plaintext,
+            from: nil)
+    }
+
+    private func throwawayRecipeCoordinator() -> ProximityCoordinator {
+        ProximityCoordinator(
+            identity: IdentityService(keychainService: "test.recipe.wire.\(UUID().uuidString)"),
+            transport: MockMultipeerTransport(),
+            ranging: MockRangingProvider(),
+            inspector: nil,
+            replayCache: ReplayCache(),
+            foregroundAnchor: nil,
+            displayName: "Local",
+            timeoutSeconds: 0)
+    }
+
+    /// M7: a decoded recipe plaintext is size-gated BEFORE `JSONDecoder`. The image cap alone only
+    /// applies after a multi-megabyte body has already been decoded.
+    @Test func oversizedRecipePlaintextIsDroppedBeforeDecode() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+        let oversized = Data(count: ProximityRecipeSharePayload.maxWireBytes + 1)
+
+        manager.proximityCoordinator(
+            throwawayRecipeCoordinator(),
+            didReceive: recipeEnvelope(senderDisplayName: "Loud", plaintext: oversized),
+            plaintext: oversized,
+            from: nil)
+
+        #expect(manager.pendingRecipeShares.isEmpty, "An oversized share must never reach the pending queue")
+        #expect(manager.diagnosticEvents.contains { $0.message.contains("oversized recipe share") },
+                "The drop must be named, not silent")
+    }
+
+    /// M15: the peer-supplied sender name is rendered in the review sheet and every diagnostic,
+    /// so it is coerced once at ingest.
+    @Test func receivedShareSenderNameIsSanitized() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+
+        deliverShare(makePayload(), senderDisplayName: "Ma\u{200B}ya", to: manager)
+
+        #expect(manager.pendingRecipeShares.first?.senderDisplayName == "Maya")
+        #expect(!manager.diagnosticEvents.contains { $0.message.unicodeScalars.contains { $0.value == 0x200B } },
+                "No zero-width scalar may reach the diagnostics ring either")
+    }
+
+    /// The deliberate exception: the per-sender RATE-LIMIT key stays RAW. Sanitizing it would
+    /// collapse distinct unfingerprinted senders whose names differ only by a zero-width character
+    /// into one bucket, which is the opposite of what the limiter is for.
+    @Test func rateLimitKeyStaysRawSoLookalikeSendersAreNotCollapsed() {
+        let host = RecipeCapTestHost()
+        let manager = ProximityRecipeShareManager(store: host)
+
+        deliverShare(makePayload(), senderDisplayName: "Maya", to: manager)
+        deliverShare(makePayload(), senderDisplayName: "Ma\u{200B}ya", to: manager)
+
+        #expect(manager.pendingRecipeShares.count == 2,
+                "Two distinct raw sender keys must not share one rate-limit bucket")
+    }
+
+    // MARK: - Saved-arm wire bounds (M16 / M8 / M11)
+
+    /// An honest saved (web-imported) share, at values a real page produces.
+    private func honestSavedPayload() -> SharedSavedRecipePayload {
+        SharedSavedRecipePayload(
+            name: "Sheet-pan salmon",
+            sourceURLString: "https://example.com/recipes/salmon",
+            ingredients: ["1 salmon fillet", "2 tbsp olive oil"],
+            summary: "Roast at 200C for 15 minutes.",
+            servings: 2,
+            protein: 34,
+            carbs: 6,
+            fat: 18,
+            micronutrients: Micronutrients(fiber: 2, sodium: 380),
+            steps: [RecipeStep(text: "Heat the oven."), RecipeStep(text: "Roast the salmon.")]
+        )
+    }
+
+    /// Encodes an honest saved share, then pokes hostile values into the WIRE JSON — the encoder
+    /// cannot produce these shapes, which is exactly why the bounds live in `init(from:)`.
+    private func savedShareWire(_ overrides: [String: Any]) throws -> Data {
+        let payload = ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(kind: .saved, saved: honestSavedPayload()))
+        let encoded = try JSONEncoder().encode(payload)
+        var root = (try JSONSerialization.jsonObject(with: encoded) as? [String: Any]) ?? [:]
+        var recipe = (root["recipe"] as? [String: Any]) ?? [:]
+        var saved = (recipe["saved"] as? [String: Any]) ?? [:]
+        for (key, value) in overrides { saved[key] = value }
+        recipe["saved"] = saved
+        root["recipe"] = recipe
+        return try JSONSerialization.data(withJSONObject: root)
+    }
+
+    private func decodeSavedShare(_ overrides: [String: Any]) throws -> ProximityRecipeSharePayload {
+        try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: savedShareWire(overrides))
+    }
+
+    /// M16: the saved arm had NO bounded decode at all — name, source URL, summary, ingredient lines
+    /// and step text rode in unbounded and straight into the synced snapshot.
+    @Test func savedRecipeDecodeRejectsOversizedFields() throws {
+        let cases: [[String: Any]] = [
+            ["name": String(repeating: "x", count: SharedRecipeLimits.maxNameCharacters + 1)],
+            ["ingredients": ["ok", String(repeating: "x", count: SharedRecipeLimits.maxIngredientLineCharacters + 1)]],
+            ["ingredients": Array(repeating: "line", count: SharedRecipeLimits.maxIngredients + 1)],
+            ["summary": String(repeating: "x", count: SharedRecipeLimits.maxSummaryCharacters + 1)],
+            ["sourceURLString": "https://example.com/" + String(repeating: "x", count: SharedRecipeLimits.maxSourceURLCharacters)],
+            ["steps": [["text": String(repeating: "x", count: SharedRecipeLimits.maxStepTextCharacters + 1)]]],
+            ["steps": Array(repeating: ["text": "stir"], count: SharedRecipeLimits.maxSavedSteps + 1)]
+        ]
+        for override in cases {
+            #expect(throws: RecipeImportError.invalidPayload) {
+                _ = try decodeSavedShare(override)
+            }
+        }
+    }
+
+    /// M8's saved arm: `Macros.calories` multiplies and adds these, so `Int.max` traps on the first
+    /// render of the imported recipe.
+    @Test func savedRecipeDecodeRejectsOutOfRangeMacros() throws {
+        for override in [["protein": Int.max], ["carbs": SharedRecipeLimits.maxMacroGrams + 1], ["fat": -1]] {
+            #expect(throws: RecipeImportError.invalidPayload) {
+                _ = try decodeSavedShare(override)
+            }
+        }
+        // Exactly at the cap must SUCCEED — the bound is inclusive, honest shares are unaffected.
+        let atCap = try decodeSavedShare(["protein": SharedRecipeLimits.maxMacroGrams])
+        #expect(atCap.recipe.saved?.protein == SharedRecipeLimits.maxMacroGrams)
+    }
+
+    /// M11's mesh half: an implausible micronutrient is dropped to "not measured" at the wire.
+    @Test func savedRecipeDecodeSanitizesMicronutrients() throws {
+        let decoded = try decodeSavedShare(["micronutrients": ["sodium": 1e300, "fiber": 12.0, "iron": -3.0]])
+        let micros = try #require(decoded.recipe.saved?.micronutrients)
+        #expect(micros.sodium == nil)
+        #expect(micros.iron == nil)
+        #expect(micros.fiber == 12)
+    }
+
+    /// THE COMPAT TEST: the saved arm's step cap is 200 (`maxSavedSteps`), not `maxSteps` (60),
+    /// because this app's own web importer keeps up to `RecipeWebImporter.maxImportedSteps` steps.
+    /// A 60-cap here would silently refuse a recipe Fernlet itself imported and shared.
+    @Test func savedRecipeDecodeAcceptsAWebImportedRecipeAtItsCaps() throws {
+        let decoded = try decodeSavedShare([
+            "name": String(repeating: "n", count: SharedRecipeLimits.maxNameCharacters),
+            "ingredients": Array(repeating: String(repeating: "i", count: SharedRecipeLimits.maxIngredientLineCharacters),
+                                 count: SharedRecipeLimits.maxIngredients),
+            "steps": Array(repeating: ["text": "stir"], count: SharedRecipeLimits.maxSavedSteps)
+        ])
+        #expect(decoded.recipe.saved?.steps?.count == SharedRecipeLimits.maxSavedSteps)
+        #expect(decoded.recipe.saved?.ingredients.count == SharedRecipeLimits.maxIngredients)
+        #expect(SharedRecipeLimits.maxSavedSteps == RecipeWebImporter.maxImportedSteps,
+                "The wire's saved-step cap must track what the web importer can produce")
+        #expect(RecipeWebImporter.maxImportedNameCharacters <= SharedRecipeLimits.maxNameCharacters,
+                "Fernlet must never import a name its own wire decoder would refuse")
+    }
+
+    /// Wire compatibility: `steps` stays the ONE optional key. An older peer sends no steps at all.
+    @Test func olderPeerPayloadWithoutStepsStillDecodes() throws {
+        let payload = ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(kind: .saved, saved: honestSavedPayload()))
+        let encoded = try JSONEncoder().encode(payload)
+        var root = (try JSONSerialization.jsonObject(with: encoded) as? [String: Any]) ?? [:]
+        var recipe = (root["recipe"] as? [String: Any]) ?? [:]
+        var saved = (recipe["saved"] as? [String: Any]) ?? [:]
+        saved.removeValue(forKey: "steps")
+        recipe["saved"] = saved
+        root["recipe"] = recipe
+
+        let decoded = try JSONDecoder().decode(
+            ProximityRecipeSharePayload.self,
+            from: try JSONSerialization.data(withJSONObject: root))
+
+        #expect(decoded.recipe.saved?.steps == nil)
+        #expect(decoded.recipe.saved?.name == "Sheet-pan salmon")
+    }
+
+    /// The send side must never emit a share the new decoder refuses.
+    @Test func savedRecipeWireRoundTripsThroughTheRealSendPath() throws {
+        let recipe = RecipeDefinition(
+            name: "Saved bowl",
+            servings: 3,
+            ingredients: [],
+            notes: "A saved web recipe summary.",
+            source: MealLogSource.webImport,
+            createdAt: Date(timeIntervalSince1970: 1_779_664_800),
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/saved-bowl",
+                ingredientLines: ["Oats", "Greek yogurt"],
+                macros: Macros(protein: 24, carbs: 42, fat: 6),
+                micronutrients: Micronutrients(fiber: 6)
+            ),
+            steps: [RecipeStep(text: "Follow the linked recipe.")]
+        )
+        let payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
+        let encoded = try JSONEncoder().encode(payload)
+
+        let decoded = try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: encoded)
+
+        #expect(decoded.recipe.saved?.name == "Saved bowl")
+        #expect(decoded.recipe.saved?.protein == 24)
+        #expect(decoded.recipe.saved?.steps?.count == 1)
+    }
+
+    /// M8: the review sheet renders BEFORE the store's clamps and can be handed an in-process
+    /// payload (tests, the send-side preview), so its macro sum must be total on its own.
+    @Test func reviewSheetMacroSumSurvivesHostileIngredients() {
+        let hostile = [
+            SharedRecipeIngredient(name: "a", quantity: 1, unit: "g", protein: .max, carbs: .max, fat: .max),
+            SharedRecipeIngredient(name: "b", quantity: 1, unit: "g", protein: .max, carbs: .max, fat: .max)
+        ]
+
+        let protein = ProximityRecipeShareReviewSheet.boundedMacroSum(hostile, \.protein)
+
+        #expect(protein == 2 * SharedRecipeLimits.maxMacroGrams)
+        #expect(ProximityRecipeShareReviewSheet.boundedMacro(.min) == 0)
+        #expect(ProximityRecipeShareReviewSheet.boundedMacro(42) == 42)
     }
 
     // MARK: - Belt-and-braces third-peer admission

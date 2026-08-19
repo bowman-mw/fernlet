@@ -70,7 +70,9 @@ final class ShareViewController: UIViewController {
     /// Bridges `NSItemProvider.loadItem` for the URL type into async.
     ///
     /// Some apps deliver URL-typed items as `String`, so a string payload is also accepted and
-    /// parsed. An item of any other shape resolves to `nil` rather than throwing, letting
+    /// parsed — but only up to `SharedRecipeImportQueueWriter.maxURLByteCount` bytes (R3), so the
+    /// extension never holds an unbounded provider string for longer than one continuation. An item
+    /// of any other shape, or an oversize string, resolves to `nil` rather than throwing, letting
     /// ``sharedURL()`` move on to the next provider.
     private func loadURL(from provider: NSItemProvider) async throws -> URL? {
         try await withCheckedThrowingContinuation { continuation in
@@ -82,7 +84,8 @@ final class ShareViewController: UIViewController {
 
                 if let url = item as? URL {
                     continuation.resume(returning: url)
-                } else if let string = item as? String {
+                } else if let string = item as? String,
+                          string.utf8.count <= SharedRecipeImportQueueWriter.maxURLByteCount {
                     continuation.resume(returning: URL(string: string))
                 } else {
                     continuation.resume(returning: nil)
@@ -92,7 +95,13 @@ final class ShareViewController: UIViewController {
     }
 
     /// Bridges `NSItemProvider.loadItem` for the plain-text type into async, returning the raw
-    /// string (or `nil` when the item is not a string) for the caller to parse as a URL.
+    /// string for the caller to parse as a URL.
+    ///
+    /// Resolves to `nil` when the item is not a string, or is longer than
+    /// `SharedRecipeImportQueueWriter.maxURLByteCount` bytes (R3) — a shared block of text is not a
+    /// URL, and rejecting it here keeps the extension from holding it past this continuation.
+    /// `nil` (rather than a throw) is deliberate: ``sharedURL()`` moves on to the next provider and
+    /// only reports `ShareExtensionError.noURL` when nothing usable is found.
     private func loadURLString(from provider: NSItemProvider) async throws -> String? {
         try await withCheckedThrowingContinuation { continuation in
             provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, error in
@@ -100,7 +109,12 @@ final class ShareViewController: UIViewController {
                     continuation.resume(throwing: error)
                     return
                 }
-                continuation.resume(returning: item as? String)
+                guard let string = item as? String,
+                      string.utf8.count <= SharedRecipeImportQueueWriter.maxURLByteCount else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: string)
             }
         }
     }

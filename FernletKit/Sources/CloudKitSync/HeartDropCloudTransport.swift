@@ -14,9 +14,13 @@ import FernletFoundation
 ///
 /// Wall note (S3): this type sees only pseudonymous rotating day tags and sealed blobs; every
 /// byte of crypto lives on the ProximityKit side of the `HeartDropTransporting` seam declared in
-/// FernletDomainModel. Known accepted residual (documented in the plan): public-DB records carry
-/// a `creatorUserRecordID` — an observer can see that SOME iCloud user wrote N drops on a day,
-/// never to whom, and tags are uncorrelatable across days.
+/// FernletDomainModel. Known accepted residual: public-DB records carry a `creatorUserRecordID`, a
+/// per-container STABLE pseudonymous id. Tags are uncorrelatable across days, but the CREATOR is
+/// not — a dashboard observer gets one anonymous account's send-activity timeline, and its distinct
+/// tags-per-day equal how many different friends it sent to that day. Never who they are, never to
+/// whom, never what. Records are deletable only by their creator, from the record names in this
+/// device's outbox: an uninstall (or a wipe whose purge failed) strands them permanently — there is
+/// no server-side TTL.
 ///
 /// Schema (dev auto-creates on first save; PRODUCTION promotion — with the `tag` field queryable —
 /// is an owner console action, tracked in RemainingWork): record type `HeartDrop`, fields
@@ -39,13 +43,18 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
     /// Safety cap on records pulled in one `fetch(tags:)`. A truncated fetch is LOGGED, never
     /// silent — the remaining records stay on the server and the next sync picks them up.
     /// Public alongside `perChunkBudget` so the anti-starvation split is assertable in tests.
-    public static let maxRecordsPerFetch = 500
+    public static let maxRecordsPerFetch = HeartDropWireLimits.maxRecordsPerFetch
     /// Belt-and-braces bound on cursor follows per chunk, so a server that keeps handing back a
     /// non-nil cursor can't spin the sync forever.
     static let maxPagesPerChunk = 40
-    /// Upper bound on one drop's sealed payload, under CloudKit's ~1 MB per-record budget (R3:
-    /// caller-supplied bytes are validated where they enter, not discovered as a server error).
-    public static let maxPayloadBytes = 900_000
+    /// Upper bound on one drop's sealed payload (R3: caller-supplied bytes are validated where they
+    /// enter, not discovered as a server error).
+    ///
+    /// This is the RECEIVER's cap, not CloudKit's ~1 MB per-record budget: a record the recipient's
+    /// pre-decrypt gate will reject is a record no honest sender should ever write, and bounding it
+    /// here also bounds what a fetch can be made to download. `HeartDropSealer.seal` refuses
+    /// anything larger first, so no legitimate send can trip this.
+    public static let maxPayloadBytes = HeartDropWireLimits.maxRecordByteCount
 
     // CKContainer/CKDatabase are documented thread-safe — the @unchecked Sendable is these two
     // immutable references only.
@@ -115,23 +124,32 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
 
         let chunks = Self.chunked(tags)
         let perChunkBudget = Self.perChunkBudget(chunkCount: chunks.count)
+        // Bytes, not just records: a record budget alone bounds nothing if the server hands back a
+        // page of fat records. Counted per chunk, so one hostile writer can't spend another's.
+        let byteBudget = perChunkBudget * HeartDropWireLimits.maxRecordByteCount
 
         for chunk in chunks {
             let query = CKQuery(
                 recordType: Self.recordType,
                 predicate: NSPredicate(format: "%K IN %@", Self.tagField, chunk)
             )
-            var page = try await database.records(matching: query)
+            // `resultsLimit` is load-bearing, not a hint: without it the SERVER chooses the page
+            // size, so a chunk's first page can arrive far larger than the budget that is about to
+            // reject most of it — paid for in download bytes before ingest sees one.
+            var page = try await database.records(matching: query, resultsLimit: perChunkBudget)
             var pagesRead = 1
             var chunkCount = 0
-            var chunkFull = ingest(page, budget: perChunkBudget, into: &results,
-                                   count: &chunkCount, skipped: &skipped)
+            var chunkBytes = 0
+            var chunkFull = ingest(page, budget: perChunkBudget, byteBudget: byteBudget,
+                                   into: &results, count: &chunkCount, bytes: &chunkBytes,
+                                   skipped: &skipped)
             var cursor = page.queryCursor
             while !chunkFull, pagesRead < Self.maxPagesPerChunk, let next = cursor {
-                page = try await database.records(continuingMatchFrom: next)
+                page = try await database.records(continuingMatchFrom: next, resultsLimit: perChunkBudget)
                 pagesRead += 1
-                chunkFull = ingest(page, budget: perChunkBudget, into: &results,
-                                   count: &chunkCount, skipped: &skipped)
+                chunkFull = ingest(page, budget: perChunkBudget, byteBudget: byteBudget,
+                                   into: &results, count: &chunkCount, bytes: &chunkBytes,
+                                   skipped: &skipped)
                 cursor = page.queryCursor
             }
             if chunkFull || cursor != nil { truncated = true }
@@ -155,13 +173,19 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         return results
     }
 
-    /// Appends one query page's usable records to `results`, returning whether the chunk's budget
-    /// ran out mid-page (the `chunkFull` signal the fetch loop's condition reads).
-    private func ingest(
+    /// Appends one query page's usable records to `results`, returning whether the chunk's record
+    /// or byte budget ran out mid-page (the `chunkFull` signal the fetch loop's condition reads).
+    ///
+    /// `internal` rather than `private` so the budget rule is testable against synthesized record
+    /// pages: it is the seam that decides both what reaches the main actor and whether the fetch
+    /// keeps following cursors, and `fetch` itself needs a live `CKDatabase`.
+    func ingest(
         _ page: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?),
         budget: Int,
+        byteBudget: Int,
         into results: inout [HeartDropRecord],
         count: inout Int,
+        bytes: inout Int,
         skipped: inout Int
     ) -> Bool {
         for (recordID, result) in page.matchResults {
@@ -169,10 +193,19 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
             // more matches than the remaining headroom, and every record admitted here
             // costs the receiver a ChaChaPoly open plus a deflate inflate on the main
             // actor — the work this cap exists to bound.
-            guard count < budget else { return true }
+            guard count < budget, bytes < byteBudget else { return true }
             guard let record = try? result.get(),
                   let tag = record[Self.tagField] as? String,
                   let payload = record[Self.payloadField] as? Data else {
+                skipped += 1
+                continue
+            }
+            // Counted even for records dropped just below: the bytes were already downloaded, and
+            // spending the budget on them is exactly what stops the cursor follows for this chunk.
+            bytes += payload.count
+            // A record the recipient's pre-decrypt gate would reject anyway is dropped here rather
+            // than carried to the main actor. Counted into `skipped`, which the fetch logs.
+            guard payload.count <= HeartDropWireLimits.maxRecordByteCount else {
                 skipped += 1
                 continue
             }

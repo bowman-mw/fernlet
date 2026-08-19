@@ -53,7 +53,10 @@ struct SafetyReportingView: View {
 
                 section(
                     "What happens next",
-                    "Reports are handled on your device — there is no server that sees your data. When "
+                    "Reports are handled on your device — there is no server that sees your data. Your "
+                    + "reports also travel to friends you meet in person, signed by your device, so several "
+                    + "people reporting the same item can be counted together; the person you reported is "
+                    + "one of the friends who may receive it. They are never uploaded anywhere. When "
                     + "the same item is reported enough, it can no longer be sold; a maker whose items are "
                     + "repeatedly reported loses their shop for a while.")
 

@@ -975,6 +975,203 @@ struct ProximityCoordinatorTests {
         #expect(inspector.events.contains("state: pendingInvite"))
     }
 
+    // MARK: - Peer display names are bounded, but never before verification (M15)
+
+    /// M15: `senderDisplayName` is unbounded attacker-chosen wire text that reaches the trainer
+    /// audit list (500 CloudKit-synced rows) and every `PeerIdentity`. It is coerced on READ.
+    ///
+    /// The first assertion is the load-bearing one: `verify` recomputes the canonical bytes from
+    /// the decoded fields, so sanitizing in `init(from:)` or before `canonicalBytes` would break
+    /// the signature for every name that changes under sanitisation. This test fails loudly if
+    /// anyone "simplifies" the accessor into the decode path.
+    @Test func envelopeSenderNameIsBoundedOnReadWhileTheSignatureStillVerifies() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
+
+        let hugeName = String(repeating: "A", count: 100_000)
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: hugeName,
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: Data())
+
+        // (a) The RAW field is signature-covered and must still verify untouched.
+        _ = try envelope.verify(identityService: local, replayCache: ReplayCache())
+        #expect(envelope.senderDisplayName.count == 100_000, "The raw field must not be mutated")
+
+        // (b) Every render/persist site reads the bounded accessor.
+        #expect(envelope.sanitizedSenderDisplayName.count <= 24)
+
+        // (c) …and the identity the coordinator builds carries the bounded form.
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport,
+                                          ranging: MockRangingProvider(isHardwareSupported: false))
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        guard case .awaitingManualCommit(let identity) = coordinator.state else {
+            Issue.record("Expected the proximity gate, got \(coordinator.state)")
+            return
+        }
+        #expect(identity.displayName.count <= 24, "PeerIdentity must carry the bounded name")
+    }
+
+    // MARK: - Peer heartbeats must not substitute for local consent (H1)
+
+    /// Wire shape of `SessionHeartbeatPayload`, which is file-private to the coordinator. Kept
+    /// structurally identical (default `JSONEncoder` date strategy, same keys) so these tests
+    /// exercise the real decode path rather than a stub.
+    private struct HeartbeatWireBody: Encodable {
+        let kind: String
+        let heartbeatID: UUID
+        let sentAt: Date
+        let responseTo: UUID?
+    }
+
+    private func signedHeartbeat(
+        from identity: IdentityService,
+        kind: String = "ack",
+        payloadOverride: Data? = nil
+    ) throws -> Data {
+        let body = HeartbeatWireBody(kind: kind, heartbeatID: UUID(), sentAt: Date(), responseTo: nil)
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: identity,
+            senderDisplayName: "Remote Device",
+            payloadType: .sessionHeartbeat,
+            payloadSummary: PayloadSummary(title: "Heartbeat"),
+            payload: payloadOverride ?? (try JSONEncoder().encode(body))
+        )
+        return try JSONEncoder().encode(envelope)
+    }
+
+    /// Drives a friend-mode coordinator to its proximity gate and returns the peer.
+    /// `uwbCapable == false` lands in `.awaitingManualCommit`; `true` (peer advertises a UWB
+    /// discovery token) lands in `.awaitingProximityCommit`.
+    private func friendGate(
+        coordinator: ProximityCoordinator,
+        transport: MockMultipeerTransport,
+        remote: IdentityService,
+        uwbCapable: Bool
+    ) async throws -> MultipeerPeer {
+        struct RangingPayload: Encodable {
+            let rangingMode: String
+            let discoveryToken: Data?
+        }
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        let payload = try JSONEncoder().encode(RangingPayload(
+            rangingMode: uwbCapable ? "uwb" : "rssi",
+            discoveryToken: uwbCapable ? Data([1, 2, 3]) : nil))
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: "Remote Device",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: payload)
+
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        return peer
+    }
+
+    private func isConnected(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .connected = coordinator.state { return true }
+        return false
+    }
+
+    /// A peer's message is not the local user's consent. The manual-commit gate has NO local
+    /// proximity evidence at all, so its only exit is the on-screen confirm — an inbound heartbeat
+    /// must leave it exactly where it was.
+    @Test func peerHeartbeatDoesNotCommitWithoutLocalProximityEvidence() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider(isHardwareSupported: false)
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+
+        let peer = try await friendGate(coordinator: coordinator, transport: transport,
+                                        remote: remote, uwbCapable: false)
+        guard case .awaitingManualCommit = coordinator.state else {
+            Issue.record("precondition: expected .awaitingManualCommit, got \(coordinator.state)")
+            return
+        }
+        let sentAfterAck = transport.sentData.count
+
+        transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        #expect(!isConnected(coordinator),
+                "A peer heartbeat must never commit the manual gate — that gate is the user's tap alone")
+        guard case .awaitingManualCommit = coordinator.state else {
+            Issue.record("Expected to stay at the manual gate, got \(coordinator.state)")
+            return
+        }
+        #expect(transport.sentData.count == sentAfterAck,
+                "An `ack` heartbeat with no matching ping emits nothing back")
+    }
+
+    /// The asymmetric-UWB robustness path still works — but only once THIS device's own ranging
+    /// has seen the peer inside the commit threshold.
+    @Test func peerHeartbeatCommitsOnlyAfterLocalCloseSample() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider()
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+
+        let peer = try await friendGate(coordinator: coordinator, transport: transport,
+                                        remote: remote, uwbCapable: true)
+        guard case .awaitingProximityCommit = coordinator.state else {
+            Issue.record("precondition: expected .awaitingProximityCommit, got \(coordinator.state)")
+            return
+        }
+
+        // Without evidence: dropped.
+        transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
+        try await Task.sleep(nanoseconds: 30_000_000)
+        #expect(!isConnected(coordinator), "No local close sample yet — the heartbeat must be dropped")
+
+        // One close sample is enough evidence, and is NOT enough for the dwell detector on its own
+        // (3 samples / 0.8 s), so the commit below is genuinely the heartbeat's doing.
+        ranging.simulateDistance(0.10)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        #expect(!isConnected(coordinator), "precondition: one sample must not trip the dwell detector")
+
+        transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
+        await waitUntil { if case .connected = coordinator.state { return true }; return false }
+        #expect(isConnected(coordinator), "A locally evidenced heartbeat still ratifies the commit")
+    }
+
+    /// The evidence check runs AFTER the payload decode, so bytes any connected peer can emit
+    /// cannot commit anything.
+    @Test func undecodableHeartbeatNeverCommits() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider()
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+
+        let peer = try await friendGate(coordinator: coordinator, transport: transport,
+                                        remote: remote, uwbCapable: true)
+        ranging.simulateDistance(0.10)          // evidence IS present — only the decode fails
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        transport.simulateInboundData(
+            try signedHeartbeat(from: remote, payloadOverride: Data("not a heartbeat".utf8)),
+            from: peer)
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        #expect(!isConnected(coordinator),
+                "An undecodable heartbeat body must never commit, even with local proximity evidence")
+    }
+
 }
 
 @MainActor

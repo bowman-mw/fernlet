@@ -277,6 +277,12 @@ struct NoTrackingBoundaryTests {
     /// away from silently regressing when someone swaps the base configuration; each knob is set
     /// explicitly so the guarantee survives that edit, and this list is what makes deleting one a
     /// failing test rather than a diff nobody questions.
+    ///
+    /// The eighth entry, `timeoutIntervalForResource`, is the one that is NOT a privacy knob — it is
+    /// the whole-transfer ceiling (2026-08-18). It is pinned here because it lives in the same
+    /// factory and is equally easy to delete without anyone questioning the diff; the *value* is
+    /// pinned separately by `ephemeralSessionBoundsWholeTransferNotJustIdleTime`, since a name-only
+    /// check would happily accept a regression to the 7-day platform default.
     private static let requiredEphemeralSessionSettings = [
         "URLSessionConfiguration.ephemeral",             // the base: nothing on disk
         "httpCookieAcceptPolicy",                        // .never — refuse Set-Cookie outright
@@ -285,7 +291,8 @@ struct NoTrackingBoundaryTests {
         "urlCache",                                      // nil — no ETag/Last-Modified replay
         "requestCachePolicy",                            // reload-ignoring — belt to that brace
         "reloadIgnoringLocalAndRemoteCacheData",
-        "urlCredentialStorage"                           // nil — no silent auth replay
+        "urlCredentialStorage",                          // nil — no silent auth replay
+        "timeoutIntervalForResource"                     // whole-transfer ceiling; the callers' 15 s is idle-only
     ]
 
     // MARK: - Web view / in-app browser surface
@@ -886,6 +893,7 @@ struct NoTrackingBoundaryTests {
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.urlCredentialStorage = nil
+        configuration.timeoutIntervalForResource = maxResourceSeconds
         return URLSession(configuration: configuration)
         """)
         let missingFromFactory = NoTrackingBoundaryTests.requiredEphemeralSessionSettings
@@ -894,6 +902,12 @@ struct NoTrackingBoundaryTests {
         // Drop one knob and the check must notice.
         let weakened = factory.replacingOccurrences(of: "configuration.urlCredentialStorage = nil", with: "")
         #expect(!NoTrackingBoundaryTests.namesSymbol(weakened, "urlCredentialStorage"))
+        // Same for the liveness knob — deleting the whole-transfer ceiling must fail the check, not
+        // pass because the doc comment above it still mentions the word.
+        let untimed = factory.replacingOccurrences(
+            of: "configuration.timeoutIntervalForResource = maxResourceSeconds", with: ""
+        )
+        #expect(!NoTrackingBoundaryTests.namesSymbol(untimed, "timeoutIntervalForResource"))
 
         // Web views: the marker fires on a real one, and the non-persistent opt-in is detected.
         let badWebView = NoTrackingBoundaryTests.codeOnly("let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())")

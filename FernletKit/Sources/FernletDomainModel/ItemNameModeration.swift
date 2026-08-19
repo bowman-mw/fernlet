@@ -55,16 +55,34 @@ public nonisolated enum ItemNameModeration {
     /// control / zero-width / bidi-override scalars, collapse whitespace runs, and cap length. Mirrors
     /// `ItemGridTexture.sanitized()`'s never-throw boundary coercion for the name string. Does NOT remove
     /// profanity — listing is gated separately by `isAllowedForListing`.
-    public static func sanitizedName(_ raw: String) -> String {
-        let kept = raw.unicodeScalars.filter { scalar in
-            !CharacterSet.controlCharacters.contains(scalar)
-                && !invisibleScalars.contains(scalar)
+    ///
+    /// - Parameter maxLength: the length cap, defaulting to ``maxNameLength`` (24, the clothing wire
+    ///   bound). Callers whose names are not clothing labels — a prompt payload bounding externally
+    ///   authored meal/session names, say — pass their own; the control-character, zero-width and
+    ///   whitespace-collapse properties are the same at any cap.
+    public static func sanitizedName(_ raw: String, maxLength: Int = maxNameLength) -> String {
+        // Order is load-bearing, and the three legs are not interchangeable:
+        //  1. Invisible scalars are dropped OUTRIGHT, never turned into a space. They render as
+        //     nothing, so "Ali<ZWSP>ce" is seen by a human as "Alice" and must sanitize to "Alice";
+        //     emitting a space instead would invent a name nobody typed. This leg runs first
+        //     because Foundation counts ZERO WIDTH SPACE as whitespace, so leg 2 would claim it.
+        //  2. Visible whitespace — including the control scalars \n, \r and \t — becomes a SPACE
+        //     rather than vanishing. Deleting it glues the words either side together
+        //     ("Soup\nIgnore this" -> "SoupIgnore this"), which reads wrong and lets externally
+        //     authored text forge a phrase it never wrote. Runs before leg 3 because those three
+        //     are themselves control characters.
+        //  3. Every remaining control scalar is dropped, so the result carries none.
+        let normalized = raw.unicodeScalars.compactMap { scalar -> Unicode.Scalar? in
+            if invisibleScalars.contains(scalar) { return nil }
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) { return " " }
+            if CharacterSet.controlCharacters.contains(scalar) { return nil }
+            return scalar
         }
-        let collapsed = String(String.UnicodeScalarView(kept))
+        let collapsed = String(String.UnicodeScalarView(normalized))
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        return String(collapsed.prefix(maxNameLength))
+        return String(collapsed.prefix(maxLength))
     }
 
     // MARK: - Internals

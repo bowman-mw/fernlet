@@ -11,7 +11,9 @@ import Foundation
 /// cross-request linkability the user never asked for. Routing every fetch through one deliberately
 /// amnesiac session removes that channel. See `Docs/No-Tracking-Wall.md` §2a.
 ///
-/// **What it does NOT change.** This type owns *transport privacy only*. Each caller keeps its own
+/// **What it does NOT change.** This type owns *transport privacy only* — plus, since 2026-08-18,
+/// the one bound no caller can express with a `URLRequest`: the whole-transfer ceiling
+/// ``maxResourceSeconds``. Each caller keeps its own idle
 /// timeout, `User-Agent`, `Accept`, redirect policy, content-type check, and size cap — those differ
 /// between the two importers on purpose (the product importer spoofs Safari to get past bot walls and
 /// throws on an oversized body; the recipe importer identifies itself honestly, re-validates every
@@ -29,6 +31,19 @@ public enum EphemeralWebSession {
     /// Created once, lazily. Every knob that could retain cross-request state is disabled in
     /// ``makeConfiguration()``; see that method for the per-setting rationale.
     public static let shared: URLSession = makeSession()
+
+    /// Whole-transfer ceiling for any fetch on this session, in seconds.
+    ///
+    /// The callers' `URLRequest(timeoutInterval: 15)` is `timeoutIntervalForRequest` — an
+    /// *inactivity* timer reset by every byte that arrives. A server trickling one byte every 14 s
+    /// never trips it, and the byte caps bound a body's SIZE, not its DURATION, so without this the
+    /// task runs to the 7-day platform default. That wedges the share-extension queue drain (which
+    /// awaits its import) for the whole session.
+    ///
+    /// 120 s, not 60: the largest cap on this session is the 12 MB product-label image, and 60 s
+    /// would fail an honest 12 MB download below ~200 KB/s. 120 s puts the floor near 100 KB/s —
+    /// below any usable mobile link, and still short enough that a foreground spinner resolves.
+    public static let maxResourceSeconds: TimeInterval = 120
 
     /// A fresh configuration with every state-retaining feature turned off.
     ///
@@ -60,6 +75,11 @@ public enum EphemeralWebSession {
     ///   quietly reintroduce validator-based tracking without also changing this line.
     /// - `urlCredentialStorage = nil` — **not** redundant. `.ephemeral` keeps an in-memory credential
     ///   store; `nil` means an auth challenge answered on one host can never be silently replayed.
+    /// - `timeoutIntervalForResource = ` ``maxResourceSeconds`` — the one entry in this list that is a
+    ///   **liveness** bound rather than a privacy knob, and it is here because no caller can express
+    ///   it: `URLRequest(timeoutInterval:)` sets the *idle* timer, which a trickling server resets
+    ///   forever. Failure surfaces as the same `NSURLErrorTimedOut` every caller already maps to its
+    ///   own `fetchFailed`, so it adds no error case and no new user-facing copy.
     ///
     /// **Honest limit.** There is no public API to disable TLS session-ticket resumption or HTTP/2
     /// connection coalescing, so a server can still correlate two fetches that reuse one live
@@ -73,6 +93,7 @@ public enum EphemeralWebSession {
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.urlCredentialStorage = nil
+        configuration.timeoutIntervalForResource = maxResourceSeconds
         return configuration
     }
 

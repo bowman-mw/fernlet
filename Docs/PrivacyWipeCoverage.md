@@ -82,6 +82,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Recipe photos | PrivateMediaStore | `recipePhotoStore.deleteAll` |
 | Share-extension import queue | App group | `sharedRecipeImportQueue.clear` |
 | Data export files — the "export my data" dump (`Fernlet-data-*.json`) AND the trainer/nutritionist summary (`Fernlet-training-*.json`) | tmp/DataExports (+ legacy tmp/-root strays of both prefixes) | `purgeDataExports` |
+| Connection-history export — the proximity peer-identity dossier (display names, advertised/confirmed fingerprints, signing keys, first/last-seen times) written as `Fernlet-connection-logs-*.json`; builds before this change wrote it flat as lowercase `fernlet-connection-logs-*.json` | tmp/DataExports (+ legacy tmp/-root stray of that lowercase prefix) | `purgeDataExports` |
 | Friends' clothing catalogs (1 h window) | Memory | `clothingShop.clearAll` |
 | Session temp messages | Memory (SessionMessageStore) | `sessionMessages.clear` |
 | Presence radio + discovery state | PresenceManager | `presenceManager.stop` |

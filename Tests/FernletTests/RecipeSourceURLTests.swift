@@ -197,6 +197,48 @@ struct RecipeReimportTests {
         #expect(queue.clear(), "teardown: the shared import queue must clear")
     }
 
+    /// R3 self-heal: a row whose URL exceeds the shared byte cap — only reachable from a build that
+    /// predates the extension-side guard, or an app/extension version skew — is dropped on the FIRST
+    /// drain rather than parsed or fetched. The loopback host proves no network was touched: had the
+    /// drain attempted it, the SSRF guard would have kept the row with `attemptCount == 1`.
+    @Test func drainDropsAnOversizedQueueRowWithoutFetching() async {
+        let store = makeTestStore()
+        let oversized = URL(string: "https://127.0.0.1/" + String(repeating: "a", count: 3000))!
+        #expect(oversized.absoluteString.utf8.count > SharedRecipeImportQueue.maxURLByteCount)
+
+        let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("oversized"))
+        #expect(queue.save([SharedRecipeImportRecord(url: oversized)]))
+        store.sharedRecipeImportQueue = queue
+
+        await store.processSharedRecipeImportQueue()
+
+        #expect(queue.records().isEmpty, "an oversized row must be dropped on the first drain")
+        #expect(store.savedRecipes.isEmpty)
+        #expect(queue.clear(), "teardown: the shared import queue must clear")
+    }
+
+    /// The boundary half: a URL of EXACTLY the cap must survive, proving the comparison is `<=` and
+    /// not `<`. It is still attempted (the SSRF guard refuses the loopback host without touching the
+    /// network), so the row comes back with one failed attempt rather than being deleted.
+    @Test func drainKeepsAQueueRowExactlyAtTheURLByteCap() async {
+        let store = makeTestStore()
+        let prefix = "https://127.0.0.1/"
+        let padding = String(repeating: "a", count: SharedRecipeImportQueue.maxURLByteCount - prefix.utf8.count)
+        let exact = URL(string: prefix + padding)!
+        #expect(exact.absoluteString.utf8.count == SharedRecipeImportQueue.maxURLByteCount)
+
+        let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("exactcap"))
+        #expect(queue.save([SharedRecipeImportRecord(url: exact)]))
+        store.sharedRecipeImportQueue = queue
+
+        await store.processSharedRecipeImportQueue()
+
+        let records = queue.records()
+        #expect(records.count == 1, "a row exactly at the cap must not be dropped")
+        #expect(records.first?.attemptCount == 1, "a row at the cap must still be attempted")
+        #expect(queue.clear(), "teardown: the shared import queue must clear")
+    }
+
     // MARK: - Re-import from source (replace definition, preserve photo + notes)
 
     /// The replace-and-preserve contract: same id (so the sealed photo — keyed by id — survives

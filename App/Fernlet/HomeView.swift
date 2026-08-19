@@ -2211,9 +2211,21 @@ struct MacroCard: View {
         }
     }
 
+    /// Same ceiling and reasoning as `DayMicronutrientBreakdownRow.maxDisplayableAmount`: this
+    /// footer renders `store.micronutrientTotals.fiber`, a sum of persisted meal snapshots, and
+    /// `Int(_: Double)` traps outside `Int`'s range — on the HOME tab, so a single poisoned row
+    /// would crash the app's first screen on render.
+    private static let maxDisplayableFiber = 1_000_000_000.0
+
     private var fiberFooter: String {
-        guard let fiberIntake else { return "Fiber target \(targets.fiber)g" }
-        return "Fiber \(Int(fiberIntake.rounded()))g of \(targets.fiber)g"
+        Self.fiberFooterText(intake: fiberIntake, target: targets.fiber)
+    }
+
+    /// Pure so the hostile-value case is testable without rendering the card.
+    static func fiberFooterText(intake: Double?, target: Int) -> String {
+        guard let intake, intake.isFinite else { return "Fiber target \(target)g" }
+        let grams = Int(min(max(intake, 0), maxDisplayableFiber).rounded())
+        return "Fiber \(grams)g of \(target)g"
     }
 }
 

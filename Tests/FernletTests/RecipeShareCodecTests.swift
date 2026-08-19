@@ -4,6 +4,8 @@ import Testing
 import MultipeerConnectivity
 import FernletFoundation
 import FernletDomainModel
+import AIProviders
+import AppServices
 @testable import Fernlet
 
 struct RecipeShareCodecTests {
@@ -319,6 +321,112 @@ struct RecipeShareCodecTests {
             if polls >= minimumPolls, clock.now >= deadline { return }
             try? await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    // MARK: - Peer-supplied source provenance (M4)
+
+    /// A mesh-received recipe's source URL was chosen by a STRANGER, so it must be marked as such —
+    /// that flag is what keeps the source-link connection pre-warm from beaconing to the sender's
+    /// host on every open (Docs/No-Tracking-Wall.md 4b).
+    @MainActor
+    @Test func meshImportedRecipeIsMarkedPeerSupplied() throws {
+        let store = makeTestStore()
+        let payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe(), foodItems: [])
+
+        _ = try store.importProximityRecipeShare(payload)
+
+        let savedRecipe = try #require(store.savedRecipes.first)
+        let webImport = try #require(savedRecipe.webImport)
+        #expect(webImport.sourceIsPeerSupplied == true)
+        // The URL itself must be PRESERVED: `recipe(matchingSourceURL:)` decides the keep-existing
+        // duplicate rule from this exact string, so "simplifying" the fix into blanking the source
+        // URL would silently re-break the owner's 2026-08-09 decision.
+        #expect(webImport.sourceURLString == "https://example.com/saved-training-bowl")
+    }
+
+    /// A URL the user pasted or shared in is NOT peer-supplied — the pre-warm must keep working for
+    /// the recipes it was introduced for.
+    @MainActor
+    @Test func pastedAndSharedImportsAreNotPeerSupplied() throws {
+        let imported = ImportedRecipe(
+            sourceURL: try #require(URL(string: "https://example.com/oats")),
+            name: "Oats",
+            ingredients: ["Oats", "Milk"],
+            summary: "Simmer.",
+            servings: 1,
+            protein: 12,
+            carbs: 40,
+            fat: 6
+        )
+
+        let recipe = RecipeDefinition(importedRecipe: imported)
+
+        #expect(recipe.webImport?.sourceIsPeerSupplied == nil)
+    }
+
+    /// The pure policy behind the pre-warm modifier, testable without rendering a view.
+    @MainActor
+    @Test func prewarmURLIsNilForPeerSuppliedImports() throws {
+        let peerSupplied = RecipeWebImport(
+            sourceURLString: "https://peer.example.com/recipe",
+            ingredientLines: [],
+            sourceIsPeerSupplied: true
+        )
+        let userChosen = RecipeWebImport(
+            sourceURLString: "https://example.com/recipe",
+            ingredientLines: []
+        )
+
+        #expect(SourceLinkPrewarmModifier.prewarmURL(for: peerSupplied) == nil)
+        #expect(SourceLinkPrewarmModifier.prewarmURL(for: userChosen)?.host() == "example.com")
+        #expect(SourceLinkPrewarmModifier.prewarmURL(for: nil) == nil)
+        // A recipe with no usable source link warms nothing either.
+        #expect(SourceLinkPrewarmModifier.prewarmURL(
+            for: RecipeWebImport(sourceURLString: "", ingredientLines: [])) == nil)
+    }
+
+    /// A legacy synced blob predates the provenance flag: it must decode to nil (keep pre-warming),
+    /// never fail the whole recipe.
+    @MainActor
+    @Test func legacyWebImportBlobDecodesWithoutTheProvenanceFlag() throws {
+        let legacy = #"{"sourceURLString":"https://example.com/oats","ingredientLines":["Oats"],"macros":{"protein":10,"carbs":20,"fat":3}}"#
+        let data = try #require(legacy.data(using: .utf8))
+
+        let decoded = try JSONDecoder().decode(RecipeWebImport.self, from: data)
+
+        #expect(decoded.sourceIsPeerSupplied == nil)
+        #expect(decoded.sourceURLString == "https://example.com/oats")
+    }
+
+    /// M8's saved arm: a payload built IN-PROCESS never meets the wire decoder, so the store's own
+    /// clamps have to stop `Macros.calories` from trapping on the first render.
+    @MainActor
+    @Test func savedProximityImportClampsHostileMacros() throws {
+        let store = makeTestStore()
+        let payload = ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(
+                kind: .saved,
+                saved: SharedSavedRecipePayload(
+                    name: "Hostile bowl",
+                    sourceURLString: "https://example.com/hostile",
+                    ingredients: ["Oats"],
+                    summary: "",
+                    servings: 2,
+                    protein: .max,
+                    carbs: .max,
+                    fat: .max,
+                    micronutrients: Micronutrients(sodium: 1e300)
+                )
+            )
+        )
+
+        _ = try store.importProximityRecipeShare(payload)
+
+        let savedRecipe = try #require(store.savedRecipes.first)
+        let webImport = try #require(savedRecipe.webImport)
+        #expect(webImport.macros.protein == SharedRecipeLimits.maxMacroGrams)
+        #expect(webImport.macros.calories == SharedRecipeLimits.maxMacroGrams * 17)
+        #expect(webImport.micronutrients.sodium == nil)
     }
 
     private func makeRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {

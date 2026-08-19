@@ -119,6 +119,7 @@ enum UITestSupport {
     static var bypassPrivateLockGate: Bool { false }
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
+    static var enableCoachExchange: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var forceCaptureCover: Bool { false }
     static var shouldOpenJournalEditor: Bool { false }

@@ -996,7 +996,7 @@ struct SavedRecipeNotesSheet: View {
         // Warm the DNS/TLS connection to the source host while the sheet is up, so tapping the
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
-        .prewarmsSourceLinkConnection(to: webImport?.sourceURL)
+        .prewarmsSourceLinkConnection(for: webImport)
         .sheet(isPresented: $showingSafari) {
             if let sourceURL = webImport?.sourceURL, sourceURL.isSafariPresentable {
                 SafariView(url: sourceURL)
@@ -4206,7 +4206,7 @@ struct RecipeDetailView: View {
         // Warm the DNS/TLS connection to the source host while the detail is up, so the source
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
-        .prewarmsSourceLinkConnection(to: recipe.webImport?.sourceURL)
+        .prewarmsSourceLinkConnection(for: recipe.webImport)
         .toolbar { reimportToolbar }
         // Resolve the manual recipe's structured ingredients (a FoodCatalog SQLite read) into a cached
         // dictionary, keyed on the ingredient ids so an edit-and-save under this detail (the editor
@@ -4259,7 +4259,7 @@ struct RecipeDetailView: View {
         if recipe.webImport?.sourceURL?.isSafariPresentable == true {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    reimportFromSource()
+                    confirmReimportFromSource()
                 } label: {
                     Label("Re-import from source", systemImage: "arrow.clockwise")
                 }
@@ -4636,6 +4636,22 @@ struct RecipeDetailView: View {
                 photo = await UIImage(data: stored)?.byPreparingForDisplay()
             }
         }
+    }
+
+    /// Names the host BEFORE the tap that contacts it. A web-imported recipe can arrive over the
+    /// proximity mesh carrying a stranger's source URL (`RecipeWebImport.sourceIsPeerSupplied`), so
+    /// the one button that deliberately re-fetches must say whose server it is about to reach — and
+    /// it replaces the imported ingredients/macros on screen, which is why it routes through the
+    /// shared destructive-confirmation affordance rather than firing on a bare tap.
+    private func confirmReimportFromSource() {
+        let host = recipe.webImport?.sourceURL?.host() ?? "the source page"
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Re-import from \(host)?",
+            message: "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept.",
+            confirmLabel: "Re-import",
+            auditEvent: "recipe.reimport.confirmed",
+            perform: { reimportFromSource() }
+        )
     }
 
     /// Runs the explicit "Re-import from source" (owner decision 2026-08-09): re-fetches the source
@@ -5320,12 +5336,25 @@ struct SafariView: UIViewControllerRepresentable {
 /// detail-appear, before any tap. HTTPS-only (pre-warming plaintext HTTP buys nothing), gated on
 /// ``URL/isSafariPresentable``, and the token is invalidated on disappear so warmed connections
 /// don't outlive the page that justified them.
-private struct SourceLinkPrewarmModifier: ViewModifier {
+///
+/// A PEER-SUPPLIED source is excluded entirely (``prewarmURL(for:)``): the justification for the
+/// pre-warm is that the user chose the host by importing from it, and that is simply false for a
+/// URL a stranger sent over the mesh — a unique per-recipient hostname would otherwise turn every
+/// open of that recipe into a DNS+TLS beacon back to the sender.
+struct SourceLinkPrewarmModifier: ViewModifier {
     /// The source link to warm; `nil` and non-https URLs make the modifier inert.
     let url: URL?
     /// The live pre-warm token. Non-nil exactly while this view is on screen with a warmable URL;
     /// `invalidate()` on disappear releases the warmed connections.
     @State private var token: SFSafariViewController.PrewarmingToken?
+
+    /// The URL this modifier may warm for a recipe's web import, or nil when it must stay inert.
+    /// Nil for a peer-supplied source (the consent boundary above) and for a recipe with no import.
+    /// Pure and static so the policy is testable without rendering a view.
+    static func prewarmURL(for webImport: RecipeWebImport?) -> URL? {
+        guard webImport?.sourceIsPeerSupplied != true else { return nil }
+        return webImport?.sourceURL
+    }
 
     func body(content: Content) -> some View {
         content
@@ -5344,11 +5373,12 @@ private struct SourceLinkPrewarmModifier: ViewModifier {
 }
 
 extension View {
-    /// Applies ``SourceLinkPrewarmModifier``: warms the DNS/TLS connection to `url` (https only)
-    /// while this view is on screen, releasing it on disappear. A no-op for `nil`, non-presentable,
-    /// or non-https URLs.
-    func prewarmsSourceLinkConnection(to url: URL?) -> some View {
-        modifier(SourceLinkPrewarmModifier(url: url))
+    /// Applies ``SourceLinkPrewarmModifier`` for a recipe's own web import: warms the DNS/TLS
+    /// connection to its source link (https only) while this view is on screen, releasing it on
+    /// disappear. A no-op for `nil`, non-presentable, or non-https URLs — and inert for a
+    /// PEER-SUPPLIED source, because a host a stranger chose must not be contacted without a tap.
+    func prewarmsSourceLinkConnection(for webImport: RecipeWebImport?) -> some View {
+        modifier(SourceLinkPrewarmModifier(url: SourceLinkPrewarmModifier.prewarmURL(for: webImport)))
     }
 }
 #endif

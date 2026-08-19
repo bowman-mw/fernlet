@@ -257,12 +257,17 @@ Not required for F1, but scope it honestly before anyone proposes it:
   alternative (give a component sealed bytes without it naming the store).
 - **A working precedent for the wall shape exists**: `FoodProductWebImporter.swift` (948 lines, app
   target) is a hard grep-wall floor file that performs network fetches *and* builds a
-  `FoundationModels` prompt, staying wall-clean by never naming a sealed store. **But do not copy its
-  SSRF posture (corrected 2026-07-24):** its `fetchHTML` / `fetchImage` (`:340`, `:522`) validate
-  **scheme-only, with no per-redirect-hop validation**, which makes it **weaker SSRF-wise than
-  `RecipeWebImporter`**. **`RecipeWebImporter` is the precedent to copy** (it does per-redirect-hop
-  `isPrivateOrLoopbackIPLiteral` validation); `FoodProductWebImporter` is a **counter-example to
-  fix**, not a template.
+  `FoundationModels` prompt, staying wall-clean by never naming a sealed store. **Its SSRF posture was
+  the counter-example to fix (2026-07-24) and is now CLOSED (2026-08-18):** `fetchHTML` used to
+  validate **scheme-only, with no per-redirect-hop validation**. It now calls
+  `RecipeWebImporter.isSafePublicHTTPSURL` on the initial URL and passes the shared
+  `RecipeWebImporter.RedirectValidator` to the fetch, so both importers classify hosts and
+  re-validate hops with one implementation (`fetchImage` already routed through
+  `RecipeWebImporter.downloadImage` as of 2026-08-09). The reuse is deliberate: the validator stays
+  in `RecipeWebImporter.swift` rather than moving to `WebScrapingKit`, because the no-tracking wall
+  pins the set of shipping files allowed to name `URLSession` to exactly three. **Honest limit,
+  unchanged for both importers:** the predicate rejects private *literals* in every spelling, not a
+  public hostname whose DNS answer is private — neither resists DNS rebinding.
 
 ### 2.5 Bugs found in passing
 

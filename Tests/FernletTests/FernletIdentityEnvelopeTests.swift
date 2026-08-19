@@ -428,12 +428,14 @@ struct FernletIdentityEnvelopeTests {
         )
 
         let meshID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
-        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID,
+                         expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
         let canonicalBefore = canonicalBytes(for: token)
         token.admitterSignature = Data("tampered".utf8)
         #expect(canonicalBytes(for: token) == canonicalBefore)
         #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid) {
-            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID,
+                             expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
         }
     }
 
@@ -451,10 +453,13 @@ struct FernletIdentityEnvelopeTests {
             grantedAt: grantedAt
         )
         // A token issued for mesh ...0002 must not verify when presented as a grant for ...0009.
+        // Pass the real admitter key so the admitter guard (which runs first) cannot mask the
+        // mesh binding this test is actually asserting.
         #expect(throws: MeshAdmissionToken.VerifyError.meshMismatch) {
             try token.verify(
                 joinerSigningPublicKey: joiner.localSigningPublicKey,
                 expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000009")!,
+                expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
                 now: grantedAt.addingTimeInterval(60)
             )
         }
@@ -478,8 +483,51 @@ struct FernletIdentityEnvelopeTests {
         #expect(throws: MeshAdmissionToken.VerifyError.joinerKeyMismatch) {
             try token.verify(joinerSigningPublicKey: attacker.localSigningPublicKey,
                              expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                             expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
                              now: grantedAt.addingTimeInterval(60))
         }
+    }
+
+    /// H2: the token's signature root is the admitter key carried INSIDE it, so a self-signed
+    /// token from a stranger verifies on its own terms. `expectedAdmitterSigningPublicKey` is what
+    /// turns "well-formed" into "granted by someone entitled to grant" — the caller supplies the
+    /// key it independently authenticated (the envelope sender).
+    @Test func meshAdmissionTokenRejectsAnAdmitterOtherThanTheAuthenticatedSender() throws {
+        let (admitter, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (joiner, jid) = try makeIdentity()
+        defer { cleanup(jid) }
+        let (someoneElse, sid) = try makeIdentity()
+        defer { cleanup(sid) }
+        let meshID = UUID(uuidString: "00000000-0000-0000-0000-0000000000a2")!
+        let grantedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let token = try MeshAdmissionToken.signed(
+            meshID: meshID,
+            joinerFingerprint: joiner.localFingerprint,
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
+            admitterIdentity: admitter,
+            grantedAt: grantedAt
+        )
+
+        // The token is perfectly valid — but it was not minted by the peer that sent it to us.
+        #expect(throws: MeshAdmissionToken.VerifyError.admitterKeyMismatch) {
+            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
+                             expectedMeshID: meshID,
+                             expectedAdmitterSigningPublicKey: someoneElse.localSigningPublicKey,
+                             now: grantedAt.addingTimeInterval(60))
+        }
+        // An unattributable grant (no authenticated sender) is equally inert.
+        #expect(throws: MeshAdmissionToken.VerifyError.admitterKeyMismatch) {
+            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
+                             expectedMeshID: meshID,
+                             expectedAdmitterSigningPublicKey: nil,
+                             now: grantedAt.addingTimeInterval(60))
+        }
+        // Positive control: the real admitter still verifies.
+        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
+                         expectedMeshID: meshID,
+                         expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
+                         now: grantedAt.addingTimeInterval(60))
     }
 
     @Test func meshAdmissionTokenRejectsLegacyEightCharacterJoinerFingerprint() throws {
@@ -499,10 +547,13 @@ struct FernletIdentityEnvelopeTests {
             grantedAt: grantedAt
         )
 
+        // The admitter key is correct here on purpose: the rejection under test is the 8-char
+        // joiner fingerprint, so the admitter guard must not be what throws.
         #expect(throws: (any Error).self) {
             try token.verify(
                 joinerSigningPublicKey: joiner.localSigningPublicKey,
                 expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
                 now: grantedAt.addingTimeInterval(60)
             )
         }
@@ -706,7 +757,9 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: expiresAt
         )
         try newToken.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
-                            expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+                            expectedMeshID: meshID,
+                            expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
+                            now: grantedAt.addingTimeInterval(60))
 
         // Legacy — signed over the old canonical bytes — still verifies via the legacy fallback.
         var legacyToken = MeshAdmissionToken(
@@ -721,7 +774,9 @@ struct FernletIdentityEnvelopeTests {
         )
         legacyToken.admitterSignature = try admitter.sign(legacyCanonicalBytes(for: legacyToken))
         try legacyToken.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
-                               expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+                               expectedMeshID: meshID,
+                               expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
+                               now: grantedAt.addingTimeInterval(60))
     }
 
     @Test func wi6_verifyRejectsTamperedCanonicalEnvelopeField() throws {
@@ -767,7 +822,9 @@ struct FernletIdentityEnvelopeTests {
         )
         #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid) {
             try bad.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
-                           expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+                           expectedMeshID: meshID,
+                           expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
+                           now: grantedAt.addingTimeInterval(60))
         }
     }
 

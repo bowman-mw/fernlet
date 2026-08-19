@@ -58,8 +58,16 @@ struct ConnectionInspectorHistoryView: View {
                 .accessibilityLabel("Export connection history")
             }
         }
+        // Delete the peer-identity dossier as soon as the chosen activity has finished reading it —
+        // on both the shared and cancelled paths — rather than letting it linger until the next
+        // sweep. Only THIS file: a data export or trainer summary may be in flight elsewhere.
         .sheet(item: $exportPayload) { payload in
-            ActivityShareView(items: [payload.url])
+            ActivityShareView(items: [payload.url]) {
+                if inspector.store?.discardExportedFile(at: payload.url) == false {
+                    FernletAuditLog.log("connectionInspector.discardFailed")
+                }
+                exportPayload = nil
+            }
         }
         .alert("Couldn't export", isPresented: $exportError.isPresent()) {
             Button("OK") { exportError = nil }
@@ -102,12 +110,25 @@ struct ConnectionInspectorHistoryView: View {
         return String(format: "%.0fs", seconds)
     }
 
+    /// Writes the history as JSON and presents the share sheet for it.
+    ///
+    /// The file is a proximity peer-identity dossier (display names, advertised/confirmed
+    /// fingerprints, signing keys, first/last-seen times), so it goes through
+    /// ``FernletStore/writeProtectedExport(_:kind:)`` into `tmp/DataExports` — the one directory the
+    /// launch sweep, the share-completion purge and "Delete everything" reach by construction. It is
+    /// deliberately NOT preceded by a `purgeDataExports()`: that removes the whole directory and
+    /// would delete a trainer summary another screen has in flight.
     private func exportLogs() {
+        // R5: the store is late-bound via `attachStore`, so a nil here would otherwise be a button
+        // that silently does nothing.
+        guard let store = inspector.store else {
+            FernletAuditLog.log("connectionInspector.exportFailed", context: ["reason": "noStore"])
+            exportError = "Fernlet isn't ready yet. Please try again."
+            return
+        }
         do {
             let data = try inspector.exportAsJSON()
-            let fileName = "fernlet-connection-logs-\(Date().formatted(.iso8601.year().month().day())).json"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try data.write(to: url, options: .atomic)
+            let url = try store.writeProtectedExport(data, kind: "connection-logs")
             exportPayload = ExportPayload(url: url)
         } catch {
             // `recordError` writes to the LIVE log, which this Settings browser normally does not

@@ -146,6 +146,12 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   **OWNER ACTION before TestFlight:** promote the `HeartDrop` record type (`tag` queryable,
   `payload` bytes) from the CloudKit Development schema to Production in the console — dev
   auto-creates it on first save; production will not.
+  **While promoting it,** set a retention/lifecycle policy on the record type if the console offers
+  one. Cleanup is creator-only and driven from the sending device's local outbox, so a record
+  stranded by an uninstall (or by a delete-everything whose remote purge could not run) can never
+  be deleted by anyone afterwards — a server-side expiry is the ONLY mechanism that can bound that
+  case, and no client change can substitute for it. Disclosed as an accepted residual in
+  `Docs/No-Tracking-Wall.md` §6 and `Docs/Privacy-Policy.md` §6/§12 (finding I32).
 - **BLE wake-on-proximity presence** — deferred by decision 2026-07-25; design sketch in
   `Plan-Bitchat-Adoptions-2026-07-25.md` §E (tags/envelopes
   kept transport-agnostic for it); revisit with the Android/cross-platform transport work.

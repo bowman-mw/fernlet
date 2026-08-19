@@ -6,6 +6,7 @@ import WebScrapingKit
 
 #if canImport(UIKit)
 import UIKit
+import ImageIO
 #endif
 
 #if canImport(FoundationModels)
@@ -92,7 +93,11 @@ enum FoodProductWebSearch {
 
     /// Extracts deduplicated (URL, title) result links from the search page's HTML, unwrapping
     /// DuckDuckGo `uddg` redirects and keeping only https, non-DuckDuckGo destinations.
-    static func searchResults(from html: String) -> [ProductPagePreview] {
+    static func searchResults(from rawHTML: String) -> [ProductPagePreview] {
+        // R3/M10: the `(.*?)` link pattern is quadratic in the input on markup that opens `<a` and
+        // never closes it, and this is a third party's page. The result list of an honest search page
+        // is far inside 512 KB, so the cap costs nothing real and bounds the pathological case.
+        let html = String(rawHTML.prefix(HTMLScraper.maxTextExtractionCharacters))
         let pattern = #"(?is)<a\b([^>]*)>(.*?)</a>"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
@@ -112,6 +117,12 @@ enum FoodProductWebSearch {
         }
     }
 
+    /// One search-result href as a usable product-page URL, or `nil`.
+    ///
+    /// The https tests are the SSRF predicate (2026-08-18), not a bare scheme check: a search result
+    /// is a destination a *third party* chose, and a private-literal result would otherwise be
+    /// surfaced as a `ProductPagePreview` whose "Open page" button hands it to Safari — a hop the
+    /// fetch-side guard never sees.
     private static func resultURL(from href: String) -> URL? {
         let decodedHref = FoodProductWebImporter.htmlDecoded(href)
         guard let url = URL(string: decodedHref, relativeTo: URL(string: "https://duckduckgo.com"))?.absoluteURL else {
@@ -121,11 +132,11 @@ enum FoodProductWebSearch {
            let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
            let redirect = components.queryItems?.first(where: { $0.name == "uddg" })?.value,
            let redirectedURL = URL(string: redirect),
-           redirectedURL.scheme == "https",
+           RecipeWebImporter.isSafePublicHTTPSURL(redirectedURL),
            !(redirectedURL.host()?.contains("duckduckgo.com") ?? false) {
             return redirectedURL
         }
-        guard url.scheme == "https",
+        guard RecipeWebImporter.isSafePublicHTTPSURL(url),
               url.host()?.contains("duckduckgo.com") != true else {
             return nil
         }
@@ -295,7 +306,8 @@ enum FoodProductWebImporter {
         } catch FoodProductWebImportError.fetchFailed {
             return try await FoodProductWebSearch.preview(for: fallbackSearchText(from: url))
         }
-        let title = productDictionary(in: html).flatMap { stringValue($0["name"]) }
+        let scripts = await scriptBlocks(in: html)
+        let title = productDictionary(fromScripts: scripts).flatMap { stringValue($0["name"]) }
             ?? metadataContent(named: "og:title", in: html)
             ?? firstCapture(in: html, pattern: #"(?is)<title\b[^>]*>(.*?)</title>"#)
             ?? url.host()
@@ -336,10 +348,13 @@ enum FoodProductWebImporter {
         } catch {
             throw error
         }
-        if let product = structuredProduct(from: html, sourceURL: preview.sourceURL) {
+        // M10: the structured tier's JSON-LD scan runs off the main actor; `structuredProduct` keeps
+        // its synchronous shape for the pure-parser tests, which feed it a literal fixture.
+        if let dictionary = productDictionary(fromScripts: await scriptBlocks(in: html)),
+           let product = importedProduct(from: dictionary, sourceURL: preview.sourceURL) {
             return product
         }
-        if let product = productFromVisibleNutritionText(
+        if let product = await productFromVisibleNutritionText(
             in: html,
             fallbackName: preview.title,
             sourceURL: preview.sourceURL
@@ -355,7 +370,7 @@ enum FoodProductWebImporter {
             return product
         }
         #endif
-        let cleanedText = try cleanedBodyText(from: html)
+        let cleanedText = try await cleanedBodyText(from: html)
         return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL, gate: gate)
     }
 
@@ -403,20 +418,32 @@ enum FoodProductWebImporter {
                 }) == true
     }
 
-    /// Fetches a page as HTML with a Safari-like User-Agent: https-only, 15 s timeout, 2xx +
-    /// text/html content-type required, and the body capped at 3 MB (streamed so an oversized page
-    /// aborts early).
+    /// Fetches a page as HTML with a Safari-like User-Agent: SSRF-guarded https, 15 s idle /
+    /// 120 s whole-transfer timeout, 2xx + text/html content-type required, and the body capped at
+    /// 3 MB (streamed so an oversized page aborts early).
     ///
     /// Transport is `WebScrapingKit`'s `EphemeralWebSession` — no cookie jar, no cache, no credential
     /// store — so a retailer page cannot set state during one lookup and read it back during the
-    /// next. Everything *else* here is this importer's own policy and deliberately differs from the
-    /// recipe importer's: the https guard is inline (not the SSRF helper), the User-Agent spoofs
-    /// Safari so retailer bot-walls serve real markup, the content-type check reads the raw header
-    /// string, and an over-cap body THROWS rather than truncating (a half-read nutrition table is
-    /// worse than no table).
+    /// next.
+    ///
+    /// **SSRF parity with the recipe fetch (2026-08-18).** This used to be a bare
+    /// `url.scheme == "https"` test with no redirect delegate, so a private/loopback literal — or a
+    /// public page that 30x'd to one — reached the network. It now runs the same
+    /// `RecipeWebImporter.isSafePublicHTTPSURL` predicate on the initial URL and re-runs it on every
+    /// redirect hop via the shared `RecipeWebImporter.RedirectValidator`. Honest limit: the
+    /// predicate rejects private *literals* in every spelling, NOT a public hostname whose DNS
+    /// answer is a private address — neither importer resists DNS rebinding.
+    ///
+    /// Everything *else* here is still this importer's own policy and deliberately differs from the
+    /// recipe importer's: the User-Agent spoofs Safari so retailer bot-walls serve real markup, the
+    /// content-type check reads the raw header string, and an over-cap body THROWS rather than
+    /// truncating (a half-read nutrition table is worse than no table).
     /// - Throws: ``FoodProductWebImportError/fetchFailed`` / `emptyHTML` / `invalidURL`.
     static func fetchHTML(from url: URL) async throws -> String {
-        guard url.scheme == "https" else {
+        // `.invalidURL`, not `.fetchFailed`, is load-bearing: `preview(from:)` catches ONLY
+        // `.fetchFailed` before falling back to a DuckDuckGo search, so a URL rejected here is
+        // never re-egressed as a search query.
+        guard RecipeWebImporter.isSafePublicHTTPSURL(url) else {
             throw FoodProductWebImportError.invalidURL
         }
         var request = URLRequest(url: url, timeoutInterval: 15)
@@ -425,7 +452,10 @@ enum FoodProductWebImporter {
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (asyncBytes, response) = try await EphemeralWebSession.shared.bytes(for: request)
+            // Re-validate every redirect hop, not just the initial URL: a public https product page
+            // can 30x toward an internal or link-local address. A refused hop leaves the 3xx as the
+            // final response, which the status-code guard below already treats as a failed fetch.
+            (asyncBytes, response) = try await EphemeralWebSession.shared.bytes(for: request, delegate: RecipeWebImporter.RedirectValidator())
         } catch {
             throw FoodProductWebImportError.fetchFailed
         }
@@ -453,7 +483,23 @@ enum FoodProductWebImporter {
     }
 
     private static func productDictionary(in html: String) -> [String: Any]? {
-        for rawJSON in JSONLDScraper.scriptContents(from: html) {
+        productDictionary(fromScripts: JSONLDScraper.scriptContents(from: html))
+    }
+
+    /// The page's `application/ld+json` blocks, extracted OFF the main actor (M10).
+    ///
+    /// The scan is linear since 2026-08-18 but still walks up to 3 MB of page-controlled markup, and
+    /// this target is MainActor-by-default. `[String]` is Sendable; `[String: Any]` is not, which is
+    /// why the split exists at all — only the blocks cross the hop, the dictionary is rebuilt here.
+    private static func scriptBlocks(in html: String) async -> [String] {
+        await Task.detached(priority: .userInitiated) {
+            JSONLDScraper.scriptContents(from: html)
+        }.value
+    }
+
+    /// The first schema.org `Product` object among already-extracted JSON-LD blocks.
+    private static func productDictionary(fromScripts scripts: [String]) -> [String: Any]? {
+        for rawJSON in scripts {
             guard let data = htmlDecoded(rawJSON).data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data),
                   let product = JSONLDScraper.object(ofType: "Product", in: object) else {
@@ -538,12 +584,18 @@ enum FoodProductWebImporter {
 
     /// The visible-text tier: flattens the page body to lines, normalizes shorthand ("fat 5g" →
     /// "Total Fat 5g"), and runs the shared `NutritionLabelScanner` line parser over them.
-    static func productFromVisibleNutritionText(in html: String, fallbackName: String, sourceURL: URL) -> ImportedFoodProduct? {
+    static func productFromVisibleNutritionText(in html: String, fallbackName: String, sourceURL: URL) async -> ImportedFoodProduct? {
+        // M10: both scrapes keep non-greedy regex patterns over page-controlled markup, so they run
+        // off the main actor together; the `([String], String?)` result is Sendable, and the label
+        // parse + product build stay on-actor.
+        let scraped: (lines: [String], servingSize: String?) = await Task.detached(priority: .userInitiated) {
+            (lines: visibleTextLines(from: html), servingSize: inferredServingSize(from: html))
+        }.value
         var lines: [String] = []
-        for line in visibleTextLines(from: html) {
+        for line in scraped.lines {
             lines.append(normalizedWebNutritionLine(line))
         }
-        if let servingSize = inferredServingSize(from: html) {
+        if let servingSize = scraped.servingSize {
             lines.append("Serving size \(servingSize)")
         }
         let result = NutritionLabelScanner.parse(lines: lines)
@@ -553,6 +605,64 @@ enum FoodProductWebImporter {
     #if canImport(UIKit)
     /// R3: how many scraped candidate images the OCR tier will fetch, however many the page carries.
     private static let maxLabelImagesToScan = 8
+
+    /// Largest per-axis pixel dimension accepted from an untrusted web label image.
+    ///
+    /// Deliberately the same number the app's sealed media path uses for untrusted peer photos, so
+    /// there is ONE answer to "how big may an image a stranger supplied be" across the app.
+    private static let maxLabelImagePixelDimension = 6_000
+
+    /// Largest total pixel COUNT accepted from an untrusted web label image (24 MP). The per-axis
+    /// bound alone lets a 6 000 x 6 000 image through at 36 MP; this is the clause that stops it.
+    /// Worst admitted case is 24 MP x 4 B = 96 MB, doubled for the decode + render — survivable on
+    /// the iPhone-11 floor. Same number as the sealed media path, same reason.
+    private static let maxLabelImagePixelCount = 24_000_000
+
+    /// Longest edge the OCR copy of a web label image is decoded at.
+    ///
+    /// 2 400, NOT the camera path's 1 600: that cap is chosen for frames where the label FILLS the
+    /// viewfinder, while a retailer CDN image is often a whole-package shot with the nutrition panel
+    /// occupying a fraction of the frame. One smeared digit fails `isCompleteNutritionLabelScan` and
+    /// drops the whole import, so this stays at or above the resolution of any real label crop while
+    /// still capping a render at ~23 MB.
+    private static let labelImageOCRMaxPixelSize = 2_400
+
+    /// ImageIO probe-then-thumbnail for an untrusted web label image: reads the pixel dimensions
+    /// WITHOUT decoding, refuses a decompression bomb outright, then decodes a bounded copy for OCR.
+    ///
+    /// The download's 12 MB byte cap bounds the TRANSFER, not the bitmap — a few-hundred-KB flat PNG
+    /// can declare 256 MP, which is ~1 GB of RGBA once `UIImage(data:)` materialises it and then
+    /// again when Vision's preprocessing renders it. Mirrors the app's sealed media path without
+    /// reaching into it (this file is an S3 grep-wall floor file and may not name that store).
+    ///
+    /// Not `private`: the regression test drives it directly, the same way it already drives
+    /// ``isCompleteNutritionLabelScan(_:)``.
+    ///
+    /// - Returns: `nil` for undeterminable dimensions, an over-bound image, or an undecodable body —
+    ///   the same `nil` every other `fetchImage` failure produces, so the candidate is simply skipped.
+    static func boundedLabelImage(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0,
+              // R5: `width * height` would TRAP on overflow, so it stays AFTER the two per-axis
+              // bounds in this same chain — with both proven <= 6 000 the product cannot overflow.
+              width <= maxLabelImagePixelDimension,
+              height <= maxLabelImagePixelDimension,
+              width * height <= maxLabelImagePixelCount else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: labelImageOCRMaxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
 
     private static func productFromNutritionLabelImages(in html: String, fallbackName: String, sourceURL: URL) async -> ImportedFoodProduct? {
         for imageURL in candidateImageURLs(from: html, sourceURL: sourceURL).prefix(maxLabelImagesToScan) {
@@ -579,17 +689,22 @@ enum FoodProductWebImporter {
     /// SSRF host validation, per-hop redirect re-validation, an image MIME requirement (`image/*`,
     /// or a generic octet-stream declaration whose bytes pass the magic-number sniff — retailer
     /// CDNs serving label images off S3-style origins with no content-type metadata keep working,
-    /// HTML error pages don't), the 15 s timeout, and a streaming 12 MB cap that aborts oversize
+    /// HTML error pages don't), the 15 s idle timeout plus the session's 120 s whole-transfer ceiling,
+    /// and a streaming 12 MB cap that aborts oversize
     /// bodies instead of buffering them whole. Transport stays `EphemeralWebSession.shared`
     /// (inside the downloader), and this importer's Safari User-Agent spoof is preserved so
     /// retailer CDNs keep serving real images.
+    ///
+    /// The bytes are then pixel-PROBED and thumbnail-decoded by ``boundedLabelImage(from:)``
+    /// (2026-08-18) rather than handed straight to `UIImage(data:)`: the 12 MB cap bounds the
+    /// transfer, not the bitmap a hostile image declares.
     private static func fetchImage(from url: URL) async -> UIImage? {
         guard let data = try? await RecipeWebImporter.downloadImage(
             from: url,
             userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
             maxBytes: 12_000_000
         ) else { return nil }
-        return UIImage(data: data)
+        return boundedLabelImage(from: data)
     }
     #endif
 
@@ -705,14 +820,24 @@ enum FoodProductWebImporter {
     /// The pass itself is `WebScrapingKit`'s; only the *empty-page* verdict is this importer's, which
     /// is why the shared helper returns `nil` instead of throwing — `.productNotFound` carries product
     /// copy the recipe importer's `.noRecipeFound` does not.
-    private static func cleanedBodyText(from html: String) throws -> String {
-        guard let text = HTMLScraper.cleanedBodyText(from: html, decodingNumericEntities: false) else {
+    /// M10: the reduction runs off the main actor — it keeps regex passes over page-controlled markup
+    /// (bounded by `HTMLScraper.maxTextExtractionCharacters`, but still up to 512 KB of it) — and only
+    /// the `String?` verdict crosses back.
+    private static func cleanedBodyText(from html: String) async throws -> String {
+        let text = await Task.detached(priority: .userInitiated) {
+            HTMLScraper.cleanedBodyText(from: html, decodingNumericEntities: false)
+        }.value
+        guard let text else {
             throw FoodProductWebImportError.productNotFound
         }
         return text
     }
 
-    private static func visibleTextLines(from html: String) -> [String] {
+    nonisolated private static func visibleTextLines(from rawHTML: String) -> [String] {
+        // R3/M10: same 512 KB input cap as `HTMLScraper.cleanedBodyText` — the `<body>` capture below
+        // keeps its `(.*?)` shape, so the cap is what bounds its residual quadratic cost on a page
+        // that never closes the tag. Visible nutrition copy past 512 KB of source is now unread.
+        let html = String(rawHTML.prefix(HTMLScraper.maxTextExtractionCharacters))
         let bodyHTML = firstCapture(in: html, pattern: #"(?is)<body\b[^>]*>(.*?)</body>"#) ?? html
         let withLineBreaks = bodyHTML.replacingOccurrences(
             of: #"(?is)</?(?:br|p|li|tr|td|th|section|article|h[1-6])\b[^>]*>"#,
@@ -737,8 +862,9 @@ enum FoodProductWebImporter {
         return line
     }
 
-    private static func inferredServingSize(from html: String) -> String? {
-        let decodedHTML = htmlDecoded(html)
+    nonisolated private static func inferredServingSize(from html: String) -> String? {
+        // R3/M10: `(.+?)` over a whole decoded document — same cap, same reason as above.
+        let decodedHTML = htmlDecoded(String(html.prefix(HTMLScraper.maxTextExtractionCharacters)))
         return firstCapture(
             in: decodedHTML,
             pattern: #"(?is)\bcalories\s+in\s+(.+?)\s+of\b"#
@@ -977,7 +1103,7 @@ enum FoodProductWebImporter {
         return (value as? NSNumber)?.stringValue
     }
 
-    private static func allCaptures(in text: String, pattern: String) -> [String] {
+    nonisolated private static func allCaptures(in text: String, pattern: String) -> [String] {
         HTMLScraper.allLastCaptures(in: text, pattern: pattern)
     }
 
@@ -987,7 +1113,7 @@ enum FoodProductWebImporter {
     /// two differ when a first match's capture group does not participate: this form falls through to
     /// the next match, that one returns nil. Every pattern here has a mandatory trailing group so they
     /// agree today, but the shape this file has always had is the one it keeps.
-    private static func firstCapture(in text: String, pattern: String) -> String? {
+    nonisolated private static func firstCapture(in text: String, pattern: String) -> String? {
         allCaptures(in: text, pattern: pattern).first
     }
 
@@ -1000,7 +1126,7 @@ enum FoodProductWebImporter {
     /// guess. Kept as a one-line shim so this file states its policy in exactly one place.
     /// (`&amp;` is still decoded last inside the shared helper, so double-encoded text unwraps one
     /// layer per pass exactly as before.)
-    static func htmlDecoded(_ text: String) -> String {
+    nonisolated static func htmlDecoded(_ text: String) -> String {
         HTMLScraper.htmlDecoded(text, decodingNumericEntities: false)
     }
 }

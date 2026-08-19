@@ -356,6 +356,43 @@ struct ProximityVerificationTests {
         #expect(capture.contains("mesh.verifyQR.staleChallengeDropped"))
     }
 
+    /// L22, scanner-side counterpart to `ceremonyCommitsOnlyTheSlotTheQRWasOpenedFor`: the SCAN is
+    /// bound to the row the sheet was opened from, exactly as the DISPLAY already is. A code that
+    /// is perfectly valid but belongs to a different nearby peer is refused, not searched for —
+    /// otherwise "verify the person in front of you" degrades to "verify whoever is nearby".
+    ///
+    /// The `== false` assertion is the load-bearing one: it is what makes the row's "That code
+    /// didn't match" alert reachable.
+    @Test func scanningADifferentPeersCodeFromThisRowIsRefused() async throws {
+        let (local, localID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: localID) }
+        let (bob, bobID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: bobID) }
+        let (mallory, malloryID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: malloryID) }
+        let capture = CeremonyAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        let manager = MeshNetworkManager(store: store)
+        let bobSlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: bob, name: "Bob")
+        let mallorySlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: mallory, name: "Mallory")
+
+        // The sheet was opened from BOB's row; the code scanned is MALLORY's.
+        let malloryQR = try ProximityVerifyQR.makeURL(identity: mallory)
+        #expect(manager.beginQRVerification(with: malloryQR.url, slotID: bobSlot.peer.id) == false,
+                "A valid code belonging to a DIFFERENT nearby peer must be refused, not searched for")
+        #expect(capture.contains("mesh.verifyQR.qrPeerMismatch"))
+
+        #expect(manager.pendingVerifyChallengeNonceForTesting(slotID: mallorySlot.peer.id) == nil,
+                "No round may be opened against the peer whose code was scanned from someone else's row")
+        #expect(manager.pendingVerifyChallengeNonceForTesting(slotID: bobSlot.peer.id) == nil)
+
+        await settle()
+        #expect(!isCommitted(mallorySlot.coordinator))
+        #expect(!isCommitted(bobSlot.coordinator))
+    }
+
     /// Scanner half, happy path: the response signed by the peer whose QR was scanned commits
     /// this side. (The displayer half is `ceremonyCommitsOnlyTheSlotTheQRWasOpenedFor` — both
     /// halves can't run in one process, since every manager in it shares the one device identity.)
@@ -372,7 +409,7 @@ struct ProximityVerificationTests {
         let bobSlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: bob, name: "Bob")
 
         let bobQR = try ProximityVerifyQR.makeURL(identity: bob)
-        #expect(manager.beginQRVerification(with: bobQR.url))
+        #expect(manager.beginQRVerification(with: bobQR.url, slotID: bobSlot.peer.id))
         let challengeNonce = try #require(manager.pendingVerifyChallengeNonceForTesting(slotID: bobSlot.peer.id))
 
         let signature = try bob.sign(ProximityVerifySignature.message(
@@ -405,7 +442,7 @@ struct ProximityVerificationTests {
         let bobSlot = try await makeAwaitingManualCommitSlot(on: manager, localIdentity: local, remote: bob, name: "Bob")
 
         let bobQR = try ProximityVerifyQR.makeURL(identity: bob)
-        #expect(manager.beginQRVerification(with: bobQR.url))
+        #expect(manager.beginQRVerification(with: bobQR.url, slotID: bobSlot.peer.id))
         let challengeNonce = try #require(manager.pendingVerifyChallengeNonceForTesting(slotID: bobSlot.peer.id))
 
         // Correct transcript, wrong signer — the envelope still claims Bob's signing key, so only

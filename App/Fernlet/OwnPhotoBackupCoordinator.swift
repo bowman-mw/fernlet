@@ -296,7 +296,11 @@ final class OwnPhotoBackupCoordinator {
         fullVerification: Bool = false
     ) async -> PassResult {
         var pass = PassResult()
+        // DEBUG-only (this guard fronts the UPLOAD path as well as the restore), so it cannot be
+        // triggered in a shipping binary.
+        #if DEBUG
         guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return pass }
+        #endif
         let prefs = StoragePreferencesStore.currentPreferences()
         guard preferenceOverride || prefs.sealedBackupOwnPhotosEnabled else { return pass }
 

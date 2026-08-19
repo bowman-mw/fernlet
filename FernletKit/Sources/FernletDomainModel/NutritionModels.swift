@@ -680,6 +680,49 @@ extension Micronutrients {
         )
     }
 
+    /// A copy with every implausible amount dropped to nil — the honest reading of garbage, and it
+    /// preserves the nil-vs-zero invariant this type documents ("not measured" stays distinct from
+    /// zero). Applied where UNTRUSTED micronutrients enter: the mesh `.saved` recipe decoder and
+    /// the JSON-LD web importer's nutrition label.
+    ///
+    /// Drops rather than clamps deliberately: clamping a 1e300 sodium to the limit would PERSIST a
+    /// fabricated number and show the user a plausible-looking wrong value, where nil renders as
+    /// "not measured", which is true. R5: a non-finite or absurd `Double` here would otherwise
+    /// reach a trapping `Int(_:)` in a day-detail or Home row.
+    public func sanitizedForImport(limit: Double = SharedRecipeLimits.maxMicronutrientAmount) -> Micronutrients {
+        Micronutrients(
+            fiber: Self.plausible(fiber, limit),
+            sugar: Self.plausible(sugar, limit),
+            saturatedFat: Self.plausible(saturatedFat, limit),
+            cholesterol: Self.plausible(cholesterol, limit),
+            vitaminA: Self.plausible(vitaminA, limit),
+            vitaminC: Self.plausible(vitaminC, limit),
+            vitaminD: Self.plausible(vitaminD, limit),
+            vitaminE: Self.plausible(vitaminE, limit),
+            vitaminK: Self.plausible(vitaminK, limit),
+            vitaminB6: Self.plausible(vitaminB6, limit),
+            vitaminB12: Self.plausible(vitaminB12, limit),
+            thiamin: Self.plausible(thiamin, limit),
+            riboflavin: Self.plausible(riboflavin, limit),
+            niacin: Self.plausible(niacin, limit),
+            folate: Self.plausible(folate, limit),
+            calcium: Self.plausible(calcium, limit),
+            iron: Self.plausible(iron, limit),
+            magnesium: Self.plausible(magnesium, limit),
+            phosphorus: Self.plausible(phosphorus, limit),
+            potassium: Self.plausible(potassium, limit),
+            sodium: Self.plausible(sodium, limit),
+            zinc: Self.plausible(zinc, limit),
+            omega3: Self.plausible(omega3, limit)
+        )
+    }
+
+    /// One field's plausibility test: finite, non-negative, and at or under `limit`.
+    private static func plausible(_ value: Double?, _ limit: Double) -> Double? {
+        guard let value, value.isFinite, value >= 0, value <= limit else { return nil }
+        return value
+    }
+
     public mutating func add(_ other: Micronutrients) {
         fiber = Self.sum(fiber, other.fiber)
         sugar = Self.sum(sugar, other.sugar)
@@ -1510,6 +1553,13 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     /// one attempt per device, suppression syncs. Additive and tolerant-decoded; `nil` (legacy
     /// blobs) means "no suppression".
     public var webImageSuppressed: Bool?
+    /// True when `sourceURLString` came from a PEER over the proximity mesh rather than from a URL
+    /// this user pasted or shared in. The distinction is the consent boundary for automatic network
+    /// contact: a URL the user chose justifies the source-link connection pre-warm
+    /// (Docs/No-Tracking-Wall.md §4b), a stranger's does not — a unique per-recipient hostname would
+    /// otherwise turn every open of that recipe into a DNS+TLS beacon to the sender. Additive and
+    /// tolerant-decoded; `nil` (legacy blobs) means "not known to be peer-supplied".
+    public var sourceIsPeerSupplied: Bool?
 
     /// The parsed source link, or `nil` when there's no usable one. An absent or unparseable
     /// `sourceURLString` (e.g. the decode default of `""`) returns `nil` rather than fabricating a
@@ -1527,7 +1577,8 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         macros: Macros = Macros(protein: 0, carbs: 0, fat: 0),
         micronutrients: Micronutrients = Micronutrients(),
         imageURLString: String? = nil,
-        webImageSuppressed: Bool? = nil
+        webImageSuppressed: Bool? = nil,
+        sourceIsPeerSupplied: Bool? = nil
     ) {
         self.sourceURLString = sourceURLString
         self.ingredientLines = ingredientLines
@@ -1535,6 +1586,7 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         self.micronutrients = micronutrients
         self.imageURLString = imageURLString
         self.webImageSuppressed = webImageSuppressed
+        self.sourceIsPeerSupplied = sourceIsPeerSupplied
     }
 
     public init(from decoder: Decoder) throws {
@@ -1547,6 +1599,9 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         // fields existed. Missing key -> nil, never a decode failure.
         imageURLString = try container.decodeIfPresent(String.self, forKey: .imageURLString)
         webImageSuppressed = try container.decodeIfPresent(Bool.self, forKey: .webImageSuppressed)
+        // Same additive + tolerant rule: absent on every blob written before the provenance flag
+        // existed, and an absent flag must degrade to "pre-warm as before", never to a decode error.
+        sourceIsPeerSupplied = try container.decodeIfPresent(Bool.self, forKey: .sourceIsPeerSupplied)
     }
 }
 
@@ -1698,10 +1753,19 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
         guard decodedIngredients.count <= SharedRecipeLimits.maxIngredients else {
             throw RecipeImportError.invalidPayload
         }
+        // R5: a peer controls every number and string here. The macro ceilings keep a hostile Int
+        // out of the trapping `+` that sums them (the review sheet renders this payload BEFORE the
+        // store ever sees it), and the name/unit caps keep an unbounded string out of the synced
+        // catalog row each ingredient mints. Reject rather than truncate — see `bounded(_:limit:)`.
         for ingredient in decodedIngredients {
             guard ingredient.quantity.isFinite,
                   ingredient.quantity >= 0,
-                  ingredient.quantity <= SharedRecipeLimits.maxQuantity else {
+                  ingredient.quantity <= SharedRecipeLimits.maxQuantity,
+                  ingredient.protein >= 0, ingredient.protein <= SharedRecipeLimits.maxMacroGrams,
+                  ingredient.carbs >= 0, ingredient.carbs <= SharedRecipeLimits.maxMacroGrams,
+                  ingredient.fat >= 0, ingredient.fat <= SharedRecipeLimits.maxMacroGrams,
+                  ingredient.name.count <= SharedRecipeLimits.maxIngredientNameCharacters,
+                  ingredient.unit.count <= SharedRecipeLimits.maxUnitCharacters else {
                 throw RecipeImportError.invalidPayload
             }
         }
@@ -1737,6 +1801,32 @@ public nonisolated enum SharedRecipeLimits {
     public static let maxNotesCharacters = 2000
     public static let maxServings = 99
     public static let maxQuantity = 5000.0
+    /// Largest per-ingredient macro, in grams. No real ingredient approaches this; the cap exists
+    /// so peer-supplied `Int`s can never overflow a macro SUM in a view body (`Macros.calories`
+    /// and the review sheet both add them with a trapping `+`).
+    public static let maxMacroGrams = 10_000
+    /// Longest per-ingredient name accepted from a wire payload.
+    public static let maxIngredientNameCharacters = 200
+    /// Longest per-ingredient unit string accepted from a wire payload.
+    public static let maxUnitCharacters = 40
+    /// Longest free-text ingredient LINE accepted on the saved (web-import) arm, which ships whole
+    /// lines rather than structured ingredients.
+    public static let maxIngredientLineCharacters = 300
+    /// Longest saved-recipe summary accepted from a wire payload.
+    public static let maxSummaryCharacters = 4_000
+    /// Longest source URL accepted from a wire payload (the conventional practical URL ceiling).
+    public static let maxSourceURLCharacters = 2_048
+    /// Longest cooking-step text accepted from a wire payload; mirrors `RecipeLimits.maxStepTextLength`.
+    public static let maxStepTextCharacters = 2_000
+    /// Step cap for the SAVED (web-imported) arm. Deliberately 200, not ``maxSteps`` (60): the web
+    /// importer keeps up to `RecipeWebImporter.maxImportedSteps` = 200 steps, so a 60-step cap here
+    /// would REJECT a recipe this very app legitimately imported and then shared.
+    public static let maxSavedSteps = 200
+    /// Largest plausible micronutrient amount for one food or meal, in the field's own unit (mg for
+    /// minerals, g for macronutrient-adjacent fields, mcg for vitamins). Generous by two orders of
+    /// magnitude for every field; the cap exists so a peer- or page-supplied `Double` can never
+    /// reach a trapping `Int(_:)` in a view body.
+    public static let maxMicronutrientAmount = 100_000.0
 }
 
 /// One wire recipe ingredient: name, quantity/unit, and flat macro grams.

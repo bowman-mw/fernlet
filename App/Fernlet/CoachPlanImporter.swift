@@ -394,6 +394,21 @@ extension FernletStore {
         return (resolved.sorted { $0.dayKey < $1.dayKey }, issues)
     }
 
+    /// The clamped prescription line one coach-proposed exercise becomes. The single renderer
+    /// shared by `applying(_:to:)` and `CoachPlanStrikeFilter`, so the text written to the calendar
+    /// and the text the safety strikes are applied to can never disagree.
+    ///
+    /// `fileprivate`, not `private`: `CoachPlanStrikeFilter` is a file-scope struct and cannot
+    /// reach a `private` member of this extension.
+    fileprivate static func clampedLine(_ exercise: CoachExercise) -> String {
+        var clamped = exercise
+        clamped.sets = min(max(exercise.sets, 1), CoachPlanLimits.maxSets)
+        if let rest = exercise.restSeconds {
+            clamped.restSeconds = min(max(rest, 0), CoachPlanLimits.maxRestSeconds)
+        }
+        return clamped.line
+    }
+
     /// Produces the edited row: every field the edit doesn't mention keeps its current value.
     ///
     /// Set counts and rest are clamped here, matching the new-day path, so a `.clamped` advisory the
@@ -404,14 +419,7 @@ extension FernletStore {
             updated.name = title
         }
         if let exercises = edit.exercises, !exercises.isEmpty {
-            updated.exercises = exercises.map { exercise -> String in
-                var clamped = exercise
-                clamped.sets = min(max(exercise.sets, 1), CoachPlanLimits.maxSets)
-                if let rest = exercise.restSeconds {
-                    clamped.restSeconds = min(max(rest, 0), CoachPlanLimits.maxRestSeconds)
-                }
-                return clamped.line
-            }.joined(separator: "\n")
+            updated.exercises = exercises.map(Self.clampedLine).joined(separator: "\n")
             // Muscle groups are derived from the new prescription, not carried over: keeping the old
             // set would leave the safety filter and scoring reasoning about exercises that are gone.
             var muscles = Set<MuscleGroup>()
@@ -535,9 +543,15 @@ private struct CoachPlanStrikeFilter {
     /// Normalized exercise keys the user turned off.
     let struckKeys: Set<String>
 
+    /// The exercises of `exercises` that survive the strikes — the one place a strike key is
+    /// compared against an exercise name, always in `CoachPlan.normalizedName` form.
+    func kept(_ exercises: [CoachExercise]) -> [CoachExercise] {
+        exercises.filter { !struckKeys.contains(CoachPlan.normalizedName($0.name)) }
+    }
+
     /// The exercises of `session` that survive the strikes.
     func kept(_ session: CoachSession) -> [CoachExercise] {
-        session.exercises.filter { !struckKeys.contains(CoachPlan.normalizedName($0.name)) }
+        kept(session.exercises)
     }
 
     /// Whether a session still prescribes anything at all once strikes are applied.
@@ -550,11 +564,13 @@ private struct CoachPlanStrikeFilter {
     func survivingExercises(of resolved: ResolvedCoachPlanEdit) -> String? {
         guard let after = resolved.after else { return nil }
         var text = after.exercises
-        if !struckKeys.isEmpty {
-            let lines = after.exerciseLines.filter { line in
-                !struckKeys.contains(where: { line.lowercased().hasPrefix($0) })
-            }
-            text = lines.joined(separator: "\n")
+        // Filter the edit's own [CoachExercise] by normalized name and RE-RENDER through the same
+        // clamped renderer `applying(_:to:)` used. String-prefixing the rendered line compared a
+        // raw author name against a normalized strike key, so "Back  squat" outran its own strike.
+        // Only when the edit actually proposes a prescription: a title/notes-only edit leaves the
+        // user's existing lines standing, and those were never flagged, so they are not strikable.
+        if !struckKeys.isEmpty, let proposed = resolved.edit.exercises, !proposed.isEmpty {
+            text = kept(proposed).map(FernletStore.clampedLine).joined(separator: "\n")
         }
         return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
     }

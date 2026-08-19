@@ -300,19 +300,27 @@ public nonisolated enum KeychainItem {
     }
 
     /// Loads the device-bound `SymmetricKey` stored for a well-known ``Account``, minting and
-    /// persisting a fresh 256-bit key on first use.
+    /// persisting a fresh 256-bit key **only** when the keychain definitively reports the row absent.
     ///
     /// Goes through the typed ``store(_:for:service:)`` overload, so the row is pinned to
     /// `AfterFirstUnlockThisDeviceOnly` accessibility (device-bound, never iCloud-synced).
     ///
     /// R7: the read distinguishes absence from unreadability (``loadDistinguishingAbsence(account:service:synchronizable:)``)
-    /// and BOTH failure legs are audited rather than dropped — `keychain.deviceKey.unreadable` when a
-    /// pre-first-unlock read hides an existing key (the returned fresh key then seals content the
-    /// stored key cannot open), and `keychain.deviceKey.storeFailed` when the fresh key could not be
-    /// persisted (content sealed with it is unopenable next launch). The signature stays
-    /// non-throwing so the existing callers are unchanged; the audit trail is what makes either
-    /// event diagnosable instead of invisible.
-    public static func loadOrCreateSymmetricKey(for account: Account, service: String) -> SymmetricKey {
+    /// and BOTH failure legs are audited AND fail closed — `keychain.deviceKey.unreadable` when a
+    /// read could not reach an existing row, and `keychain.deviceKey.storeFailed` when the fresh key
+    /// could not be persisted.
+    ///
+    /// - Returns: The key, or nil when the row could not be read or the minted key could not be
+    ///   stored. Nothing is cached and nothing is written in those cases, so callers fail closed and
+    ///   the next access retries.
+    /// - Important: the absent-vs-unreadable distinction is load-bearing, not cosmetic. A plain
+    ///   "read failed ⇒ mint" would, during the window when the row exists but is unavailable (an
+    ///   `AfterFirstUnlockThisDeviceOnly` item before the first post-boot unlock, or any transient
+    ///   `SecItemCopyMatching` failure), mint a fresh key and — since ``store(_:account:service:accessibility:synchronizable:replacing:)``
+    ///   is delete-then-add — REPLACE the real one, turning every sealed journal entry and Worry Box
+    ///   row into permanent garbage with no failure signal. Fail closed instead: no key, no reads,
+    ///   no writes, no mint, no delete — and the next attempt after unlock succeeds.
+    public static func loadOrCreateSymmetricKey(for account: Account, service: String) -> SymmetricKey? {
         switch loadDistinguishingAbsence(account: account.rawValue, service: service) {
         case .found(let data):
             return SymmetricKey(data: data)
@@ -320,15 +328,22 @@ public nonisolated enum KeychainItem {
             FernletAuditLog.log("keychain.deviceKey.unreadable", context: [
                 "account": account.rawValue, "status": "\(status)"
             ])
+            // Load-bearing: returning here is what stops `store`'s delete-then-add from ever running
+            // against a row we could not read.
+            return nil
         case .absent:
             break
         }
         let key = SymmetricKey(size: .bits256)
         let status = store(key.rawBytes, for: account, service: service)
-        guard status != errSecSuccess else { return key }
-        FernletAuditLog.log("keychain.deviceKey.storeFailed", context: [
-            "account": account.rawValue, "status": "\(status)"
-        ])
+        guard status == errSecSuccess else {
+            FernletAuditLog.log("keychain.deviceKey.storeFailed", context: [
+                "account": account.rawValue, "status": "\(status)"
+            ])
+            // Never hand back a key that was not persisted: content sealed with it would be
+            // unopenable next launch.
+            return nil
+        }
         return key
     }
 }

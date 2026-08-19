@@ -48,13 +48,25 @@ public protocol HealthWorkoutSample {
     /// Sample metadata; Fernlet-authored samples carry the `fernlet.*` keys written by
     /// `HealthKitService.makeMetadata`.
     var metadata: [String: Any]? { get }
+    /// Bundle identifier of the app that WROTE this sample (`sourceRevision.source.bundleIdentifier`).
+    /// The only non-forgeable provenance HealthKit offers — every `metadata` key, INCLUDING the standard
+    /// `HKMetadataKeySyncIdentifier`, is writable by any co-installed app with workout share access.
+    /// `nil` means "unknown", which callers MUST treat as not-ours (fail closed).
+    ///
+    /// Deliberately has NO protocol-extension default: a default of `nil` would silently re-open the
+    /// hole for any future conformer, so the missing-witness compile error is the forcing function.
+    var sourceBundleID: String? { get }
     /// Cumulative statistic for one quantity type over the workout (energy, distance).
     func sumQuantity(for type: HKQuantityType) -> HKQuantity?
 }
 
 /// Production conformance: a real Health workout answers ``HealthWorkoutSample/sumQuantity(for:)``
-/// from its per-type statistics.
+/// from its per-type statistics, and reports the writing app from its source revision.
 extension HKWorkout: HealthWorkoutSample {
+    /// The writing app's bundle identifier, straight off the sample's `sourceRevision` — the one
+    /// field HealthKit stamps itself and no other app can forge.
+    public var sourceBundleID: String? { sourceRevision.source.bundleIdentifier }
+
     public func sumQuantity(for type: HKQuantityType) -> HKQuantity? {
         statistics(for: type)?.sumQuantity()
     }
@@ -95,9 +107,11 @@ public struct WorkoutHealthKitMetadata {
 /// backfill (``backfillIfNeeded(defaults:)``).
 ///
 /// Key invariants:
-/// - Provenance rides in sample metadata: `fernlet.workoutID` (plus the sync identifier) marks a
-///   sample as OURS, so a rebuilt row keeps its identity and stays editable, while foreign samples
-///   import under fresh ids as read-only rows.
+/// - Provenance takes BOTH halves: the sample's `sourceRevision` bundle identifier must be this app's
+///   AND it must carry our private `fernlet.workoutID` key. Metadata is forgeable by any co-installed
+///   app with workout share access (the standard `HKMetadataKeySyncIdentifier` included), so the source
+///   is the half that decides. Only a proven-own sample rebuilds a row under its original id and stays
+///   editable; everything else imports under a fresh id as a read-only row.
 /// - Tombstones (via ``WorkoutSyncContext``) close the race where an in-flight save lands after the
 ///   local row was removed — the resurfacing sample is deleted and skipped, never re-imported.
 /// - Health-app-side deletions are honored immediately (no grace window); a cross-device edit's
@@ -117,10 +131,22 @@ public final class WorkoutHealthKitSync {
     /// R3: bounds task fan-out to one in-flight delete per id, so a batch that redelivers the same
     /// resurrected samples (HealthKit replays until the anchor advances) cannot re-issue deletes.
     private var inFlightTombstoneDeletes: Set<UUID> = []
+    /// This app's bundle identifier — the value an inbound sample's ``HealthWorkoutSample/sourceBundleID``
+    /// must equal before its `fernlet.*` metadata is believed. Injectable so the FOREIGN case is testable
+    /// without depending on what `Bundle.main` resolves to under the test host.
+    private let ownBundleID: String
 
-    public init(context: WorkoutSyncContext, service: any HealthKitServicing) {
+    /// - Parameter ownBundleID: defaults to `Bundle.main.bundleIdentifier`, falling back to `""` — the
+    ///   fail-closed value, since an empty string never equals a real sample's bundle id, so an
+    ///   unresolvable `Bundle.main` degrades to "never claim authorship", never to "trust everything".
+    public init(
+        context: WorkoutSyncContext,
+        service: any HealthKitServicing,
+        ownBundleID: String = Bundle.main.bundleIdentifier ?? ""
+    ) {
         self.context = context
         self.service = service
+        self.ownBundleID = ownBundleID
     }
 
     /// Writes a workout to Apple Health if workout sharing is authorized, then stamps the local row
@@ -207,15 +233,32 @@ public final class WorkoutHealthKitSync {
         }
     }
 
-    /// Builds a local row from a Health sample. `authoredFernletID` is non-nil only when the sample
-    /// carries OUR OWN `fernlet.workoutID` metadata (see `reconcileWorkouts`), which makes it a sample
-    /// Fernlet wrote: the row is rebuilt under that same workout id and re-marked `healthKitAuthored`
+    /// Upper bound on an imported sample's duration. A workout longer than a week is a corrupt or hostile
+    /// sample, not a workout; clamping keeps the `Int` conversion total (a NaN/infinite `duration` traps).
+    static let maxImportedDurationSeconds: TimeInterval = 7 * 24 * 3600
+
+    /// The app's effort scale, as the activity logger's slider defines it (`MoveView` →
+    /// `ActivityPickerSection`, `Slider(value:in: 1...10)`). An imported `fernlet.effort` is clamped into
+    /// it so a corrupt or hostile sample cannot plant an out-of-scale value in the synced blob.
+    static let importedEffortRange: ClosedRange<Int> = 1...10
+
+    /// Builds a local row from a Health sample. `authoredFernletID` is non-nil only when the sample was
+    /// WRITTEN BY THIS APP *and* carries our own `fernlet.workoutID` metadata (see
+    /// ``ownWorkoutID(from:ownBundleID:)``), which makes it a sample Fernlet wrote: the row is rebuilt
+    /// under that same workout id and re-marked `healthKitAuthored`
     /// rather than landing as a fresh random-id Health *import*. That keeps identity stable across
     /// devices — a rebuilt row merges with the same-id row another device holds instead of duplicating
     /// it — and keeps the row editable/removable, which an import is not.
     static func makeWorkout(from sample: some HealthWorkoutSample, authoredFernletID: UUID? = nil) -> Workout {
+        // `fernlet.*` is OUR private provenance namespace. On a proven-own sample its contents are the
+        // user's own text (Fernlet caps none of it on write, so any length cap here would silently
+        // truncate their own notes on a legitimate cross-device rebuild). On any other sample it is
+        // 100% attacker-controlled and no legitimate third-party app ever writes it — so it is ignored
+        // outright rather than sanitized, which keeps forged names/notes/exercises out of the synced
+        // blob and out of the on-device AI prompt entirely.
+        let ownMetadata = authoredFernletID != nil ? sample.metadata : nil
         let activityType: WorkoutActivityType = {
-            if let rawValue = sample.metadata?["fernlet.activityType"] as? String,
+            if let rawValue = ownMetadata?["fernlet.activityType"] as? String,
                let type = WorkoutActivityType(rawValue: rawValue) {
                 return type
             }
@@ -226,7 +269,11 @@ public final class WorkoutHealthKitSync {
             }
             return base
         }()
-        let durationMin = Int(sample.duration / 60)
+        // P10 rule 7: `Int(_:)` on a non-finite or absurd `Double` traps. `duration` comes off an
+        // untrusted sample, so clamp it into a total range before converting.
+        let durationMin = sample.duration.isFinite
+            ? Int(min(max(sample.duration, 0), Self.maxImportedDurationSeconds) / 60)
+            : 0
         let kcal = sample.sumQuantity(for: HKQuantityType(.activeEnergyBurned))?.doubleValue(for: .kilocalorie())
         let distanceMiles: Double? = {
             let types: [HKQuantityTypeIdentifier] = [.distanceWalkingRunning, .distanceCycling, .distanceSwimming]
@@ -237,19 +284,19 @@ public final class WorkoutHealthKitSync {
             }
             return nil
         }()
-        let name = (sample.metadata?["fernlet.activityName"] as? String) ?? activityType.displayName
+        let name = (ownMetadata?["fernlet.activityName"] as? String) ?? activityType.displayName
         let mode: WorkoutMode = {
             if sample.workoutActivityType == .traditionalStrengthTraining || sample.workoutActivityType == .functionalStrengthTraining {
                 return .strengthTraining
             }
             return .activity
         }()
-        let metadata = parseFernletMetadata(sample.metadata)
+        let metadata = parseFernletMetadata(ownMetadata)
         // `HealthKitService.makeMetadata` writes the workout's true intensity onto every app-authored
         // sample; read it back so a REBUILT authored row returns as itself rather than reset to
         // `.moderate` — a lossy rebuild can win the day-record last-writer-wins merge and silently
         // revert an edit made on another device. Foreign samples lack the key and keep the default.
-        let intensity = (sample.metadata?["fernlet.intensity"] as? String)
+        let intensity = (ownMetadata?["fernlet.intensity"] as? String)
             .flatMap(WorkoutIntensity.init(rawValue:)) ?? .moderate
         return Workout(
             id: authoredFernletID ?? UUID(),
@@ -274,7 +321,8 @@ public final class WorkoutHealthKitSync {
     }
 
     /// Decodes the `fernlet.*` metadata keys from a Health sample into a typed
-    /// ``WorkoutHealthKitMetadata``; missing keys (any foreign sample) yield empty/nil fields.
+    /// ``WorkoutHealthKitMetadata``; missing keys — or the `nil` dictionary callers pass for any sample
+    /// whose authorship is not proven — yield empty/nil fields.
     public static func parseFernletMetadata(_ metadata: [String: Any]?) -> WorkoutHealthKitMetadata {
         let muscleGroupsRaw = (metadata?["fernlet.muscleGroups"] as? String) ?? ""
         let muscleGroups = Set(muscleGroupsRaw.split(separator: ",").compactMap { rawValue in
@@ -282,7 +330,10 @@ public final class WorkoutHealthKitSync {
         })
         let exercises = (metadata?["fernlet.exercises"] as? String) ?? ""
         let notes = (metadata?["fernlet.notes"] as? String) ?? ""
-        let effort = (metadata?["fernlet.effort"] as? NSNumber)?.intValue
+        // Clamped to the logger's own 1...10 scale: the value round-trips through sample metadata, so a
+        // corrupt or hostile write must not land an out-of-scale effort in the day record.
+        let rawEffort = (metadata?["fernlet.effort"] as? NSNumber)?.intValue
+        let effort = rawEffort.map { min(max($0, importedEffortRange.lowerBound), importedEffortRange.upperBound) }
         let plannedWorkoutID = (metadata?["fernlet.plannedWorkoutID"] as? String).flatMap(UUID.init(uuidString:))
         return WorkoutHealthKitMetadata(
             muscleGroups: muscleGroups,
@@ -299,6 +350,17 @@ public final class WorkoutHealthKitSync {
     public static func isWorkoutLoggingAuthorized(_ snapshot: AuthorizationSnapshot) -> Bool {
         snapshot.status(for: HKObjectType.workoutType().identifier) == .sharingAuthorized ||
         snapshot.status(for: HealthCapability.workoutLogging.rawValue) == .sharingAuthorized
+    }
+
+    /// The workout id a sample may claim as OURS: its `fernlet.workoutID` metadata value, and ONLY when the
+    /// sample was written by this app. Metadata is forgeable by any co-installed app with workout write
+    /// access — `HKMetadataKeySyncIdentifier` included — so the bundle identifier is the half that decides.
+    /// Fails closed: unknown or foreign source ⇒ nil ⇒ the sample imports as a foreign row and can never
+    /// repoint or rebuild an existing one.
+    static func ownWorkoutID(from sample: some HealthWorkoutSample, ownBundleID: String) -> UUID? {
+        guard !ownBundleID.isEmpty, sample.sourceBundleID == ownBundleID else { return nil }
+        guard let raw = sample.metadata?["fernlet.workoutID"] as? String else { return nil }
+        return UUID(uuidString: raw)
     }
 
     /// Tears down the long-lived workout observation query (used on disable and by
@@ -326,23 +388,29 @@ public final class WorkoutHealthKitSync {
         // of one detached Task per sample (unbounded fan-out on a resurrected batch).
         var tombstoned: [UUID] = []
         for sample in samples {
-            let externalID = sample.metadata?["fernlet.workoutID"] as? String
-            let syncID = sample.metadata?[HKMetadataKeySyncIdentifier] as? String
-            let knownID = externalID ?? syncID
-            let knownUUID = knownID.flatMap(UUID.init(uuidString:))
+            // Authorship = OUR source AND our private `fernlet.workoutID` key. Metadata alone decides
+            // nothing: any co-installed app with workout share access can write both that key and the
+            // standard sync identifier, and a forged id would otherwise repoint or rebuild the user's
+            // genuine row. Nothing silent: a foreign sample that claims one of our ids is audited.
+            let ownID = Self.ownWorkoutID(from: sample, ownBundleID: ownBundleID)
+            if ownID == nil, sample.metadata?["fernlet.workoutID"] != nil {
+                FernletAuditLog.log("healthkit.workout.foreignProvenanceClaim", context: [
+                    "source": sample.sourceBundleID ?? "unknown"
+                ])
+            }
             // A tombstoned id is a locally-removed workout whose app-authored Health sample just
             // resurfaced (its in-flight save landed after the row was gone). Delete it from Health and
             // skip the import so it can't come back as a new, untagged, unremovable Health row.
-            if let knownUUID, context.isWorkoutTombstoned(fernletWorkoutID: knownUUID) {
-                if !inFlightTombstoneDeletes.contains(knownUUID) {
-                    inFlightTombstoneDeletes.insert(knownUUID)
-                    tombstoned.append(knownUUID)
+            if let ownID, context.isWorkoutTombstoned(fernletWorkoutID: ownID) {
+                if !inFlightTombstoneDeletes.contains(ownID) {
+                    inFlightTombstoneDeletes.insert(ownID)
+                    tombstoned.append(ownID)
                 }
                 continue
             }
-            if let knownUUID, context.workoutExists(id: knownUUID) {
+            if let ownID, context.workoutExists(id: ownID) {
                 context.setWorkoutHealthKitUUID(
-                    workoutID: knownUUID,
+                    workoutID: ownID,
                     hkUUID: sample.uuid,
                     date: FernletDate.dayKey(for: sample.endDate)
                 )
@@ -352,14 +420,15 @@ public final class WorkoutHealthKitSync {
                 continue
             }
 
-            // No local row for this sample. If it carries OUR OWN `fernlet.workoutID` (never `syncID`,
-            // which any app may set) then Fernlet authored it and the row is missing — most often because
+            // No local row for this sample. If THIS APP wrote it and it carries our own
+            // `fernlet.workoutID` (never `syncID`, which any app may set, and never metadata from a
+            // foreign source) then Fernlet authored it and the row is missing — most often because
             // another device edited the workout and this device consumed the resync's *delete* of the old
             // sample before the day record or the replacement sample arrived. Rebuild under the sample's
             // own workout id and authored provenance so the row returns as itself, editable, instead of
-            // demoted to an un-editable import under a fresh random id.
-            let authoredID = externalID.flatMap(UUID.init(uuidString:))
-            let workout = Self.makeWorkout(from: sample, authoredFernletID: authoredID)
+            // demoted to an un-editable import under a fresh random id. A foreign sample falls through
+            // here and lands as a normal read-only import: it is still a workout the user really did.
+            let workout = Self.makeWorkout(from: sample, authoredFernletID: ownID)
             let dayKey = FernletDate.dayKey(for: sample.endDate)
             context.upsertWorkout(workout, date: dayKey)
         }

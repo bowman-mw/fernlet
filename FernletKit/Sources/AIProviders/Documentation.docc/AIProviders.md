@@ -51,6 +51,16 @@ downloads image bytes under the same SSRF/redirect guard plus an `image/*` MIME 
 oversize-aborting byte cap. Import itself never downloads the image — only user-present app paths
 do (see `Docs/No-Tracking-Wall.md` §4b), and the app-side caller owns sealing and storage.
 
+Two pieces of that guard are deliberately PUBLIC so the app-target product importer can reuse them
+rather than grow a second, drifting copy (2026-08-18): ``RecipeWebImporter/isSafePublicHTTPSURL(_:)``
+classifies a host (private/loopback/link-local literals rejected in every spelling — decimal, hex,
+octal, IPv4-mapped) and ``RecipeWebImporter/RedirectValidator`` re-applies it to every redirect hop.
+Reuse, not relocation: they stay here rather than moving down to `WebScrapingKit` because the
+no-tracking wall pins the set of shipping files allowed to name `URLSession` to exactly three, and
+because moving the predicate would break the API the recipe importer's own tests pin. Honest limit,
+worth restating wherever this is described: it rejects private *literals*, not a public hostname
+whose DNS answer is private — neither importer resists DNS rebinding.
+
 Concurrency: the target sets `defaultIsolation(MainActor.self)`, so the provider enums are
 MainActor-isolated; pure value types (``WorkoutAdjustmentCandidate``, ``ImportedRecipe``) and the
 testable binding/parsing helpers are explicitly `nonisolated`. The module holds no state and
@@ -83,6 +93,7 @@ their helpers are extracted.
 ### Recipe web import
 
 - ``RecipeWebImporter``
+- ``RecipeWebImporter/RedirectValidator``
 - ``ImportedRecipe``
 - ``RecipeWebImportError``
 

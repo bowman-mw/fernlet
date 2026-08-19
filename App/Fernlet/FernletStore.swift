@@ -1621,8 +1621,10 @@ final class FernletStore {
     /// uploaded, and a second on-disk flag would only add another trace of a feature the user has
     /// just opted out of. The in-memory flag this replaces was wrong on two paths:
     /// - it died with the process, so a purge that failed offline and was followed by an app kill was
-    ///   forgotten entirely: nothing retried it, and this device's records sat on the public database
-    ///   until they aged out while the user read "off" as "removed";
+    ///   forgotten entirely: nothing retried it, and this device's records stayed on the public
+    ///   database indefinitely while the user read "off" as "removed" — there is no server-side
+    ///   expiry, and `HeartDropOutbox.entryLifetime` prunes only the LOCAL outbox, so losing the
+    ///   outbox loses the only handle that could delete them;
     /// - `heartsAwayDelivery` lives in the SYNCED snapshot, so withdrawing consent on another device
     ///   arrives here as a state change and never runs the setter a flag would have been set in.
     /// Reading it re-derives on both, because both are visible in (consent flag, outbox).
@@ -1960,8 +1962,12 @@ final class FernletStore {
 
     /// R3: most peer-supplied moderation rows accepted from ONE relay batch. Defense in depth at the
     /// store seam — a chatty verified peer must not be able to grow the device-local ledger without
-    /// bound; the definitive per-reporter cap belongs in `ModerationLedger.ingestForeign`.
-    static let maxForeignModerationRowsPerBatch = 256
+    /// bound. Pinned to the WIRE cap rather than a second hand-picked number so the two can never
+    /// drift: a batch larger than one payload's worth cannot legitimately exist, so this now never
+    /// truncates in practice, which is the point. The bound that actually holds against a sustained
+    /// flood is `ModerationLedger.maxRowsPerReporter` + its max-min-fair `bounded` eviction, which
+    /// drains a loud reporter before a quiet one (or this device's own rows) loses anything.
+    static let maxForeignModerationRowsPerBatch = ModerationReportPayload.maxReports
 
     /// Stores peers' verified moderation reports (from the one-hop relay) and re-evaluates bans.
     /// Oversized batches are truncated at this seam (R3).
@@ -2432,6 +2438,14 @@ final class FernletStore {
         let queue = sharedRecipeImportQueue
         let maxAge: TimeInterval = 7 * 24 * 3600
         for record in queue.records() {
+            // R3 self-heal, checked BEFORE `URL(string:)` so a giant string is never parsed: the
+            // extension rejects an oversize URL at enqueue, but a file poisoned by a pre-fix build —
+            // or by an app/extension version skew during an update — still has to converge. Dropped
+            // on the FIRST drain rather than retried.
+            guard record.urlString.utf8.count <= SharedRecipeImportQueue.maxURLByteCount else {
+                noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeOversizedURL")
+                continue
+            }
             guard let url = record.url else {
                 noteSharedRecipeQueueRewrite(queue.remove(record), operation: "removeUnparseable")
                 continue
@@ -2458,6 +2472,14 @@ final class FernletStore {
                 continue
             }
 
+            // Durability: the attempt is spent BEFORE the risky work, not in the `catch`. A record
+            // whose page kills the app (a watchdog kill on a pathological page) or hangs the fetch
+            // forever never reaches the catch, so it used to be retried on every launch — the same
+            // failure, forever, with the queue never converging. The transient budget arm below
+            // refunds it, keeping "a budget miss is not the page's fault" true.
+            noteSharedRecipeQueueRewrite(
+                queue.markAttemptStarted(record), operation: "markAttemptStarted"
+            )
             do {
                 // Ambient drain: userInvoked=false, so the `.sleepy` band falls back and the daily
                 // budget is reserved for the user's own taps. A JSON-LD page still imports here without
@@ -2470,9 +2492,11 @@ final class FernletStore {
                 // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Don't burn
                 // an attempt or remove the record; just stamp it deferred-for-today so the rest of today's
                 // foreground drains skip re-fetching it. Tomorrow's key differs → it retries with a fresh
-                // budget.
+                // budget. `refundingStartedAttempt` gives back the attempt spent above — without it,
+                // three resting days would silently delete a perfectly good queued recipe.
                 noteSharedRecipeQueueRewrite(
-                    queue.markBudgetDeferred(record, dayKey: todayKey), operation: "markBudgetDeferred"
+                    queue.markBudgetDeferred(record, dayKey: todayKey, refundingStartedAttempt: true),
+                    operation: "markBudgetDeferred"
                 )
                 FernletAuditLog.log("recipe.shareExtensionImport.deferred", context: [
                     "host": url.host() ?? "unknown",
@@ -2481,7 +2505,7 @@ final class FernletStore {
             } catch {
                 let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
                 noteSharedRecipeQueueRewrite(
-                    queue.markAttempt(record, errorDescription: description), operation: "markAttempt"
+                    queue.noteFailure(record, errorDescription: description), operation: "noteFailure"
                 )
                 FernletAuditLog.log("recipe.shareExtensionImport.failed", context: [
                     "host": url.host() ?? "unknown",
@@ -4290,8 +4314,12 @@ final class FernletStore {
         guard let savedPayload else { throw RecipeImportError.invalidPayload }
         let trimmedName = savedPayload.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { throw RecipeImportError.emptyRecipe }
-        // R5: every number below is peer-controlled. The macro fields are `Int` (no NaN reachable),
-        // so clamping at or above zero and capping servings/ingredient count is the whole contract.
+        // R5: every number below is peer-controlled, and "clamp at or above zero" is NOT the whole
+        // contract — an `Int.max` macro traps the moment `Macros.calories` adds it, and a 1e300
+        // micronutrient traps in the day-detail row that renders it. So: servings and ingredient
+        // COUNT capped, macros clamped into [0, maxMacroGrams], micronutrients sanitized. The
+        // primary defence is `SharedSavedRecipePayload.init(from:)`, which rejects an out-of-range
+        // payload at the wire; these clamps are belt-and-braces for a payload built in-process.
         let sanitizedSourceURLString = Self.sanitizedSharedSourceURLString(savedPayload.sourceURLString)
         // The owner's duplicate decision (2026-08-09) applies to the mesh path exactly as it
         // does to the paste-import and queue-drain paths: a share whose source page is already
@@ -4316,16 +4344,20 @@ final class FernletStore {
                 // R3: a peer's ingredient list is unbounded input riding into the synced snapshot.
                 ingredientLines: Array(savedPayload.ingredients.prefix(RecipeImportLimits.maxIngredients)),
                 macros: Macros(
-                    protein: max(savedPayload.protein, 0),
-                    carbs: max(savedPayload.carbs, 0),
-                    fat: max(savedPayload.fat, 0)
+                    protein: min(max(savedPayload.protein, 0), SharedRecipeLimits.maxMacroGrams),
+                    carbs: min(max(savedPayload.carbs, 0), SharedRecipeLimits.maxMacroGrams),
+                    fat: min(max(savedPayload.fat, 0), SharedRecipeLimits.maxMacroGrams)
                 ),
-                micronutrients: savedPayload.micronutrients,
+                micronutrients: savedPayload.micronutrients.sanitizedForImport(),
                 // A mesh-received recipe must never web-fetch: the wire carries no image URL
                 // (imageURLString stays nil) AND the fetch is pre-suppressed, so even a
                 // future field addition can't quietly turn receivers into fetchers.
                 imageURLString: nil,
-                webImageSuppressed: true
+                webImageSuppressed: true,
+                // ...and the same rule for the SOURCE LINK: a peer-chosen host must not be
+                // contacted on detail-appear by the connection pre-warm. An explicit tap on the
+                // link is the consent point (Docs/No-Tracking-Wall.md §4b).
+                sourceIsPeerSupplied: true
             ),
             // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
             steps: Self.sanitizedSharedSteps(savedPayload.steps)

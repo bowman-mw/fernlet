@@ -67,6 +67,13 @@ final class JournalSealingCoordinator {
     /// Content key available while the lock is open; nil when locked.
     private var journalContentKey: SymmetricKey?
     private var journalActivationMode: JournalActivationMode = .inactive
+    /// Whether the last `.noLock` activation actually hydrated sealed text.
+    ///
+    /// False when the device key could not be read, which leaves stripped sealed entries in memory
+    /// with empty text — indistinguishable from a tag-only mood check-in. ``canIdentifyTagOnlyEntries``
+    /// reads it so the one-tap mood row appends instead of overwriting a real sealed entry in that
+    /// window.
+    private var noLockHydrated = false
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by the store's `currentSnapshot()` to strip text before persisting to the cloud blob.
     /// Readable by the store (passed to `FernletSnapshot.forStorage`); mutation stays here.
@@ -89,9 +96,14 @@ final class JournalSealingCoordinator {
     /// locked/inactive, stripped sealed entries also sit in memory with empty text — a tag-only
     /// check-in is indistinguishable from them, and callers (e.g. the one-tap mood row's
     /// update-in-place) must fall back to appending instead of mutating what might be a real entry.
+    ///
+    /// The `.noLock` case additionally requires that hydration actually ran: a device key that could
+    /// not be read leaves sealed entries empty in memory, and treating those as tag-only check-ins
+    /// would let the update-in-place path overwrite a real sealed entry.
     var canIdentifyTagOnlyEntries: Bool {
         switch journalActivationMode {
-        case .noLock, .sealedUnlocked: true
+        case .noLock: noLockHydrated
+        case .sealedUnlocked: true
         case .inactive, .sealedLocked: false
         }
     }
@@ -101,10 +113,19 @@ final class JournalSealingCoordinator {
     /// Call at startup when no lock is configured: seals any legacy plaintext blob entries
     /// with the device key and populates in-memory journal text from the device-key-sealed store.
     func activateNoLockJournals() {
+        // The mode is set even when the key is unavailable, so `activeJournalRefreshKey()` re-hits the
+        // keychain on every later call and self-heals in-session.
         journalActivationMode = .noLock
-        let key = deviceJournalKey
+        guard let key = deviceJournalKey else {
+            // Nothing hydrated: sealed entries keep their empty in-memory text, so "empty text" is no
+            // longer proof of a tag-only mood check-in (see `canIdentifyTagOnlyEntries`).
+            noLockHydrated = false
+            FernletAuditLog.log("journal.deviceKey.unavailable", context: [:])
+            return
+        }
         migrateExistingJournalsToSealedStore(contentKey: key)
         refreshSealedJournals(contentKey: key)
+        noLockHydrated = true
     }
 
     /// Call on unlock: migrates any device-key-sealed entries, sets the content key,
@@ -147,7 +168,15 @@ final class JournalSealingCoordinator {
         // in-memory entry with no narrative row IS a mood check-in, not a stripped sealed entry.
         // (Hydration paths already skip ids with no narrative row, so nothing downstream changes.)
         guard !entry.text.isEmpty else { return }
-        let key = journalContentKey ?? deviceJournalKey
+        // No key obtainable ⇒ take the identical recovery the insert-failure path below documents:
+        // the id stays out of `sealedJournalIDs`, so the plaintext is preserved in the days blob and
+        // re-sealed by `migrateExistingJournalsToSealedStore` on the next activation, with the
+        // past-day rescrub re-armed for days outside the in-memory window.
+        guard let key = journalContentKey ?? deviceJournalKey else {
+            FernletAuditLog.log("journal.seal.failed", context: ["id": entry.id.uuidString])
+            host.requestPastDayJournalRescrub()
+            return
+        }
         let narrative = JournalNarrative(
             id: entry.id, dayKey: dayKey, tag: entry.tag, entryDate: entry.date,
             text: entry.text, emotions: entry.emotions,
@@ -172,7 +201,20 @@ final class JournalSealingCoordinator {
 
     /// Re-seals an edited entry's narrative when it is already sealed and a key is available.
     func updateSealedNarrative(for entry: JournalEntry, text trimmed: String, tag: FeelingTag, dayKey: String) {
-        guard sealedJournalIDs.contains(entry.id), let key = activeJournalRefreshKey() else { return }
+        guard sealedJournalIDs.contains(entry.id) else { return }
+        guard let key = activeJournalRefreshKey() else {
+            // Same hazard as the `catch` below, reached a different way. Since the device key now
+            // fails CLOSED on an unreadable keychain row, this guard can fire for an entry that IS
+            // sealed — and simply returning would leave the id in sealedJournalIDs, so the snapshot /
+            // past-day strip would blank the entry against the now-STALE narrative and silently
+            // destroy the edit the user just made. Fail the way the catch does: drop the id so the
+            // new plaintext survives in the blob, and re-arm the scrub to re-seal it later.
+            FernletAuditLog.log("journal.reseal.failed",
+                                context: ["id": entry.id.uuidString, "reason": "noContentKey"])
+            sealedJournalIDs.remove(entry.id)
+            host.requestPastDayJournalRescrub()
+            return
+        }
         let updated = JournalNarrative(
             id: entry.id, dayKey: dayKey, tag: tag, entryDate: entry.date,
             text: trimmed, emotions: entry.emotions,
@@ -254,14 +296,26 @@ final class JournalSealingCoordinator {
 
     /// Device-bound key generated on first use and stored in Keychain (not iCloud-synced).
     /// Used to seal journal text when no user lock is configured, ensuring text never reaches the blob.
-    private var deviceJournalKey: SymmetricKey {
+    ///
+    /// Nil when the keychain row exists but could not be read (a transient failure, or a read before
+    /// the first post-boot unlock) — the helper fails closed rather than minting over a key it could
+    /// not read, which would destroy every sealed entry. Every caller here treats nil as "no key this
+    /// instant": no hydration, no seal, no rekey. The property is recomputed on each access, so the
+    /// next attempt after unlock succeeds.
+    private var deviceJournalKey: SymmetricKey? {
         KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: KeychainItem.journalService)
     }
 
     /// When the user sets up a lock for the first time, re-encrypts entries that were previously
     /// sealed with the device key so they become protected by the user's content key.
     private func migrateDeviceKeyEntriesToUserKey(userKey: SymmetricKey) {
-        let dKey = deviceJournalKey
+        // No device key readable this instant ⇒ nothing can be decrypted to re-key. The rows stay
+        // readable under the device key and this migration re-runs on every `activateSealedJournals`,
+        // so this is a deferral, not a loss — but it is named rather than silent.
+        guard let dKey = deviceJournalKey else {
+            FernletAuditLog.log("journal.rekey.failed", context: [:])
+            return
+        }
         let todayNarratives = loadNarratives("rekeyToday") {
             try narrativeRepository.narratives(forDayKey: host.todayKey, contentKey: dKey)
         }

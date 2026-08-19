@@ -24,7 +24,8 @@ import Security
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel
-import CloudKitSync
+import CloudKit
+@testable import CloudKitSync
 @testable import Fernlet
 
 @MainActor
@@ -340,6 +341,47 @@ struct HeartDropTests {
                 staticPublicKey: recipient.localKeyAgreementPublicKey
             )
         }
+    }
+
+    /// The wire cap alone bounds nothing: DEFLATE reaches ~1032:1, so a record that passes the
+    /// 8 KiB gate could still inflate to megabytes on the main actor. `open` must hand the framing
+    /// its own ceiling rather than accept the shared 16 MiB default.
+    ///
+    /// `SealedPayloadFramingTests.inflateBombIsRejected` only exercises the guard with a >16 MiB
+    /// input, which is exactly why the drop-sized bomb slipped through.
+    @Test func inflateBombIsRejectedWellUnderTheSharedFramingCeiling() throws {
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+
+        // ~1 MB of zeros: far under the framing's 16 MiB default, far over the drop's own ceiling,
+        // and it deflates to a couple of KiB so the sealed wire lands under the 8 KiB cap.
+        let bomb = Data(count: 1_000_000)
+        #expect(bomb.count > HeartDropWireLimits.maxInflatedByteCount)
+        #expect(bomb.count < SealedPayloadFraming.maxInflatedByteCount)
+        let wire = try HeartDropSealer.seal(
+            innerEnvelopeJSON: bomb,
+            toPrekey: nil,
+            orStaticKey: recipient.localKeyAgreementPublicKey
+        )
+        #expect(wire.count <= HeartDropSealer.maxWireByteCount, "the size gate must not be what rejects this")
+
+        #expect(throws: HeartDropSealer.SealError.malformed) {
+            try HeartDropSealer.open(
+                wire,
+                prekeyPrivateKey: { _ in nil },
+                staticAgreement: { try recipient.heartDropStaticAgreement(withEphemeralPublicKey: $0) },
+                staticPublicKey: recipient.localKeyAgreementPublicKey
+            )
+        }
+    }
+
+    /// The sealer, the receiver's pre-decrypt gate and the CloudKit ferry must agree on the wire
+    /// bound, and CloudKitSync cannot import ProximityKit to check — the shared constant in
+    /// FernletDomainModel is the only thing holding them together, so pin it.
+    @Test func wireLimitsAreTheSingleSourceOfTruth() {
+        #expect(HeartDropSealer.maxWireByteCount == HeartDropWireLimits.maxRecordByteCount)
+        #expect(HeartDropCloudTransport.maxPayloadBytes == HeartDropWireLimits.maxRecordByteCount)
+        #expect(HeartDropCloudTransport.maxRecordsPerFetch == HeartDropWireLimits.maxRecordsPerFetch)
     }
 
     // MARK: - Prekey stores
@@ -2041,5 +2083,65 @@ struct HeartDropTests {
         #expect(HeartDropCloudTransport.perChunkBudget(chunkCount: 0) == HeartDropCloudTransport.maxRecordsPerFetch)
         #expect(HeartDropCloudTransport.perChunkBudget(chunkCount: 10_000) == 1, "Never a zero budget")
         #expect(HeartDropCloudTransport.chunked([]).isEmpty)
+    }
+
+    /// A record budget alone bounds nothing if the server hands back fat records: 500 × 900 KB is
+    /// ~450 MB the receiver pays for before anything rejects it. `ingest` is the seam that decides
+    /// both what reaches the main actor and — via its `chunkFull` return — whether `fetch` keeps
+    /// following cursors, so the byte budget is asserted there (`fetch` needs a live CKDatabase).
+    @Test func fetchStopsFollowingCursorsOnceTheByteBudgetIsSpent() {
+        let transport = HeartDropCloudTransport()
+        let oversize = HeartDropWireLimits.maxRecordByteCount + 1
+        let page = Self.recordPage(count: 8, payloadBytes: oversize)
+
+        var results: [HeartDropRecord] = []
+        var count = 0
+        var bytes = 0
+        var skipped = 0
+        // A record budget that could never stop this page on its own.
+        let chunkFull = transport.ingest(page, budget: 500,
+                                         byteBudget: 2 * HeartDropWireLimits.maxRecordByteCount,
+                                         into: &results, count: &count, bytes: &bytes,
+                                         skipped: &skipped)
+
+        #expect(results.isEmpty, "A record the recipient's pre-decrypt gate would reject never reaches it")
+        #expect(skipped > 0, "Dropped records are counted, so the fetch's skippedRecords line fires")
+        #expect(chunkFull, "Spent byte budget reports the chunk full, which stops the cursor follows")
+    }
+
+    /// The byte budget must not reject an ordinary page: a real drop is ~1–2 KiB.
+    @Test func fetchAdmitsAnOrdinaryPageWithinTheByteBudget() {
+        let transport = HeartDropCloudTransport()
+        let page = Self.recordPage(count: 4, payloadBytes: 1024)
+
+        var results: [HeartDropRecord] = []
+        var count = 0
+        var bytes = 0
+        var skipped = 0
+        let chunkFull = transport.ingest(page, budget: 500,
+                                         byteBudget: 100 * HeartDropWireLimits.maxRecordByteCount,
+                                         into: &results, count: &count, bytes: &bytes,
+                                         skipped: &skipped)
+
+        #expect(results.count == 4)
+        #expect(skipped == 0)
+        #expect(!chunkFull)
+        #expect(bytes == 4 * 1024)
+    }
+
+    /// One query page of synthesized `HeartDrop` records (no container, no network).
+    private static func recordPage(
+        count: Int,
+        payloadBytes: Int
+    ) -> (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?) {
+        var matches: [(CKRecord.ID, Result<CKRecord, Error>)] = []
+        for index in 0..<count {
+            let id = CKRecord.ID(recordName: "record-\(index)")
+            let record = CKRecord(recordType: HeartDropCloudTransport.recordType, recordID: id)
+            record["tag"] = "tag-\(index)" as CKRecordValue
+            record["payload"] = Data(count: payloadBytes) as CKRecordValue
+            matches.append((id, .success(record)))
+        }
+        return (matchResults: matches, queryCursor: nil)
     }
 }

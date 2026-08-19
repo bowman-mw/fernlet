@@ -20,7 +20,7 @@
 
 <!--
   GENERATED PAGE — do not edit this prose in isolation.
-  Source of truth: Docs/Privacy-Policy.md (effective August 12, 2026).
+  Source of truth: Docs/Privacy-Policy.md (effective August 19, 2026).
   The same text is pinned in three places and they must always match:
     1. Docs/Privacy-Policy.md           (source)
     2. Fernlet/PrivacyPolicyView.swift  (in-app copy)
@@ -47,7 +47,7 @@
   <div class="eyebrow">Privacy policy</div>
   <h1>What Fernlet knows about you.</h1>
   <div class="policy-meta">
-    <span>Effective August 12, 2026</span>
+    <span>Effective August 19, 2026</span>
     <span>Michael Bowman Olay</span>
     <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>
   </div>
@@ -138,7 +138,8 @@
     <section>
       <h2 id="s6">6. Identity keys and friend features (in-person only)</h2>
       <p>To support optional in-person friend features, Fernlet generates a cryptographic identity for your device on first launch. The keys are stored in your device's Keychain and never sync to iCloud Keychain — a new phone starts with a fresh identity, and you re-add friends in person. Your <strong>public key</strong> is the only persistent identifier shared with friends; your private keys never leave your device.</p>
-      <p>The friend features work <strong>only when two people are physically near each other</strong>, over a short-range, encrypted, peer-to-peer connection — there is no friend server and no remote friend activity. When you add a friend in person, your devices exchange your display names, public keys, avatar appearances, and a <strong>fuzzy</strong> wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends <strong>never</strong> see your numeric score, your goals, your cycle information, or any raw health data. You can send "hearts," share recipes, and share custom companion clothing with nearby friends. All of this stays device-to-device.</p>
+      <p>By default the friend features work <strong>only when two people are physically near each other</strong>, over a short-range, encrypted, peer-to-peer connection — no friend server, and no remote friend activity. When you add a friend in person, your devices exchange your display names, public keys, avatar appearances, and a <strong>fuzzy</strong> wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends <strong>never</strong> see your numeric score, your goals, your cycle information, or any raw health data. You can send "hearts," share recipes, and share custom companion clothing with nearby friends. All of this stays device-to-device.</p>
+      <p>There is one <strong>optional exception</strong>, and it is off unless you turn it on. If you switch on <strong>Deliver hearts when apart</strong>, a heart you send to a friend you already added in person is sealed end to end and left in a shared iCloud drop-off area under a rotating, meaningless tag, so their phone can pick it up later. Only sealed hearts go there — never your own data, and nothing that names either of you. We cannot read them. Turning the setting off deletes the ones still waiting.</p>
       <p>Optional coarse (approximate) location may be used only for gentle weather-based prompts and, if you choose, to tag an in-person group activity. Location is never tracked over time and never attached to your identity for us.</p>
     </section>
 
@@ -148,7 +149,7 @@
       <p>Some optional convenience features may look up <strong>non-personal reference data</strong> from public sources — for example, fetching the nutrition facts for a packaged product or a recipe you're importing. Those lookups send only the minimal query needed (such as a product name or a recipe URL) and never attach your identity, health data, or any sensitive information.</p>
       <p>Fernlet does not use AI to generate mental-health diagnoses or clinical labels, and it filters such language out of anything it stores.</p>
       <p><strong>Copying a training summary for an outside assistant (off by default).</strong> There is one place where you can deliberately take your data to an AI service Fernlet has no relationship with. If you turn on <strong>Manual plan exchange</strong> in Settings, "Share with a trainer" on the Move tab gains a button that copies a training summary — your workouts, macro targets and recent meals, equipment, and the muscles and movements you avoid — to your clipboard as plain text, so you can paste it into an assistant of your choosing and paste the workout plan it writes back into Fernlet.</p>
-      <p>This is off unless you switch it on, and Fernlet still sends nothing anywhere: the copying and the pasting are both actions you take. But once you paste that text into another app, that app has it, under its own privacy policy and not ours — Fernlet cannot reach it or take it back. The summary never includes your journal, period or cycle data, intimate data, photos, friends, location, or your private keys. A plan you paste back is shown to you day by day, and checked against the muscles and movements you avoid, before anything is added to your week.</p>
+      <p>This is off unless you switch it on, and Fernlet still sends nothing anywhere: the copying and the pasting are both actions you take. The copy is marked device-local, so it is not shared to your other Apple devices through Universal Clipboard. But once you paste that text into another app, that app has it, under its own privacy policy and not ours — Fernlet cannot reach it or take it back. The summary never includes your journal, period or cycle data, intimate data, photos, friends, location, or your private keys. A plan you paste back is shown to you day by day, and checked against the muscles and movements you avoid, before anything is added to your week.</p>
     </section>
 
     <section>
@@ -166,7 +167,7 @@
 
     <section>
       <h2 id="s9">9. User-generated content and safety</h2>
-      <p>If you create custom companion clothing and share it with friends in person, that content is governed by our in-app rules against objectionable content. You can <strong>report</strong> and <strong>block</strong> content and the people who share it; reporting hides the content on your device and blocks that person, and Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer, moderation actions take effect on-device. The full content rules are shown in the app, and use of the app is governed by Apple's standard Licensed Application End User License Agreement.</p>
+      <p>If you create custom companion clothing and share it with friends in person, that content is governed by our in-app rules against objectionable content. You can <strong>report</strong> and <strong>block</strong> content and the people who share it; reporting hides the content on your device and blocks that person, and Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer, moderation works device to device: when you report an item, a signed record of that report — the item, the reason, the maker's key and your key — is passed to friends you meet in person so their devices can hide repeatedly reported content. The maker you reported is one of those friends, so a report is not anonymous to them. It never reaches us or any server. The full content rules are shown in the app, and use of the app is governed by Apple's standard Licensed Application End User License Agreement.</p>
     </section>
 
     <section>
@@ -194,11 +195,12 @@
 
     <section>
       <h2 id="s12">12. Data retention</h2>
-      <p>Data is retained on your device until you delete it or delete the app. iCloud copies are retained in your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no copy to retain or delete.</p>
+      <p>Data is retained on your device until you delete it or delete the app. iCloud copies are retained in your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no copy we can read.</p>
+      <p>One thing does sit outside your own iCloud storage, and only if you turned it on: <strong>away hearts</strong> (Section 6). A heart you send while your friend is elsewhere is stored, sealed, in a shared area of our iCloud database until their phone picks it up or your phone cleans it up. It is unreadable to us and carries no name. Only the device that wrote a heart can delete it — so if you delete Fernlet without first using <strong>Delete Everything</strong>, or turn the setting off, the hearts you already sent stay there, because the information needed to delete them lived only on your phone. They remain sealed, unreadable ciphertext that is never linked to you by name. Use Delete Everything, or turn away hearts off, before you uninstall, and Fernlet clears them for you.</p>
       <p>If you configured a duress PIN (Section 10), its responses have specific retention consequences:</p>
       <ul>
         <li><strong>Decoy</strong> destroys nothing. It opens a view with sensitive content hidden; all your data is retained.</li>
-        <li><strong>Silent wipe</strong> immediately destroys every key that can open sealed data on this device — an instant, irreversible <strong>crypto-erasure</strong> — and then deletes the remaining local data, your iCloud copies, and the samples Fernlet wrote to Apple Health, on a best-effort basis. Encrypted backup data or in-transit "hearts" stored off the device may persist briefly, but they are unopenable ciphertext, and they are removed when the purge completes or when they age out on their own.</li>
+        <li><strong>Silent wipe</strong> immediately destroys every key that can open sealed data on this device — an instant, irreversible <strong>crypto-erasure</strong> — and then deletes the remaining local data, your iCloud copies, and the samples Fernlet wrote to Apple Health, on a best-effort basis. Encrypted backup data or in-transit "hearts" stored off the device may persist, but they are unopenable ciphertext. They are removed when the purge completes; if the purge cannot run — no network at that moment, or the app was already deleted — they stay where they are, sealed and unreadable, and nothing can address them afterwards to remove them.</li>
         <li><strong>Recovery lock</strong> is <strong>not</strong> deletion. It destroys this device's unlock keys, so everything sealed stays on the phone as unreadable ciphertext — a lock-out, not an erase. The data can be recovered only in person, through a mutual QR ceremony with a second device <strong>you</strong> previously enrolled as your own recovery device. There is no cloud or remote route, and the recovery device is always your own — never us, never a third party.</li>
       </ul>
     </section>

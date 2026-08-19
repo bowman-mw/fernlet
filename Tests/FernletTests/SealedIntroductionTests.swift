@@ -177,7 +177,12 @@ struct SealedIntroductionTests {
         let sentAfterIntro = transport.sentData.count
 
         // The forger seals a wrapper to US with ITS OWN key. `open(from: friendKA)` cannot decrypt
-        // it (the HKDF sharedInfo binds to the sender's real KA key, which the forger is not).
+        // it — but ONLY because `IdentityService.seal` puts the SEALER's own key in the sharedInfo
+        // slot, and we derive with the expected friend's. That makes this case unopenable by
+        // construction; it does NOT show that `open` authenticates the sender. A forger who
+        // hand-rolls the wrapper with the FRIEND's public key in the sharedInfo produces one that
+        // opens perfectly — see `inboundSealedWrapperFromAForgerHoldingOnlyPublicKeysIsRejected`,
+        // which is the test that actually pins the sender binding.
         let forgerWrapper = SealedIntroductionEnvelope(
             sealedIntroduction: try forger.seal(Data("bait".utf8), to: local.localKeyAgreementPublicKey))
         transport.simulateInboundData(try JSONEncoder().encode(forgerWrapper), from: peer)
@@ -286,6 +291,79 @@ struct SealedIntroductionTests {
             return
         }
         #expect(transport.sentData.isEmpty, "No introduction — sealed or unsealed — may be emitted without the key")
+    }
+
+    // MARK: - (b4) An OPENABLE wrapper carrying a foreign identity is rejected
+
+    /// The sender-binding regression. `IdentityService.seal`/`open` is ephemeral-static ECIES: the
+    /// sealer's static key is a public HKDF `sharedInfo`/AAD input, never a key-agreement input, so
+    /// a successful `open` proves only that the sealer knew OUR public KA key. Anyone holding the
+    /// friend's and our published KA keys can hand-roll a wrapper that opens.
+    ///
+    /// Deliberately does NOT use `forger.seal(_:to:)` — that API necessarily puts the FORGER's own
+    /// key in the sharedInfo slot, which is the one construction that cannot open, and is why
+    /// `inboundSealedWrapperThatCannotBeOpenedFailsWithoutEmittingAck` passes vacuously as a test
+    /// of sender authentication. The wrapper is built by hand with CryptoKit, exactly as
+    /// `IdentityService.seal` builds it but with the FRIEND's KA key in the sharedInfo/AAD slot.
+    @Test func inboundSealedWrapperFromAForgerHoldingOnlyPublicKeysIsRejected() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (friend, friendID) = try makeIdentity(); defer { cleanup(friendID) }
+        let (forger, forgerID) = try makeIdentity(); defer { cleanup(forgerID) }
+
+        let transport = MockMultipeerTransport()
+        let coordinator = makeSealedCoordinator(
+            identity: local, transport: transport,
+            expectedFriendKA: friend.localKeyAgreementPublicKey, displayName: "Aisha Bloom")
+        let peer = presencePeer(name: "forger-openable")
+
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { !transport.sentData.isEmpty }
+        let sentAfterIntro = transport.sentData.count
+
+        // The inner envelope is signed by the FORGER — a genuine, verifiable signature over a
+        // different identity than the one this coordinator exists for.
+        let innerEnvelope = try FernletIdentityEnvelope.signed(
+            identityService: forger,
+            senderDisplayName: "Forger",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: Data())
+        let innerJSON = try JSONEncoder().encode(innerEnvelope)
+
+        // Hand-rolled wrapper: ephemeral-static ECIES with the FRIEND's public KA key occupying the
+        // sender slot in the sharedInfo and the AAD. The forger holds only PUBLIC keys.
+        let ephemeral = Curve25519.KeyAgreement.PrivateKey()
+        let recipient = try Curve25519.KeyAgreement.PublicKey(
+            rawRepresentation: local.localKeyAgreementPublicKey)
+        let shared = try ephemeral.sharedSecretFromKeyAgreement(with: recipient)
+        let symKey = shared.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: Data("fernlet.proximity.v1".utf8),
+            sharedInfo: friend.localKeyAgreementPublicKey + local.localKeyAgreementPublicKey,
+            outputByteCount: 32)
+        let box = try ChaChaPoly.seal(innerJSON, using: symKey,
+                                      authenticating: friend.localKeyAgreementPublicKey)
+        let wrapper = SealedIntroductionEnvelope(
+            sealedIntroduction: ephemeral.publicKey.rawRepresentation + box.combined)
+
+        // Precondition: this wrapper really does open — otherwise the test proves nothing.
+        #expect((try? local.open(wrapper.sealedIntroduction,
+                                 from: friend.localKeyAgreementPublicKey)) != nil,
+                "The hand-rolled wrapper must be openable, or the sender binding is not what is under test")
+
+        transport.simulateInboundData(try JSONEncoder().encode(wrapper), from: peer)
+
+        await waitUntil { if case .failed = coordinator.state { return true }; return false }
+        guard case .failed = coordinator.state else {
+            Issue.record("Expected .failed on an openable wrapper carrying a foreign identity, got \(coordinator.state)")
+            return
+        }
+        if case .connected = coordinator.state {
+            Issue.record("A forger must never reach .connected")
+        }
+        #expect(transport.sentData.count == sentAfterIntro,
+                "No ack, no heartbeat — nothing carrying local identity is emitted to the forger")
     }
 
     // MARK: - (a) Real mutual friends: sealed intro decrypts, heart delivered

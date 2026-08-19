@@ -177,10 +177,18 @@ public enum RecipeWebImporter {
         }
 
         let html = try await fetchHTML(from: url)
+        // M10: the JSON-LD scan is linear now, but it still walks up to 3 MB of page-controlled
+        // markup, and this module is MainActor-by-default. Run the scan OFF the main actor and bring
+        // back only the `[String]` blocks (Sendable) — the JSON parse, the bounded object walk and
+        // the catalog conversion stay on-actor. A pathological page then degrades this import
+        // instead of freezing the UI that is awaiting it.
+        let scripts = await Task.detached(priority: .userInitiated) {
+            JSONLDScraper.scriptContents(from: html)
+        }.value
         // The page's main food picture, as a URL only — no second fetch happens here, so the
         // background queue drain stays image-free; user-present callers download it later.
         let imageURL = extractedImageURL(from: html, sourceURL: url)
-        if var recipe = try jsonLDRecipe(from: html, sourceURL: url, catalog: catalog) {
+        if var recipe = try jsonLDRecipe(from: scripts, sourceURL: url, catalog: catalog) {
             recipe.imageURL = imageURL
             return recipe
         }
@@ -189,13 +197,14 @@ public enum RecipeWebImporter {
             throw RecipeWebImportError.noRecipeFound
         }
 
-        let cleanedText = try cleanedBodyText(from: html)
+        let cleanedText = try await cleanedBodyText(from: html)
         var recipe = try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
         recipe.imageURL = imageURL
         return recipe
     }
 
-    /// Streams the page with a 15 s timeout, redirect re-validation, an HTML-only MIME check, and the
+    /// Streams the page with a 15 s idle timeout (plus the session's 120 s whole-transfer ceiling,
+    /// `EphemeralWebSession.maxResourceSeconds`), redirect re-validation, an HTML-only MIME check, and the
     /// 3 MB cap; UTF-8 with an ISO-Latin-1 fallback.
     ///
     /// Transport is `WebScrapingKit`'s `EphemeralWebSession` — no cookie jar, no cache, no credential
@@ -319,8 +328,21 @@ public enum RecipeWebImporter {
     /// unsafe hop is refused — the 3xx then becomes the final response and fails the caller's
     /// status-code guard. Stateless, which is why the `@unchecked Sendable` is sound even though
     /// URLSession invokes it off the main actor.
-    private final class RedirectValidator: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-        func urlSession(
+    ///
+    /// **Public because the product importer needs the same delegate** (2026-08-18). Reused, not
+    /// relocated: `App/Fernlet/FoodProductWebImporter.swift` passes one of these to its own page
+    /// fetch so both egress seams re-validate every hop with one implementation. Moving it into
+    /// `WebScrapingKit` instead would drag ``isSafePublicHTTPSURL(_:)`` below the wall and add a
+    /// third shipping file naming `URLSession` — which the no-tracking wall's
+    /// `onlyThePinnedWebImportersMayHoldAnHTTPClient` pins to exactly three.
+    ///
+    /// Explicitly `nonisolated`: this module is built with `.defaultIsolation(MainActor.self)`
+    /// (see `Package.swift`), and URLSession invokes the delegate off the main actor.
+    public nonisolated final class RedirectValidator: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        /// Creates a stateless validator. One per task; it holds nothing between hops.
+        public override init() { super.init() }
+
+        public func urlSession(
             _ session: URLSession,
             task: URLSessionTask,
             willPerformHTTPRedirection response: HTTPURLResponse,
@@ -423,7 +445,8 @@ public enum RecipeWebImporter {
     /// on the initial URL, `RedirectValidator` re-validation on every redirect hop, a 2xx +
     /// image MIME requirement (an `image/*` declaration, or a generic binary one whose bytes then
     /// must pass the ``looksLikeImageBytes(_:)`` magic-number sniff — mislabeled S3-style image
-    /// CDNs stay importable, HTML error pages do not), a 15 s timeout, and a hard byte cap that
+    /// CDNs stay importable, HTML error pages do not), a 15 s idle timeout (the session adds the 120 s
+    /// whole-transfer ceiling), and a hard byte cap that
     /// aborts (never truncates) an oversize stream — all over `EphemeralWebSession.shared`.
     ///
     /// - Parameter url: The image URL (typically from ``extractedImageURL(from:sourceURL:)``).
@@ -562,10 +585,13 @@ public enum RecipeWebImporter {
         return accumulated
     }
 
-    /// Scans every `application/ld+json` script block for a schema.org `Recipe` object and converts
-    /// the first usable one; `nil` sends the caller to the AI fallback.
-    private static func jsonLDRecipe(from html: String, sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe? {
-        for rawJSON in JSONLDScraper.scriptContents(from: html) {
+    /// Converts the first usable schema.org `Recipe` object in `scripts` (the page's already-extracted
+    /// `application/ld+json` blocks); `nil` sends the caller to the AI fallback.
+    ///
+    /// Takes the extracted blocks rather than the raw HTML so the caller can run the scan off the main
+    /// actor (M10) — the catalog conversion below is MainActor work and cannot move with it.
+    private static func jsonLDRecipe(from scripts: [String], sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe? {
+        for rawJSON in scripts {
             guard let jsonData = htmlDecoded(rawJSON).data(using: .utf8) else { continue }
             guard let object = try? JSONSerialization.jsonObject(with: jsonData) else { continue }
             if let recipe = JSONLDScraper.object(ofType: "Recipe", in: object),
@@ -582,8 +608,14 @@ public enum RecipeWebImporter {
     /// The pass itself is `WebScrapingKit`'s; only the *empty-page* verdict is this importer's, which
     /// is why the shared helper returns `nil` instead of throwing — `.noRecipeFound` carries recipe
     /// copy and recipe retry semantics that the product importer's `.productNotFound` does not.
-    private static func cleanedBodyText(from html: String) throws -> String {
-        guard let text = HTMLScraper.cleanedBodyText(from: html, decodingNumericEntities: true) else {
+    /// M10: the reduction runs off the main actor — it keeps regex passes over page-controlled
+    /// markup (bounded by `HTMLScraper.maxTextExtractionCharacters`, but still up to 512 KB of it) —
+    /// and only the `String?` verdict crosses back.
+    private static func cleanedBodyText(from html: String) async throws -> String {
+        let text = await Task.detached(priority: .userInitiated) {
+            HTMLScraper.cleanedBodyText(from: html, decodingNumericEntities: true)
+        }.value
+        guard let text else {
             throw RecipeWebImportError.noRecipeFound
         }
         return text
@@ -665,7 +697,7 @@ public enum RecipeWebImporter {
     // through, which can only find MORE recipes, never a different kind of object.
 
     private static func importedRecipe(from dictionary: [String: Any], sourceURL: URL, catalog: FoodCatalog) -> ImportedRecipe? {
-        let name = stringValue(dictionary["name"])
+        let name = stringValue(dictionary["name"]).map { String($0.prefix(maxImportedNameCharacters)) }
         // R3: `recipeIngredient` is page-controlled and otherwise bounded only by the 3 MB HTML cap;
         // every kept line costs one main-actor catalog search in estimateMacrosFromIngredients.
         let ingredients = Array(stringArrayValue(dictionary["recipeIngredient"]).prefix(maxImportedIngredients))
@@ -714,7 +746,9 @@ public enum RecipeWebImporter {
     /// so the unwrap needs a bound visible at the loop).
     nonisolated private static let maxYieldUnwrapDepth = 8
 
-    private static func parseServings(from value: Any?) -> Int {
+    /// Public for tests: `RecipeWebImporterTests` drives it with a literal `recipeYield` (plain
+    /// `import AIProviders`, matching ``orderedSteps(from:)``) — no network, no `FoodCatalog`.
+    public nonisolated static func parseServings(from value: Any?) -> Int {
         // Unwrap `[[4]]`-style nesting iteratively rather than recursively (R1); a scalar or a string
         // is not an `[Any]`, so this loop leaves every classified shape untouched.
         var current = value
@@ -723,19 +757,32 @@ public enum RecipeWebImporter {
             current = array.first
             depth += 1
         }
-        if let n = current as? Int { return max(1, n) }
-        if let d = current as? Double { return max(1, Int(d.rounded())) }
+        // R5: `recipeYield` is page-controlled. `Int(d.rounded())` TRAPS for a `Double` outside
+        // Int's range (1e300 in a JSON-LD field is one hostile page away), so the conversion is
+        // `Int(exactly:)` and a non-representable value falls through to the trailing `return 1` —
+        // "unreadable yield means one serving", the default this function already had.
+        if let n = current as? Int { return boundedServings(n) }
+        if let d = current as? Double, let n = Int(exactly: d.rounded()) { return boundedServings(n) }
         if let s = stringValue(current) {
             // "4 servings", "Makes 12 cookies", "4-6 servings" — take the first integer
             let digits = s.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
-            if let first = digits.first, let n = Int(first) { return max(1, n) }
+            if let first = digits.first, let n = Int(first) { return boundedServings(n) }
         }
         return 1
     }
 
+    /// Clamps a page's claimed yield into `[1, maxImportedServings]`. Clamping (not rejecting) is
+    /// right here because servings is a DIVISOR, not a claim: a bogus yield must not fail an
+    /// otherwise-good import, it must only stop skewing the per-serving macros.
+    nonisolated private static func boundedServings(_ count: Int) -> Int {
+        min(max(count, 1), maxImportedServings)
+    }
+
     // MARK: - Nutrition label (JSON-LD schema.org/NutritionInformation)
 
-    private static func nutritionMacros(from dictionary: [String: Any]) -> (protein: Int, carbs: Int, fat: Int, micronutrients: Micronutrients)? {
+    /// Public for tests (same reason as ``orderedSteps(from:)``): the hostile-number cases below are
+    /// pure-function tests over a literal JSON-LD dictionary.
+    public nonisolated static func nutritionMacros(from dictionary: [String: Any]) -> (protein: Int, carbs: Int, fat: Int, micronutrients: Micronutrients)? {
         guard let nutrition = nutritionDictionary(from: dictionary["nutrition"]) else { return nil }
         guard let protein = nutritionValue(nutrition["proteinContent"]),
               let carbs = nutritionValue(nutrition["carbohydrateContent"]),
@@ -750,11 +797,14 @@ public enum RecipeWebImporter {
                 saturatedFat: nutritionDoubleValue(nutrition["saturatedFatContent"]),
                 cholesterol: nutritionDoubleValue(nutrition["cholesterolContent"]),
                 sodium: nutritionDoubleValue(nutrition["sodiumContent"])
-            )
+            // R5: the page's own micronutrient numbers are finite by the guard in
+            // `nutritionDoubleValue`, but a finite 1e300 sodium would still reach a trapping
+            // `Int(_:)` in a day-detail row, so drop implausible amounts at the door.
+            ).sanitizedForImport()
         )
     }
 
-    private static func nutritionDictionary(from value: Any?) -> [String: Any]? {
+    nonisolated private static func nutritionDictionary(from value: Any?) -> [String: Any]? {
         if let dictionary = value as? [String: Any] { return dictionary }
         if let array = value as? [Any] {
             return array.compactMap { $0 as? [String: Any] }.first
@@ -762,11 +812,28 @@ public enum RecipeWebImporter {
         return nil
     }
 
-    private static func nutritionValue(_ value: Any?) -> Int? {
-        nutritionDoubleValue(value).map { Int($0.rounded()) }
+    /// A page's nutrition figure as `Int`, or nil when it is not representable.
+    ///
+    /// R5: `Int(_: Double)` traps outside Int's range (see `Macros.clampedInt`'s note), so the
+    /// conversion is `Int(exactly:)`. A nil here makes ``nutritionMacros(from:)`` return nil for the
+    /// WHOLE label, which falls the import back to USDA ingredient estimation — the degrade path
+    /// every other unparseable nutrition field already takes.
+    nonisolated private static func nutritionValue(_ value: Any?) -> Int? {
+        nutritionDoubleValue(value).flatMap { Int(exactly: $0.rounded()) }
     }
 
-    private static func nutritionDoubleValue(_ value: Any?) -> Double? {
+    /// Page-supplied nutrition numbers, rejected unless finite and non-negative.
+    ///
+    /// R5: a long digit run parses to `+infinity` and a 27-digit one to ~1e27; both would trap in
+    /// `Int(_:)` one line later. One guard covers every branch, so no shape can slip past it.
+    nonisolated private static func nutritionDoubleValue(_ value: Any?) -> Double? {
+        guard let raw = rawNutritionDouble(value), raw.isFinite, raw >= 0 else { return nil }
+        return raw
+    }
+
+    /// The raw shape-matching half of ``nutritionDoubleValue(_:)`` — Int, Double, or leading numeric
+    /// prefix of a string. Never call it directly: it applies no bounds.
+    nonisolated private static func rawNutritionDouble(_ value: Any?) -> Double? {
         if let n = value as? Int { return Double(n) }
         if let d = value as? Double { return d }
         if let s = stringValue(value) {
@@ -927,6 +994,8 @@ public enum RecipeWebImporter {
             return strings
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
+                // R3: one page-controlled ingredient line is otherwise bounded only by the 3 MB HTML cap.
+                .map { String($0.prefix(RecipeWebImporter.maxImportedIngredientLineCharacters)) }
         }
         if let string = stringValue(value) {
             return [string]
@@ -946,6 +1015,26 @@ public enum RecipeWebImporter {
     /// below this; the cap exists because these steps are persisted and then serialised into the
     /// app-group file a cold-launched Live Activity intent must decode on every Lock Screen tap.
     nonisolated public static let maxImportedSteps = 200
+
+    /// Largest serving count believed from a page's `recipeYield` (R3/R5: page-controlled). Matches
+    /// `FernletStore.RecipeImportLimits.maxServings`, the cap the mesh/paste paths already enforce.
+    nonisolated public static let maxImportedServings = 100
+
+    /// Longest recipe NAME kept from an imported page (R3: page-controlled input). Deliberately
+    /// EQUAL to the wire cap, not larger: a web-imported recipe can be shared over the mesh, and a
+    /// name this importer kept but `SharedSavedRecipePayload.init(from:)` rejects would mean Fernlet
+    /// emitting a share Fernlet refuses.
+    nonisolated public static let maxImportedNameCharacters = SharedRecipeLimits.maxNameCharacters
+
+    /// Longest single ingredient LINE kept from an imported page (R3: page-controlled input).
+    nonisolated public static let maxImportedIngredientLineCharacters = 300
+
+    /// Longest single STEP text kept from an imported page (R3: page-controlled input; the steps are
+    /// persisted and then serialised into the app-group file a cold Live Activity intent decodes).
+    nonisolated public static let maxImportedStepTextCharacters = 2_000
+
+    // Page strings are TRUNCATED here, not rejected: unlike a peer's wire payload, page text carries
+    // no authorship contract, and failing a whole import over one long step is bad UX.
 
     private static func instructionsText(from value: Any?) -> String {
         instructionTexts(from: value).joined(separator: " ")
@@ -1003,7 +1092,7 @@ public enum RecipeWebImporter {
         while let node = work.popLast(), budget > 0, out.count < maxImportedSteps {
             budget -= 1
             if let string = stringValue(node) {
-                out.append(RecipeStep(text: string))
+                out.append(RecipeStep(text: String(string.prefix(maxImportedStepTextCharacters))))
                 continue
             }
             if let values = node as? [Any] {
@@ -1022,7 +1111,7 @@ public enum RecipeWebImporter {
             }
             // HowToStep: prefer `text`, fall back to `name`.
             if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {
-                out.append(RecipeStep(text: text))
+                out.append(RecipeStep(text: String(text.prefix(maxImportedStepTextCharacters))))
             }
         }
         return out
@@ -1058,13 +1147,14 @@ struct ExtractedRecipe {
     /// ``RecipeWebImportError/incompleteRecipe`` — then builds the ``ImportedRecipe`` with
     /// USDA-estimated macros at `servings: 1`.
     func importedRecipe(sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = String(name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(RecipeWebImporter.maxImportedNameCharacters))
         // Same R3 cap as the JSON-LD path: the model's ingredient list is derived from page content.
         let trimmedIngredients = ingredients
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .prefix(RecipeWebImporter.maxImportedIngredients)
-            .map { $0 }
+            .map { String($0.prefix(RecipeWebImporter.maxImportedIngredientLineCharacters)) }
         let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard trimmedName.isEmpty == false, trimmedIngredients.isEmpty == false else {

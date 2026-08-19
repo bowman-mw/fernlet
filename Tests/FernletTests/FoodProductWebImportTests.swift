@@ -4,6 +4,10 @@ import FernletDomainModel
 import AppServices
 @testable import Fernlet
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 struct FoodProductWebImportTests {
     @MainActor
     @Test func structuredProductExtractsSchemaNutrition() throws {
@@ -139,7 +143,7 @@ struct FoodProductWebImportTests {
     }
 
     @MainActor
-    @Test func visibleNutritionTextUsesExistingLabelParser() throws {
+    @Test func visibleNutritionTextUsesExistingLabelParser() async throws {
         let sourceURL = try #require(URL(string: "https://example.com/products/chicken-melt"))
         let html = """
         <html>
@@ -154,7 +158,7 @@ struct FoodProductWebImportTests {
         </html>
         """
 
-        guard let product = FoodProductWebImporter.productFromVisibleNutritionText(
+        guard let product = await FoodProductWebImporter.productFromVisibleNutritionText(
             in: html,
             fallbackName: "Chicken Melt",
             sourceURL: sourceURL
@@ -282,7 +286,7 @@ struct FoodProductWebImportTests {
     }
 
     @MainActor
-    @Test func compactNutritionGridUsesExistingLabelParser() throws {
+    @Test func compactNutritionGridUsesExistingLabelParser() async throws {
         let sourceURL = try #require(URL(string: "https://foods.example.com/calories-nutrition/costco/chicken-melt"))
         let html = """
         <html>
@@ -300,7 +304,7 @@ struct FoodProductWebImportTests {
         </html>
         """
 
-        guard let product = FoodProductWebImporter.productFromVisibleNutritionText(
+        guard let product = await FoodProductWebImporter.productFromVisibleNutritionText(
             in: html,
             fallbackName: "Calories in Costco Chicken Melt and Nutrition Facts - Example",
             sourceURL: sourceURL
@@ -316,4 +320,123 @@ struct FoodProductWebImportTests {
         #expect(product.macros.carbs == 17)
         #expect(product.macros.fat == 8)
     }
+
+    // MARK: - Egress guards (2026-08-18 security round, findings L24 + L23)
+
+    /// The product-page fetch used to be a bare `url.scheme == "https"` test, so a private, loopback
+    /// or link-local literal reached the network — while the recipe importer next door already
+    /// rejected all of these. `fetchHTML` now runs `RecipeWebImporter.isSafePublicHTTPSURL`.
+    ///
+    /// Deterministic and offline BY CONSTRUCTION: the guard rejects before a request is built, so a
+    /// passing run makes zero network calls. Asserting the exact `.invalidURL` case (rather than
+    /// merely "it throws") is what makes this a regression test — if the guard is ever reverted to
+    /// scheme-only these hosts reach the network and surface as `.fetchFailed`, which fails here on
+    /// the case mismatch instead of hanging for 15 s a host at a time.
+    ///
+    /// `.invalidURL` is also load-bearing beyond the guard: `preview(from:)` catches ONLY
+    /// `.fetchFailed` before falling back to a DuckDuckGo search, so a URL rejected here is never
+    /// re-egressed as a search query.
+    @MainActor
+    @Test func fetchHTMLRejectsPrivateAndLoopbackHostsInEverySpelling() async {
+        let blocked = [
+            "https://localhost/x", "https://127.0.0.1/x", "https://10.0.0.5/x",
+            "https://192.168.1.1/setup", "https://172.16.0.1/x",
+            "https://169.254.169.254/latest/meta-data",
+            "https://2130706433/x", "https://0x7f.0.0.1/x", "https://0177.0.0.1/x",
+            "https://127.1/x", "https://[::1]/x", "https://[::ffff:127.0.0.1]/x"
+        ]
+        for raw in blocked {
+            guard let url = URL(string: raw) else {
+                Issue.record("bad fixture \(raw)")
+                continue
+            }
+            do {
+                _ = try await FoodProductWebImporter.fetchHTML(from: url)
+                Issue.record("\(raw) was fetched — the product-page SSRF guard is gone.")
+            } catch FoodProductWebImportError.invalidURL {
+                continue    // expected
+            } catch {
+                Issue.record("\(raw) failed as \(error), not .invalidURL — the guard was weakened.")
+            }
+        }
+    }
+
+    /// The redirect half of the SSRF guard cannot be reached by a unit test without a local HTTP
+    /// server, which this suite does not have — so it is pinned structurally instead, the same
+    /// grep-wall shape the repo already uses for `URLSession.shared`. The delegate is the half no
+    /// runtime test here can observe, which is exactly why it needs a control that stays broken if
+    /// someone drops it.
+    @Test func everyProductPageFetchPassesTheRedirectValidator() throws {
+        let source = try String(
+            contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/FoodProductWebImporter.swift"),
+            encoding: .utf8
+        )
+        let calls = source.components(separatedBy: ".bytes(").dropFirst()
+        #expect(!calls.isEmpty, "FoodProductWebImporter no longer streams a page — re-point this rule.")
+        for call in calls {
+            let head = String(call.prefix(200))
+            #expect(
+                head.contains("delegate:"),
+                "A bytes(for:) call in FoodProductWebImporter has no delegate: argument. Without RecipeWebImporter.RedirectValidator a public page can 30x to an internal address and only the initial URL was ever checked."
+            )
+        }
+    }
+
+    #if canImport(UIKit)
+    /// A web label image is untrusted bytes: the download's 12 MB cap bounds the TRANSFER, not the
+    /// bitmap. A few-hundred-KB flat PNG can declare 256 MP, which `UIImage(data:)` would happily
+    /// materialise as ~1 GB of RGBA — and then Vision's preprocessing renders it again.
+    ///
+    /// Fixtures are thin strips on purpose (mirroring `PrivateMediaStoreTests`): the over-dimension
+    /// case must never allocate a real bomb inside the test process.
+    @MainActor
+    @Test func webLabelImageRejectsPixelBombAndBoundsTheDecode() throws {
+        let overWide = try png(width: 7_000, height: 4)
+        let overArea = try png(width: 5_000, height: 5_000)
+        let acceptableLarge = try png(width: 3_000, height: 3_000)
+        let ordinaryCrop = try png(width: 600, height: 800)
+
+        #expect(FoodProductWebImporter.boundedLabelImage(from: overWide) == nil,
+                "over the per-axis bound — must be refused from the header, without decoding.")
+        #expect(FoodProductWebImporter.boundedLabelImage(from: overArea) == nil,
+                "25 MP is inside the per-axis bound but over the area bound — the clause a dimension-only fix misses.")
+        #expect(FoodProductWebImporter.boundedLabelImage(from: Data("not an image".utf8)) == nil,
+                "undeterminable dimensions are unsafe.")
+
+        guard let big = FoodProductWebImporter.boundedLabelImage(from: acceptableLarge) else {
+            Issue.record("A 9 MP label image must still scan.")
+            return
+        }
+        #expect(max(big.size.width, big.size.height) <= 2_400, "the OCR decode must be bounded.")
+
+        guard let small = FoodProductWebImporter.boundedLabelImage(from: ordinaryCrop) else {
+            Issue.record("An ordinary retailer label crop must be untouched.")
+            return
+        }
+        #expect(small.size == CGSize(width: 600, height: 800), "a small image must never be upscaled.")
+    }
+
+    /// A flat 8-bit grayscale PNG of the requested pixel size.
+    ///
+    /// Grayscale, not RGBA, deliberately: the area-bound fixture is 25 MP by definition, and an RGBA
+    /// renderer would allocate ~100 MB inside the test process to prove a guard that only ever reads
+    /// the file header. One byte per pixel keeps it to ~25 MB, and the flat fill keeps the encoded
+    /// PNG a few KB.
+    private func png(width: Int, height: Int) throws -> Data {
+        struct PNGEncodingFailed: Error {}
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else {
+            throw PNGEncodingFailed()
+        }
+        context.setFillColor(gray: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let cgImage = context.makeImage(),
+              let data = UIImage(cgImage: cgImage).pngData() else {
+            throw PNGEncodingFailed()
+        }
+        return data
+    }
+    #endif
 }

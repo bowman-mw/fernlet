@@ -100,14 +100,7 @@ final class WorryBoxService {
             if let contentKey {
                 mode = .unlocked
                 userContentKey = contentKey
-                do {
-                    try repository.reencryptAll(from: deviceWorryKey, to: contentKey)
-                } catch {
-                    // The rows stay readable under the DEVICE key; this activation runs again on the
-                    // next `.unlocked(.privateHub)` transition, so the fold retries then. Until it
-                    // lands the hub shows only user-key rows — audited rather than silent.
-                    FernletAuditLog.log("worryBox.rekey.failed", context: [:])
-                }
+                foldDeviceKeyRows(into: contentKey)
             } else {
                 mode = .locked
                 userContentKey = nil
@@ -119,11 +112,33 @@ final class WorryBoxService {
         reload()
     }
 
+    /// Re-seals the worries written under the device fallback key so they open under the user key.
+    ///
+    /// The rows stay readable under the DEVICE key on either failure leg; this fold runs again on the
+    /// next `.unlocked(.privateHub)` transition, so it retries then. Until it lands the hub shows only
+    /// user-key rows — audited rather than silent.
+    private func foldDeviceKeyRows(into contentKey: SymmetricKey) {
+        guard let deviceKey = deviceWorryKey else {
+            FernletAuditLog.log("worryBox.rekey.failed", context: [:])
+            return
+        }
+        do {
+            try repository.reencryptAll(from: deviceKey, to: contentKey)
+        } catch {
+            FernletAuditLog.log("worryBox.rekey.failed", context: [:])
+        }
+    }
+
     // MARK: - Worry mutations
 
-    /// Seals a worry into the private store. Always succeeds in finding a key: the active key
-    /// when available, else the device fallback key (mirrors `JournalSealingCoordinator.seal`),
-    /// so a worry written from First Aid while locked still never exists as plaintext at rest.
+    /// Seals a worry into the private store under the active key when available, else the device
+    /// fallback key (mirrors `JournalSealingCoordinator.seal`), so a worry written from First Aid
+    /// while locked still never exists as plaintext at rest.
+    ///
+    /// When NEITHER key is obtainable (a keychain row that exists but cannot be read), `insert`
+    /// throws `FernletLockError.locked` and the lifetime count is deliberately not advanced: nothing
+    /// is written under a doomed key and the composer surfaces the failure rather than claiming a
+    /// worry was let go.
     func addWorry(_ text: String) throws {
         // R3/R5: the cap lives at the entry point, not in one composer — the hub's field has none.
         let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxCharacters))
@@ -203,7 +218,12 @@ final class WorryBoxService {
 
     /// Device-bound key generated on first use and stored in the Keychain (never iCloud-synced).
     /// Shares `KeychainItem.loadOrCreateSymmetricKey` with `JournalSealingCoordinator.deviceJournalKey`.
-    private var deviceWorryKey: SymmetricKey {
+    ///
+    /// Nil when the keychain row exists but could not be read: the helper fails closed rather than
+    /// minting over a key it could not read, which would make every sealed worry unopenable. A nil
+    /// key means no read (empty box), no write (`insert` throws `FernletLockError.locked`) and no
+    /// fold — never a mint. The property is recomputed on each access, so the next attempt retries.
+    private var deviceWorryKey: SymmetricKey? {
         KeychainItem.loadOrCreateSymmetricKey(for: .deviceWorryKey, service: KeychainItem.journalService)
     }
 }

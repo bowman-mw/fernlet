@@ -1386,7 +1386,9 @@ struct DayMicronutrientBreakdownRow: Identifiable {
     var id: String { "\(name)-\(unit)" }
 
     var progress: Double {
-        guard target > 0 else { return 0 }
+        // Same reasoning as `formatted(_:)`: a persisted non-finite total must not reach the bar's
+        // width (a NaN fraction paints a CoreGraphics error, not a bar).
+        guard target > 0, value.isFinite else { return 0 }
         return min(max(value / target, 0), 1)
     }
 
@@ -1407,11 +1409,19 @@ struct DayMicronutrientBreakdownRow: Identifiable {
         return .slate
     }
 
+    /// Largest amount this row will render as a number. R5: the value is a SUM of meal snapshots,
+    /// which can carry peer- or page-supplied numbers persisted (and CloudKit-synced) before the
+    /// import sanitisers existed, and `Int(_: Double)` TRAPS outside `Int`'s range. A wire fix
+    /// cannot heal an already-poisoned row, so this renderer must be total.
+    private static let maxDisplayableAmount = 1_000_000_000.0
+
     private static func formatted(_ value: Double) -> String {
-        if value >= 100 || value.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(value.rounded()))"
+        guard value.isFinite else { return "—" }
+        let bounded = min(max(value, 0), maxDisplayableAmount)
+        if bounded >= 100 || bounded.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(bounded.rounded()))"
         }
-        return value.formatted(.number.precision(.fractionLength(1)))
+        return bounded.formatted(.number.precision(.fractionLength(1)))
     }
 }
 

@@ -69,8 +69,10 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 ///
 /// The app-side consumer is `FernletStore.processSharedRecipeImportQueue()`, run on launch and on
 /// each foreground from `ContentView`; it imports each URL, then calls ``remove(_:)`` on success,
-/// ``markAttempt(_:errorDescription:)`` on failure (records self-destruct after 5 attempts), or
-/// ``markBudgetDeferred(_:dayKey:)`` when the daily AI budget is exhausted. ``clear()`` is the
+/// ``markAttemptStarted(_:)`` BEFORE the import (so a page that kills or hangs the app still spends
+/// its attempt) plus ``noteFailure(_:errorDescription:)`` on failure, or
+/// ``markBudgetDeferred(_:dayKey:refundingStartedAttempt:)`` when the daily AI budget is exhausted.
+/// ``clear()`` is the
 /// "delete everything" hook and deliberately bypasses the corrupt-file-preserving `modifyRecords`
 /// path so a wipe always empties the file. The struct itself is stateless (a file URL + JSON
 /// coders), so instances are cheap and interchangeable; edits are last-writer-wins per coordinated
@@ -101,6 +103,16 @@ public struct SharedRecipeImportQueue {
     /// and drain rows the extension considered evicted. `SharedRecipeImportQueueMirrorTests` pins
     /// both halves.
     public static let maxQueuedImports = 100
+
+    /// R3 (byte half): the largest `urlString` the drain will act on, in UTF-8 bytes. A record over
+    /// this is dropped on the first drain, not retried — it can only come from a build that predates
+    /// the extension-side guard, or from an app/extension version skew mid-update.
+    ///
+    /// **Twin note:** must equal `SharedRecipeImportQueueWriter.maxURLByteCount` in
+    /// `App/FernletShareExtension/SharedRecipeImportQueueWriter.swift` — a smaller value here
+    /// silently deletes rows the extension considers valid. `SharedRecipeImportQueueMirrorTests`
+    /// pins the two literals together.
+    public static let maxURLByteCount = 2048
 
     /// R2: the named retry cap a record self-destructs at, so a permanently broken page cannot
     /// retry forever. **Twin note:** the extension never writes `attemptCount`, so this constant is
@@ -197,6 +209,11 @@ public struct SharedRecipeImportQueue {
     ///
     /// - Returns: whether the rewrite landed (see ``remove(_:)`` — same not-discardable reasoning:
     ///   a lost attempt stamp is a broken page that never reaches its self-destruct).
+    ///
+    /// - Note: the drain no longer calls this — it spends the attempt up front via
+    ///   ``markAttemptStarted(_:)`` and records the error text with ``noteFailure(_:errorDescription:)``.
+    ///   Kept as the combined form for any caller that fails *synchronously* and cannot be killed
+    ///   mid-attempt.
     public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) -> Bool {
         let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
@@ -211,16 +228,70 @@ public struct SharedRecipeImportQueue {
         return didWrite
     }
 
+    /// Spends one retry attempt BEFORE the import runs, instead of after it fails.
+    ///
+    /// **Durability, not bookkeeping.** ``markAttempt(_:errorDescription:)`` only ever ran in the
+    /// drain's `catch`, so a record whose page kills the app — a watchdog kill on a pathological page,
+    /// or a fetch that never returns — spent no attempt at all and was retried on the next launch,
+    /// forever, with the queue never converging. Spending the attempt first makes the retry budget
+    /// survive a process that does not come back.
+    ///
+    /// Deliberately does NOT self-destruct at ``maxImportAttempts`` the way `markAttempt` does: the
+    /// drain's own attempt-cap check removes an exhausted record on the next pass, *before* any
+    /// fetch, so an exhausted record still never reaches the network — and removing it here would
+    /// delete a record that is about to import successfully.
+    ///
+    /// - Returns: whether the rewrite landed (see ``remove(_:)``). NOT discardable: a `false` means
+    ///   the attempt was not durably spent, which is precisely the case this method exists for.
+    public func markAttemptStarted(_ record: SharedRecipeImportRecord) -> Bool {
+        let didWrite = modifyRecords { records in
+            guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+            records[index].attemptCount += 1
+            records[index].lastAttemptAt = Date()
+        }
+        logIfRewriteFailed(didWrite, operation: "markAttemptStarted")
+        return didWrite
+    }
+
+    /// Records why the last attempt failed, WITHOUT burning another one.
+    ///
+    /// The drain spends its attempt up front (``markAttemptStarted(_:)``), so counting again in the
+    /// failure path would halve the retry budget. Adds no field to the record — only
+    /// `lastErrorDescription`, which already exists and is already mirrored by the share extension.
+    ///
+    /// - Returns: whether the rewrite landed (see ``remove(_:)``); a lost error string costs only the
+    ///   diagnostic, but it is reported rather than assumed.
+    public func noteFailure(_ record: SharedRecipeImportRecord, errorDescription: String?) -> Bool {
+        let didWrite = modifyRecords { records in
+            guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+            records[index].lastErrorDescription = errorDescription
+        }
+        logIfRewriteFailed(didWrite, operation: "noteFailure")
+        return didWrite
+    }
+
     /// Stamps a record as deferred-for-budget on `dayKey` (the drain hit `aiBudgetExhausted`). Unlike
     /// `markAttempt`, this does NOT burn an attempt or remove the record — a budget miss is transient and
     /// not the page's fault; it only tells the drain to stop re-fetching this page today.
     ///
+    /// - Parameter refundingStartedAttempt: gives back the attempt ``markAttemptStarted(_:)`` spent
+    ///   before the import ran. The drain passes `true`, and it is what keeps "a budget miss does not
+    ///   burn an attempt" TRUE now that the attempt is spent up front — without it, three resting
+    ///   days would silently delete a perfectly good queued recipe.
+    ///
     /// - Returns: whether the rewrite landed (see ``remove(_:)``); a lost stamp only costs a repeat
     ///   fetch today, but it is still reported rather than assumed.
-    public func markBudgetDeferred(_ record: SharedRecipeImportRecord, dayKey: String) -> Bool {
+    public func markBudgetDeferred(
+        _ record: SharedRecipeImportRecord,
+        dayKey: String,
+        refundingStartedAttempt: Bool = false
+    ) -> Bool {
         let didWrite = modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].budgetDeferredDayKey = dayKey
+            if refundingStartedAttempt {
+                records[index].attemptCount = max(0, records[index].attemptCount - 1)
+            }
         }
         logIfRewriteFailed(didWrite, operation: "markBudgetDeferred")
         return didWrite
@@ -352,8 +423,11 @@ extension RecipeDefinition {
     /// deliberate, because the sealed recipe photo is keyed by it, so reusing the id carries the
     /// photo across the refresh with no migration — plus the user's `notes` verbatim (the import
     /// summary only seeds notes on FIRST import; a refresh never overwrites what the user may
-    /// have edited), `createdAt`, fork provenance, and `webImageSuppressed` (a user who deleted
-    /// the web picture, or already has one, must not get a surprise re-download from a refresh).
+    /// have edited), `createdAt`, fork provenance, `webImageSuppressed` (a user who deleted
+    /// the web picture, or already has one, must not get a surprise re-download from a refresh),
+    /// and `sourceIsPeerSupplied` (a re-import is consent for ONE fetch the user asked for, not a
+    /// re-classification of a stranger's host as one the user chose — see
+    /// Docs/No-Tracking-Wall.md §4b).
     /// The caller passes the CURRENT saved row as `existing` — merging over a stale caller-held
     /// snapshot would revert notes edited or suppression stamped while the re-import fetch was in
     /// flight (see `FernletStore.applyReimportedRecipe`, which re-resolves the live row).
@@ -364,5 +438,6 @@ extension RecipeDefinition {
         createdAt = existing.createdAt
         parentRecipeID = existing.parentRecipeID
         webImport?.webImageSuppressed = existing.webImport?.webImageSuppressed
+        webImport?.sourceIsPeerSupplied = existing.webImport?.sourceIsPeerSupplied
     }
 }

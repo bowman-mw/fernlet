@@ -885,6 +885,66 @@ final class CoachPlanExchangeTests: XCTestCase {
                       "a conflicting exercise must be flagged whether it arrives as a new day or an edit")
     }
 
+    /// A strike is compared in `CoachPlan.normalizedName` form, but the edit path used to compare it
+    /// against the RENDERED line as a lowercase prefix. "Back  squat" renders as "back  squat - …",
+    /// which does not begin with the normalized key "back squat" — so the exercise the user turned
+    /// off for safety came back in through the edit path, which is exactly the path they saw it on.
+    func testStruckExerciseWithDoubleSpacedNameIsRemovedFromAnEditedRow() throws {
+        let store = makeTestStore()
+        store.settings.workoutProfile.avoidedMovements = [.squat]
+        let planned = PlannedWorkout(name: "Legs", split: .lower, source: .user,
+                                     exercises: "Leg press - 3 x 10", notes: "", duration: 45)
+        store.planWorkout(planned, date: store.todayKey)
+
+        let json = editsOnlyJSON(targetID: planned.id, action: "replace", extra: """
+        , "exercises": [ { "name": "Back  squat", "sets": 5, "reps": "5" } ]
+        """)
+        let review = store.reviewCoachPlan(try decoded(json), startingOn: store.todayKey)
+        let flag = try XCTUnwrap(review.safetyFlags.first)
+        let struckKey = CoachPlan.normalizedName("Back  squat")
+        XCTAssertEqual(flag.exerciseKey, struckKey, "the strike key is the normalized name")
+
+        _ = store.applyCoachPlan(review, startingOn: store.todayKey,
+                                 struckExerciseKeys: [struckKey], collisionPolicy: .keepBoth)
+
+        let lines = store.loadDay(for: store.todayKey).plannedWorkouts.flatMap(\.exerciseLines)
+        XCTAssertFalse(lines.contains { Self.normalizedLineName($0) == struckKey },
+                       "a struck exercise must not survive its own strike because of its spacing")
+        XCTAssertTrue(lines.contains("Leg press - 3 x 10"),
+                      "nothing survived the strike, so the user's original row stays standing")
+    }
+
+    /// A title/notes-only edit proposes no exercises, so the user's existing lines were never
+    /// flagged and are not strikable. Prefix-filtering the rendered "after" text — which for such an
+    /// edit is the user's OWN prescription — silently deleted any line a struck key happened to
+    /// begin with.
+    func testTitleOnlyEditDoesNotStrikeTheUsersExistingLines() throws {
+        let store = makeTestStore()
+        let planned = PlannedWorkout(name: "Legs", split: .lower, source: .user,
+                                     exercises: "Back squat - 3 x 5\nLeg press - 3 x 10",
+                                     notes: "", duration: 45)
+        store.planWorkout(planned, date: store.todayKey)
+
+        let plan = try decoded(editsOnlyJSON(targetID: planned.id, action: "adjust",
+                                             extra: ", \"title\": \"Legs (coach)\""))
+        let review = store.reviewCoachPlan(plan, startingOn: store.todayKey)
+        XCTAssertTrue(review.safetyFlags.isEmpty, "an edit proposing no exercises raises no flags")
+
+        _ = store.applyCoachPlan(review, startingOn: store.todayKey,
+                                 struckExerciseKeys: [CoachPlan.normalizedName("Back squat")],
+                                 collisionPolicy: .keepBoth)
+
+        let row = try XCTUnwrap(store.loadDay(for: store.todayKey).plannedWorkouts.first)
+        XCTAssertEqual(row.exercises, "Back squat - 3 x 5\nLeg press - 3 x 10",
+                       "an unrelated strike must not edit the user's own prescription")
+        XCTAssertEqual(row.name, "Legs (coach)", "and the edit the plan actually proposed applies")
+    }
+
+    /// The exercise name at the head of a rendered prescription line, in strike-key form.
+    private static func normalizedLineName(_ line: String) -> String {
+        CoachPlan.normalizedName(line.components(separatedBy: " - ").first ?? line)
+    }
+
     /// An edits-only plan is a complete plan; it must not be rejected for having no days.
     func testAnEditsOnlyPlanIsValid() throws {
         let store = makeTestStore()

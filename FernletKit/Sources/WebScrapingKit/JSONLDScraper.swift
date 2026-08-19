@@ -22,21 +22,43 @@ public enum JSONLDScraper {
     /// That difference cannot be observed by either caller: both hand the string to
     /// `JSONSerialization`, which skips surrounding whitespace and rejects an empty document, and both
     /// `continue` past a parse failure. The tidier contract is kept.
+    ///
+    /// **Linear since 2026-08-18 (security review M10).** This ran on EVERY import of every page,
+    /// unconditionally and before any other tier, as `(?is)<script\b([^>]*)>(.*?)</script>` — whose
+    /// `(.*?)` retries from each `<script` position, so a page carrying a few hundred thousand
+    /// unclosed `<script >` (well inside the 3 MB fetch cap) cost ~N²/2 comparisons for zero matches
+    /// and could stall the main actor into a watchdog kill. It now walks
+    /// `HTMLScraper.nextElement(named:in:from:)`, a monotonic cursor over linear substring searches.
+    /// The three observable behaviours — the case-insensitive `application/ld+json` attribute test,
+    /// trimming, and dropping empties — are unchanged, as is first-`</script>`-wins.
+    ///
+    /// The INPUT is deliberately not capped here (unlike the text tiers, which take
+    /// `HTMLScraper.maxTextExtractionCharacters`): JSON-LD legitimately sits at the end of long
+    /// pages, which is exactly why this path needed the rewrite rather than a prefix.
     public static func scriptContents(from html: String) -> [String] {
-        let pattern = #"(?is)<script\b([^>]*)>(.*?)</script>"#
-        guard let regex = WebScrapingRegex.compiled(pattern) else { return [] }
-        let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        return regex.matches(in: html, range: range).compactMap { match -> String? in
-            guard match.numberOfRanges >= 3,
-                  let attributesRange = Range(match.range(at: 1), in: html),
-                  let contentRange = Range(match.range(at: 2), in: html),
-                  String(html[attributesRange]).range(of: "application/ld+json", options: .caseInsensitive) != nil else {
-                return nil
+        var contents: [String] = []
+        var cursor = html.startIndex
+        var budget = maxScriptBlocks
+        while budget > 0, cursor < html.endIndex {
+            budget -= 1
+            guard let element = HTMLScraper.nextElement(named: "script", in: html, from: cursor) else {
+                break
             }
-            let content = String(html[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            return content.isEmpty ? nil : content
+            cursor = element.full.upperBound
+            guard html[element.attributes].range(of: "application/ld+json", options: .caseInsensitive) != nil else {
+                continue
+            }
+            let content = String(html[element.content]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !content.isEmpty { contents.append(content) }
         }
+        return contents
     }
+
+    /// R2: how many `<script>` blocks ``scriptContents(from:)`` walks before stopping. Budget
+    /// exhaustion returns what was found so far, silently — the same degrade
+    /// ``object(ofType:in:)``'s ``maxNodesVisited`` already has, and a page with more than 512 script
+    /// blocks has already told you it is not the honest recipe page it claims to be.
+    private static let maxScriptBlocks = 512
 
     /// The lowercased `@type` value(s) of a JSON-LD object — one entry for the common string form, one
     /// per entry for the array form, empty when `@type` is absent or an unexpected shape.

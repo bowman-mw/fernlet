@@ -133,7 +133,7 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `setupMeshSession()` | Installs discovery, channel-ready, disconnect/retry, and invite-acceptance callbacks. |
 | `startSearching()` | Starts mesh advertising/browsing and observation. |
 | `stopSearching()` | Cancels observation, stops MC session, cancels slot coordinators, clears slots and trust policies. |
-| `currentDiscoveryInfo()` | Builds advertised mesh/fingerprint/name metadata. |
+| `currentDiscoveryInfo()` | Builds the advertised TXT: version + per-launch session id, plus mesh id/name/member count when the mesh is open. No display name, no fingerprint. |
 | `updateDiscoveryInfo()` | Restarts advertiser with current discovery metadata. |
 | `handlePeerDiscovered(_:)` | Auto-invites peers during proximity join or into an open mesh when capacity/overflow rules allow. |
 | `handleChannelReady(_:)` | Creates a `ProximityCoordinator` and slot for a ready peer channel, then starts friend-mode handshake. |
@@ -698,7 +698,7 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 | --- | --- |
 | `body` | Renders historical logs list, delete actions, export button, and share sheet. |
 | `duration(_:)` | Formats active or completed session duration. |
-| `exportLogs()` | Writes historical logs JSON to a temporary file and presents share payload. |
+| `exportLogs()` | Writes historical logs JSON through `FernletStore.writeProtectedExport` into `tmp/DataExports` (so the wipe sweeps it) and presents the share payload; the share-completion handler deletes the file. |
 | `ActivityShareView.makeUIViewController(context:)` | Creates a UIKit share sheet for exported logs. |
 | `ActivityShareView.updateUIViewController(_:context:)` | No-op representable update. |
 

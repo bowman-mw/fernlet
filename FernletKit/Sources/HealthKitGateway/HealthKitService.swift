@@ -46,8 +46,9 @@ public protocol HealthKitServicing {
     /// Deletes specific fetched samples from Health (integration-gated).
     func delete(_ samples: [HKSample]) async throws
     /// Deletes the Fernlet-authored workout sample(s) matching `fernletWorkoutID` (our `fernlet.workoutID`
-    /// / sync-identifier metadata). Returns whether anything was found and deleted. Only ever finds our own
-    /// authored samples — imports carry no such metadata.
+    /// / sync-identifier metadata). Returns whether anything was found and deleted. Only ever deletes our
+    /// own authored samples — the metadata keys are forgeable by any co-installed app with workout share
+    /// access, so it is the implementation's `sourceRevision` filter, not the metadata, that guarantees it.
     func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool
     /// Interval-bucketed statistics for one quantity type from `anchor` to now.
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics]
@@ -831,10 +832,26 @@ public final class HealthKitService: HealthKitServicing {
         try await storeController.delete(samples)
     }
 
+    /// The subset of fetched workout samples this app itself wrote, decided by `sourceRevision` — the one
+    /// piece of provenance HealthKit stamps and no other app can forge. HealthKit refuses to delete
+    /// another app's objects, so an unfiltered delete on a foreign sample carrying our metadata throws
+    /// `errorAuthorizationDenied` and takes our own sample down with it. Fails closed on an empty
+    /// `ownBundleID` (an unresolvable `Bundle.main`): delete nothing rather than delete blind.
+    ///
+    /// Generic over ``HealthWorkoutSample`` purely for testability — `HKWorkout` is the production
+    /// conformer and constructing one in a unit test is impractical.
+    public static func ownAuthoredSamples<Sample: HealthWorkoutSample>(_ samples: [Sample], ownBundleID: String) -> [Sample] {
+        guard !ownBundleID.isEmpty else { return [] }
+        return samples.filter { $0.sourceBundleID == ownBundleID }
+    }
+
     /// Deletes the Fernlet-authored workout sample(s) carrying this workout id in their metadata.
     ///
-    /// - Returns: Whether any matching sample was found and deleted. Only ever matches our own
-    ///   authored samples — imports carry no `fernlet.workoutID` / sync-identifier metadata.
+    /// - Returns: Whether any matching sample was found and deleted. Only ever deletes our own authored
+    ///   samples, and it is the SOURCE FILTER below — not the metadata — that makes that true: the
+    ///   `fernlet.workoutID` / sync-identifier keys the fetch predicate matches are writable by any
+    ///   co-installed app with workout share access, so a planted sample would otherwise be swept into
+    ///   the delete and fail the whole batch with `errorAuthorizationDenied`.
     public func deleteWorkout(fernletWorkoutID id: UUID) async throws -> Bool {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         // We stamp both `fernlet.workoutID` and the sync identifier with the workout id on save; match
@@ -844,8 +861,17 @@ public final class HealthKitService: HealthKitServicing {
         let bySyncID = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [idString])
         let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [byWorkoutID, bySyncID])
         let samples = try await fetchWorkouts(matching: predicate)
-        guard !samples.isEmpty else { return false }
-        try await storeController.delete(samples)
+        // Filtered in Swift rather than AND-ed into the predicate: an all-or-nothing predicate would let a
+        // planted impostor hide OUR sample from the fetch, whereas the filter still deletes ours.
+        let ownSamples = Self.ownAuthoredSamples(samples, ownBundleID: Bundle.main.bundleIdentifier ?? "")
+        guard !ownSamples.isEmpty else {
+            // Nothing silent: samples matched our metadata but none were written by us.
+            if !samples.isEmpty {
+                FernletAuditLog.log("healthkit.workout.delete.foreignOnly", context: ["workoutID": idString])
+            }
+            return false
+        }
+        try await storeController.delete(ownSamples)
         return true
     }
 

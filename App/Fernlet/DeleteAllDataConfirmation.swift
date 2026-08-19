@@ -147,8 +147,14 @@ enum DeleteAllDataConfirmation {
     /// The closing line deliberately does NOT promise that retrying fixes everything, and does not say
     /// the leftovers are "on your device". Both were true when every store was local; "hearts parked in
     /// iCloud" is neither — those records sit on a CloudKit public database, and once the wipe cleared
-    /// the outbox the record names needed to delete them are gone, so a retry cannot reach them. They
-    /// age out on their own at the 14-day sender lifetime.
+    /// the outbox the record names needed to delete them are gone, so a retry cannot reach them.
+    ///
+    /// They do NOT age out on their own. `HeartDropOutbox.entryLifetime` (14 days) is the SENDER's
+    /// local outbox prune interval, not a server-side expiry, and on this path the wipe has already
+    /// emptied that outbox — so the cleanup that would have deleted them can never run. The records
+    /// remain sealed, unreadable ciphertext not linked to the user by name, which is what makes the
+    /// residual acceptable rather than harmless. Privacy-Policy.md §12 states it the same way; do not
+    /// re-introduce an auto-expiry claim here without changing the mechanism first.
     static func failureMessage(for outcome: FernletStore.DeleteAllOutcome) -> String {
         """
         Fernlet deleted everything it could, but couldn't finish: \

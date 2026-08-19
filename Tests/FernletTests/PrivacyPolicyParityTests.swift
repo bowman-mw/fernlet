@@ -28,13 +28,25 @@ struct PrivacyPolicyParityTests {
     /// the user can hand to a third party — it landed in the canonical document alone and sat
     /// out of sync in the other two copies until it was caught, which is exactly the drift this
     /// suite exists to prevent.
+    ///
+    /// The report-sharing marker (added 2026-08-19, finding L21) pins the same kind of disclosure
+    /// for the other user-to-user flow: a moderation report is not device-local and not anonymous —
+    /// it is signed and relayed to friends met in person, the reported maker among them — and all
+    /// three copies previously said only that "moderation actions take effect on-device".
+    ///
+    /// The away-hearts marker (added 2026-08-19, finding I32) pins the one exception to "friend
+    /// features are in-person only": the opt-in setting leaves sealed hearts in the developer's
+    /// CloudKit PUBLIC database, deletable only by the sending device and with no server-side
+    /// expiry. All three copies previously said friend activity stays device-to-device, full stop.
     private static let substanceMarkers = [
         "never retroactively repurposed",
         "The no-collection guarantee does not expire",
         "requires your fresh, affirmative consent",
         "verifiability statement",
         "Docs/Verifiability.md",
-        "Manual plan exchange"
+        "Manual plan exchange",
+        "signed record of that report",
+        "Deliver hearts when apart"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

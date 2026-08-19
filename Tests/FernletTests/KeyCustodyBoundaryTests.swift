@@ -116,6 +116,26 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
+    // MARK: Proves the device sealing keys fail CLOSED on an unreadable row rather than minting over
+    // it. `KeychainItem.store` is delete-then-add, so a mint on an unreadable read would destroy the
+    // real key and turn every sealed journal entry and worry into permanent garbage. A real
+    // `errSecInteractionNotAllowed` can't be forced from a test, so the same `.unreadable` branch is
+    // driven through the R5 empty-service guard (`loadDistinguishingAbsence` → `.unreadable(errSecParam)`).
+    @Test func deviceSealingKeyIsNeverMintedOverAnUnreadableRow() {
+        #expect(KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: "") == nil,
+                "an unreadable row must never mint a replacement key")
+        #expect(KeychainItem.loadOrCreateSymmetricKey(for: .deviceWorryKey, service: "") == nil,
+                "an unreadable row must never mint a replacement key")
+
+        // Non-regression: a readable row is returned, never re-minted.
+        let service = "com.fernlet.journal.test.unreadable.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: service) }
+        let first = KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: service)
+        let second = KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: service)
+        #expect(first?.rawBytes != nil, "the absent-row mint path must still persist and return a key")
+        #expect(first?.rawBytes == second?.rawBytes, "a readable row must be returned, never re-minted")
+    }
+
     // MARK: Proves the sealed-column install-binding ID (ColumnCrypto v2 AAD) lives in a
     // ThisDeviceOnly, never-synchronizable row — the property the ciphertext binding rests on.
     @Test func installBindingIDIsAfterFirstUnlockThisDeviceOnly() {

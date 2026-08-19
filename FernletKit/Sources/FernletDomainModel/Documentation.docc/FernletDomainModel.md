@@ -277,6 +277,7 @@ what actually happened.
 - ``HeartGlowMath``
 - ``HeartDropRecord``
 - ``HeartDropTransporting``
+- ``HeartDropWireLimits``
 - ``FriendInteractionDayCounts``
 - ``ClosenessMath``
 - ``CloseSlotState``

@@ -54,7 +54,9 @@ A few invariants in this module are load-bearing for the rest of the app:
   copies: ``KeychainItem/ReadResult`` + `loadDistinguishingAbsence` (a three-way read for the
   heart-drop prekey blob and sidecar seal key, whose mint-on-absence path must fail closed on an
   unreadable row rather than mint over it) and `loadOrCreateSymmetricKey` (the device-bound
-  journal and Worry Box keys).
+  journal and Worry Box keys), which fails closed on an unreadable row exactly like the media-key
+  provider — it returns nil rather than minting over a key it could not read, because `store` is
+  delete-then-add and a mint there would destroy every sealed journal entry and worry.
 - **Backup exclusion is applied in one place.** ``BackupExclusion`` toggles
   `isExcludedFromBackupKey` across a store file, its `-wal`/`-shm` sidecars, and the external
   binary `_SUPPORT` directory, shared by the sealed and synced persistence controllers so the

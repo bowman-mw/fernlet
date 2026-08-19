@@ -410,6 +410,24 @@ final class LaunchPreparationService {
     /// Device-local (not synced) UserDefaults key gating the once-per-day day-summary backfill.
     private static let daySummaryRunKeyDefault = "fernlet.daySummary.lastRunKey"
 
+    /// Runaway bound on a generated day summary (~70 words). The prompt asks for "under 50 words";
+    /// this is not a word-count enforcer, it is the ceiling past which the reply is treated as a
+    /// fallback rather than a summary. Deliberately not a truncation: half a sentence in the
+    /// journal slot reads as a bug, and the deterministic blurb reads as the app.
+    nonisolated static let maxDaySummaryCharacters = 500
+
+    /// Trims a model reply and rejects an empty or runaway one, returning nil for both — the
+    /// caller records `.fellBack` and the deterministic blurb takes the slot.
+    ///
+    /// Lives outside the `#if canImport(FoundationModels)` block so the bound is testable on any
+    /// host, and so the ceiling cannot drift with the availability of the framework.
+    nonisolated static func boundedDaySummary(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard trimmed.count <= maxDaySummaryCharacters else { return nil }
+        return trimmed
+    }
+
     #if canImport(FoundationModels)
     /// Day summary is an AMBIENT/background task (`standard` tier, runs at launch) → `userInvoked:
     /// false`. In the sleepy band it takes the deterministic path (an empty slot, per spec).
@@ -452,15 +470,15 @@ final class LaunchPreparationService {
                 instructions: "You write brief warm wellness day summaries for a companion app called Fernlet. Under 50 words. No advice. No lists. Warm observation only."
             )
             let response = try await session.respond(to: prompt)
-            let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = Self.boundedDaySummary(response.content)
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
                 destination: destination,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
-                outcome: text.isEmpty ? .fellBack : .succeeded
+                outcome: text == nil ? .fellBack : .succeeded
             )
-            return text.isEmpty ? nil : text
+            return text
         } catch {
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
