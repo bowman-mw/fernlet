@@ -48,6 +48,11 @@ struct FernletApp: App {
     )
     @State private var loader = FernletStoreLoader()
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
+    /// The System/Light/Dark choice, applied to the WHOLE scene — launch screen, onboarding and
+    /// main UI alike. Onboarding lives outside `ContentView`, so before this it was the one surface
+    /// that followed the phone while every tab and sheet was pinned by ContentView's own modifier:
+    /// a dark-mode user got a dark onboarding, then a light app the moment it finished.
+    @AppStorage(FernletAppearanceMode.storageKey) private var appearanceMode: FernletAppearanceMode = .system
     @State private var didScheduleStartupCloudSync = false
     @State private var pendingPreferenceReload: StoragePreferences?
     /// One-shot guard for the Phase-6 backup-exclusion launch gate — set once the gate actually
@@ -86,9 +91,19 @@ struct FernletApp: App {
             UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         }
         #endif
+        // Carry the pre-three-way "Dark mode" Bool into the System/Light/Dark choice before the
+        // first `@AppStorage` read below, so an existing user's app opens in the appearance they
+        // picked and a fresh install starts on System.
+        FernletAppearanceMode.migrateLegacyDarkModePreferenceIfNeeded()
+
         #if canImport(UIKit)
         UIScrollView.appearance().isDirectionalLockEnabled = true
-        UIWindow.appearance().backgroundColor = UIColor(red: 0.961, green: 0.937, blue: 0.878, alpha: 1)
+        // The window ground behind sheets and transitions. Adaptive — the same palette the
+        // `Color.parchment` token resolves — because a hard-coded light parchment flashed pale
+        // behind every sheet and push while the app was rendering dark.
+        UIWindow.appearance().backgroundColor = UIColor { @Sendable trait in
+            FernletThemePalette.current(for: trait.userInterfaceStyle).background
+        }
         Self.configureNavigationBarAppearance()
         #endif
     }
@@ -148,6 +163,7 @@ struct FernletApp: App {
                 Color.parchment.ignoresSafeArea()
                 content
             }
+            .preferredColorScheme(appearanceMode.colorScheme)
             .task {
                 guard !shouldOpenPrivacyDataForUITest else { return }
                 await loader.startIfNeeded()
@@ -508,10 +524,10 @@ private struct LaunchFailureView: View {
             Button("Try again", action: retry)
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onMoss)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
         }
         .padding(28)
         .frame(maxWidth: 420)

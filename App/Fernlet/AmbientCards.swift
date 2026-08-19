@@ -168,7 +168,8 @@ struct AmbientCardsView: View {
                             .background(Color.slate.opacity(0.10), in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Not today")
+                    // The 28pt disc keeps its look; the target around it grows to 44pt.
+                    .fernletIconButton("Not today")
                 }
             }
         }
@@ -479,7 +480,8 @@ struct AmbientCardsView: View {
                             .background(Color.slate.opacity(0.10), in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss nutrient nudge")
+                    // The 28pt disc keeps its look; the target around it grows to 44pt.
+                    .fernletIconButton("Dismiss nutrient nudge")
                 }
             }
         }

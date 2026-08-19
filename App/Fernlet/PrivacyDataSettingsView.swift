@@ -106,6 +106,9 @@ struct PrivacyDataSettingsView: View {
     @State private var existingDataSummary: ExistingDataSummary?
     @State private var deleteConfirmationText = ""
     @State private var isShowingDisableConfirmation = false
+    /// True when the disable/delete sheet was opened by the "Delete iCloud data" button (sync
+    /// already off) rather than by the sync switch — it changes the sheet's question.
+    @State private var isCloudDeleteOnlyEntry = false
     @State private var isShowingEnableConfirmation = false
     /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
     /// confirmation glue — deliberately per-screen, never shared with ``SettingsSheet``'s (the
@@ -114,6 +117,10 @@ struct PrivacyDataSettingsView: View {
     @State private var isUpdatingStorage = false
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
+    /// Which card `operationError` belongs to. A single terracotta line at the very bottom of a long
+    /// page — under "Delete everything" — is not feedback for a switch that snapped back near the
+    /// top, so every failure now renders beneath the control that produced it.
+    @State private var operationErrorScope: PrivacyErrorScope = .general
     @State private var didSeedUITestPreferences = false
     @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
     /// The own-photo escrow backup's enable confirmation. Its own flag rather than a case on
@@ -255,7 +262,8 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// First-appearance work: the DEBUG UI-test seeding and the iCloud record count.
+    /// First-appearance work: the DEBUG UI-test seeding, the entry verification, and the iCloud
+    /// record count.
     private func onFirstAppear() async {
         #if DEBUG
         seedUITestPreferencesIfNeeded()
@@ -263,7 +271,20 @@ struct PrivacyDataSettingsView: View {
             hasFreshVerification = true
         }
         #endif
+        // Ask for the check straight away rather than making every visit tap a button first: the
+        // card stays as the RETRY state after a cancel or failure, which is when it has something
+        // to say. Arriving here from a search result used to cost hub → result → Verify → Face ID.
+        if shouldVerifyOnAppear { verifyFreshAccess() }
         await loadCloudCountsIfNeeded()
+    }
+
+    /// Whether the entry check should fire by itself: only with a lock configured, nothing verified
+    /// yet, and no attempt already made. UI tests that assert the gate card drive the button
+    /// themselves, so the automatic pass stands down under the mock-services environment.
+    private var shouldVerifyOnAppear: Bool {
+        guard isLockConfigured, !hasFreshVerification, !isVerifying, verificationError == nil else { return false }
+        if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" { return false }
+        return true
     }
 
     @ViewBuilder
@@ -280,7 +301,9 @@ struct PrivacyDataSettingsView: View {
     private var freshVerificationGate: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionLabel("Fresh verification required")
-            Text("Privacy & Data requires a fresh biometric or device passcode check every time you enter.")
+            Text(verificationError == nil
+                 ? "Privacy & Data asks for a fresh Face ID or device passcode check every time you enter."
+                 : "Privacy & Data needs a fresh Face ID or device passcode check before it can show you anything.")
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -295,20 +318,28 @@ struct PrivacyDataSettingsView: View {
             Button {
                 verifyFreshAccess()
             } label: {
-                Label(isVerifying ? "Verifying" : "Verify to continue", systemImage: "lock.shield.fill")
+                Label(verifyButtonTitle, systemImage: "lock.shield.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .padding(.vertical, 14)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
             .disabled(isVerifying)
             .accessibilityIdentifier("privacy.verify")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityIdentifier("privacy.lock.gate")
+    }
+
+    /// "Try again" once an attempt has been made — the card is the retry state after the automatic
+    /// check on entry was cancelled or failed.
+    private var verifyButtonTitle: String {
+        if isVerifying { return "Verifying" }
+        return verificationError == nil ? "Verify to continue" : "Try again"
     }
 
     private var lockSetupInterstitial: some View {
@@ -327,10 +358,10 @@ struct PrivacyDataSettingsView: View {
                 Button("Set up app lock") { showLockSetup = true }
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
                     .accessibilityIdentifier("privacy.lock.setup")
             }
             .padding(16)
@@ -374,15 +405,32 @@ struct PrivacyDataSettingsView: View {
             if store != nil { exportDataCard }
             lockDataCard
 
-            if let operationError {
-                Text(operationError)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
-                    .padding(.horizontal, 4)
-            }
+            // Anything not claimed by a card still gets said.
+            operationErrorLine(.general)
         }
         .accessibilityIdentifier("privacy.controls")
+    }
+
+    /// Which control an ``operationError`` came from, so it renders next to that control.
+    private enum PrivacyErrorScope { case iCloud, backupStatus, health, export, general }
+
+    /// The failure line for one card, or nothing when the current error belongs elsewhere.
+    @ViewBuilder
+    private func operationErrorLine(_ scope: PrivacyErrorScope) -> some View {
+        if let operationError, operationErrorScope == scope {
+            Text(operationError)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.terracotta)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.operationError")
+        }
+    }
+
+    /// Records a failure against the card that raised it. One seam so a new failure path cannot
+    /// ship without saying where it belongs.
+    private func setOperationError(_ message: String?, scope: PrivacyErrorScope = .general) {
+        operationError = message
+        operationErrorScope = scope
     }
 
     private var exportDataCard: some View {
@@ -403,12 +451,18 @@ struct PrivacyDataSettingsView: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(isBuildingExport ? Color.bark : Color.onMoss)
             .padding(.vertical, 11)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .background(
+                Color.mossFill.opacity(isBuildingExport ? 0.55 : 1),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
             .disabled(isBuildingExport)
             .accessibilityIdentifier("privacy.export")
+
+            operationErrorLine(.export)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -416,12 +470,12 @@ struct PrivacyDataSettingsView: View {
     private func runExport() {
         guard let store else { return }
         isBuildingExport = true
-        operationError = nil
+        setOperationError(nil, scope: .export)
         do {
             let url = try store.writeDataExportFile()
             exportPayload = DataExportPayload(url: url)
         } catch {
-            operationError = "Couldn't prepare your export. Please try again."
+            setOperationError("Couldn't prepare your export. Please try again.", scope: .export)
         }
         isBuildingExport = false
     }
@@ -452,18 +506,7 @@ struct PrivacyDataSettingsView: View {
             .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.icloud.toggle")
 
-            Button(role: .destructive) {
-                prepareDisableICloudFlow()
-            } label: {
-                Label("Delete iCloud data", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(.white)
-            .padding(.vertical, 11)
-            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
-            .accessibilityIdentifier("privacy.icloud.delete")
+            deleteCloudDataControl
 
             Toggle("Sealed backup for sensitive notes", isOn: sealedSensitiveNotesBinding)
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
@@ -513,9 +556,55 @@ struct PrivacyDataSettingsView: View {
                 .fernletWrappingText()
 
             ownPhotoDeviceBindingRow
+
+            // Beneath the switches themselves, not at the far bottom of the page.
+            operationErrorLine(.iCloud)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The delete-the-iCloud-copy control, sized to what is actually up there.
+    ///
+    /// Full-width terracotta while iCloud holds (or may hold) Fernlet records; a quiet terracotta
+    /// text link once the account is known to be empty — the loudest control on the card used to be
+    /// an offer to delete nothing, directly under "No Fernlet iCloud records were found".
+    @ViewBuilder
+    private var deleteCloudDataControl: some View {
+        if showsProminentCloudDelete {
+            Button(role: .destructive) {
+                prepareDisableICloudFlow(deleteOnly: true)
+            } label: {
+                Label("Delete iCloud data", systemImage: "trash")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.onTerracotta)
+            .padding(.vertical, 11)
+            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("privacy.icloud.delete")
+        } else {
+            Button(role: .destructive) {
+                prepareDisableICloudFlow(deleteOnly: true)
+            } label: {
+                Text("Delete iCloud data")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracottaInk)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("privacy.icloud.delete")
+        }
+    }
+
+    /// Whether iCloud is known — or merely believed — to hold something worth a primary button.
+    private var showsProminentCloudDelete: Bool {
+        existingDataSummary != nil
+            || cloudCountsUnavailable
+            || storagePreferencesStore.preferences.iCloudSyncEnabled
+            || storagePreferencesStore.preferences.cloudCopyKept
     }
 
     /// Security-hardening Phase 5, step 5c: the consent surface for **device-binding** the user's
@@ -560,7 +649,7 @@ struct PrivacyDataSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onTerracotta)
                 .padding(.vertical, 11)
                 .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
@@ -699,7 +788,9 @@ struct PrivacyDataSettingsView: View {
                 escrowConflictSection
                 attentionLines
                 if showsRetryRestore { retryRestoreButton }
+                operationErrorLine(.backupStatus)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
@@ -840,9 +931,12 @@ struct PrivacyDataSettingsView: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(isResolvingEscrowConflict ? Color.bark : Color.onMoss)
             .padding(.vertical, 11)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .background(
+                Color.mossFill.opacity(isResolvingEscrowConflict ? 0.55 : 1),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
             .disabled(isResolvingEscrowConflict)
             .accessibilityIdentifier("privacy.sealedBackup.resolveConflict")
         }
@@ -892,9 +986,12 @@ struct PrivacyDataSettingsView: View {
         }
         .buttonStyle(.plain)
         .font(.fernlet(.label))
-        .foregroundStyle(.white)
+        .foregroundStyle(isRetryingRestore ? Color.bark : Color.onMoss)
         .padding(.vertical, 11)
-        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            Color.mossFill.opacity(isRetryingRestore ? 0.55 : 1),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
         .disabled(isRetryingRestore)
         .accessibilityIdentifier("privacy.sealedBackup.retryRestore")
     }
@@ -952,7 +1049,10 @@ struct PrivacyDataSettingsView: View {
                 // Nothing silent: a failed adoption leaves the conflict banner exactly as it was,
                 // which on its own reads as a button that does nothing.
                 guard adopted else {
-                    operationError = "Couldn't switch to your other device's backup key. Check iCloud and try again."
+                    setOperationError(
+                        "Couldn't switch to your other device's backup key. Check iCloud and try again.",
+                        scope: .backupStatus
+                    )
                     FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict.failed")
                     return
                 }
@@ -994,11 +1094,14 @@ struct PrivacyDataSettingsView: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .padding(.vertical, 11)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
             .accessibilityIdentifier("privacy.health.openSettings")
+
+            operationErrorLine(.health)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -1024,16 +1127,20 @@ struct PrivacyDataSettingsView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    /// The delete-everything card. Headed for what the button does — it used to sit under an "App
+    /// lock data" header whose paragraph about the Fernlet passcode described neither the button nor
+    /// its scope (that paragraph now lives on the App lock page, where it is about something).
     private var lockDataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("App lock data")
-            Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode will not affect your Fernlet app lock or erase your protected data.")
+            SectionLabel("Delete your data")
+            Text("Erase everything Fernlet stores on this phone and in your iCloud.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             deleteEverythingButton
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -1068,9 +1175,12 @@ struct PrivacyDataSettingsView: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(deleteFlow.isDeleting ? Color.bark : Color.onTerracotta)
             .padding(.vertical, 11)
-            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .background(
+                Color.terracotta.opacity(deleteFlow.isDeleting ? 0.55 : 1),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
             .disabled(deleteFlow.isDeleting)
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
         }
@@ -1132,20 +1242,26 @@ struct PrivacyDataSettingsView: View {
     private var disableSheetExplanation: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Titled by the door the user came through: from the Delete button (sync already
+                // off) "Turn off iCloud sync?" described nothing they had asked for.
                 ScreenHeader(
-                    title: "Turn off iCloud sync?",
-                    subtitle: "Stop syncing now, or also delete iCloud data."
+                    title: isCloudDeleteOnlyEntry ? "Delete iCloud data?" : "Turn off iCloud sync?",
+                    subtitle: isCloudDeleteOnlyEntry
+                        ? "This removes Fernlet's records from your iCloud account."
+                        : "Stop syncing now, or also delete iCloud data."
                 )
 
                 cloudCountsCard
 
-                Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                    .padding(14)
-                    .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                    .accessibilityIdentifier("privacy.icloud.divergenceWarning")
+                if !isCloudDeleteOnlyEntry {
+                    Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                        .padding(14)
+                        .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("privacy.icloud.divergenceWarning")
+                }
 
                 Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
                     .font(.fernlet(.body))
@@ -1168,17 +1284,22 @@ struct PrivacyDataSettingsView: View {
 
     /// The two ways out: keep the iCloud copy, or delete it (armed only by the typed DELETE).
     private var disableSheetActions: some View {
-        VStack(spacing: 12) {
-            Button("Stop syncing, keep iCloud data") {
-                stopSyncingKeepCloudData()
+        let isArmed = deleteConfirmationText.uppercased() == "DELETE"
+        return VStack(spacing: 12) {
+            // "Stop syncing, keep iCloud data" is an answer to "do you want to turn sync off?".
+            // Entered from the Delete button — with sync already off — it answers nothing.
+            if !isCloudDeleteOnlyEntry {
+                Button("Stop syncing, keep iCloud data") {
+                    stopSyncingKeepCloudData()
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityIdentifier("privacy.icloud.stopSync")
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-            .accessibilityIdentifier("privacy.icloud.stopSync")
 
             HStack {
                 Spacer()
@@ -1187,14 +1308,16 @@ struct PrivacyDataSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                // Terracotta, not moss: this deletes, and moss is the app's affirmative colour.
+                // Disabled fades the fill only, so the label stays readable while the user types.
+                .foregroundStyle(isArmed ? Color.onTerracotta : Color.bark)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
                 .background(
-                    deleteConfirmationText.uppercased() == "DELETE" ? Color.moss : Color.moss.opacity(0.4),
+                    Color.terracotta.opacity(isArmed ? 1 : 0.55),
                     in: RoundedRectangle(cornerRadius: 16)
                 )
-                .disabled(deleteConfirmationText.uppercased() != "DELETE")
+                .disabled(!isArmed)
                 .accessibilityIdentifier("privacy.icloud.confirmDelete")
             }
         }
@@ -1234,6 +1357,7 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.bark)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
     }
@@ -1349,7 +1473,10 @@ struct PrivacyDataSettingsView: View {
                     // A FAILED enable. The preference stays off, so the switch the user just
                     // consented to (size + binding disclosures) snaps back — say why instead of
                     // letting it look like a switch that refuses to move.
-                    operationError = "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again."
+                    setOperationError(
+                        "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                        scope: .iCloud
+                    )
                     FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
                 }
             }
@@ -1398,7 +1525,10 @@ struct PrivacyDataSettingsView: View {
                         // preference stays off, so the toggle the user just confirmed through the
                         // "Encrypt & back up" consent alert snaps back — say why rather than leaving
                         // the screen whose invariant is "never a silent swallow" doing exactly that.
-                        operationError = "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again."
+                        setOperationError(
+                            "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again.",
+                            scope: .iCloud
+                        )
                         FernletAuditLog.log(
                             "privacy.sealedBackup.enableFailed",
                             context: ["payload": payload.rawValue]
@@ -1578,8 +1708,16 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    private func prepareDisableICloudFlow() {
+    /// - Parameter deleteOnly: True when the sheet was opened by the "Delete iCloud data" button
+    ///   rather than by turning the sync switch off, which is the whole difference between the two
+    ///   questions the sheet can ask.
+    ///
+    /// The delete-only framing is withheld while sync is still ON, deliberately: this flow turns
+    /// sync off as well, so with sync on the user must still see the divergence warning and the
+    /// keep-the-copy alternative rather than a sheet that only mentions deletion.
+    private func prepareDisableICloudFlow(deleteOnly: Bool = false) {
         deleteConfirmationText = ""
+        isCloudDeleteOnlyEntry = deleteOnly && !storagePreferencesStore.preferences.iCloudSyncEnabled
         isShowingDisableConfirmation = true
         Task { await loadCloudCountsIfNeeded(force: true) }
     }
@@ -1609,7 +1747,7 @@ struct PrivacyDataSettingsView: View {
         guard deleteConfirmationText.uppercased() == "DELETE" else { return }
         FernletAuditLog.log("privacy.icloud.deletionInitiated")
         isUpdatingStorage = true
-        operationError = nil
+        setOperationError(nil, scope: .iCloud)
         Task { @MainActor in
             do {
                 var updated = storagePreferencesStore.preferences
@@ -1637,7 +1775,7 @@ struct PrivacyDataSettingsView: View {
                 existingDataSummary = nil
                 isShowingDisableConfirmation = false
             } catch {
-                operationError = error.localizedDescription
+                setOperationError(error.localizedDescription, scope: .iCloud)
                 isShowingDisableConfirmation = false
             }
             isUpdatingStorage = false
@@ -1646,13 +1784,13 @@ struct PrivacyDataSettingsView: View {
 
     private func applyStoragePreferences(_ preferences: StoragePreferences) {
         isUpdatingStorage = true
-        operationError = nil
+        setOperationError(nil, scope: .iCloud)
         Task { @MainActor in
             do {
                 try await reloadPersistence(with: preferences)
                 storagePreferencesStore.update { $0 = preferences }
             } catch {
-                operationError = error.localizedDescription
+                setOperationError(error.localizedDescription, scope: .iCloud)
             }
             isUpdatingStorage = false
         }
@@ -1694,7 +1832,7 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func setHealthKitMasterEnabled(_ enabled: Bool) async {
-        operationError = nil
+        setOperationError(nil, scope: .health)
         FernletAuditLog.log(enabled ? "privacy.healthKit.masterEnabled" : "privacy.healthKit.masterDisabled")
         do {
             let service = makeHealthKitService()
@@ -1709,7 +1847,7 @@ struct PrivacyDataSettingsView: View {
                 }
             }
         } catch {
-            operationError = error.localizedDescription
+            setOperationError(error.localizedDescription, scope: .health)
         }
     }
 

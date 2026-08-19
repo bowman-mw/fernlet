@@ -12,6 +12,7 @@ import FernletUI
 /// `finishAction`, which is the coordinator model's `complete()`.
 struct OnboardingPermissionsView: View {
     var stepText: String
+    var backAction: (() -> Void)?
     var finishAction: () -> Void
 
     /// Tri-state for the notifications row: `undecided` shows the "Turn on" button, `on`/`off`
@@ -27,7 +28,8 @@ struct OnboardingPermissionsView: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Permissions when needed",
-                subtitle: "Fernlet asks at first use where practical, so you can start without granting everything now."
+                subtitle: "Fernlet asks at first use where practical, so you can start without granting everything now.",
+                backAction: backAction
             ) {
                 VStack(spacing: 10) {
                     permissionRow("heart.text.square.fill", title: "Health", body: "Asked the first time you log a workout or open a health feature.")

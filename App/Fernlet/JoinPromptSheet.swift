@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletUI
+import ProximityKit
 
 /// The shared "someone wants to join" confirmation sheet shown to the gatekeeper of a closed
 /// in-person group — the existing members of a mesh session and the host of a Group Activity.
@@ -43,12 +44,41 @@ struct JoinPromptSheet<Request>: View {
                     if let request = requests.first {
                         requestCard(request)
                     }
+
+                    dismissalFooter
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
         }
         .background(Color.parchment)
+        // One small card doesn't need a full-height sheet — and at half height the host can still
+        // see what they were doing while deciding.
+        .presentationDetents([.medium])
+    }
+
+    /// The way out, said out loud. Swiping this sheet away declines *everything* still pending
+    /// (deliberately fail-closed) — which used to happen silently to a host who swiped down to peek
+    /// at the camera.
+    @ViewBuilder
+    private var dismissalFooter: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if requests.count > 1 {
+                Button("Decline all") {
+                    requests.forEach(decline)
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityIdentifier("\(accessibilityPrefix).declineAll")
+            }
+
+            Text(requests.count > 1
+                 ? "Swiping this away declines everyone waiting."
+                 : "Swiping this away declines this request.")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The inline admit-time error banner, with its own Dismiss (a root-level alert cannot present
@@ -56,7 +86,7 @@ struct JoinPromptSheet<Request>: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(Color.goldenrod)
             Text(message)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
@@ -70,7 +100,7 @@ struct JoinPromptSheet<Request>: View {
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.35), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14).stroke(Color.goldenrod.opacity(0.35), lineWidth: 1)
         )
         .accessibilityIdentifier("\(accessibilityPrefix).error")
     }
@@ -84,11 +114,7 @@ struct JoinPromptSheet<Request>: View {
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
 
-            Text(fingerprint(request))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Color.slate)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
+            FingerprintText(fingerprint(request), lineLimit: 2)
 
             if requests.count > 1 {
                 Text("\(requests.count - 1) more waiting")
@@ -103,17 +129,19 @@ struct JoinPromptSheet<Request>: View {
                     )
             }
 
-            HStack(spacing: 10) {
+            // Admitting or refusing someone is the sheet's whole job — 44pt action pills, not the
+            // 34pt chips used for picking options.
+            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
                 Button("Allow") {
                     allow(request)
                 }
-                .buttonStyle(ChipButtonStyle(selected: true))
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .accessibilityIdentifier("\(accessibilityPrefix).allow")
 
                 Button("Decline") {
                     decline(request)
                 }
-                .buttonStyle(ChipButtonStyle(selected: false))
+                .buttonStyle(ActionPillButtonStyle(.secondary))
                 .accessibilityIdentifier("\(accessibilityPrefix).decline")
             }
         }

@@ -81,7 +81,12 @@ nonisolated enum SettingsSearchIndex {
         let queryTokens = tokens(in: query)
         guard !queryTokens.isEmpty else { return [] }
         return entries.filter { entry in
-            queryTokens.allSatisfy { queryToken in
+            // The hub's Debug row compiles out of release builds; search must not be the back door
+            // that puts the development page in a shipping user's hands anyway.
+            #if !DEBUG
+            if entry.route == .debug { return false }
+            #endif
+            return queryTokens.allSatisfy { queryToken in
                 entry.searchableTokens.contains { $0 == queryToken || $0.hasPrefix(queryToken) }
             }
         }

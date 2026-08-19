@@ -108,6 +108,7 @@ struct GuidedWorkoutEditorSheet: View {
                     .foregroundStyle(Color.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 GuidedEditorRowControls(
+                    exerciseName: row.name,
                     canMoveUp: index > 0,
                     canMoveDown: index < rows.count - 1,
                     // Keep at least one exercise — an empty session isn't guidable and would leave a
@@ -154,15 +155,15 @@ struct GuidedWorkoutEditorSheet: View {
             Text(title.uppercased())
                 .font(.fernlet(.labelSmall)).tracking(0.6)
                 .foregroundStyle(Color.slate)
-            HStack(spacing: 12) {
-                stepButton(system: "minus", action: onDecrement)
+            HStack(spacing: 8) {
+                stepButton(system: "minus", label: "Fewer \(title.lowercased())", action: onDecrement)
                 Text(value)
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                     .frame(minWidth: fullWidth ? 80 : 40)
                     .frame(maxWidth: fullWidth ? .infinity : nil)
                     .multilineTextAlignment(.center)
-                stepButton(system: "plus", action: onIncrement)
+                stepButton(system: "plus", label: "More \(title.lowercased())", action: onIncrement)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -172,7 +173,7 @@ struct GuidedWorkoutEditorSheet: View {
         .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
     }
 
-    private func stepButton(system: String, action: @escaping () -> Void) -> some View {
+    private func stepButton(system: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.caption.weight(.bold))
@@ -181,6 +182,9 @@ struct GuidedWorkoutEditorSheet: View {
                 .background(Color.moss.opacity(0.12), in: Circle())
         }
         .buttonStyle(.plain)
+        // The drawn circle stays 30pt; the target and the VoiceOver label ("More sets") come from
+        // the shared helper — without it these read as "plus" and "minus".
+        .fernletIconButton(label)
     }
 
     // MARK: Add exercise
@@ -307,6 +311,8 @@ struct GuidedWorkoutEditorSheet: View {
 /// Split out of the card body so it stays inside the Power-of-10 length budget; the enclosing
 /// `HStack` still lays the three chips out exactly as before.
 private struct GuidedEditorRowControls: View {
+    /// Named in each chip's VoiceOver label — "Move up" alone doesn't say what moves.
+    let exerciseName: String
     let canMoveUp: Bool
     let canMoveDown: Bool
     let canRemove: Bool
@@ -326,6 +332,8 @@ private struct GuidedEditorRowControls: View {
             }
             .buttonStyle(.plain)
             .disabled(!canMoveUp)
+            // Glyph stays 30pt; the tap target and the VoiceOver label come from the shared helper.
+            .fernletIconButton("Move \(exerciseName) up")
             .accessibilityIdentifier("workout.editor.moveUp")
             Button {
                 onMoveDown()
@@ -337,6 +345,7 @@ private struct GuidedEditorRowControls: View {
             }
             .buttonStyle(.plain)
             .disabled(!canMoveDown)
+            .fernletIconButton("Move \(exerciseName) down")
             .accessibilityIdentifier("workout.editor.moveDown")
             Button(role: .destructive) {
                 onRemove()
@@ -348,6 +357,7 @@ private struct GuidedEditorRowControls: View {
             }
             .buttonStyle(.plain)
             .disabled(!canRemove)
+            .fernletIconButton("Remove \(exerciseName)")
             .accessibilityIdentifier("workout.editor.remove")
         }
     }

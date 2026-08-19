@@ -574,6 +574,9 @@ struct DisposableCameraView: View {
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
+    /// The session member a "Block …?" confirmation is about — the in-session menu used to block
+    /// instantly while the roster's Block asked first.
+    @State private var participantToBlock: MeshSessionParticipant?
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
     @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
@@ -685,6 +688,7 @@ struct DisposableCameraView: View {
                 .foregroundStyle(Color.white.opacity(0.5))
         }
         .accessibilityIdentifier("camera.info")
+        .fernletIconButton("Session info")
     }
 
     /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
@@ -707,6 +711,7 @@ struct DisposableCameraView: View {
                     }
                 }
         }
+        .fernletTapTarget()
         .accessibilityLabel(hasUnread ? "Session messages, new message" : "Session messages")
         .accessibilityIdentifier("camera.chat")
     }
@@ -1021,14 +1026,26 @@ struct DisposableCameraView: View {
     }
 
     private var developButton: some View {
-        Button { beginDevelop() } label: {
+        Button {
+            // With photos there is a review sheet to back out of. With none, "Develop" used to end
+            // the live session on the spot — chat transcript gone, camera gone — off a photo verb.
+            // Ask with the same "End session?" alert the info sheet raises.
+            if manager.sessionPhotos.isEmpty {
+                leaveSessionConfirm = true
+            } else {
+                beginDevelop()
+            }
+        } label: {
             VStack(spacing: 5) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.system(size: 22))
                     .foregroundStyle(Color.white.opacity(0.65))
-                Text("Develop")
+                // Named for what it actually does: developing the film also ends the outing.
+                Text("Develop & finish")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityIdentifier("camera.develop")
@@ -1106,6 +1123,17 @@ struct DisposableCameraView: View {
         .frame(width: 64)
         .contentShape(Rectangle())
         .gesture(windGesture(isLandscape: isLandscape))
+        // Winding is the gate on the shutter, and it was drag-only: VoiceOver and Switch Control
+        // users could never arm the camera, so the shutter read "Wind camera first" forever. The
+        // wheel is now one element with a value, a default activation (double tap), and a named
+        // action — no dragging required to take a photo.
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Film wind")
+        .accessibilityValue(camera.isArmed ? "Ready" : "\(Int((camera.windProgress * 100).rounded()))% wound")
+        .accessibilityHint(camera.isArmed ? "The camera is ready to shoot" : "Winds the camera so you can take a photo")
+        .accessibilityAction { camera.advanceWind(progress: 1) }
+        .accessibilityAction(named: "Wind camera") { camera.advanceWind(progress: 1) }
     }
 
     private func windThumbwheel(active: Bool) -> some View {
@@ -1322,6 +1350,19 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $renamingMesh) {
             renameMeshSheet
         }
+        .alert(
+            participantToBlock.map { "Block \($0.displayName)?" } ?? "Block this person?",
+            isPresented: $participantToBlock.isPresent(),
+            presenting: participantToBlock
+        ) { participant in
+            Button("Block", role: .destructive) {
+                manager.block(participant)
+                participantToBlock = nil
+            }
+            Button("Cancel", role: .cancel) { participantToBlock = nil }
+        } message: { participant in
+            Text("Blocking \(participant.displayName) will hide their content from you and yours from them, and drop them from this session.")
+        }
     }
 
     /// The sheet's title row: the (renameable) mesh name and the Done button.
@@ -1357,15 +1398,18 @@ struct DisposableCameraView: View {
 
     /// Participant count and remaining film.
     private var sessionStats: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Text("\(manager.sessionParticipants.count) person(s) connected")
+        // Real plurals — "2 person(s) connected" is a placeholder that shipped.
+        let people = manager.sessionParticipants.count
+        let shots = manager.filmRemaining
+        return VStack(alignment: .leading, spacing: 22) {
+            Text(people == 1 ? "1 person connected" : "\(people) people connected")
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
 
             HStack(spacing: 6) {
                 Image(systemName: "film")
                     .foregroundStyle(Color.slate)
-                Text("\(manager.filmRemaining) shot(s) remaining")
+                Text(shots == 1 ? "1 shot left" : "\(shots) shots left")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
             }
@@ -1443,7 +1487,9 @@ struct DisposableCameraView: View {
                 Label("Ask to remove", systemImage: "person.badge.minus")
             }
             Button(role: .destructive) {
-                manager.block(participant)
+                // Same action, same person, same safety net as Friends & Blocks: blocking here also
+                // drops them from the shared photo and chat flow, so it asks first.
+                participantToBlock = participant
             } label: {
                 Label("Block", systemImage: "hand.raised")
             }
@@ -1451,6 +1497,7 @@ struct DisposableCameraView: View {
             Image(systemName: "ellipsis.circle")
                 .foregroundStyle(Color.slate)
         }
+        .fernletTapTarget()
         .accessibilityLabel("Options for \(participant.displayName)")
     }
 
@@ -1555,7 +1602,7 @@ struct DisposableCameraView: View {
         Button("End session") {
             leaveSessionConfirm = true
         }
-        .buttonStyle(ChipButtonStyle(selected: false))
+        .buttonStyle(ActionPillButtonStyle(.destructive))
         .accessibilityIdentifier("sessionInfo.endSession")
     }
 

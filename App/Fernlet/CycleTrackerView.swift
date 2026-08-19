@@ -116,10 +116,12 @@ struct CycleTrackerView: View {
     private var pageContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            // The calendar is what a daily user comes for, so nothing optional sits above it: the
+            // one-time primer moved below, and an empty predictions card (a whole FernletCard
+            // holding one "log 3 cycles" line) is now a single slate line under the grid.
             if store.isPeriodTrackingVisible {
-                periodAwarePrimer
-                if showsPrediction {
-                    PredictionsCard(prediction: periodStore.prediction)
+                if showsPrediction, let prediction = periodStore.prediction {
+                    PredictionsCard(prediction: prediction)
                 }
                 phaseTrendsCard
             }
@@ -133,6 +135,10 @@ struct CycleTrackerView: View {
                 showsIntimacyLegend: store.isIntimacyTrackingVisible,
                 onDayTapped: { date in selectedDay = SelectedCycleDay(date: date) }
             )
+            if store.isPeriodTrackingVisible {
+                predictionHint
+                periodAwarePrimer
+            }
             privacyBanner
             if store.isPeriodTrackingVisible {
                 recentEvents
@@ -142,6 +148,18 @@ struct CycleTrackerView: View {
             }
         }
         .padding(20)
+    }
+
+    /// The "not enough cycles yet" line, under the calendar. A card's worth of chrome for one
+    /// sentence used to push the grid — and today's cell — off the bottom of the screen.
+    @ViewBuilder
+    private var predictionHint: some View {
+        if showsPrediction, periodStore.prediction == nil {
+            Text("Log at least 3 cycles to see predictions.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
     }
 
     /// The pushed day detail for a tapped calendar day, with both halves gated the same way the
@@ -157,7 +175,12 @@ struct CycleTrackerView: View {
                 ? intimacyLogs.filter { $0.dayKey == dayKey }.sorted { $0.eventDate < $1.eventDate }
                 : [],
             intimacyEventCount: store.isIntimacyTrackingVisible ? (intimacyEventsByDay[dayKey] ?? 0) : 0,
-            onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingEntry: dayEntry) },
+            // A day with nothing logged opens "Log period" for that date, not "Edit period" over a
+            // placeholder entry — `entry(for:)` synthesizes an empty entry for every untouched day.
+            onEdit: {
+                let hasLog = dayEntry.hasObservedEvent || dayEntry.narrative != nil
+                activeSheet = .logPeriod(targetDate: day.date, editingEntry: hasLog ? dayEntry : nil)
+            },
             onDelete: { deleteDay(dayEntry, dayKey: dayKey) }
         )
     }
@@ -230,9 +253,11 @@ struct CycleTrackerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Log")
         } else if store.isPeriodTrackingVisible {
-            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil, editingEntry: nil) }
+            HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log period") {
+                activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
+            }
         } else if store.isIntimacyTrackingVisible {
-            HeaderActionButton(systemImage: "plus") { activeSheet = .logIntimacy }
+            HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log intimacy") { activeSheet = .logIntimacy }
         }
     }
 
@@ -257,7 +282,7 @@ struct CycleTrackerView: View {
                         } label: {
                             Text("Turn on")
                                 .font(.fernlet(.label))
-                                .foregroundStyle(Color.cream)
+                                .foregroundStyle(Color.onMoss)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                                 .background(Color.moss, in: Capsule())
@@ -461,40 +486,37 @@ struct CycleTrackerView: View {
 
 /// Card showing the likely next-period date range, a confidence chip, and the cycles-tracked count.
 ///
-/// Rendered by ``CycleTrackerView`` only when the period half is visible and predictions aren't
-/// hidden in settings; shows an empty-state nudge ("log at least 3 cycles") until
-/// `PeriodTrackerStore` produces a `CyclePrediction`.
+/// Rendered by ``CycleTrackerView`` only when the period half is visible, predictions aren't hidden
+/// in settings, and `PeriodTrackerStore` actually produced a `CyclePrediction`. Before that the page
+/// carries a single "log at least 3 cycles" line under the calendar instead — a card holding one
+/// sentence pushed the grid below the fold.
 private struct PredictionsCard: View {
-    var prediction: CyclePrediction?
+    var prediction: CyclePrediction
 
     var body: some View {
         FernletCard {
-            if let prediction {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Likely next period")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                            Text(formattedRange(prediction.likelyStartRange))
-                                .font(.fernlet(.stat))
-                                .foregroundStyle(Color.bark)
-                        }
-                        Spacer(minLength: 8)
-                        Text(confidenceLabel(for: prediction.confidence))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Likely next period")
                             .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                        Text(formattedRange(prediction.likelyStartRange))
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.bark)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.moss.opacity(0.14), in: Capsule())
                     }
-
-                    Text("Cycles tracked: \(prediction.cyclesObserved)")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
+                    Spacer(minLength: 8)
+                    Text(confidenceLabel(for: prediction.confidence))
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.bark)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.moss.opacity(0.14), in: Capsule())
                 }
-            } else {
-                EmptyState(text: "Log at least 3 cycles to see predictions.")
+
+                Text("Cycles tracked: \(prediction.cyclesObserved)")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
             }
         }
     }
@@ -574,8 +596,10 @@ private struct CycleCalendarCard: View {
         }
     }
 
+    /// The flow/intimacy key under the grid. Wraps onto new rows rather than shrinking: the old
+    /// `lineLimit(1)` + `minimumScaleFactor(0.7)` row shrank to "Med…"/"Intim…" at larger text sizes.
     private var legend: some View {
-        HStack(spacing: 12) {
+        FlowLayout(spacing: 12) {
             if showsFlowLegend {
                 ForEach([
                     (Color.dustyRose.opacity(0.22), "Light"),
@@ -588,6 +612,7 @@ private struct CycleCalendarCard: View {
                             .frame(width: 10, height: 10)
                         Text(label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
             if showsIntimacyLegend {
@@ -597,10 +622,9 @@ private struct CycleCalendarCard: View {
                         .foregroundStyle(Color.terracotta)
                     Text("Intimacy").font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
     }
 }
 

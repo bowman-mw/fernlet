@@ -1037,11 +1037,44 @@ public nonisolated enum WorkoutProgram {
             let type: WorkoutType = (kind == .cardio) ? .cardio : .fullBody
             return Workout(
                 name: suggestion.name, type: type, mode: mode, exercises: suggestion.exercises,
-                rpe: nil, notes: suggestion.notes, duration: nil,
+                rpe: nil, notes: suggestion.notes, duration: prescribedMinutes,
                 loggedFromGuidedSession: loggedFromGuidedSession ? true : nil,
                 intensity: intensity
             )
         }
+
+        /// The minutes this session actually prescribes, when it says so itself.
+        ///
+        /// Cardio and mobility sessions ARE their leading descriptor ("Easy cardio - 20 min"), so
+        /// the logged row can carry that duration instead of showing none at all while its own name
+        /// promises 20 minutes. Slot-filled sessions (strength / full body / sport) prescribe sets
+        /// and reps, not a clock, and an appended conditioning line describes only part of the
+        /// session — those stay `nil` rather than reporting a made-up total.
+        var prescribedMinutes: Int? {
+            guard kind == .cardio || kind == .mobility else { return nil }
+            return exercises.first.flatMap { WorkoutProgram.descriptorMinutes(in: $0.name) }
+        }
+    }
+
+    /// Minutes named by a conditioning descriptor's trailing clause: "Easy cardio - 20 min" → 20.
+    ///
+    /// Deliberately strict — the clause must be a number followed by "min" and nothing else in
+    /// front of it — so an interval descriptor ("Intervals - 8 × 1 min hard / 1 min easy") reports
+    /// no duration rather than the wrong one (1). Accepts the hyphen and both dashes as separators.
+    public static func descriptorMinutes(in descriptor: String) -> Int? {
+        var tail: Substring?
+        for separator in [" - ", " – ", " — "] {
+            if let range = descriptor.range(of: separator) {
+                tail = descriptor[range.upperBound...]
+                break
+            }
+        }
+        guard let clause = tail?.trimmingCharacters(in: .whitespaces) else { return nil }
+        let digits = clause.prefix(while: \.isNumber)
+        guard let minutes = Int(digits), minutes > 0, minutes <= 600 else { return nil }
+        let unit = clause.dropFirst(digits.count).trimmingCharacters(in: .whitespaces).lowercased()
+        guard unit.hasPrefix("min") else { return nil }
+        return minutes
     }
 
     /// The engine's full output for one day: sessions, dropped slots, and the location used.

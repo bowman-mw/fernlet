@@ -105,7 +105,7 @@ struct StepTimerControl: View {
                         .foregroundStyle(Color.slate.opacity(0.6))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Remove timer")
+                .fernletIconButton("Remove timer")
             }
         }
     }
@@ -159,6 +159,9 @@ struct CookingModeView: View {
     // haptic task are local UI state, re-armed from the run's window on every change and on resume.
     @State private var timerFired = false
     @State private var timerTask: Task<Void, Never>?
+    /// Drives the "stop cooking?" confirmation in front of Close during an active walk — closing used
+    /// to end the run and clear the Live Activity on a single tap.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
 
     init(store: FernletStore, recipe: RecipeDefinition, resuming: Bool = false, initialYield: Int? = nil, onLogToDay: @escaping (MealType, String) -> Void) {
         self.store = store
@@ -214,6 +217,7 @@ struct CookingModeView: View {
             }
         }
         .keepsScreenAwake(true)
+        .destructiveConfirmation($pendingDestructiveAction)
         .task(id: recipe.ingredients.map(\.foodItemId)) {
             let ids = recipe.ingredients.map(\.foodItemId)
             guard !ids.isEmpty else { return }
@@ -339,6 +343,9 @@ struct CookingModeView: View {
                         SectionLabel("Ingredients")
                         ingredientList
                     }
+                    // FernletCard hugs its content when nothing inside stretches, which left this
+                    // card visibly narrower than the "Cook for" card above it.
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(20)
@@ -439,9 +446,10 @@ struct CookingModeView: View {
                 if let started = timerStartedAt, let ends = timerEndsAt, started <= ends {
                     // GuidedWorkout idiom: a fixed window clamps to 0:00 at expiry and stays valid however
                     // long the cook over-runs it — a live `Date()` lower bound would invert past the deadline.
+                    // The design system's timer face (DM Sans, monospaced digits) rather than SF
+                    // Rounded — this was the app's largest piece of system-font text.
                     Text(timerInterval: started...ends, countsDown: true)
-                        .font(.system(size: 60, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
+                        .font(.fernletTimer())
                         .foregroundStyle(timerFired ? Color.goldenrod : Color.bark)
                         .accessibilityIdentifier("cookingMode.stepTimer")
                     if timerFired {
@@ -457,13 +465,12 @@ struct CookingModeView: View {
                     .buttonStyle(.plain)
                 } else {
                     Text(formattedDuration(duration))
-                        .font(.system(size: 44, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
+                        .font(.fernletTimer(size: 44))
                         .foregroundStyle(Color.slate)
                     Button { store.cookingStartTimer() } label: {
                         Label("Start \(formattedDuration(duration)) timer", systemImage: "timer")
                             .font(.fernlet(.label))
-                            .foregroundStyle(Color.cream)
+                            .foregroundStyle(Color.onMoss)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 10)
                             .background(Color.moss, in: Capsule())
@@ -492,7 +499,9 @@ struct CookingModeView: View {
                         Image(systemName: "chevron.right")
                     }
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
+                    // Each fill carries its own ink: `onGoldenrod` on the timer-fired amber,
+                    // `onMoss` on the moss. Cream on goldenrod measured ~2.2:1.
+                    .foregroundStyle(timerFired ? Color.onGoldenrod : Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(timerFired ? Color.goldenrod : Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -604,7 +613,7 @@ struct CookingModeView: View {
     private func primaryButtonLabel(_ title: String) -> some View {
         Text(title)
             .font(.fernlet(.label))
-            .foregroundStyle(Color.cream)
+            .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(14)
             .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -667,7 +676,25 @@ struct CookingModeView: View {
 
     /// Header Close / finish "Not now": end the shared run (clear the app-group file + the Live Activity)
     /// so no orphan resume card or activity lingers, then dismiss.
+    ///
+    /// Mid-walk it asks first — closing there throws away the cook's place in the steps, which is the
+    /// same thing the Move tab's workout runner confirms before doing. Mise en place and the finish
+    /// screen have nothing to lose, so they close straight away.
     private func closeCooking() {
+        guard stage == .cooking else {
+            endRunAndDismiss()
+            return
+        }
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Stop cooking \(recipe.name)?",
+            message: "Your place in the steps is forgotten and the Live Activity is cleared. The recipe itself is untouched.",
+            confirmLabel: "Stop cooking",
+            auditEvent: "cooking.run.closeConfirmed",
+            perform: { endRunAndDismiss() }
+        )
+    }
+
+    private func endRunAndDismiss() {
         store.endCookingRun()
         dismiss()
     }

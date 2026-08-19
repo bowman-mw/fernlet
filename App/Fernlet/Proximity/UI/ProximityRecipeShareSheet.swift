@@ -56,7 +56,11 @@ struct ProximityRecipeShareSheet: View {
                         ScreenHeader(
                             title: draft.title,
                             subtitle: "Share with a nearby Fernlet.",
-                            subtitleFirst: false
+                            subtitleFirst: false,
+                            // The title is the user's own recipe name: three lines rather than the
+                            // default two, so "Grandma's slow-cooked white bean…" keeps its name at
+                            // accessibility sizes instead of being cut mid-word.
+                            titleLineLimit: 3
                         )
 
                         recipientCard

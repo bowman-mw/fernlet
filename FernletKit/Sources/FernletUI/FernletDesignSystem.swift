@@ -52,6 +52,20 @@ public extension Font {
         case .stat:          return .custom(FernletFontName.dmSansMedium, size: 14, relativeTo: .subheadline).monospacedDigit()
         }
     }
+
+    /// The oversized monospaced-digit face for a live countdown or elapsed-time readout.
+    ///
+    /// Deliberately not a ``FernletTextRole``: it is the `stat` role at a display size, and the size
+    /// varies by surface (a rest timer, a cooking timer, a workout clock). Monospaced digits keep the
+    /// readout from twitching as the numbers change. Reach for this rather than SF Rounded — a
+    /// system-font timer is the largest text on its screen and reads as another app's.
+    ///
+    /// ```swift
+    /// Text(remaining.formatted()).font(.fernletTimer())
+    /// ```
+    static func fernletTimer(size: CGFloat = 60) -> Font {
+        .custom(FernletFontName.dmSansMedium, size: size, relativeTo: .largeTitle).monospacedDigit()
+    }
 }
 
 /// Exact PostScript names of the bundled fonts (see `Fernlet/Fonts` + Info.plist `UIAppFonts`).

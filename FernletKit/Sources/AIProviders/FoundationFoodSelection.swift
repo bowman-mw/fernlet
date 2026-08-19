@@ -103,17 +103,27 @@ public enum FoundationFoodSelectionModel {
     /// The AI-free tier of meal selection: splits the description with `MealItemSplitter`, binds each
     /// split item to its single best catalog candidate, and assembles a plan — or `nil` when nothing
     /// binds, ending the cascade.
+    ///
+    /// Split items that bind to nothing are NOT silently dropped: they are carried out as
+    /// ``FoodSelectionPlan/unmatchedItems`` so the caller can demote the resolution and the review
+    /// sheet can name them ("2 eggs and toast" that matched only the toast).
     public static func deterministicPlan(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) -> FoodSelectionPlan? {
-        let items = MealItemSplitter.items(from: description).compactMap { itemName -> FoodSelectionMealItem? in
+        var items: [FoodSelectionMealItem] = []
+        var unmatched: [String] = []
+        for itemName in MealItemSplitter.items(from: description) {
             let ingredients = deterministicIngredients(for: itemName, candidates: candidates)
-            guard ingredients.isEmpty == false else { return nil }
-            return FoodSelectionMealItem(name: itemName.capitalized, ingredients: ingredients)
+            if ingredients.isEmpty {
+                unmatched.append(itemName.capitalized)
+            } else {
+                items.append(FoodSelectionMealItem(name: itemName.capitalized, ingredients: ingredients))
+            }
         }
         guard items.isEmpty == false else { return nil }
         return FoodSelectionPlan(
             mealName: MealParser.mealName(from: description),
             mealType: fallbackType ?? MealParser.classifyMealType(description),
-            items: items
+            items: items,
+            unmatchedItems: unmatched
         )
     }
 
@@ -268,6 +278,9 @@ private struct FoundationMealSelection {
     /// weight/volume units, 20 for counts), ingredients capped at 5 per item and items at 6, blank
     /// names defaulted. Returns `nil` when no item survives — the fell-back signal.
     func plan(fallbackDescription: String, fallbackType: MealType?, candidates: [FoodSelectionCandidate]) -> FoodSelectionPlan? {
+        // Named, not dropped: an item whose every ingredient failed validation is food the user typed
+        // that this plan does not carry, so it leaves as `unmatchedItems` (see the deterministic tier).
+        var droppedItemNames: [String] = []
         let validItems = items.compactMap { item -> FoodSelectionMealItem? in
             let validIngredients = item.ingredients.compactMap { ingredient -> FoodSelectionIngredient? in
                 guard let candidate = candidates.first(where: { $0.id == ingredient.candidateNumber }) else { return nil }
@@ -283,8 +296,11 @@ private struct FoundationMealSelection {
                     unit: normalizedUnitStr
                 )
             }
-            guard validIngredients.isEmpty == false else { return nil }
             let trimmedItemName = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard validIngredients.isEmpty == false else {
+                if !trimmedItemName.isEmpty { droppedItemNames.append(trimmedItemName) }
+                return nil
+            }
             return FoodSelectionMealItem(
                 name: trimmedItemName.isEmpty ? "Meal item" : trimmedItemName,
                 ingredients: Array(validIngredients.prefix(5))
@@ -296,7 +312,8 @@ private struct FoundationMealSelection {
         return FoodSelectionPlan(
             mealName: trimmedName.isEmpty ? MealParser.mealName(from: fallbackDescription) : trimmedName,
             mealType: MealType(rawValue: mealType) ?? fallbackType ?? MealParser.classifyMealType(fallbackDescription),
-            items: Array(validItems.prefix(6))
+            items: Array(validItems.prefix(6)),
+            unmatchedItems: droppedItemNames
         )
     }
 

@@ -176,7 +176,16 @@ final class MealResolutionService {
             recipes: host.recipes,
             foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes)
         ), result.meals.isEmpty == false else { return nil }
-        return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
+        // The plan's unmatched split items ride along: `MealResolution.needsReview` treats partial
+        // coverage as review-worthy, so a meal missing half of what was typed pauses instead of
+        // committing at high confidence.
+        return MealResolution(
+            meals: result.meals,
+            createdRecipes: result.createdRecipes,
+            confidence: .high,
+            isFallback: false,
+            unmatchedItems: plan.unmatchedItems
+        )
     }
 
     /// A single quick-log is ONE meal. The AI-selection, lexicon, and deterministic tiers each split a
@@ -220,7 +229,8 @@ final class MealResolutionService {
             createdRecipes: resolution.createdRecipes,
             confidence: resolution.confidence,
             isFallback: resolution.isFallback,
-            suggestedRecipe: resolution.suggestedRecipe
+            suggestedRecipe: resolution.suggestedRecipe,
+            unmatchedItems: resolution.unmatchedItems
         )
     }
 
@@ -264,7 +274,8 @@ final class MealResolutionService {
             createdRecipes: resolution.createdRecipes,
             confidence: .low,
             isFallback: resolution.isFallback,
-            suggestedRecipe: resolution.suggestedRecipe
+            suggestedRecipe: resolution.suggestedRecipe,
+            unmatchedItems: resolution.unmatchedItems
         )
     }
 }

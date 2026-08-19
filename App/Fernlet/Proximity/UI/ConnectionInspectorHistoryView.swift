@@ -54,6 +54,8 @@ struct ConnectionInspectorHistoryView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .disabled(inspector.historicalLogs.isEmpty)
+                // Names the action, not the glyph ("square.and.arrow.up").
+                .accessibilityLabel("Export connection history")
             }
         }
         .sheet(item: $exportPayload) { payload in

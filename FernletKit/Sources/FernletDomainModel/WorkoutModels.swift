@@ -475,31 +475,35 @@ public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable
 
     public var id: String { rawValue }
 
+    /// The chip label in the log/plan sheets' "Kind" row.
+    ///
+    /// `.activity` says "Cardio & activity" rather than the old "Workouts": inside a sheet titled
+    /// "Log workout", a chip called Workouts read as "everything" instead of "the non-strength one".
     public var label: String {
         switch self {
         case .strengthTraining: "Strength Training"
-        case .activity: "Workouts"
+        case .activity: "Cardio & activity"
         }
     }
 
     public var pickerTitle: String {
         switch self {
         case .strengthTraining: "Exercise"
-        case .activity: "Class"
+        case .activity: "Activity"
         }
     }
 
     public var searchPlaceholder: String {
         switch self {
         case .strengthTraining: "Search exercise or muscle"
-        case .activity: "Search class, e.g. Pilates"
+        case .activity: "Search activity, e.g. Pilates"
         }
     }
 
     public var addLabel: String {
         switch self {
         case .strengthTraining: "Add exercise"
-        case .activity: "Add class"
+        case .activity: "Add activity"
         }
     }
 }
@@ -978,8 +982,17 @@ public nonisolated enum WorkoutExerciseCatalog {
         return allExercises.first { normalizedName($0.name) == key }
     }
 
+    /// The category to LABEL a logged row with.
+    ///
+    /// Keyword-scoring the name + exercise lines is the general rule, with one exception: a row
+    /// logged by the guided flow already recorded the session's own kind, and scoring can talk it
+    /// out of it — an "Easy cardio" session with one strength accessory added ties cardio against
+    /// that accessory and the tie-break lands on Full Body, so a 20-minute cardio session was
+    /// labelled "Full Body". A guided row that recorded `.cardio` keeps it. Every other row (manual
+    /// logs, Health imports, planned completions) still goes through the text inference below.
     public static func inferredCategory(for workout: Workout) -> WorkoutType {
-        inferredCategory(for: "\(workout.name)\n\(workout.exercises)")
+        if workout.loggedFromGuidedSession == true, workout.type == .cardio { return .cardio }
+        return inferredCategory(for: "\(workout.name)\n\(workout.exercises)")
     }
 
     public static func inferredCategory(for text: String) -> WorkoutType {

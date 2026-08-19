@@ -59,6 +59,42 @@ public extension Color {
     /// the adaptive `parchment` would flip too dark in dark mode. Non-adaptive by design — the moss
     /// fill it sits on is itself a fixed deep green in both appearances.
     static let parchmentInk = Color(red: 0.961, green: 0.937, blue: 0.878)
+
+    // MARK: Contrast-safe pairs for filled buttons
+    //
+    // A filled accent button needs BOTH halves of a pair: the `*Fill` background and its matching
+    // `on*` ink. White ink is only safe on the light-mode fills — dark-mode `moss`/`terracotta`
+    // lighten enough that white falls to 2.5:1 / 3.2:1 — so the ink tokens flip to `midnight` in
+    // dark mode (6.5:1 on dark moss, 5.1:1 on dark terracotta). Never hand-roll
+    // `.foregroundStyle(.white)` on a moss or terracotta fill.
+
+    /// Ink for text/icons on a ``mossFill`` button: white in light mode (5.4:1), `midnight` in dark.
+    static let onMoss = Color(light: .white, dark: .midnight)
+
+    /// The filled-button moss. Light mode deepens to #4F7444 so white ink clears 5.4:1 (plain `moss`
+    /// gives only 4.29:1); dark mode keeps `moss` itself, paired with ``onMoss``'s midnight ink.
+    /// `moss` stays the tint/accent color — this token is for *filled* button backgrounds.
+    static let mossFill = Color(
+        light: Color(red: 0.310, green: 0.455, blue: 0.267),
+        dark:  Color(red: 0.498, green: 0.690, blue: 0.412)
+    )
+
+    /// Ink for text/icons on a filled `terracotta` (destructive) button: white in light mode (4.8:1),
+    /// `midnight` in dark mode where terracotta lightens and white would fall to 3.2:1.
+    static let onTerracotta = Color(light: .white, dark: .midnight)
+
+    /// Ink for text/icons on a filled `goldenrod` button. Unlike moss and terracotta, goldenrod is a
+    /// light warm amber in *both* appearances, so the ink never flips: white on it measures ~2.2:1,
+    /// while this fixed `midnight` clears 6:1 on the light fill and more on the dark one.
+    static let onGoldenrod = Color.midnight
+
+    /// Accessible ink for destructive *text* — a red label drawn on parchment/cream rather than on a
+    /// terracotta fill. Light mode deepens to #9E4028 (5.4:1 on a tinted chip); dark mode keeps
+    /// `terracotta`, which already clears 4.5:1 on the dark box.
+    static let terracottaInk = Color(
+        light: Color(red: 0.620, green: 0.251, blue: 0.157),
+        dark:  Color(red: 0.839, green: 0.459, blue: 0.345)
+    )
 }
 
 public extension Color {
@@ -84,6 +120,36 @@ public extension View {
         accessibilityElement(children: .contain)
             .accessibilityIdentifier(identifier)
     }
+
+    /// Grows a control's hit area to the 44×44pt minimum without changing how it draws.
+    ///
+    /// Apply to the `Button` itself — the frame becomes the layout box and `contentShape` makes all
+    /// of it tappable, while the glyph stays its drawn size, centered. The glyph-only buttons across
+    /// the app (calendar chevrons, remove-ingredient X, move-widget arrows) sit at 24–34pt without
+    /// it. Prefer ``fernletIconButton(_:minWidth:minHeight:)``, which also supplies the VoiceOver
+    /// label such a button always needs.
+    func fernletTapTarget(minWidth: CGFloat = 44, minHeight: CGFloat = 44) -> some View {
+        frame(minWidth: minWidth, minHeight: minHeight)
+            .contentShape(Rectangle())
+    }
+
+    /// The two things every icon-only button owes the user: a 44pt tap target and a VoiceOver label.
+    ///
+    /// ```swift
+    /// Button { previousMonth() } label: { Image(systemName: "chevron.left") }
+    ///     .fernletIconButton("Previous month")
+    /// ```
+    ///
+    /// Without a label VoiceOver reads the SF Symbol name — "chevron.left", "person.2" — or nothing
+    /// at all. Name the *action* ("Remove tomato", "Hide widget"), not the glyph.
+    func fernletIconButton(
+        _ accessibilityLabel: String,
+        minWidth: CGFloat = 44,
+        minHeight: CGFloat = 44
+    ) -> some View {
+        fernletTapTarget(minWidth: minWidth, minHeight: minHeight)
+            .accessibilityLabel(accessibilityLabel)
+    }
 }
 
 /// The standard screen title block: a display-serif title with an italic slate subtitle.
@@ -91,6 +157,11 @@ public extension View {
 /// Used at the top of the major tab screens and hub pages so page headers share one type
 /// treatment. `subtitleFirst` places the subtitle above the title (the "eyebrow" layout); the
 /// optional `identifier` gives UX appearance tests a stable anchor for the whole header.
+///
+/// Titles **wrap** (two lines by default) rather than shrink-and-truncate: at accessibility sizes a
+/// one-line header used to read "Protect private spa…", and a header that swallows the page's name
+/// is worse than a header that takes a second line. Pass `titleLineLimit: 3` where the title is
+/// user-supplied and long (a recipe name, say); the subtitle takes up to three lines.
 public struct ScreenHeader: View {
     var title: String
     var subtitle: String
@@ -98,12 +169,21 @@ public struct ScreenHeader: View {
     /// Optional stable accessibility identifier so UX appearance tests can anchor a
     /// screen's header (e.g. "screen.home"). Empty when unset — a no-op for users.
     var identifier: String?
+    /// How many lines the title may wrap to before truncating. Two by default.
+    var titleLineLimit: Int
 
-    public init(title: String, subtitle: String, subtitleFirst: Bool = false, identifier: String? = nil) {
+    public init(
+        title: String,
+        subtitle: String,
+        subtitleFirst: Bool = false,
+        identifier: String? = nil,
+        titleLineLimit: Int = 2
+    ) {
         self.title = title
         self.subtitle = subtitle
         self.subtitleFirst = subtitleFirst
         self.identifier = identifier
+        self.titleLineLimit = titleLineLimit
     }
 
     public var body: some View {
@@ -112,8 +192,8 @@ public struct ScreenHeader: View {
             Text(title)
                 .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+                .lineLimit(titleLineLimit)
+                .fixedSize(horizontal: false, vertical: true)
             if !subtitleFirst { subtitleView }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,8 +206,8 @@ public struct ScreenHeader: View {
             .font(.fernlet(.bodySmall))
             .italic()
             .foregroundStyle(Color.slate)
-            .lineLimit(2)
-            .minimumScaleFactor(0.82)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -136,15 +216,29 @@ public struct ScreenHeader: View {
 /// Sits alongside ``ScreenHeader`` on tab screens for actions like opening settings or starting an
 /// entry flow. At least one of `title` / `systemImage` must be provided (asserted in the
 /// initializer); the 58pt minimum height keeps it comfortably tappable.
+///
+/// - Important: an **icon-only** button must pass `accessibilityLabel:` — without it VoiceOver falls
+///   back to the raw SF Symbol name and announces "plus" or "person.2". Title-bearing buttons are
+///   already announced by their title, so the label is only needed there to say something different
+///   from what is drawn. The title never wraps: the pill grows instead, so accessibility sizes can't
+///   break a word in half ("Shar/e").
 public struct HeaderActionButton: View {
     var title: String?
     var systemImage: String?
+    /// VoiceOver label; overrides the drawn title. Required in practice for icon-only buttons.
+    var axLabel: String?
     var action: () -> Void
 
-    public init(title: String? = nil, systemImage: String? = nil, action: @escaping () -> Void) {
+    public init(
+        title: String? = nil,
+        systemImage: String? = nil,
+        accessibilityLabel: String? = nil,
+        action: @escaping () -> Void
+    ) {
         assert(title != nil || systemImage != nil, "header action needs title or image")
         self.title = title
         self.systemImage = systemImage
+        self.axLabel = accessibilityLabel
         self.action = action
     }
 
@@ -158,6 +252,8 @@ public struct HeaderActionButton: View {
                 if let title {
                     Text(title)
                         .font(.fernlet(.label))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
             .foregroundStyle(Color.bark)
@@ -170,7 +266,7 @@ public struct HeaderActionButton: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title ?? systemImage ?? "Action")
+        .accessibilityLabel(axLabel ?? title ?? systemImage ?? "Action")
     }
 }
 
@@ -219,7 +315,8 @@ public struct PolaroidTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(caption)
                 .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate.opacity(0.58))
+                // Full-strength slate, not 58%: the faded caption measured 1.9:1 on the cream frame.
+                .foregroundStyle(Color.slate)
                 .lineLimit(1)
         }
         .padding(.horizontal, 7)
@@ -245,8 +342,16 @@ public extension View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    func sheetTextInput() -> some View {
+    /// The standard cream text-field card used by every entry sheet.
+    ///
+    /// Carries the design-system font as well as the chrome: without it a `TextField` renders its
+    /// value and placeholder in system SF, next to serif placeholders in the same sheet. Pass
+    /// `font: .fernlet(.label)` for numeric fields (the tabular DM Sans reads better for digits);
+    /// the parameter defaults to `nil` and resolves inside the body, because a `@MainActor`
+    /// expression can never be a default argument in this module.
+    func sheetTextInput(font: Font? = nil) -> some View {
         self
+            .font(font ?? .fernlet(.body))
             .textInputAutocapitalization(.sentences)
             .autocorrectionDisabled(false)
             .textContentType(.none)
@@ -280,14 +385,104 @@ public extension View {
 
     /// Standard "discard your unsaved changes?" dialog for entry sheets. Pair with
     /// `.interactiveDismissDisabled(isDirty)` and a Cancel affordance that flips `isPresented` on when
-    /// dirty (dismiss directly when clean). Keeps the wording consistent across every workout/food sheet.
+    /// dirty (dismiss directly when clean), or adopt ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)``
+    /// which wires all three together. Keeps the wording consistent across every workout/food sheet.
+    ///
+    /// - Important: this is an `alert`, deliberately, and destructive confirmations elsewhere should
+    ///   follow it. On iOS 26 a `.confirmationDialog` renders as a popover that **suppresses the
+    ///   `.cancel`-role button**, so the user saw a lone red "Discard" and no visible way back; the
+    ///   popover also anchors to the view root rather than the control that raised it. An `alert`
+    ///   always renders both buttons, anchored to the screen.
     func discardConfirmation(isPresented: Binding<Bool>, onDiscard: @escaping () -> Void) -> some View {
-        self.confirmationDialog("Discard your changes?", isPresented: isPresented, titleVisibility: .visible) {
-            Button("Discard", role: .destructive, action: onDiscard)
+        self.alert("Discard your changes?", isPresented: isPresented) {
             Button("Keep editing", role: .cancel) {}
+            Button("Discard", role: .destructive, action: onDiscard)
         } message: {
             Text("Anything you've typed here won't be saved.")
         }
+    }
+
+    /// A confirmation for an irreversible action, phrased so the user knows exactly what is lost.
+    ///
+    /// The package-side counterpart of the app target's `DestructiveConfirmation` type: use *that*
+    /// inside `Fernlet/` (it carries the audit trail and the two-destructive-outcome case), and this
+    /// one from package-resident UI (`ProximityKit`, `FernletLockUI`, `FernletUI`) which cannot see
+    /// app-target types. Same rule as ``discardConfirmation(isPresented:onDiscard:)``: an `alert`, so
+    /// iOS 26 cannot hide the Cancel button, and the mutation runs *only* from `onConfirm`.
+    ///
+    /// - Parameters:
+    ///   - title: Phrase it as a question, e.g. "Delete 12 shared pictures?".
+    ///   - message: Name the exact data affected and whether anything survives.
+    ///   - confirmLabel: The destructive button, e.g. "Delete all 12".
+    func confirmDestructive(
+        _ title: String,
+        isPresented: Binding<Bool>,
+        message: String,
+        confirmLabel: String,
+        cancelLabel: String = "Cancel",
+        onConfirm: @escaping () -> Void
+    ) -> some View {
+        self.alert(title, isPresented: isPresented) {
+            Button(cancelLabel, role: .cancel) {}
+            Button(confirmLabel, role: .destructive, action: onConfirm)
+        } message: {
+            Text(message)
+        }
+    }
+
+    /// The whole "dirty entry sheet" contract in one line: block swipe-to-dismiss while there are
+    /// unsaved changes, render the leading ``SheetCancelBar`` that swipe-dismiss would otherwise be,
+    /// and raise ``discardConfirmation(isPresented:onDiscard:)`` when Cancel is tapped with a dirty
+    /// draft. A clean draft dismisses immediately — no dialog for a sheet with nothing to lose.
+    ///
+    /// ```swift
+    /// .fernletDraftGuard(isDirty: draft != original) { dismiss() }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - isDirty: Whether the sheet holds unsaved edits.
+    ///   - showsCancelBar: Pass `false` when the sheet already draws its own Cancel — two bars would
+    ///     also mean two views carrying the `sheet.cancel` identifier, which breaks the UI tests.
+    ///     Drive the prompt yourself with `discardConfirmation` in that case.
+    ///   - onDismiss: Closes the sheet. Runs on Cancel-when-clean and on Discard.
+    func fernletDraftGuard(
+        isDirty: Bool,
+        showsCancelBar: Bool = true,
+        onDismiss: @escaping () -> Void
+    ) -> some View {
+        modifier(FernletDraftGuardModifier(isDirty: isDirty, showsCancelBar: showsCancelBar, onDismiss: onDismiss))
+    }
+}
+
+/// Implements ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)`` — see there.
+///
+/// Owns the discard-prompt flag itself so call sites don't each declare a `@State showDiscardConfirm`;
+/// the cancel bar is installed as a top safe-area inset so it stays pinned above the sheet's own
+/// scrolling content.
+public struct FernletDraftGuardModifier: ViewModifier {
+    let isDirty: Bool
+    let showsCancelBar: Bool
+    let onDismiss: () -> Void
+    @State private var askingToDiscard = false
+
+    public init(isDirty: Bool, showsCancelBar: Bool = true, onDismiss: @escaping () -> Void) {
+        self.isDirty = isDirty
+        self.showsCancelBar = showsCancelBar
+        self.onDismiss = onDismiss
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .interactiveDismissDisabled(isDirty)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsCancelBar {
+                    SheetCancelBar {
+                        if isDirty { askingToDiscard = true } else { onDismiss() }
+                    }
+                    .background(Color.parchment)
+                }
+            }
+            .discardConfirmation(isPresented: $askingToDiscard, onDiscard: onDismiss)
     }
 }
 
@@ -373,6 +568,50 @@ public struct FlowLayout: Layout {
     }
 }
 
+/// A row of peer controls that becomes a column at accessibility text sizes.
+///
+/// The fix for side-by-side button pairs, which do not reflow: at AX sizes "Meal planner" /
+/// "Shopping list" broke to "planne/r" and "Shopp/ing list" at different heights, and a word split
+/// inside a button reads as a broken screen rather than as large text. Stacking is the honest
+/// answer — two full-width buttons, each legible.
+///
+/// ```swift
+/// AdaptiveStack {
+///     Button("Meal planner") { … }.buttonStyle(ActionPillButtonStyle(.secondary))
+///     Button("Shopping list") { … }.buttonStyle(ActionPillButtonStyle(.secondary))
+/// }
+/// ```
+///
+/// For a *variable-length* set of items (chips, legends, tags) reach for ``FlowLayout`` instead:
+/// this switches wholesale on the text size, while FlowLayout wraps on measured width.
+public struct AdaptiveStack<Content: View>: View {
+    var spacing: CGFloat
+    var horizontalAlignment: HorizontalAlignment
+    var verticalAlignment: VerticalAlignment
+    var content: Content
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    public init(
+        spacing: CGFloat = 10,
+        horizontalAlignment: HorizontalAlignment = .center,
+        verticalAlignment: VerticalAlignment = .center,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.spacing = spacing
+        self.horizontalAlignment = horizontalAlignment
+        self.verticalAlignment = verticalAlignment
+        self.content = content()
+    }
+
+    public var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: horizontalAlignment, spacing: spacing) { content }
+        } else {
+            HStack(alignment: verticalAlignment, spacing: spacing) { content }
+        }
+    }
+}
+
 /// A labeled form row for entry sheets: an uppercase small-label caption above arbitrary content.
 ///
 /// The standard building block of the food/workout/journal entry sheets — it pairs a
@@ -401,30 +640,123 @@ public struct SheetField<Content: View>: View {
 /// A pill "chip" button style that inverts to a filled bark background when selected.
 ///
 /// Applied to the tag/option chips inside entry sheets (often laid out with ``FlowLayout``). Pass
-/// `selected:` so the style can render the chosen state; unselected chips stay cream with a faint
-/// bark outline.
+/// `selected:` so the style can render *and announce* the chosen state — the `.isSelected` trait is
+/// added here, which is why VoiceOver can tell "Breakfast" from "Breakfast, selected" at every chip
+/// site in the app. Unselected chips stay cream with a faint bark outline.
+///
+/// `destructive: true` renders the terracotta variant for a chip that destroys something (the
+/// button's `role` alone is invisible to a custom style). It is a *selection* style: a real
+/// call-to-action ("Ask to join", "End activity", "Delete all") belongs in
+/// ``ActionPillButtonStyle``, which meets the 44pt target these 34pt chips do not.
 public struct ChipButtonStyle: ButtonStyle {
     var selected: Bool
+    var destructive: Bool
 
-    public init(selected: Bool) {
+    public init(selected: Bool, destructive: Bool = false) {
         self.selected = selected
+        self.destructive = destructive
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let ink: Color = destructive ? .terracottaInk : (selected ? .parchment : .bark)
+        let fill: Color = destructive
+            ? Color.terracotta.opacity(0.10)
+            : (selected ? Color.bark : Color.cream)
+        let stroke: Color = destructive
+            ? Color.terracottaInk.opacity(0.35)
+            : Color.bark.opacity(selected ? 0 : 0.12)
+        return configuration.label
             .font(.fernlet(.label))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .foregroundStyle(selected ? Color.parchment : Color.bark)
-            .background(
-                selected ? Color.bark : Color.cream,
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.bark.opacity(selected ? 0 : 0.12), lineWidth: 1)
-            )
+            .foregroundStyle(ink)
+            .background(fill, in: shape)
+            .overlay(shape.stroke(stroke, lineWidth: 1))
+            .contentShape(shape)
             .opacity(configuration.isPressed ? 0.75 : 1.0)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Which role an ``ActionPillButtonStyle`` plays — it picks the fill/ink pair, not the size.
+public enum FernletActionPillKind {
+    /// The screen's affirmative action: filled ``Color/mossFill`` with ``Color/onMoss`` ink.
+    case primary
+    /// A secondary action beside a primary one: cream with a bark hairline.
+    case secondary
+    /// Deletes or ends something: filled `terracotta` with ``Color/onTerracotta`` ink. Always pair it
+    /// with a confirmation — see ``SwiftUI/View/confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)``.
+    case destructive
+}
+
+/// The style for a real call-to-action button: a 44pt-tall pill in one of three roles.
+///
+/// ```swift
+/// Button("Ask to join") { … }.buttonStyle(ActionPillButtonStyle(.primary))
+/// ```
+///
+/// Use it wherever a tap *does* something (join, connect, end, leave, delete) rather than selecting
+/// an option — those stay ``ChipButtonStyle``. The distinction is the point: chips are 34pt tall,
+/// which is under the 44pt minimum target, so the Friends/Activities surfaces that dressed their
+/// primary actions as chips were shipping undersized buttons. The label wraps rather than
+/// truncating, and the pill grows to fit at accessibility sizes.
+///
+/// Disabled state fades the *fill* only and switches to bark ink: fading white ink along with the
+/// fill is what made the disabled Save pill unreadable (1.8:1), and a user who can't read a disabled
+/// button can't tell what completing the form would do.
+public struct ActionPillButtonStyle: ButtonStyle {
+    var kind: FernletActionPillKind
+
+    public init(_ kind: FernletActionPillKind = .primary) {
+        self.kind = kind
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        Pill(kind: kind, configuration: configuration)
+    }
+
+    /// Nested so the style can read `isEnabled` — a `ButtonStyle` itself has no environment.
+    private struct Pill: View {
+        let kind: FernletActionPillKind
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isEnabled) private var isEnabled
+
+        private var fill: Color {
+            switch kind {
+            case .primary:     return Color.mossFill.opacity(isEnabled ? 1 : 0.55)
+            case .secondary:   return Color.cream
+            case .destructive: return Color.terracotta.opacity(isEnabled ? 1 : 0.55)
+            }
+        }
+
+        private var ink: Color {
+            guard isEnabled else { return .bark }
+            switch kind {
+            case .primary:     return .onMoss
+            case .secondary:   return .bark
+            case .destructive: return .onTerracotta
+            }
+        }
+
+        private var strokeOpacity: Double {
+            kind == .secondary ? 0.14 : 0
+        }
+
+        var body: some View {
+            let shape = Capsule(style: .continuous)
+            return configuration.label
+                .font(.fernlet(.label))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(ink)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .frame(minHeight: 44)
+                .background(fill, in: shape)
+                .overlay(shape.stroke(Color.bark.opacity(strokeOpacity), lineWidth: 1))
+                .contentShape(shape)
+                .opacity(configuration.isPressed ? 0.78 : 1.0)
+        }
     }
 }
 
@@ -471,16 +803,70 @@ public struct SheetTextEditor: View {
     }
 }
 
+/// A short free-text field on the same cream card as ``SheetTextEditor``, that grows with the text
+/// and whose Return key **submits** instead of inserting a newline.
+///
+/// The right control for a one-or-two-line entry (a meal description, a title): a `TextEditor` there
+/// turns the natural "type, Return" rhythm into a stray line break and forces a reach for the Save
+/// pill. Reach for ``SheetTextEditor`` when the field is genuinely a paragraph (journal, notes),
+/// where Return should make a new line.
+///
+/// ```swift
+/// SheetGrowingTextField(text: $description, placeholder: "2 eggs and toast") {
+///     if canSave { save() }
+/// }
+/// ```
+public struct SheetGrowingTextField: View {
+    @Binding var text: String
+    var placeholder: String
+    var lineLimit: ClosedRange<Int>
+    var submitLabel: SubmitLabel
+    var onSubmit: (() -> Void)?
+
+    /// - Parameters:
+    ///   - lineLimit: How far the field may grow before it scrolls; 1…4 by default.
+    ///   - onSubmit: Runs when Return is pressed. Guard it with the sheet's own validity check —
+    ///     Return must never save a form the Save pill would refuse.
+    public init(
+        text: Binding<String>,
+        placeholder: String,
+        lineLimit: ClosedRange<Int> = 1...4,
+        submitLabel: SubmitLabel = .done,
+        onSubmit: (() -> Void)? = nil
+    ) {
+        self._text = text
+        self.placeholder = placeholder
+        self.lineLimit = lineLimit
+        self.submitLabel = submitLabel
+        self.onSubmit = onSubmit
+    }
+
+    public var body: some View {
+        TextField(placeholder, text: $text, axis: .vertical)
+            .lineLimit(lineLimit)
+            .submitLabel(submitLabel)
+            .onSubmit { onSubmit?() }
+            .sheetTextInput()
+    }
+}
+
 /// A horizontal section switcher: a row of pill buttons where the selected section is highlighted
 /// on a cream capsule.
 ///
 /// Generic over any `Hashable` section type; hub-style screens use it to flip between sub-pages
 /// (with a spring animation on selection change) without the visual weight of a system segmented
 /// control.
+///
+/// The row scrolls horizontally rather than compressing: as a fixed `HStack` it wrapped labels
+/// mid-word at accessibility sizes ("Journ/al", "Worry/Box"). Each pill keeps its label on one line,
+/// carries the `.isSelected` trait so VoiceOver announces which section is showing, and takes a 44pt
+/// tap target (the visible capsule stays its original height — the extra target is transparent).
+/// Selection motion is skipped under Reduce Motion.
 public struct HubSectionPicker<Section: Hashable>: View {
     var sections: [Section]
     @Binding var selection: Section
     var label: (Section) -> String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(sections: [Section], selection: Binding<Section>, label: @escaping (Section) -> String) {
         self.sections = sections
@@ -488,32 +874,47 @@ public struct HubSectionPicker<Section: Hashable>: View {
         self.label = label
     }
 
+    private var selectionAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8)
+    }
+
     public var body: some View {
-        HStack(spacing: 4) {
-            ForEach(sections.indices, id: \.self) { index in
-                let section = sections[index]
-                let isSelected = selection == section
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                        selection = section
+        ScrollView(.horizontal) {
+            HStack(spacing: 4) {
+                ForEach(sections.indices, id: \.self) { index in
+                    let section = sections[index]
+                    let isSelected = selection == section
+                    Button {
+                        withAnimation(selectionAnimation) {
+                            selection = section
+                        }
+                    } label: {
+                        Text(label(section))
+                            .font(.fernlet(.label))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                isSelected ? Color.cream : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            )
+                            .animation(selectionAnimation, value: isSelected)
+                            // Transparent margin that lifts the tap target to 44pt without
+                            // fattening the capsule the user sees.
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
                     }
-                } label: {
-                    Text(label(section))
-                        .font(.fernlet(.label))
-                        .foregroundStyle(isSelected ? Color.bark : Color.slate)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            isSelected ? Color.cream : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        )
-                        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isSelected)
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 6)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.parchment)
     }
@@ -594,6 +995,11 @@ public struct FernletTabBarCompactionModifier: ViewModifier {
 ///
 /// Rendered on a parchment strip so it reads as a fixed footer beneath the sheet's scrolling
 /// content; `disabled` fades the fill and blocks the action while the form is incomplete.
+///
+/// Draws ``Color/onMoss`` on ``Color/mossFill`` rather than white on `moss`: white on the old fill
+/// measured 4.29:1 in light mode and 2.53:1 in dark, so the primary button of every entry sheet was
+/// the least legible text on it. The disabled state fades only the fill and switches to bark ink —
+/// a disabled Save the user cannot read tells them nothing about what finishing the form will do.
 public struct SheetSaveBar: View {
     var label: String
     var disabled: Bool
@@ -611,10 +1017,13 @@ public struct SheetSaveBar: View {
             Button(label, action: action)
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(disabled ? Color.bark : Color.onMoss)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
-                .background(disabled ? Color.moss.opacity(0.4) : Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                .background(
+                    Color.mossFill.opacity(disabled ? 0.55 : 1),
+                    in: RoundedRectangle(cornerRadius: 16)
+                )
                 .disabled(disabled)
         }
         .padding(20)
@@ -637,6 +1046,9 @@ public struct SearchingPulse: View {
     var size: CGFloat
     var systemImage: String
     @State private var animate = false
+    /// Under Reduce Motion the rings hold still — a forever-repeating expansion is exactly the kind of
+    /// continuous motion the setting exists to stop.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(tint: Color = .moss, size: CGFloat = 80, systemImage: String = "bag") {
         self.tint = tint
@@ -653,7 +1065,9 @@ public struct SearchingPulse: View {
                     .scaleEffect(animate ? 1.8 : 0.8)
                     .opacity(animate ? 0 : 0.5)
                     .animation(
-                        .easeOut(duration: 2.4).repeatForever(autoreverses: false).delay(Double(i) * 1.2),
+                        reduceMotion
+                            ? nil
+                            : .easeOut(duration: 2.4).repeatForever(autoreverses: false).delay(Double(i) * 1.2),
                         value: animate
                     )
             }
@@ -667,7 +1081,7 @@ public struct SearchingPulse: View {
                 )
         }
         .frame(width: size, height: size)
-        .onAppear { animate = true }
+        .onAppear { animate = !reduceMotion }
         .accessibilityHidden(true)
     }
 }

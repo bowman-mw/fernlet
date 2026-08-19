@@ -52,8 +52,10 @@ struct JournalView: View {
         .onChange(of: store.day.journals.count) { allDays = store.loadDays() }
         .onChange(of: store.day.meals.count) { allDays = store.loadDays() }
         .sheet(item: $editingJournal, onDismiss: { allDays = store.loadDays() }) { target in
+            // `.large` only: at `.medium` the feeling chips and the character counter pushed the
+            // editor itself under the fold, and at accessibility sizes it was off-screen entirely.
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(captureProtection)
@@ -77,7 +79,7 @@ struct JournalView: View {
             HStack(alignment: .top) {
                 ScreenHeader(title: "Journal", subtitle: "A small record of being.", identifier: "screen.journal")
                 Spacer()
-                HeaderActionButton(systemImage: "plus") { activeSheet = .journal }
+                HeaderActionButton(systemImage: "plus", accessibilityLabel: "New journal entry") { activeSheet = .journal }
             }
             .padding(.top, 4)
 
@@ -99,11 +101,33 @@ struct JournalView: View {
         .padding(20)
     }
 
+    /// Today's entries, newest first — the one just saved sits at the top.
+    ///
+    /// `store.day.journals` is append-ordered (oldest first), so the list is reversed here rather
+    /// than in the store, which other surfaces read in chronological order.
+    private var todayEntries: [JournalEntry] {
+        store.day.journals.reversed()
+    }
+
+    /// The recent EARLIER entries, newest first.
+    ///
+    /// `store.previousJournals` deliberately front-inserts today's entries (it is the "recent
+    /// entries" pool feeding Home and the companion), so today has to be filtered out here — without
+    /// it every entry written today rendered twice on this page: once under Today and again under
+    /// Previous.
+    private var previousEntries: [JournalEntry] {
+        store.previousJournals
+            .filter { FernletDate.dayKey(for: $0.date) != store.todayKey }
+            .prefix(10)
+            .map { $0 }
+    }
+
     /// Today's entries, or the "How was today?" invitation when there are none.
     @ViewBuilder
     private var todaySection: some View {
         FernletScrollSection("Today") {
-            if store.day.journals.isEmpty {
+            let entries = todayEntries
+            if entries.isEmpty {
                 Button { activeSheet = .journal } label: {
                     Text("How was today?")
                         .font(.fernlet(.bubble))
@@ -113,12 +137,12 @@ struct JournalView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                ForEach(Array(store.day.journals.enumerated()), id: \.element.id) { index, entry in
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey) } label: {
                         JournalRow(entry: entry)
                     }
                     .buttonStyle(.plain)
-                    if index < store.day.journals.count - 1 {
+                    if index < entries.count - 1 {
                         FernletRowDivider()
                     }
                 }
@@ -129,9 +153,9 @@ struct JournalView: View {
     /// The ten most recent earlier entries; absent entirely when there are none.
     @ViewBuilder
     private var previousSection: some View {
-        if !store.previousJournals.isEmpty {
+        let entries = previousEntries
+        if !entries.isEmpty {
             FernletScrollSection("Previous") {
-                let entries = Array(store.previousJournals.prefix(10))
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: FernletDate.dayKey(for: entry.date)) } label: {
                         JournalRow(entry: entry, compact: true)
@@ -176,16 +200,36 @@ struct JournalSheet: View {
     @Environment(\.openURL) private var openURL
     var store: FernletStore
     @State private var text = ""
-    @State private var tag: FeelingTag = .neutral
+    @State private var tag: FeelingTag
     @State private var promptedReasons: Set<JournalPromptReason> = []
     @State private var journalPromptNotification: JournalPromptNotification?
     @State private var inspirationDismissed = false
+    /// The feeling the day already carried when the sheet opened — both the starting selection and
+    /// the "is this dirty?" reference point.
+    private let initialTag: FeelingTag
+
+    /// Seeds the feeling chip from today's LAST entry rather than always from `.neutral`.
+    ///
+    /// Scoring, the calendar tint, and the companion all read the day's last tag, so a preselected
+    /// `.neutral` meant that writing a note and tapping Save silently overwrote a day already marked
+    /// Bright unless the user re-tapped a chip every time.
+    init(store: FernletStore) {
+        self.store = store
+        let seed = store.day.journals.last?.tag ?? .neutral
+        self.initialTag = seed
+        _tag = State(initialValue: seed)
+    }
 
     private var limitedText: Binding<String> {
         Binding(
             get: { text },
             set: { updateText($0) }
         )
+    }
+
+    /// Whether the sheet holds anything a swipe-down would throw away.
+    private var isDirty: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || tag != initialTag
     }
 
     var body: some View {
@@ -205,10 +249,13 @@ struct JournalSheet: View {
                         }
                     }
 
+                    // Editor first, prompt under it: at the `.medium` detent the prompt card used to
+                    // push the text field under the fold, so the sheet opened on everything except
+                    // the thing the user came to write in.
                     SheetField("How was today?") {
                         VStack(alignment: .leading, spacing: 10) {
+                            SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 150)
                             inspirationChip
-                            SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 200)
                         }
                     }
 
@@ -238,6 +285,8 @@ struct JournalSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // A swipe-down used to throw away a typed entry with no warning.
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE so every
         // presenter — the hub, Home's quick-log tile, the notification tap, the App Intent — is
         // covered by this one edit. A presented sheet is frontmost by construction.
@@ -500,6 +549,9 @@ struct JournalEntryEditorSheet: View {
     @State private var tag: FeelingTag
     @State private var promptedReasons: Set<JournalPromptReason> = []
     @State private var journalPromptNotification: JournalPromptNotification?
+    /// The pending delete, held until the user confirms it — a sealed entry must never go on a
+    /// mis-tap while scrolling this sheet.
+    @State private var pendingDelete: DestructiveConfirmation?
 
     init(store: FernletStore, dateKey: String, entry: JournalEntry) {
         self.store = store
@@ -516,48 +568,72 @@ struct JournalEntryEditorSheet: View {
         )
     }
 
+    /// Whether the sheet holds edits a swipe-down would throw away.
+    private var isDirty: Bool {
+        text != entry.text || tag != entry.tag
+    }
+
+    /// Title, feeling chips, the editor, its counter, and the delete affordance — the scrolling half
+    /// of the editor sheet.
+    private var editorScrollContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("Edit journal")
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.bark)
+
+            SheetField("Feeling") {
+                FlowLayout(spacing: 8) {
+                    ForEach(FeelingTag.allCases) { option in
+                        Button(option.label) { tag = option }
+                            .buttonStyle(ChipButtonStyle(selected: tag == option))
+                    }
+                }
+            }
+
+            SheetField("Entry") {
+                SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 200)
+            }
+
+            Text("\(text.count)/800")
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.slate)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            deleteEntryButton
+        }
+        .padding(20)
+        .padding(.bottom, 10)
+    }
+
+    /// Destructive delete, gated behind the shared confirmation sheet.
+    private var deleteEntryButton: some View {
+        Button(role: .destructive) {
+            pendingDelete = DestructiveConfirmation(
+                title: "Delete this entry?",
+                message: "The words you wrote for this day are sealed on this device — deleting them can't be undone.",
+                confirmLabel: "Delete",
+                auditEvent: "journal.entryDeleteConfirmed",
+                perform: {
+                    store.deleteJournal(entry, date: dateKey)
+                    dismiss()
+                }
+            )
+        } label: {
+            Label("Delete journal entry", systemImage: "trash")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.terracottaInk)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.22), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text("Edit journal")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
-                    SheetField("Feeling") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(FeelingTag.allCases) { option in
-                                Button(option.label) { tag = option }
-                                    .buttonStyle(ChipButtonStyle(selected: tag == option))
-                            }
-                        }
-                    }
-
-                    SheetField("Entry") {
-                        SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 200)
-                    }
-
-                    Text("\(text.count)/800")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-
-                    Button(role: .destructive) {
-                        store.deleteJournal(entry, date: dateKey)
-                        dismiss()
-                    } label: {
-                        Label("Delete journal entry", systemImage: "trash")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.terracotta)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.22), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(20)
-                .padding(.bottom, 10)
+                editorScrollContent
             }
 
             SheetSaveBar(disabled: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
@@ -577,6 +653,9 @@ struct JournalEntryEditorSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // A swipe-down used to throw away the edit with no warning.
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        .destructiveConfirmation($pendingDelete)
         // Capture FRICTION (never a security control), attached at the sheet TYPE so both
         // presenters (JournalView's entry rows and DayDetailView's) are covered by one edit.
         .captureProtected(surface: "journalEditor")
@@ -656,17 +735,18 @@ struct JournalCalendarCard: View {
         }
     }
 
+    /// The feeling key under the grid. Wraps onto new rows rather than shrinking: at accessibility
+    /// sizes the old `lineLimit(1)` + `minimumScaleFactor(0.7)` row read "Work…"/"Ten…".
     private var tagLegend: some View {
-        HStack {
+        FlowLayout(spacing: 10) {
             ForEach(FeelingTag.allCases) { tag in
                 HStack(spacing: 4) {
                     Circle().fill(tag.color).frame(width: 8, height: 8)
                     Text(tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
     }
 }
 
@@ -747,10 +827,16 @@ struct JournalMonthCell: Identifiable {
         return Color.softTaupe.opacity(day == nil ? 0.05 : 0.16)
     }
 
+    /// The spoken cell. The feeling tag is named here because the grid encodes it as a tint alone —
+    /// without it the mood a day carries is invisible to VoiceOver and to anyone who can't
+    /// distinguish the tints.
     var accessibilityLabel: String {
         guard let day else { return "Empty calendar cell" }
         if isFuture { return "Day \(day)" }
-        return isToday ? "Today, day \(day)" : "Day \(day)\(hasData ? ", has data" : "")"
+        var label = isToday ? "Today, day \(day)" : "Day \(day)"
+        if let tag { label += ", feeling \(tag.label.lowercased())" }
+        else if hasData { label += ", has data" }
+        return label
     }
 }
 
@@ -930,6 +1016,16 @@ struct DayDetailView: View {
         store.dailyHealthScore(for: dateKey, day: day)
     }
 
+    /// Whether anything at all was logged for this day — the domain model's own definition, shared
+    /// with active-day accrual and fresh-install detection so this screen can't drift from it.
+    ///
+    /// A day the user simply didn't track must not be graded: the computed score for an empty day
+    /// lands in the terracotta band, so an untouched Tuesday used to open on a red "DAILY SCORE 31%"
+    /// bar plus a macro card and a partial-nutrition warning for meals that don't exist.
+    private var hasLoggedData: Bool {
+        day.hasLoggedContent
+    }
+
     private var dayScore: Double { dailyHealthScore.score }
     private var scoreState: CompanionState { dailyHealthScore.companionState }
 
@@ -980,8 +1076,22 @@ struct DayDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 reviewCard
-                MacroCard(totals: dayMacros, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
-                micronutrientBreakdown
+                // Nutrition cards only when there is nutrition: an untracked day showed a full
+                // macro card of targets (read as intake) and a micronutrient warning about meals
+                // that were never logged.
+                if hasLoggedData {
+                    // "Macros", not "Macros today" — this screen shows a PAST day — and the fiber
+                    // footer names what was actually eaten rather than reprinting the target. Both
+                    // are what `MacroCard`'s `title:` / `fiberIntake:` parameters exist for.
+                    MacroCard(
+                        totals: dayMacros,
+                        targets: store.nutritionTargets,
+                        showCalories: store.settings.showCalories,
+                        title: "Macros",
+                        fiberIntake: dayMicronutrients.fiber
+                    )
+                    micronutrientBreakdown
+                }
                 mealsSection
                 movementSection
                 HStack(alignment: .top, spacing: 12) {
@@ -996,6 +1106,10 @@ struct DayDetailView: View {
         .background(Color.parchment)
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // Opaque parchment bar: without it the review card's score pills scrolled up THROUGH the
+        // transparent title bar, between the back button and "Edit day".
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color.parchment, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showEditSheet = true } label: {
@@ -1021,8 +1135,9 @@ struct DayDetailView: View {
                 .environment(captureProtection)
         }
         .sheet(item: $editingJournal, onDismiss: refresh) { target in
+            // `.large` only — see the note on JournalView's presentation of the same sheet.
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(captureProtection)
@@ -1039,7 +1154,9 @@ struct DayDetailView: View {
                         .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
-                if dayMicronutrients.completeness < 0.5 {
+                // Only meaningful once meals exist: with none, "some meals were logged without
+                // micronutrients" describes meals that were never logged at all.
+                if !day.meals.isEmpty, dayMicronutrients.completeness < 0.5 {
                     Text("Partial nutrition data — some meals were logged without micronutrients.")
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
@@ -1071,18 +1188,28 @@ struct DayDetailView: View {
                 Divider()
                     .overlay(Color.bark.opacity(0.08))
                     .padding(.vertical, 2)
-                HStack {
-                    Text("Daily score")
+                if hasLoggedData {
+                    HStack {
+                        Text("Daily score")
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                            .tracking(0.5)
+                            .textCase(.uppercase)
+                        Spacer()
+                        Text("\(Int(dayScore * 100))%")
+                            .font(.fernlet(.stat))
+                            .foregroundStyle(scoreState.color)
+                    }
+                    HealthBar(state: scoreState, value: dayScore)
+                } else {
+                    // A day nobody logged isn't a bad day — never grade it.
+                    Text("No score — nothing was logged")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .tracking(0.5)
                         .textCase(.uppercase)
-                    Spacer()
-                    Text("\(Int(dayScore * 100))%")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(scoreState.color)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                HealthBar(state: scoreState, value: dayScore)
             }
         }
     }
@@ -1344,15 +1471,22 @@ struct DayEditSheet: View {
     let initialDay: FernletDay
 
     @State private var journalText = ""
-    @State private var journalTag: FeelingTag = .neutral
+    /// Nil until the user taps a chip: a preselected "Neutral" made a day with no journal look
+    /// pre-filled, and saving one then wrote a feeling the user never chose.
+    @State private var journalTag: FeelingTag?
     @State private var promptedReasons: Set<JournalPromptReason> = []
     @State private var journalPromptNotification: JournalPromptNotification?
     @State private var mealDescription = ""
     @State private var workoutName = ""
     @State private var workoutType: WorkoutType = .mixed
     @State private var workoutIntensity: WorkoutIntensity = .moderate
+    /// Whether the user actually picked a workout type or intensity. The name field is optional, so
+    /// this is what tells a deliberate "I did a mixed workout" apart from an untouched section.
+    @State private var workoutTouched = false
     @State private var bottleCount: Int
-    @State private var sleepQuality: SleepQuality
+    /// Nil when the day has no sleep entry and the user hasn't chosen one — an unselected row means
+    /// "no change", never "Ok".
+    @State private var sleepQuality: SleepQuality?
     @State private var sleepHoursText: String
     @State private var sleepNote: String
     @State private var completedPersonalCareTaskIDs: Set<String>
@@ -1380,14 +1514,31 @@ struct DayEditSheet: View {
         self.dateKey = dateKey
         self.initialDay = initialDay
         _bottleCount = State(initialValue: initialDay.bottleCount)
-        _sleepQuality = State(initialValue: initialDay.sleep?.quality ?? .ok)
-        if let h = initialDay.sleep?.hours {
-            _sleepHoursText = State(initialValue: h.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(h)) : String(h))
-        } else {
-            _sleepHoursText = State(initialValue: "")
-        }
+        _sleepQuality = State(initialValue: initialDay.sleep?.quality)
+        _sleepHoursText = State(initialValue: Self.hoursText(initialDay.sleep?.hours))
         _sleepNote = State(initialValue: initialDay.sleep?.note ?? "")
         _completedPersonalCareTaskIDs = State(initialValue: initialDay.completedPersonalCareTaskIDs)
+    }
+
+    /// The editable text for a stored sleep duration. Shared by the initial value and the
+    /// dirty-check, so "unchanged" can never drift from "what was seeded".
+    private static func hoursText(_ hours: Double?) -> String {
+        guard let hours else { return "" }
+        return hours.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(hours)) : String(hours)
+    }
+
+    /// Whether this catch-up sheet holds anything a swipe-down would throw away.
+    private var isDirty: Bool {
+        !journalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || journalTag != nil
+            || !mealDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || workoutTouched
+            || bottleCount != initialDay.bottleCount
+            || sleepQuality != initialDay.sleep?.quality
+            || sleepHoursText != Self.hoursText(initialDay.sleep?.hours)
+            || sleepNote != (initialDay.sleep?.note ?? "")
+            || completedPersonalCareTaskIDs != initialDay.completedPersonalCareTaskIDs
     }
 
     private var formattedDate: String {
@@ -1431,6 +1582,8 @@ struct DayEditSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+        // A swipe-down used to throw away a whole day's catch-up with no warning.
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
         // Capture FRICTION (never a security control): a past day's edit sheet can hold that
         // day's journal text, so it is one of the six in-scope surfaces.
         .captureProtected(surface: "dayEdit")
@@ -1459,20 +1612,28 @@ struct DayEditSheet: View {
     private var mealField: some View {
         SheetField("Add a meal") {
             TextField("What did you eat?", text: $mealDescription)
+                .submitLabel(.done)
                 .sheetTextInput()
         }
     }
 
     /// Optional workout name plus the type and intensity menus.
+    ///
+    /// The name really is optional now: picking a type or intensity is enough to log the workout,
+    /// and the type's own label stands in for the name.
     private var workoutField: some View {
         SheetField("Add a workout") {
             VStack(spacing: 8) {
                 TextField("Workout name (optional)", text: $workoutName)
+                    .submitLabel(.done)
                     .sheetTextInput()
                 HStack(spacing: 8) {
                     Menu {
                         ForEach(WorkoutType.allCases) { type in
-                            Button(type.rawValue) { workoutType = type }
+                            Button(type.rawValue) {
+                                workoutType = type
+                                workoutTouched = true
+                            }
                         }
                     } label: {
                         menuLabel(workoutType.rawValue)
@@ -1480,7 +1641,10 @@ struct DayEditSheet: View {
 
                     Menu {
                         ForEach(WorkoutIntensity.allCases) { intensity in
-                            Button(intensity.rawValue.capitalized) { workoutIntensity = intensity }
+                            Button(intensity.rawValue.capitalized) {
+                                workoutIntensity = intensity
+                                workoutTouched = true
+                            }
                         }
                     } label: {
                         menuLabel(workoutIntensity.rawValue.capitalized)
@@ -1529,8 +1693,9 @@ struct DayEditSheet: View {
                 HStack(spacing: 12) {
                     TextField("Hours (e.g. 7.5)", text: $sleepHoursText)
                         .keyboardType(.decimalPad)
-                        .sheetTextInput()
+                        .sheetTextInput(font: .fernlet(.label))
                     TextField("Note (optional)", text: limitedSleepNote)
+                        .submitLabel(.done)
                         .sheetTextInput()
                 }
             }
@@ -1633,13 +1798,15 @@ struct DayEditSheet: View {
         let hasSleepEntry = initialDay.sleep != nil
         let hoursEntered = !sleepHoursText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let sleepNoteEntered = !sleepNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if hasSleepEntry || hoursEntered || sleepNoteEntered || sleepQuality != .ok {
-            store.setSleep(hours: validatedSleepHours(), quality: sleepQuality, note: sleepNote, date: dateKey)
+        // An untouched sleep row (no existing entry, no chip tapped, nothing typed) is "no change",
+        // not a silent "Ok".
+        if hasSleepEntry || hoursEntered || sleepNoteEntered || sleepQuality != nil {
+            store.setSleep(hours: validatedSleepHours(), quality: sleepQuality ?? .ok, note: sleepNote, date: dateKey)
         }
 
         let journalTrimmed = journalText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !journalTrimmed.isEmpty {
-            store.addJournal(text: journalTrimmed, tag: journalTag, date: dateKey)
+            store.addJournal(text: journalTrimmed, tag: journalTag ?? .neutral, date: dateKey)
         }
 
         let mealTrimmed = mealDescription.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1647,12 +1814,16 @@ struct DayEditSheet: View {
             store.addMeal(from: mealTrimmed, date: dateKey)
         }
 
+        // The name is genuinely optional: a touched type/intensity logs the workout under the
+        // type's own label. Without this, choosing "Cardio · Hard" and tapping Save recorded
+        // nothing at all.
         let workoutTrimmed = workoutName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !workoutTrimmed.isEmpty {
+        if !workoutTrimmed.isEmpty || workoutTouched {
             let workoutDate = FernletDate.date(fromDayKey: dateKey) ?? .now
             let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: workoutDate) ?? workoutDate
             var workout = Workout(
-                name: workoutTrimmed, type: workoutType, exercises: "",
+                name: workoutTrimmed.isEmpty ? workoutType.rawValue : workoutTrimmed,
+                type: workoutType, exercises: "",
                 rpe: nil, notes: "", duration: nil, intensity: workoutIntensity
             )
             workout.completedAt = noon

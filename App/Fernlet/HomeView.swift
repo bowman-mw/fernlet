@@ -67,6 +67,10 @@ struct HomeView: View {
     @State private var periodActivityTask: Task<Void, Never>?
     /// Cancel-and-replace handle for the settled-pose re-sync (R3: one sleeping task, not one per pet).
     @State private var settledResyncTask: Task<Void, Never>?
+    /// The photowall strip's height, scaled with the user's text size — the tiles sit inside it and
+    /// the thought bubble sits on top of it, so a fixed 132 clipped both at accessibility sizes.
+    @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 132
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -88,7 +92,15 @@ struct HomeView: View {
                 store: store,
                 petCount: $companionPetCount
             )
-            .presentationDetents([.medium, .large])
+            // One detent, and it is the full one. This sheet hosts a four-level stack — Customize →
+            // slot picker → Wardrobe → Creation Studio → Save item — and the last two pin a bottom
+            // action bar ("Next", "Save to closet") to the sheet's edge. At the half detent there is
+            // no room left above that bar: the studio's canvas and the save step's shop toggle fall
+            // below the fold, directly behind it, so a tap aimed at the toggle lands on Save — which
+            // saves the item unlisted and, because the studio exits by dismissing, tears the whole
+            // sheet down to Home. Nothing is lost by dropping the half detent: every screen in here
+            // draws the companion itself, which is all the half sheet was showing behind it.
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
         }
@@ -139,21 +151,14 @@ struct HomeView: View {
         let tint: Color
     }
 
-    /// Icon + tint per milestone kind. Tints are chosen to stay distinct on the parchment card rather
-    /// than to encode meaning. A kind with no entry here still gets a token (generic seal) — see
-    /// `keepsakeStyle(for:)` — so a new `MilestoneEventKind` can't make the shelf silently under-count
-    /// against the summary before someone styles it.
-    private static let keepsakeStyles: [MilestoneEventKind: (icon: String, tint: Color)] = [
-        .journal: ("book", .moss),
-        .meal: ("fork.knife", .goldenrod),
-        .workout: ("figure.walk", .terracotta),
-        .water: ("drop", Color(red: 0.36, green: 0.55, blue: 0.74)),
-        .breathing: ("wind", Color(red: 0.53, green: 0.51, blue: 0.72)),
-        .worry: ("archivebox", .softTaupe)
-    ]
-
+    /// Icon + tint per milestone kind, read from ``MilestoneRowModel/style(for:)`` — the single table
+    /// the Milestones page and keepsake shelf draw from too.
+    ///
+    /// This card used to carry its own copy (journal as a moss "book", workouts terracotta) while the
+    /// page rendered journal as an amethyst "book.closed" and workouts green, so the same keepsake
+    /// changed glyph and colour one tap after the user saw it.
     private func keepsakeStyle(for kind: MilestoneEventKind) -> (icon: String, tint: Color) {
-        Self.keepsakeStyles[kind] ?? ("seal", .goldenrod)
+        MilestoneRowModel.style(for: kind)
     }
 
     /// The kinds the user has actually kept (count > 0) from the pre-read ledger inputs, one token each,
@@ -283,7 +288,12 @@ struct HomeView: View {
         case .quickLog:
             quickLog
         case .macros:
-            MacroCard(totals: store.macroTotals, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
+            MacroCard(
+                totals: store.macroTotals,
+                targets: store.nutritionTargets,
+                showCalories: store.settings.showCalories,
+                fiberIntake: store.micronutrientTotals.fiber
+            )
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
         case .ambient:
@@ -310,15 +320,11 @@ struct HomeView: View {
         HStack(alignment: .top) {
             ScreenHeader(title: "Fernlet", subtitle: FernletDate.niceDate().uppercased(), subtitleFirst: true, identifier: "screen.home")
             Spacer()
-            Button { activeSheet = .settings } label: {
-                Image(systemName: "gearshape")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.bark)
-                    .frame(width: 44, height: 44)
-                    .background(Color.bark.opacity(0.06), in: Circle())
+            // The shared header control every other tab uses (58pt cream, stroked). The hand-rolled
+            // 44pt 6%-bark circle this replaces was visibly smaller and lighter than its siblings.
+            HeaderActionButton(systemImage: "gearshape", accessibilityLabel: "Settings") {
+                activeSheet = .settings
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
             .accessibilityIdentifier("home.settings")
         }
     }
@@ -334,7 +340,10 @@ struct HomeView: View {
                     ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                         PolaroidTile(
                             color: tile.color,
-                            caption: tile.caption,
+                            // The tiles overlap by design, so at accessibility sizes the four
+                            // captions ran into each other ("brigh good note morning"). Only the
+                            // front tile (highest zIndex) keeps its caption there.
+                            caption: showsAllPolaroidCaptions || index == finalIndex ? tile.caption : "",
                             rotation: tile.rotation,
                             imageData: tile.photoID.flatMap { store.meshNetworkManager.thumbnailData(forPhotoID: $0) },
                             imageWidth: 104,
@@ -356,10 +365,17 @@ struct HomeView: View {
                 .opacity(isCompanionThoughtVisible ? 1 : 0)
                 .zIndex(100)
         }
-        .frame(height: 132, alignment: .bottom)
+        // Scales with the text size instead of a hard 132: at accessibility sizes the fixed strip
+        // clipped the bubble to "Keep t…".
+        .frame(height: photowallHeight, alignment: .bottom)
         .padding(.top, 4)
         .padding(.bottom, -8)
         .allowsHitTesting(false)
+    }
+
+    /// Below `.accessibility1` every polaroid keeps its caption; above it only the front one does.
+    private var showsAllPolaroidCaptions: Bool {
+        !dynamicTypeSize.isAccessibilitySize
     }
 
     private var photowallTiles: [PhotowallTile] {
@@ -457,15 +473,25 @@ struct HomeView: View {
         .accessibilityHint("Explains how body signals are estimated")
     }
 
-    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted card that
-    /// opens the First Aid sheet — but now with three chips previewing what's inside, so it reads as an
-    /// invitation rather than another unlabelled nav row. One tap on the card still opens the sheet; the
-    /// chips are a preview, not separate targets.
+    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted card whose
+    /// header opens the First Aid list, over three chips that go STRAIGHT to the tool they name.
+    ///
+    /// The chips used to be decorative: they looked like capsule buttons, but tapping "Breathe" only
+    /// opened the list, where the user tapped "Slow breathing" again. The direct routes already
+    /// existed (`.firstAid(.breathing)` and friends), so each chip is now its own target — the header
+    /// row keeps `home.firstAid` and the general entry.
+    ///
+    /// The whole card is still tappable. Moving the padding/background onto this plain wrapper left
+    /// its margin — and the gap between the header and the chips — dead, so a tap that landed a few
+    /// points off the header did nothing where it used to open First aid. The container carries its
+    /// own `contentShape` + tap gesture; the header and the three chips stay real `Button`s, and
+    /// SwiftUI hands a tap inside a button's own frame to that button rather than to the enclosing
+    /// gesture, so the container only picks up what would otherwise fall through.
     private var firstAidAction: some View {
-        Button {
-            activeSheet = .firstAid(nil)
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                activeSheet = .firstAid(nil)
+            } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "heart.circle")
                         .font(.headline.weight(.semibold))
@@ -487,43 +513,56 @@ struct HomeView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.moss.opacity(0.7))
                 }
-                HStack(spacing: 8) {
-                    firstAidChip("wind", "Breathe")
-                    firstAidChip("scope", "Ground")
-                    firstAidChip("archivebox", "Worry box")
-                }
+                .contentShape(Rectangle())
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.moss.opacity(0.10))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.moss.opacity(0.22), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("home.firstAid")
+            .accessibilityLabel("First aid")
+            .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
+
+            FlowLayout(spacing: 8) {
+                firstAidChip("wind", "Breathe", tool: .breathing)
+                firstAidChip("scope", "Ground", tool: .grounding)
+                firstAidChip("archivebox", "Worry box", tool: .worryBox)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityIdentifier("home.firstAid")
-        .accessibilityLabel("First aid")
-        .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.moss.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.moss.opacity(0.22), lineWidth: 1)
+        )
+        // Padding included: this is what makes the card's margin and the header-to-chips gap open
+        // First aid again. Declared on the padded container, so the chips' and the header's own
+        // button frames win their taps first.
+        .contentShape(Rectangle())
+        .onTapGesture { activeSheet = .firstAid(nil) }
     }
 
-    /// A preview chip inside the First Aid card. Decorative — the card is the tap target, so the chips
-    /// carry no accessibility of their own (the card's label already names the tools).
-    private func firstAidChip(_ icon: String, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-            Text(label).font(.fernlet(.labelSmall))
+    /// One chip inside the First Aid card — its own button straight to `tool`.
+    private func firstAidChip(_ icon: String, _ label: String, tool: FirstAidTool) -> some View {
+        Button {
+            activeSheet = .firstAid(tool)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                Text(label).font(.fernlet(.labelSmall))
+            }
+            .foregroundStyle(Color.moss)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.cream, in: Capsule())
+            .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
         }
-        .foregroundStyle(Color.moss)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.cream, in: Capsule())
-        .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
-        .accessibilityHidden(true)
+        .buttonStyle(.plain)
+        .fernletTapTarget(minWidth: 0)
+        .accessibilityLabel(label)
+        .accessibilityHint("Opens \(label.lowercased()) straight away")
     }
 
     /// The recent photographed meals for the strip — any meal with a photo across the last 7 days, newest
@@ -650,14 +689,18 @@ struct HomeView: View {
         if let last = store.day.journals.last {
             return "You marked today as \(last.tag.label.lowercased()). Let that be enough information for now."
         }
+        // BEFORE the companion thought, not after it. `companionThought` falls back to a
+        // deterministic line ("A few ordinary care notes are already here") that is never nil, so on
+        // a fresh install the bubble claimed notes existed while the intent card below said nothing
+        // was logged — and this empty-day line was unreachable.
+        if hasNoUserLogsToday {
+            return "Start with one small thing. Enough, not everything."
+        }
         if let thought = store.companionThought {
             return thought
         }
         if let thought = signalThought {
             return thought
-        }
-        if store.day.meals.isEmpty && store.day.workouts.isEmpty {
-            return "Start with one small thing. Enough, not everything."
         }
         return "A few ordinary care notes are already here. Keep the day simple."
     }
@@ -852,13 +895,14 @@ struct HomeView: View {
                     Text("Today")
                         .font(.fernlet(.header))
                     Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(FernletDate.niceDate().components(separatedBy: ",").first ?? "Today")
-                            .font(.fernlet(.labelSmall))
-                        Text(store.settings.selectedGoal.displayName)
-                            .font(.fernlet(.labelSmall))
-                    }
-                    .foregroundStyle(Color.slate)
+                    // The weekday is already in the page header, and the bare goal name read as a
+                    // status word ("Wellness") rather than as the user's chosen goal — so: one
+                    // labelled line, no duplication.
+                    Text("Goal · \(store.settings.selectedGoal.displayName)")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
             }
@@ -895,7 +939,8 @@ struct HomeView: View {
                             .background(Color.slate.opacity(0.10), in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss today's intent")
+                    // The 28pt disc keeps its look; the tap area around it grows to 44pt.
+                    .fernletIconButton("Dismiss today's intent")
                 }
             }
         }
@@ -953,12 +998,16 @@ struct HomeView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.body)
+                        .font(.system(size: 20))
                         .foregroundStyle(Color.moss)
                         .background(Color.parchment, in: Circle())
+                        // The glyph keeps its drawn size; the 44pt frame around it is the target.
+                        // At ~27pt this was the app's fastest daily log sitting under the minimum,
+                        // right beside a larger button that does something else (opens the sheet).
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(5)
                 .accessibilityLabel("Add a bottle of water")
                 .accessibilityIdentifier("home.water.quickAdd")
             }
@@ -1126,6 +1175,10 @@ private struct CompanionCustomizationSheet: View {
     var store: FernletStore
     @Binding var petCount: Int
     @Environment(\.dismiss) private var dismiss
+    /// Raised by a ``CreationStudioView`` pushed anywhere on this stack while it holds unsaved paint.
+    /// The studio is a PUSH inside this sheet, so without this a swipe-down from the studio threw the
+    /// drawing away with no prompt.
+    @State private var isStudioDraftDirty = false
 
     var body: some View {
         NavigationStack {
@@ -1144,7 +1197,9 @@ private struct CompanionCustomizationSheet: View {
             }
             .background(Color.parchment)
             .tint(Color.moss)
-            .navigationTitle("Fernlet")
+            // "Customize" here, and no second in-body title: the sheet used to read "Fernlet" in the
+            // nav bar with "Customize" repeated directly beneath it.
+            .navigationTitle("Customize")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1153,10 +1208,11 @@ private struct CompanionCustomizationSheet: View {
                 }
             }
         }
+        .interactiveDismissDisabled(isStudioDraftDirty)
     }
 
-    /// A live preview of the companion next to a calm "Customize" title. Replaces the old
-    /// segmented Style/Customization control — the selector rows below carry the structure now.
+    /// A live preview of the companion next to the "tap a slot" nudge. The title lives in the nav
+    /// bar; this is the preview plus the one line of guidance.
     private var companionHeader: some View {
         HStack(spacing: 14) {
             CompanionView(
@@ -1168,15 +1224,12 @@ private struct CompanionCustomizationSheet: View {
             )
             .frame(width: 84, height: 84)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Customize")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                Text(hasAnythingOn ? "Tap a slot to change it" : "Nothing on yet — pick a slot")
-                    .font(.fernlet(.body))
-                    .italic()
-                    .foregroundStyle(Color.slate)
-            }
+            Text(hasAnythingOn ? "Tap a slot to change it" : "Nothing on yet — pick a slot")
+                .font(.fernlet(.body))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
@@ -1215,7 +1268,7 @@ private struct CompanionCustomizationSheet: View {
                 isBuiltInEquipped: true,
                 customSlots: []
             ) { style in
-                Label(style.label, systemImage: "seal")
+                Label(style.label, systemImage: bodyStyleIcon(style))
             }
         } label: {
             slotRowLabel(
@@ -1466,7 +1519,7 @@ private struct CompanionCustomizationSheet: View {
                 }
 
                 NavigationLink {
-                    WardrobeView(store: store)
+                    WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "tshirt.fill")
@@ -1584,6 +1637,17 @@ private struct CompanionCustomizationSheet: View {
         )
     }
 
+    /// One glyph per body shape. All four used to draw the same "seal", so the icons carried no
+    /// information at all and the live preview above was the only cue to what a row would do.
+    private func bodyStyleIcon(_ style: CompanionBodyStyle) -> String {
+        switch style {
+        case .circle: "circle"
+        case .softBlob: "oval"
+        case .pear: "drop"
+        case .puddle: "capsule"
+        }
+    }
+
     private func accessoryIcon(_ accessory: CompanionAccessory) -> String {
         switch accessory {
         case .none: "circle.slash"
@@ -1647,19 +1711,22 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                 SectionLabel(title)
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(items) { item in
+                        let isSelected = selection.id == item.id
                         Button {
                             selection = item
                         } label: {
                             label(item)
                                 .font(.fernlet(.label))
-                                .foregroundStyle(selection.id == item.id ? Color.cream : Color.bark)
+                                // The contrast-safe fill/ink pair, not cream on plain `moss`.
+                                .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
                                 .frame(maxWidth: .infinity, minHeight: 42)
                                 .background(
-                                    selection.id == item.id ? Color.moss : Color.bark.opacity(0.06),
+                                    isSelected ? Color.mossFill : Color.bark.opacity(0.06),
                                     in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
                     }
                 }
 
@@ -1697,14 +1764,16 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     .font(.fernlet(.label))
                     .lineLimit(1)
             }
-            .foregroundStyle(isSelected ? Color.cream : Color.bark)
+            .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
             .frame(maxWidth: .infinity, minHeight: 34)
             .background(
-                isSelected ? Color.moss : Color.bark.opacity(0.05),
+                isSelected ? Color.mossFill : Color.bark.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(color.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
@@ -1744,7 +1813,9 @@ struct SignalDetailRow: View {
 
             FlowLayout(spacing: 6) {
                 ForEach(signal.sourceFields, id: \.self) { field in
-                    Text(field)
+                    // The engine's raw keys ("journals.tag", "meals.calorieSnapshot") leaked
+                    // straight onto the card; these are what the user actually logged.
+                    Text(SignalPresentation.sourceLabel(for: field))
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .padding(.horizontal, 8)
@@ -1849,6 +1920,27 @@ enum SignalPresentation {
         return 3
     }
 
+    /// Plain-language name for a raw `sourceFields` key. Unknown keys fall back to the key with its
+    /// dots opened out, so a signal added later degrades to readable text rather than to code.
+    static func sourceLabel(for field: String) -> String {
+        switch field {
+        case "journals.tag": "Journal moods"
+        case "sleep": "Sleep"
+        case "sleep.hours": "Sleep hours"
+        case "sleep.quality": "Sleep quality"
+        case "meals.count": "Meal count"
+        case "meals.macros": "Meal macros"
+        case "meals.calorieSnapshot": "Meal energy"
+        case "meals.micronutrientSnapshot": "Meal nutrients"
+        case "workouts.intensity": "Workout intensity"
+        case "workouts.duration": "Workout length"
+        case "workouts.rpe": "Perceived effort"
+        case "body.restingHeartRate": "Resting heart rate"
+        case "body.heartRateVariability": "Heart rate variability"
+        default: field.replacingOccurrences(of: ".", with: " ")
+        }
+    }
+
     static func explanation(for signal: DerivedSignalRecord) -> String {
         switch signal.signalName {
         case "moodTrend":
@@ -1885,7 +1977,9 @@ struct TrendsModal: View {
                 VStack(alignment: .leading, spacing: 16) {
                     ScreenHeader(
                         title: "Trends",
-                        subtitle: "Local signals from your logs. Prototype only — not production-private.",
+                        // Was "Prototype only — not production-private": developer copy, shown to
+                        // users, contradicting the privacy promise the screen is actually keeping.
+                        subtitle: "Local signals from your logs — worked out on this device.",
                         subtitleFirst: false
                     )
                     if signals.isEmpty {
@@ -1899,24 +1993,11 @@ struct TrendsModal: View {
                 .padding(20)
                 .padding(.bottom, 80)
             }
-            doneBar
+            // The shared save bar: right-aligned like every other sheet's (this was the app's only
+            // bottom-CENTRED Done), and it draws the contrast-safe `onMoss`-on-`mossFill` pair
+            // instead of white on `moss` (4.29:1 light, 2.53:1 dark).
+            SheetSaveBar(label: "Done") { dismiss() }
         }
-        .background(Color.parchment)
-    }
-
-    private var doneBar: some View {
-        HStack {
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-            Spacer()
-        }
-        .padding(20)
         .background(Color.parchment)
     }
 }
@@ -1935,6 +2016,10 @@ struct ThoughtBubble: View {
             .font(.fernlet(.bubble))
             .foregroundStyle(Color.bark)
             .multilineTextAlignment(.center)
+            // Three lines, then shrink — rather than one line clipped to "Keep t…" the moment the
+            // text size grows past the strip's height.
+            .lineLimit(3)
+            .minimumScaleFactor(0.7)
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -2073,6 +2158,9 @@ struct QuickLogButton: View {
                     .font(.fernlet(.label))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    // The water tile's "+1 bottle" badge changes this in place ("Water" → "2x" → "3x");
+                    // rolling the digits is the only feedback that the one-tap add landed.
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, minHeight: 66)
             .foregroundStyle(active ? Color.moss : Color.slate)
@@ -2085,17 +2173,27 @@ struct QuickLogButton: View {
 /// The "Macros today" card: three ``MacroRing``s (protein/carbs/fat) plus the calorie and fiber
 /// footer line.
 ///
-/// Shared by Home and the Food tab; `showCalories` honors the user's calories-display setting.
+/// Shared by Home, the Food tab and the Journal day detail; `showCalories` honors the user's
+/// calories-display setting. `title` exists because the day detail shows a PAST day, where "Macros
+/// today" was simply wrong; `fiberIntake` because the footer used to print the fiber *target* in the
+/// same place and format the three consumed-vs-goal rings use, so "Fiber 37g" read as intake.
 struct MacroCard: View {
     var totals: MacroTotals
     var targets: NutritionTargets
     var showCalories: Bool
+    /// Card heading. "Macros today" on Home/Food; pass "Macros" for a day that isn't today.
+    var title: String = "Macros today"
+    /// The day's fiber intake in grams, when the logged meals carry micronutrients. Nil ⇒ the footer
+    /// names the value as a target rather than implying it was eaten.
+    var fiberIntake: Double? = nil
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel("Macros today")
-                HStack(spacing: 14) {
+                SectionLabel(title)
+                // Becomes a column at accessibility sizes: side by side, "114g" overflowed its ring
+                // and the three columns fell out of vertical alignment.
+                AdaptiveStack(spacing: 14, verticalAlignment: .top) {
                     MacroRing(label: "Protein", color: .moss, current: totals.protein, goal: targets.protein)
                     MacroRing(label: "Carbs", color: .goldenrod, current: totals.carbs, goal: targets.carbs)
                     MacroRing(label: "Fat", color: .terracotta, current: totals.fat, goal: targets.fat)
@@ -2105,12 +2203,17 @@ struct MacroCard: View {
                         Label("\(totals.calories) / \(targets.calories) cal", systemImage: "flame")
                         Spacer()
                     }
-                    Label("Fiber \(targets.fiber)g", systemImage: "leaf")
+                    Label(fiberFooter, systemImage: "leaf")
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
+    }
+
+    private var fiberFooter: String {
+        guard let fiberIntake else { return "Fiber target \(targets.fiber)g" }
+        return "Fiber \(Int(fiberIntake.rounded()))g of \(targets.fiber)g"
     }
 }
 
@@ -2124,6 +2227,11 @@ struct MacroRing: View {
     var color: Color
     var current: Int
     var goal: Int
+    /// Scales the ring with the text inside it, capped so an accessibility size can't hand one ring
+    /// the whole card. A hard 68pt frame let "114g" spill outside the circle.
+    @ScaledMetric(relativeTo: .subheadline) private var ringSize: CGFloat = 68
+
+    private var clampedRingSize: CGFloat { min(ringSize, 96) }
 
     var progress: Double { Self.ringProgress(current: current, goal: goal) }
 
@@ -2146,15 +2254,24 @@ struct MacroRing: View {
                     .rotationEffect(.degrees(-90))
                 Text("\(current)g")
                     .font(.fernlet(.stat))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 6)
             }
-            .frame(width: 68, height: 68)
+            .frame(width: clampedRingSize, height: clampedRingSize)
             Text(label)
                 .font(.fernlet(.labelSmall))
             Text("of \(goal)g")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
+        // One VoiceOver element per macro. The three Texts used to be read as three unrelated
+        // fragments ("76g", "Protein", "of 93g").
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label) \(current) of \(goal) grams")
     }
 }
 
@@ -2172,7 +2289,9 @@ struct HygieneCard: View {
                 VStack(alignment: .leading, spacing: 10) {
                     let progress = store.personalCareProgress()
                     HStack {
-                        SectionLabel("Hygiene")
+                        // "Personal care", matching the sheet this card opens. The same feature used
+                        // to be called Care (tile), Personal care (sheet) and Hygiene (here).
+                        SectionLabel("Personal care")
                         Spacer()
                         Text("\(progress.completed)/\(progress.total)")
                             .font(.fernlet(.stat))

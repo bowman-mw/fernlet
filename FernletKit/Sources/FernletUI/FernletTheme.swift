@@ -86,6 +86,11 @@ nonisolated public struct FernletThemePalette {
     }
 
     /// The stock light/dark palette used when the stored background equals the built-in default.
+    ///
+    /// The light `secondaryText` ("slate") is deliberately darker than it looks like it should be:
+    /// it inks every 12pt section eyebrow, subtitle and sheet Cancel in the app, and the previous
+    /// value measured 3.05:1 on parchment — under the 4.5:1 floor for small text. It now clears
+    /// 4.8:1 on parchment and 5.1:1 on cream. Dark mode was already fine (5.9–6.9:1) and is unchanged.
     private static func defaultPalette(background: UIColor, isDarkMode: Bool) -> FernletThemePalette {
         FernletThemePalette(
             background: background,
@@ -95,7 +100,7 @@ nonisolated public struct FernletThemePalette {
                 : UIColor(red: 0.239, green: 0.180, blue: 0.118, alpha: 1),
             secondaryText: isDarkMode
                 ? UIColor(red: 0.620, green: 0.655, blue: 0.682, alpha: 1)
-                : UIColor(red: 0.482, green: 0.545, blue: 0.600, alpha: 1)
+                : UIColor(red: 0.360, green: 0.420, blue: 0.470, alpha: 1)
         )
     }
 

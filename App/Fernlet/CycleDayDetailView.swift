@@ -32,6 +32,16 @@ struct CycleDayDetailView: View {
     var intimacyEventCount: Int = 0
     var onEdit: () -> Void = { }
     var onDelete: () -> Void = { }
+    /// The pending delete, held until the user confirms it. Deleting a cycle day removes the
+    /// HealthKit samples AND the sealed note for that day — never on one tap.
+    @State private var pendingDelete: DestructiveConfirmation?
+
+    /// Whether this day actually holds a cycle log. A day with nothing on it gets "Log this day"
+    /// and no Delete: the old screen offered "Edit"/"Delete" on an empty day, where Delete was a
+    /// no-op that still popped the screen as though something had been removed.
+    private var hasCycleLog: Bool {
+        entry.hasObservedEvent || entry.narrative != nil
+    }
 
     var body: some View {
         ScrollView {
@@ -52,11 +62,21 @@ struct CycleDayDetailView: View {
 
                 if showsPeriodHalf {
                     HStack {
-                        Button("Edit", action: onEdit)
+                        Button(hasCycleLog ? "Edit" : "Log this day", action: onEdit)
                             .foregroundStyle(Color.moss)
                         Spacer()
-                        Button("Delete", role: .destructive, action: onDelete)
-                            .foregroundStyle(Color.terracotta)
+                        if hasCycleLog {
+                            Button("Delete", role: .destructive) {
+                                pendingDelete = DestructiveConfirmation(
+                                    title: "Delete this day's cycle log?",
+                                    message: "This removes the health samples Fernlet wrote for \(entry.date.formatted(.dateTime.month(.wide).day())) and the sealed note kept with them. It can't be undone.",
+                                    confirmLabel: "Delete",
+                                    auditEvent: "cycle.dayDeleteConfirmed",
+                                    perform: { onDelete() }
+                                )
+                            }
+                            .foregroundStyle(Color.terracottaInk)
+                        }
                     }
                     .font(.fernlet(.label))
                     .padding(.horizontal, 4)
@@ -66,6 +86,7 @@ struct CycleDayDetailView: View {
         }
         .background(Color.parchment)
         .navigationTitle("")
+        .destructiveConfirmation($pendingDelete)
     }
 
     // MARK: - Period half

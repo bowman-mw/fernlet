@@ -35,10 +35,15 @@ struct WorryEntryView: View {
     @State private var releasedText = ""
     @State private var gentleError: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isEditorFocused: Bool
 
     /// The composer's cap — the same constant the sealed-store entry point enforces.
     private static let characterLimit = WorryBoxService.maxCharacters
+
+    /// How long the tuck theater runs before the confirmation settles. Reduce Motion collapses the
+    /// sequence to a crossfade, so the wait collapses with it.
+    private var tuckDuration: Duration { reduceMotion ? .milliseconds(600) : .milliseconds(2200) }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -98,6 +103,9 @@ struct WorryEntryView: View {
 
             letGoButton
         }
+        // Arriving here from First aid is a heavy moment — the keyboard should already be up
+        // rather than costing one more tap.
+        .onAppear { isEditorFocused = true }
     }
 
     /// The worry text editor: placeholder overlay, the 300-character cap, and its a11y label.
@@ -156,7 +164,7 @@ struct WorryEntryView: View {
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 12)
 
-            Text("You can set it down for now. It's kept safe in the Worry Box on your Personal tab, sealed on this device.")
+            Text("You can set it down for now. It's kept safe in the Worry box on your Private tab, sealed on this device.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
@@ -197,10 +205,10 @@ struct WorryEntryView: View {
             withAnimation(.easeInOut(duration: 0.4)) { phase = .releasing }
             // The tuck (words sink) + lid close + seal glow run for ~2.2s; then settle onto
             // the confirmation. The worry is already sealed in the store above — the wait is
-            // purely the animation.
+            // purely the animation, so Reduce Motion shortens it with the animation.
             Task { @MainActor in
                 do {
-                    try await Task.sleep(for: .milliseconds(2200))
+                    try await Task.sleep(for: tuckDuration)
                 } catch {
                     // Cancelled: the entry view is gone; the worry is already sealed, so there is
                     // nothing to undo and no state left to settle.
@@ -227,6 +235,7 @@ private struct TuckIntoBoxView: View {
     @State private var tucked = false      // words sink + shrink into the box
     @State private var lidClosed = false   // lid rotates down over the opening
     @State private var sealGlow = false    // amber halo blooms once sealed
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Warm wood tones for the box — outside the shared palette, so kept local.
     private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
@@ -312,6 +321,16 @@ private struct TuckIntoBoxView: View {
     }
 
     private func runSequence() {
+        guard !reduceMotion else {
+            // Reduce Motion: one short crossfade to the sealed state instead of the sinking note,
+            // the swinging lid, and the blooming glow.
+            withAnimation(.easeInOut(duration: 0.35)) {
+                tucked = true
+                lidClosed = true
+                sealGlow = true
+            }
+            return
+        }
         withAnimation(.easeIn(duration: 0.9)) { tucked = true }
         withAnimation(.spring(response: 0.55, dampingFraction: 0.62).delay(1.05)) { lidClosed = true }
         withAnimation(.easeOut(duration: 0.9).delay(1.7)) { sealGlow = true }
@@ -324,6 +343,7 @@ private struct TuckIntoBoxView: View {
 /// Static decoration for ``WorryEntryView``'s `tucked` phase; hidden from accessibility.
 private struct SealedBoxView: View {
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
     private let boxLid = Color(red: 0.796, green: 0.627, blue: 0.388)
@@ -361,6 +381,9 @@ private struct SealedBoxView: View {
         .frame(width: 180, height: 150)
         .accessibilityHidden(true)
         .onAppear {
+            // A forever-repeating halo is exactly the continuous motion Reduce Motion exists to
+            // stop — hold the glow still instead.
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) { pulse = true }
         }
     }
@@ -375,20 +398,47 @@ private struct SealedBoxView: View {
 /// ``WorryBoxService/worries`` (empty while locked), reloads on appear, and per-worry "Release"
 /// plays the ember-lift animation before ``WorryBoxService/release(_:)`` performs the real
 /// deletion.
+///
+/// The delete waits out a short "Keep it" window behind an undo strip, on Mail's Undo Send terms:
+/// undo is available while the user is on the page, and leaving (or backgrounding) COMMITS the
+/// release rather than reverting it. Every ending — the timer, a second release, disappearing,
+/// backgrounding — funnels through ``claimPendingRelease()``, which consumes the worry exactly
+/// once, so no pair of them can delete twice.
 struct WorryBoxView: View {
     var worryBox: WorryBoxService
     @State private var composeText = ""
-    @State private var releasingID: WorryNarrative.ID?
+    /// The worry whose ember is currently lifting — the row is still listed (dimmed, with the ember
+    /// overlay) and its sealed row is untouched until the lift finishes.
+    @State private var releasingWorry: WorryNarrative?
     @State private var emberLifted = false
     /// Gentle copy shown when a sealed write or a release did not land (never a silent failure).
     @State private var composeError: String?
     @State private var releaseError: String?
+    /// The worry whose ember has lifted but whose sealed row is NOT deleted yet — the page hides it
+    /// and offers "Keep it" for a few seconds first. Releasing is permanent, so the ceremony gets an
+    /// honest way back instead of a dialog in front of it.
+    @State private var pendingRelease: WorryNarrative?
+    /// The timer that commits ``pendingRelease``. Cancelled by "Keep it".
+    @State private var pendingReleaseTask: Task<Void, Never>?
+    /// The ember-lift animation for a release that has been tapped but has not reached its "Keep it"
+    /// window yet. Held so a commit path can end it: an unstructured `Task` outlives the view, and
+    /// would otherwise land `pendingRelease` and a fresh timer on state that no longer exists.
+    @State private var emberTask: Task<Void, Never>?
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var isComposeFocused: Bool
+
+    /// How long a released worry can still be kept.
+    private static let keepItWindow: Duration = .seconds(6)
+
+    /// The kept worries, minus one waiting out its "Keep it" window.
+    private var visibleWorries: [WorryNarrative] {
+        worryBox.worries.filter { $0.id != pendingRelease?.id }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: "Worry box", subtitle: "", identifier: "screen.worryBox")
+                ScreenHeader(title: "Worry box", subtitle: "Set it down for a while.", identifier: "screen.worryBox")
 
                 Text("Worries you've set down. The box keeps them — releasing one lets it go for good.")
                     .font(.fernlet(.body))
@@ -404,21 +454,60 @@ struct WorryBoxView: View {
                         .fernletWrappingText()
                 }
 
-                if worryBox.worries.isEmpty {
+                if visibleWorries.isEmpty {
                     emptyState
                 } else {
                     VStack(spacing: 10) {
-                        ForEach(worryBox.worries) { worry in
+                        ForEach(visibleWorries) { worry in
                             worryCard(worry)
                         }
                     }
-                    .animation(.easeOut(duration: 0.45), value: worryBox.worries.count)
+                    .animation(.easeOut(duration: 0.45), value: visibleWorries.count)
                 }
             }
             .padding(20)
         }
         .background(Color.parchment)
+        .overlay(alignment: .bottom) { keepItToast }
         .onAppear { worryBox.reload() }
+        // Leaving COMMITS the pending release — the same contract as Mail's Undo Send. The strip is
+        // the undo affordance while the user is on the page; once the page is gone, the ceremony the
+        // user just completed ("releasing one lets it go for good") must not quietly un-happen and
+        // put the worry back with nothing said.
+        .onDisappear { commitPendingRelease() }
+        .onChange(of: scenePhase) { _, phase in
+            // Backgrounding takes the strip away just as thoroughly as leaving does, and the pending
+            // timer can be suspended — or the app killed — long before its deadline. Commit here too,
+            // synchronously, while there is still a runloop to do it on. `claimPendingRelease`
+            // consumes the worry, so an `onDisappear` that follows finds nothing left to delete.
+            if phase == .background { commitPendingRelease() }
+        }
+    }
+
+    /// The "Released — Keep it" strip: the whole undo window, and the only thing standing between a
+    /// tap and a permanent delete.
+    @ViewBuilder
+    private var keepItToast: some View {
+        if pendingRelease != nil {
+            HStack(spacing: 12) {
+                Text("Released.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                Spacer(minLength: 8)
+                Button("Keep it") { keepPendingRelease() }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .buttonStyle(.plain)
+                    .fernletTapTarget(minWidth: 60)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Color.cream, in: Capsule())
+            .fernletSmallShadow()
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     private var composer: some View {
@@ -441,6 +530,9 @@ struct WorryBoxView: View {
                         .foregroundStyle(Color.terracotta)
                         .fernletWrappingText()
                 }
+                // Disabled fades the FILL, never the label: at 0.45 opacity the whole button read as
+                // an empty green bar with no readable word on it.
+                let composeEmpty = composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Button {
                     sealComposedWorry()
                 } label: {
@@ -448,12 +540,12 @@ struct WorryBoxView: View {
                         .font(.fernlet(.label))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .foregroundStyle(Color.parchmentInk)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(composeEmpty ? Color.moss.opacity(0.55) : Color.parchmentInk)
+                        .background(composeEmpty ? Color.moss.opacity(0.18) : Color.moss,
+                                    in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
-                .disabled(composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(composeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                .disabled(composeEmpty)
             }
         }
     }
@@ -483,7 +575,7 @@ struct WorryBoxView: View {
                 Text("The box is empty right now.")
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
-                Text("That's a good thing. When something feels heavy, First aid on the Home screen can tuck it in here.")
+                Text("That's a good thing. Write one above whenever something feels heavy.")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -495,7 +587,7 @@ struct WorryBoxView: View {
     }
 
     private func worryCard(_ worry: WorryNarrative) -> some View {
-        let releasing = releasingID == worry.id
+        let releasing = releasingWorry?.id == worry.id
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: "archivebox")
                 .font(.system(size: 15, weight: .regular))
@@ -518,9 +610,13 @@ struct WorryBoxView: View {
                     } label: {
                         Label("Release this worry", systemImage: "arrow.up")
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.goldenrod)
+                            // Moss, not goldenrod: this is an action, and goldenrod on cream read as
+                            // decoration rather than something tappable.
+                            .foregroundStyle(Color.moss)
                     }
                     .buttonStyle(.plain)
+                    // A labelSmall text link was a ~16pt-tall target for a permanent action.
+                    .fernletTapTarget(minWidth: 0)
                     .accessibilityLabel("Release this worry")
                 }
             }
@@ -555,34 +651,103 @@ struct WorryBoxView: View {
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    /// Ember-lift release: dim the row, float a warm ember up out of it, then remove it from
-    /// the sealed store. The store call is the real deletion; the wait is only the animation.
+    /// Ember-lift release: dim the row, float a warm ember up out of it, then hold the sealed row
+    /// back for a few seconds behind a "Keep it" strip before deleting it for real.
+    ///
+    /// The ceremony is unchanged — what changed is that it no longer destroys anything on its own.
+    /// The page copy says releasing "lets it go for good", which is exactly why one small text link
+    /// must not be able to do it on a mis-tap.
     private func release(_ worry: WorryNarrative) {
-        guard releasingID == nil else { return }
+        guard releasingWorry == nil else { return }
+        // A second release while one is still waiting: let the first one finish now rather than
+        // silently extending — or dropping — its window.
+        commitPendingRelease()
         emberLifted = false
         releaseError = nil
-        withAnimation(.easeOut(duration: 0.3)) { releasingID = worry.id }
+        withAnimation(.easeOut(duration: 0.3)) { releasingWorry = worry }
         withAnimation(.easeOut(duration: 1.1)) { emberLifted = true }
-        Task { @MainActor in
+        emberTask = Task { @MainActor in
             do {
                 try await Task.sleep(for: .milliseconds(760))
             } catch {
-                // Cancelled before the ember finished: the worry was NOT released, so settle the
-                // row back instead of running the delete on a view that is going away.
-                releasingID = nil
-                emberLifted = false
+                // Cancelled by a commit path (leaving the page, backgrounding, or a second release):
+                // that path already claimed this worry and deleted it, so there is nothing left to
+                // settle here.
                 return
             }
-            let released = withAnimation(.easeOut(duration: 0.45)) {
-                worryBox.release(worry.id)
+            emberTask = nil
+            withAnimation(.easeOut(duration: 0.45)) {
+                releasingWorry = nil
+                pendingRelease = worry
             }
-            if !released {
-                // The sealed row is still on disk (the service audited the failure); say so rather
-                // than showing a letting-go that did not happen.
-                releaseError = "That one didn't quite lift just now — try again in a moment."
-            }
-            releasingID = nil
             emberLifted = false
+            startKeepItWindow(for: worry)
+        }
+    }
+
+    /// Starts the undo window. When it elapses undisturbed, the sealed row is really deleted.
+    private func startKeepItWindow(for worry: WorryNarrative) {
+        pendingReleaseTask?.cancel()
+        pendingReleaseTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: Self.keepItWindow)
+            } catch {
+                // Cancelled by "Keep it" (the worry stays) or by a commit path that has already
+                // claimed it (the worry is already gone). Nothing to do either way.
+                return
+            }
+            guard pendingRelease?.id == worry.id else { return }
+            pendingReleaseTask = nil
+            guard let claimed = withAnimation(.easeOut(duration: 0.3), { claimPendingRelease() }) else { return }
+            performRelease(claimed)
+        }
+    }
+
+    /// Claims the release in flight, clearing the pending state before handing back the worry.
+    ///
+    /// The single seam through which a worry becomes deletable: every path that can end the window
+    /// (the timer, a second release, leaving the page, backgrounding) goes through here, and the
+    /// state is consumed before the worry is returned — so two paths racing to end the same window
+    /// can never hand the same worry to ``performRelease(_:)`` twice.
+    ///
+    /// Claims the ember-lift worry too, so a release tapped moments before the page went away is
+    /// committed rather than stranded in a task the view no longer owns.
+    private func claimPendingRelease() -> WorryNarrative? {
+        pendingReleaseTask?.cancel()
+        pendingReleaseTask = nil
+        emberTask?.cancel()
+        emberTask = nil
+        guard let worry = pendingRelease ?? releasingWorry else { return nil }
+        pendingRelease = nil
+        releasingWorry = nil
+        emberLifted = false
+        return worry
+    }
+
+    /// Ends the window early and deletes now — used when a second release starts, when the page goes
+    /// away, and when the app is backgrounded.
+    private func commitPendingRelease() {
+        guard let worry = claimPendingRelease() else { return }
+        performRelease(worry)
+    }
+
+    /// Keeps the worry: cancels the pending delete and slides the row back into the list.
+    private func keepPendingRelease() {
+        pendingReleaseTask?.cancel()
+        pendingReleaseTask = nil
+        withAnimation(.easeOut(duration: 0.35)) { pendingRelease = nil }
+    }
+
+    /// The real deletion in the sealed store. The worry has already been consumed by
+    /// ``claimPendingRelease()``, so this runs at most once per release.
+    private func performRelease(_ worry: WorryNarrative) {
+        let released = worryBox.release(worry.id)
+        if !released {
+            // The sealed row is still on disk (the service audited the failure); say so rather
+            // than showing a letting-go that did not happen. On the leaving/backgrounding paths the
+            // strip is already gone, but the worry stays in the box — so the list itself is the
+            // honest answer when the user comes back.
+            releaseError = "That one didn't quite lift just now — try again in a moment."
         }
     }
 }

@@ -38,42 +38,49 @@ struct QuickMoodRow: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(FeelingTag.allCases) { tag in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                store.logQuickMood(tag)
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(tag.color)
-                                    .frame(width: 8, height: 8)
-                                Text(tag.label)
-                                    .font(.fernlet(.label))
-                            }
-                            .foregroundStyle(currentTag == tag ? Color.parchment : Color.bark)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                currentTag == tag ? Color.bark : Color.cream,
-                                in: Capsule()
-                            )
-                            .overlay(
-                                Capsule().stroke(Color.bark.opacity(currentTag == tag ? 0 : 0.12), lineWidth: 1)
-                            )
+            // Wraps rather than scrolls: as a horizontal scroller only the first four chips fit and
+            // the fourth ended flush with the card edge, so nothing hinted that the two HARDER
+            // moods (Tired, Hard) were the ones off-screen. It also stops a horizontal drag here
+            // competing with the page/scroll gestures around it.
+            FlowLayout(spacing: 8) {
+                ForEach(FeelingTag.allCases) { tag in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            store.logQuickMood(tag)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Mood: \(tag.label)")
-                        .accessibilityAddTraits(currentTag == tag ? .isSelected : [])
-                        .accessibilityIdentifier("quickMood.\(tag.rawValue)")
+                    } label: {
+                        moodChipLabel(tag)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Mood: \(tag.label)")
+                    .accessibilityAddTraits(currentTag == tag ? .isSelected : [])
+                    .accessibilityIdentifier("quickMood.\(tag.rawValue)")
                 }
-                .padding(.vertical, 1)
             }
+            .padding(.vertical, 1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityHint("One tap notes how today feels. No writing needed.")
+    }
+
+    /// The chip itself — the coloured dot plus the label — shared by every tag so Home and the
+    /// Journal screen keep one mood-chip treatment.
+    private func moodChipLabel(_ tag: FeelingTag) -> some View {
+        let isCurrent = currentTag == tag
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(tag.color)
+                .frame(width: 8, height: 8)
+            Text(tag.label)
+                .font(.fernlet(.label))
+                .lineLimit(1)
+        }
+        .foregroundStyle(isCurrent ? Color.parchment : Color.bark)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(isCurrent ? Color.bark : Color.cream, in: Capsule())
+        .overlay(
+            Capsule().stroke(Color.bark.opacity(isCurrent ? 0 : 0.12), lineWidth: 1)
+        )
     }
 }

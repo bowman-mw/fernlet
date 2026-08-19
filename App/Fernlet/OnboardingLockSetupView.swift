@@ -4,17 +4,27 @@ import FernletUI
 import FernletLock
 import FernletLockUI
 
-/// Onboarding step offering three ways through lock setup: set a passcode now, rely on biometrics,
-/// or skip until a lockable feature asks.
+/// Onboarding step for lock setup: set a passcode now, or move on and set one when a lockable
+/// feature asks.
 ///
 /// "Set a passcode" presents `FernletLockSetupView` (from `FernletLockUI`) as a sheet and reports
-/// completion via `setPasscodeAction` on dismiss; the other two choices call straight through. The
-/// coordinator model records the outcome in `UserDefaults` (``OnboardingDefaults``) and advances —
-/// biometrics-only is treated as a deferral, since no Fernlet passcode exists yet.
+/// completion via `setPasscodeAction` on dismiss; the other choices call straight through, and the
+/// coordinator model records the deferral in `UserDefaults` (``OnboardingDefaults``) and advances.
+///
+/// Note on the middle card: it is a DEFERRAL, not a lock. Fernlet's rule is passcode-before-
+/// biometrics (`FernletLockService.setBiometricEnabled` requires the passcode), so there is no
+/// biometrics-only lock to configure — the card used to promise "device biometrics as your
+/// preferred lock path" and silently set nothing, leaving the Private tab on its "Set up app lock"
+/// gate. Its copy now says what actually happens. It keeps the `onboarding.lock.biometrics`
+/// identifier and its advance-without-a-lock behavior because the onboarding UI tests tap it to
+/// walk the flow; collapsing the two deferral cards into one is a follow-up that has to land with
+/// that test change.
 struct OnboardingLockSetupView: View {
     var stepText: String
+    var backAction: (() -> Void)?
     var setPasscodeAction: () -> Void
-    var biometricsOnlyAction: () -> Void
+    /// "Face ID later" — a deferral, identical in effect to `skipAction`.
+    var laterAction: () -> Void
     var skipAction: () -> Void
 
     /// Read on the setup sheet's dismissal so a CANCELLED sheet records a deferral rather than a
@@ -28,12 +38,13 @@ struct OnboardingLockSetupView: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Protect private spaces",
-                subtitle: "The lock guards period, intimacy, and other sensitive areas before they open."
+                subtitle: "The lock guards period, intimacy, and other sensitive areas before they open.",
+                backAction: backAction
             ) {
                 VStack(spacing: 10) {
                     lockChoice(
                         title: "Set a passcode",
-                        subtitle: "Create a PIN or password for lockable features.",
+                        subtitle: "Create a PIN or password for lockable features — you can turn on Face ID with it here too.",
                         systemImage: "key.fill"
                     ) {
                         isShowingPasscodeSetup = true
@@ -41,11 +52,11 @@ struct OnboardingLockSetupView: View {
                     .accessibilityIdentifier("onboarding.lock.passcode")
 
                     lockChoice(
-                        title: "Use biometrics only",
-                        subtitle: "Continue with device biometrics as your preferred lock path.",
+                        title: "Set up Face ID later",
+                        subtitle: "Face ID needs a Fernlet passcode first. Nothing is locked until you set one.",
                         systemImage: "faceid"
                     ) {
-                        biometricsOnlyAction()
+                        laterAction()
                     }
                     .accessibilityIdentifier("onboarding.lock.biometrics")
 

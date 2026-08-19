@@ -117,7 +117,10 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .journal: "Journal"
         case .sleep: "Sleep"
         case .water: "Water"
-        case .hygiene: "Hygiene"
+        // "Personal care", matching the card this widget draws and the sheet that card opens. The
+        // same set of tasks used to be called Care (tile), Personal care (sheet) and Hygiene (here),
+        // so the widget-order list named a feature nothing else in the app called by that name.
+        case .hygiene: "Personal care"
         case .macros: "Macros"
         case .trends: "Trends"
         case .ambient: "Moments"

@@ -103,12 +103,15 @@ struct MoveView: View {
         }
     }
 
-    /// The tab header: title plus the Log / Share actions.
+    /// The tab header: title plus the Log / Share / Settings actions.
+    ///
+    /// The action pills sit in an ``AdaptiveStack`` so they stack into a column at accessibility text
+    /// sizes rather than squeezing side by side (where "Share" broke to "Shar/e").
     private var headerRow: some View {
         HStack(alignment: .top) {
             ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
-            Spacer()
-            HStack(spacing: 10) {
+            Spacer(minLength: 8)
+            AdaptiveStack(spacing: 10, horizontalAlignment: .trailing, verticalAlignment: .top) {
                 HeaderActionButton(title: "Log") { activeSheet = .workout }
                 // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
                 // beside planning one, not in the tab header. The header slot it freed
@@ -117,9 +120,22 @@ struct MoveView: View {
                 HeaderActionButton(title: "Share") { showingTrainerShare = true }
                     .accessibilityIdentifier("move.trainerShare")
                     .accessibilityLabel("Share with a trainer")
+                // Settings used to be reachable only from Home (tab switch + gear). The same compact
+                // gear the Home header draws, so every tab opens Settings in one tap.
+                settingsButton
             }
         }
         .padding(.top, 4)
+    }
+
+    /// The Settings gear, drawn with the shared ``HeaderActionButton`` exactly as the Home and Food
+    /// headers do. A hand-rolled 44pt 6%-bark circle here would re-create the very mismatch the Home
+    /// header just dropped — smaller and lighter than the "Log" / "Share" pills beside it.
+    private var settingsButton: some View {
+        HeaderActionButton(systemImage: "gearshape", accessibilityLabel: "Settings") {
+            activeSheet = .settings
+        }
+        .accessibilityIdentifier("move.settings")
     }
 
     /// Resume-a-run card, else the approved "Today's workout" card, else nothing.
@@ -133,8 +149,25 @@ struct MoveView: View {
                 if let session = store.guidedSessionForResume() { guidedSession = session }
             }
         } else if let guidedCardState {
-            StartTodaysWorkoutCard(state: guidedCardState, onStart: startTodaysGuidedWorkout)
+            StartTodaysWorkoutCard(
+                state: guidedCardState,
+                loggedSessionName: loggedGuidedSessionName,
+                onStart: startTodaysGuidedWorkout
+            )
         }
+    }
+
+    /// The name of today's guided session that is already accounted for, so the done card can say
+    /// WHICH session is logged instead of a nameless "That's logged for today".
+    private var loggedGuidedSessionName: String? {
+        guard let plan = store.currentGuidedWorkoutPlan else { return nil }
+        return plan.sessions.first {
+            GuidedWorkoutAvailability.isAlreadyLogged(
+                $0,
+                completed: store.guidedCompletedSessionIDs,
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+            )
+        }?.suggestion.name
     }
 
     /// Today's planned rows then today's logged rows, divided.
@@ -470,10 +503,10 @@ struct ResumeWorkoutCard: View {
                         Text("Resume workout")
                             .font(.fernlet(.label))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("workout.resume")
@@ -491,6 +524,9 @@ struct ResumeWorkoutCard: View {
 /// a done state, never a restart. Renders whatever ``GuidedWorkoutCardState`` its parent resolved.
 struct StartTodaysWorkoutCard: View {
     var state: GuidedWorkoutCardState
+    /// The session already logged today, when there is one — the done copy names it rather than
+    /// saying "That's logged" about an unnamed something. Nil falls back to the generic line.
+    var loggedSessionName: String?
     var onStart: () -> Void
 
     var body: some View {
@@ -521,10 +557,10 @@ struct StartTodaysWorkoutCard: View {
                             Text("Start today's workout")
                                 .font(.fernlet(.label))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onMoss)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("workout.startToday")
@@ -551,13 +587,17 @@ struct StartTodaysWorkoutCard: View {
     private var subtitle: String {
         switch state {
         case .ready:
-            "Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure."
+            return "Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure."
         case .allComplete(let remainingMovement):
-            remainingMovement
-                ? "Your guided sets are done. There's some easy movement left in today's plan too, whenever you feel like it."
-                : "That's logged for today. Nicely done — rest up."
+            if remainingMovement {
+                return "Your guided sets are done. There's some easy movement left in today's plan too, whenever you feel like it."
+            }
+            if let loggedSessionName, !loggedSessionName.isEmpty {
+                return "\(loggedSessionName) is logged. Nicely done — rest up."
+            }
+            return "That's logged for today. Nicely done — rest up."
         case .noneToGuide(let reason):
-            reason
+            return reason
         }
     }
 }
@@ -682,13 +722,45 @@ struct WorkoutSheet: View {
         HStack(alignment: .top, spacing: 12) {
             SheetField("RPE (1–10)") {
                 TextField("7", text: $rpe)
-                    .sheetTextInput()
+                    .keyboardType(.numberPad)
+                    .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Duration (min)") {
                 TextField("45", text: $duration)
-                    .sheetTextInput()
+                    .keyboardType(.numberPad)
+                    .sheetTextInput(font: .fernlet(.label))
             }
         }
+    }
+
+    /// The exercises (added rows plus a typed-but-unadded draft) the default name is built from.
+    private var namedExercises: [String] {
+        var names = exerciseRows.map(\.exercise.name)
+        if let drafted = draft.exercise { names.append(drafted.name) }
+        return names
+    }
+
+    /// The name a strength log takes when the user doesn't type one: the first exercise, plus how
+    /// many others came with it ("Bench press + 2"). Empty until something is added — which is
+    /// exactly when Save is still gated.
+    private var inferredStrengthName: String {
+        guard let first = namedExercises.first else { return "" }
+        let others = namedExercises.count - 1
+        return others > 0 ? "\(first) + \(others)" : first
+    }
+
+    /// The name field is optional: the placeholder shows the name that will actually be saved.
+    private var namePlaceholder: String {
+        if logMode == .activity {
+            return selectedActivityType?.displayName ?? "Optional, e.g. Saturday ride"
+        }
+        return inferredStrengthName.isEmpty ? "Optional, e.g. Upper strength" : inferredStrengthName
+    }
+
+    /// Whether there is anything for the category preview to be derived FROM. Before an exercise or
+    /// an activity type exists it would claim "Full Body" about an empty sheet.
+    private var hasCategoryInput: Bool {
+        logMode == .activity ? selectedActivityType != nil : !namedExercises.isEmpty
     }
 
     /// The free-text notes field.
@@ -712,11 +784,13 @@ struct WorkoutSheet: View {
                         .foregroundStyle(Color.bark)
 
                     SheetField("Workout") {
-                        TextField(logMode == .activity ? "Optional, e.g. Saturday ride" : "e.g. Upper strength", text: $name)
+                        TextField(namePlaceholder, text: $name)
                             .sheetTextInput()
                     }
 
-                    WorkoutCategoryPreview(category: inferredCategory)
+                    if hasCategoryInput {
+                        WorkoutCategoryPreview(category: inferredCategory)
+                    }
 
                     kindField
 
@@ -728,7 +802,8 @@ struct WorkoutSheet: View {
                             duration: $duration,
                             distance: $distance,
                             energyKcal: $energyKcal,
-                            effort: $effort
+                            effort: $effort,
+                            showsEnergyField: store.settings.showCalories
                         )
                     }
 
@@ -745,7 +820,10 @@ struct WorkoutSheet: View {
             SheetSaveBar(disabled: saveDisabled) { saveWorkout() }
         }
         .background(Color.parchment)
-        .keyboardDoneToolbar()
+        // NOT `keyboardDoneToolbar()` here: this sheet is presented both by the root router (where
+        // `fernletSheetChrome` already supplies one) and by the day detail (which supplies its own).
+        // Declaring a second `ToolbarItemGroup(placement: .keyboard)` inside the same hierarchy puts
+        // two "Done" buttons in one accessory bar.
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onChange(of: logMode) { _, _ in
@@ -805,7 +883,9 @@ struct WorkoutSheet: View {
         if logMode == .activity, let selectedActivityType {
             return selectedActivityType.displayName
         }
-        return trimmed
+        // A strength log names itself from what's in it, so a daily log costs no keyboard trip:
+        // Save enables as soon as one exercise is added.
+        return inferredStrengthName
     }
 
     private var saveDisabled: Bool {
@@ -944,12 +1024,15 @@ struct QuickExerciseSheet: View {
                         pickerTitle: "Exercise",
                         searchPlaceholder: "Search exercise or muscle",
                         showAddButton: false,
+                        // This sheet exists for speed — open it and you're already typing.
+                        autofocusSearch: true,
                         onAdd: {}
                     )
 
                     SheetField("RPE (1-10)") {
                         TextField("7", text: $rpe)
-                            .sheetTextInput()
+                            .keyboardType(.numberPad)
+                            .sheetTextInput(font: .fernlet(.label))
                     }
                 }
                 .padding(20)
@@ -963,7 +1046,8 @@ struct QuickExerciseSheet: View {
             }
         }
         .background(Color.parchment)
-        .keyboardDoneToolbar()
+        // The root router's `fernletSheetChrome` supplies the keyboard "Done"; a second
+        // `ToolbarItemGroup(placement: .keyboard)` here would render a second Done beside it.
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
     }
@@ -1111,7 +1195,9 @@ struct WorkoutSuggestionSheet: View {
 
                 Text(isAdjusting
                     ? "Hang on — we'll finish your adjustment first, then you can rework it."
-                    : "Nothing's logged yet, so you can rebuild it — adjust your intensity, notes, or equipment.")
+                    // "Nothing's logged yet" read as false whenever anything else was logged today:
+                    // it means nothing of THIS plan.
+                    : "None of this plan is logged yet, so you can still rebuild it — adjust your intensity, notes, or equipment.")
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -1134,7 +1220,8 @@ struct WorkoutSuggestionSheet: View {
             )
         }
         VStack(spacing: 10) {
-            HStack(spacing: 12) {
+            // Stacks at accessibility sizes so "Approve workout" can't break mid-word beside "Edit".
+            AdaptiveStack(spacing: 12) {
                 // Edit is offered only while nothing of the plan is logged yet — the same precondition
                 // `updateGuidedSession` enforces — so an edit is never silently discarded after a
                 // session started (matching the rework affordance).
@@ -1159,10 +1246,10 @@ struct WorkoutSuggestionSheet: View {
                 } label: {
                     Text("Approve workout")
                         .font(.fernlet(.label))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onMoss)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 16))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("workout.approvePlan")
@@ -1177,15 +1264,20 @@ struct WorkoutSuggestionSheet: View {
         .background(Color.parchment)
     }
 
-    /// The gentle retroactive "Log as already done" link under the committed-plan bar.
+    /// The retroactive "already did this" action under the committed-plan bar.
+    ///
+    /// A full-width tertiary button rather than the 24pt italic caption it used to be: this writes
+    /// workouts, and an action that logs should not be the least tappable thing on the screen.
     private func logAlreadyDoneButton(_ sessions: [WorkoutProgram.SessionSuggestion]) -> some View {
         Button {
             logRemainingSessions(sessions)
         } label: {
-            Text("Log as already done")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
-                .padding(.vertical, 4)
+            Text("Already did this — log it")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.vertical, 6)
+                .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.logAlreadyDone")
@@ -1212,15 +1304,15 @@ struct WorkoutSuggestionSheet: View {
             Button(action: startSuggesting) {
                 HStack(spacing: 8) {
                     if isSuggesting {
-                        ProgressView().controlSize(.small).tint(.white)
+                        ProgressView().controlSize(.small).tint(Color.onMoss)
                     }
                     Text(isSuggesting ? "Building your workout…" : "Suggest")
                         .font(.fernlet(.label))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onMoss)
                 }
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
-                .background(isSuggesting ? Color.moss.opacity(0.6) : Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                .background(Color.mossFill.opacity(isSuggesting ? 0.6 : 1), in: RoundedRectangle(cornerRadius: 16))
             }
             .buttonStyle(.plain)
             .disabled(isSuggesting)
@@ -1285,10 +1377,10 @@ struct WorkoutSuggestionSheet: View {
                 Text("Start now")
                     .font(.fernlet(.label))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.startGuided")
@@ -1369,10 +1461,15 @@ struct WorkoutSuggestionSheet: View {
             .onAppear { seedIntensityOnce(preferCommitted: false) }
         }
 
+        // Read-only, so it is rendered as a plain value row rather than dressed as a text field —
+        // and it reads the SAME summary as the Move root's GOAL segment, which used to disagree
+        // with it (strip: the first crafted goal's sentence; here: the goal TYPE).
         SheetField("Goal") {
-            Text(store.settings.selectedGoal.displayName)
-                .sheetTextInput()
+            Text(MoveGoalSummary.text(selectedGoal: store.settings.selectedGoal, goalCount: store.goals.count))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fernletWrappingText()
         }
 
         SheetField("Anything else?") {
@@ -1651,9 +1748,13 @@ struct WorkoutRow: View {
             footerActions
         }
         .padding(.vertical, 4)
-        .confirmationDialog("Remove this workout?", isPresented: $showRemoveConfirm, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { removeTapped() }
+        // An alert, not a confirmationDialog: on iOS 26 the dialog renders as a popover that
+        // SUPPRESSES the `.cancel` button (leaving a lone red Remove) and anchors to the view root
+        // rather than the row, so its arrow pointed at a different workout. The title names the
+        // workout, so there is no doubt which one is about to go.
+        .alert("Remove \(workout.name)?", isPresented: $showRemoveConfirm) {
             Button("Keep it", role: .cancel) {}
+            Button("Remove", role: .destructive) { removeTapped() }
         } message: {
             Text(removeConfirmMessage)
         }
@@ -1663,8 +1764,10 @@ struct WorkoutRow: View {
             Text("It came from Health, so manage it in the Health app.")
         }
         .sheet(isPresented: $showEditSheet) {
+            // .large only, like Log and Plan: at .medium the notes field sat below the fold with no
+            // cue that there was anything under it.
             EditWorkoutSheet(store: store, workout: workout, date: date, onSaved: onChanged)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
@@ -1690,6 +1793,7 @@ struct EditWorkoutSheet: View {
     @State private var name: String
     @State private var intensity: WorkoutIntensity
     @State private var duration: String
+    @State private var rpe: String
     @State private var notes: String
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
@@ -1702,7 +1806,14 @@ struct EditWorkoutSheet: View {
         _name = State(initialValue: workout.name)
         _intensity = State(initialValue: workout.intensity)
         _duration = State(initialValue: workout.duration.map(String.init) ?? "")
+        _rpe = State(initialValue: Self.rpeText(workout.rpe))
         _notes = State(initialValue: workout.notes)
+    }
+
+    /// The RPE as the field shows it — "7", not "7.0" — and empty when the row carries none.
+    private static func rpeText(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return String(format: "%g", value)
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -1712,6 +1823,7 @@ struct EditWorkoutSheet: View {
         name != workout.name
             || intensity != workout.intensity
             || duration != (workout.duration.map(String.init) ?? "")
+            || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
     }
 
@@ -1763,6 +1875,8 @@ struct EditWorkoutSheet: View {
         updated.name = trimmedName
         updated.intensity = intensity
         updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
+        // Blank clears the RPE rather than pinning the old one — the field is how you correct it.
+        updated.rpe = Double(rpe.trimmingCharacters(in: .whitespacesAndNewlines))
         updated.notes = notes
         guard store.updateWorkout(updated, date: date) else {
             showHealthRefusalAlert = true
@@ -1785,10 +1899,19 @@ struct EditWorkoutSheet: View {
 
                     intensityField
 
-                    SheetField("Duration (min)") {
-                        TextField("45", text: $duration)
-                            .sheetTextInput()
-                            .accessibilityIdentifier("workout.edit.duration")
+                    HStack(alignment: .top, spacing: 12) {
+                        SheetField("RPE (1–10)") {
+                            TextField("7", text: $rpe)
+                                .keyboardType(.numberPad)
+                                .sheetTextInput(font: .fernlet(.label))
+                                .accessibilityIdentifier("workout.edit.rpe")
+                        }
+                        SheetField("Duration (min)") {
+                            TextField("45", text: $duration)
+                                .keyboardType(.numberPad)
+                                .sheetTextInput(font: .fernlet(.label))
+                                .accessibilityIdentifier("workout.edit.duration")
+                        }
                     }
 
                     SheetField("Workout notes") {
@@ -1875,6 +1998,20 @@ struct WorkoutCategoryPreview: View {
     }
 }
 
+/// The one summary of the user's movement goal, shared by the Move root's GOAL segment and the
+/// Suggest sheet's read-only "Goal" field.
+///
+/// They used to disagree: the strip showed the first crafted goal's own sentence (which truncated to
+/// "Complete 3 gene…") while Suggest showed the goal TYPE ("Wellness"), under the same word "Goal".
+/// One function, so both read the same thing. Static so it is unit-testable without SwiftUI.
+enum MoveGoalSummary {
+    /// e.g. "Wellness · 3 goals", "Wellness · 1 goal", or just "Wellness" when none are written.
+    static func text(selectedGoal: GoalType, goalCount: Int) -> String {
+        guard goalCount > 0 else { return selectedGoal.displayName }
+        return "\(selectedGoal.displayName) · \(goalCount) goal\(goalCount == 1 ? "" : "s")"
+    }
+}
+
 /// The thin two-segment context strip (Goal · Space) above the workout calendar.
 ///
 /// The three look-alike cream boxes it replaced — a navigational goal, a passive readiness band, and
@@ -1884,18 +2021,29 @@ struct MoveContextStrip: View {
     var store: FernletStore
     var onEditGoal: () -> Void
     var onEditSpace: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Goal segment value, mirroring the prior summary logic; nil renders the empty "Tap to plan"
-    /// treatment so a first-run goal reads as an invitation, not a set value.
+    /// Goal segment value; nil renders the empty "Tap to plan" treatment so a first-run goal reads as
+    /// an invitation, not a set value.
     private var goalValue: String? {
-        if let goal = store.goals.first {
-            return "\(goal.goal) · \(goal.timeframe)"
-        }
-        return store.settings.selectedGoal == .exploring ? nil : store.settings.selectedGoal.displayName
+        if store.goals.isEmpty && store.settings.selectedGoal == .exploring { return nil }
+        return MoveGoalSummary.text(selectedGoal: store.settings.selectedGoal, goalCount: store.goals.count)
     }
 
+    private var location: WorkoutLocation { store.settings.activeWorkoutLocation }
+
+    /// "Full gym · 22 items", shortened to "Full gym · 22" at accessibility sizes where the word
+    /// "items" is what pushes the line into an ellipsis.
     private var spaceValue: String {
-        "\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items"
+        let count = location.ownedEquipment.count
+        return dynamicTypeSize.isAccessibilitySize
+            ? "\(location.name) · \(count)"
+            : "\(location.name) · \(count) items"
+    }
+
+    /// Always the full, unabbreviated sentence — VoiceOver has no width to run out of.
+    private var spaceAccessibilityValue: String {
+        "\(location.name), \(location.ownedEquipment.count) items"
     }
 
     var body: some View {
@@ -1907,7 +2055,11 @@ struct MoveContextStrip: View {
                 emptyPrompt: "Tap to plan",
                 action: onEditGoal
             )
-            .accessibilityLabel("Edit movement goals")
+            // Both segments announce label + current value, then what a tap does — the Goal segment
+            // used to announce only the action (never the goal) and Space only the value (never that
+            // it opens anything).
+            .accessibilityLabel("Goal, \(goalValue ?? "not set")")
+            .accessibilityHint("Opens your movement goals")
 
             Rectangle()
                 .fill(Color.bark.opacity(0.10))
@@ -1921,7 +2073,8 @@ struct MoveContextStrip: View {
                 emptyPrompt: "Set up your space",
                 action: onEditSpace
             )
-            .accessibilityLabel(spaceValue)
+            .accessibilityLabel("Space, \(spaceAccessibilityValue)")
+            .accessibilityHint("Opens where you train")
             // Stable id: the label is the location's NAME, which the user can now rename, so a test that
             // matched on it would break the moment it exercised the rename it's there to check.
             .accessibilityIdentifier("move.space")
@@ -1957,15 +2110,19 @@ private struct MoveContextSegment: View {
                         .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.slate)
                     if let value {
                         Text(value)
+                            // Two lines, not one: at default size an accepted goal already truncated
+                            // to "Complete 3 gene…" with no way to read the rest.
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
-                            .lineLimit(1)
+                            .lineLimit(2)
                             .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(emptyPrompt)
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
@@ -2135,6 +2292,8 @@ struct WorkoutExerciseBuilder: View {
     var mode: WorkoutMode = .strengthTraining
     var addLabel = "Add exercise"
     var showAddButton = true
+    /// Forwarded to ``ExerciseSearchPicker`` — see there.
+    var autofocusSearch = false
     var onAdd: () -> Void
 
     private var inputKind: ExerciseInputKind {
@@ -2147,12 +2306,12 @@ struct WorkoutExerciseBuilder: View {
             SheetField("Sets") {
                 TextField("3", text: $sets)
                     .keyboardType(.numberPad)
-                    .sheetTextInput()
+                    .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Reps") {
                 TextField("8", text: $reps)
                     .keyboardType(.numberPad)
-                    .sheetTextInput()
+                    .sheetTextInput(font: .fernlet(.label))
             }
         }
 
@@ -2173,12 +2332,12 @@ struct WorkoutExerciseBuilder: View {
             SheetField("Speed") {
                 TextField("5.5 mph", text: $speed)
                     .keyboardType(.decimalPad)
-                    .sheetTextInput()
+                    .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Incline") {
                 TextField("2", text: $incline)
                     .keyboardType(.decimalPad)
-                    .sheetTextInput()
+                    .sheetTextInput(font: .fernlet(.label))
             }
         }
 
@@ -2209,7 +2368,8 @@ struct WorkoutExerciseBuilder: View {
                 selectedExercise: $selectedExercise,
                 resetToken: $resetToken,
                 title: pickerTitle,
-                placeholder: searchPlaceholder
+                placeholder: searchPlaceholder,
+                autofocus: autofocusSearch
             )
 
             switch inputKind {
@@ -2239,9 +2399,22 @@ struct ExerciseSearchPicker: View {
     @State private var query = ""
     var title = "Exercise"
     var placeholder = "Search exercise or muscle"
+    /// Puts the keyboard in the search field as the sheet opens. Only the speed-first Quick exercise
+    /// sheet asks for it — a sheet with fields above the picker shouldn't yank focus past them.
+    var autofocus = false
+    @FocusState private var searchFocused: Bool
 
     private var results: [ExerciseTarget] {
         Array(WorkoutExerciseCatalog.search(query).prefix(8))
+    }
+
+    /// Return picks the top result instead of doing nothing — typing "squat" then Return used to
+    /// leave the user reaching back up to tap the row they'd already named.
+    private func selectFirstResult() {
+        guard selectedExercise == nil, let first = results.first else { return }
+        selectedExercise = first
+        query = first.name
+        searchFocused = false
     }
 
     var body: some View {
@@ -2253,6 +2426,9 @@ struct ExerciseSearchPicker: View {
                     TextField(placeholder, text: $query)
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled(false)
+                        .focused($searchFocused)
+                        .submitLabel(.search)
+                        .onSubmit { selectFirstResult() }
                         .accessibilityIdentifier("exercise.search")
                 }
                 .sheetTextInput()
@@ -2277,6 +2453,9 @@ struct ExerciseSearchPicker: View {
         }
         .onChange(of: resetToken) { _, _ in
             query = ""
+        }
+        .onAppear {
+            if autofocus && selectedExercise == nil { searchFocused = true }
         }
     }
 }
@@ -2346,6 +2525,7 @@ struct LoggedExerciseRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
+            .fernletIconButton("Remove \(entry.exercise.name)")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -2380,6 +2560,7 @@ struct EditablePlannedExerciseRow: View {
                         .foregroundStyle(Color.slate)
                 }
                 .buttonStyle(.plain)
+                .fernletIconButton("Remove \(entry.exercise.name)")
             }
 
             switch entry.exercise.inputKind {
@@ -2416,7 +2597,8 @@ struct EditablePlannedExerciseRow: View {
                 .foregroundStyle(Color.slate)
             TextField(label, text: text)
                 .keyboardType(keyboard)
-                .sheetTextInput()
+                // Tabular DM Sans for the numeric fields, per the shared field idiom.
+                .sheetTextInput(font: keyboard == .default ? nil : .fernlet(.label))
                 .onChange(of: text.wrappedValue) { _, _ in onChange() }
         }
     }
@@ -2502,17 +2684,18 @@ struct WorkoutCalendarCard: View {
         }
     }
 
+    /// The split legend, wrapped rather than shrunk: as a fixed row with `minimumScaleFactor(0.7)` the
+    /// entries scaled down to "Work…"/"Full B…" instead of taking a second line.
     private var workoutLegend: some View {
-        HStack {
+        FlowLayout(spacing: 10) {
             ForEach(legendSplits) { split in
                 HStack(spacing: 4) {
                     Circle().fill(split.color).frame(width: 8, height: 8)
                     Text(split.title).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
+                .fixedSize()
             }
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
     }
 }
 
@@ -2706,6 +2889,13 @@ struct MoveDayDetailView: View {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
+    /// The full date under the header title. Replaces "Movement only." — which said nothing about
+    /// WHICH day, next to a nav bar that was already repeating the title.
+    private var headerSubtitle: String {
+        let date = FernletDate.date(fromDayKey: dateKey) ?? .now
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
     /// One planned row, wired to the reload-token nudge past days need.
     private func plannedRow(_ workout: PlannedWorkout) -> some View {
         PlannedWorkoutRow(
@@ -2806,14 +2996,16 @@ struct MoveDayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: navigationTitle, subtitle: "Movement only.")
+                ScreenHeader(title: navigationTitle, subtitle: headerSubtitle)
                 planSection
                 workoutsSection
             }
             .padding(20)
         }
         .background(Color.parchment)
-        .navigationTitle(navigationTitle)
+        // The page draws its own ScreenHeader (matching the Move root), so the bar carries only
+        // back + Plan/Log rather than repeating "Today" directly above the big one.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarItems }
         .sheet(isPresented: $showWorkoutSheet) {
@@ -2821,6 +3013,10 @@ struct MoveDayDetailView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+                // The sheet no longer declares its own (the root router's `fernletSheetChrome` does
+                // for the other presentation), so this presentation supplies it — the RPE and
+                // Duration number pads have no return key of their own.
+                .keyboardDoneToolbar()
         }
         .sheet(isPresented: $showPlanSheet) {
             WorkoutPlanSheet(
@@ -2848,6 +3044,11 @@ struct PlannedWorkoutRow: View {
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
+
+    /// Remove asks first — a mis-tap on a small text button used to erase a plan (possibly a
+    /// coach-imported one) with no dialog and no undo, while the sibling logged row confirmed.
+    /// Held here rather than at each call site so both the Move root and the day detail inherit it.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
 
     private var stepLines: [String] {
         plannedWorkout.exercises
@@ -2929,9 +3130,21 @@ struct PlannedWorkoutRow: View {
             Button("Edit", action: onEdit)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
-            Button("Remove", role: .destructive, action: onDelete)
+            Button("Remove", role: .destructive) { confirmRemove() }
                 .font(.fernlet(.label))
+                .foregroundStyle(Color.terracottaInk)
+                .accessibilityIdentifier("workout.plan.remove")
         }
+    }
+
+    private func confirmRemove() {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Remove this plan?",
+            message: "It won't be logged — you can plan it again any time.",
+            confirmLabel: "Remove",
+            auditEvent: "workout.plan.deleteConfirmed",
+            perform: { onDelete() }
+        )
     }
 
     var body: some View {
@@ -2946,6 +3159,7 @@ struct PlannedWorkoutRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+        .destructiveConfirmation($pendingDestructiveAction)
     }
 }
 
@@ -3057,6 +3271,14 @@ struct WorkoutPlanSheet: View {
         return "\(split.title) workout"
     }
 
+    /// The name field is optional — the placeholder shows the name the plan will actually take.
+    private var plannedNamePlaceholder: String {
+        if logMode == .activity {
+            return selectedActivityType?.displayName ?? "Optional, e.g. Saturday ride"
+        }
+        return "\(split.title) workout"
+    }
+
     private var exerciseText: String {
         if logMode == .activity {
             return selectedActivityType?.displayName ?? ""
@@ -3132,19 +3354,24 @@ struct WorkoutPlanSheet: View {
         .buttonStyle(.plain)
     }
 
-    /// The split chip row. Choosing "workout" switches the sheet to activity logging.
+    /// The split chip row — strength only.
+    ///
+    /// The "Workout" chip is deliberately absent: it duplicated the Kind row (picking it flipped Kind,
+    /// and picking Kind flipped it back), so two controls mirrored one piece of state. Split is now
+    /// only asked for when it means something, which is a strength plan.
     private var splitField: some View {
         SheetField("Split") {
             FlowLayout(spacing: 8) {
-                ForEach(WorkoutSplit.allCases) { option in
-                    Button(option.title) {
-                        split = option
-                        logMode = option == .workout ? .activity : .strengthTraining
-                    }
+                ForEach(strengthSplits) { option in
+                    Button(option.title) { split = option }
                         .buttonStyle(ChipButtonStyle(selected: split == option))
                 }
             }
         }
+    }
+
+    private var strengthSplits: [WorkoutSplit] {
+        WorkoutSplit.allCases.filter { $0 != .workout }
     }
 
     /// The strength / activity chip row, kept consistent with the chosen split.
@@ -3199,10 +3426,12 @@ struct WorkoutPlanSheet: View {
             }
         }
 
+        // The two free-text fields used to invite the same content ("exercises, cues") while only
+        // this one parses into rows. The placeholders now say which is which.
         SheetField("Plan steps") {
             SheetTextEditor(
                 text: $plannedExerciseText,
-                placeholder: "Exercises, sets, reps, or trainer cues...",
+                placeholder: "One exercise per line, e.g. Squat 3x8 @60",
                 minHeight: 100
             )
         }
@@ -3215,7 +3444,8 @@ struct WorkoutPlanSheet: View {
             duration: $duration,
             distance: $distance,
             energyKcal: $energyKcal,
-            effort: $effort
+            effort: $effort,
+            showsEnergyField: store.settings.showCalories
         )
     }
 
@@ -3224,7 +3454,7 @@ struct WorkoutPlanSheet: View {
         SheetField("Plan notes") {
             SheetTextEditor(
                 text: $notes,
-                placeholder: "Exercises, coach cues, target pace, or recovery focus...",
+                placeholder: "Anything to remember on the day (pace, warm-up, how you felt)",
                 minHeight: 120
             )
         }
@@ -3252,11 +3482,14 @@ struct WorkoutPlanSheet: View {
                 .accessibilityIdentifier("plan.suggest")
             }
 
-            splitField
+            // Kind first, then Split — Split only qualifies a strength plan.
             kindField
+            if logMode == .strengthTraining {
+                splitField
+            }
 
             SheetField("Workout") {
-                TextField("\(split.title) workout", text: $name)
+                TextField(plannedNamePlaceholder, text: $name)
                     .sheetTextInput()
             }
 
@@ -3270,7 +3503,7 @@ struct WorkoutPlanSheet: View {
                 SheetField("Duration (min)") {
                     TextField("45", text: $duration)
                         .keyboardType(.numberPad)
-                        .sheetTextInput()
+                        .sheetTextInput(font: .fernlet(.label))
                 }
             }
 

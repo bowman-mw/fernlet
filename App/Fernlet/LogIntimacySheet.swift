@@ -24,10 +24,20 @@ struct LogIntimacySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var eventDate = Date()
+    /// Whether the user moved the date off "now". The seed is a live `Date()`, so this flag — not a
+    /// value comparison — is what tells an adjusted date from an untouched one.
+    @State private var dateAdjusted = false
     @State private var note = ""
     @State private var protectionUsed: Bool?
     @State private var isSaving = false
     @State private var statusMessage: String?
+
+    /// Whether the sheet holds anything a swipe-down would throw away.
+    private var isDirty: Bool {
+        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || protectionUsed != nil
+            || dateAdjusted
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +66,8 @@ struct LogIntimacySheet: View {
             }
         }
         .background(Color.parchment)
+        // A swipe-down used to throw away a typed private note with no warning.
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE — presented
         // from the root router, so protection engages regardless of the tab beneath it.
         .captureProtected(surface: "logIntimacy")
@@ -66,6 +78,7 @@ struct LogIntimacySheet: View {
         SheetField("Date and time") {
             DatePicker("Date and time", selection: $eventDate, in: ...Date())
                 .labelsHidden()
+                .onChange(of: eventDate) { _, _ in dateAdjusted = true }
                 .tint(Color.moss)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -117,6 +130,9 @@ struct LogIntimacySheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+            // Full width like the date and note fields above it — the card used to hug its text and
+            // stop short of the right edge.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))

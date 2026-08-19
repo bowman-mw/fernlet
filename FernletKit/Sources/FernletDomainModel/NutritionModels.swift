@@ -244,7 +244,8 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
 /// field (`mealType`, `mealSource`, `quality`) decodes tolerantly with parked tokens
 /// (``EnumDecodeCompat``). The `*Snapshot` fields freeze the numbers as logged; `isAIFallback` and
 /// `confidence` record how trustworthy the resolution was, and `source` carries the free-string
-/// ``MealLogSource`` provenance token. `copyForToday()` re-logs a past meal under a fresh identity.
+/// ``MealLogSource`` provenance token. `copyForToday(mealType:)` re-logs a past meal under a fresh
+/// identity.
 public nonisolated struct Meal: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -279,11 +280,25 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         macros.calories
     }
 
-    public func copyForToday() -> Meal {
+    /// Re-logs this meal on today under a fresh identity.
+    ///
+    /// The copy is a NEW log, not a duplicate of the old row: the caller's `mealType` (the log
+    /// sheet's explicit choice, or the same time-of-day classification a typed log's "Auto" rule
+    /// produces) files it in the right slot instead of inheriting the source meal's — repeating a
+    /// yogurt bowl at 7:35 PM filed it under Breakfast. The source `note` is dropped for the same
+    /// reason: it described THAT logging ("Estimated locally from the description.", a seeded demo
+    /// note) and attributing it to a meal the user never wrote is a small lie. `confidence` becomes
+    /// "Repeated" — this row is as trustworthy as the one it copies, and says how it got here.
+    ///
+    /// - Parameter mealType: The slot to file the copy under; `nil` keeps the source meal's slot.
+    public func copyForToday(mealType: MealType? = nil) -> Meal {
         var copy = self
         copy.id = UUID()
         copy.loggedAt = .now
         copy.photoID = nil
+        if let mealType { copy.mealType = mealType }
+        copy.note = ""
+        copy.confidence = "Repeated"
         return copy
     }
 
@@ -433,13 +448,15 @@ public nonisolated struct MealResolution {
         createdRecipes: [RecipeDefinition],
         confidence: MealResolutionConfidence,
         isFallback: Bool,
-        suggestedRecipe: RecipeDefinition? = nil
+        suggestedRecipe: RecipeDefinition? = nil,
+        unmatchedItems: [String] = []
     ) {
         self.meals = meals
         self.createdRecipes = createdRecipes
         self.confidence = confidence
         self.isFallback = isFallback
         self.suggestedRecipe = suggestedRecipe
+        self.unmatchedItems = unmatchedItems
     }
     public var meals: [Meal]
     /// Recipes auto-minted as a side effect of resolution and persisted silently on commit (the legacy
@@ -452,8 +469,17 @@ public nonisolated struct MealResolution {
     /// reaches the recipe book only through a user confirm, so a decomposition that auto-commits (high
     /// confidence, no review) never mints a recipe. `nil` for every other tier.
     public var suggestedRecipe: RecipeDefinition?
+    /// Typed items the resolver could not bind to any food, verbatim ("2 eggs" out of "2 eggs and
+    /// toast"). Carried up from ``FoodSelectionPlan/unmatchedItems`` so the review sheet can name
+    /// what was missed. Empty means every item the splitter produced ended up in the meal.
+    public var unmatchedItems: [String] = []
 
-    public var needsReview: Bool { confidence.needsReview || isFallback }
+    /// Whether the quick-log flow must pause on the "Check this meal" sheet instead of committing.
+    ///
+    /// Coverage counts as much as confidence: a plan that bound one of two typed items produces a
+    /// meal that LOOKS certain (one real catalog match, `.high`) while silently dropping food, so
+    /// any unmatched item forces the review — see ``unmatchedItems``.
+    public var needsReview: Bool { confidence.needsReview || isFallback || !unmatchedItems.isEmpty }
 }
 
 /// Protein/carb/fat grams; `calories` derives via the 4/4/9 kcal-per-gram rule.
@@ -1102,14 +1128,32 @@ public nonisolated struct FoodSelectionMealItem: Identifiable, Equatable {
 /// foods.
 public nonisolated struct FoodSelectionPlan: Equatable {
 
-    public init(mealName: String, mealType: MealType, items: [FoodSelectionMealItem]) {
+    public init(
+        mealName: String,
+        mealType: MealType,
+        items: [FoodSelectionMealItem],
+        unmatchedItems: [String] = []
+    ) {
         self.mealName = mealName
         self.mealType = mealType
         self.items = items
+        self.unmatchedItems = unmatchedItems
     }
     public var mealName: String
     public var mealType: MealType
     public var items: [FoodSelectionMealItem]
+    /// The split items the tier could NOT bind to a catalog food, verbatim as the user typed them
+    /// ("2 eggs" out of "2 eggs and toast").
+    ///
+    /// A plan that binds one of two items is not a full answer: dropping the unbound half silently
+    /// logs a confident-looking meal that is missing food. Resolvers carry the dropped words here so
+    /// the confidence can be lowered and the review sheet can show what was missed instead of the
+    /// user discovering it by re-reading the row. Empty means full coverage.
+    public var unmatchedItems: [String]
+
+    /// True when at least one split item was dropped — the "this plan is partial" signal callers
+    /// use to demote confidence and open the review sheet.
+    public var hasUnmatchedItems: Bool { !unmatchedItems.isEmpty }
 
     public var ingredients: [FoodSelectionIngredient] {
         items.flatMap(\.ingredients)

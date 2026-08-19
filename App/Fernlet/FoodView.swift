@@ -29,8 +29,13 @@ struct FoodView: View {
     @State private var editingRecipe: RecipeDefinition?
     @State private var editingSavedRecipe: RecipeDefinition?
     @State private var correctingMeal: Meal?
-    @State private var showingRecipeBook = false
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
+    /// Presents the macro-target editor from the Food tab, so nudging a target doesn't mean leaving
+    /// for Settings and hunting for "Goal & nutrition".
+    @State private var showingNutritionTargets = false
+    /// Drives the shared destructive confirmation for the two irreversible actions on this screen —
+    /// removing a logged meal (and its sealed photo) and discarding an in-progress cooking run.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
     /// The recipe to re-open cooking mode on when the user taps the Food-root resume card (set only for
     /// an in-progress cooking run whose recipe still exists). Carries whether it's a saved/web recipe so
     /// the completion log routes to the right store method.
@@ -49,7 +54,7 @@ struct FoodView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     headerRow
 
-                    MacroCard(totals: store.macroTotals, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
+                    macrosSection
 
                     cookingResumeSection
                     pendingRetrySection
@@ -63,15 +68,47 @@ struct FoodView: View {
             .background(Color.parchment)
             .navigationTitle("")
         }
+        // One keyboard "Done" for everything pushed inside the Food tab (the recipe book, its create
+        // flow, the planner). A tab is not a sheet, so it gets none of `fernletSheetChrome`'s
+        // accessories, and the numeric pads in there had no way to dismiss themselves. Declared once,
+        // at the stack, so a pushed page never stacks a second Done on top of it.
+        .keyboardDoneToolbar()
     }
 
     private var headerRow: some View {
         HStack(alignment: .top) {
             ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
             Spacer()
+            // Settings used to be reachable only from Home (tab switch + gear). Every tab header
+            // carries the same small gear so it is one tap from wherever the user already is.
+            HeaderActionButton(systemImage: "gearshape", accessibilityLabel: "Settings") { activeSheet = .settings }
             HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
         }
         .padding(.top, 4)
+    }
+
+    /// Today's macro totals plus the way in to the targets they're measured against — the card used
+    /// to name targets ("of 93g") with no path to change them short of hunting through Settings.
+    ///
+    /// `fiberIntake` is the same value Home passes: without it this card fell back to "Fiber target
+    /// 37g" while Home read "Fiber 12g of 37g" for the very same day.
+    private var macrosSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MacroCard(
+                totals: store.macroTotals,
+                targets: store.nutritionTargets,
+                showCalories: store.settings.showCalories,
+                fiberIntake: store.micronutrientTotals.fiber
+            )
+            HStack {
+                Spacer()
+                Button("Adjust targets") { showingNutritionTargets = true }
+                    .buttonStyle(.plain)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .accessibilityIdentifier("food.adjustTargets")
+            }
+        }
     }
 
     /// A cooking session in progress takes precedence — it stays resumable even after an app kill
@@ -84,9 +121,33 @@ struct FoodView: View {
                 stepNumber: run.stepNumber,
                 stepCount: run.stepCount,
                 onResume: { resumeCookingRun() },
-                onDiscard: { store.endCookingRun() }
+                onDiscard: { confirmDiscardCookingRun(named: run.recipeName) }
             )
         }
+    }
+
+    /// Discarding a cook throws away where the user had got to (and clears the Live Activity), so it
+    /// asks first — the Move tab's workout runner already does.
+    private func confirmDiscardCookingRun(named recipeName: String) {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Stop cooking \(recipeName)?",
+            message: "Your place in the steps is forgotten and the Live Activity is cleared. The recipe itself is untouched.",
+            confirmLabel: "Stop cooking",
+            auditEvent: "cooking.run.discardConfirmed",
+            perform: { store.endCookingRun() }
+        )
+    }
+
+    /// Removing a logged meal takes its sealed photo with it and can't be undone, so it routes
+    /// through the same confirmation as the recipe-photo delete rather than firing on one tap.
+    private func confirmDeleteMeal(_ meal: Meal) {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Remove this meal?",
+            message: "\u{201C}\(meal.name)\u{201D} and any photo attached to it are removed from this device. Fernlet can't undo this.",
+            confirmLabel: "Remove",
+            auditEvent: "meal.deleteConfirmed",
+            perform: { store.deleteMeal(meal) }
+        )
     }
 
     /// Re-opens the in-progress run's recipe in cooking mode, or retires the run when the recipe it
@@ -139,7 +200,7 @@ struct FoodView: View {
                             MealRow(
                                 meal: meal,
                                 showCalories: store.settings.showCalories,
-                                onDelete: { store.deleteMeal(meal) },
+                                onDelete: { confirmDeleteMeal(meal) },
                                 onCorrect: { correctingMeal = meal },
                                 loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
                                 hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
@@ -149,7 +210,7 @@ struct FoodView: View {
                                 FernletRowDivider()
                             }
                         }
-                        mealTypeSubtotal(group.meals)
+                        mealTypeSubtotal(group.meals, type: group.type)
                     }
                 }
             }
@@ -161,9 +222,21 @@ struct FoodView: View {
             HStack {
                 SectionLabel("Recipes")
                 Spacer()
-                Button("Recipe book") { showingRecipeBook = true }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.fern)
+                // Pushed, not presented: book → detail → editor then lives in ONE stack, so saving an
+                // edit started from the book returns to that recipe instead of dropping to Food root.
+                NavigationLink {
+                    RecipeBookSheet(
+                        store: store,
+                        editingRecipe: $editingRecipe,
+                        editingSavedRecipe: $editingSavedRecipe,
+                        isEmbeddedInNavigationStack: true
+                    )
+                } label: {
+                    Text("Recipe book")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                }
+                .buttonStyle(.plain)
             }
             if recentRecipePreviews.isEmpty {
                 FernletCard {
@@ -287,31 +360,29 @@ struct FoodView: View {
     }
 
     /// The Food root's five editor/share sheets, in their original application order.
+    ///
+    /// The four entry sheets go through `fernletSheetChrome` for the same reason the routed sheets do:
+    /// a sheet is its own presentation, so it inherits neither the tab tree's moss tint nor a keyboard
+    /// "Done" accessory unless it asks for them.
     private func foodSheets<V: View>(_ content: V) -> some View {
         content
             .sheet(item: $editingRecipe) { recipe in
                 RecipeSheet(store: store, recipe: recipe)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+                    .fernletSheetChrome(anchor: "sheet.recipeEditor", detents: [.large])
             }
             .sheet(item: $editingSavedRecipe) { recipe in
                 SavedRecipeNotesSheet(store: store, recipe: recipe)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+                    .fernletSheetChrome(anchor: "sheet.savedRecipeNotes", detents: [.medium, .large])
             }
             .sheet(item: $correctingMeal) { meal in
+                // Full height only: at .medium the "Matched items" editor — the thing the user opened
+                // this sheet to fix — sat clipped behind the Save pill until they dragged it up.
                 MealCorrectionSheet(store: store, meal: meal)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+                    .fernletSheetChrome(anchor: "sheet.mealCorrection", detents: [.large])
             }
-            .sheet(isPresented: $showingRecipeBook) {
-                RecipeBookSheet(store: store, editingRecipe: $editingRecipe, editingSavedRecipe: $editingSavedRecipe)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+            .sheet(isPresented: $showingNutritionTargets) {
+                NutritionTargetsSheet(store: store)
+                    .fernletSheetChrome(anchor: "sheet.nutritionTargets", detents: [.medium, .large])
             }
             .sheet(item: $recipeShareDraft) { draft in
                 ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
@@ -325,6 +396,7 @@ struct FoodView: View {
     /// modifier order matches what shipped.
     private func foodLifecycle<V: View>(_ content: V) -> some View {
         content
+            .destructiveConfirmation($pendingDestructiveAction)
             .onAppear {
                 store.markLaunchScreenDismissed()
                 store.ensureBundledFoodItemsSeeded()
@@ -371,22 +443,27 @@ struct FoodView: View {
         }
     }
 
-    /// A quiet per-section macro footer inside each meal-type card (the type name is the card's title,
-    /// so this only carries the protein and, behind the calorie opt-in, calorie subtotal).
-    private func mealTypeSubtotal(_ meals: [Meal]) -> some View {
-        let protein = meals.reduce(0) { $0 + $1.macros.protein }
-        let calories = meals.reduce(0) { $0 + $1.calories }
-        return HStack(spacing: 10) {
-            Spacer(minLength: 0)
-            Text("P \(protein)g")
-                .foregroundStyle(Color.moss)
-            if store.settings.showCalories {
-                Text("\(calories) cal")
+    /// A quiet per-section macro footer inside each meal-type card, shown only when the section has
+    /// more than one meal — under a single row the unlabelled "P 28g" simply repeated that row's own
+    /// protein directly beneath it. When it does show it says whose total it is.
+    @ViewBuilder private func mealTypeSubtotal(_ meals: [Meal], type: MealType) -> some View {
+        if meals.count > 1 {
+            let protein = meals.reduce(0) { $0 + $1.macros.protein }
+            let calories = meals.reduce(0) { $0 + $1.calories }
+            HStack(spacing: 10) {
+                Text("\(type.rawValue) total")
                     .foregroundStyle(Color.slate)
+                Spacer(minLength: 0)
+                Text("P \(protein)g")
+                    .foregroundStyle(Color.moss)
+                if store.settings.showCalories {
+                    Text("\(calories) cal")
+                        .foregroundStyle(Color.slate)
+                }
             }
+            .font(.fernlet(.stat))
+            .padding(.top, 10)
         }
-        .font(.fernlet(.stat))
-        .padding(.top, 10)
     }
 }
 
@@ -490,16 +567,43 @@ private struct CookingResumeCard: View {
                             Text("Resume")
                                 .font(.fernlet(.label))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.onMoss)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("cooking.resume")
                 }
             }
         }
+    }
+}
+
+/// The Food tab's way in to ``NutritionTargetsEditor`` — the same card Settings shows, wrapped in a
+/// sheet with a title and a Done bar.
+///
+/// The macro card names targets the user can't reach from here otherwise; this keeps "nudge a target"
+/// a tap away from the numbers it changes, without duplicating the editor.
+private struct NutritionTargetsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var store: FernletStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Nutrition targets")
+                        .font(.fernlet(.displayMedium))
+                        .foregroundStyle(Color.bark)
+                    NutritionTargetsEditor(store: store)
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+            SheetSaveBar(label: "Done") { dismiss() }
+        }
+        .background(Color.parchment)
     }
 }
 
@@ -535,6 +639,10 @@ struct NutritionPill: View {
 private struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
+    /// Called instead of `dismiss()` once a recipe has actually been imported, so the host can pop
+    /// past the create-recipe chooser to the book rather than leaving the user on it. `nil` keeps the
+    /// plain one-level dismiss.
+    var onSaved: ((String) -> Void)?
     @State private var importText = ""
     @State private var notice: String?
     @State private var isImportingURL = false
@@ -616,12 +724,22 @@ private struct RecipeImportSheet: View {
         .disabled(isImportingURL)
     }
 
+    /// Leaves the import screen after a successful import: all the way back to the book when the host
+    /// asked for that, otherwise the plain dismiss.
+    private func finishImport(named recipeName: String) {
+        if let onSaved {
+            onSaved(recipeName)
+        } else {
+            dismiss()
+        }
+    }
+
     /// Decodes the pasted share text through the store, dismissing on success and surfacing the
     /// import error's own message otherwise.
     private func importSharedText() {
         do {
-            try store.importRecipe(from: importText)
-            dismiss()
+            let imported = try store.importRecipe(from: importText)
+            finishImport(named: imported.name)
         } catch let error as RecipeImportError {
             notice = error.message
         } catch {
@@ -746,7 +864,7 @@ private struct RecipeImportSheet: View {
                     // nothing left to dismiss.
                     return
                 }
-                dismiss()
+                finishImport(named: importedRecipe.name)
             } catch {
                 notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
                 isImportingURL = false
@@ -830,6 +948,9 @@ struct SavedRecipeNotesSheet: View {
     var store: FernletStore
     @State private var recipe: RecipeDefinition
     @State private var showingSafari = false
+    /// Drives the confirmation in front of "Delete recipe" — it used to delete and dismiss on a
+    /// single tap, with no way back.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
 
     init(store: FernletStore, recipe: RecipeDefinition) {
         self.store = store
@@ -871,6 +992,7 @@ struct SavedRecipeNotesSheet: View {
             }
         }
         .background(Color.parchment)
+        .destructiveConfirmation($pendingDestructiveAction)
         // Warm the DNS/TLS connection to the source host while the sheet is up, so tapping the
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
@@ -941,11 +1063,20 @@ struct SavedRecipeNotesSheet: View {
 
     private var deleteButton: some View {
         Button(role: .destructive) {
-            store.deleteSavedRecipe(recipe)
-            dismiss()
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Delete \u{201C}\(recipe.name)\u{201D}?",
+                message: "The saved recipe, its notes and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this.",
+                confirmLabel: "Delete",
+                auditEvent: "savedRecipe.deleteConfirmed",
+                perform: {
+                    store.deleteSavedRecipe(recipe)
+                    dismiss()
+                }
+            )
         } label: {
             Label("Delete recipe", systemImage: "trash")
                 .font(.fernlet(.label))
+                .foregroundStyle(Color.terracottaInk)
                 .frame(maxWidth: .infinity)
                 .padding(14)
         }
@@ -974,7 +1105,8 @@ private struct SourceLinkRow: View {
                         .font(.fernlet(.labelSmall))
                         .underline()
                 }
-                .foregroundStyle(Color.fern)
+                // Moss rather than fern: at 11pt on cream, fern measured under 3:1.
+                .foregroundStyle(Color.moss)
             }
             .buttonStyle(.plain)
         } else {
@@ -1019,6 +1151,11 @@ struct RecipeSheet: View {
     private var editingRecipe: RecipeDefinition?
     private var isEmbeddedInNavigationStack: Bool
     private var startsWithScanner: Bool
+    /// Called instead of `dismiss()` after a successful save when this editor is PUSHED inside a host
+    /// stack that wants to pop further than one level (the recipe book's create flow lands the user
+    /// back on the book, not on the "Import / Manual entry" chooser they passed through). `nil` keeps
+    /// the plain dismiss the sheet and the meal-flow push both want.
+    private var onSaved: ((String) -> Void)?
     @State private var name = ""
     @State private var servings = 1
     @State private var notes = ""
@@ -1030,12 +1167,25 @@ struct RecipeSheet: View {
     @State private var scannerPath = false
     @State private var didStartScanner = false
     @State private var showingBarcodeScanner = false
+    /// Drives the confirmation in front of "Delete recipe" — deleting and dismissing on one tap was
+    /// the only unguarded way to lose a whole recipe.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
+    /// The at-open draft, so the sheet can tell "nothing typed yet" from "unsaved edits" and only
+    /// warn about the second (see ``isDirty``).
+    private let originalDraft: RecipeDraftSnapshot
 
-    init(store: FernletStore, recipe: RecipeDefinition? = nil, isEmbeddedInNavigationStack: Bool = false, startsWithScanner: Bool = false) {
+    init(
+        store: FernletStore,
+        recipe: RecipeDefinition? = nil,
+        isEmbeddedInNavigationStack: Bool = false,
+        startsWithScanner: Bool = false,
+        onSaved: ((String) -> Void)? = nil
+    ) {
         self.store = store
         self.editingRecipe = recipe
         self.isEmbeddedInNavigationStack = isEmbeddedInNavigationStack
         self.startsWithScanner = startsWithScanner
+        self.onSaved = onSaved
         if let recipe {
             let loadedIngredients = Self.inputs(for: recipe, foodItems: store.foodCatalog.items(forRecipe: recipe))
             _name = State(initialValue: recipe.name)
@@ -1043,12 +1193,36 @@ struct RecipeSheet: View {
             _notes = State(initialValue: recipe.notes)
             _ingredients = State(initialValue: loadedIngredients)
             _steps = State(initialValue: recipe.steps ?? [])
-            _expandedId = State(initialValue: loadedIngredients.first?.id)
+            // Editing opens on the WHOLE recipe: expanding the first ingredient's search editor pushed
+            // the list, servings and steps below the fold, so the user had to tap Done before they
+            // could see what they came to change. Blank rows still auto-expand (see `ingredientsSection`).
+            _expandedId = State(initialValue: nil)
+            originalDraft = RecipeDraftSnapshot(
+                name: recipe.name,
+                servings: recipe.servings,
+                notes: recipe.notes,
+                ingredients: loadedIngredients,
+                steps: recipe.steps ?? []
+            )
         } else {
             let first = ManualRecipeIngredientInput()
             _ingredients = State(initialValue: [first])
             _expandedId = State(initialValue: first.id)
+            originalDraft = RecipeDraftSnapshot(
+                name: "",
+                servings: 1,
+                notes: "",
+                ingredients: [first],
+                steps: []
+            )
         }
+    }
+
+    /// Whether the editor holds edits a swipe-away would silently throw out.
+    private var isDirty: Bool {
+        originalDraft != RecipeDraftSnapshot(
+            name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps
+        )
     }
 
     @ViewBuilder
@@ -1059,6 +1233,8 @@ struct RecipeSheet: View {
             NavigationStack {
                 recipeContent
             }
+            // Presented as a sheet: a swipe-down used to discard a typed recipe with no warning.
+            .fernletDraftGuard(isDirty: isDirty) { dismiss() }
         }
     }
 
@@ -1066,12 +1242,17 @@ struct RecipeSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(editingRecipe == nil ? "New recipe" : "Edit recipe")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
+                    // Pushed pages title themselves in the nav bar (see `.navigationTitle` below); only
+                    // the sheet, which has no bar, draws the display-serif title in the body.
+                    if !isEmbeddedInNavigationStack {
+                        Text(editorTitle)
+                            .font(.fernlet(.displayMedium))
+                            .foregroundStyle(Color.bark)
+                    }
 
                     SheetField("Recipe name") {
                         TextField("black bean bowls", text: $name)
+                            .submitLabel(.done)
                             .sheetTextInput()
                     }
 
@@ -1096,6 +1277,14 @@ struct RecipeSheet: View {
             saveBar
         }
         .background(Color.parchment)
+        // Belt and braces for the unit menu and the steppers: this editor is reached from a routed
+        // sheet, its own sheet, and two pushed stacks, and an untinted system control renders Apple
+        // blue in any presentation that isn't already tinted. (The keyboard "Done" is NOT declared
+        // here — its host does that once, so a pushed editor can't stack a second one.)
+        .tint(Color.moss)
+        .navigationTitle(isEmbeddedInNavigationStack ? editorTitle : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .destructiveConfirmation($pendingDestructiveAction)
         .navigationDestination(isPresented: $scannerPath) {
             NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 applyLabelScan(result)
@@ -1141,7 +1330,9 @@ struct RecipeSheet: View {
                         )
                     }
                 }
-                HStack(spacing: 8) {
+                // Stacks at accessibility sizes: side by side, "Add ingredient" / "Scan barcode"
+                // squeezed to the edge and broke mid-word.
+                AdaptiveStack(spacing: 8) {
                     Button {
                         addIngredient()
                     } label: {
@@ -1219,14 +1410,38 @@ struct RecipeSheet: View {
     @ViewBuilder private var deleteRecipeButton: some View {
         if let editingRecipe {
             Button(role: .destructive) {
-                store.deleteRecipe(editingRecipe)
-                dismiss()
+                pendingDestructiveAction = DestructiveConfirmation(
+                    title: "Delete \u{201C}\(editingRecipe.name)\u{201D}?",
+                    message: "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this.",
+                    confirmLabel: "Delete",
+                    auditEvent: "recipe.deleteConfirmed",
+                    perform: {
+                        store.deleteRecipe(editingRecipe)
+                        // Deleting is not saving: close this editor and leave the host where it is,
+                        // rather than announcing a recipe that no longer exists.
+                        dismiss()
+                    }
+                )
             } label: {
                 Label("Delete recipe", systemImage: "trash")
                     .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracottaInk)
                     .frame(maxWidth: .infinity)
                     .padding(14)
             }
+        }
+    }
+
+    /// The editor's own title, used in the nav bar when pushed and in the body when presented.
+    private var editorTitle: String { editingRecipe == nil ? "New recipe" : "Edit recipe" }
+
+    /// Leaves the editor after a save/delete: pops all the way back to the host's landing screen when
+    /// one asked for that (`onSaved`), otherwise the plain dismiss (sheet close, or one pop).
+    private func finishAfterSave(named recipeName: String) {
+        if let onSaved {
+            onSaved(recipeName)
+        } else {
+            dismiss()
         }
     }
 
@@ -1236,18 +1451,20 @@ struct RecipeSheet: View {
         if let editingRecipe {
             SheetSaveBar(disabled: !canSave) {
                 store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-                dismiss()
+                finishAfterSave(named: name)
             }
         } else {
             createButtons
         }
     }
 
+    /// Stacks at accessibility sizes — side by side, "Save recipe" / "Log & save" squeezed to the
+    /// screen edge and broke mid-word.
     private var createButtons: some View {
-        HStack(spacing: 12) {
+        AdaptiveStack(spacing: 12) {
             Button("Save recipe") {
                 store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-                dismiss()
+                finishAfterSave(named: name)
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
@@ -1262,14 +1479,14 @@ struct RecipeSheet: View {
             Button("Log & save") {
                 let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
                 store.logRecipe(recipe)
-                dismiss()
+                finishAfterSave(named: name)
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(canSave ? Color.moss : Color.moss.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+            .background(canSave ? Color.mossFill : Color.mossFill.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
             .disabled(!canSave)
         }
         .padding(20)
@@ -1328,8 +1545,11 @@ struct RecipeSheet: View {
             VStack(spacing: 8) {
                 // Identity is the step id (stable under reorder/delete); the display index is recomputed
                 // per render so "Step N" and the up/down enable-state always reflect current position.
-                ForEach(steps) { step in
-                    stepEditorCard(step, index: steps.firstIndex(where: { $0.id == step.id }) ?? 0)
+                // Each editor gets the ELEMENT binding (`$step`) rather than a by-id computed Binding:
+                // the computed one rewrote the whole array on every keystroke, which reset the caret
+                // mid-word and dropped characters as the user typed.
+                ForEach($steps) { $step in
+                    stepEditorCard($step, index: steps.firstIndex(where: { $0.id == step.id }) ?? 0)
                 }
                 addStepButton
             }
@@ -1338,25 +1558,26 @@ struct RecipeSheet: View {
 
     /// One step's editor card: position label + move/remove controls, the text editor, and the
     /// optional per-step timer.
-    private func stepEditorCard(_ step: RecipeStep, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func stepEditorCard(_ step: Binding<RecipeStep>, index: Int) -> some View {
+        let id = step.wrappedValue.id
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Step \(index + 1)")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()
                 stepControlButton(systemImage: "chevron.up", enabled: index > 0, label: "Move step \(index + 1) up") {
-                    moveStep(step.id, by: -1)
+                    moveStep(id, by: -1)
                 }
                 stepControlButton(systemImage: "chevron.down", enabled: index < steps.count - 1, label: "Move step \(index + 1) down") {
-                    moveStep(step.id, by: 1)
+                    moveStep(id, by: 1)
                 }
                 stepControlButton(systemImage: "xmark", enabled: true, tint: Color.slate, label: "Remove step \(index + 1)") {
-                    removeStep(step.id)
+                    removeStep(id)
                 }
             }
-            SheetTextEditor(text: bindingForStepText(step.id), placeholder: "what to do in this step", minHeight: 60)
-            StepTimerControl(durationSeconds: bindingForStepDuration(step.id))
+            SheetTextEditor(text: step.text, placeholder: "what to do in this step", minHeight: 60)
+            StepTimerControl(durationSeconds: step.durationSeconds)
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1408,25 +1629,6 @@ struct RecipeSheet: View {
     private func addStep() {
         guard steps.count < RecipeLimits.maxSteps else { return }
         steps.append(RecipeStep(text: ""))
-    }
-
-    /// A by-id text binding (safe under reorder/delete — an index binding would target a shifted row).
-    private func bindingForStepText(_ id: UUID) -> Binding<String> {
-        Binding(
-            get: { steps.first(where: { $0.id == id })?.text ?? "" },
-            set: { newValue in
-                if let i = steps.firstIndex(where: { $0.id == id }) { steps[i].text = newValue }
-            }
-        )
-    }
-
-    private func bindingForStepDuration(_ id: UUID) -> Binding<Int?> {
-        Binding(
-            get: { steps.first(where: { $0.id == id })?.durationSeconds },
-            set: { newValue in
-                if let i = steps.firstIndex(where: { $0.id == id }) { steps[i].durationSeconds = newValue }
-            }
-        )
     }
 
     private func moveStep(_ id: UUID, by offset: Int) {
@@ -1501,6 +1703,19 @@ struct RecipeSheet: View {
     }
 }
 
+/// Everything ``RecipeSheet`` lets the user edit, captured as one comparable value.
+///
+/// The editor snapshots it at open and compares the live fields against it, so the discard warning
+/// fires on real edits only — an opened-and-closed recipe (or an untouched blank draft) dismisses
+/// without a dialog.
+private struct RecipeDraftSnapshot: Equatable {
+    let name: String
+    let servings: Int
+    let notes: String
+    let ingredients: [ManualRecipeIngredientInput]
+    let steps: [RecipeStep]
+}
+
 /// The collapsed one-line summary of a recipe ingredient (name plus a quantity/macros line), shown
 /// while a different ingredient's editor is expanded.
 ///
@@ -1550,6 +1765,7 @@ private struct CollapsedIngredientRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
+            .fernletIconButton("Remove \(ingredient.name.isEmpty ? "ingredient" : ingredient.name)")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1585,6 +1801,7 @@ private struct RecipeIngredientEditor: View {
             saveCustomIngredientButton
             quantityUnitRow
             macroSection
+            removeIngredientButton
         }
         .padding(.vertical, 6)
         .onChange(of: ingredient.name) { _, newValue in
@@ -1599,6 +1816,10 @@ private struct RecipeIngredientEditor: View {
         }
     }
 
+    /// Only "Done" lives beside the search field. The remove control used to sit next to it as a bare
+    /// x, which reads as "clear/close the search" — one mis-tap while looking for a way out of the
+    /// results list deleted the whole ingredient. Removal is now the labelled button at the bottom of
+    /// the card (see ``removeIngredientButton``).
     private var searchHeaderRow: some View {
         HStack {
             HStack(spacing: 8) {
@@ -1615,13 +1836,22 @@ private struct RecipeIngredientEditor: View {
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
+                    .fernletTapTarget(minWidth: 44, minHeight: 44)
             }
-            Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .foregroundStyle(Color.slate)
-            }
-            .buttonStyle(.plain)
         }
+    }
+
+    /// The labelled way out of an ingredient: a word, at the foot of the card, well away from the
+    /// search field's Done.
+    private var removeIngredientButton: some View {
+        Button("Remove ingredient", action: onRemove)
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.terracottaInk)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Remove \(ingredient.trimmedName.isEmpty ? "ingredient" : ingredient.name)")
     }
 
     @ViewBuilder private var suggestionList: some View {
@@ -1691,6 +1921,9 @@ private struct RecipeIngredientEditor: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
                 .textContentType(.none)
+                // Design-system digits: the bare field rendered its value in system SF next to the
+                // serif placeholders in the same card.
+                .font(.fernlet(.label))
                 .frame(maxWidth: 80)
             Picker("Unit", selection: $ingredient.unit) {
                 ForEach(RecipeUnit.allCases) { unit in
@@ -1851,6 +2084,9 @@ struct MealSheet: View {
     /// True once a meal has been committed but the sheet stayed open (photo-save failure notice). The
     /// save bar then becomes a Done/dismiss — a second "Save" tap must never log the same meal twice.
     @State private var didLogMeal = false
+    /// Set when the user discards this sheet while a resolve is still running, so the in-flight
+    /// resolve drops its result instead of committing a meal they just cancelled.
+    @State private var abandonedResolve = false
     @State private var reviewContext: MealReviewContext?
     #if canImport(UIKit)
     @State private var mealPhoto: UIImage?
@@ -1890,12 +2126,6 @@ struct MealSheet: View {
                 }
         }
         .background(Color.parchment)
-        // While a resolve is in flight, keep the sheet from being swiped away: the unstructured resolve
-        // Task isn't cancelled on dismiss, so an interactive dismiss mid-"Matching" could commit a meal
-        // the user meant to cancel or set reviewContext on a torn-down sheet. Once resolve finishes,
-        // the commit / reviewContext handoff runs synchronously (no suspension point), so re-enabling
-        // dismissal here can't reopen the window.
-        .interactiveDismissDisabled(isResolvingMeal)
         #if canImport(UIKit)
         .overlay {
             if isAnalyzingCapture {
@@ -1905,10 +2135,27 @@ struct MealSheet: View {
         }
         .animation(FernletMotion.ui, value: isAnalyzingCapture)
         #endif
+        // At the sheet ROOT, not just on the composer: the draft guard below lives on the composer
+        // page (so a pushed Scan/Import page keeps its own chevron instead of growing a Cancel bar),
+        // and a preference declared there stops applying once that page is off screen. Without this
+        // line an interactive dismiss from a pushed page while "Matching" is still running would let
+        // the unstructured resolve Task commit a meal the user meant to cancel.
+        .interactiveDismissDisabled(isResolvingMeal)
         .onAppear {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
         }
+    }
+
+    /// Whether the composer holds anything a swipe-away would silently discard. False once the meal
+    /// has actually logged (the sheet then only carries a photo-failure notice).
+    private var hasUnsavedDraft: Bool {
+        guard !didLogMeal else { return false }
+        if !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        #if canImport(UIKit)
+        if mealPhoto != nil || mealPhotoData != nil { return true }
+        #endif
+        return false
     }
 
     /// One pushed destination in the log-meal flow (scanner, embedded recipe editor, web import /
@@ -1995,7 +2242,7 @@ struct MealSheet: View {
         #endif
     }
 
-    /// The pre-log review sheet for a low-confidence resolution.
+    /// The pre-log review sheet for a low-confidence or partially-matched resolution.
     private func reviewSheet(_ context: MealReviewContext) -> some View {
         MealReviewSheet(
             resolution: context.resolution,
@@ -2125,7 +2372,12 @@ struct MealSheet: View {
                     photoAndIdentifySection
 
                     SheetField("What did you eat?") {
-                        SheetTextEditor(text: $description, placeholder: "scrambled eggs and toast", minHeight: 100)
+                        // A one-line log is the common case, so Return saves instead of inserting a
+                        // line break; the field still grows to four lines for a longer description.
+                        SheetGrowingTextField(text: $description, placeholder: "scrambled eggs and toast") {
+                            guard canSaveTypedMeal else { return }
+                            saveTapped()
+                        }
                     }
 
                     captureButtonsSection
@@ -2140,12 +2392,30 @@ struct MealSheet: View {
 
             SheetSaveBar(
                 label: didLogMeal ? "Done" : (isResolvingMeal ? "Matching" : "Save"),
-                disabled: !didLogMeal && (description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal)
+                disabled: !didLogMeal && !canSaveTypedMeal
             ) {
                 saveTapped()
             }
         }
         .background(Color.parchment)
+        // Two reasons a swipe must not take this sheet away, folded into one guard:
+        //  - a resolve in flight (the unstructured Task isn't cancelled on dismiss, so an interactive
+        //    dismiss mid-"Matching" could commit a meal the user meant to cancel), and
+        //  - a typed description / attached photo, which a swipe-down silently threw out.
+        // Cancel dismisses a clean sheet outright and asks first when there's something to lose;
+        // discarding mid-resolve also disarms the in-flight commit (`abandonedResolve`). It sits on
+        // the composer rather than the whole stack so a pushed page (Scan, Import) keeps its own
+        // back chevron instead of growing a second bar above it.
+        .fernletDraftGuard(isDirty: isResolvingMeal || hasUnsavedDraft) {
+            abandonedResolve = isResolvingMeal
+            dismiss()
+        }
+    }
+
+    /// Whether Save (or a Return press) has something to log: the same condition the save bar's
+    /// disabled state uses, so Return can never save a form the pill would refuse.
+    private var canSaveTypedMeal: Bool {
+        !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResolvingMeal
     }
 
     /// The captured/picked meal photo plus the gated "Identify from photo" action.
@@ -2187,13 +2457,20 @@ struct MealSheet: View {
                     path.append(.scanBarcode)
                 }
                 recentMealsMenu
-                mealSecondaryButton("Import", icon: "link.badge.plus") {
-                    path.append(.productPageImport)
+                // Import is a web lookup end to end. Offering it with web nutrition lookup switched
+                // off led to a screen that accepted a search and then refused it, so it only appears
+                // when the lookup it depends on is actually available.
+                if store.allowsWebNutritionLookup {
+                    mealSecondaryButton("Import", icon: "link.badge.plus") {
+                        path.append(.productPageImport)
+                    }
                 }
             }
             #else
-            mealSecondaryButton("Import", icon: "link.badge.plus") {
-                path.append(.productPageImport)
+            if store.allowsWebNutritionLookup {
+                mealSecondaryButton("Import", icon: "link.badge.plus") {
+                    path.append(.productPageImport)
+                }
             }
             #endif
         }
@@ -2206,7 +2483,13 @@ struct MealSheet: View {
             Menu {
                 ForEach(store.recentMeals.prefix(8)) { meal in
                     Button(meal.name) {
-                        let copiedMeal = store.copyMeal(meal)
+                        // File the repeat for NOW: the sheet's own Meal-type choice when the user made
+                        // one, otherwise the same by-time "Auto" rule a typed log follows. Without a
+                        // slot the copy inherited the source meal's, so yogurt repeated at 7:35 PM
+                        // landed under Breakfast. (The store drops the carried note and stamps the copy
+                        // "Repeated" — see `FernletStore.copyMeal`.)
+                        let copiedMeal = store.copyMeal(
+                            meal, mealType: mealType ?? MealParser.classifyMealType(meal.name))
                         onLogged([copiedMeal])
                         dismiss()
                     }
@@ -2294,8 +2577,14 @@ struct MealSheet: View {
         Task {
             let resolution = await store.resolveMeals(from: mealDescription, type: type)
             isResolvingMeal = false
+            // The sheet was discarded while this resolve was still running: the user cancelled, so
+            // nothing here commits.
+            guard !abandonedResolve else { return }
+            // `needsReview` now covers coverage as well as confidence: a resolution that quietly
+            // dropped part of what was typed ("2 eggs and toast" matching only the toast) pauses here
+            // too, and the review sheet names the words that found nothing.
             if resolution.needsReview {
-                // Pause for a pre-log review instead of silently committing a low-confidence guess.
+                // Pause for a pre-log review instead of silently committing a partial guess.
                 #if canImport(UIKit)
                 reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto, photoData: capturedPhotoData)
                 #else
@@ -2322,8 +2611,8 @@ struct MealSheet: View {
         }
     }
 
-    /// The payload for the pre-log review sheet: the low-confidence resolution plus any captured
-    /// photo awaiting attach.
+    /// The payload for the pre-log review sheet: the resolution under review plus any captured photo
+    /// awaiting attach.
     ///
     /// Identifiable with a fresh `id` per presentation so `sheet(item:)` re-presents even for an
     /// identical resolution.
@@ -2582,6 +2871,7 @@ struct MealSheet: View {
                     .background(Color.cream, in: Circle())
             }
             .buttonStyle(.plain)
+            .fernletIconButton("Remove this photo")
             .padding(8)
         }
     }
@@ -2624,10 +2914,8 @@ private struct FoodProductPageImportView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Import product")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
+                    // This page is always PUSHED, so it titles itself in the nav bar rather than
+                    // drawing a display-serif title under an empty one.
                     urlEntry
 
                     if isLoading {
@@ -2644,6 +2932,8 @@ private struct FoodProductPageImportView: View {
 
         }
         .background(Color.parchment)
+        .navigationTitle("Import product")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingProductReview) {
             if let preview {
                 FoodProductReviewSheet(
@@ -2711,8 +3001,12 @@ private struct FoodProductPageImportView: View {
     private var urlEntry: some View {
         VStack(alignment: .leading, spacing: 14) {
             SheetField("Product search or page URL") {
-                TextField("Costco chicken melts or https://example.com/product", text: $lookupText)
+                // A plain-language placeholder: the example URL rendered as a live blue link inside
+                // the empty field, which read as content rather than a hint.
+                TextField("Product name or paste a page link", text: $lookupText)
                     .textInputAutocapitalization(.never)
+                    .submitLabel(.search)
+                    .onSubmit { loadPreview() }
                     .sheetTextInput()
             }
             Text("Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving.")
@@ -2727,10 +3021,12 @@ private struct FoodProductPageImportView: View {
         }
     }
 
+    /// Says what is off and where to turn it on, in that order — the old copy ("Turn off Manual off
+    /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? "Turn off Manual off mode before using web nutrition lookup."
-            : "Turn on Web nutrition lookup in Settings before searching the web for nutrition."
+            ? "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web."
+            : "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web."
     }
 
     /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
@@ -3038,19 +3334,32 @@ private struct MealRow: View {
             Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
             Text("C \(meal.macros.carbs)g")
             Text("F \(meal.macros.fat)g")
-            Text(meal.confidence).foregroundStyle(Color.goldenrod)
+            // Bark, not goldenrod: the confidence word carries meaning, and goldenrod measured 2.4:1
+            // on parchment. Goldenrod stays for fills and icons.
+            Text(meal.confidence).foregroundStyle(Color.bark)
             Spacer(minLength: 0)
+            // Moss, not fern (2.75:1) — this is the only way in to correcting a wrong match, so it
+            // must be legible.
             Button("Looks off?", action: onCorrect)
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.fern)
+                .foregroundStyle(Color.moss)
         }
         .font(.fernlet(.stat))
         .foregroundStyle(Color.slate)
     }
 
+    /// The line under the meal name. A component breakdown says where the numbers came from — but
+    /// only the food-matching path matched "local foods"; a recipe log and a cooking-mode log both
+    /// carry components too and used to claim the same thing.
     private var displayNote: String {
-        breakdownText == nil ? meal.note : "Matched from local foods."
+        guard breakdownText != nil else { return meal.note }
+        switch meal.mealSource {
+        case .recipe, .mealDefinition:
+            return "From your recipe."
+        case .manual:
+            return "Matched from your foods."
+        }
     }
 
     private var breakdownText: String? {
@@ -3359,6 +3668,10 @@ private struct MealReviewSheet: View {
     /// happens only on this confirm, never at resolve time.
     var onConfirm: ([Meal], RecipeDefinition?) -> Void
     var onDiscard: () -> Void
+    /// Items the user typed that the resolver bound nothing to (`MealResolution.unmatchedItems`).
+    /// Named on screen so a dropped ingredient is visible before the meal is logged, not discovered
+    /// afterwards by reading the row.
+    private let unmatchedItems: [String]
     @State private var meals: [EditableReviewMeal]
     /// One-shot guard so a fast double-tap on "Log meal" can't fire onConfirm twice — which would
     /// append the same meal id twice and double its macros.
@@ -3377,6 +3690,7 @@ private struct MealReviewSheet: View {
         self.store = store
         self.confidence = resolution.confidence
         self.suggestedRecipe = resolution.suggestedRecipe
+        self.unmatchedItems = resolution.unmatchedItems
         self.onConfirm = onConfirm
         self.onDiscard = onDiscard
         _meals = State(initialValue: resolution.meals.map(EditableReviewMeal.init(base:)))
@@ -3443,6 +3757,8 @@ private struct MealReviewSheet: View {
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
+
+                    unmatchedItemsCard
 
                     ForEach($meals) { $meal in
                         VStack(alignment: .leading, spacing: 14) {
@@ -3528,12 +3844,47 @@ private struct MealReviewSheet: View {
         .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    /// Names the words nothing was found for, as chips, above the meal being reviewed. Nothing is
+    /// guessed on the user's behalf: the meal logs without them unless the user adds the nutrition
+    /// themselves below (or backs out and rewords).
+    @ViewBuilder private var unmatchedItemsCard: some View {
+        if !unmatchedItems.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Couldn't find")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .tracking(0.8)
+                FlowLayout(spacing: 8) {
+                    ForEach(unmatchedItems, id: \.self) { item in
+                        Text(item)
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.bark)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.parchment, in: Capsule())
+                            .overlay(Capsule().stroke(Color.goldenrod.opacity(0.5), lineWidth: 1))
+                    }
+                }
+                Text("These aren't counted in the macros below. Adjust the numbers to include them, or log the meal without them.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.goldenrod.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityIdentifier("mealReview.unmatchedItems")
+        }
+    }
+
     private var reviewMessage: String {
         switch confidence {
         case .low:
             return "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
         default:
-            return "Double-check the items below before logging."
+            return unmatchedItems.isEmpty
+                ? "Double-check the items below before logging."
+                : "Fernlet matched part of what you typed. Check what's here before logging."
         }
     }
 }
@@ -3652,7 +4003,9 @@ private struct RecipeRow: View {
                 Text("C \(perServing.carbs)g")
                 Text("F \(perServing.fat)g")
                 if showCalories {
-                    Text("\(perServing.calories) cal").foregroundStyle(Color.goldenrod)
+                    // Slate like its neighbours: goldenrod on this 12pt row measured 2.4:1, and the
+                    // figure carries meaning rather than decoration.
+                    Text("\(perServing.calories) cal").foregroundStyle(Color.slate)
                 }
             }
             .font(.fernlet(.stat))
@@ -4001,6 +4354,7 @@ struct RecipeDetailView: View {
                     }
                     Button { confirmRemovePhoto() } label: { photoIconChip("trash") }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Delete this recipe photo")
                         .accessibilityIdentifier("recipeDetail.deletePhoto")
                 }
                 .padding(8)
@@ -4173,6 +4527,10 @@ struct RecipeDetailView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // The 44pt target centres the glyph well below the ingredient's first text baseline in
+                // this top-aligned row; lift it so icon and text read as one line (the target is
+                // unchanged — only where it sits).
+                .padding(.top, -6)
                 .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
                 .accessibilityIdentifier("recipeDetail.swapIngredient")
             }
@@ -4188,6 +4546,9 @@ struct RecipeDetailView: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
             }
+            // FernletCard hugs its content when nothing inside stretches, which left this card
+            // visibly narrower than the macro/ingredient cards above it.
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -4220,7 +4581,8 @@ struct RecipeDetailView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("recipeDetail.cook")
             }
-            HStack(spacing: 10) {
+            // Stacks at accessibility sizes rather than breaking "Share" mid-word.
+            AdaptiveStack(spacing: 10) {
                 Button { onEdit() } label: {
                     secondaryActionLabel("Edit", icon: "pencil")
                 }
@@ -4354,6 +4716,9 @@ private struct MacroInputRow: View {
                     .autocorrectionDisabled(true)
                     .textContentType(.none)
                     .multilineTextAlignment(.trailing)
+                    // Same DM Sans figures the tapped value shows, so the number doesn't change
+                    // typeface the moment it becomes editable.
+                    .font(.fernlet(.stat))
                     .frame(width: 52)
                     .focused($isFocused)
                     .onAppear {
@@ -4395,21 +4760,38 @@ private struct MacroInputRow: View {
 ///
 /// Pushed from the recipe book's Create button. Nutrition-label scanning is deliberately absent here —
 /// it belongs to the barcode-not-found handoff, not to recipe creation.
+///
+/// This view never pops itself. Saving used to clear the editor's destination flag AND call
+/// `dismiss()` in the same update; when SwiftUI coalesced the two pops the user landed back on this
+/// chooser with the recipe already saved. The push state for the WHOLE branch — chooser and editor
+/// alike — belongs to ``RecipeBookSheet`` instead, so finishing is one assignment there and both
+/// levels come off together.
 private struct RecipeCreationOptionsView: View {
     var store: FernletStore
+    /// Reports a finished creation to the recipe book, which collapses the branch and shows the
+    /// confirmation line. Both branches hand their saved name straight to it.
+    var onCreated: (String) -> Void = { _ in }
+
+    /// The editor this chooser can push: the import screen or the manual editor.
+    private enum CreationStep: Hashable { case importing, manual }
+
+    /// Which editor is pushed above the chooser, if any. One optional value rather than two
+    /// independent Bools, so "import" and "manual entry" can never both claim the destination.
+    @State private var step: CreationStep?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: "Create recipe", subtitle: "Choose how to start.", subtitleFirst: false)
+                Text("Choose how to start.")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
 
                 VStack(spacing: 10) {
                     // Recipe creation is Import or Manual only. Nutrition-label scanning belongs to the
                     // barcode-not-found handoff (BarcodeNotFoundView, reached from the camera when a scanned
                     // barcode has no catalog match) — not as a standalone recipe-creation entry point.
-                    NavigationLink {
-                        RecipeImportSheet(store: store)
-                    } label: {
+                    Button { step = .importing } label: {
                         RecipeCreationOptionRow(
                             title: "Import recipe",
                             subtitle: "Paste a recipe URL or Fernlet recipe text.",
@@ -4418,9 +4800,7 @@ private struct RecipeCreationOptionsView: View {
                     }
                     .buttonStyle(.plain)
 
-                    NavigationLink {
-                        RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
-                    } label: {
+                    Button { step = .manual } label: {
                         RecipeCreationOptionRow(
                             title: "Manual entry",
                             subtitle: "Enter ingredients, macros, servings, and notes yourself.",
@@ -4436,12 +4816,24 @@ private struct RecipeCreationOptionsView: View {
         .background(Color.parchment)
         .navigationTitle("Create recipe")
         .navigationBarTitleDisplayMode(.inline)
+        // Saving reports the name and stops there: the book pops the editor AND this chooser with
+        // the one assignment it owns. Clearing `step` here too would put a second, racing pop back
+        // into the same update — the bug this replaced.
+        .navigationDestination(item: $step) { destination in
+            switch destination {
+            case .importing:
+                RecipeImportSheet(store: store, onSaved: onCreated)
+            case .manual:
+                RecipeSheet(store: store, isEmbeddedInNavigationStack: true, onSaved: onCreated)
+            }
+        }
     }
 }
 
 /// One tappable option card (icon, title, subtitle, chevron) in ``RecipeCreationOptionsView``.
 ///
-/// Purely presentational — the wrapping `NavigationLink` provides the behavior.
+/// Purely presentational — the wrapping `Button` (which sets the chooser's `step`) provides the
+/// behavior.
 private struct RecipeCreationOptionRow: View {
     var title: String
     var subtitle: String
@@ -4577,41 +4969,101 @@ struct RecipeBookSheet: View {
     var store: FernletStore
     @Binding var editingRecipe: RecipeDefinition?
     @Binding var editingSavedRecipe: RecipeDefinition?
+    /// True when the book is PUSHED inside a host stack (the Food tab) rather than presented as a
+    /// sheet. Then it draws no stack of its own — book → detail → editor is one stack, so an edit
+    /// started here returns to the recipe instead of dropping to the Food root — and it titles itself
+    /// in the nav bar. The Home shortcut still presents it as a sheet, which keeps its own stack.
+    var isEmbeddedInNavigationStack = false
     @State private var searchText = ""
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
+    /// Calm confirmation after a recipe is created, shown here because this is where the create flow
+    /// now lands (see ``RecipeCreationOptionsView``). Clears itself after a beat.
+    @State private var createdNotice: String?
+    /// The single switch for the whole create-recipe branch: chooser, plus whichever editor the
+    /// chooser pushed above it. Clearing it pops BOTH levels at once, so finishing a recipe is one
+    /// assignment rather than two pops racing inside one SwiftUI update (the chooser used to clear
+    /// its editor flag and `dismiss()` itself in the same tick, and a coalesced pair left the user
+    /// standing on the "Import recipe / Manual entry" chooser with the recipe already saved).
+    @State private var isCreatingRecipe = false
 
+    @ViewBuilder
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ScreenHeader(title: "Recipe book", subtitle: "Recipes and saved products, A\u{2013}Z.", subtitleFirst: false)
-                    createAndPlannerButtons
-
-                    TextField("Search recipes and products", text: $searchText)
-                        .sheetTextInput()
-                    let allManual = filteredManualRecipes
-                    if !allManual.isEmpty {
-                        recipesCard(allManual, isSaved: false)
-                    }
-                    let allSaved = filteredSavedRecipes
-                    if !allSaved.isEmpty {
-                        recipesCard(allSaved, isSaved: true)
-                    }
-                    let allProducts = filteredWebImportedProducts
-                    if !allProducts.isEmpty {
-                        importedProductsCard(allProducts)
-                    }
-                    if allManual.isEmpty && allSaved.isEmpty && allProducts.isEmpty && !searchText.isEmpty {
-                        emptySearchState
-                    }
-                }
-                .padding(20)
-                .padding(.bottom, 24)
+        if isEmbeddedInNavigationStack {
+            bookContent
+        } else {
+            NavigationStack {
+                bookContent
             }
             .background(Color.parchment)
-            .navigationTitle("")
+        }
+    }
+
+    /// Header, search field, and the three A–Z lists — the scrolling half of ``bookContent``.
+    private var bookScrollContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Pushed: the nav bar carries the title. Presented: no bar, so the header draws it.
+            if isEmbeddedInNavigationStack {
+                Text("Recipes and saved products, A\u{2013}Z.")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+            } else {
+                ScreenHeader(title: "Recipe book", subtitle: "Recipes and saved products, A\u{2013}Z.", subtitleFirst: false)
+            }
+            if let createdNotice {
+                Text(createdNotice)
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.moss)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("recipeBook.createdNotice")
+            }
+            createAndPlannerButtons
+
+            TextField("Search recipes and products", text: $searchText)
+                .sheetTextInput()
+            let allManual = filteredManualRecipes
+            if !allManual.isEmpty {
+                recipesCard(allManual, isSaved: false)
+            }
+            let allSaved = filteredSavedRecipes
+            if !allSaved.isEmpty {
+                recipesCard(allSaved, isSaved: true)
+            }
+            let allProducts = filteredWebImportedProducts
+            if !allProducts.isEmpty {
+                importedProductsCard(allProducts)
+            }
+            if allManual.isEmpty && allSaved.isEmpty && allProducts.isEmpty && !searchText.isEmpty {
+                emptySearchState
+            }
+        }
+        .padding(20)
+        .padding(.bottom, 24)
+    }
+
+    private var bookContent: some View {
+        ScrollView {
+            bookScrollContent
         }
         .background(Color.parchment)
+        .navigationTitle(isEmbeddedInNavigationStack ? "Recipe book" : "")
+        .navigationBarTitleDisplayMode(.inline)
+        // The create branch hangs off the book, not off the chooser, so `finishCreation` collapses
+        // chooser + editor in one go and the user lands back here — the new recipe's home.
+        .navigationDestination(isPresented: $isCreatingRecipe) {
+            RecipeCreationOptionsView(store: store, onCreated: { name in finishCreation(named: name) })
+        }
+        .task(id: createdNotice) {
+            guard createdNotice != nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(4))
+            } catch {
+                // Superseded by a newer creation (or the book went away) — that one owns the line.
+                return
+            }
+            createdNotice = nil
+        }
         .sheet(item: $recipeShareDraft) { draft in
             ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
                 .presentationDetents([.medium, .large])
@@ -4620,24 +5072,44 @@ struct RecipeBookSheet: View {
         }
     }
 
+    /// Lands a finished creation back on the book. `isCreatingRecipe = false` is the ONLY navigation
+    /// change: it removes the chooser destination, and with it the editor the chooser had pushed, so
+    /// there is no second pop to be dropped or reordered. The notice is plain state, applied in the
+    /// same update but driving nothing but text.
+    private func finishCreation(named recipeName: String) {
+        isCreatingRecipe = false
+        createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+    }
+
+    /// Closes the book only when it is a sheet. Pushed inside the Food stack there is nothing to
+    /// close — the editor sheet presents OVER the book, which is the whole point of pushing it.
+    private func dismissIfPresented() {
+        guard !isEmbeddedInNavigationStack else { return }
+        dismiss()
+    }
+
     /// Create-recipe plus the F3 grocery entry points: a weekly planner (persists a per-day plan)
     /// and a one-off list builder. Both aggregate through the shared Phase A pipeline and share to
     /// Notes.
     private var createAndPlannerButtons: some View {
         VStack(spacing: 16) {
-            NavigationLink {
-                RecipeCreationOptionsView(store: store)
+            // A Button rather than a NavigationLink: the push is driven by `isCreatingRecipe`, the
+            // one value that also un-pushes the whole branch when a recipe is saved.
+            Button {
+                isCreatingRecipe = true
             } label: {
                 Label("Create recipe", systemImage: "plus")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
+                    .foregroundStyle(Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 12) {
+            // Stacks at accessibility sizes: side by side these two broke to "planne/r" and
+            // "Shopp/ing list" at different heights.
+            AdaptiveStack(spacing: 12) {
                 NavigationLink {
                     WeeklyMealPlannerView(store: store)
                 } label: {
@@ -4691,14 +5163,14 @@ struct RecipeBookSheet: View {
             }
             .buttonStyle(.plain)
             #else
-            Button { beginEditing(recipe, isSaved: isSaved); dismiss() } label: {
+            Button { beginEditing(recipe, isSaved: isSaved); dismissIfPresented() } label: {
                 recipeRowLabel(recipe, isSaved: isSaved)
             }
             .buttonStyle(.plain)
             #endif
             RecipeMealTypeMenu { mealType in
                 logRecipe(recipe, mealType: mealType, isSaved: isSaved)
-                dismiss()
+                dismissIfPresented()
             }
             RecipeShareButton {
                 recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
@@ -4720,13 +5192,15 @@ struct RecipeBookSheet: View {
         RecipeDetailView(
             store: store,
             recipe: recipe,
-            onEdit: { beginEditing(recipe, isSaved: isSaved); dismiss() },
+            // Pushed inside the Food stack the editor presents OVER this detail and returns to it on
+            // save; only the sheet presentation has to close itself first so the editor can appear.
+            onEdit: { beginEditing(recipe, isSaved: isSaved); dismissIfPresented() },
             onSaveFork: { fork in
                 if isSaved { store.addForkedSavedRecipe(fork) } else { store.addForkedRecipe(fork) }
             },
             onLog: { current, mealType in
                 logRecipe(current, mealType: mealType, isSaved: isSaved)
-                dismiss()
+                dismissIfPresented()
             },
             onShare: { current in recipeShareDraft = shareDraft(for: current, isSaved: isSaved) },
             onCookLog: { current, mealType, day in
@@ -4776,7 +5250,7 @@ struct RecipeBookSheet: View {
                             WebImportedFoodRow(foodItem: product)
                             RecipeMealTypeMenu { mealType in
                                 store.logWebImportedFoodProduct(product, mealType: mealType)
-                                dismiss()
+                                dismissIfPresented()
                             }
                         }
                     }

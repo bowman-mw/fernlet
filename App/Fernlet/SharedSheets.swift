@@ -66,13 +66,26 @@ struct WaterSheet: View {
 ///
 /// Presented from the main view's quick-log flow. Pre-fills from today's existing sleep entry on
 /// appear (so reopening edits rather than resets) and commits everything in one
-/// `FernletStore.setSleep` call on Save — dismissing without saving discards the draft.
+/// `FernletStore.setSleep` call on Save — a swipe-down with unsaved edits raises the shared discard
+/// confirmation rather than throwing the draft away.
 struct SleepSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     @State private var hours = ""
     @State private var quality: SleepQuality = .ok
     @State private var note = ""
+    /// What `prefillFromToday` landed, so the dirty guard fires on real edits only (and never on the
+    /// pre-fill itself).
+    @State private var original = Draft()
+
+    /// The three editable fields as one comparable value — the dirty check for the draft guard.
+    private struct Draft: Equatable {
+        var hours = ""
+        var quality: SleepQuality = .ok
+        var note = ""
+    }
+
+    private var draft: Draft { Draft(hours: hours, quality: quality, note: note) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,10 +100,15 @@ struct SleepSheet: View {
                     HStack(alignment: .top, spacing: 12) {
                         SheetField("Hours (optional)") {
                             TextField("7.5", text: $hours)
-                                .sheetTextInput()
+                                // A decimal pad, not the full alphabetic keyboard: "7.5" is the
+                                // expected value and there are no letters in it.
+                                .keyboardType(.decimalPad)
+                                .sheetTextInput(font: .fernlet(.label))
                         }
                         SheetField("Note (optional)") {
                             TextField("woke up twice...", text: $note)
+                                .submitLabel(.done)
+                                .onSubmit { save() }
                                 .sheetTextInput()
                         }
                     }
@@ -100,60 +118,51 @@ struct SleepSheet: View {
             }
             .onAppear(perform: prefillFromToday)
 
-            SheetSaveBar {
-                store.setSleep(hours: validatedHours, quality: quality, note: note)
-                dismiss()
-            }
+            SheetSaveBar { save() }
         }
         .background(Color.parchment)
+        .fernletDraftGuard(isDirty: draft != original) { dismiss() }
     }
 
-    /// The one-per-quality option rows (extracted so `body` stays readable).
+    /// The four quality options as one wrapping row of chips, with the chosen option's description
+    /// as a single line beneath.
+    ///
+    /// Four two-line cards pushed "Great", Hours and Note below the fold of a medium sheet (and left
+    /// 1.5 options visible at accessibility sizes); chips fit the whole choice on one or two rows.
+    /// ``ChipButtonStyle`` also carries the `.isSelected` trait, which the checkmark-only rows never
+    /// exposed to VoiceOver.
     private var qualityPicker: some View {
         SheetField("Quality") {
-            VStack(spacing: 8) {
-                ForEach(SleepQuality.allCases) { option in
-                    Button {
-                        quality = option
-                    } label: {
-                        qualityRow(option)
+            VStack(alignment: .leading, spacing: 8) {
+                FlowLayout(spacing: 8) {
+                    ForEach(SleepQuality.allCases) { option in
+                        Button(option.label) { quality = option }
+                            .buttonStyle(ChipButtonStyle(selected: quality == option))
                     }
-                    .buttonStyle(.plain)
                 }
+                Text(quality.description)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
             }
         }
     }
 
-    private func qualityRow(_ option: SleepQuality) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(option.label)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                Text(option.description)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Spacer()
-            if quality == option {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.moss)
-            }
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(quality == option ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08), lineWidth: 1)
-        )
+    private func save() {
+        store.setSleep(hours: validatedHours, quality: quality, note: note)
+        dismiss()
     }
 
     /// Pre-fills the draft from today's existing sleep entry so reopening edits rather than resets.
     private func prefillFromToday() {
         guard let sleep = store.day.sleep else { return }
+        let recordedHours = sleep.hours.map { String($0) } ?? ""
         quality = sleep.quality
         note = sleep.note
-        if let recorded = sleep.hours { hours = String(recorded) }
+        hours = recordedHours
+        // The baseline the discard prompt compares against — the values just landed, so an untouched
+        // reopen of an existing entry is clean and dismisses without a dialog.
+        original = Draft(hours: recordedHours, quality: sleep.quality, note: sleep.note)
     }
 
     /// The typed hours, validated at this boundary (R5): `Double("nan")` is NaN and `Double("1e400")`
@@ -177,6 +186,7 @@ struct SleepSheet: View {
 struct GoalsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
+    /// Kept in sync with `isDirty`'s untouched-level check below.
     @State private var level = "intermediate"
     @State private var interests = ""
     @State private var constraints = ""
@@ -238,6 +248,16 @@ struct GoalsSheet: View {
             }
         }
         .background(Color.parchment)
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+    }
+
+    /// Anything typed, picked, or crafted but not yet accepted. A crafted-but-unaccepted set counts:
+    /// swiping the sheet away there silently discards the plan the user just asked for.
+    private var isDirty: Bool {
+        !proposed.isEmpty
+            || level != "intermediate"
+            || !interests.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !constraints.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -265,12 +285,13 @@ struct HygieneSheet: View {
                             SheetField(group) {
                                 VStack(spacing: 6) {
                                     ForEach(tasks) { task in
+                                        let isDone = store.isPersonalCareTaskCompleted(task)
                                         Button { store.togglePersonalCareTask(task) } label: {
                                             HStack {
                                                 Label(task.label, systemImage: task.systemImage)
                                                     .foregroundStyle(Color.bark)
                                                 Spacer()
-                                                if store.isPersonalCareTaskCompleted(task) {
+                                                if isDone {
                                                     Image(systemName: "checkmark.circle.fill")
                                                         .foregroundStyle(Color.moss)
                                                 }
@@ -279,10 +300,15 @@ struct HygieneSheet: View {
                                             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(store.isPersonalCareTaskCompleted(task) ? Color.moss.opacity(0.3) : Color.bark.opacity(0.08), lineWidth: 1)
+                                                    .stroke(isDone ? Color.moss.opacity(0.3) : Color.bark.opacity(0.08), lineWidth: 1)
                                             )
                                         }
                                         .buttonStyle(.plain)
+                                        // The checkmark glyph was the only "done" cue and it carries
+                                        // no label, so VoiceOver read a finished task identically to
+                                        // an unfinished one.
+                                        .accessibilityValue(isDone ? "completed" : "not done yet")
+                                        .accessibilityAddTraits(isDone ? [.isSelected] : [])
                                     }
                                 }
                             }

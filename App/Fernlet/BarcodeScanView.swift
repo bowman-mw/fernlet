@@ -250,7 +250,7 @@ struct BarcodeScanView: View {
             } label: {
                 Label("Add a photo instead", systemImage: "camera.fill")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
+                    .foregroundStyle(Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15))
@@ -887,7 +887,7 @@ private struct RememberedConfirmationView: View {
                 .shadow(color: Color.moss.opacity(0.3), radius: 12, y: 8)
             Image(systemName: "checkmark")
                 .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(Color.cream)
+                .foregroundStyle(Color.onMoss)
         }
         .scaleEffect(appeared ? 1 : 0.6)
         .opacity(appeared ? 1 : 0)
@@ -950,7 +950,7 @@ private struct RememberedConfirmationView: View {
         Button(action: onDone) {
             Text("Done")
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.cream)
+                .foregroundStyle(Color.onMoss)
                 .frame(maxWidth: .infinity)
                 .padding(16)
                 .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))

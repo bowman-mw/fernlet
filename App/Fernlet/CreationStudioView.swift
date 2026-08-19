@@ -16,6 +16,10 @@ struct CreationStudioView: View {
     var store: FernletStore
     /// When non-nil we edit an existing item in place (id / createdAt / designer preserved).
     var editingItem: CustomizationItem?
+    /// Optional back-channel to the hosting customization sheet, so it can block swipe-to-dismiss
+    /// while there is unsaved paint on the canvas. Nil when the studio is shown without a host that
+    /// cares (previews, tests) — never a crash, just no swipe guard.
+    var draftIsDirty: Binding<Bool>?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -49,6 +53,14 @@ struct CreationStudioView: View {
     /// Drives the push to the naming + shop-listing confirmation step. The editor screen itself no longer
     /// carries the name/shop controls — you draw, tap Next, then name and (optionally) list it.
     @State private var showingConfirmation = false
+    /// The canvas as it was last persisted (the item's own art on the edit path, blank on create).
+    /// `pixels != savedPixels` is what "unsaved paint" means when editing.
+    @State private var savedPixels: [Int]
+    /// Set by `save()` so a saved-but-still-open studio (a refused listing keeps the user here to
+    /// rename) stops claiming there is anything to lose.
+    @State private var didSave = false
+    /// Drives the custom back button's discard prompt.
+    @State private var askingToDiscard = false
 
     /// Bounded so a long session can't grow without limit. A body grid is 48×40 Ints ≈ 15 KB, so 32
     /// snapshots is ~0.5 MB worst case — irrelevant next to the images this app already holds.
@@ -56,12 +68,15 @@ struct CreationStudioView: View {
 
     private let palette = ItemDesignPalette.hexes
 
-    init(store: FernletStore, editingItem: CustomizationItem? = nil) {
+    init(store: FernletStore, editingItem: CustomizationItem? = nil, draftIsDirty: Binding<Bool>? = nil) {
         self.store = store
         self.editingItem = editingItem
+        self.draftIsDirty = draftIsDirty
         if let item = editingItem {
+            let initialPixels = Self.editorPixels(for: item, palette: ItemDesignPalette.hexes)
             _slot = State(initialValue: item.slot)
-            _pixels = State(initialValue: Self.editorPixels(for: item, palette: ItemDesignPalette.hexes))
+            _pixels = State(initialValue: initialPixels)
+            _savedPixels = State(initialValue: initialPixels)
             _name = State(initialValue: item.name)
             _isShareable = State(initialValue: item.isShareable)
             _price = State(initialValue: ClothingShopLimits.clampedPrice(item.price))
@@ -70,9 +85,11 @@ struct CreationStudioView: View {
             _slot = State(initialValue: initialSlot)
             // The UI-test seed paints the canvas so "Next" is enabled: XCUITest can't synthesize the
             // custom canvas's paint gesture, and a blank canvas leaves the confirmation step unreachable.
-            _pixels = State(initialValue: UITestSupport.shouldSeedStudioCanvas
-                            ? Self.seededPixels(for: initialSlot)
-                            : Self.blankPixels(for: initialSlot))
+            let initialPixels = UITestSupport.shouldSeedStudioCanvas
+                ? Self.seededPixels(for: initialSlot)
+                : Self.blankPixels(for: initialSlot)
+            _pixels = State(initialValue: initialPixels)
+            _savedPixels = State(initialValue: initialPixels)
             _name = State(initialValue: "")
             _isShareable = State(initialValue: false)
             _price = State(initialValue: ClothingShopLimits.minPrice)
@@ -108,6 +125,49 @@ struct CreationStudioView: View {
         .navigationDestination(isPresented: $showingConfirmation) {
             confirmationScreen
         }
+        // A painted canvas is unsaved work: hiding the system back button (which also disables the
+        // interactive swipe-back) and substituting one that ASKS is what stops a stray chevron tap
+        // from throwing the drawing away. A blank / already-saved canvas keeps the ordinary back.
+        .navigationBarBackButtonHidden(hasUnsavedDrawing)
+        .toolbar {
+            if hasUnsavedDrawing {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { askingToDiscard = true } label: {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .fernletIconButton("Back")
+                    .accessibilityIdentifier("studio.back")
+                }
+            }
+        }
+        .discardConfirmation(isPresented: $askingToDiscard) { leaveStudio() }
+        // The other half of the same guard: the studio is pushed INSIDE the customization sheet, so
+        // a swipe-down anywhere on it dismissed the whole stack. Reported up so the host can block
+        // interactive dismissal while the drawing is unsaved. (`onAppear` + `onChange` rather than
+        // `onChange(initial:)` — the report writes the HOST's state, so it must land after the first
+        // render, never during it.)
+        .onAppear { draftIsDirty?.wrappedValue = hasUnsavedDrawing }
+        .onChange(of: hasUnsavedDrawing) { _, dirty in
+            draftIsDirty?.wrappedValue = dirty
+        }
+    }
+
+    /// True while the studio holds paint that has not been saved: the live canvas, or a per-slot
+    /// buffer stashed on the way here (switching slots keeps each drawing alive, so those count too).
+    private var hasUnsavedDrawing: Bool {
+        guard !didSave else { return false }
+        if editingItem != nil { return pixels != savedPixels }
+        if !isCanvasBlank { return true }
+        return slotBuffers.values.contains { buffer in
+            buffer.pixels.contains { $0 != ItemGridTexture.transparent }
+        }
+    }
+
+    /// The single exit from the studio. Clears the host sheet's swipe-dismiss block before popping —
+    /// a flag left standing would leave the customization sheet permanently un-swipeable.
+    private func leaveStudio() {
+        draftIsDirty?.wrappedValue = false
+        dismiss()
     }
 
     // MARK: - Sections
@@ -280,6 +340,7 @@ struct CreationStudioView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Eraser")
+        .accessibilityAddTraits(selectedColor == ItemGridTexture.transparent ? [.isSelected] : [])
     }
 
     private func swatch(index: Int, hex: String) -> some View {
@@ -292,7 +353,23 @@ struct CreationStudioView: View {
                 .overlay(selectionRing(isSelected: selectedColor == index))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Color \(index + 1)")
+        // "Color 7" tells a VoiceOver user nothing about what they are about to paint with.
+        .accessibilityLabel(Self.paletteName(at: index))
+        .accessibilityAddTraits(selectedColor == index ? [.isSelected] : [])
+    }
+
+    /// Spoken names for `ItemDesignPalette.hexes`, in its order. Kept here (not on the domain
+    /// palette) so this stays a presentation concern; the index fallback keeps it total if a colour
+    /// is ever appended upstream.
+    private static let paletteNames = [
+        "Near-black", "Bark", "Taupe", "Cream", "Parchment", "White",
+        "Moss", "Fern", "Terracotta", "Sun", "Rose", "Plum",
+        "Slate blue", "Deep slate", "Red", "Emerald"
+    ]
+
+    private static func paletteName(at index: Int) -> String {
+        guard index >= 0, index < paletteNames.count else { return "Color \(index + 1)" }
+        return paletteNames[index]
     }
 
     /// Selected → moss ring; unselected → a hairline so light swatches (cream, parchment, white) never
@@ -535,6 +612,10 @@ struct CreationStudioView: View {
 
     private func save() {
         guard canSave else { return }
+        // Everything below persists the canvas, so from here on there is nothing unsaved to warn
+        // about — including on the refusal branches that deliberately keep the user on this screen.
+        didSave = true
+        savedPixels = pixels
         let texture = ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels)
         // R5: the UNLISTED save also persists this name (the shop gate's moderation only runs when
         // listing), and it later renders in the Wardrobe and on the companion — so apply the same
@@ -561,19 +642,19 @@ struct CreationStudioView: View {
         guard canSell, isShareable else {
             // Toggled off (or not sellable): make sure it isn't listed, then leave.
             if canSell { store.unlistCustomItem(id: itemID) }
-            dismiss()
+            leaveStudio()
             return
         }
 
         switch store.listCustomItemForSale(id: itemID, price: price) {
         case .listed:
-            dismiss()
+            leaveStudio()
         case .nameFlagged:
             shopAlert = .nameFlagged   // stay so the user can rename and re-save
         case .capReached:
             shopAlert = .capReached
         case .notAllowed:
-            dismiss()                  // not your design (unreachable — `canSell` guards); item saved, just unlisted
+            leaveStudio()              // not your design (unreachable — `canSell` guards); item saved, just unlisted
         case .storeBanned:
             shopAlert = .storeBanned
         }

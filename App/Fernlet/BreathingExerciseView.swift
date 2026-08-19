@@ -77,9 +77,17 @@ struct BreathingExerciseView: View {
     /// Called once when a session runs to its full chosen length (not when abandoned early).
     var onSessionComplete: (_ start: Date, _ end: Date) -> Void
 
-    @State private var preset: BreathingPreset = .box
-    @State private var minutes = 1
-    @State private var hapticsEnabled = true
+    /// Pattern, length, and haptics persist between visits: a daily user who prefers "Relax · 3 min"
+    /// had to re-pick both every single time before Begin.
+    @AppStorage("fernlet.breathing.presetID") private var presetID = BreathingPreset.box.id
+    @AppStorage("fernlet.breathing.minutes") private var minutes = 1
+    @AppStorage("fernlet.breathing.haptics") private var hapticsEnabled = true
+
+    /// The stored pattern, resolved against the curated presets (falling back to Box if the stored
+    /// id ever names a preset that no longer exists).
+    private var preset: BreathingPreset {
+        BreathingPreset.all.first { $0.id == presetID } ?? .box
+    }
 
     @State private var isRunning = false
     @State private var isFinished = false
@@ -89,6 +97,8 @@ struct BreathingExerciseView: View {
     @State private var sessionTask: Task<Void, Never>?
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The circle's small resting scale — it sways gently around this so the first
     /// "Breathe in" visibly swells out of it (mockup rests ~168px against a 280px full).
@@ -118,6 +128,11 @@ struct BreathingExerciseView: View {
         .background(Color.parchment)
         .navigationTitle("Slow breathing")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // The persisted length is user defaults, i.e. arbitrary storage: `startSession` refuses
+            // anything outside 1…3, so a stray value would make Begin a silent no-op.
+            if !(1...3).contains(minutes) { minutes = 1 }
+        }
         .onDisappear { sessionTask?.cancel() }
         .onChange(of: scenePhase) { _, newPhase in
             // Breathing is a present-moment activity. If the app is actually backgrounded mid-session
@@ -148,6 +163,10 @@ struct BreathingExerciseView: View {
                         .scaleEffect(idleBreathing ? 1.04 : 0.98)
                         .onAppear {
                             circleScale = restingScale
+                            // The forever-repeating idle sway is decoration, not the exercise —
+                            // Reduce Motion holds the circle still. (The GUIDED breathing scale
+                            // during a session stays: that motion IS the exercise.)
+                            guard !reduceMotion else { return }
                             withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
                                 idleBreathing = true
                             }
@@ -241,9 +260,16 @@ struct BreathingExerciseView: View {
             .frame(maxWidth: 300)
             .padding(.bottom, 10)
 
-            Button("Done for now") { finishToSetup() }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+            // "Done" leaves the tool, exactly as Grounding's does — the two sibling exercises used
+            // to give their identically-placed secondary action two different meanings ("Done for
+            // now" quietly rewound to this tool's own setup screen). "Once more" above is the
+            // repeat.
+            Button("Done") {
+                finishToSetup()
+                dismiss()
+            }
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.slate)
 
             Spacer()
         }
@@ -385,7 +411,7 @@ struct BreathingExerciseView: View {
     private func patternTile(_ candidate: BreathingPreset) -> some View {
         let selected = preset == candidate
         return Button {
-            preset = candidate
+            presetID = candidate.id
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(candidate.name)

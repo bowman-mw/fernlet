@@ -16,8 +16,10 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"
     /// The merged period + intimacy page (``CycleTrackerView``); each half gates itself inside.
     case cycle = "Cycle"
-    // Worry Box + Journal: always visible (no per-user gating), so they pick up via `allCases`.
-    case worryBox = "Worry Box"
+    // Worry box + Journal: always visible (no per-user gating), so they pick up via `allCases`.
+    // Sentence case, matching the page's own title and the First aid tile — the picker was the one
+    // place that title-cased it.
+    case worryBox = "Worry box"
     var id: String { rawValue }
 
     /// The single source of truth for hub section visibility. `PrivateHubView.body` used to inline a

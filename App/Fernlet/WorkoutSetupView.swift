@@ -8,8 +8,9 @@ import FernletUI
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
 /// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
 /// sport/interests, and areas to work around. Injury-area chips expand to the muscle-group and
-/// movement-pattern sets the planner avoids. Saving a split change while training has been
-/// consistent asks a gentle confirm first — consistency beats novelty — but never hard-blocks.
+/// movement-pattern sets the planner avoids. Changing the split is a plain edit — a neutral note
+/// beside the options says training has been consistent, where a confirmation dialog used to
+/// interrupt the save; the sheet guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -19,11 +20,19 @@ struct WorkoutSetupSheet: View {
     @State private var avoidedAreas: Set<String>
     @State private var selectedSplitID: String?
     @State private var showingLocations = false
-    @State private var pendingSwitch = false
+    @State private var showDiscardConfirm = false
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
-    private let currentActiveSplitID: String
     private let currentSplitName: String
+    /// Computed once at init, not in `body`: the consistency read walks recent days, and the body
+    /// re-evaluates on every keystroke in the interests / sport / injury fields.
+    private let isTrainingConsistently: Bool
+    /// The seeded values, so a swipe-away can tell an untouched sheet from typed days / experience /
+    /// injury notes — which used to be thrown away silently, this sheet having neither a Cancel nor
+    /// an `interactiveDismissDisabled`.
+    private let initialProfile: WorkoutProfile
+    private let initialInterestsText: String
+    private let initialAvoidedAreas: Set<String>
 
     /// One selectable "work around this" chip: a display name plus the muscle groups and movement
     /// patterns the planner should avoid while it's on.
@@ -57,20 +66,38 @@ struct WorkoutSetupSheet: View {
         let active = selected.flatMap { id in WorkoutSplitCatalog.all.first { $0.id == id } }
             ?? recommendedSplits.first ?? WorkoutSplitCatalog.fallback
         self.originalSelectedSplitID = selected
-        self.currentActiveSplitID = active.id
         self.currentSplitName = active.name
+        self.isTrainingConsistently = store.workoutConsistency() != .low
         _selectedSplitID = State(initialValue: settings.workoutProfile.selectedSplitID)
         _profile = State(initialValue: settings.workoutProfile)
-        _interestsText = State(initialValue: settings.workoutProfile.interests.joined(separator: ", "))
+        let seedInterests = settings.workoutProfile.interests.joined(separator: ", ")
+        _interestsText = State(initialValue: seedInterests)
         let avoided = settings.workoutProfile.avoidedMuscles
         let preselected = Self.injuryAreas
             .filter { $0.muscles.isEmpty == false && $0.muscles.isSubset(of: avoided) }
             .map(\.name)
         _avoidedAreas = State(initialValue: Set(preselected))
+        self.initialProfile = settings.workoutProfile
+        self.initialInterestsText = seedInterests
+        self.initialAvoidedAreas = Set(preselected)
+    }
+
+    /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
+    /// not a change tracker.
+    private var isDirty: Bool {
+        profile != initialProfile
+            || interestsText != initialInterestsText
+            || avoidedAreas != initialAvoidedAreas
+            || selectedSplitID != originalSelectedSplitID
+    }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Workout setup")
@@ -87,23 +114,20 @@ struct WorkoutSetupSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: "Save") { save() }
+            SheetSaveBar(label: "Save") { commit() }
         }
         .background(Color.parchment)
+        // Presented from another sheet, so it inherits none of the app's tint: without this the
+        // Stepper's +/- render iOS blue against the parchment palette.
+        .tint(Color.moss)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-        }
-        .confirmationDialog("Switch your routine?", isPresented: $pendingSwitch, titleVisibility: .visible) {
-            Button("Switch to \(pendingNewSplitName)") { commit() }
-            Button("Keep \(currentSplitName)", role: .cancel) {
-                selectedSplitID = originalSelectedSplitID
-                commit()
-            }
-        } message: {
-            Text("You've been consistent with \(currentSplitName). Sticking with one routine is where progress comes from — switching restarts that momentum.")
         }
     }
 
@@ -129,8 +153,25 @@ struct WorkoutSetupSheet: View {
                         badge: split.id == recommendedSplits.first?.id ? "Recommended" : nil
                     ) { selectedSplitID = split.id }
                 }
+
+                if let consistencyNote {
+                    Text(consistencyNote)
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
             }
         }
+    }
+
+    /// A neutral note beside the options, where a confirmation dialog used to sit.
+    ///
+    /// Changing your split is not destructive, so it doesn't earn a dialog — and the old one said
+    /// switching "restarts that momentum", which is the guilt framing this app doesn't do. It also
+    /// rendered without its cancel button on iOS 26, so tapping outside abandoned the whole save.
+    private var consistencyNote: String? {
+        guard isTrainingConsistently else { return nil }
+        return "You've been consistent with \(currentSplitName) — keep it unless something changed."
     }
 
     private func splitOption(
@@ -259,28 +300,6 @@ struct WorkoutSetupSheet: View {
 
     private func toggleArea(_ name: String) {
         if avoidedAreas.contains(name) { avoidedAreas.remove(name) } else { avoidedAreas.insert(name) }
-    }
-
-    /// The split id that `selectedSplitID` would actually resolve to (auto → top recommendation).
-    private func resolvedActiveSplitID(for selection: String?) -> String {
-        if let selection, WorkoutSplitCatalog.all.contains(where: { $0.id == selection }) { return selection }
-        return recommendedSplits.first?.id ?? WorkoutSplitCatalog.fallback.id
-    }
-
-    private var pendingNewSplitName: String {
-        let id = resolvedActiveSplitID(for: selectedSplitID)
-        return WorkoutSplitCatalog.all.first(where: { $0.id == id })?.name ?? "the new routine"
-    }
-
-    private func save() {
-        // Gentle friction: if the active split is actually changing and the user has been training
-        // consistently, confirm before switching (consistency beats novelty). Never a hard block.
-        let newActiveID = resolvedActiveSplitID(for: selectedSplitID)
-        if newActiveID != currentActiveSplitID, store.workoutConsistency() != .low {
-            pendingSwitch = true
-            return
-        }
-        commit()
     }
 
     private func commit() {

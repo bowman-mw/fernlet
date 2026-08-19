@@ -37,7 +37,12 @@ struct SessionChatPanel: View {
         }
         // TF b19 item 6: an open panel keeps the unread badge at zero — the store suppresses unread
         // counting while viewing, and clears the standing count the moment the panel appears.
-        .onAppear { manager.sessionMessages.beginViewing() }
+        // Opening the panel is already "I want to type" — land the caret in the field rather than
+        // charging every message an extra tap.
+        .onAppear {
+            manager.sessionMessages.beginViewing()
+            composeFocused = true
+        }
         .onDisappear { manager.sessionMessages.endViewing() }
     }
 
@@ -130,6 +135,13 @@ struct SessionChatPanel: View {
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .lineLimit(1...4)
+                // Return sends, as it does in every messaging app — it used to only insert a newline,
+                // leaving the 30pt glyph as the single way to send. (Same mechanism as the shared
+                // `SheetGrowingTextField`; the chat bubble keeps its own chrome.)
+                .submitLabel(.send)
+                .onSubmit {
+                    if canSend { send() }
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -140,6 +152,8 @@ struct SessionChatPanel: View {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 30))
                     .foregroundStyle(canSend ? Color.terracotta : Color.slate.opacity(0.4))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(!canSend)
             .accessibilityLabel("Send message")

@@ -13,6 +13,17 @@ import FernletFoundation
 import FernletLock
 import FernletUI
 
+/// Copy shared by the lock setup flow and the lock gate's set-up call to action.
+///
+/// One constant rather than two hand-written sentences: the two screens are seen back to back (the
+/// gate offers the sheet), and they used to name different things — "the period and intimacy
+/// sections" against "journal, period, and intimacy history" — with neither mentioning the worry
+/// box, which the same key also seals.
+enum FernletLockCopy {
+    /// What the app lock actually protects. Every surface behind ``FernletLockScope/privateHub``.
+    static let protectsSentence = "Protects your journal, cycle, intimacy notes and worry box."
+}
+
 // MARK: - Setup view
 
 /// Five-step first-time passcode configuration flow for the Fernlet app lock.
@@ -70,15 +81,25 @@ public struct FernletLockSetupView: View {
         NavigationStack {
             ZStack {
                 Color.parchment.ignoresSafeArea()
-                stepContent
-                    .padding(24)
+                // Once the lock IS configured the wizard stops pretending it isn't: the live step
+                // (with its tappable Cancel and Continue, which re-opened the disclosure) is
+                // replaced by a settled "You're set" state while the toast dwells.
+                if showSuccess {
+                    completedStep
+                        .padding(24)
+                } else {
+                    stepContent
+                        .padding(24)
+                }
             }
             .navigationTitle("Set up app lock")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(Color.slate)
+                if !showSuccess {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .foregroundStyle(Color.slate)
+                    }
                 }
             }
         }
@@ -111,14 +132,18 @@ public struct FernletLockSetupView: View {
     private var kindPickerStep: some View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel("Choose a lock type")
-            Text("Your lock type protects the period and intimacy sections.")
+            // One sentence, shared verbatim with the gate's set-up call to action: naming a
+            // narrower set here than the gate did (and omitting the worry box from both) told the
+            // user the lock covers less than it actually does.
+            Text(FernletLockCopy.protectsSentence)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             VStack(spacing: 12) {
                 kindCard(.pin4, title: "4-digit PIN", subtitle: "Fast, lower security")
-                kindCard(.pin6, title: "6-digit PIN", subtitle: "Recommended", recommended: true)
+                // The badge already says RECOMMENDED — the subtitle says something useful instead.
+                kindCard(.pin6, title: "6-digit PIN", subtitle: "Good balance of speed and security", recommended: true)
                 kindCard(.alphanumeric, title: "Password", subtitle: "8+ characters, highest security")
             }
 
@@ -303,6 +328,30 @@ public struct FernletLockSetupView: View {
         }
     }
 
+    // MARK: Success state
+
+    /// The settled state shown between a successful `configure` and the sheet dismissing itself —
+    /// no live controls, so a second tap on a still-armed Continue can't re-open the disclosure for
+    /// a lock that is already set up.
+    private var completedStep: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(Color.moss)
+            Text("You're set")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+            Text(FernletLockCopy.protectsSentence)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     // MARK: Disclosure sheet
 
     private var disclosureSheet: some View {
@@ -428,11 +477,13 @@ public struct FernletLockSetupView: View {
         Button(title, action: action)
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            // Contrast-safe pair: white on plain `moss` measures 4.29:1 in light mode and 2.53:1 in
+            // dark. Disabled fades the FILL only, so the label stays readable.
+            .foregroundStyle(disabled ? Color.bark : Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                disabled ? Color.moss.opacity(0.4) : Color.moss,
+                Color.mossFill.opacity(disabled ? 0.55 : 1),
                 in: RoundedRectangle(cornerRadius: 16)
             )
             .disabled(disabled)
@@ -583,9 +634,11 @@ public struct FernletLockView: View {
                 let attempts = lockService.currentAttemptCount
                 if attempts > 0 && !isInputDisabled {
                     let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
+                    // Terracotta ink, not goldenrod: goldenrod on parchment measured about 2.2:1,
+                    // and this line is the warning that the next mistakes cost a lockout.
                     Text("\(remaining) attempt\(remaining == 1 ? "" : "s") remaining before lockout")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.goldenrod)
+                        .foregroundStyle(Color.terracottaInk)
                 }
 
                 // Input
@@ -979,10 +1032,10 @@ public struct FernletLockView: View {
         Button(title, action: action)
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -990,6 +1043,10 @@ public struct FernletLockView: View {
 
 /// Row of `total` circles with the first `current.count` filled — the masked progress
 /// indicator shown above ``FernletNumericPad`` in both the setup and unlock flows.
+///
+/// Spoken as one element carrying a live count ("2 of 6 digits entered"). Without it the row is a
+/// handful of decorative circles, and a VoiceOver user typing a PIN has no way to tell how many
+/// digits have landed — the one piece of feedback the masked field exists to give.
 private func pinDotsRow(current: String, total: Int) -> some View {
     HStack(spacing: 16) {
         ForEach(0..<total, id: \.self) { index in
@@ -999,6 +1056,8 @@ private func pinDotsRow(current: String, total: Int) -> some View {
                 .overlay(Circle().stroke(Color.bark.opacity(0.35), lineWidth: 1.5))
         }
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(current.count) of \(total) digits entered")
 }
 
 // MARK: - Numeric pad

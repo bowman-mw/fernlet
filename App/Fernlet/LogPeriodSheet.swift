@@ -11,7 +11,11 @@ import FernletUI
 ///
 /// Serves both flows — a fresh log (optionally pre-dated via `targetDate`) and an edit of an
 /// existing `CycleDayEntry` — and saves through `PeriodTrackerStore.logEvent`/`editEvent` as a
-/// `UserLoggedCycleEvent`. The clinical fields become HealthKit samples; the note and symptoms
+/// `UserLoggedCycleEvent`. A fresh log must carry something to write; an edit only has to have
+/// changed, so unsetting a mis-logged flow chip stays saveable and removes that entry rather than
+/// forcing the user onto the day detail's Delete (see ``canSave`` and ``save()``).
+///
+/// The clinical fields become HealthKit samples; the note and symptoms
 /// become a sealed narrative, so the sheet warns up front when no app lock is configured and maps
 /// the store's `PeriodLogResult` (saved / narrative buffered until unlock / narrative dropped) to
 /// an honest status message before dismissing.
@@ -35,29 +39,104 @@ struct LogPeriodSheet: View {
     @State private var customScales: [PeriodSymptom: Int]
     @State private var statusMessage: String?
     @State private var isSaving = false
+    /// The field values the sheet opened with, so the dirty check compares against exactly what was
+    /// seeded (a fresh log and an edit of an existing day seed very different things).
+    private let initialValues: SheetValues
+
+    /// Every user-editable value on this sheet, as one comparable snapshot.
+    ///
+    /// `nonisolated` because the target's default isolation is `MainActor`, and a MainActor-isolated
+    /// `==` cannot satisfy `Equatable`'s nonisolated requirement.
+    private nonisolated struct SheetValues: Equatable {
+        var eventDate: Date
+        var flowLevel: PeriodFlowLevel?
+        var temperatureText: String
+        var mucusQuality: CervicalMucusQuality?
+        var ovulationResult: OvulationTestResult?
+        var hasIntermenstrualBleeding: Bool
+        var isCycleStart: Bool
+        var note: String
+        var symptoms: Set<PeriodSymptom>
+        var customScales: [PeriodSymptom: Int]
+    }
+
+    private var currentValues: SheetValues {
+        SheetValues(
+            eventDate: eventDate,
+            flowLevel: flowLevel,
+            temperatureText: temperatureText,
+            mucusQuality: mucusQuality,
+            ovulationResult: ovulationResult,
+            hasIntermenstrualBleeding: hasIntermenstrualBleeding,
+            isCycleStart: isCycleStart,
+            note: note,
+            symptoms: symptoms,
+            customScales: customScales
+        )
+    }
+
+    /// Whether the sheet holds anything a swipe-down would throw away.
+    private var isDirty: Bool { currentValues != initialValues }
+
+    /// Whether Save is available.
+    ///
+    /// A fresh log needs something to write. An EDIT needs only a change: a day whose only content
+    /// was a flow level had no way back once that chip was unset — gating on content alone left Save
+    /// disabled, and the sole exit was the day detail's Delete, which also destroys the sealed note
+    /// and every Fernlet-owned HealthKit sample for that day. An emptied edit removes exactly the
+    /// entry it is editing (see ``save()``), which is what unsetting the chip asked for.
+    private var canSave: Bool { hasLoggableContent || (editingEntry != nil && isDirty) }
+
+    /// Whether the user has emptied an edit out — the tap then removes the entry instead of writing
+    /// one, so the bar says so rather than calling a deletion "Save". Requires `isDirty` so the label
+    /// only ever changes on a button the user can actually press.
+    private var isEmptiedEdit: Bool { editingEntry != nil && !hasLoggableContent && isDirty }
+
+    /// Whether there is anything to log at all. Save used to be enabled on an untouched sheet and
+    /// dismissed without writing a thing, which reads as "saved" and isn't.
+    private var hasLoggableContent: Bool {
+        flowLevel != nil
+            || isCycleStart
+            || hasIntermenstrualBleeding
+            || mucusQuality != nil
+            || ovulationResult != nil
+            || !symptoms.isEmpty
+            || !temperatureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     init(periodStore: PeriodTrackerStore, targetDate: Date? = nil, editingEntry: CycleDayEntry? = nil) {
         self.periodStore = periodStore
         self.editingEntry = editingEntry
         let defaultUnit: PeriodTemperatureUnit = Locale.current.measurementSystem == .metric ? .celsius : .fahrenheit
-        _eventDate = State(initialValue: editingEntry?.date ?? targetDate ?? Date())
-        _flowLevel = State(initialValue: editingEntry?.flowLevel)
-        _isCycleStart = State(initialValue: editingEntry?.isCycleStart ?? false)
-        _hasIntermenstrualBleeding = State(initialValue: editingEntry?.hasIntermenstrualBleeding ?? false)
-        _mucusQuality = State(initialValue: editingEntry?.cervicalMucusQuality)
-        _ovulationResult = State(initialValue: editingEntry?.ovulationTestResult)
-        if let bbt = editingEntry?.basalBodyTemperatureFahrenheit {
-            _temperatureText = State(initialValue: String(format: "%.2f", bbt))
-            _temperatureUnit = State(initialValue: .fahrenheit)
-        } else {
-            _temperatureText = State(initialValue: "")
-            _temperatureUnit = State(initialValue: defaultUnit)
-        }
-        _note = State(initialValue: editingEntry?.narrative?.note ?? "")
-        _symptoms = State(initialValue: Set(editingEntry?.narrative?.symptomFlags ?? []))
-        _customScales = State(initialValue: Dictionary(uniqueKeysWithValues: (editingEntry?.narrative?.customSymptomScales ?? [:]).compactMap { rawValue, scale in
-            PeriodSymptom(rawValue: rawValue).map { ($0, scale) }
-        }))
+        // Seeded ONCE and reused for both the @State values and the dirty-check baseline — two
+        // separate `Date()` calls would make a freshly opened sheet claim to be dirty.
+        let seeded = SheetValues(
+            eventDate: editingEntry?.date ?? targetDate ?? Date(),
+            flowLevel: editingEntry?.flowLevel,
+            temperatureText: editingEntry?.basalBodyTemperatureFahrenheit.map { String(format: "%.2f", $0) } ?? "",
+            mucusQuality: editingEntry?.cervicalMucusQuality,
+            ovulationResult: editingEntry?.ovulationTestResult,
+            hasIntermenstrualBleeding: editingEntry?.hasIntermenstrualBleeding ?? false,
+            isCycleStart: editingEntry?.isCycleStart ?? false,
+            note: editingEntry?.narrative?.note ?? "",
+            symptoms: Set(editingEntry?.narrative?.symptomFlags ?? []),
+            customScales: Dictionary(uniqueKeysWithValues: (editingEntry?.narrative?.customSymptomScales ?? [:]).compactMap { rawValue, scale in
+                PeriodSymptom(rawValue: rawValue).map { ($0, scale) }
+            })
+        )
+        _eventDate = State(initialValue: seeded.eventDate)
+        _flowLevel = State(initialValue: seeded.flowLevel)
+        _isCycleStart = State(initialValue: seeded.isCycleStart)
+        _hasIntermenstrualBleeding = State(initialValue: seeded.hasIntermenstrualBleeding)
+        _mucusQuality = State(initialValue: seeded.mucusQuality)
+        _ovulationResult = State(initialValue: seeded.ovulationResult)
+        _temperatureText = State(initialValue: seeded.temperatureText)
+        _temperatureUnit = State(initialValue: editingEntry?.basalBodyTemperatureFahrenheit == nil ? defaultUnit : .fahrenheit)
+        _note = State(initialValue: seeded.note)
+        _symptoms = State(initialValue: seeded.symptoms)
+        _customScales = State(initialValue: seeded.customScales)
+        self.initialValues = seeded
     }
 
     var body: some View {
@@ -69,6 +148,7 @@ struct LogPeriodSheet: View {
                         .foregroundStyle(Color.bark)
 
                     lockWarning
+                    dateField
                     flowLevelField
                     cycleDetailsField
                     symptomsField
@@ -82,7 +162,7 @@ struct LogPeriodSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: isSaving ? "Saving" : "Save", disabled: isSaving) {
+            SheetSaveBar(label: saveLabel, disabled: isSaving || !canSave) {
                 Task { await save() }
             }
         }
@@ -93,9 +173,26 @@ struct LogPeriodSheet: View {
                 await authorization.request(.cycleTracking)
             }
         }
+        // A swipe-down used to throw away a period log with symptoms and a note, with no warning.
+        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE so both
         // presenters (the Cycle page and Home's quick-log tile) are covered by one edit.
         .captureProtected(surface: "logPeriod")
+    }
+
+    /// Which day is being logged. Without it the sheet silently logged "today" — a user catching up
+    /// on yesterday had to back out, find the day on the calendar, open it, and tap Edit.
+    private var dateField: some View {
+        SheetField("Date") {
+            DatePicker("Date", selection: $eventDate, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+                .tint(Color.moss)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
     }
 
     /// Shown only when notes would be dropped for want of an app lock.
@@ -157,6 +254,8 @@ struct LogPeriodSheet: View {
                                 set: { customScales[symptom] = $0 }
                             ), in: 1...10) {
                                 Text("Intensity \(customScales[symptom] ?? 5)")
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
                             }
                             .padding(.bottom, 12)
                         }
@@ -172,26 +271,66 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// Cervical mucus and ovulation test as labeled rows.
+    ///
+    /// A bare `Picker` outside a `Form` drops its title and renders in the system accent, so this
+    /// read as two stacked, unexplained blue "None" menus. Each row now names itself and carries a
+    /// moss chip showing the current value.
     private var observationsField: some View {
         SheetField("Observations") {
-            VStack(spacing: 12) {
-                Picker("Cervical mucus", selection: $mucusQuality) {
-                    Text("None").tag(CervicalMucusQuality?.none)
+            VStack(spacing: 0) {
+                observationRow("Cervical mucus", value: mucusQuality?.title ?? "None") {
+                    Button("None") { mucusQuality = nil }
                     ForEach(CervicalMucusQuality.allCases) { quality in
-                        Text(quality.title).tag(Optional(quality))
+                        Button(quality.title) { mucusQuality = quality }
                     }
                 }
-                Picker("Ovulation test", selection: $ovulationResult) {
-                    Text("None").tag(OvulationTestResult?.none)
+                Divider()
+                observationRow("Ovulation test", value: ovulationResult?.title ?? "None") {
+                    Button("None") { ovulationResult = nil }
                     ForEach(OvulationTestResult.allCases) { result in
-                        Text(result.title).tag(Optional(result))
+                        Button(result.title) { ovulationResult = result }
                     }
                 }
             }
-            .padding(14)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .tint(Color.moss)
         }
+    }
+
+    /// One "label on the left, value chip on the right" observation row.
+    private func observationRow<Options: View>(
+        _ title: String,
+        value: String,
+        @ViewBuilder options: () -> Options
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Menu {
+                options()
+            } label: {
+                HStack(spacing: 6) {
+                    Text(value)
+                        .font(.fernlet(.label))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(Color.moss)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(Color.moss.opacity(0.10), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .accessibilityLabel("\(title), \(value)")
+        }
+        .padding(.vertical, 8)
     }
 
     private var temperatureField: some View {
@@ -199,7 +338,7 @@ struct LogPeriodSheet: View {
             HStack(spacing: 10) {
                 TextField("Optional", text: $temperatureText)
                     .keyboardType(.decimalPad)
-                    .sheetTextInput()
+                    .sheetTextInput(font: .fernlet(.label))
                 Picker("Unit", selection: $temperatureUnit) {
                     ForEach(PeriodTemperatureUnit.allCases) { unit in
                         Text(unit.symbol).tag(unit)
@@ -224,6 +363,13 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// The save bar's word for what the tap will do — "Remove entry" once an edit has been emptied,
+    /// because that tap deletes the day's Fernlet-owned samples and sealed note instead of writing.
+    private var saveLabel: String {
+        if isSaving { return "Saving" }
+        return isEmptiedEdit ? "Remove entry" : "Save"
+    }
+
     private var noteCounter: some View {
         Text("\(note.count)/1000")
             .font(.fernlet(.stat))
@@ -244,6 +390,9 @@ struct LogPeriodSheet: View {
 
     private func periodToggle(_ title: String, isOn: Binding<Bool>) -> some View {
         Toggle(title, isOn: isOn)
+            // Without these the label rendered in system SF, next to DM Sans everywhere else.
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.bark)
             .tint(Color.moss)
             .padding(.vertical, 12)
     }
@@ -284,10 +433,21 @@ struct LogPeriodSheet: View {
         case invalid(String)
     }
 
+    /// Writes the sheet.
+    ///
+    /// An emptied EDIT is a real outcome, not a no-op: `editEvent` deletes that entry's Fernlet-owned
+    /// samples and its sealed narrative and then re-logs an event that carries nothing, so no sample
+    /// is written and no narrative is sealed — the day's entry goes away and no other day is touched.
+    /// A fresh log can never take that path: `canSave` requires content when `editingEntry` is nil,
+    /// so an empty sheet cannot write an empty entry.
     private func save() async {
         // Single-flight: the save bar is disabled while saving, but the entry point states it too so
         // a double invocation can never run two writes for one sheet.
         guard !isSaving else { return }
+        // The bar is disabled otherwise; stated here too so the write path carries its own
+        // precondition — an empty fresh sheet must never write, and an untouched edit must never
+        // delete-and-recreate its day for nothing.
+        guard canSave else { return }
         isSaving = true
         defer { isSaving = false }
         let basalBodyTemperature: Double?

@@ -47,7 +47,9 @@ struct MealPhotoPolaroid: View {
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(name)
                 .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate.opacity(0.58))
+                // Full-strength slate, not 58%: the faded caption measured 1.9:1 on the cream frame
+                // (matching the shared `PolaroidTile`, which was corrected the same way).
+                .foregroundStyle(Color.slate)
                 .lineLimit(1)
                 .frame(maxWidth: width)
         }
@@ -125,7 +127,9 @@ private struct MealPhotoPlaceholder: View {
                 .foregroundStyle(Color.slate.opacity(0.5))
             Text(text)
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate.opacity(0.75))
+                // Full-strength slate: this 11pt line explains where the picture went, so it has to
+                // be readable on the cream frame.
+                .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
@@ -156,7 +160,7 @@ private struct MealPhotoUnavailableCard: View {
                         .foregroundStyle(Color.slate)
                     Text(detail)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate.opacity(0.8))
+                        .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
                         .padding(.horizontal, 24)

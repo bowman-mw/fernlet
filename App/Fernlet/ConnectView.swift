@@ -188,22 +188,26 @@ struct FriendsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
+                        ScreenHeader(title: "Friends", subtitle: "Together, in person.", identifier: "screen.friends")
                         Spacer()
-                        NavigationLink {
-                            ActivitiesView(store: store)
-                        } label: {
-                            headerButtonLabel("figure.2.arms.open")
+                        HStack(spacing: 10) {
+                            NavigationLink {
+                                ActivitiesView(store: store)
+                            } label: {
+                                headerButtonLabel("Activities")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("friends.activities")
+                            .accessibilityLabel("Activities")
+                            NavigationLink {
+                                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                            } label: {
+                                headerButtonLabel("Friends")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("friends.manageFriends")
+                            .accessibilityLabel("Friends and blocks")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("friends.activities")
-                        NavigationLink {
-                            FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                        } label: {
-                            headerButtonLabel("person.2")
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("friends.manageFriends")
                     }
                     .padding(.top, 4)
 
@@ -212,6 +216,8 @@ struct FriendsView: View {
                     nearbyStatusBanner
                         .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
                         .animation(.easeInOut(duration: 0.3), value: manager.slots.count)
+
+                    displayNameHint
 
                     if manager.meshPhotos.isEmpty {
                         emptyAlbumView
@@ -231,16 +237,56 @@ struct FriendsView: View {
 
     // MARK: - Header button label (matches HeaderActionButton visual)
 
-    private func headerButtonLabel(_ systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.title3.weight(.semibold))
+    /// A named header pill matching ``HeaderActionButton``'s title variant — the same cream pill the
+    /// Food ("+ meal") and Move ("Log" / "Share") headers use.
+    ///
+    /// Drawn here rather than composed from `HeaderActionButton` because these two header actions are
+    /// `NavigationLink`s, not button actions. They are deliberately **titled**: the old icon-only pair
+    /// made the user tap to discover what `figure.2.arms.open` and `person.2` did, and `person.2` was
+    /// already doing duty as the searching-pulse glyph and the selected tab icon on the same screen.
+    private func headerButtonLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.fernlet(.label))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(Color.bark)
-            .frame(width: 58, height: 58)
+            .frame(minWidth: 72, minHeight: 58)
+            .padding(.horizontal, 10)
             .background(Color.cream.opacity(0.9), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(Color.bark.opacity(0.08), lineWidth: 1)
             )
+    }
+
+    // MARK: - Display-name hint
+
+    /// First-run nudge: with no mesh display name set, nearby friends see this device's name
+    /// ("iPhone") — the name rides the discovery broadcast. Say so where the connecting actually
+    /// happens rather than leaving it two taps deep in the roster, and link straight to the field.
+    @ViewBuilder
+    private var displayNameHint: some View {
+        if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            NavigationLink {
+                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+            } label: {
+                HStack(spacing: 8) {
+                    Text("You appear as \(store.resolvedProximityDisplayName)")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                    Text("Change")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 4)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("friends.changeDisplayName")
+            .accessibilityLabel("You appear as \(store.resolvedProximityDisplayName). Change the name friends see.")
+        }
     }
 
     // MARK: - Post-session shop window (Phase 3a)
@@ -298,7 +344,10 @@ struct FriendsView: View {
                     discoveryFailureBanner(discoveryError)
                 } else if manager.slots.isEmpty {
                     HStack(spacing: 10) {
-                        SearchingPulse(tint: Color.moss, size: 32, systemImage: "person.2")
+                        // Deliberately NOT `person.2`: that glyph is already the (filled) Friends tab
+                        // icon on this very screen, so it says "you are on the Friends tab", not
+                        // "listening for someone nearby". The radio waves say the second thing.
+                        SearchingPulse(tint: Color.moss, size: 32, systemImage: "dot.radiowaves.left.and.right")
                         Text("Looking for nearby friends…")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
@@ -387,7 +436,7 @@ struct FriendsView: View {
                         .foregroundStyle(Color.slate)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss")
+                .fernletIconButton("Dismiss photo shelf notice")
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -406,20 +455,35 @@ struct FriendsView: View {
     private var photoGrid: some View {
         LazyVGrid(columns: columns, spacing: 1) {
             ForEach(filteredPhotoWallPosts) { post in
-                albumPhotoCell(post)
-                    .onTapGesture {
-                        selectedAlbumPostID = post.id
-                    }
+                // A real Button, not a tap gesture on a colour: VoiceOver could neither name nor
+                // activate the old cells, so the album was unopenable without sight.
+                Button {
+                    selectedAlbumPostID = post.id
+                } label: {
+                    albumPhotoCell(post)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(albumCellLabel(post))
             }
         }
         .padding(.top, 2)
+    }
+
+    /// What VoiceOver says for one album cell: who shared it, when, and whether it opens a carousel.
+    private func albumCellLabel(_ post: FriendPhotoWallPost) -> String {
+        let cover = post.coverPhoto
+        let when = cover.addedAt.formatted(date: .abbreviated, time: .omitted)
+        if post.isCarousel {
+            return "Photo from \(cover.senderName), \(when), carousel, \(post.photos.count) photos"
+        }
+        return "Photo from \(cover.senderName), \(when)"
     }
 
     private var sessionSearchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.slate)
-            TextField("Search sessions by person or mesh", text: $sessionSearchText)
+            TextField("Search by friend or session name", text: $sessionSearchText)
                 .autocorrectionDisabled()
         }
         .padding(.horizontal, 14)
@@ -462,17 +526,11 @@ struct FriendsView: View {
     // MARK: - Empty state
 
     private var emptyAlbumView: some View {
-        VStack(spacing: 14) {
-            Spacer().frame(height: 48)
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.bark.opacity(0.18))
-            Text("Photos from your hangouts\nwill appear here")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
+        EmptyState(
+            text: "Photos from your hangouts will appear here.",
+            systemImage: "photo.on.rectangle.angled"
+        )
+        .padding(.top, 34)
     }
 
     // MARK: - Helper
@@ -582,7 +640,7 @@ private struct FriendPhotoFeedView: View {
                     Image(systemName: "xmark")
                         .font(.body.weight(.bold))
                         .foregroundStyle(Color.bark)
-                        .frame(width: 42, height: 42)
+                        .frame(width: 44, height: 44)
                         .background(.regularMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -656,10 +714,12 @@ private struct FriendPhotoCarouselPostView: View {
             }
         }
         .onDisappear { chromeTask?.cancel() }
-        .confirmationDialog(
+        // An `alert`, not a `confirmationDialog`: on iOS 26 the dialog renders as a popover that
+        // suppresses the `.cancel`-role button, so the user saw a lone red "Delete" and no way out —
+        // and the popover anchored to the view root rather than the picture being deleted.
+        .alert(
             "Delete this picture?",
-            isPresented: $pendingDeletePhotoID.isPresent(),
-            titleVisibility: .visible
+            isPresented: $pendingDeletePhotoID.isPresent()
         ) {
             deleteConfirmationButtons
         } message: {
@@ -723,7 +783,8 @@ private struct FriendPhotoCarouselPostView: View {
                     .foregroundStyle(Color.slate)
             }
             Spacer()
-            Color.clear.frame(width: 42, height: 42)
+            // Balances the 44pt close button that floats over this row.
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -742,17 +803,22 @@ private struct FriendPhotoCarouselPostView: View {
             .frame(height: width * 1.25)
             .overlay(alignment: .bottomTrailing) {
                 HStack(spacing: 10) {
+                    let isSaved = savedPhotoIDs.contains(photo.id)
                     circleActionButton(
-                        systemName: savedPhotoIDs.contains(photo.id) ? "checkmark" : "square.and.arrow.down",
-                        tint: savedPhotoIDs.contains(photo.id) ? Color.moss : .white,
-                        accessibilityLabel: "Save this picture to your Photos library"
+                        systemName: isSaved ? "checkmark" : "square.and.arrow.down",
+                        tint: isSaved ? Color.moss : .white,
+                        // The glyph turns into a checkmark when it's done — the label has to say the
+                        // same thing, or VoiceOver keeps offering a save that already happened.
+                        accessibilityLabel: isSaved ? "Saved to Photos" : "Save this picture to your Photos library"
                     ) { savePhoto(photo) }
 
                     if post.session != nil {
+                        let isFavorite = manager.favoritePhotoID(for: post) == photo.id
                         circleActionButton(
-                            systemName: manager.favoritePhotoID(for: post) == photo.id ? "heart.fill" : "heart",
-                            tint: manager.favoritePhotoID(for: post) == photo.id ? Color.dustyRose : .white,
-                            accessibilityLabel: "Favorite this photo"
+                            systemName: isFavorite ? "heart.fill" : "heart",
+                            tint: isFavorite ? Color.dustyRose : .white,
+                            accessibilityLabel: "Favorite this photo",
+                            selected: isFavorite
                         ) { manager.toggleFavorite(photoID: photo.id, in: post) }
                     }
 
@@ -770,6 +836,7 @@ private struct FriendPhotoCarouselPostView: View {
         systemName: String,
         tint: Color,
         accessibilityLabel: String,
+        selected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -781,6 +848,8 @@ private struct FriendPhotoCarouselPostView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        // A filled heart is the ONLY thing that said "favorited"; the trait says it out loud.
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func savePhoto(_ photo: FriendPhotoPayload) {
@@ -965,7 +1034,9 @@ private struct NearbySlotRow: View {
                     .foregroundStyle(Color.slate)
             }
         case .awaitingManualCommit:
-            HStack(spacing: 8) {
+            // Both of these ACT (they commit a connection), so they take the 44pt action pill rather
+            // than the 34pt selection chip — and the bare "Verify" text label now matches Connect.
+            AdaptiveStack(spacing: 8) {
                 // Ceremony-grade alternative to the bare tap (Increment 4): scan proves the
                 // person holds the key; a successful round commits BOTH sides.
                 Menu {
@@ -981,12 +1052,12 @@ private struct NearbySlotRow: View {
                     }
                 } label: {
                     Text("Verify")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
                 }
+                .menuStyle(.button)
+                .buttonStyle(ActionPillButtonStyle(.secondary))
                 .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
                 Button("Connect", action: onForceConnect)
-                    .buttonStyle(ChipButtonStyle(selected: true))
+                    .buttonStyle(ActionPillButtonStyle(.primary))
                     .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
             }
             .sheet(isPresented: $verifyQRURL.isPresent(), onDismiss: onDismissVerifyQR) {
@@ -1107,7 +1178,7 @@ struct ConnectionSuccessOverlay: View {
                 VStack(spacing: 6) {
                     Text(peerName)
                         .font(.fernlet(.display))
-                        .foregroundStyle(Color.primary)
+                        .foregroundStyle(Color.bark)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text("Connected")

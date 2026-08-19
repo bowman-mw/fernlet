@@ -34,8 +34,11 @@ struct MilestonesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                eyebrow
+                // The nav bar already says "Milestones"; a spaced "MILESTONES" eyebrow above
+                // "All of it, added up" made it three titles in a stack. The screen anchor UI tests
+                // assert on moves onto the header itself so the string survives the trim.
                 header
+                    .uxScreenAnchor("screen.milestones")
 
                 VStack(spacing: 11) {
                     ForEach(rows, id: \.kind) { row in
@@ -50,21 +53,6 @@ struct MilestonesView: View {
         .background(Color.parchment)
         .navigationTitle("Milestones")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    // MARK: - Eyebrow
-
-    /// A small, spaced "MILESTONES" label sitting above the title — the keepsake-shelf eyebrow from
-    /// the mockup, so the screen opens like a quiet page in a memento book rather than a stat panel.
-    private var eyebrow: some View {
-        Text("MILESTONES")
-            .font(.fernlet(.labelSmall))
-            .tracking(1.6)
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity)
-            // Stable screen anchor (same convention as ScreenHeader's "screen.home" etc.) so UI tests
-            // can assert this screen was actually reached, not just that some nav bar exists.
-            .accessibilityIdentifier("screen.milestones")
     }
 
     // MARK: - Data
@@ -178,7 +166,12 @@ struct MilestonesView: View {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.goldenrod)
-                            Text(row.reachedCount == 1 ? "1 milestone gift" : "\(row.reachedCount) milestone gifts")
+                            // "reached", not "gifts": this counts THRESHOLDS crossed (append-only,
+                            // survives a reset) while the footer below counts COINS from the ledger
+                            // (voided by a reset). Wording them the same let the page say
+                            // "2 milestone gifts" on a row and "No milestone gifts yet" underneath.
+                            // Only the footer talks about coins now.
+                            Text(row.reachedCount == 1 ? "1 milestone reached" : "\(row.reachedCount) milestones reached")
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.goldenrod)
                         }
@@ -229,18 +222,15 @@ struct MilestonesView: View {
                     .strokeBorder(Color.goldenrod.opacity(0.3), lineWidth: 1)
             )
         } else {
-            // No gifts yet: a reassuring note, never a countdown to chase.
-            HStack(spacing: 14) {
-                CoinGlyph(diameter: 40, muted: true)
-                Text("No milestone gifts yet — the first lands with your very first log. No rush.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 14)
+            // No gifts yet: a reassuring note, never a countdown to chase. Routed through the shared
+            // `EmptyState` (with its optional glyph) so this reads in the same voice as the other 30
+            // empty sections instead of in its own font and spacing.
+            EmptyState(
+                text: "No milestone gifts yet — the first lands with your very first log. No rush.",
+                systemImage: "star"
+            )
             .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.cream.opacity(0.7))
@@ -393,16 +383,33 @@ struct MilestoneRowModel {
     /// A gentle "your first … will land here" line for a kind with no count yet.
     let emptyPrompt: String
 
+    /// The ONE icon + tint per milestone kind, for every surface that draws a keepsake — this
+    /// screen's rows, the keepsake shelf, and Home's milestones card. It used to be duplicated on
+    /// Home, where journal was a moss "book" and workouts terracotta, so the same keepsake changed
+    /// glyph and colour one tap later. Exhaustive on purpose: a new `MilestoneEventKind` is a
+    /// compile error here rather than an unstyled token on one surface only.
+    static func style(for kind: MilestoneEventKind) -> (icon: String, tint: Color) {
+        switch kind {
+        case .journal: ("book.closed", .journalMedal)
+        case .meal: ("fork.knife", .mealMedal)
+        case .workout: ("figure.walk", .workoutMedal)
+        case .water: ("drop", .waterMedal)
+        case .breathing: ("wind", .breathingMedal)
+        case .worry: ("archivebox", .worryMedal)
+        }
+    }
+
     static func rows(counts: [MilestoneEventKind: Int], worriesLetGo: Int) -> [MilestoneRowModel] {
-        let order: [(MilestoneEventKind, String, Color, String, String)] = [
-            (.journal, "book.closed", .journalMedal, "journal", "Your first journal moment will land here."),
-            (.meal, "fork.knife", .mealMedal, "meals", "Your first noticed meal will land here."),
-            (.workout, "figure.walk", .workoutMedal, "workouts", "Your first time moving will land here."),
-            (.water, "drop", .waterMedal, "water", "Your first well-watered day will land here."),
-            (.breathing, "wind", .breathingMedal, "breathing", "Your first slow-breathing break will land here."),
-            (.worry, "archivebox", .worryMedal, "worries let go", "Your first worry let go will land here.")
+        let order: [(MilestoneEventKind, String, String)] = [
+            (.journal, "journal", "Your first journal moment will land here."),
+            (.meal, "meals", "Your first noticed meal will land here."),
+            (.workout, "workouts", "Your first time moving will land here."),
+            (.water, "water", "Your first well-watered day will land here."),
+            (.breathing, "breathing", "Your first slow-breathing break will land here."),
+            (.worry, "worries let go", "Your first worry let go will land here.")
         ]
-        return order.map { kind, icon, tint, shelfLabel, emptyPrompt in
+        return order.map { kind, shelfLabel, emptyPrompt in
+            let (icon, tint) = style(for: kind)
             // Worry counts come from the device-local Worry Box (never the synced ledger), and worries
             // award no coins (a device-local coin award would desync the wallet), so their "gifts" is 0.
             let count = kind == .worry ? worriesLetGo : (counts[kind] ?? 0)

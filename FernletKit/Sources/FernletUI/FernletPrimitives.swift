@@ -52,22 +52,40 @@ public struct SectionLabel: View {
     }
 }
 
-/// A centered italic placeholder line shown when a list or section has no content yet.
+/// A centered italic placeholder line shown when a list or section has no content yet, optionally
+/// over a soft glyph.
 ///
 /// Used wherever a card would otherwise render empty (no meals logged, no friends nearby, …) so
-/// empty sections still read as intentional rather than broken.
+/// empty sections still read as intentional rather than broken. **Every** empty section should route
+/// through this rather than hand-rolling its own line — the friends album, activities list, friend
+/// shop and milestones each drew their own with different fonts and spacing, which is what
+/// `systemImage:` is here for: an illustrated empty state in the same voice as the plain ones.
 public struct EmptyState: View {
-    var text: String
+    private let text: String
+    private let systemImage: String?
 
-    public init(text: String) {
+    /// - Parameter systemImage: Optional SF Symbol drawn above the line. Decorative — it is hidden
+    ///   from VoiceOver, which reads only `text`.
+    public init(text: String, systemImage: String? = nil) {
         self.text = text
+        self.systemImage = systemImage
     }
 
     public var body: some View {
-        Text(text)
-            .font(.fernlet(.bubble))
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 18)
+        VStack(spacing: 10) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Color.slate.opacity(0.6))
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 18)
     }
 }

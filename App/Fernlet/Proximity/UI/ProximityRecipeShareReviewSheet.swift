@@ -32,7 +32,11 @@ struct ProximityRecipeShareReviewSheet: View {
                         ScreenHeader(
                             title: share.payload.recipe.title,
                             subtitle: "Shared by \(share.senderDisplayName)",
-                            subtitleFirst: false
+                            subtitleFirst: false,
+                            // A peer-supplied recipe name, so the same three-line allowance the
+                            // sending sheet gives its own: truncating what arrived hides the very
+                            // thing the user is deciding whether to import.
+                            titleLineLimit: 3
                         )
 
                         summaryCard

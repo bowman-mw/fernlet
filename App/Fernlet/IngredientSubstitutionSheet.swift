@@ -130,6 +130,7 @@ struct IngredientSubstitutionSheet: View {
                                 substituteRow(suggestion.foodItem, reason: suggestion.reason)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
 
@@ -139,32 +140,60 @@ struct IngredientSubstitutionSheet: View {
                         TextField("Search for a replacement", text: $searchText)
                             .sheetTextInput()
                             .accessibilityIdentifier("substitution.search")
-                        if searchResults.isEmpty {
+                        if visibleSearchResults.isEmpty {
                             Text("Type to find a replacement food.")
                                 .font(.fernlet(.bodySmall))
                                 .foregroundStyle(Color.slate)
                         } else {
-                            ForEach(Array(searchResults.enumerated()), id: \.element.foodItem.id) { index, candidate in
+                            ForEach(Array(visibleSearchResults.enumerated()), id: \.element.id) { index, foodItem in
                                 if index > 0 { FernletRowDivider() }
-                                substituteRow(candidate.foodItem, reason: nil)
+                                substituteRow(foodItem, reason: nil)
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(20)
         }
     }
 
+    /// The search list with same-name/same-source repeats collapsed.
+    ///
+    /// The catalog holds "Rolled oats", "Rolled Oats" and "Rolled Oats" from the same source; as bare
+    /// name-only rows they were three identical, unchoosable lines.
+    private var visibleSearchResults: [FoodItem] {
+        var seen = Set<String>()
+        return searchResults.compactMap { candidate -> FoodItem? in
+            let item = candidate.foodItem
+            let key = "\(item.name.lowercased())|\(item.dataSourceLabel)"
+            return seen.insert(key).inserted ? item : nil
+        }
+    }
+
+    /// One replacement candidate, rendered the way the recipe editor's typeahead renders the SAME
+    /// catalog: name, provenance badge, and the reference serving with its macros. A name alone left
+    /// the cook no way to tell two similar hits apart — or to spot an unrelated one.
     private func substituteRow(_ foodItem: FoodItem, reason: String?) -> some View {
         Button {
             selectSubstitute(foodItem)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(foodItem.name)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(foodItem.name)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Text(foodItem.dataSourceLabel)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Color.parchment, in: Capsule())
+                }
+                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
                 if let reason, !reason.isEmpty {
                     Text(reason)
                         .font(.fernlet(.bodySmall))
@@ -173,6 +202,7 @@ struct IngredientSubstitutionSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -210,7 +240,7 @@ struct IngredientSubstitutionSheet: View {
                 } label: {
                     Label("Save as new recipe", systemImage: "plus.circle")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.cream)
+                        .foregroundStyle(Color.onMoss)
                         .frame(maxWidth: .infinity)
                         .padding(14)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))

@@ -257,42 +257,44 @@ struct DuressPINSetupView: View {
             .environment(lockService)
         }
         .sheet(isPresented: $showRecoveryEnrollment) {
-            DuressRecoveryEnrollmentSheet()
+            // Opened from the phone being protected, so the ceremony starts on that side instead of
+            // asking a question this entry point already answered.
+            DuressRecoveryEnrollmentSheet(initialRole: .protectedPhone)
                 .environment(lockService)
         }
-        .confirmationDialog(
+        // Alerts, not confirmation dialogs: on iOS 26 a `.confirmationDialog` renders as a popover
+        // that SUPPRESSES the `.cancel`-role button, which on this screen meant arming an
+        // irreversible response with no visible way back.
+        .alert(
             pendingDestructiveMode.flatMap(DuressModeCopy.armConfirmationTitle) ?? "",
             isPresented: Binding(
                 get: { pendingDestructiveMode != nil },
                 set: { if !$0 { pendingDestructiveMode = nil } }
-            ),
-            titleVisibility: .visible
+            )
         ) {
+            Button("Cancel", role: .cancel) { pendingDestructiveMode = nil }
             Button("I understand — continue", role: .destructive) {
                 pendingDestructiveMode = nil
                 showEntrySheet = true
             }
-            Button("Cancel", role: .cancel) { pendingDestructiveMode = nil }
         } message: {
             Text(pendingDestructiveMode.map(DuressModeCopy.detail) ?? "")
         }
-        .confirmationDialog(
+        .alert(
             "Remove duress code?",
-            isPresented: $showRemoveConfirm,
-            titleVisibility: .visible
+            isPresented: $showRemoveConfirm
         ) {
-            Button("Remove duress code", role: .destructive) { removeDuress() }
             Button("Cancel", role: .cancel) { }
+            Button("Remove duress code", role: .destructive) { removeDuress() }
         } message: {
             Text("Your duress code stops working. Your passcode and your data are untouched.")
         }
-        .confirmationDialog(
+        .alert(
             "Remove recovery device?",
-            isPresented: $showRecoveryRemoveConfirm,
-            titleVisibility: .visible
+            isPresented: $showRecoveryRemoveConfirm
         ) {
-            Button("Remove recovery device", role: .destructive) { removeRecoveryCustodian() }
             Button("Cancel", role: .cancel) { }
+            Button("Remove recovery device", role: .destructive) { removeRecoveryCustodian() }
         } message: {
             Text("That phone can no longer recover this one. Your data is untouched — but if you arm the recovery lock again you will need to enrol a device first.")
         }
@@ -321,9 +323,12 @@ struct DuressPINSetupView: View {
             .navigationTitle("Duress code")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                // Trailing, like every other "this screen is finished" control — the leading slot
+                // is where the sibling lock sheets put Cancel, and "Done" there read as one.
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .foregroundStyle(Color.slate)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
                 }
             }
         }
@@ -357,6 +362,8 @@ struct DuressPINSetupView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
         }
+        // Spans the column like the Status card below it, instead of hugging its longest line.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -411,32 +418,39 @@ struct DuressPINSetupView: View {
             errorMessage = nil
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.4))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(DuressModeCopy.title(mode))
-                            .font(.fernlet(.label))
-                            .foregroundStyle(mode == .silentWipe ? Color.terracotta : Color.bark)
-                            .fernletWrappingText()
-                        Text(DuressModeCopy.summary(mode))
+                // Only the OPTION is dimmed when it can't be picked — see the reason line below.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.4))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(DuressModeCopy.title(mode))
+                                .font(.fernlet(.label))
+                                .foregroundStyle(mode == .silentWipe ? Color.terracottaInk : Color.bark)
+                                .fernletWrappingText()
+                            Text(DuressModeCopy.summary(mode))
+                                .font(.fernlet(.bodySmall))
+                                .foregroundStyle(Color.slate)
+                                .fernletWrappingText()
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if isSelected {
+                        Text(DuressModeCopy.detail(mode))
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
-                    Spacer(minLength: 0)
                 }
-                if isSelected {
-                    Text(DuressModeCopy.detail(mode))
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                .opacity(selectable ? 1 : 0.55)
+
                 if let reason = availability.unavailableReason(for: mode) {
+                    // Outside the dim, deliberately: this is the readable reason the option is
+                    // withheld, and at 55% it was the least legible text on the card.
                     Text(reason)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(Color.terracottaInk)
                         .fernletWrappingText()
                 }
             }
@@ -453,7 +467,6 @@ struct DuressPINSetupView: View {
                         lineWidth: 1
                     )
             )
-            .opacity(selectable ? 1 : 0.55)
         }
         .buttonStyle(.plain)
         .disabled(!selectable)
@@ -469,64 +482,87 @@ struct DuressPINSetupView: View {
                 .fernletWrappingText()
 
             if availability.hasRecoveryCustodian {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                    Text("A recovery device is enrolled.")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                }
-                .accessibilityIdentifier("duress.recovery.enrolled")
-
-                if availability.hasSupersededRecoveryBlob {
-                    // The route back to everything from BEFORE this app lock still works — that is
-                    // why the enrollment was kept — but the key it holds cannot open a word written
-                    // since. Said out loud here because the recovery lock is refused over it, and a
-                    // greyed-out option whose reason lives on another card is a dead end.
-                    Text("This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracotta)
-                        .fernletWrappingText()
-                        .accessibilityIdentifier("duress.recovery.superseded")
-
-                    Button("Set up this device again") { showRecoveryEnrollment = true }
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .accessibilityIdentifier("duress.recovery.reenroll")
-                }
-
-                if availability.canRemoveRecoveryCustodian {
-                    Button(role: .destructive) {
-                        showRecoveryRemoveConfirm = true
-                    } label: {
-                        Text("Remove recovery device")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.terracotta)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("duress.recovery.remove")
-                } else if let refusal = availability.recoveryRemovalRefusalReason {
-                    Text(refusal)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                recoveryDeviceEnrolledBody(availability)
             } else {
-                Button("Set up a recovery device") { showRecoveryEnrollment = true }
-                    .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
-                    .accessibilityIdentifier("duress.recovery.enroll")
+                recoveryDeviceEnrollButton
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The enrolled branch of ``recoveryDeviceCard(_:)``: the confirmation row, the superseded-key
+    /// warning, and the removal affordance (or the reason removal is refused).
+    @ViewBuilder
+    private func recoveryDeviceEnrolledBody(_ availability: DuressSetupAvailability) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.moss)
+            Text("A recovery device is enrolled.")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+            Spacer()
+        }
+        .accessibilityIdentifier("duress.recovery.enrolled")
+
+        if availability.hasSupersededRecoveryBlob {
+            // The route back to everything from BEFORE this app lock still works — that is
+            // why the enrollment was kept — but the key it holds cannot open a word written
+            // since. Said out loud here because the recovery lock is refused over it, and a
+            // greyed-out option whose reason lives on another card is a dead end.
+            Text("This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.terracottaInk)
+                .fernletWrappingText()
+                .accessibilityIdentifier("duress.recovery.superseded")
+
+            Button("Set up this device again") { showRecoveryEnrollment = true }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .accessibilityIdentifier("duress.recovery.reenroll")
+        }
+
+        if availability.canRemoveRecoveryCustodian {
+            Button(role: .destructive) {
+                showRecoveryRemoveConfirm = true
+            } label: {
+                Text("Remove recovery device")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracottaInk)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("duress.recovery.remove")
+        } else if let refusal = availability.recoveryRemovalRefusalReason {
+            Text(refusal)
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    /// The un-enrolled branch of ``recoveryDeviceCard(_:)``.
+    ///
+    /// A moss OUTLINE, not a second filled button: two full-width filled moss buttons in adjacent
+    /// cards left no way to tell which was the screen's real primary. The filled one is "Set duress
+    /// code" below.
+    private var recoveryDeviceEnrollButton: some View {
+        Button("Set up a recovery device") { showRecoveryEnrollment = true }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.vertical, 10)
+            .background(Color.parchment, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.moss.opacity(0.45), lineWidth: 1)
+            )
+            .accessibilityIdentifier("duress.recovery.enroll")
     }
 
     private func commitCard(_ availability: DuressSetupAvailability) -> some View {
@@ -541,11 +577,11 @@ struct DuressPINSetupView: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(availability.isSelectable(selectedMode) ? Color.onMoss : Color.bark)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                availability.isSelectable(selectedMode) ? Color.moss : Color.moss.opacity(0.4),
+                Color.mossFill.opacity(availability.isSelectable(selectedMode) ? 1 : 0.55),
                 in: RoundedRectangle(cornerRadius: 14)
             )
             .disabled(!availability.isSelectable(selectedMode))
@@ -558,6 +594,7 @@ struct DuressPINSetupView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -571,17 +608,20 @@ struct DuressPINSetupView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "trash")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(Color.terracottaInk)
                         .frame(width: 28)
                     Text("Remove duress code")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(Color.terracottaInk)
                     Spacer()
                 }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("duress.remove")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -692,6 +732,11 @@ private struct DuressPINEntrySheet: View {
                     .padding(24)
                 }
             }
+            // The keypad is pinned above the safe area — thumb reach, and the same shape as the
+            // lock gate — while the explanation above it scrolls.
+            .safeAreaInset(edge: .bottom) {
+                numericPadInset
+            }
             .navigationTitle("Duress code")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -716,26 +761,45 @@ private struct DuressPINEntrySheet: View {
                 Button("Continue") { advance() }
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isSubmitting ? Color.bark : Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .background(
+                        Color.mossFill.opacity(isSubmitting ? 0.55 : 1),
+                        in: RoundedRectangle(cornerRadius: 14)
+                    )
                     .disabled(isSubmitting)
                     .accessibilityIdentifier("duress.entry.continue")
             }
         } else {
-            let total = kind == .pin4 ? 4 : 6
-            VStack(spacing: 20) {
-                duressPinDots(current: step == .enter ? entry : confirmation, total: total)
-                FernletNumericPad(value: step == .enter ? $entry : $confirmation, maxLength: total)
-            }
-            .onChange(of: entry) { _, new in
-                if step == .enter, new.count == total { advance() }
-            }
-            .onChange(of: confirmation) { _, new in
-                if step == .confirm, new.count == total { advance() }
-            }
+            // Dots high, pad low (see `numericPadInset`) — the lock gate's shape, so the duress
+            // code is typed exactly where the real passcode is. Being indistinguishable from a
+            // normal unlock is the feature.
+            duressPinDots(current: step == .enter ? entry : confirmation, total: pinLength)
+                .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The keypad, pinned to the bottom of the sheet. Empty for the alphanumeric kind, which types
+    /// into a `SecureField` with the system keyboard instead.
+    @ViewBuilder private var numericPadInset: some View {
+        if (lockService.credentialKind ?? .pin6) != .alphanumeric {
+            FernletNumericPad(value: step == .enter ? $entry : $confirmation, maxLength: pinLength)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
+                .background(Color.parchment)
+                .onChange(of: entry) { _, new in
+                    if step == .enter, new.count == pinLength { advance() }
+                }
+                .onChange(of: confirmation) { _, new in
+                    if step == .confirm, new.count == pinLength { advance() }
+                }
+        }
+    }
+
+    /// How many digits the configured credential kind takes.
+    private var pinLength: Int {
+        (lockService.credentialKind ?? .pin6) == .pin4 ? 4 : 6
     }
 
     /// Advances from entry to confirmation, or commits.

@@ -11,6 +11,12 @@ import FernletUI
 /// so a brand-new not-yet-saved location isn't committed by a cancel-swipe). Deletes persist
 /// immediately at their confirm, because a swipe-dismiss after a delete must not silently resurrect
 /// the location.
+///
+/// Adding a location never changes which one is ACTIVE: tapping a preset used to append it *and*
+/// make it active, so merely peeking at "Home setup" and backing out re-pointed every future
+/// suggestion at a gym the user doesn't train in — with no Save tapped and nothing said. The switch
+/// is now an explicit "Train here" (or a tap on the saved card), and backing out of a location that
+/// was never saved discards it.
 struct WorkoutLocationSetupView: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -25,6 +31,10 @@ struct WorkoutLocationSetupView: View {
     @State private var locations: [WorkoutLocation]
     @State private var activeID: UUID
     @State private var editingIndex: Int?
+    /// The location an adder just appended, exactly as it was seeded. `leaveEquipmentStep()` compares
+    /// against it so backing out of an untouched peek discards the location, while a location the
+    /// user actually edited (equipment ticked, name changed) is committed rather than thrown away.
+    @State private var newLocationSeed: WorkoutLocation?
     @State private var addingCustom = false
     @State private var customName = ""
     @State private var pendingDestructiveAction: DestructiveConfirmation?
@@ -261,7 +271,7 @@ struct WorkoutLocationSetupView: View {
     private var equipmentHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Button { commitEdits(); step = .location } label: {
+                Button { leaveEquipmentStep() } label: {
                     Image(systemName: "chevron.left")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.bark)
@@ -298,18 +308,49 @@ struct WorkoutLocationSetupView: View {
                 .background(Color.moss.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
                 Spacer()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("What's available?")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.moss)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("What's available?")
+                        .font(.fernlet(.header))
+                        .foregroundStyle(Color.bark)
+                    Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                }
+                Spacer(minLength: 8)
+                activeLocationControl
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
         .padding(.bottom, 12)
+    }
+
+    /// The explicit "this is where I train" switch, and the quiet state when it already is.
+    ///
+    /// Adding a location no longer flips `activeID` behind the user's back, so this is where the
+    /// switch is actually made — beside the equipment it's being made about.
+    @ViewBuilder private var activeLocationControl: some View {
+        if let editing = editingLocation {
+            if editing.id == activeID {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                    Text("Training here")
+                        .font(.fernlet(.labelSmall))
+                }
+                .foregroundStyle(Color.moss)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("workout.location.isActive")
+            } else {
+                Button("Train here") { activeID = editing.id }
+                    .buttonStyle(ChipButtonStyle(selected: false))
+                    // Chip drawing, 44pt target.
+                    .fernletTapTarget()
+                    .accessibilityHint("Plans your workouts around this space")
+                    .accessibilityIdentifier("workout.location.makeActive")
+            }
+        }
     }
 
     private func equipmentCategorySection(_ category: EquipmentCategory) -> some View {
@@ -364,7 +405,7 @@ struct WorkoutLocationSetupView: View {
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.cream)
+                        .foregroundStyle(Color.onMoss)
                         .frame(width: 22, height: 22)
                         .background(Color.moss, in: Circle())
                         .offset(x: 7, y: -7)
@@ -412,6 +453,37 @@ struct WorkoutLocationSetupView: View {
     private func commitEdits() {
         repairBlankName()
         store.setWorkoutLocations(locations, activeID: activeID)
+        // Persisted, so it is no longer a brand-new draft the back chevron may discard.
+        newLocationSeed = nil
+    }
+
+    /// Whether the location being edited already exists in the store. A brand-new one lives only in
+    /// local `@State` until its "Save location" bar is tapped.
+    private var editingLocationIsSaved: Bool {
+        guard let editing = editingLocation else { return false }
+        return store.settings.workoutLocations.contains { $0.id == editing.id }
+    }
+
+    /// The back chevron. An existing location commits its edits (that is what makes a rename survive a
+    /// later swipe-dismiss); a brand-new one is DISCARDED only while it is still exactly as the adder
+    /// seeded it, because opening a preset to look at its equipment is a peek, not a decision to keep
+    /// it. The moment the user ticks or unticks anything (or renames it) that is real work, and the
+    /// chevron commits it rather than deleting it out from under them.
+    private func leaveEquipmentStep() {
+        if editingLocationIsSaved {
+            commitEdits()
+        } else if let index = editingIndex, locations.indices.contains(index) {
+            if locations[index] == newLocationSeed {
+                let discarded = locations.remove(at: index)
+                // Never leave `activeID` pointing at a location that no longer exists.
+                if activeID == discarded.id { activeID = store.settings.activeWorkoutLocation.id }
+            } else {
+                commitEdits()
+            }
+        }
+        newLocationSeed = nil
+        editingIndex = nil
+        step = .location
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -434,12 +506,14 @@ struct WorkoutLocationSetupView: View {
     /// explicit cap at the point the input enters (both adders guard on it, and the add cards hide).
     private static let maxLocations = 12
 
+    // Neither adder touches `activeID`: adding a place you sometimes train must not silently move
+    // your training there. "Train here" on the equipment step (or tapping the saved card) does that.
     private func addFromTemplate(_ template: LocationTemplate) {
         guard locations.count < Self.maxLocations else { return }
         let location = template.makeLocation()
         locations.append(location)
         editingIndex = locations.count - 1
-        activeID = location.id
+        newLocationSeed = location
         step = .equipment
     }
 
@@ -449,7 +523,7 @@ struct WorkoutLocationSetupView: View {
         let location = WorkoutLocation(name: name, ownedEquipment: [])
         locations.append(location)
         editingIndex = locations.count - 1
-        activeID = location.id
+        newLocationSeed = location
         customName = ""
         addingCustom = false
         step = .equipment

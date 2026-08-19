@@ -37,6 +37,8 @@ struct ConnectionInspectorView: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .foregroundStyle(Color.slate)
+                    // Without this VoiceOver announces the glyph name, "xmark.circle.fill".
+                    .accessibilityLabel("Close")
                 }
             }
         }

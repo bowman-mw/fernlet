@@ -60,6 +60,13 @@ struct NutritionTargetsEditor: View {
         if totalsExceedCalories {
             return "Your protein and fat leave less room than the carb minimum, so the totals come out a little above your calories."
         }
+        // With Show calories off, the footnote never talks about "your calories" — the card above
+        // promised not to put calorie figures in front of the user, and the two must agree.
+        guard store.settings.showCalories else {
+            return hasAnyOverride
+                ? "Carbs fill in the room your protein and fat leave. Clear a field to let Fernlet set it from your goal and profile again."
+                : "These come from your goal, profile, activity and eating pattern. Type a number to set your own — carbs fill in the room your protein and fat leave."
+        }
         return hasAnyOverride
             ? "Carbs fill in the calories your protein and fat leave room for. Clear a field to let Fernlet set it from your goal and profile again."
             : "These come from your goal, profile, activity and eating pattern. Type a number to set your own — carbs fill in the calories your protein and fat leave room for."
@@ -135,6 +142,41 @@ struct NutritionTargetsEditor: View {
                         .fernletWrappingText()
                         .accessibilityIdentifier("nutritionTargets.lowTargetNote")
                 }
+
+                caloriesOffNote
+            }
+        }
+    }
+
+    /// Says why a calorie figure is on screen while "Show calories" is off, and offers the one tap
+    /// that makes the two surfaces agree.
+    ///
+    /// Sits at the FOOT of the card, beside the derivation footnote it belongs with, rather than
+    /// wedged under the Calories row: `showCalories` defaults to off, so inline it added a paragraph
+    /// and a 44pt button above the protein/fat rows on every fresh install and pushed the rows —
+    /// and the Reset affordance above them — off a short viewport.
+    ///
+    /// The row itself stays: this number is the budget the protein/fat/carb split is derived FROM, so
+    /// hiding it would leave the card unable to explain where its own macros come from — and the
+    /// shipped targets UI test drives this field directly. What it must not do is read as Fernlet
+    /// putting calorie counting in front of someone who opted out, so it says so plainly.
+    @ViewBuilder private var caloriesOffNote: some View {
+        if !store.settings.showCalories {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Button("Show calories in Fernlet") {
+                    store.settings.showCalories = true
+                    store.scheduleSnapshotSave()
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.moss)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("nutritionTargets.showCalories")
             }
         }
     }

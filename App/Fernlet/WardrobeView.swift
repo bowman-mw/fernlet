@@ -12,9 +12,18 @@ import FernletUI
 /// stack, so it pushes the Creation Studio without nesting sheets.
 struct WardrobeView: View {
     var store: FernletStore
+    /// Forwarded to every ``CreationStudioView`` pushed from here so the hosting customization sheet
+    /// can block swipe-to-dismiss over an unsaved drawing. Nil when there is no host to tell.
+    var studioDraftIsDirty: Binding<Bool>? = nil
 
     /// The listing refusals (`store.listCustomItemForSale`) surfaced from the swipe "Sell" action.
     @State private var shopAlert: ShopAlert?
+    /// The pending swipe-to-delete. Deleting a designed item is irreversible, so the swipe only ever
+    /// ASKS — the delete itself runs from the confirmation's `perform`.
+    @State private var pendingDelete: DestructiveConfirmation?
+    /// Drives the push into a NEW item's studio. Both entry points (the top row and the empty-closet
+    /// invitation) are plain buttons feeding this, so neither inherits the `List`'s extra chevron.
+    @State private var isDesigningNewItem = false
 
     var body: some View {
         List {
@@ -39,16 +48,23 @@ struct WardrobeView: View {
             }
         }
         .alert(item: $shopAlert) { $0.alert(in: .wardrobe) }
+        .destructiveConfirmation($pendingDelete)
+        .navigationDestination(isPresented: $isDesigningNewItem) {
+            CreationStudioView(store: store, draftIsDirty: studioDraftIsDirty)
+        }
     }
 
     /// The row that pushes the Creation Studio.
+    ///
+    /// A plain `Button` + `navigationDestination`, not a `NavigationLink`: inside a `List` the link
+    /// adds the system disclosure chevron OUTSIDE the cream card, next to the one the card already
+    /// draws. One row, one chevron.
     private var designNewSection: some View {
         Section {
-            NavigationLink {
-                CreationStudioView(store: store)
-            } label: {
+            Button { isDesigningNewItem = true } label: {
                 designNewItemRow
             }
+            .buttonStyle(.plain)
             .plainClosetRow(insets: EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
         }
     }
@@ -174,7 +190,7 @@ struct WardrobeView: View {
     private func row(for item: CustomizationItem) -> some View {
         let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
         NavigationLink {
-            CreationStudioView(store: store, editingItem: item)
+            CreationStudioView(store: store, editingItem: item, draftIsDirty: studioDraftIsDirty)
         } label: {
             HStack(spacing: 12) {
                 CustomItemThumbnail(texture: item.texture, size: 44)
@@ -211,9 +227,11 @@ struct WardrobeView: View {
             }
             .tint(Color.moss)
         }
-        .swipeActions(edge: .trailing) {
+        // `allowsFullSwipe: false`: a full swipe used to delete a hand-drawn (or bought) item
+        // outright, with no confirmation and no undo. The swipe now only opens the question.
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                store.deleteCustomItem(id: item.id)
+                pendingDelete = deleteConfirmation(for: item)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -228,6 +246,20 @@ struct WardrobeView: View {
                 .tint(Color.moss)
             }
         }
+    }
+
+    /// The "are you sure" behind the swipe Delete. Names the item and what leaving the closet costs
+    /// (it comes off the companion too), and routes through the audited app-target confirmation so
+    /// the deletion leaves the same trail every other destructive path does.
+    private func deleteConfirmation(for item: CustomizationItem) -> DestructiveConfirmation {
+        let label = item.name.isEmpty ? item.slot.label : item.name
+        return DestructiveConfirmation(
+            title: "Delete “\(label)”?",
+            message: "It leaves your closet and your companion. This can't be undone.",
+            confirmLabel: "Delete",
+            auditEvent: "wardrobe.customItem.deleted",
+            perform: { store.deleteCustomItem(id: item.id) }
+        )
     }
 
     /// The provenance line: shop status for your own listed items, "designed by …" for the rest.
@@ -293,18 +325,12 @@ struct WardrobeView: View {
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
 
-            NavigationLink {
-                CreationStudioView(store: store)
-            } label: {
-                Text("Design your first item")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchmentInk)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 11)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 18)
+            // A plain Button, not a NavigationLink: inside a `List` the link hung a stray system
+            // chevron off the right of this pill. `ActionPillButtonStyle` also supplies the
+            // contrast-safe moss fill + ink pair (white on plain `moss` measured 4.29:1).
+            Button("Design your first item") { isDesigningNewItem = true }
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .padding(.top, 18)
         }
         .padding(.horizontal, 26)
         .padding(.vertical, 32)

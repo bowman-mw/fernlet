@@ -16,6 +16,7 @@ import FernletUI
 struct OnboardingStorageChoiceView: View {
     var stepText: String
     let detector: any ExistingCloudDataDetecting
+    var backAction: (() -> Void)?
     var continueAction: () -> Void
 
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
@@ -31,7 +32,8 @@ struct OnboardingStorageChoiceView: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Choose where logs live",
-                subtitle: "You can change this later in Settings."
+                subtitle: "You can change this later in Settings.",
+                backAction: backAction
             ) {
                 // Show ONLY the spinner while detecting, then reveal the choices — so the user can't pick
                 // "just on this device" (and see the softer copy) before detection has had a chance to find

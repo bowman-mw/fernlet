@@ -32,7 +32,8 @@ import FernletLockUI
 /// request is that feature's persistence — the local `@State` merely mirrors it per visit).
 ///
 /// Invariants this view enforces:
-/// - Nothing destructive happens silently: hiding period/intimacy tracking and "Delete everything"
+/// - Nothing destructive happens silently: hiding period/intimacy tracking, removing a core memory
+///   or a personal-care task, and "Delete everything"
 ///   route through ``DestructiveConfirmation`` / ``DeleteAllDataConfirmation``, and a wipe raises
 ///   `deleteFlow.isDeleting` (``DeleteEverythingFlow``) to show ``DeletingEverythingOverlay``,
 ///   disable the delete/Done buttons, and block interactive dismissal so a second confirm can't
@@ -47,7 +48,10 @@ struct SettingsSheet: View {
     @Bindable var store: FernletStore
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
-    @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
+    /// System / Light / Dark. The app root reads the same key and hands ``FernletAppearanceMode``'s
+    /// `colorScheme` (nil for `.system`) to `preferredColorScheme`, so "System" really does follow
+    /// the phone; the legacy Dark-mode Bool is migrated once at launch.
+    @AppStorage(FernletAppearanceMode.storageKey) private var appearanceMode: FernletAppearanceMode = .system
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
@@ -95,10 +99,25 @@ struct SettingsSheet: View {
                 // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
                 // swallows taps on whatever row settles behind it.
                 .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
-                .safeAreaInset(edge: .bottom) {
-                    doneBar
+                // Setting names, not sentences: the automatic capitalization turned a typed
+                // "lock" into "Lock" while the user was still choosing what to search for.
+                .textInputAutocapitalization(.never)
+                // Done lives in the nav bar, not a permanent bottom inset: the inset pill plus the
+                // search field left exactly one row visible at accessibility text sizes, and every
+                // other sheet closes from its chrome.
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.moss)
+                            .disabled(deleteFlow.isDeleting)
+                            .accessibilityIdentifier("settings.done")
+                    }
                 }
         }
+        // The Settings sheet is a separate presentation from the tab content, so ContentView's
+        // `.tint(Color.moss)` never reached it — every hub Toggle rendered the system green.
+        .tint(Color.moss)
         .background(Color.parchment)
         .overlay {
             if deleteFlow.isDeleting {
@@ -205,7 +224,6 @@ struct SettingsSheet: View {
 
     private var settingsForm: some View {
         Form {
-            dataStaysLocalHeader
             generalSection
             wellnessSection
             periodSection
@@ -218,52 +236,60 @@ struct SettingsSheet: View {
         .background(Color.parchment)
     }
 
-    /// The standing promise at the top of Settings: nothing leaves the device unless the user says so.
-    private var dataStaysLocalHeader: some View {
-        Section {
-        } header: {
-            Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-                .textCase(nil)
-                .fernletWrappingText()
+    /// A hub section header in the app's type system rather than system SF.
+    ///
+    /// `textCase(nil)` because ``SectionLabel`` uppercases the string itself — leaving the Form's own
+    /// automatic uppercasing on would double it.
+    private func hubSectionHeader(_ title: String) -> some View {
+        SectionLabel(title).textCase(nil)
+    }
+
+    /// A hub navigation row: the standard value-based link, drawn in DM Sans like every other list
+    /// in the app (a bare `NavigationLink("…", value:)` renders in system SF).
+    private func hubLink(_ title: String, _ route: SettingsRoute) -> some View {
+        NavigationLink(value: route) {
+            Text(title)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
         }
-        .listSectionSeparator(.hidden)
-        .listSectionSpacing(.compact)
     }
 
     private var generalSection: some View {
-        Section("General") {
-            NavigationLink("Appearance", value: SettingsRoute.appearance)
-            NavigationLink("Goal & nutrition", value: SettingsRoute.goalNutrition)
-            NavigationLink("Layout & shortcuts", value: SettingsRoute.layoutShortcuts)
+        Section {
+            hubLink("Appearance", .appearance)
+            hubLink("Goal & nutrition", .goalNutrition)
+            hubLink("Layout & shortcuts", .layoutShortcuts)
+        } header: {
+            hubSectionHeader("General")
         }
         .listRowBackground(Color.cream)
     }
 
     private var wellnessSection: some View {
-        Section("Wellness") {
-            NavigationLink("Health", value: SettingsRoute.health)
-            NavigationLink("Sleep", value: SettingsRoute.sleep)
-            NavigationLink("Move", value: SettingsRoute.move)
+        Section {
+            hubLink("Health", .health)
+            hubLink("Sleep", .sleep)
+            hubLink("Move", .move)
                 .accessibilityIdentifier("settings.move")
+        } header: {
+            hubSectionHeader("Wellness")
         }
         .listRowBackground(Color.cream)
     }
 
     private var periodSection: some View {
         Section {
-            Toggle("Period tracking", isOn: periodTrackingVisibleBinding)
+            hubToggle("Period tracking", isOn: periodTrackingVisibleBinding)
                 .accessibilityIdentifier("settings.period.visible")
             // Cosmetic sub-options: these still read cycle data, so they only make sense —
             // and are only offered — while the hard gate above is on.
             if store.isPeriodTrackingVisible {
-                Toggle("Hide predictions", isOn: hidePredictionsBinding)
-                Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
-                Toggle("Period-aware care", isOn: periodAwareScoringBinding)
+                hubToggle("Hide predictions", isOn: hidePredictionsBinding)
+                hubToggle("Hide fertile window", isOn: hideFertileWindowBinding)
+                hubToggle("Period-aware care", isOn: periodAwareScoringBinding)
             }
         } header: {
-            Text("Period")
+            hubSectionHeader("Period")
         } footer: {
             if store.isPeriodTrackingVisible {
                 Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.\n\nTurning off Period tracking hides every cycle surface and stops Fernlet reading your cycle data. Your entries are kept, not deleted.")
@@ -277,7 +303,7 @@ struct SettingsSheet: View {
     private var intimacySection: some View {
         Section {
             if store.isIntimateLoggingAllowed {
-                Toggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
+                hubToggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
                     .accessibilityIdentifier("settings.intimacy.visible")
             } else {
                 // Age is a floor, not a preference — say the true reason rather than showing a
@@ -291,7 +317,7 @@ struct SettingsSheet: View {
                 )
             }
         } header: {
-            Text("Intimacy")
+            hubSectionHeader("Intimacy")
         } footer: {
             if store.isIntimateLoggingAllowed {
                 Text(store.settings.intimacyTrackingVisible
@@ -303,12 +329,20 @@ struct SettingsSheet: View {
     }
 
     private var advancedSection: some View {
-        Section("Advanced") {
-            NavigationLink("Core memory", value: SettingsRoute.coreMemory)
-            NavigationLink("Signals", value: SettingsRoute.signals)
-            NavigationLink("Debug", value: SettingsRoute.debug)
-            NavigationLink("Connection Inspector", value: SettingsRoute.connectionInspector)
-            NavigationLink("Connection History", value: SettingsRoute.connectionHistory)
+        Section {
+            hubLink("Core memory", .coreMemory)
+            hubLink("Signals", .signals)
+            #if DEBUG
+            // A development inspection surface, headed "Prototype only — not production-private".
+            // It has no business in a shipping user's hub, so it compiles out of release builds
+            // (the UI-test suite runs Debug, where the row is still here).
+            hubLink("Debug", .debug)
+            #endif
+            // Connection Inspector keeps its own row; the History page it already links to no
+            // longer duplicates it here.
+            hubLink("Connection Inspector", .connectionInspector)
+        } header: {
+            hubSectionHeader("Advanced")
         }
         .listRowBackground(Color.cream)
     }
@@ -318,17 +352,19 @@ struct SettingsSheet: View {
     /// raised by the hearts toggle inside it.
     private var privacySection: some View {
         Section {
-            NavigationLink("Privacy & Data", value: SettingsRoute.privacyData)
-            NavigationLink("Privacy Policy", value: SettingsRoute.privacyPolicy)
-            NavigationLink("Safety & reporting", value: SettingsRoute.safetyReporting)
-            NavigationLink("App lock", value: SettingsRoute.appLock)
+            hubLink("Privacy & Data", .privacyData)
+            hubLink("Privacy Policy", .privacyPolicy)
+            hubLink("Safety & reporting", .safetyReporting)
+            hubLink("App lock", .appLock)
             nearbySharingToggles
             awayDeliveryControls
             presenceToggles
         } header: {
-            Text("Privacy")
+            hubSectionHeader("Privacy")
         } footer: {
-            Text("Nearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped.")
+            // The standing promise used to be a serif paragraph above the first section, which at
+            // accessibility sizes left one row on screen. It belongs with the controls it describes.
+            Text("Your data stays on this phone unless you turn on iCloud sync.\n\nNearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped.")
         }
         .alert("Turn on Nearby Friends?", isPresented: $offerPresenceForHearts) {
             Button("Turn on") { store.setAllowNearbyPresence(true) }
@@ -342,7 +378,7 @@ struct SettingsSheet: View {
     /// The in-person sharing consents: recipes, clothing shops, and hearts (which need presence).
     @ViewBuilder
     private var nearbySharingToggles: some View {
-        Toggle(
+        hubToggle(
             "Allow nearby recipe shares",
             isOn: Binding(
                 get: { store.settings.allowNearbyRecipeShares },
@@ -351,7 +387,7 @@ struct SettingsSheet: View {
         )
         // Phase 3a: payload-layer control — the shop rides the friend session (no
         // standalone radio), so this governs whether shop catalogs are shared at all.
-        Toggle(
+        hubToggle(
             "Share clothing shops with friends",
             isOn: Binding(
                 get: { store.settings.allowNearbyClothingShares },
@@ -362,7 +398,7 @@ struct SettingsSheet: View {
         // whether hearts are sent AND received; the presence toggle below still runs.
         // Hearts require presence (Group 2): enabling hearts while Nearby Friends is off
         // offers to enable presence, since hearts cannot function without it.
-        Toggle(
+        hubToggle(
             "Allow nearby hearts",
             isOn: Binding(
                 get: { store.settings.allowNearbyHearts },
@@ -397,7 +433,7 @@ struct SettingsSheet: View {
     /// not the synced store) — plus every state where the "on" promise isn't being kept.
     @ViewBuilder
     private var awayDeliveryControls: some View {
-        Toggle(
+        hubToggle(
             "Deliver hearts when apart",
             isOn: Binding(
                 get: { store.settings.heartsAwayDelivery },
@@ -443,7 +479,7 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var presenceToggles: some View {
         // Phase 4a: the standing presence radio — rotating pairwise tags only.
-        Toggle(
+        hubToggle(
             "Nearby friends presence",
             isOn: Binding(
                 get: { store.settings.allowNearbyPresence },
@@ -452,7 +488,7 @@ struct SettingsSheet: View {
         )
         // Phase 4: share a fuzzy vibe (thriving/okay/struggling) + your avatar with kept
         // friends when you meet in person. Never a number, goal, or cycle. Default off.
-        Toggle(
+        hubToggle(
             "Share your vibe with friends",
             isOn: Binding(
                 get: { store.settings.allowNearbyFriendState },
@@ -461,9 +497,21 @@ struct SettingsSheet: View {
         )
     }
 
+    /// A hub switch in the app's type system. The moss switch colour comes from the sheet-level
+    /// `.tint(Color.moss)`, so every hub toggle now matches the Privacy & Data ones.
+    private func hubToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(title)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+        }
+    }
+
     private var dangerSection: some View {
-        Section("Danger zone") {
+        Section {
             resetSection
+        } header: {
+            hubSectionHeader("Danger zone")
         }
         .listRowBackground(Color.cream)
     }
@@ -569,9 +617,23 @@ struct SettingsSheet: View {
 
     private var appearanceTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Toggle("Dark mode", isOn: $isDarkModeEnabled)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 10) {
+                SheetField("Appearance") {
+                    FlowLayout(spacing: 8) {
+                        ForEach(FernletAppearanceMode.allCases) { mode in
+                            Button(mode.label) { appearanceMode = mode }
+                                .buttonStyle(ChipButtonStyle(selected: appearanceMode == mode))
+                        }
+                    }
+                }
+                Text("“System” follows your phone's Light/Dark setting, the way onboarding already does.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             SectionLabel("Backgrounds")
             VStack(alignment: .leading, spacing: 12) {
                 Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")
@@ -647,7 +709,7 @@ struct SettingsSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Home widgets")
             VStack(alignment: .leading, spacing: 8) {
-                Text("Choose what appears on the main page and put the widgets in the order you want.")
+                Text("Choose what appears on the main page and put the widgets in the order you want. Your companion always stays on Home — you can move it, but not remove it.")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -708,42 +770,67 @@ struct SettingsSheet: View {
 
     private func homeWidgetLayoutRow(_ widget: HomeWidget, index: Int) -> some View {
         HStack(spacing: 10) {
-            VStack(spacing: 4) {
-                Button {
-                    moveHomeWidget(from: index, by: -1)
-                } label: {
-                    Image(systemName: "chevron.up")
-                        .frame(width: 28, height: 24)
-                }
-                .disabled(index == 0)
-
-                Button {
-                    moveHomeWidget(from: index, by: 1)
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .frame(width: 28, height: 24)
-                }
-                .disabled(index == store.settings.homeWidgets.count - 1)
+            reorderControls(
+                name: widget.title,
+                canMoveUp: index > 0,
+                canMoveDown: index < store.settings.homeWidgets.count - 1
+            ) { offset in
+                moveHomeWidget(from: index, by: offset)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.slate)
 
             Label(widget.title, systemImage: widget.systemImage)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
+                // Without the priority the fixed chevron/remove frames squeezed the label until
+                // "Companion" broke mid-word as "Companio / n" at accessibility sizes.
+                .fernletWrappingText()
+                .layoutPriority(1)
 
             Spacer(minLength: 4)
 
-            Button {
-                removeHomeWidget(widget)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(Color.slate)
+            // The companion is the surface the whole app is built around, so it stays pinned:
+            // reorderable, but never one stray tap away from being gone.
+            if widget != .companion {
+                Button {
+                    removeHomeWidget(widget)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.slate)
+                }
+                .buttonStyle(.plain)
+                .fernletIconButton("Remove \(widget.title) from Home")
             }
-            .buttonStyle(.plain)
         }
         .padding(10)
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// The stacked move-up / move-down controls shared by the widget and quick-log rows.
+    ///
+    /// 44pt targets with spoken labels: the old 28×24pt chevrons were both under the minimum target
+    /// and announced by VoiceOver as "chevron.up". An unavailable end-of-list arrow is hidden rather
+    /// than greyed — colour alone was the only signal that it did nothing.
+    private func reorderControls(
+        name: String,
+        canMoveUp: Bool,
+        canMoveDown: Bool,
+        move: @escaping (Int) -> Void
+    ) -> some View {
+        VStack(spacing: 0) {
+            Button { move(-1) } label: { Image(systemName: "chevron.up") }
+                .fernletIconButton("Move \(name) up")
+                .disabled(!canMoveUp)
+                .opacity(canMoveUp ? 1 : 0)
+                .accessibilityHidden(!canMoveUp)
+
+            Button { move(1) } label: { Image(systemName: "chevron.down") }
+                .fernletIconButton("Move \(name) down")
+                .disabled(!canMoveDown)
+                .opacity(canMoveDown ? 1 : 0)
+                .accessibilityHidden(!canMoveDown)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.slate)
     }
 
     private func addHomeWidget(_ widget: HomeWidget) {
@@ -772,29 +859,19 @@ struct SettingsSheet: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                VStack(spacing: 4) {
-                    Button {
-                        moveQuickLogItem(from: index, by: -1)
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .frame(width: 28, height: 24)
-                    }
-                    .disabled(index == 0)
-
-                    Button {
-                        moveQuickLogItem(from: index, by: 1)
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .frame(width: 28, height: 24)
-                    }
-                    .disabled(index == 5)
+                reorderControls(
+                    name: "slot \(index + 1)",
+                    canMoveUp: index > 0,
+                    canMoveDown: index < 5
+                ) { offset in
+                    moveQuickLogItem(from: index, by: offset)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.slate)
 
                 Label("Slot \(index + 1): \(currentItem.title)", systemImage: currentItem.systemImage)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                    .layoutPriority(1)
 
                 Spacer(minLength: 4)
             }
@@ -870,27 +947,20 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Status")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                        Text("Available after Apple Fitness integration lands (M2)")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 8)
-                    Button("Request access") {}
-                        .buttonStyle(.plain)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate.opacity(0.55))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-                        .disabled(true)
+                // No internal milestone tag, and no permanently disabled button pretending to be an
+                // action: this says what is true today and where the working control lives.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Not ready yet")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                    Text("This isn't switched on yet. Workouts you log already sync to Apple Health when you allow it under Health.")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
         }
@@ -916,6 +986,7 @@ struct SettingsSheet: View {
                             .foregroundStyle(Color.slate)
                     }
                     .buttonStyle(.plain)
+                    .fernletIconButton("Clear search")
                 }
             }
             .padding(12)
@@ -943,7 +1014,9 @@ struct SettingsSheet: View {
         }
         .sheet(item: $editingMemory) { memory in
             MemoryEditorSheet(store: store, memory: memory)
-                .presentationDetents([.medium, .large])
+                // Full height, not .medium: the character counter, the source date and Delete all
+                // sat below the fold of the half sheet.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
@@ -984,10 +1057,12 @@ struct SettingsSheet: View {
                         memorySearch = ""
                     }
                     .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracottaInk)
                     Button("Cancel") { memorySearch = "" }
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
                 }
+                .frame(minHeight: 44)
             }
             .padding(14)
             .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
@@ -1035,20 +1110,22 @@ struct SettingsSheet: View {
 
     private var healthTab: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Health access is optional and requested by feature. Apple does not reveal read-denial status, so empty Health results are handled as normal.")
+            Text("Fernlet asks for Health access only when a feature needs it, and you can say no to any of them.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             if !healthKit.snapshot.isAvailable {
-                FernletCard { EmptyState(text: "Health data is not available on this device.") }
+                FernletCard { EmptyState(text: "Health data is not available on this device.", systemImage: "heart.slash") }
             } else {
                 ForEach(store.visibleHealthCapabilities) { capability in
                     healthCapabilityRow(capability)
                 }
             }
 
-            if !healthKit.statusMessage.isEmpty {
+            // The empty state above already says the device has no Health data; repeating the
+            // service's own copy of that sentence underneath it read as a glitch.
+            if !healthKit.statusMessage.isEmpty && healthKit.snapshot.isAvailable {
                 Text(healthKit.statusMessage)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
@@ -1089,9 +1166,9 @@ struct SettingsSheet: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.onMoss)
             .padding(.vertical, 11)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
             .disabled(healthKit.isRequesting)
             .opacity(healthKit.isRequesting ? 0.55 : 1)
 
@@ -1104,7 +1181,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onTerracotta)
                 .padding(.vertical, 11)
                 .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
             }
@@ -1156,6 +1233,7 @@ struct SettingsSheet: View {
             Task {
                 if let profile = await healthKit.importBodyProfile(current: store.settings.userProfile) {
                     store.settings.userProfile = profile
+                    store.scheduleSnapshotSave()
                 }
             }
         case .cycleTracking, .bodyContext, .workoutLogging, .activityContext, .mindfulness, .intimateLogging:
@@ -1196,6 +1274,7 @@ struct SettingsSheet: View {
             Task {
                 if let profile = await healthKit.updateBodyProfile(current: store.settings.userProfile) {
                     store.settings.userProfile = profile
+                    store.scheduleSnapshotSave()
                 }
             }
         case .bodyContext, .workoutLogging, .cycleTracking, .activityContext, .mindfulness, .intimateLogging:
@@ -1240,11 +1319,29 @@ struct SettingsSheet: View {
         return "Your \(list) stay as you set them — clear them to follow this goal's plan."
     }
 
+    /// A binding onto one settings field that also **schedules the save**.
+    ///
+    /// `FernletSettings` has no `didSet`, so a bare `$store.settings.x` binding mutates the blob and
+    /// waits for some *other* change to schedule a snapshot save. A user who flipped a Settings
+    /// switch and force-quit without logging anything found it reverted on relaunch. Every switch,
+    /// stepper and editor on this screen goes through here (or through a `store.setX` setter, which
+    /// schedules its own save) so the change is durable the moment it is made.
+    private func settingsBinding<Value>(_ keyPath: WritableKeyPath<FernletSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { store.settings[keyPath: keyPath] },
+            set: { newValue in
+                store.settings[keyPath: keyPath] = newValue
+                store.scheduleSnapshotSave()
+            }
+        )
+    }
+
     private var healthSyncedProfileBinding: Binding<UserNutritionProfile> {
         Binding(
             get: { store.settings.userProfile },
             set: { profile in
                 store.settings.userProfile = profile
+                store.scheduleSnapshotSave()
                 syncBodyProfileToHealth(profile)
             }
         )
@@ -1305,17 +1402,19 @@ struct SettingsSheet: View {
                 get: { store.isSick(on: store.todayKey) },
                 set: { store.setSick($0, on: store.todayKey) }
             ))
-            Toggle("Show calories", isOn: $store.settings.showCalories)
+            Toggle("Show calories", isOn: settingsBinding(\.showCalories))
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// The body profile (HealthKit-synced) and the nutrition targets editor.
+    ///
+    /// No outer SectionLabel: the two cards below label themselves ("BODY PROFILE", "PREFERENCES"),
+    /// and a third uppercase caption directly above them read as a doubled heading.
     @ViewBuilder
     private var bodyAndPreferencesSection: some View {
-        SectionLabel("Body & preferences")
-        ProfileEditor(profile: healthSyncedProfileBinding, preferences: $store.settings.nutritionPreferences)
+        ProfileEditor(profile: healthSyncedProfileBinding, preferences: settingsBinding(\.nutritionPreferences))
 
         NutritionTargetsEditor(store: store)
     }
@@ -1326,16 +1425,21 @@ struct SettingsSheet: View {
     private var aiSection: some View {
         SectionLabel("AI")
         VStack(alignment: .leading, spacing: 10) {
+            // A positive switch: ON means the helper is available. "Manual off mode" was a double
+            // negative — a green switch meant the AI was off — while every other switch in this
+            // card reads the normal way round.
+            Toggle("On-device AI helper", isOn: aiEnabledBinding)
             HStack {
-                Text("Current")
+                Text("Today")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.slate)
                 Spacer()
                 Text(store.effectiveAIStatus.label)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
             }
-            Toggle("Manual off mode", isOn: aiManualOffBinding)
             Divider().overlay(Color.bark.opacity(0.08))
-            Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
+            Toggle("Web nutrition lookup", isOn: settingsBinding(\.webNutritionLookupEnabled))
                 .disabled(store.settings.aiStatus == .off)
             Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
                 .font(.fernlet(.bodySmall))
@@ -1349,9 +1453,11 @@ struct SettingsSheet: View {
                         Task {
                             let granted = await WeatherKitService.shared.requestAuthorization()
                             store.settings.weatherPromptsEnabled = granted
+                            store.scheduleSnapshotSave()
                         }
                     } else {
                         store.settings.weatherPromptsEnabled = false
+                        store.scheduleSnapshotSave()
                     }
                 }
             ))
@@ -1384,7 +1490,7 @@ struct SettingsSheet: View {
     private var coachSection: some View {
         SectionLabel("Coach")
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Manual plan exchange", isOn: $store.settings.coachExchangeEnabled)
+            Toggle("Manual plan exchange", isOn: settingsBinding(\.coachExchangeEnabled))
             Text("Adds two things to \"Share with a trainer\" on the Move tab: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
@@ -1400,11 +1506,11 @@ struct SettingsSheet: View {
             Text("Also include in trainer summaries")
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
-            Toggle("Your goal", isOn: $store.settings.trainerExportIncludesGoal)
-            Toggle("Hydration", isOn: $store.settings.trainerExportIncludesHydration)
-            Toggle("Sleep summaries", isOn: $store.settings.trainerExportIncludesSleep)
-            Toggle("Days you were unwell", isOn: $store.settings.trainerExportIncludesSickness)
-            Toggle("Wellbeing score", isOn: $store.settings.trainerExportIncludesWellbeing)
+            Toggle("Your goal", isOn: settingsBinding(\.trainerExportIncludesGoal))
+            Toggle("Hydration", isOn: settingsBinding(\.trainerExportIncludesHydration))
+            Toggle("Sleep summaries", isOn: settingsBinding(\.trainerExportIncludesSleep))
+            Toggle("Days you were unwell", isOn: settingsBinding(\.trainerExportIncludesSickness))
+            Toggle("Wellbeing score", isOn: settingsBinding(\.trainerExportIncludesWellbeing))
             Text("These choices apply when you use Share on the Move tab.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
@@ -1493,18 +1599,24 @@ struct SettingsSheet: View {
     private var hydrationSection: some View {
         SectionLabel("Hydration")
         VStack(alignment: .leading, spacing: 10) {
-            Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
+            Stepper("Bottle: \(store.settings.bottleOz) oz", value: settingsBinding(\.bottleOz), in: 4...64)
+                .font(.fernlet(.label))
             Divider().overlay(Color.bark.opacity(0.08))
-            Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: $store.settings.hydrationTarget, in: 1...30)
+            Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: settingsBinding(\.hydrationTarget), in: 1...30)
+                .font(.fernlet(.label))
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private var aiManualOffBinding: Binding<Bool> {
+    /// The AI switch, read the way it is drawn: ON means the on-device helper may run.
+    private var aiEnabledBinding: Binding<Bool> {
         Binding(
-            get: { store.settings.aiStatus == .off },
-            set: { store.settings.aiStatus = $0 ? .off : .ready }
+            get: { store.settings.aiStatus != .off },
+            set: { newValue in
+                store.settings.aiStatus = newValue ? .ready : .off
+                store.scheduleSnapshotSave()
+            }
         )
     }
 
@@ -1593,6 +1705,19 @@ struct SettingsSheet: View {
             || store.personalCareTasks.count >= Self.maxCustomCareTasks
     }
 
+    /// Raises the shared destructive confirmation for one personal-care task. The minus used to
+    /// remove a saved task outright, with no confirmation and nothing to undo it with.
+    private func confirmRemoveCareTask(_ task: PersonalCareTask) {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Remove \(task.label)?",
+            message: "It comes off your personal care list. Days you've already ticked it stay as they are.",
+            confirmLabel: "Remove",
+            auditEvent: "settings.personalCare.removeConfirmed"
+        ) {
+            store.removePersonalCareTask(task)
+        }
+    }
+
     /// Appends one personal-care task, re-checking both caps at the point of use.
     private func addPersonalCareTask() {
         let label = String(newCareTaskName.prefix(Self.maxCareTaskLabelLength))
@@ -1642,11 +1767,15 @@ struct SettingsSheet: View {
             }
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            // Full-strength ink on a faded fill for the disabled state: fading the label too made
+            // it unreadable, so the user couldn't tell what completing the field would do.
+            .foregroundStyle(isAddCareTaskDisabled ? Color.bark : Color.onMoss)
             .padding(.vertical, 11)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .background(
+                Color.mossFill.opacity(isAddCareTaskDisabled ? 0.55 : 1),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
             .disabled(isAddCareTaskDisabled)
-            .opacity(isAddCareTaskDisabled ? 0.45 : 1)
             if store.personalCareTasks.count >= Self.maxCustomCareTasks {
                 Text("That's the most personal care tasks Fernlet keeps (\(Self.maxCustomCareTasks)). Remove one to add another.")
                     .font(.fernlet(.bodySmall))
@@ -1674,13 +1803,14 @@ struct SettingsSheet: View {
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                         Spacer()
-                        Button { store.removePersonalCareTask(task) } label: {
+                        Button { confirmRemoveCareTask(task) } label: {
                             Image(systemName: "minus.circle")
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(Color.terracotta)
+                                .foregroundStyle(Color.terracottaInk)
                                 .frame(width: 32, height: 32)
                         }
                         .buttonStyle(.plain)
+                        .fernletIconButton("Remove \(task.label)")
                     }
                     .padding(12)
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1693,12 +1823,14 @@ struct SettingsSheet: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel("Debug")
-                Text("Storage: local JSON database")
-                Text("File: \(store.storageLocation)")
+                // One storage line, derived: the card used to state "Storage: local JSON database"
+                // above a File: line reading "Core Data + iCloud", contradicting itself.
+                Text("Storage: \(store.storageLocation)")
                 Text("Today key: \(store.todayKey)")
             }
             .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -1887,33 +2019,46 @@ struct SettingsSheet: View {
     /// reveal named no data and stated no consequences. Both are now the shared dialog over the single
     /// `deleteAllData` funnel.
     private var resetSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button("Delete everything", role: .destructive) {
-                pendingDestructiveAction = deleteFlow.makeConfirmation(
-                    preferences: storagePreferencesStore.preferences,
-                    store: store
-                )
+        // The same terracotta text + trash row App lock's danger zone uses, rather than a third
+        // destructive style (system red here, terracotta there, a filled button in Privacy & Data).
+        Button(role: .destructive) {
+            pendingDestructiveAction = deleteFlow.makeConfirmation(
+                preferences: storagePreferencesStore.preferences,
+                store: store
+            )
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "trash")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.terracottaInk)
+                    .frame(width: 28)
+                Text("Delete everything")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracottaInk)
+                Spacer()
             }
-            .disabled(deleteFlow.isDeleting)
-            .accessibilityIdentifier("settings.deleteAll")
+            // `.buttonStyle(.plain)` hit-tests the drawn content only, so without this the row's
+            // trailing `Spacer()` — which is where the centre of the row is — swallowed the tap and
+            // the confirm dialog never opened.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .font(.fernlet(.label))
+        .buttonStyle(.plain)
+        .disabled(deleteFlow.isDeleting)
+        .accessibilityIdentifier("settings.deleteAll")
     }
 
-    private var doneBar: some View {
-        HStack {
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-                .disabled(deleteFlow.isDeleting)
+    /// Raises the shared destructive confirmation for one core memory. Nothing is removed until the
+    /// user confirms — the mutation lives only inside `perform`.
+    private func confirmDeleteMemory(_ memory: MemoryNote) {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Delete this memory?",
+            message: "\"\(memory.text)\"\n\nFernlet forgets it for good. Your journal entry stays.",
+            confirmLabel: "Delete",
+            auditEvent: "settings.memory.deleteConfirmed"
+        ) {
+            store.deleteMemory(memory)
         }
-        .padding(20)
-        .background(Color.parchment)
     }
 
     private func groupedMemories(for memories: [MemoryNote]) -> [String: [MemoryNote]] {
@@ -1943,13 +2088,17 @@ struct SettingsSheet: View {
                     .background(Color.bark.opacity(0.05), in: Circle())
             }
             .buttonStyle(.plain)
-            Button { store.deleteMemory(memory) } label: {
+            .fernletIconButton("Edit memory")
+            // A memory is saved user data, so removing it is confirmed like every other delete —
+            // it used to vanish on one tap with no undo.
+            Button { confirmDeleteMemory(memory) } label: {
                 Image(systemName: "xmark")
                     .foregroundStyle(Color.slate)
                     .frame(width: 34, height: 34)
                     .background(Color.bark.opacity(0.05), in: Circle())
             }
             .buttonStyle(.plain)
+            .fernletIconButton("Delete memory")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
@@ -1977,60 +2126,82 @@ private struct MemoryEditorSheet: View {
         _text = State(initialValue: memory.text)
     }
 
+    /// Category chips, the memory editor, its counter, the source date, and the delete affordance.
+    private var editorScrollContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Core memory")
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.bark)
+
+            // Chips, not free text: the list groups memories by category, and a free
+            // TextField let one memory land in a category of its own by a typo.
+            SheetField("Category") {
+                FlowLayout(spacing: 8) {
+                    ForEach(categoryChoices, id: \.self) { choice in
+                        Button(choice.capitalized) { category = choice }
+                            .buttonStyle(ChipButtonStyle(selected: category.lowercased() == choice))
+                    }
+                }
+            }
+
+            SheetField("Memory") {
+                SheetTextEditor(text: $text, placeholder: "What should Fernlet remember?", minHeight: 150)
+            }
+
+            Text("\(text.count)/240")
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.slate)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Source date")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year()))
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.bark)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
+            deleteSection
+        }
+        .padding(20)
+        .padding(.bottom, 10)
+    }
+
+    /// Delete, with its inline two-step confirmation.
+    @ViewBuilder
+    private var deleteSection: some View {
+        if confirmDelete {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Delete this memory?")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                HStack(spacing: 16) {
+                    Button("Delete", role: .destructive) {
+                        store.deleteMemory(memory)
+                        dismiss()
+                    }
+                    .foregroundStyle(Color.terracottaInk)
+                    Button("Cancel") { confirmDelete = false }
+                        .foregroundStyle(Color.slate)
+                }
+                .font(.fernlet(.label))
+                .frame(minHeight: 44)
+            }
+        } else {
+            Button("Delete memory", role: .destructive) { confirmDelete = true }
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.terracottaInk)
+                .frame(minHeight: 44)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Core memory")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
-                    SheetField("Category") {
-                        TextField("note", text: $category)
-                            .sheetTextInput()
-                    }
-
-                    SheetField("Memory") {
-                        SheetTextEditor(text: $text, placeholder: "What should Fernlet remember?", minHeight: 150)
-                    }
-
-                    Text("\(text.count)/240")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Source date")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                        Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year()))
-                            .font(.fernlet(.stat))
-                            .foregroundStyle(Color.bark)
-                    }
-                    .padding(14)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-                    if confirmDelete {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Delete this memory?")
-                                .font(.fernlet(.header))
-                                .foregroundStyle(Color.bark)
-                            HStack {
-                                Button("Delete", role: .destructive) {
-                                    store.deleteMemory(memory)
-                                    dismiss()
-                                }
-                                Button("Cancel") { confirmDelete = false }
-                            }
-                            .font(.fernlet(.label))
-                        }
-                    } else {
-                        Button("Delete memory", role: .destructive) { confirmDelete = true }
-                            .font(.fernlet(.label))
-                    }
-                }
-                .padding(20)
-                .padding(.bottom, 10)
+                editorScrollContent
             }
             .onChange(of: text) { _, newValue in
                 if newValue.count > 240 { text = String(newValue.prefix(240)) }
@@ -2042,6 +2213,22 @@ private struct MemoryEditorSheet: View {
             }
         }
         .background(Color.parchment)
+        // The drag handle was the only way out — every sibling entry sheet offers a Cancel, and a
+        // dirty draft now asks before it is thrown away.
+        .fernletDraftGuard(isDirty: category != memory.category || text != memory.text) { dismiss() }
+    }
+
+    /// The categories already in use, plus "other" as the escape hatch, lower-cased for storage and
+    /// title-cased only for display.
+    private var categoryChoices: [String] {
+        var seen = Set<String>()
+        var choices: [String] = []
+        for candidate in store.memories.map(\.category) + [category, "other"] {
+            let normalized = candidate.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            choices.append(normalized)
+        }
+        return choices.sorted()
     }
 }
 
@@ -2113,7 +2300,9 @@ struct AppLockSettingsView: View {
                         .environment(lockService)
                 }
                 .sheet(isPresented: $showRecoveryCustodian) {
-                    DuressRecoveryEnrollmentSheet()
+                    // The row says "Be a recovery device", so the sheet opens on that role instead
+                    // of asking "which phone is this?" with the opposite answer as its primary.
+                    DuressRecoveryEnrollmentSheet(initialRole: .recoveryDevice)
                         .environment(lockService)
                 }
                 .sheet(isPresented: $showRecoveryReturn) {
@@ -2148,13 +2337,15 @@ struct AppLockSettingsView: View {
     /// the reset can leave behind (keys and rows destroyed, sealed store file not rebuilt).
     private func resetPresentations(_ content: some View) -> some View {
         content
-            .confirmationDialog(
+            // An alert, deliberately: on iOS 26 a `.confirmationDialog` renders as a popover that
+            // SUPPRESSES the `.cancel`-role button, so this — which makes sealed notes permanently
+            // unreadable — showed a lone red "Reset app lock" and no visible way out.
+            .alert(
                 "Reset app lock?",
-                isPresented: $showResetConfirm,
-                titleVisibility: .visible
+                isPresented: $showResetConfirm
             ) {
-                Button("Reset app lock", role: .destructive) { resetAppLock() }
                 Button("Cancel", role: .cancel) { }
+                Button("Reset app lock", role: .destructive) { resetAppLock() }
             } message: {
                 Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
             }
@@ -2218,12 +2409,23 @@ struct AppLockSettingsView: View {
 
             FernletRowDivider()
 
+            // No chevron: this acts here and now, it doesn't navigate anywhere.
             Button {
                 lockService.lock(reason: .manual)
             } label: {
-                settingsRow(icon: "lock.fill", title: "Lock now")
+                settingsRow(icon: "lock.fill", title: "Lock now", showsChevron: false)
             }
+
+            FernletRowDivider()
+
+            // Moved here from Privacy & Data, where it sat under an "App lock data" header above
+            // the Delete everything button and described neither.
+            Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -2256,6 +2458,8 @@ struct AppLockSettingsView: View {
                     .fernletWrappingText()
             }
         }
+        // Spans the column like Status and Manage above it; without this the card hugged its text.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -2346,11 +2550,12 @@ struct AppLockSettingsView: View {
             Button("Set up app lock") { showSetup = true }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onMoss)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
@@ -2377,29 +2582,35 @@ struct AppLockSettingsView: View {
                         SecureField("Current password", text: $verifyCurrentPasscode)
                             .textContentType(.password)
                             .sheetTextInput()
-                    } else {
-                        let total = lockService.credentialKind == .pin4 ? 4 : 6
-                        VStack(spacing: 20) {
-                            pinDotsRow(current: verifyCurrentPasscode, total: total)
-                            FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total)
-                        }
-                        .onChange(of: verifyCurrentPasscode) { _, new in
-                            if new.count == total { commitBiometricToggle() }
-                        }
-                    }
 
-                    if lockService.credentialKind == .alphanumeric {
+                        Spacer()
+
                         Button("Confirm") { commitBiometricToggle() }
                             .buttonStyle(.plain)
                             .font(.fernlet(.label))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.onMoss)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                            .background(
+                                Color.mossFill.opacity(verifyCurrentPasscode.isEmpty ? 0.55 : 1),
+                                in: RoundedRectangle(cornerRadius: 14)
+                            )
                             .disabled(verifyCurrentPasscode.isEmpty)
-                    }
+                    } else {
+                        // The lock gate's shape: dots in the upper third, keypad anchored above the
+                        // safe area where the thumb is. Stacked from the top it left the bottom
+                        // half of the sheet empty and the digits up by the nav bar.
+                        let total = lockService.credentialKind == .pin4 ? 4 : 6
+                        pinDotsRow(current: verifyCurrentPasscode, total: total)
+                            .frame(maxWidth: .infinity)
 
-                    Spacer()
+                        Spacer(minLength: 12)
+
+                        FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total)
+                            .onChange(of: verifyCurrentPasscode) { _, new in
+                                if new.count == total { commitBiometricToggle() }
+                            }
+                    }
                 }
                 .padding(24)
             }
@@ -2493,22 +2704,29 @@ struct AppLockSettingsView: View {
         }
     }
 
-    private func settingsRow(icon: String, title: String, destructive: Bool = false) -> some View {
+    private func settingsRow(
+        icon: String,
+        title: String,
+        destructive: Bool = false,
+        showsChevron: Bool = true
+    ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(destructive ? Color.terracotta : Color.moss)
+                .foregroundStyle(destructive ? Color.terracottaInk : Color.moss)
                 .frame(width: 28)
             Text(title)
                 .font(.fernlet(.label))
-                .foregroundStyle(destructive ? Color.terracotta : Color.bark)
+                .foregroundStyle(destructive ? Color.terracottaInk : Color.bark)
             Spacer()
-            if !destructive {
+            if !destructive && showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.slate.opacity(0.5))
             }
         }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -2571,9 +2789,12 @@ private struct FernletLockChangePasscodeView: View {
     private var verifyOldStep: some View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel("Current passcode")
-            Text("Enter your current passcode to continue.")
+            // Says WHY it is asking again seconds after the gate accepted the same passcode: the
+            // re-key needs it, and an unexplained re-prompt reads as the app not having listened.
+            Text("Enter your current passcode again — Fernlet needs it to re-key your sealed notes.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
+                .fernletWrappingText()
 
             if let msg = errorMessage { errorBanner(msg) }
 
@@ -2582,19 +2803,17 @@ private struct FernletLockChangePasscodeView: View {
                 SecureField("Current password", text: $currentPasscode)
                     .textContentType(.password)
                     .sheetTextInput()
+                Spacer()
+                continueButton { advanceFromVerifyOld() }
             } else {
                 let total = oldKind == .pin4 ? 4 : 6
-                VStack(spacing: 20) {
-                    pinDotsRow(current: currentPasscode, total: total)
-                    FernletNumericPad(value: $currentPasscode, maxLength: total)
-                }
-                .onChange(of: currentPasscode) { _, new in
-                    if new.count == total { advanceFromVerifyOld() }
-                }
-            }
-            Spacer()
-            if (lockService.credentialKind ?? .pin6) == .alphanumeric {
-                continueButton { advanceFromVerifyOld() }
+                pinDotsRow(current: currentPasscode, total: total)
+                    .frame(maxWidth: .infinity)
+                Spacer(minLength: 12)
+                FernletNumericPad(value: $currentPasscode, maxLength: total)
+                    .onChange(of: currentPasscode) { _, new in
+                        if new.count == total { advanceFromVerifyOld() }
+                    }
             }
         }
     }
@@ -2633,19 +2852,17 @@ private struct FernletLockChangePasscodeView: View {
                 SecureField("New password", text: $newPasscode)
                     .textContentType(.newPassword)
                     .sheetTextInput()
+                Spacer()
+                continueButton(disabled: newPasscode.count < 8) { step = .confirmNew }
             } else {
                 let total = selectedKind == .pin4 ? 4 : 6
-                VStack(spacing: 20) {
-                    pinDotsRow(current: newPasscode, total: total)
-                    FernletNumericPad(value: $newPasscode, maxLength: total)
-                }
-                .onChange(of: newPasscode) { _, new in
-                    if new.count == total { step = .confirmNew }
-                }
-            }
-            Spacer()
-            if selectedKind == .alphanumeric {
-                continueButton(disabled: newPasscode.count < 8) { step = .confirmNew }
+                pinDotsRow(current: newPasscode, total: total)
+                    .frame(maxWidth: .infinity)
+                Spacer(minLength: 12)
+                FernletNumericPad(value: $newPasscode, maxLength: total)
+                    .onChange(of: newPasscode) { _, new in
+                        if new.count == total { step = .confirmNew }
+                    }
             }
         }
         .onChange(of: selectedKind) { _, _ in newPasscode = "" }
@@ -2687,19 +2904,17 @@ private struct FernletLockChangePasscodeView: View {
                 SecureField("Confirm new password", text: $confirmPasscode)
                     .textContentType(.newPassword)
                     .sheetTextInput()
+                Spacer()
+                continueButton(disabled: confirmPasscode.isEmpty) { commitChange() }
             } else {
                 let total = selectedKind == .pin4 ? 4 : 6
-                VStack(spacing: 20) {
-                    pinDotsRow(current: confirmPasscode, total: total)
-                    FernletNumericPad(value: $confirmPasscode, maxLength: total)
-                }
-                .onChange(of: confirmPasscode) { _, new in
-                    if new.count == total { commitChange() }
-                }
-            }
-            Spacer()
-            if selectedKind == .alphanumeric {
-                continueButton(disabled: confirmPasscode.isEmpty) { commitChange() }
+                pinDotsRow(current: confirmPasscode, total: total)
+                    .frame(maxWidth: .infinity)
+                Spacer(minLength: 12)
+                FernletNumericPad(value: $confirmPasscode, maxLength: total)
+                    .onChange(of: confirmPasscode) { _, new in
+                        if new.count == total { commitChange() }
+                    }
             }
         }
     }
@@ -2731,10 +2946,12 @@ private struct FernletLockChangePasscodeView: View {
         Button("Continue", action: action)
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            // Disabled fades the fill only: moss-at-40% under white ink measured 1.8:1, so the
+            // label the user is working towards was unreadable.
+            .foregroundStyle(disabled ? Color.bark : Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(disabled ? Color.moss.opacity(0.4) : Color.moss, in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.mossFill.opacity(disabled ? 0.55 : 1), in: RoundedRectangle(cornerRadius: 14))
             .disabled(disabled)
     }
 

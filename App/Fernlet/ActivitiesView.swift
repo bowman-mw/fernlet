@@ -105,7 +105,9 @@ struct ActivitiesView: View {
                 chipRow(ActivityDurationOption.allCases, selected: draftDuration) { draftDuration = $0 } label: { $0.rawValue }
 
                 TextField("Where? (optional, e.g. \"the park\")", text: $draftLocation)
-                    .font(.fernlet(.bodySmall))
+                    // Same role, same size as the name field above it — the two used to render at
+                    // different type sizes in the same form.
+                    .font(.fernlet(.body))
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
@@ -164,12 +166,12 @@ struct ActivitiesView: View {
                                    subtitle: subtitle(type: offered.descriptor.activityTypeToken, location: offered.descriptor.coarseLocation),
                                    icon: "figure.2.arms.open")
                     ExpiryLabel(expiresAt: offered.descriptor.expiresAt)
-                    HStack(spacing: 10) {
+                    AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
                         Button("Ask to join") { manager.requestJoin(offered) }
-                            .buttonStyle(ChipButtonStyle(selected: true))
+                            .buttonStyle(ActionPillButtonStyle(.primary))
                             .accessibilityIdentifier("activities.askToJoin")
                         Button("Dismiss") { manager.dismissOffer(activityID: offered.descriptor.activityID) }
-                            .buttonStyle(ChipButtonStyle(selected: false))
+                            .buttonStyle(ActionPillButtonStyle(.secondary))
                     }
                 }
                 .padding(14)
@@ -191,11 +193,10 @@ struct ActivitiesView: View {
                     rosterView(participants: hosted.participants,
                                hostFingerprint: hosted.descriptor.hostFingerprint,
                                issuedAt: hosted.currentSnapshot.issuedAt,
-                               version: hosted.version,
                                removable: true,
                                activityID: hosted.descriptor.activityID)
                     Button("End activity") { pendingEnd = hosted.descriptor.activityID }
-                        .buttonStyle(ChipButtonStyle(selected: false))
+                        .buttonStyle(ActionPillButtonStyle(.destructive))
                         .accessibilityIdentifier("activities.end")
                 }
                 .padding(14)
@@ -217,11 +218,10 @@ struct ActivitiesView: View {
                     rosterView(participants: joined.lastSnapshot.participants,
                                hostFingerprint: joined.descriptor.hostFingerprint,
                                issuedAt: joined.lastSnapshot.issuedAt,
-                               version: joined.lastSnapshot.version,
                                removable: false,
                                activityID: joined.descriptor.activityID)
                     Button("Leave") { manager.leaveJoined(activityID: joined.descriptor.activityID) }
-                        .buttonStyle(ChipButtonStyle(selected: false))
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
                         .accessibilityIdentifier("activities.leave")
                 }
                 .padding(14)
@@ -234,9 +234,11 @@ struct ActivitiesView: View {
 
     @ViewBuilder
     private func rosterView(participants: [ActivityParticipant], hostFingerprint: String,
-                            issuedAt: Date, version: Int, removable: Bool, activityID: UUID) -> some View {
+                            issuedAt: Date, removable: Bool, activityID: UUID) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Roster as of \(issuedAt.formatted(date: .abbreviated, time: .shortened)) (v\(version))")
+            // "Roster as of … (v3)" was wire vocabulary — the snapshot version means nothing to the
+            // person reading it, and "roster" is a clipboard word for a list of friends.
+            Text("Updated \(rosterTimestamp(issuedAt))")
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             ForEach(participants) { member in
@@ -253,21 +255,20 @@ struct ActivitiesView: View {
                                     .foregroundStyle(Color.moss)
                             }
                         }
-                        Text(member.fingerprint)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(Color.slate)
-                            .lineLimit(1).truncationMode(.middle)
+                        FingerprintText(member.fingerprint)
                     }
                     Spacer()
                     if removable && member.fingerprint != hostFingerprint {
+                        let memberName = ItemNameModeration.sanitizedName(member.displayName)
                         Button {
                             pendingRemoval = RemovalTarget(activityID: activityID, fingerprint: member.fingerprint,
-                                                           name: ItemNameModeration.sanitizedName(member.displayName))
+                                                           name: memberName)
                         } label: {
                             Image(systemName: "minus.circle")
                                 .foregroundStyle(Color.terracotta)
                         }
                         .buttonStyle(.plain)
+                        .fernletIconButton("Remove \(memberName) from this activity")
                     }
                 }
             }
@@ -291,32 +292,29 @@ struct ActivitiesView: View {
     // MARK: - Empty
 
     private var emptyHint: some View {
-        VStack(spacing: FernletMetrics.spaceSm) {
-            Image(systemName: "figure.2.arms.open")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(Color.moss.opacity(0.7))
-            Text("No activities yet")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-            Text("Start one above, or wait for a nearby friend to invite you.")
-                .font(.fernlet(.bodySmall))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        EmptyState(
+            text: "No activities yet — start one above, or wait for a nearby friend to invite you.",
+            systemImage: "figure.2.arms.open"
+        )
+        .padding(.vertical, 6)
     }
 
     // MARK: - Building blocks
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+            // The app's one section-heading treatment (uppercase, letter-spaced slate), same as
+            // Move's "TODAY'S MOVEMENT" and Food's "BREAKFAST".
+            SectionLabel(title)
             content()
         }
+    }
+
+    /// "Updated 7:17 PM" for a snapshot from today; a date as well once it isn't.
+    private func rosterTimestamp(_ issuedAt: Date) -> String {
+        Calendar.current.isDateInToday(issuedAt)
+            ? issuedAt.formatted(date: .omitted, time: .shortened)
+            : issuedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
     private func activityHeader(title: String, subtitle: String?, icon: String) -> some View {
@@ -338,16 +336,19 @@ struct ActivitiesView: View {
         }
     }
 
+    /// The type/duration option chips.
+    ///
+    /// Wrapped with ``FlowLayout``, not scrolled: inside the card's 16pt padding a horizontal
+    /// scroller hard-clipped "Workout" mid-word at the padding edge, with no fade and no trailing
+    /// peek, so the last three types were simply invisible.
     @ViewBuilder
     private func chipRow<T: Identifiable & Equatable>(_ options: [T], selected: T,
                                                       onSelect: @escaping (T) -> Void,
                                                       label: @escaping (T) -> String) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(options) { option in
-                    Button(label(option)) { onSelect(option) }
-                        .buttonStyle(ChipButtonStyle(selected: option == selected))
-                }
+        FlowLayout(spacing: 8) {
+            ForEach(options) { option in
+                Button(label(option)) { onSelect(option) }
+                    .buttonStyle(ChipButtonStyle(selected: option == selected))
             }
         }
     }

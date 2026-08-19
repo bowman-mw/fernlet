@@ -102,7 +102,7 @@ final class OnboardingCoordinatorModel {
         var indexText: String { "\(rawValue + 1) of \(Self.allCases.count)" }
     }
 
-    /// The page currently on screen. Only ``advance()`` moves it — the flow is strictly forward.
+    /// The page currently on screen. Moved only by ``advance()`` and ``back()``.
     private(set) var step: Step = .welcome
     var goal: GoalType
     var profile: UserNutritionProfile
@@ -140,7 +140,26 @@ final class OnboardingCoordinatorModel {
         step = next
     }
 
-    /// Records that lock setup was skipped (biometrics-only or "skip for now"), audits it, and advances.
+    /// Returns to the previous ``Step``; a no-op on the first one.
+    ///
+    /// Safe to re-enter any step: every choice except the lock deferral and the storage preference
+    /// is draft state on this model, and both of those are simply re-written by the step's own
+    /// action when the user chooses again.
+    func back() {
+        guard let previous = Step(rawValue: step.rawValue - 1) else { return }
+        step = previous
+    }
+
+    /// Whether there is a step to go back to — drives the Back button's presence.
+    var canGoBack: Bool { step != .welcome }
+
+    /// The Back handler each step passes to ``OnboardingScreenContainer``; `nil` on the first step.
+    var backActionIfAvailable: (() -> Void)? {
+        guard canGoBack else { return nil }
+        return { self.back() }
+    }
+
+    /// Records that lock setup was deferred ("Face ID later" or "Skip for now"), audits it, and advances.
     func deferLockSetup() {
         UserDefaults.standard.set(true, forKey: OnboardingDefaults.lockSetupDeferredKey)
         FernletAuditLog.log("onboarding.lock.skipped")
@@ -231,14 +250,16 @@ struct OnboardingCoordinator: View {
         case .lockSetup:
             OnboardingLockSetupView(
                 stepText: model.step.indexText,
+                backAction: model.backActionIfAvailable,
                 setPasscodeAction: { model.markLockSetupChosen(via: "passcode") },
-                biometricsOnlyAction: model.deferLockSetup,
+                laterAction: model.deferLockSetup,
                 skipAction: model.deferLockSetup
             )
         case .storageChoice:
             OnboardingStorageChoiceView(
                 stepText: model.step.indexText,
                 detector: detector,
+                backAction: model.backActionIfAvailable,
                 continueAction: model.advance
             )
         case .goal:
@@ -248,6 +269,7 @@ struct OnboardingCoordinator: View {
                 level: $model.goalPlanningLevel,
                 interests: $model.goalPlanningInterests,
                 constraints: $model.goalPlanningConstraints,
+                backAction: model.backActionIfAvailable,
                 continueAction: model.advance
             )
         case .starterCustomization:
@@ -255,6 +277,7 @@ struct OnboardingCoordinator: View {
                 stepText: model.step.indexText,
                 starterName: $model.starterName,
                 starterColor: $model.starterColor,
+                backAction: model.backActionIfAvailable,
                 continueAction: model.advance
             )
         case .personalDetails:
@@ -263,22 +286,28 @@ struct OnboardingCoordinator: View {
                 profile: $model.profile,
                 displayName: $model.proximityDisplayName,
                 ageAssurance: model.ageAssurance,
+                backAction: model.backActionIfAvailable,
                 continueAction: model.advance
             )
         case .dietaryPattern:
             OnboardingDietaryPatternScreen(
                 stepText: model.step.indexText,
                 preferences: $model.nutritionPreferences,
+                backAction: model.backActionIfAvailable,
                 continueAction: model.advance
             )
         case .permissions:
-            OnboardingPermissionsView(stepText: model.step.indexText, finishAction: model.complete)
+            OnboardingPermissionsView(
+                stepText: model.step.indexText,
+                backAction: model.backActionIfAvailable,
+                finishAction: model.complete
+            )
         }
     }
 }
 
-/// Shared chrome for every onboarding screen: the "N of M" caption, a `ScreenHeader`, and the
-/// step's own content in a scrolling column capped at 620pt.
+/// Shared chrome for every onboarding screen: the "N of M" caption (with the Back affordance), a
+/// `ScreenHeader`, and the step's own content in a scrolling column capped at 620pt.
 ///
 /// Every step view wraps its body in this so spacing, padding, and the step caption's
 /// accessibility identifier stay identical across the flow; the save/continue bar sits outside it.
@@ -286,16 +315,34 @@ struct OnboardingScreenContainer<Content: View>: View {
     var stepText: String
     var title: String
     var subtitle: String
+    /// The step's way back. Every step past Welcome passes ``OnboardingCoordinatorModel/back()``;
+    /// `nil` (the first step) draws no button, since there is nowhere to go. Without this the flow
+    /// was strictly forward, so a mis-tapped "Skip for now" or storage card could not be undone.
+    var backAction: (() -> Void)? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(stepText)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
-                        .accessibilityIdentifier("onboarding.step")
+                    HStack(spacing: 12) {
+                        if let backAction {
+                            Button(action: backAction) {
+                                Label("Back", systemImage: "chevron.left")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.slate)
+                            }
+                            .buttonStyle(.plain)
+                            .fernletTapTarget()
+                            .accessibilityIdentifier("onboarding.back")
+                        }
+                        Text(stepText)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.moss)
+                            .accessibilityIdentifier("onboarding.step")
+                        Spacer(minLength: 0)
+                    }
                     ScreenHeader(title: title, subtitle: subtitle)
                     content
                 }
@@ -318,6 +365,7 @@ private struct OnboardingGoalScreen: View {
     @Binding var level: String
     @Binding var interests: String
     @Binding var constraints: String
+    var backAction: (() -> Void)?
     var continueAction: () -> Void
 
     var body: some View {
@@ -325,7 +373,8 @@ private struct OnboardingGoalScreen: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Plan your goals",
-                subtitle: "Choose a focus and outline how movement should fit your life."
+                subtitle: "Choose a focus and outline how movement should fit your life.",
+                backAction: backAction
             ) {
                 VStack(alignment: .leading, spacing: 16) {
                     // Reuse the Settings preset cards so the moment the goal is actually chosen shows the
@@ -368,6 +417,7 @@ private struct OnboardingStarterScreen: View {
     var stepText: String
     @Binding var starterName: String
     @Binding var starterColor: CompanionAssetColor
+    var backAction: (() -> Void)?
     var continueAction: () -> Void
 
     /// A curated starter subset of `CompanionAssetColor` — the wardrobe offers the full set later.
@@ -390,7 +440,8 @@ private struct OnboardingStarterScreen: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Make Fernlet yours",
-                subtitle: "Pick a starter name and color. You can change these later."
+                subtitle: "Pick a starter name and color. You can change these later.",
+                backAction: backAction
             ) {
                 CompanionView(state: .thriving, appearance: previewAppearance, size: 120)
                     .frame(maxWidth: .infinity)
@@ -424,25 +475,94 @@ private struct OnboardingStarterScreen: View {
 /// Onboarding step for the body profile (age, weight, height, sex, activity), the proximity
 /// display name, and the one unprompted age-range request Fernlet ever makes.
 ///
-/// The stepper age feeds nutrition targets only; the age-gated features (intimacy 16+, mesh chat
-/// 13+) read Apple's DeclaredAgeRange answer instead, requested through ``AgeAssuranceStore`` when
-/// Continue is tapped. A declined or unavailable answer never blocks onboarding.
+/// The typed age (field + ±1 stepper) feeds nutrition targets only; the age-gated features
+/// (intimacy 16+, mesh chat 13+) read Apple's DeclaredAgeRange answer instead, requested through
+/// ``AgeAssuranceStore`` when Continue is tapped. A declined or unavailable answer never blocks
+/// onboarding.
 private struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
     @Binding var displayName: String
     var ageAssurance: AgeAssuranceStore
+    var backAction: (() -> Void)?
     var continueAction: () -> Void
 
     /// Flipped by Continue to run the system age-range request; the modifier flips it back and advances.
     @State private var isRequestingAgeRange = false
+
+    /// Age as text so it can be TYPED. The stepper alone meant a 48-year-old tapped + eighteen times
+    /// from the default 30; the field takes the number directly and the stepper stays for ±1 nudges.
+    /// Digits only, and deliberately NOT clamped up to 13 while typing — a half-typed "4" would jump
+    /// to 13 mid-entry. Continue stays disabled below 13, which is the real gate.
+    private var ageText: Binding<String> {
+        Binding(
+            get: { profile.age > 0 ? "\(profile.age)" : "" },
+            set: { typed in
+                let digits = typed.filter(\.isNumber).prefix(3)
+                profile.age = min(Int(digits) ?? 0, 100)
+            }
+        )
+    }
+
+    /// The ±1 stepper's value. Reads through a floor of 13 so a half-typed age (or an empty field)
+    /// can't hand `Stepper(value:in:)` a value outside its own range and leave the buttons stuck.
+    private var steppedAge: Binding<Int> {
+        Binding(
+            get: { max(profile.age, 13) },
+            set: { profile.age = $0 }
+        )
+    }
+
+    /// Age, weight, height, and the two labelled pickers that feed nutrition targets.
+    private var bodyProfileField: some View {
+        SheetField("Body profile") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Text("Age")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                    TextField("30", text: ageText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.center)
+                        .sheetTextInput(font: .fernlet(.label))
+                        .frame(maxWidth: 90)
+                        .accessibilityLabel("Age")
+                        .accessibilityIdentifier("onboarding.profile.age")
+                    Spacer(minLength: 0)
+                    Stepper("Age", value: steppedAge, in: 13...100)
+                        .labelsHidden()
+                }
+                Stepper("Weight: \(Int(profile.weightPounds.rounded())) lb", value: $profile.weightPounds, in: 70...500, step: 1)
+                Stepper("Height: \(heightText)", value: $profile.heightInches, in: 48...84, step: 1)
+                // Labelled, and with the same words Settings uses: `.menu` pickers outside a
+                // Form hide their own label, so these two rows read as a bare "Male ◇" and
+                // "Moderate ◇" with nothing saying what they set.
+                LabeledProfilePicker(BodyProfileFieldLabel.sex) {
+                    Picker(BodyProfileFieldLabel.sex, selection: $profile.sex) {
+                        ForEach(BiologicalSex.allCases) { sex in
+                            Text(sex.label).tag(sex)
+                        }
+                    }
+                }
+                LabeledProfilePicker(BodyProfileFieldLabel.activity) {
+                    Picker(BodyProfileFieldLabel.activity, selection: $profile.activityLevel) {
+                        ForEach(ActivityLevel.allCases) { level in
+                            Text(level.label).tag(level)
+                        }
+                    }
+                }
+            }
+            .profileFieldStyle()
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Add personal details",
-                subtitle: "These are optional except age. Fernlet never asks for weight goals."
+                subtitle: "These are optional except age. Fernlet never asks for weight goals.",
+                backAction: backAction
             ) {
                 SheetField("Your name") {
                     TextField("How friends will see you", text: $displayName)
@@ -450,28 +570,10 @@ private struct OnboardingPersonalDetailsScreen: View {
                         .sheetTextInput()
                         .accessibilityIdentifier("onboarding.displayName")
                 }
-                SheetField("Body profile") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Stepper("Age: \(profile.age)", value: $profile.age, in: 13...100)
-                            .accessibilityIdentifier("onboarding.profile.age")
-                        Stepper("Weight: \(Int(profile.weightPounds.rounded())) lb", value: $profile.weightPounds, in: 70...500, step: 1)
-                        Stepper("Height: \(heightText)", value: $profile.heightInches, in: 48...84, step: 1)
-                        Picker("Biological sex", selection: $profile.sex) {
-                            ForEach(BiologicalSex.allCases) { sex in
-                                Text(sex.label).tag(sex)
-                            }
-                        }
-                        Picker("Activity", selection: $profile.activityLevel) {
-                            ForEach(ActivityLevel.allCases) { level in
-                                Text(level.label).tag(level)
-                            }
-                        }
-                    }
-                    .profileFieldStyle()
-                }
+                bodyProfileField
                 // The age above feeds nutrition targets and nothing else. Two features have real age
                 // requirements — intimacy tracking (16+) and messaging friends nearby (13+) — and those
-                // read Apple's answer, not this stepper, so say so before the system sheet appears.
+                // read Apple's answer, not this field, so say so before the system sheet appears.
                 Text("Next, iPhone will ask whether you want to share your age range with Fernlet. It's used only to unlock messaging friends nearby (13+) and intimacy tracking (16+). Fernlet never sees your birthday, and the answer stays on this device.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
@@ -503,6 +605,7 @@ private struct OnboardingPersonalDetailsScreen: View {
 private struct OnboardingDietaryPatternScreen: View {
     var stepText: String
     @Binding var preferences: UserNutritionPreferences
+    var backAction: (() -> Void)?
     var continueAction: () -> Void
 
     var body: some View {
@@ -510,7 +613,8 @@ private struct OnboardingDietaryPatternScreen: View {
             OnboardingScreenContainer(
                 stepText: stepText,
                 title: "Pick an eating pattern",
-                subtitle: "This tunes suggestions without locking you into rules."
+                subtitle: "This tunes suggestions without locking you into rules.",
+                backAction: backAction
             ) {
                 VStack(spacing: 10) {
                     ForEach(DietaryPattern.allCases) { pattern in

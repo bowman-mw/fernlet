@@ -118,6 +118,7 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
         let model = MonthGridModel(date: displayedMonth, todayKey: todayKey)
         let slots = (0..<model.leadingBlanks).map { _ in Slot(day: nil) }
             + model.days.map { Slot(day: $0) }
+        let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
         FernletCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center) {
@@ -130,13 +131,11 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
+                    // 44pt target + a spoken name: VoiceOver read "chevron.left" before.
+                    .fernletIconButton("Previous month")
 
-                    Text(model.monthTitle)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                        .frame(maxWidth: .infinity)
+                    monthTitleView(model.monthTitle, isCurrentMonth: isCurrentMonth)
 
-                    let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
                     Button {
                         if !isCurrentMonth {
                             displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
@@ -149,6 +148,7 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isCurrentMonth)
+                    .fernletIconButton("Next month")
                 }
 
                 LazyVGrid(columns: columns, spacing: 4) {
@@ -162,6 +162,37 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
 
                 footer()
             }
+        }
+    }
+
+    /// The centered month title — a plain label on the current month, and a "Today" button on any
+    /// other, because after paging back several months the only way home was tapping forward once
+    /// per month. Rendered as two distinct views rather than one `.disabled` button so the title
+    /// never reads as a greyed-out control on the month the user is normally looking at.
+    @ViewBuilder
+    private func monthTitleView(_ title: String, isCurrentMonth: Bool) -> some View {
+        if isCurrentMonth {
+            Text(title)
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+                .frame(maxWidth: .infinity)
+        } else {
+            Button {
+                displayedMonth = .now
+            } label: {
+                VStack(spacing: 1) {
+                    Text(title)
+                        .font(.fernlet(.headerMedium))
+                        .foregroundStyle(Color.bark)
+                    Text("Today")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title). Back to this month")
         }
     }
 }

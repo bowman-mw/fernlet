@@ -85,22 +85,28 @@ struct GuidedWorkoutSheet: View {
         }
         .background(Color.parchment)
         .interactiveDismissDisabled(isLive)
-        .confirmationDialog("End this session?", isPresented: $showEndConfirm, titleVisibility: .visible) {
+        // Alerts, not confirmationDialogs: on iOS 26 a confirmationDialog renders as a popover that
+        // SUPPRESSES the `.cancel`-role button, so the user saw a lone red "End without logging" with
+        // no visible way back — on a dialog whose whole purpose is offering the way back.
+        .alert("End this session?", isPresented: $showEndConfirm) {
+            Button("Keep going", role: .cancel) {}
             Button("End without logging", role: .destructive) {
                 store.abandonGuidedRun()
                 dismiss()
             }
-            Button("Keep going", role: .cancel) {}
         } message: {
             Text("You can always come back and start again — no pressure.")
         }
         // Starting here would throw away a live run for a different session. Name what's at stake, and
         // let "Go back to it" close the sheet onto the Move-root Resume card that resumes the other run.
-        .confirmationDialog(
-            "You have a workout in progress",
-            isPresented: $showReplaceConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("You have a workout in progress", isPresented: $showReplaceConfirm) {
+            Button("Go back to it", role: .cancel) {
+                dismiss()
+                // Nested presentation (the Suggest flow): also close the presenter, or the user lands on
+                // the configurator whose Start re-opens this same dialog — a loop, not the promised
+                // route back to the Resume card.
+                onExitToResumeCard?()
+            }
             Button("Start this one instead", role: .destructive) {
                 // R7: a replace can still be refused (the plan moved on under us) — name it and get
                 // out of the way rather than leaving the sheet pretending the run began.
@@ -108,13 +114,6 @@ struct GuidedWorkoutSheet: View {
                     FernletAuditLog.log("workout.guided.startRefused", context: ["replacing": "true"])
                     dismiss()
                 }
-            }
-            Button("Go back to it", role: .cancel) {
-                dismiss()
-                // Nested presentation (the Suggest flow): also close the presenter, or the user lands on
-                // the configurator whose Start re-opens this same dialog — a loop, not the promised
-                // route back to the Resume card.
-                onExitToResumeCard?()
             }
         } message: {
             Text(replaceConfirmMessage)
@@ -257,9 +256,10 @@ struct GuidedWorkoutSheet: View {
                 // A fixed window: Text(timerInterval:) clamps to 0:00 once it expires, and the range
                 // stays valid however long the user over-rests. A live `Date()` lower bound would invert
                 // past the deadline and trap on the next body re-evaluation.
+                // The design system's timer face (DM Sans, monospaced digits) rather than SF Rounded:
+                // the largest text on this screen shouldn't be the one glyph set that isn't ours.
                 Text(timerInterval: restStartedAt...restEndsAt, countsDown: true)
-                    .font(.system(size: 68, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .font(.fernletTimer(size: 68))
                     .foregroundStyle(Color.bark)
                     .accessibilityIdentifier("workout.guided.restTimer")
             }
@@ -360,10 +360,10 @@ struct GuidedWorkoutSheet: View {
         Button(action: action) {
             Text(label)
                 .font(.fernlet(.label))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.onMoss)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)

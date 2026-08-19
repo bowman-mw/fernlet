@@ -75,11 +75,22 @@ final class FernletStore {
         set { diary.day = newValue }
     }
     /// The synced user settings blob (goals, visibility toggles, proximity opt-ins, companion
-    /// appearance, home-widget order). Writes flow into the snapshot; prefer the dedicated
-    /// setters when a side effect (scrub, radio stop) must accompany the change.
+    /// appearance, home-widget order). Prefer the dedicated setters when a side effect (scrub,
+    /// radio stop) must accompany the change.
+    ///
+    /// The setter SCHEDULES A SNAPSHOT SAVE, so a plain SwiftUI binding — `$store.settings.showCalories`
+    /// and the dozen other direct bindings in Settings — is durable the moment it is flipped. Without
+    /// it those writes only reached memory: `flushPendingSnapshotSave()` on background flushes a
+    /// PENDING save, and nothing had scheduled one, so a user who toggled a setting and force-quit
+    /// without logging anything found it reverted. The write goes to `diary.settings` directly, which
+    /// is what keeps this off the load path — `applyDiarySlice` assigns the diary's own property, so
+    /// applying a remote snapshot still never schedules a save of what it just read.
     var settings: FernletSettings {
         get { diary.settings }
-        set { diary.settings = newValue }
+        set {
+            diary.settings = newValue
+            scheduleSnapshotSave()
+        }
     }
     /// The AI status actually in effect: the stored (synced) user intent in `settings.aiStatus`
     /// overlaid with this device's local daily call counter (`AICallQuotaStore`). The derived
@@ -2111,8 +2122,11 @@ final class FernletStore {
         return resolution.meals
     }
 
-    @discardableResult func copyMeal(_ meal: Meal) -> Meal {
-        diary.copyMeal(meal)
+    /// Re-logs a past meal on today, dropping the source note and stamping it "Repeated".
+    /// `mealType` files it in a specific slot (the log sheet's choice, or the by-time "Auto" rule a
+    /// typed log follows); `nil` keeps the slot the passed-in meal already carries.
+    @discardableResult func copyMeal(_ meal: Meal, mealType: MealType? = nil) -> Meal {
+        diary.copyMeal(meal, mealType: mealType)
     }
 
     func deleteMeal(_ meal: Meal) {

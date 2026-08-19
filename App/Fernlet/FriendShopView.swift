@@ -88,22 +88,15 @@ struct FriendShopView: View {
     /// Shown when no catalogs are held (the window closed mid-browse, or the entry was reached with
     /// nothing exchanged): explains the post-session model rather than spinning forever.
     private var emptyState: some View {
-        VStack(spacing: FernletMetrics.spaceMd) {
-            Image(systemName: "bag")
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.moss)
-            Text("No shops right now")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-            Text("Spend time with a friend and their shop opens here for an hour after you part.")
-                .font(.fernlet(.bodySmall))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        // The shared primitive rather than a third hand-rolled empty state: same italic centred line
+        // and glyph the other 30-odd empty sections use.
+        EmptyState(
+            text: "No shops right now. Spend time with a friend and their shop opens here for an hour after you part.",
+            systemImage: "bag"
+        )
         .frame(maxWidth: .infinity)
         .padding(.horizontal, FernletMetrics.spaceLg)
-        .padding(.vertical, 56)
+        .padding(.vertical, 40)
     }
 
     private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
@@ -195,9 +188,12 @@ struct FriendShopView: View {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.slate)
-                    .padding(7)
+                    // ~27pt with no VoiceOver label: this is the App Store UGC report path, so it
+                    // has to be both reachable and nameable.
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            .accessibilityLabel("More options for \(item.name.isEmpty ? item.slot.label : item.name)")
             .accessibilityIdentifier("friendShop.report")
         }
         .fernletSmallShadow()
@@ -227,11 +223,13 @@ struct FriendShopView: View {
                 Text("\(price)")
                     .font(.fernlet(.label))
             }
-            .foregroundStyle(Color.cream)
+            // The contrast-safe filled-button pair: cream on plain `moss` was well under 4.5:1,
+            // worst in dark mode where moss lightens.
+            .foregroundStyle(Color.onMoss)
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
             .background(
-                Capsule(style: .continuous).fill(Color.moss)
+                Capsule(style: .continuous).fill(Color.mossFill)
             )
             .opacity(affordable ? 1 : 0.5)
         }

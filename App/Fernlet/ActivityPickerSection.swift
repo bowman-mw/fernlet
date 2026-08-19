@@ -16,6 +16,10 @@ struct ActivityPickerSection: View {
     @Binding var distance: String
     @Binding var energyKcal: String
     @Binding var effort: String
+    /// Mirrors `settings.showCalories`, the same opt-in the macros card and nutrition label honor: a
+    /// user who turned calories off shouldn't be asked for kcal on every activity log. Energy that
+    /// arrives from Health is still stored — it just isn't asked for here.
+    var showsEnergyField: Bool = false
     @AppStorage("fernlet.recentActivityTypes") private var recentActivityTypeRawValues = ""
     @State private var query = ""
 
@@ -85,7 +89,8 @@ struct ActivityPickerSection: View {
         } label: {
             Label(type.displayName, systemImage: type.systemImage)
                 .font(.fernlet(.label))
-                .foregroundStyle(selectedActivityType == type ? Color.cream : Color.bark)
+                // Selected = ink for the moss fill; unselected = bark on the cream one.
+                .foregroundStyle(selectedActivityType == type ? Color.onMoss : Color.bark)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .background(selectedActivityType == type ? Color.moss : Color.cream, in: RoundedRectangle(cornerRadius: 10))
@@ -126,30 +131,39 @@ struct ActivityPickerSection: View {
                 SheetField("Duration (min)") {
                     TextField("\(type.defaultDurationMinutes)", text: $duration)
                         .keyboardType(.numberPad)
-                        .sheetTextInput()
+                        .sheetTextInput(font: .fernlet(.label))
                         .accessibilityIdentifier("activity.duration")
                 }
                 if type.expectsDistance {
                     SheetField("Distance (mi)") {
                         TextField("3.0", text: $distance)
                             .keyboardType(.decimalPad)
-                            .sheetTextInput()
+                            .sheetTextInput(font: .fernlet(.label))
                             .accessibilityIdentifier("activity.distance")
                     }
                 }
             }
 
-            SheetField("Energy (kcal)") {
-                TextField("250", text: $energyKcal)
-                    .keyboardType(.numberPad)
-                    .sheetTextInput()
-                    .accessibilityIdentifier("activity.energy")
+            if showsEnergyField {
+                SheetField("Energy (kcal)") {
+                    TextField("250", text: $energyKcal)
+                        .keyboardType(.numberPad)
+                        .sheetTextInput(font: .fernlet(.label))
+                        .accessibilityIdentifier("activity.energy")
+                }
             }
 
             SheetField("Effort") {
                 VStack(alignment: .leading, spacing: 8) {
+                    // Tinted moss: this sheet is presented from the app's root, outside the
+                    // `mainInterface` tint scope, so an untinted Slider rendered iOS blue — the only
+                    // blue control in the app. The a11y label/value make it readable to VoiceOver,
+                    // which otherwise announced just "adjustable".
                     Slider(value: effortValue, in: 1...10, step: 1)
+                        .tint(Color.moss)
                         .accessibilityIdentifier("activity.effort")
+                        .accessibilityLabel("Effort")
+                        .accessibilityValue("\(Int(effort) ?? 5) of 10")
                     HStack {
                         Text("Easy")
                         Spacer()

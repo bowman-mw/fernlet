@@ -123,7 +123,13 @@ struct GroundingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { advance() }
-        .navigationTitle("Grounding")
+        // Tap-anywhere is a bonus, never the only way through: a rotor action gives VoiceOver users
+        // the same pace, and the Next/Back buttons in the footer give everyone a way back from a
+        // sense they skipped by accident.
+        .accessibilityAction(named: "Next") { advance() }
+        .accessibilityAction(named: "Back") { goBack() }
+        // The screen already carries a large "GROUNDING" kicker; an inline nav title said it twice.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -207,7 +213,22 @@ struct GroundingView: View {
                 }
             } else {
                 VStack(spacing: 16) {
-                    progressDots
+                    HStack(spacing: 14) {
+                        Button("Back") { goBack() }
+                            .font(.fernlet(.label))
+                            .foregroundStyle(stepIndex == 0 ? Color.slate.opacity(0.35) : Color.slate)
+                            .buttonStyle(.plain)
+                            .fernletTapTarget(minWidth: 60)
+                            .disabled(stepIndex == 0)
+
+                        progressDots
+
+                        Button("Next") { advance() }
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.moss)
+                            .buttonStyle(.plain)
+                            .fernletTapTarget(minWidth: 60)
+                    }
                     Text("Tap anywhere when you're ready for the next one — take all the time you like.")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
@@ -241,6 +262,13 @@ struct GroundingView: View {
                 isComplete = true
             }
         }
+    }
+
+    /// Steps back one sense. Nothing is recorded, so an accidental skip should cost a tap to undo,
+    /// not a restart from "Begin again".
+    private func goBack() {
+        guard !isComplete, stepIndex > 0 else { return }
+        withAnimation(.easeInOut(duration: 0.35)) { stepIndex -= 1 }
     }
 
     private func restart() {

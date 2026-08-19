@@ -36,6 +36,9 @@ struct FriendListView: View {
     @State private var selected: ProximityTrustedPeerRecord?
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
+    /// The friend a "Remove …?" confirmation is about. Removing revokes trust and forgets their
+    /// cached state — you have to meet in person again — so it asks first, exactly as Block does.
+    @State private var peerToRemove: ProximityTrustedPeerRecord?
     @State private var peerToReport: ProximityTrustedPeerRecord?
     // Away hearts (bitchat adoptions Increment 3): the first-use consent target + the local
     // status line for queue outcomes (separate from the live-send heartSendState pipeline).
@@ -53,14 +56,19 @@ struct FriendListView: View {
             // each row — re-sorting and re-filtering the whole peer list O(n) times per render.
             let peers = filteredPeers
             peerList(peers, lastPeerID: peers.last?.id)
+            safetyFooterRow
         }
         .listStyle(.plain)
         .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
         .scrollContentBackground(.hidden)
         .background(Color.parchment)
         .navigationTitle("Friends & Blocks")
-        .navigationBarTitleDisplayMode(.large)
-        .confirmationDialog(
+        // Inline, matching the two sibling pushes off the same header (Activities, Safety &
+        // reporting). A large title here sat flush against x=0 while every field below is inset 20pt.
+        .navigationBarTitleDisplayMode(.inline)
+        // An `alert`, not a `confirmationDialog`: on iOS 26 the dialog renders as a popover that
+        // suppresses the `.cancel`-role button, leaving a list of red reasons and no way out.
+        .alert(
             "Report this person?",
             isPresented: $peerToReport.isPresent(),
             presenting: peerToReport
@@ -80,16 +88,42 @@ struct FriendListView: View {
         } message: {
             blockAlertMessage
         }
+        .alert(
+            peerToRemove.map { "Remove \($0.displayName)?" } ?? "Remove friend?",
+            isPresented: $peerToRemove.isPresent(),
+            presenting: peerToRemove
+        ) { peer in
+            removeAlertActions(peer)
+        } message: { _ in
+            Text("You'll need to meet in person to add them again.")
+        }
     }
 
     /// The mesh display-name field — what nearby peers see, committed only when the edit finishes.
     private var displayNameRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            displayNameField
+            Text("Friends nearby see this name.")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .padding(.horizontal, 4)
+        }
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    private var displayNameField: some View {
         HStack(spacing: 10) {
             Text("You appear as")
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
             Spacer()
-            TextField("Your name", text: $displayName)
+            // The placeholder is the name that is ACTUALLY broadcast when the field is empty (the
+            // device name), not an invented "Your name" — otherwise friends see "iPhone" and nothing
+            // here ever said so.
+            TextField(store.resolvedProximityDisplayName, text: $displayName)
+                .font(.fernlet(.body))
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(Color.bark)
                 .submitLabel(.done)
@@ -109,9 +143,6 @@ struct FriendListView: View {
         .padding(.vertical, 11)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
     }
 
     /// The name/fingerprint search field.
@@ -191,12 +222,33 @@ struct FriendListView: View {
         }
     }
 
+    /// The always-available route to the safety explainer — blocking happens on this screen, so the
+    /// page that explains reporting (and what happens next) belongs at the end of it, not only in
+    /// Settings › Privacy.
+    private var safetyFooterRow: some View {
+        NavigationLink {
+            SafetyReportingView()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "lifepreserver")
+                    .foregroundStyle(Color.moss)
+                Text("Safety & reporting")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+            }
+            .frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("friends.safetyReporting")
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 28, trailing: 20))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
     /// Remove / block-or-unblock / report, the swipe mirror of the detail card's actions.
     @ViewBuilder
     private func swipeActions(for peer: ProximityTrustedPeerRecord) -> some View {
         Button(role: .destructive) {
-            store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
-            if selected?.id == peer.id { selected = nil }
+            peerToRemove = peer
         } label: {
             Label("Remove", systemImage: "trash")
         }
@@ -241,6 +293,19 @@ struct FriendListView: View {
         Button("Cancel", role: .cancel) { peerToReport = nil }
     }
 
+    /// Confirm/cancel for the remove alert. Removing revokes trust and forgets the friend's cached
+    /// state, so it asks first — the most destructive of the three row actions used to be the only
+    /// one that fired silently.
+    @ViewBuilder
+    private func removeAlertActions(_ peer: ProximityTrustedPeerRecord) -> some View {
+        Button("Remove", role: .destructive) {
+            store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
+            if selected?.id == peer.id { selected = nil }
+            peerToRemove = nil
+        }
+        Button("Cancel", role: .cancel) { peerToRemove = nil }
+    }
+
     /// Confirm/cancel for the block alert.
     @ViewBuilder
     private var blockAlertActions: some View {
@@ -273,11 +338,9 @@ struct FriendListView: View {
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
 
-                Text(peer.fingerprint)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Color.slate)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                // The raw hex fingerprint lives in the expanded detail card, not on every row: it is
+                // a verification tool, not a name, and a wall of hex made the roster read as a
+                // security console rather than a list of friends.
 
                 Text("Last seen \(peer.lastSeenAt.relativeFormatted)")
                     .font(.fernlet(.labelSmall))
@@ -365,10 +428,11 @@ struct FriendListView: View {
     private func peerDetailCard(_ peer: ProximityTrustedPeerRecord) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                detailRow("Fingerprint", value: peer.fingerprint, monospaced: true)
-                detailRow("First accepted", value: peer.firstAcceptedAt.formatted(date: .abbreviated, time: .omitted))
+                fingerprintDetailRow(peer.fingerprint)
+                detailRow("Friends since", value: peer.firstAcceptedAt.formatted(date: .abbreviated, time: .omitted))
                 detailRow("Last seen", value: peer.lastSeenAt.formatted(date: .abbreviated, time: .shortened))
-                detailRow("Mode", value: peer.mode.rawValue.capitalized)
+                // "Mode: Uwb/Manual" was transport trivia in a friend's card — how the two phones
+                // met changes nothing the user can act on. The Connection Inspector still shows it.
                 if let revokedAt = peer.revokedAt {
                     detailRow("Revoked", value: revokedAt.formatted(date: .abbreviated, time: .omitted))
                 }
@@ -387,30 +451,29 @@ struct FriendListView: View {
 
             Divider().overlay(Color.bark.opacity(0.08))
 
-            HStack(spacing: 10) {
+            // These four ACT on a person, so they take the 44pt action pill rather than the 34pt
+            // selection chip, and stack at accessibility text sizes instead of splitting words.
+            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
                 if peer.blockedAt == nil {
                     Button("Block") {
                         peerToBlock = peer
                         blockConfirmShown = true
                     }
-                    .buttonStyle(ChipButtonStyle(selected: false))
+                    .buttonStyle(ActionPillButtonStyle(.secondary))
                 } else {
                     Button("Unblock") {
                         store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
                         if selected?.id == peer.id { selected = nil }
                     }
-                    .buttonStyle(ChipButtonStyle(selected: true))
+                    .buttonStyle(ActionPillButtonStyle(.primary))
                 }
 
-                Button("Remove") {
-                    store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
-                    if selected?.id == peer.id { selected = nil }
-                }
-                .buttonStyle(ChipButtonStyle(selected: false))
+                Button("Remove") { peerToRemove = peer }
+                    .buttonStyle(ActionPillButtonStyle(.destructive))
 
                 if peer.reportedAt == nil {
                     Button("Report") { peerToReport = peer }
-                        .buttonStyle(ChipButtonStyle(selected: false))
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
                 }
             }
         }
@@ -708,18 +771,31 @@ struct FriendListView: View {
         }
     }
 
-    private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {
+    private func detailRow(_ label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Spacer(minLength: 12)
             Text(value)
-                .font(monospaced ? .system(.caption, design: .monospaced) : .subheadline)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .multilineTextAlignment(.trailing)
                 .lineLimit(2)
                 .minimumScaleFactor(0.75)
+        }
+    }
+
+    /// The fingerprint's own row — the one place the raw hex belongs, rendered through the shared
+    /// ``FingerprintText`` so every surface that shows one uses the same treatment.
+    private func fingerprintDetailRow(_ fingerprint: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Fingerprint")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+            Spacer(minLength: 12)
+            FingerprintText(fingerprint, color: Color.bark, lineLimit: 2)
+                .multilineTextAlignment(.trailing)
         }
     }
 
@@ -758,11 +834,11 @@ struct FriendListView: View {
     }
 
     private var emptyStateText: String {
-        if !searchText.isEmpty { return "No peers match \"\(searchText)\"." }
+        // Everyday words, not security-console words: this list is people you've met, not "peers".
+        if !searchText.isEmpty { return "No one matches \"\(searchText)\"." }
         switch filter {
-        case .all: return "No trusted peers yet."
-        case .friends: return "No friends yet."
-        case .blocked: return "No blocked peers."
+        case .all, .friends: return "No friends yet — meet up in person to add one."
+        case .blocked: return "No one is blocked."
         }
     }
 }

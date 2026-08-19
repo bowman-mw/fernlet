@@ -82,6 +82,9 @@ struct ContentView: View {
     /// flight (rather than a cancel, which must never interrupt a restore mid-write).
     @State private var isSettlingSealedBackups = false
     @Environment(\.scenePhase) private var scenePhase
+    /// Read by ``customTabBar`` only: at accessibility text sizes the five labels break mid-word
+    /// ("Hom/e", "Frien/ds") and the bar swallows a fifth of the screen, so they stop being drawn.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         rootSheetHost
             .onChange(of: activeSheet?.id) { oldID, newID in
@@ -514,10 +517,10 @@ struct ContentView: View {
             .background(sceneBackground.ignoresSafeArea())
     }
 
-    /// Always the five-tab `pagedTabs`, unconditionally — its structural identity must never
+    /// Always the five-tab `tabPages`, unconditionally — its structural identity must never
     /// change, or SwiftUI tears down and rebuilds every tab (losing all @State) on the swap.
     ///
-    /// This used to be an `if isDisposableCameraSessionActive { SocialHubView(...) } else { pagedTabs }`.
+    /// This used to be an `if isDisposableCameraSessionActive { SocialHubView(...) } else { tabPages }`.
     /// Because a `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two
     /// different types in the same slot — flipping the condition removed the whole `TabView` and
     /// inserted a bare `SocialHubView`, then reversed it at session end. Every tab (Home/Food/Move/
@@ -535,7 +538,7 @@ struct ContentView: View {
     /// overlay + haptic in `FriendsView.onChange(of: isInSession)`, which the old swap defeated by
     /// destroying that instance in the same transaction as the flip.
     private var mainTabContent: some View {
-        pagedTabs
+        tabPages
     }
 
     /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
@@ -551,7 +554,7 @@ struct ContentView: View {
             || store.recipeShareManager.pendingRecipeShares.first != nil
     }
 
-    private var pagedTabs: some View {
+    private var tabPages: some View {
         TabView(selection: $selectedTab) {
             HomeView(
                 store: store,
@@ -563,31 +566,40 @@ struct ContentView: View {
                 periodStore: periodStore,
                 stressService: stressService
             )
-            .tag(FernletTab.home)
+            .tabPage(.home)
             FoodView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
-                .tag(FernletTab.food)
+                .tabPage(.food)
             MoveView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .move))
-                .tag(FernletTab.move)
+                .tabPage(.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
-                .tag(FernletTab.social)
+                .tabPage(.social)
             // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
             // its capture-friction pulse must not fire (and spend the once-per-session nudge
             // invisibly) while an unprotected sheet — Settings, Trends, First Aid from a
             // notification tap, an incoming recipe share — fully covers the Personal tab. The
             // protected sheets claim the nudge themselves, visibly, via their own attachments.
             PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs)
-                .tag(FernletTab.personal)
+                .tabPage(.personal)
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        // Restore the "locked takeover" the old mainTabContent swap provided implicitly. With the
-        // camera now rendered as the live `.social` PAGE (rather than a bare, TabView-less
-        // SocialHubView), interactive paging is active beneath it — a stray horizontal drag would
-        // swipe off the camera mid-session. That is worst in landscape, where the tab bar is hidden
-        // and the session is meant to be fully locked. Disabling the page scroll only while the
-        // camera session is active re-locks it without any identity change. The condition already
-        // requires `selectedTab == .social`, so paging stays enabled everywhere else — including when
-        // the user tap-navigates to another tab (in portrait) and swipes back toward Social.
-        .scrollDisabled(isDisposableCameraSessionActive)
+        // Paging is OFF: the floating tab bar is the navigation. `.page` style handed every
+        // horizontal drag not swallowed by an inner scroller to the pager, so a drag on Home's
+        // polaroid strip (hit-testing disabled), the mood row, or "Recent bites" flipped the user
+        // onto Food mid-gesture. Making the strip hit-testable is not a fix — a non-scrolling view
+        // still lets the pager take the drag — so the page style is gone entirely and tab switching
+        // is deliberate (tab-bar taps only). That also subsumes the old camera-session special case
+        // (`.scrollDisabled(isDisposableCameraSessionActive)`), which existed only to stop a stray
+        // drag swiping off the live camera.
+        //
+        // Locking the *pager* with `.scrollDisabled(true)` is NOT the way to do this: that modifier
+        // is an environment write, so it reached every scroll view underneath and froze all five
+        // tabs' own feeds solid — content below the fold became permanently unreachable — and a
+        // per-page `.scrollDisabled(false)` counter-write does not win against it. Structure, not
+        // environment, is what keeps the drags and the scrolls apart.
+        //
+        // The plain style keeps every property `tabPages` is documented to need: one stable
+        // container identity for all five tabs, `selection:` driven by the floating bar, and pages
+        // that survive a tab switch with their @State intact. `tabPage(_:)` hides the system tab
+        // bar this style would otherwise draw beneath the floating one.
     }
 
     private var isDisposableCameraSessionActive: Bool {
@@ -608,22 +620,33 @@ struct ContentView: View {
     private var customTabBar: some View {
         let isCompact = isCustomTabBarCompact
         let cornerRadius: CGFloat = isCompact ? 22 : 26
+        // The label is drawn only when there is room for it to stay one word: compacted (scrolled)
+        // or at accessibility text sizes it is dropped visually and survives as the button's
+        // VoiceOver label, which is what stops "Hom/e" / "Frien/ds" and the SF-Symbol announcements
+        // ("leaf", "person.2") the hidden label used to leave behind.
+        let hidesLabel = isCompact || dynamicTypeSize.isAccessibilitySize
 
         return HStack(spacing: isCompact ? 4 : 0) {
             ForEach(FernletTab.allCases) { tab in
+                let isSelected = selectedTab == tab
                 Button {
                     selectedTab = tab
                 } label: {
-                    let isSelected = selectedTab == tab
-                    VStack(spacing: isCompact ? 0 : 3) {
+                    VStack(spacing: hidesLabel ? 0 : 3) {
                         Image(systemName: tab.systemImage)
-                            .font(.system(size: isCompact ? 18 : 20))
-                            .frame(height: isCompact ? 22 : 24)
+                            // Scales with Dynamic Type instead of a fixed 18/20pt, so the bar's one
+                            // remaining element grows with the user's text size.
+                            .font(isCompact ? .body : .title3)
+                            .frame(minHeight: isCompact ? 22 : 24)
                         Text(tab.title)
                             .font(.fernlet(.labelSmall))
-                            .opacity(isCompact ? 0 : 1)
-                            .frame(height: isCompact ? 0 : nil)
-                            .accessibilityHidden(isCompact)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .opacity(hidesLabel ? 0 : 1)
+                            .frame(height: hidesLabel ? 0 : nil)
+                            // Always hidden: the Button carries the title as its accessibility
+                            // label, so VoiceOver reads it in every state (drawn or not) exactly once.
+                            .accessibilityHidden(true)
                     }
                     .foregroundStyle(isSelected ? Color.moss : Color.slate)
                     .frame(maxWidth: .infinity)
@@ -635,8 +658,22 @@ struct ContentView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                // Settings is reachable from every tab (FLOW-34): the gear itself lives only on the
+                // Home header, so a long press on the Home tab item opens it from wherever you are.
+                // `simultaneousGesture` leaves the plain tap — switch tabs — untouched.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                        guard tab == .home else { return }
+                        selectedTab = .home
+                        activeSheet = .settings
+                    }
+                )
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isTabBar)
         .padding(.horizontal, isCompact ? 6 : 8)
         .padding(.vertical, isCompact ? 5 : 6)
         .frame(maxWidth: isCompact ? 300 : .infinity)
@@ -682,11 +719,15 @@ struct ContentView: View {
             WaterSheet(store: store)
                 .fernletSheetChrome(anchor: "sheet.water", detents: [.medium])
         case .sleep:
+            // `[.medium, .large]` like Care: locked at medium the fourth quality option, the Hours
+            // field and the Note field all sat below the fold behind the floating Save pill.
             SleepSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.sleep", detents: [.medium])
+                .fernletSheetChrome(anchor: "sheet.sleep", detents: [.medium, .large])
         case .journal:
+            // `[.large]`: at medium only one line of the editor cleared the feeling chips + prompt
+            // card, and at accessibility sizes the editor and Save were entirely off-screen.
             JournalSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.journal", detents: [.medium, .large])
+                .fernletSheetChrome(anchor: "sheet.journal", detents: [.large])
                 .environment(captureProtection)
         case .quickExercise:
             QuickExerciseSheet(store: store)
@@ -1119,8 +1160,10 @@ struct ContentView: View {
     private func showMealLogNotification(_ meals: [Meal]) {
         guard meals.isEmpty == false else { return }
         let notification = MealLogNotification(meals: meals)
+        // Deliberately does NOT switch to Home. The toast is an overlay on the ROOT, so it shows
+        // over whichever tab the log started from; jumping to Home meant a meal logged from Food
+        // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
-        selectedTab = .home
 
         Task { @MainActor in
             do {
@@ -1263,16 +1306,38 @@ struct ContentView: View {
 }
 
 extension View {
-    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the detent set,
-    /// a visible drag indicator, and the house 20pt presentation corner radius.
+    /// Marks one page of ``ContentView/tabPages``: tags it for `selectedTab`, and hides the system
+    /// tab bar underneath it so only the app's own floating bar is ever drawn.
     ///
-    /// One modifier rather than the same four lines repeated per case — the values are identical
-    /// across all 22 sheets except the anchor and the detents.
+    /// The tab container is a plain `TabView` rather than a `.page` one precisely so there is no
+    /// horizontal pager to steal drags (see `tabPages`). Hiding the system bar per page is the
+    /// documented way to suppress it — it also drops the bar's safe-area inset, so the floating bar
+    /// `mainInterface` installs with `safeAreaInset(edge: .bottom)` stays the only bottom chrome.
+    func tabPage(_ tab: FernletTab) -> some View {
+        toolbar(.hidden, for: .tabBar)
+            .tag(tab)
+    }
+
+    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the detent set,
+    /// a visible drag indicator, the house 20pt presentation corner radius, the moss tint, and the
+    /// keyboard "Done" accessory.
+    ///
+    /// One modifier rather than the same lines repeated per case — the values are identical across
+    /// all 22 sheets except the anchor and the detents.
+    ///
+    /// The last two are here rather than per sheet because a routed sheet is attached to
+    /// `launchRoot`, OUTSIDE the `.tint(Color.moss)` on `mainInterface`: every un-tinted system
+    /// control inside one (the Effort slider, the recipe unit menu, the cycle Observation pickers,
+    /// the Settings hub's toggles and links) rendered Apple blue. And numeric keypads have no return
+    /// key, so without ``SwiftUI/View/keyboardDoneToolbar()`` the pad floated over the Save bar with
+    /// no way to dismiss it.
     func fernletSheetChrome(anchor: String, detents: Set<PresentationDetent>) -> some View {
         uxScreenAnchor(anchor)
             .presentationDetents(detents)
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
+            .tint(Color.moss)
+            .keyboardDoneToolbar()
     }
 }
 

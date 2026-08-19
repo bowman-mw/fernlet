@@ -27,6 +27,12 @@ struct TrainerExportView: View {
     @State private var prepareError = false
     @State private var showCopyConfirm = false
     @State private var didCopy = false
+    /// True once a share has completed. Sharing deletes the prepared file, which used to flip the
+    /// button back to "Prepare summary" — reading as though the summary had been lost.
+    @State private var didShare = false
+    /// Whether the "What's included" list is expanded. The intro promises control over the contents;
+    /// this is where the contents are actually named.
+    @State private var showsIncluded = false
     @State private var sheet: TrainerSheet?
     /// A plan decoded by the paste sheet, held until that sheet has finished dismissing.
     ///
@@ -147,7 +153,10 @@ struct TrainerExportView: View {
                     // until the next sweep. A failed delete keeps the file on screen so it can be
                     // retried. Only THIS file: a full data export may be in flight in Privacy & Data.
                     onShareFinished: { url in
-                        if discardExportedFile(at: url) { preparedFile = nil }
+                        if discardExportedFile(at: url) {
+                            preparedFile = nil
+                            didShare = true
+                        }
                     },
                     onDecoded: { plan in pendingPlan = plan },
                     onImported: { result in importResult = result }
@@ -261,6 +270,8 @@ struct TrainerExportView: View {
                 .foregroundStyle(Color.slate)
                 .frame(maxWidth: .infinity, alignment: .center)
 
+            includedDisclosure
+
             if let url = preparedFile {
                 // Deliberately NOT a `ShareLink`: that has no completion callback, so the plaintext
                 // summary would have no seam to be deleted at. `ActivityShareView`'s `onFinish` is that
@@ -285,7 +296,10 @@ struct TrainerExportView: View {
                         prepareError = true
                     }
                 } label: {
-                    Text("Prepare summary")
+                    // "Share again" after a completed share: the button reverting to its untouched
+                    // label read as the summary having been lost, when what happened is that the
+                    // plaintext file was deleted on purpose.
+                    Text(didShare ? "Share again" : "Prepare summary")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.parchment)
                         .frame(maxWidth: .infinity)
@@ -294,8 +308,73 @@ struct TrainerExportView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("trainer.prepare")
+
+                if didShare {
+                    Text("Shared — the file has been removed from Fernlet.")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
+    }
+
+    /// The "What's included" expander under the count line.
+    ///
+    /// The intro promises the user controls exactly what goes in the summary, but the toggles live in
+    /// Settings → Move and nothing on this screen said what was in it. This names the contents where
+    /// the decision to share is made, and says where to change them.
+    private var includedDisclosure: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                showsIncluded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Text("What's included")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    Image(systemName: showsIncluded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.slate)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("trainer.whatsIncluded")
+
+            if showsIncluded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(includedLines, id: \.self) { line in
+                        bullet(line)
+                    }
+                    Text("Change what's included in Settings → Move.")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// What this summary would carry right now — the always-included core plus whichever optional
+    /// categories are switched on.
+    private var includedLines: [String] {
+        var lines = [
+            "Your workouts, and how each exercise has progressed",
+            "What you've eaten, and the targets you're aiming at",
+            "Your equipment, and the muscles and movements you avoid",
+        ]
+        let settings = store.settings
+        if settings.trainerExportIncludesGoal { lines.append("Your goal") }
+        if settings.trainerExportIncludesHydration { lines.append("Hydration") }
+        if settings.trainerExportIncludesSleep { lines.append("Sleep") }
+        if settings.trainerExportIncludesSickness { lines.append("Days you were unwell") }
+        if settings.trainerExportIncludesWellbeing { lines.append("How you've been feeling") }
+        return lines
     }
 
     /// The clipboard half of the manual coach exchange.

@@ -200,7 +200,7 @@ struct ProgressPhotoSection: View {
                     Text("Unlock to view")
                         .font(.fernlet(.label))
                 }
-                .foregroundStyle(Color.cream)
+                .foregroundStyle(Color.onMoss)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
                 .background(Color.moss, in: Capsule())
@@ -253,7 +253,7 @@ struct ProgressPhotoSection: View {
             Text("Add progress photo")
                 .font(.fernlet(.label))
         }
-        .foregroundStyle(Color.cream)
+        .foregroundStyle(Color.onMoss)
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(Color.moss, in: Capsule())

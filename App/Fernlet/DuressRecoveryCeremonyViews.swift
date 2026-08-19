@@ -238,10 +238,11 @@ private struct CeremonyButton: View {
         Button(title, action: action)
             .buttonStyle(.plain)
             .font(.fernlet(.label))
-            .foregroundStyle(.white)
+            // Paired ink/fill tokens: white on dark-mode moss measured 2.5:1.
+            .foregroundStyle(destructive ? Color.onTerracotta : Color.onMoss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(destructive ? Color.terracotta : Color.moss, in: RoundedRectangle(cornerRadius: 14))
+            .background(destructive ? Color.terracotta : Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
             .accessibilityIdentifier(identifier ?? "duress.ceremony.action")
     }
 }
@@ -296,6 +297,12 @@ struct DuressRecoveryEnrollmentSheet: View {
     /// it nil and gets `IdentityService()`. Not a default *value*, because a `@MainActor` type can
     /// never be a default argument — the coordinator is built in `onAppear` instead.
     var coordinatorFactory: (@MainActor (FernletLockService) -> DuressRecoveryCoordinator)?
+    /// The side of the ceremony the entry point already committed to, skipping the chooser.
+    ///
+    /// A row labelled "Be a recovery device" that opens on "Which phone is this?" — with *"This is
+    /// the phone I'm protecting"* as the moss primary — offers the opposite of what was tapped. Nil
+    /// keeps the chooser, for entry points that genuinely don't know.
+    var initialRole: CeremonyRole?
 
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
@@ -320,6 +327,7 @@ struct DuressRecoveryEnrollmentSheet: View {
         }
         .tint(Color.moss)
         .onAppear {
+            if role == nil { role = initialRole }
             guard coordinator == nil else { return }
             coordinator = coordinatorFactory?(lockService)
                 ?? DuressRecoveryCoordinator(identity: IdentityService(), lockService: lockService)
@@ -382,7 +390,9 @@ struct DuressRecoveryEnrollmentSheet: View {
     }
 
     /// Which side of the ceremony this phone is playing.
-    private enum CeremonyRole { case protectedPhone, recoveryDevice }
+    ///
+    /// Not private: entry points that already know the answer pass it as ``initialRole``.
+    enum CeremonyRole { case protectedPhone, recoveryDevice }
 }
 
 // MARK: - Recovery sheet
@@ -883,7 +893,10 @@ private struct DuressCeremonyCustodianFlow: View {
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                     Text(requesterFingerprint)
-                        .font(.system(.body, design: .monospaced))
+                        // The design system's tabular role, not system monospaced: this is the one
+                        // string on the screen the user compares character by character.
+                        .font(.fernlet(.stat))
+                        .monospacedDigit()
                         .foregroundStyle(Color.bark)
                         .accessibilityIdentifier("duress.custodian.fingerprint")
                 }

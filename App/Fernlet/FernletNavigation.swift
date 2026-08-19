@@ -12,6 +12,58 @@ import SwiftUI
 import FernletDomainModel
 import PrivateHealthStore
 
+/// How Fernlet picks light or dark: follow the phone, or force one.
+///
+/// Stored as a raw string under ``storageKey`` and read with `@AppStorage`; `.system` (the default)
+/// maps to a `nil` `preferredColorScheme`, which is the only value that lets the OS decide. The app
+/// previously had a Dark-mode Bool that ContentView passed to `preferredColorScheme` as
+/// `.dark`/`.light` — never `nil` — so a phone in Dark Mode still got a fully light app, with no
+/// "match system" choice anywhere and a dark onboarding handing over to a light app on step 8.
+///
+/// ``migrateLegacyDarkModePreferenceIfNeeded(defaults:)`` carries the old Bool over once at launch,
+/// so an existing user's dark app stays dark.
+enum FernletAppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    /// `@AppStorage` key for the stored choice.
+    static let storageKey = "fernletAppearanceMode"
+    /// The pre-three-way Bool this replaces. Read once by the migration below, then left alone.
+    static let legacyDarkModeKey = "fernletDarkModeEnabled"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    /// The value to hand `preferredColorScheme`. `nil` for ``system`` — passing a concrete scheme
+    /// is exactly what pinned the app to one appearance regardless of the phone.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    /// One-time carry-over of the legacy Dark-mode Bool.
+    ///
+    /// Only runs when no mode has been stored yet AND the old key exists, so a fresh install
+    /// defaults to ``system`` while an existing user keeps the appearance they chose. Idempotent.
+    static func migrateLegacyDarkModePreferenceIfNeeded(defaults: UserDefaults = .standard) {
+        guard defaults.string(forKey: storageKey) == nil,
+              defaults.object(forKey: legacyDarkModeKey) != nil else { return }
+        let mode: FernletAppearanceMode = defaults.bool(forKey: legacyDarkModeKey) ? .dark : .light
+        defaults.set(mode.rawValue, forKey: storageKey)
+    }
+}
+
 /// The five top-level tabs (Home / Food / Move / Friends / Private) in display order.
 ///
 /// `ContentView` keys the paged `TabView`, the custom floating tab bar, and the per-tab

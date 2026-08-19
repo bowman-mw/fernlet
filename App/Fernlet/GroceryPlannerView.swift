@@ -66,11 +66,15 @@ struct ShoppingListBuilderView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(
-                    title: "Shopping list",
-                    subtitle: "Pick recipes, then share the combined list to Notes.",
-                    subtitleFirst: false,
-                    identifier: "screen.shoppingList")
+                // A pushed page titles itself in the nav bar (see `.navigationTitle` below); drawing
+                // the title in the body as well left ~90pt of empty bar above it.
+                Text("Pick recipes, then share the combined list to Notes.")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("screen.shoppingList")
 
                 if allRecipes.isEmpty {
                     EmptyState(text: "No recipes yet. Create one in the recipe book first.")
@@ -93,7 +97,7 @@ struct ShoppingListBuilderView: View {
                         ShareLink(item: listText) {
                             Label("Share shopping list", systemImage: "square.and.arrow.up")
                                 .font(.fernlet(.label))
-                                .foregroundStyle(Color.cream)
+                                .foregroundStyle(Color.onMoss)
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
                                 .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -109,7 +113,8 @@ struct ShoppingListBuilderView: View {
             .padding(.bottom, 24)
         }
         .background(Color.parchment)
-        .navigationTitle("")
+        .navigationTitle("Shopping list")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if !didSeed {
                 didSeed = true
@@ -227,11 +232,15 @@ struct WeeklyMealPlannerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(
-                    title: "Meal planner",
-                    subtitle: "Assign recipes to your week, then build one shopping list.",
-                    subtitleFirst: false,
-                    identifier: "screen.mealPlanner")
+                // Pushed page: the nav bar carries the title (see `.navigationTitle` below), so the
+                // body keeps only the line that says what this screen is for.
+                Text("Assign recipes to your week, then build one shopping list.")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("screen.mealPlanner")
 
                 weekSwitcher
 
@@ -244,7 +253,7 @@ struct WeeklyMealPlannerView: View {
                 } label: {
                     Label("Create shopping list", systemImage: "cart")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.cream)
+                        .foregroundStyle(Color.onMoss)
                         .frame(maxWidth: .infinity)
                         .padding(14)
                         .background(plannedIDsThisWeek.isEmpty ? Color.slate : Color.moss,
@@ -257,7 +266,8 @@ struct WeeklyMealPlannerView: View {
             .padding(.bottom, 24)
         }
         .background(Color.parchment)
-        .navigationTitle("")
+        .navigationTitle("Meal planner")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reload)
         .sheet(item: $pickingForDay) { pick in
             RecipePickerSheet(store: store) { recipeID in
@@ -272,6 +282,7 @@ struct WeeklyMealPlannerView: View {
             Button { weekOffset -= 1; reload() } label: {
                 Image(systemName: "chevron.left").foregroundStyle(Color.moss)
             }
+            .fernletIconButton("Previous week")
             Spacer()
             Text(weekLabel)
                 .font(.fernlet(.headerMedium))
@@ -280,6 +291,7 @@ struct WeeklyMealPlannerView: View {
             Button { weekOffset += 1; reload() } label: {
                 Image(systemName: "chevron.right").foregroundStyle(Color.moss)
             }
+            .fernletIconButton("Next week")
         }
         .padding(.horizontal, 4)
     }
@@ -306,6 +318,7 @@ struct WeeklyMealPlannerView: View {
                             .font(.system(size: 22))
                             .foregroundStyle(Color.moss)
                     }
+                    .fernletIconButton("Add a meal to \(dayHeading(key))")
                     .accessibilityIdentifier("mealPlanner.add")
                 }
                 if ids.isEmpty {
@@ -328,6 +341,7 @@ struct WeeklyMealPlannerView: View {
                                     Image(systemName: "minus.circle")
                                         .foregroundStyle(Color.slate)
                                 }
+                                .fernletIconButton("Remove \(recipe.name) from \(dayHeading(key))")
                             }
                         }
                     }

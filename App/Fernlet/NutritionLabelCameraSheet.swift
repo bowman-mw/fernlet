@@ -90,7 +90,7 @@ struct NutritionLabelCameraSheet: View {
             } label: {
                 Label("Camera", systemImage: "camera.fill")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
+                    .foregroundStyle(Color.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(14)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -114,13 +114,16 @@ struct NutritionLabelCameraSheet: View {
             } label: {
                 Image(systemName: isFlashOn ? "bolt.fill" : "bolt.slash.fill")
                     .font(.headline)
-                    .foregroundStyle(isFlashOn ? Color.cream : Color.bark)
+                    // On = ink for the moss fill; off = bark on the cream one.
+                    .foregroundStyle(isFlashOn ? Color.onMoss : Color.bark)
                     .frame(width: 48, height: 48)
                     .background(isFlashOn ? Color.moss : Color.cream, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(hasCameraFlash == false)
+            // Names the action and its state — VoiceOver read "bolt.slash.fill" before.
+            .accessibilityLabel(isFlashOn ? "Turn the flash off" : "Turn the flash on")
         }
     }
 

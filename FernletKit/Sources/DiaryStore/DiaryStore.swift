@@ -60,7 +60,11 @@ public final class DiaryStore {
     /// date round-trips through the repository via ``mutateDay(date:_:)``.
     public var day: FernletDay
     /// The synced settings aggregate (goal, visibility gates, workout profile, dismissals, …).
-    /// Mutate through the setter methods so every change schedules a snapshot save.
+    ///
+    /// Mutate through the setter methods below (or, app-side, through the facade's `settings`
+    /// property, whose setter schedules the save) — a bare write to THIS property changes memory
+    /// only, which is why `applyDiarySlice` can seed it without scheduling a save of what it just
+    /// loaded.
     public var settings: FernletSettings
     /// Rolling newest-first window of recently logged meals (capped at 50 by
     /// ``appendMeal(_:date:)``) that powers quick re-logging.
@@ -665,9 +669,17 @@ public final class DiaryStore {
         }
     }
 
-    /// Duplicates a past meal onto today (fresh identity via `copyForToday`) and returns the copy.
-    @discardableResult public func copyMeal(_ meal: Meal) -> Meal {
-        let copiedMeal = meal.copyForToday()
+    /// Duplicates a past meal onto today (fresh identity via `copyForToday(mealType:)`) and returns
+    /// the copy. The copy always drops the source meal's note and is stamped "Repeated" — see
+    /// `Meal.copyForToday(mealType:)`.
+    ///
+    /// - Parameter mealType: The slot to file the repeat under. Pass the log sheet's explicit choice,
+    ///   or the by-time "Auto" classification (`MealParser.classifyMealType`) when the user made
+    ///   none — repeating a yogurt bowl at 7:35 PM must not inherit Breakfast from the meal it
+    ///   copies. Deliberately NOT re-derived here when `nil`: a caller that already resolved the slot
+    ///   would have it silently overwritten by a classification of the meal's NAME.
+    @discardableResult public func copyMeal(_ meal: Meal, mealType: MealType? = nil) -> Meal {
+        let copiedMeal = meal.copyForToday(mealType: mealType)
         batchSnapshotPersistence {
             day.meals.append(copiedMeal)
         }

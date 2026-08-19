@@ -12,6 +12,10 @@ In the FernletKit dependency DAG this is a **layer 1.5 leaf-adjacent target**: i
 
 The module's one genuinely subtle mechanism is theme resolution. The adaptive surface tokens are built on `UIColor` dynamic providers, and UIKit invokes those provider closures on **whatever thread is resolving the trait collection — including SwiftUI's off-main render thread on device**. The target's package-level `defaultIsolation(MainActor.self)` would make that a Swift 6 executor trap (SIGTRAP), so everything on the resolution path is explicitly `nonisolated` (``FernletThemePalette``, ``FernletThemeDefaults``, the `UIColor` hex/luminance helpers) and every provider closure is annotated `@Sendable` — both annotations are load-bearing, not decoration. When editing colors, follow the existing pattern exactly: fixed colors go through the `Color(light:dark:)` initializer (which bridges to `UIColor` *before* the provider closure, because the SwiftUI bridge is not safe inside it), and adaptive surfaces go through ``FernletThemePalette/current(for:)``. Custom user backgrounds derive a matching box surface via HSB adjustment and choose light-or-dark ink by WCAG relative luminance, so any user-chosen background stays legible.
 
+**Accessibility is a property of the primitives, not of the call sites.** Several rules are enforced here precisely because they cannot be enforced 41 chip sites at a time: ``ChipButtonStyle`` and ``HubSectionPicker`` add the `.isSelected` trait themselves (a custom style renders a selected state that VoiceOver otherwise cannot see); ``ScreenHeader`` titles *wrap* rather than shrink-and-truncate; ``HeaderActionButton`` takes an `accessibilityLabel:` because an icon-only button otherwise announces its SF Symbol name; `fernletIconButton(_:)` / `fernletTapTarget()` lift a glyph-sized control to the 44pt minimum; and the contrast-safe fill/ink pairs (`mossFill` + `onMoss`, `terracotta` + `onTerracotta`, `terracottaInk` for destructive *text*) exist because plain white on `moss` measures 4.29:1 in light mode and 2.53:1 in dark. Never hand-roll `.foregroundStyle(.white)` on an accent fill, and prefer ``ActionPillButtonStyle`` — 44pt, three roles — for anything that *acts*, leaving ``ChipButtonStyle`` for things that *select*.
+
+Confirmations are the other module-level rule. Both `discardConfirmation(isPresented:onDiscard:)` and `confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)` are **alerts, deliberately**: on iOS 26 a `.confirmationDialog` renders as a popover that suppresses the `.cancel`-role button, so the user is shown a lone destructive action and no visible way out. Any new destructive prompt in a package module goes through `confirmDestructive`; app-target surfaces use the richer `DestructiveConfirmation` type in `App/Fernlet/`, which adds the audit trail. `fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)` packages the whole dirty-sheet contract — blocked swipe-dismiss, a ``SheetCancelBar``, and the discard alert — into one modifier.
+
 Two other conventions matter before changing this module. First, **fonts resolve by PostScript name only** — the font files themselves stay registered by the app's Info.plist `UIAppFonts`, and `FernletFontRegistrationTests` asserts every name in ``FernletFontName`` resolves, so a wrong name fails the test run instead of silently falling back to the system font. Second, several tokens (``FernletMotion``, the `lichen`/`state*`/`journal*` colors, the `.wordmark` type role) are **reserved design-export vocabulary**: they may have no call site yet, but they are the documented system palette for surfaces still being built out — they are intentionally kept and should not be flagged or removed as dead code.
 
 ## Topics
@@ -38,6 +42,7 @@ Two other conventions matter before changing this module. First, **fonts resolve
 - ``FernletCard``
 - ``SectionLabel``
 - ``EmptyState``
+- ``AdaptiveStack``
 - ``FernletTabBarCompactionModifier``
 
 ### Entry-sheet components
@@ -46,9 +51,13 @@ Two other conventions matter before changing this module. First, **fonts resolve
 - ``SheetSaveBar``
 - ``SheetField``
 - ``SheetTextEditor``
+- ``SheetGrowingTextField``
 - ``ChipButtonStyle``
+- ``ActionPillButtonStyle``
+- ``FernletActionPillKind``
 - ``FlowLayout``
 - ``HubSectionPicker``
+- ``FernletDraftGuardModifier``
 
 ### System integration
 

@@ -108,28 +108,61 @@ struct BarcodeServingStepView: View {
         return "\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit)"
     }
 
+    /// Title block plus the inline Cancel affordance — the sheet's own header.
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("How many servings?")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                Text(foodItem.name)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            Spacer(minLength: 12)
+            Button("Cancel") { onCancel() }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+                .accessibilityIdentifier("barcodeServingCancel")
+        }
+    }
+
+    /// The typeable servings field, its stepper, and the macros that scale with it.
+    private var servingsField: some View {
+        SheetField("Servings") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    // Typeable so fractional amounts (half a bar, a serving and a half) log honestly.
+                    TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.leading)
+                        .textContentType(.none)
+                        .frame(maxWidth: 90)
+                        .font(.fernlet(.displayMedium))
+                        .foregroundStyle(Color.bark)
+                        .accessibilityIdentifier("barcodeServingValue")
+                    Spacer()
+                    Stepper("", value: $servings, in: 0...99, step: 1)
+                        .labelsHidden()
+                        .accessibilityIdentifier("barcodeServingStepper")
+                }
+                Text("P \(scaledMacros.protein)g   C \(scaledMacros.carbs)g   F \(scaledMacros.fat)g")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.moss)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("How many servings?")
-                                .font(.fernlet(.header))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                            Text(foodItem.name)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                        }
-                        Spacer(minLength: 12)
-                        Button("Cancel") { onCancel() }
-                            .buttonStyle(.plain)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.slate)
-                            .accessibilityIdentifier("barcodeServingCancel")
-                    }
+                    header
 
                     if let servingContext {
                         Text("One serving: \(servingContext)")
@@ -138,30 +171,7 @@ struct BarcodeServingStepView: View {
                             .fernletWrappingText()
                     }
 
-                    SheetField("Servings") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .firstTextBaseline) {
-                                // Typeable so fractional amounts (half a bar, a serving and a half) log honestly.
-                                TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)))
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.leading)
-                                    .textContentType(.none)
-                                    .frame(maxWidth: 90)
-                                    .font(.fernlet(.displayMedium))
-                                    .foregroundStyle(Color.bark)
-                                    .accessibilityIdentifier("barcodeServingValue")
-                                Spacer()
-                                Stepper("", value: $servings, in: 0...99, step: 1)
-                                    .labelsHidden()
-                                    .accessibilityIdentifier("barcodeServingStepper")
-                            }
-                            Text("P \(scaledMacros.protein)g   C \(scaledMacros.carbs)g   F \(scaledMacros.fat)g")
-                                .font(.fernlet(.stat))
-                                .foregroundStyle(Color.moss)
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    }
+                    servingsField
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -172,6 +182,10 @@ struct BarcodeServingStepView: View {
             }
         }
         .background(Color.parchment)
+        // Its own presentation, so it inherits neither the presenting sheet's tint nor its keyboard
+        // accessory: the decimal pad here had no Done and floated over the Log bar.
+        .tint(Color.moss)
+        .keyboardDoneToolbar()
         .accessibilityIdentifier("barcodeServingStep")
     }
 }
