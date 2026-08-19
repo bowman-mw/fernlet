@@ -69,7 +69,60 @@ final class ItemCreationFlowUITests: XCTestCase {
                       "should stay on the confirmation screen to rename and retry")
     }
 
+    /// Saving must leave the user in the CLOSET, looking at the thing they just made — not on Home
+    /// with the whole customization sheet gone.
+    ///
+    /// The studio is pushed inside that sheet and "Save to closet" is tapped from the confirmation
+    /// step, one push above the studio. From there the studio's environment `dismiss` no longer
+    /// pops: it degrades to dismissing the nearest presentation — the sheet — so a save dropped the
+    /// user on Home and the new item was never seen. Both entry points are covered here (the
+    /// "Design a new item" row and, on the way back out, an existing item's row), because both were
+    /// broken and the push mechanism was never the cause.
+    @MainActor
+    func testSavingPopsBackToTheWardrobeAndKeepsTheSheetUp() {
+        let app = launchToStudioEditor(seedCanvas: true)
+
+        saveFromTheEditor(in: app)
+
+        // Back in the closet — the sheet is still up (the Wardrobe only exists inside it) and the
+        // studio is gone.
+        let designNew = waitForButton(in: app, labelContaining: "Design a new item", timeout: 10)
+        XCTAssertNotNil(designNew, "saving should pop back to the Wardrobe, not dismiss the sheet")
+        XCTAssertTrue(app.descendants(matching: .any)["wardrobe.coinBalance"].exists,
+                      "the Wardrobe's own chrome should be on screen after saving")
+        XCTAssertFalse(app.descendants(matching: .any)["studio.canvas"].exists,
+                       "the studio should have been popped off the stack")
+
+        // The saved item is in the closet, which is the whole point of landing here.
+        guard let saved = waitForButton(in: app, labelContaining: "designed by you", timeout: 10) else {
+            XCTFail("the item just saved is not in the closet")
+            return
+        }
+
+        // The edit entry point exits through the same seam: open the saved item and save again.
+        saved.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["studio.canvas"].waitForExistence(timeout: 20),
+                      "tapping a closet item should push its editor")
+        saveFromTheEditor(in: app)
+
+        XCTAssertNotNil(waitForButton(in: app, labelContaining: "Design a new item", timeout: 10),
+                        "saving an EDITED item should pop back to the Wardrobe too")
+    }
+
     // MARK: - Helpers
+
+    /// Editor → "Next" → "Save to closet", with no name and no listing: the shortest path through the
+    /// two-step save.
+    @MainActor
+    private func saveFromTheEditor(in app: XCUIApplication) {
+        let next = app.buttons["Next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 20), "Next bar not found")
+        next.tap()
+
+        let save = app.buttons["Save to closet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), "confirmation screen did not push")
+        save.tap()
+    }
 
     /// Drives customization sheet → Clothing slot → Wardrobe → "Design a new item".
     @MainActor

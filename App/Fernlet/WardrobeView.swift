@@ -24,6 +24,15 @@ struct WardrobeView: View {
     /// Drives the push into a NEW item's studio. Both entry points (the top row and the empty-closet
     /// invitation) are plain buttons feeding this, so neither inherits the `List`'s extra chevron.
     @State private var isDesigningNewItem = false
+    /// Drives the push into an EXISTING item's studio, by id rather than by value: the studio saves
+    /// through the store, so a value-keyed route would change identity on save and tear its own
+    /// destination down mid-flight.
+    ///
+    /// A binding-driven push (not a `NavigationLink`) because the closet is what pops the studio —
+    /// see ``CreationStudioView/leaveStudio()``: the studio's environment `dismiss` cannot pop
+    /// itself from the confirmation step above it, and takes the whole customization sheet down
+    /// with it when it tries.
+    @State private var editingItemID: UUID?
 
     var body: some View {
         List {
@@ -50,7 +59,27 @@ struct WardrobeView: View {
         .alert(item: $shopAlert) { $0.alert(in: .wardrobe) }
         .destructiveConfirmation($pendingDelete)
         .navigationDestination(isPresented: $isDesigningNewItem) {
-            CreationStudioView(store: store, draftIsDirty: studioDraftIsDirty)
+            CreationStudioView(store: store,
+                               draftIsDirty: studioDraftIsDirty,
+                               onExit: { isDesigningNewItem = false })
+        }
+        .navigationDestination(item: $editingItemID) { id in
+            editor(forItemID: id)
+        }
+    }
+
+    /// The edit-path studio, resolved from the live store so a save is reflected without re-pushing.
+    /// The item can vanish underneath us (a delete from another surface); an empty closet screen is
+    /// a better answer than a force-unwrap.
+    @ViewBuilder
+    private func editor(forItemID id: UUID) -> some View {
+        if let item = store.customItems.first(where: { $0.id == id }) {
+            CreationStudioView(store: store,
+                               editingItem: item,
+                               draftIsDirty: studioDraftIsDirty,
+                               onExit: { editingItemID = nil })
+        } else {
+            Color.parchment.ignoresSafeArea()
         }
     }
 
@@ -189,9 +218,11 @@ struct WardrobeView: View {
     @ViewBuilder
     private func row(for item: CustomizationItem) -> some View {
         let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
-        NavigationLink {
-            CreationStudioView(store: store, editingItem: item, draftIsDirty: studioDraftIsDirty)
-        } label: {
+        // A plain `Button` feeding `editingItemID`, not a `NavigationLink`, for the same two reasons
+        // the "Design a new item" row is one: the closet has to be able to POP this studio, and
+        // inside a `List` the link hangs the system disclosure chevron outside the cream card. The
+        // card draws its own instead.
+        Button { editingItemID = item.id } label: {
             HStack(spacing: 12) {
                 CustomItemThumbnail(texture: item.texture, size: 44)
 
@@ -207,6 +238,10 @@ struct WardrobeView: View {
                 if isEquipped {
                     equippedPill
                 }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.bark.opacity(0.35))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

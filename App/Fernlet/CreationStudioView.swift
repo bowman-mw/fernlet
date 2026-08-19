@@ -20,6 +20,11 @@ struct CreationStudioView: View {
     /// while there is unsaved paint on the canvas. Nil when the studio is shown without a host that
     /// cares (previews, tests) — never a crash, just no swipe guard.
     var draftIsDirty: Binding<Bool>?
+    /// How the host pops this studio off ITS stack. Supplied by ``WardrobeView``, which owns both
+    /// pushes into here; nil only when nothing owns the push (previews, tests), where the
+    /// environment `dismiss` is the right exit. See ``leaveStudio()`` for why the environment
+    /// action alone is not enough.
+    var onExit: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -68,10 +73,14 @@ struct CreationStudioView: View {
 
     private let palette = ItemDesignPalette.hexes
 
-    init(store: FernletStore, editingItem: CustomizationItem? = nil, draftIsDirty: Binding<Bool>? = nil) {
+    init(store: FernletStore,
+         editingItem: CustomizationItem? = nil,
+         draftIsDirty: Binding<Bool>? = nil,
+         onExit: (() -> Void)? = nil) {
         self.store = store
         self.editingItem = editingItem
         self.draftIsDirty = draftIsDirty
+        self.onExit = onExit
         if let item = editingItem {
             let initialPixels = Self.editorPixels(for: item, palette: ItemDesignPalette.hexes)
             _slot = State(initialValue: item.slot)
@@ -165,9 +174,23 @@ struct CreationStudioView: View {
 
     /// The single exit from the studio. Clears the host sheet's swipe-dismiss block before popping —
     /// a flag left standing would leave the customization sheet permanently un-swipeable.
+    ///
+    /// The exit is driven by explicit state, NOT by the environment `dismiss`, because "Save to
+    /// closet" leaves from the confirmation step — one push ABOVE the studio. From there the
+    /// studio's own `DismissAction` no longer pops: it degrades to dismissing the nearest
+    /// presentation, which is the whole customization sheet, dropping the user on Home instead of
+    /// back in the closet holding the thing they just saved. (From the editor, where the studio IS
+    /// the top screen, the same action pops correctly — which is why only the save path looked
+    /// broken.) So: pop our own confirmation step, then ask the host to pop us. `dismiss` remains
+    /// the fallback for a studio nobody owns the push for (previews, tests).
     private func leaveStudio() {
         draftIsDirty?.wrappedValue = false
-        dismiss()
+        showingConfirmation = false
+        if let onExit {
+            onExit()
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Sections

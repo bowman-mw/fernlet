@@ -733,24 +733,31 @@ struct CompanionCustomItemLayer: View {
     @State private var image: CGImage?
 
     var body: some View {
-        Group {
-            if let image {
-                let placement = Self.placement(for: item.slot, size: size, texture: item.texture)
-                // `.medium` rather than `.none`: nearest-neighbour was what made worn items read as hard
-                // blocks — a body item is ~48 cells across ~79pt, so every cell was a visible square.
-                // Safe on alpha because the renderer writes premultipliedLast with transparent cells left
-                // at (0,0,0,0), the correct premultiplied encoding, so filtering cannot bleed black halos
-                // in from outside the art.
-                Image(decorative: image, scale: 1)
-                    .interpolation(.medium)
-                    .resizable()
-                    .frame(width: placement.width, height: placement.height)
-                    .offset(x: placement.x, y: placement.y)
+        let placement = Self.placement(for: item.slot, size: size, texture: item.texture)
+        // The sized `Color.clear` is load-bearing, not padding: `image` starts nil, and a `Group`
+        // whose only child is `if let image` is EMPTY on that first pass. `Group` distributes its
+        // modifiers to its children, so with no children the `.onChange` had nothing to attach to
+        // and never ran — `image` stayed nil forever and equipped items were never drawn on the
+        // companion anywhere in the app. Hanging the modifier on a view that always exists is what
+        // makes the first render happen at all.
+        Color.clear
+            .frame(width: placement.width, height: placement.height)
+            .overlay {
+                if let image {
+                    // `.medium` rather than `.none`: nearest-neighbour was what made worn items read as
+                    // hard blocks — a body item is ~48 cells across ~79pt, so every cell was a visible
+                    // square. Safe on alpha because the renderer writes premultipliedLast with
+                    // transparent cells left at (0,0,0,0), the correct premultiplied encoding, so
+                    // filtering cannot bleed black halos in from outside the art.
+                    Image(decorative: image, scale: 1)
+                        .interpolation(.medium)
+                        .resizable()
+                }
             }
-        }
-        .onChange(of: item.texture, initial: true) { _, texture in
-            image = ItemTextureRenderer.image(for: texture)
-        }
+            .offset(x: placement.x, y: placement.y)
+            .onChange(of: item.texture, initial: true) { _, texture in
+                image = ItemTextureRenderer.image(for: texture)
+            }
     }
 
     /// Slot placement on the `size`-square companion frame. `width` is a fraction of `size`; height
