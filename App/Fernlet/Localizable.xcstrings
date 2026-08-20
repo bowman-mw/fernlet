@@ -1,0 +1,3782 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "" : {
+
+    },
+    " " : {
+
+    },
+    " of %lld" : {
+
+    },
+    "%.1f hours" : {
+
+    },
+    "%@ %@ · P%lldg C%lldg F%lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ · P%3$lldg C%4$lldg F%5$lldg"
+          }
+        }
+      }
+    },
+    "%@ %lld of %lld grams" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$lld of %3$lld grams"
+          }
+        }
+      }
+    },
+    "%@ - %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ - %2$@"
+          }
+        }
+      }
+    },
+    "%@ - %lld oz total" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ - %2$lld oz total"
+          }
+        }
+      }
+    },
+    "%@ asked to remove %@ from this session. A different participant must second the decision." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asked to remove %2$@ from this session. A different participant must second the decision."
+          }
+        }
+      }
+    },
+    "%@ asked to remove %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asked to remove %2$@."
+          }
+        }
+      }
+    },
+    "%@ is in your foods now — scan it again and it'll log in a tap." : {
+
+    },
+    "%@ isn't reachable for a heart right now." : {
+
+    },
+    "%@ on this device, behind your app lock." : {
+
+    },
+    "%@ sent you some warmth — a friend is thinking of you." : {
+
+    },
+    "%@ total" : {
+
+    },
+    "%@ wants to join %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ wants to join %2$@"
+          }
+        }
+      }
+    },
+    "%@ workout" : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ %@ reference" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ %3$@ reference"
+          }
+        }
+      }
+    },
+    "%@ · %lld of %lld bottles" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld of %3$lld bottles"
+          }
+        }
+      }
+    },
+    "%@ — %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — %2$@"
+          }
+        }
+      }
+    },
+    "%@ — pick up where you left off." : {
+
+    },
+    "%@ — step %lld of %lld. Pick up where you left off." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — step %2$lld of %3$lld. Pick up where you left off."
+          }
+        }
+      }
+    },
+    "%@ — you're resting between sets." : {
+
+    },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %lld grams protein, %lld grams carbs, %lld grams fat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld grams protein, %3$lld grams carbs, %4$lld grams fat"
+          }
+        }
+      }
+    },
+    "%@. Back to this month" : {
+
+    },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@: %lld grams" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$lld grams"
+          }
+        }
+      }
+    },
+    "%@h" : {
+
+    },
+    "%@’s shop" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%lld / %lld cal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld cal"
+          }
+        }
+      }
+    },
+    "%lld cal" : {
+
+    },
+    "%lld coins" : {
+
+    },
+    "%lld day%@ a week" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld day%2$@ a week"
+          }
+        }
+      }
+    },
+    "%lld day%@ of training will be included." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld day%2$@ of training will be included."
+          }
+        }
+      }
+    },
+    "%lld envelopes" : {
+
+    },
+    "%lld events logged in Apple Health" : {
+
+    },
+    "%lld gifted" : {
+
+    },
+    "%lld hearts are tucked away for %@ — delivered when they next open Fernlet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld hearts are tucked away for %2$@ — delivered when they next open Fernlet."
+          }
+        }
+      }
+    },
+    "%lld ingredient%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld ingredient%2$@"
+          }
+        }
+      }
+    },
+    "%lld items%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld items%2$@"
+          }
+        }
+      }
+    },
+    "%lld meal logs, %lld journal entries, %lld workouts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld meal logs, %2$lld journal entries, %3$lld workouts"
+          }
+        }
+      }
+    },
+    "%lld milestone gifts" : {
+
+    },
+    "%lld milestones reached" : {
+
+    },
+    "%lld min" : {
+
+    },
+    "%lld min timer" : {
+
+    },
+    "%lld more waiting" : {
+
+    },
+    "%lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "%lld of 10" : {
+
+    },
+    "%lld oz each · target %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld oz each · target %2$lld"
+          }
+        }
+      }
+    },
+    "%lld oz total" : {
+
+    },
+    "%lld pending" : {
+
+    },
+    "%lld people connected" : {
+
+    },
+    "%lld person(s) connected" : {
+
+    },
+    "%lld pieces of equipment" : {
+
+    },
+    "%lld selected" : {
+
+    },
+    "%lld serving%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld serving%2$@"
+          }
+        }
+      }
+    },
+    "%lld servings" : {
+
+    },
+    "%lld shot(s) remaining" : {
+
+    },
+    "%lld shots left" : {
+
+    },
+    "%lld tracked" : {
+
+    },
+    "%lld → %lld cal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld → %2$lld cal"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "%lld%% wound" : {
+
+    },
+    "%lld%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%2$@"
+          }
+        }
+      }
+    },
+    "%lld. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld. %2$@"
+          }
+        }
+      }
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/1000" : {
+
+    },
+    "%lld/240" : {
+
+    },
+    "%lld/800" : {
+
+    },
+    "%lldg" : {
+
+    },
+    "+%lld" : {
+
+    },
+    "+1" : {
+
+    },
+    "- %@" : {
+
+    },
+    "--" : {
+
+    },
+    "1 event logged in Apple Health" : {
+
+    },
+    "1 milestone gift" : {
+
+    },
+    "1 milestone reached" : {
+
+    },
+    "1 person connected" : {
+
+    },
+    "1 shot left" : {
+
+    },
+    "2" : {
+
+    },
+    "250" : {
+
+    },
+    "3" : {
+
+    },
+    "3.0" : {
+
+    },
+    "30" : {
+
+    },
+    "30 lb" : {
+
+    },
+    "45" : {
+
+    },
+    "5.5 mph" : {
+
+    },
+    "7" : {
+
+    },
+    "7.5" : {
+
+    },
+    "8" : {
+
+    },
+    "8-12" : {
+
+    },
+    "A couple of readings looked close. Pick the one that fits." : {
+
+    },
+    "A gentle daily check-in reminder, only if you want one." : {
+
+    },
+    "A gentle offer" : {
+
+    },
+    "A gentler day" : {
+
+    },
+    "A heart is tucked away for %@ — delivered when they next open Fernlet." : {
+
+    },
+    "A new place you visit" : {
+
+    },
+    "A quick mood check-in." : {
+
+    },
+    "A quiet minute, whenever" : {
+
+    },
+    "A recovery device is enrolled." : {
+
+    },
+    "A second code you can give away" : {
+
+    },
+    "A word about this one — optional" : {
+
+    },
+    "Activities" : {
+
+    },
+    "Activity" : {
+
+    },
+    "Activity name" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add %@ to today" : {
+
+    },
+    "Add a bottle" : {
+
+    },
+    "Add a bottle of water" : {
+
+    },
+    "Add a food" : {
+
+    },
+    "Add a meal" : {
+
+    },
+    "Add a photo" : {
+
+    },
+    "Add a photo instead" : {
+
+    },
+    "Add a photo of this recipe" : {
+
+    },
+    "Add by hand" : {
+
+    },
+    "Add ingredient" : {
+
+    },
+    "Add location" : {
+
+    },
+    "Add progress photo" : {
+
+    },
+    "Add step" : {
+
+    },
+    "Add task" : {
+
+    },
+    "Add timer" : {
+
+    },
+    "Add to my plan" : {
+
+    },
+    "Add who was involved and any details you want to remember. This note stays encrypted on this device." : {
+
+    },
+    "Adds one bottle of water to today's Fernlet diary." : {
+
+    },
+    "Adds two things to \"Share with a trainer\" on the Move tab: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in." : {
+
+    },
+    "Adjust meal" : {
+
+    },
+    "Adjust targets" : {
+
+    },
+    "Adjust with AI" : {
+
+    },
+    "Adjusting…" : {
+
+    },
+    "Advanced" : {
+
+    },
+    "Age" : {
+
+    },
+    "Age: %lld" : {
+
+    },
+    "All done" : {
+
+    },
+    "All done." : {
+
+    },
+    "All of it, added up" : {
+
+    },
+    "All-out" : {
+
+    },
+    "Allow" : {
+
+    },
+    "Allow nearby hearts" : {
+
+    },
+    "Allow nearby recipe shares" : {
+
+    },
+    "Already did this — log it" : {
+
+    },
+    "Already in your recipe book" : {
+
+    },
+    "Also found %lld hygiene logs, %lld hydration logs, and %lld sleep records." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Also found %1$lld hygiene logs, %2$lld hydration logs, and %3$lld sleep records."
+          }
+        }
+      }
+    },
+    "Also include in trainer summaries" : {
+
+    },
+    "Amounts written into the steps reflect the original %lld-serving recipe, not the %lld-serving scale above." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amounts written into the steps reflect the original %1$lld-serving recipe, not the %2$lld-serving scale above."
+          }
+        }
+      }
+    },
+    "Analyzing" : {
+
+    },
+    "Analyzing your photo" : {
+
+    },
+    "Anyone you're with right now can ask to join. It stays on your devices — nothing is uploaded." : {
+
+    },
+    "Anything else to keep in mind (not medical advice)" : {
+
+    },
+    "App lock" : {
+
+    },
+    "App lock is not set up. Set a passcode to protect your journal, period, and intimacy history." : {
+
+    },
+    "App lock reset" : {
+
+    },
+    "Appearance" : {
+
+    },
+    "Apple Health sync is off" : {
+
+    },
+    "Apple Health sync is on" : {
+
+    },
+    "Approve workout" : {
+
+    },
+    "Ask for a corrected plan and paste it again." : {
+
+    },
+    "Ask the other person to open Fernlet on Home, Food, or Move while unlocked." : {
+
+    },
+    "Ask to join" : {
+
+    },
+    "Ask to remove" : {
+
+    },
+    "Ask your friend to show their code again — codes expire after a few minutes — and make sure you're scanning the person shown in this row." : {
+
+    },
+    "Asking phone" : {
+
+    },
+    "Assign recipes to your week, then build one shopping list." : {
+
+    },
+    "Auto" : {
+
+    },
+    "Available after Apple Fitness integration lands (M2)" : {
+
+    },
+    "Average cycle length: %lld days" : {
+
+    },
+    "Back" : {
+
+    },
+    "Back to locations" : {
+
+    },
+    "Back up your photos?" : {
+
+    },
+    "Begin" : {
+
+    },
+    "Begin again" : {
+
+    },
+    "Biological sex" : {
+
+    },
+    "Block" : {
+
+    },
+    "Block %@?" : {
+
+    },
+    "Block peer?" : {
+
+    },
+    "Block this person?" : {
+
+    },
+    "Blocked" : {
+
+    },
+    "Blocking %@ will hide their content from you and yours from them, and drop them from this session." : {
+
+    },
+    "Blocking %@ will hide their content from you and yours from them." : {
+
+    },
+    "Body signals" : {
+
+    },
+    "Body signals needs Apple Health. Turn on Health integration in Privacy & Data to feed it." : {
+
+    },
+    "Body signals — how Fernlet reads this" : {
+
+    },
+    "Bottle: %lld oz" : {
+
+    },
+    "Bottles: %lld" : {
+
+    },
+    "Bring your recovery device" : {
+
+    },
+    "Building your workout…" : {
+
+    },
+    "Built from your %@ split, your equipment, and anything you note here." : {
+
+    },
+    "Built from your split, equipment, and limits" : {
+
+    },
+    "C %lld" : {
+
+    },
+    "C %lldg" : {
+
+    },
+    "Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split." : {
+
+    },
+    "Camera" : {
+
+    },
+    "Camera access is off" : {
+
+    },
+    "Can't look for nearby friends" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Capture" : {
+
+    },
+    "Capture food" : {
+
+    },
+    "Carbs" : {
+
+    },
+    "Care score %lld percent" : {
+
+    },
+    "Care score %lld percent, with a little warmth from a friend" : {
+
+    },
+    "Category" : {
+
+    },
+    "Cervical mucus" : {
+
+    },
+    "Change" : {
+
+    },
+    "Change duress code" : {
+
+    },
+    "Change passcode" : {
+
+    },
+    "Change what's included in Settings → Move." : {
+
+    },
+    "Changing the response asks for your duress code again — pick a code you have not used as your passcode." : {
+
+    },
+    "Check my age with Apple" : {
+
+    },
+    "Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation." : {
+
+    },
+    "Check this meal" : {
+
+    },
+    "Checking iCloud" : {
+
+    },
+    "Checking iCloud for Fernlet data" : {
+
+    },
+    "Choose a different swap" : {
+
+    },
+    "Choose a lock type for your new passcode." : {
+
+    },
+    "Choose a new passcode" : {
+
+    },
+    "Choose from library" : {
+
+    },
+    "Choose how to start." : {
+
+    },
+    "Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable." : {
+
+    },
+    "Choose the six home shortcuts and put them in the order you want." : {
+
+    },
+    "Choose what appears on the main page and put the widgets in the order you want." : {
+
+    },
+    "Choose what appears on the main page and put the widgets in the order you want. Your companion always stays on Home — you can move it, but not remove it." : {
+
+    },
+    "Choose your duress code" : {
+
+    },
+    "Clear canvas" : {
+
+    },
+    "Close" : {
+
+    },
+    "Close editor" : {
+
+    },
+    "Close photo viewer" : {
+
+    },
+    "Closed" : {
+
+    },
+    "Color" : {
+
+    },
+    "Color %lld" : {
+
+    },
+    "Conditioning / mobility — walked as a single step, no rest timer." : {
+
+    },
+    "Confirm" : {
+
+    },
+    "Confirm duress password" : {
+
+    },
+    "Confirm new password" : {
+
+    },
+    "Confirm product" : {
+
+    },
+    "Confirm your age" : {
+
+    },
+    "Connect" : {
+
+    },
+    "Connected" : {
+
+    },
+    "Connection History" : {
+
+    },
+    "Connection Inspector" : {
+
+    },
+    "Connection Inspector captures proximity pairing diagnostics for local troubleshooting." : {
+
+    },
+    "Connection details" : {
+
+    },
+    "Contact" : {
+
+    },
+    "Continue" : {
+
+    },
+    "Cook" : {
+
+    },
+    "Cook for %lld" : {
+
+    },
+    "Cooking in progress" : {
+
+    },
+    "Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying." : {
+
+    },
+    "Copied — copy again" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy URL" : {
+
+    },
+    "Copy previous week" : {
+
+    },
+    "Copy summary + prompt" : {
+
+    },
+    "Copy your training summary?" : {
+
+    },
+    "Core memory" : {
+
+    },
+    "Costco chicken melts or https://example.com/product" : {
+
+    },
+    "Couldn't add this plan" : {
+
+    },
+    "Couldn't check iCloud just now, so what's up there is unknown." : {
+
+    },
+    "Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it." : {
+
+    },
+    "Couldn't create a code just now. Close this and try again." : {
+
+    },
+    "Couldn't create a verification code just now." : {
+
+    },
+    "Couldn't delete everything" : {
+
+    },
+    "Couldn't delete this day" : {
+
+    },
+    "Couldn't delete your encrypted %@ backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry." : {
+
+    },
+    "Couldn't delete your encrypted photo backup from iCloud just now, so it's still switched on — that way it can still be removed. Turn it off again to retry." : {
+
+    },
+    "Couldn't export" : {
+
+    },
+    "Couldn't find" : {
+
+    },
+    "Couldn't log that just now — please try again in a moment." : {
+
+    },
+    "Couldn't open this photo" : {
+
+    },
+    "Couldn't prepare the summary" : {
+
+    },
+    "Couldn't read that" : {
+
+    },
+    "Couldn't save this photo" : {
+
+    },
+    "Couldn't save those changes" : {
+
+    },
+    "Create recipe" : {
+
+    },
+    "Create shopping list" : {
+
+    },
+    "Current" : {
+
+    },
+    "Current password" : {
+
+    },
+    "Custom color" : {
+
+    },
+    "Customize" : {
+
+    },
+    "Cycle outlook" : {
+
+    },
+    "Cycle surfaces are hidden and Fernlet isn't reading your cycle data. Your entries are kept — turn this back on any time to see them again. Entries in Apple Health stay there either way." : {
+
+    },
+    "Cycles tracked: %lld" : {
+
+    },
+    "D11: LPLinkMetadata" : {
+
+    },
+    "DELETE" : {
+
+    },
+    "DETECTED VALUES" : {
+
+    },
+    "Daily check-in" : {
+
+    },
+    "Daily score" : {
+
+    },
+    "Daily target: %lld bottles" : {
+
+    },
+    "Danger zone" : {
+
+    },
+    "Dark mode" : {
+
+    },
+    "Date" : {
+
+    },
+    "Date and time" : {
+
+    },
+    "Date taken" : {
+
+    },
+    "Day %lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "Day 1 lands here; the rest follow day by day." : {
+
+    },
+    "Days you were unwell" : {
+
+    },
+    "Debug" : {
+
+    },
+    "Decline" : {
+
+    },
+    "Decline all" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete %@" : {
+
+    },
+    "Delete %lld" : {
+
+    },
+    "Delete everything" : {
+
+    },
+    "Delete iCloud data" : {
+
+    },
+    "Delete journal entry" : {
+
+    },
+    "Delete meal" : {
+
+    },
+    "Delete memory" : {
+
+    },
+    "Delete recipe" : {
+
+    },
+    "Delete this memory?" : {
+
+    },
+    "Delete this photo" : {
+
+    },
+    "Delete this picture?" : {
+
+    },
+    "Delete this recipe photo" : {
+
+    },
+    "Deleting everything…" : {
+
+    },
+    "Deliver hearts when apart" : {
+
+    },
+    "Deliver hearts when you're apart?" : {
+
+    },
+    "Design & recolor in Wardrobe" : {
+
+    },
+    "Design a new item" : {
+
+    },
+    "Design one in the Wardrobe to fold it in here." : {
+
+    },
+    "Design your first item" : {
+
+    },
+    "Designed by %@" : {
+
+    },
+    "Develop" : {
+
+    },
+    "Develop & finish" : {
+
+    },
+    "Discard" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Dismiss nutrient nudge" : {
+
+    },
+    "Dismiss the prompt" : {
+
+    },
+    "Dismiss today's intent" : {
+
+    },
+    "Done" : {
+
+    },
+    "Done for now" : {
+
+    },
+    "Done set" : {
+
+    },
+    "Drag to paint · pinch to zoom" : {
+
+    },
+    "Duress code" : {
+
+    },
+    "Duress code set" : {
+
+    },
+    "Duress password" : {
+
+    },
+    "Easy" : {
+
+    },
+    "Eating pattern" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Edit %@" : {
+
+    },
+    "Edit day" : {
+
+    },
+    "Edit item" : {
+
+    },
+    "Edit journal" : {
+
+    },
+    "Edit movement goals" : {
+
+    },
+    "Edit or remove the notes Fernlet keeps from journals, plus the local trends it is inferring." : {
+
+    },
+    "Edit period" : {
+
+    },
+    "Edit plan" : {
+
+    },
+    "Edit recipe" : {
+
+    },
+    "Edit workout" : {
+
+    },
+    "Effort" : {
+
+    },
+    "Email the developer at %@" : {
+
+    },
+    "Encrypt & back up" : {
+
+    },
+    "End" : {
+
+    },
+    "End Session" : {
+
+    },
+    "End activity" : {
+
+    },
+    "End activity?" : {
+
+    },
+    "End early" : {
+
+    },
+    "End session" : {
+
+    },
+    "End session?" : {
+
+    },
+    "End this session?" : {
+
+    },
+    "End without logging" : {
+
+    },
+    "Ends the current rest early and moves to your next set." : {
+
+    },
+    "Enter details by hand" : {
+
+    },
+    "Enter it again" : {
+
+    },
+    "Enter your current passcode again — Fernlet needs it to re-key your sealed notes." : {
+
+    },
+    "Enter your current passcode to %@ %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter your current passcode to %1$@ %2$@."
+          }
+        }
+      }
+    },
+    "Enter your current passcode to continue." : {
+
+    },
+    "Enter your passcode" : {
+
+    },
+    "Equip" : {
+
+    },
+    "Equipment & limits · %@" : {
+
+    },
+    "Equipped" : {
+
+    },
+    "Erase everything Fernlet stores on this phone and in your iCloud." : {
+
+    },
+    "Eraser" : {
+
+    },
+    "Estimated lifestyle activity" : {
+
+    },
+    "Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak." : {
+
+    },
+    "Every bit of care, pressed into a keepsake. These only ever grow — nothing resets or expires." : {
+
+    },
+    "Everything deleted" : {
+
+    },
+    "Everything is estimated and stored on this device only." : {
+
+    },
+    "Everything you'll need, laid out before you start." : {
+
+    },
+    "Exclude from backups" : {
+
+    },
+    "Exercise %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exercise %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Expired" : {
+
+    },
+    "Expires %@" : {
+
+    },
+    "Explains how body signals are estimated" : {
+
+    },
+    "Export connection history" : {
+
+    },
+    "Export my data" : {
+
+    },
+    "F %lld" : {
+
+    },
+    "F %lldg" : {
+
+    },
+    "Fernlet" : {
+
+    },
+    "Fernlet asks for Health access only when a feature needs it, and you can say no to any of them." : {
+
+    },
+    "Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on." : {
+
+    },
+    "Fernlet companion" : {
+
+    },
+    "Fernlet companion, %@" : {
+
+    },
+    "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %1$lld or older — %2$@ is meant for people that age and up."
+          }
+        }
+      }
+    },
+    "Fernlet couldn't open" : {
+
+    },
+    "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts." : {
+
+    },
+    "Fernlet couldn't seal this photo to your private timeline. Please try again." : {
+
+    },
+    "Fernlet nearby" : {
+
+    },
+    "Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen." : {
+
+    },
+    "Fernlet needs the camera to take photos with friends. You can turn it on any time." : {
+
+    },
+    "Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode will not affect your Fernlet app lock or erase your protected data." : {
+
+    },
+    "Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data." : {
+
+    },
+    "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week." : {
+
+    },
+    "Fernlet removed everything it stored on this device." : {
+
+    },
+    "Fiber %lldg" : {
+
+    },
+    "File: %@" : {
+
+    },
+    "Film remaining: %lld" : {
+
+    },
+    "Film wind" : {
+
+    },
+    "Finding product page..." : {
+
+    },
+    "Fingerprint" : {
+
+    },
+    "Finish" : {
+
+    },
+    "Finish workout" : {
+
+    },
+    "First aid" : {
+
+    },
+    "First aid has slow breathing, grounding, and a worry box — only if it sounds nice." : {
+
+    },
+    "For anything a report or block can't resolve, reach the developer, Michael Bowman Olay." : {
+
+    },
+    "Force" : {
+
+    },
+    "Forget %lld memor%@ matching \"%@\"?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget %1$lld memor%2$@ matching \"%3$@\"?"
+          }
+        }
+      }
+    },
+    "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found %1$lld meal logs, %2$lld journal entries, %3$lld workouts in this iCloud account."
+          }
+        }
+      }
+    },
+    "Friend" : {
+
+    },
+    "Friend shops" : {
+
+    },
+    "Friend shops are open" : {
+
+    },
+    "Friend shops open, %lld minutes left" : {
+
+    },
+    "Friends & Blocks" : {
+
+    },
+    "Friends and blocks" : {
+
+    },
+    "Friends nearby can buy it for their companion." : {
+
+    },
+    "Friends nearby see this name." : {
+
+    },
+    "Gender" : {
+
+    },
+    "General" : {
+
+    },
+    "Give it a name and it'll be here next time you scan." : {
+
+    },
+    "Go back to it" : {
+
+    },
+    "Goal & nutrition" : {
+
+    },
+    "Goal · %@" : {
+
+    },
+    "Goal, %@" : {
+
+    },
+    "Goals are crafted entirely on your device — your health details never leave your phone." : {
+
+    },
+    "Good vibes" : {
+
+    },
+    "Good vibes from %@. Tap to tuck away." : {
+
+    },
+    "Grounding" : {
+
+    },
+    "Guidance style" : {
+
+    },
+    "Hang on — we'll finish your adjustment first, then you can rework it." : {
+
+    },
+    "Haptics" : {
+
+    },
+    "Have %@ scan this code. It proves this phone really holds your Fernlet identity — the code expires after a few minutes." : {
+
+    },
+    "Haven't had these in a while" : {
+
+    },
+    "Hazelnut oat bar" : {
+
+    },
+    "Heads up: this iCloud account already has Fernlet data. Choosing “Just on this device” won’t bring it in, and anything you log here won’t reach your other devices." : {
+
+    },
+    "Health" : {
+
+    },
+    "Health access is optional and requested by feature. Apple does not reveal read-denial status, so empty Health results are handled as normal." : {
+
+    },
+    "Health integration" : {
+
+    },
+    "Health samples" : {
+
+    },
+    "Hearts are sent in person over Nearby Friends — turn it on to see when this friend is close by." : {
+
+    },
+    "Hearts are sent in person over Nearby Friends. Turn it on so you can see when friends are close by and send them a heart. Fernlet broadcasts only rotating tags your friends can recognize — never your name." : {
+
+    },
+    "Hearts need Nearby Friends turned on to work — turn it on below." : {
+
+    },
+    "Hearts travel in person for now — tap Send to turn on delivery while apart." : {
+
+    },
+    "Height: %@" : {
+
+    },
+    "Hidden" : {
+
+    },
+    "Hide fertile window" : {
+
+    },
+    "Hide predictions" : {
+
+    },
+    "Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again." : {
+
+    },
+    "Hours (e.g. 7.5)" : {
+
+    },
+    "Hours not logged" : {
+
+    },
+    "How friends will see you" : {
+
+    },
+    "How many servings?" : {
+
+    },
+    "How was today?" : {
+
+    },
+    "How's today feeling?" : {
+
+    },
+    "Hydration" : {
+
+    },
+    "I understand — continue" : {
+
+    },
+    "I'm %lld or older" : {
+
+    },
+    "If someone makes you unlock Fernlet, type your duress code instead of your passcode. Fernlet does what you choose below and looks completely normal doing it — no warning, no message, nothing on screen that says anything happened." : {
+
+    },
+    "If things feel heavy" : {
+
+    },
+    "Import product" : {
+
+    },
+    "Import recipe" : {
+
+    },
+    "Imported products" : {
+
+    },
+    "Imported · free-text ingredients" : {
+
+    },
+    "Importing URL" : {
+
+    },
+    "In your shop · %lld coins" : {
+
+    },
+    "Inactive" : {
+
+    },
+    "Include local data in iOS backup" : {
+
+    },
+    "Include notes" : {
+
+    },
+    "Include picture" : {
+
+    },
+    "Inserts the prompt so you can write under it" : {
+
+    },
+    "Intensity %lld" : {
+
+    },
+    "Intimacy" : {
+
+    },
+    "Intimacy surfaces are hidden and Fernlet isn't reading them. Your notes are kept — turn this back on any time. Entries in Apple Health stay there either way." : {
+
+    },
+    "Intimacy tracking" : {
+
+    },
+    "It came from Health, so manage it in the Health app." : {
+
+    },
+    "It works even while Fernlet is counting down from too many wrong attempts, and it never counts as a wrong attempt itself." : {
+
+    },
+    "It's alright. Just start typing…" : {
+
+    },
+    "Journal" : {
+
+    },
+    "Keep %@" : {
+
+    },
+    "Keep Fernlet data out of device backups?" : {
+
+    },
+    "Keep both" : {
+
+    },
+    "Keep going" : {
+
+    },
+    "Keep in backups" : {
+
+    },
+    "Keep it" : {
+
+    },
+    "Keep this in your recipe book to log again later." : {
+
+    },
+    "Keepsake shelf" : {
+
+    },
+    "Last seen %@" : {
+
+    },
+    "Last sleep logged for today." : {
+
+    },
+    "Layout & shortcuts" : {
+
+    },
+    "Leave" : {
+
+    },
+    "Let it go" : {
+
+    },
+    "Letting it go…" : {
+
+    },
+    "Library" : {
+
+    },
+    "Likely next period" : {
+
+    },
+    "List in my shop" : {
+
+    },
+    "Local trends Fernlet is inferring from journals, meals, sleep, and workouts." : {
+
+    },
+    "Location" : {
+
+    },
+    "Location name" : {
+
+    },
+    "Lock photos to this device" : {
+
+    },
+    "Log" : {
+
+    },
+    "Log & save" : {
+
+    },
+    "Log a bottle of water" : {
+
+    },
+    "Log a meal" : {
+
+    },
+    "Log as already done" : {
+
+    },
+    "Log at least 3 cycles to see predictions." : {
+
+    },
+    "Log intimacy" : {
+
+    },
+    "Log meal" : {
+
+    },
+    "Log period" : {
+
+    },
+    "Log recipe as meal" : {
+
+    },
+    "Log this day" : {
+
+    },
+    "Log this recipe" : {
+
+    },
+    "Log water" : {
+
+    },
+    "Log what you typed instead" : {
+
+    },
+    "Log workout" : {
+
+    },
+    "Logged a bottle of water." : {
+
+    },
+    "Looking for a barcode..." : {
+
+    },
+    "Looking for nearby friends…" : {
+
+    },
+    "Looking for nearby people..." : {
+
+    },
+    "Looks off?" : {
+
+    },
+    "MACROS" : {
+
+    },
+    "MILESTONES" : {
+
+    },
+    "Macros, per serving" : {
+
+    },
+    "Made by %@, for your companion." : {
+
+    },
+    "Make the first little thing for your companion to wear. New creations appear on your companion right away." : {
+
+    },
+    "Makes %lld serving%@: P %lldg · C %lldg · F %lldg%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Makes %1$lld serving%2$@: P %3$lldg · C %4$lldg · F %5$lldg%6$@"
+          }
+        }
+      }
+    },
+    "Manual" : {
+
+    },
+    "Manual off mode" : {
+
+    },
+    "Manual plan exchange" : {
+
+    },
+    "Mark %@ complete" : {
+
+    },
+    "Marks the current set done and starts your rest timer." : {
+
+    },
+    "Meal" : {
+
+    },
+    "Meal photo" : {
+
+    },
+    "Meal planner" : {
+
+    },
+    "Message" : {
+
+    },
+    "Messages" : {
+
+    },
+    "Messages stay in this session only — they disappear for everyone when the session ends." : {
+
+    },
+    "Milestone gifts have added %lld coins to your pouch." : {
+
+    },
+    "Milestones" : {
+
+    },
+    "Milestones. %@" : {
+
+    },
+    "Mirror" : {
+
+    },
+    "Mise en place" : {
+
+    },
+    "Moisturizer, meds, stretch..." : {
+
+    },
+    "Mood: %@" : {
+
+    },
+    "More options for %@" : {
+
+    },
+    "Move" : {
+
+    },
+    "Move closer so the label fills the frame." : {
+
+    },
+    "Move step %lld down" : {
+
+    },
+    "Move step %lld up" : {
+
+    },
+    "Moves to the next step of the recipe you're cooking." : {
+
+    },
+    "Name stays put — it's how your guided plan keeps track of this one." : {
+
+    },
+    "Name your item" : {
+
+    },
+    "Narrative" : {
+
+    },
+    "Nearby Friends is off" : {
+
+    },
+    "Nearby friends presence" : {
+
+    },
+    "Nearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped." : {
+
+    },
+    "Nearby now" : {
+
+    },
+    "New item" : {
+
+    },
+    "New password" : {
+
+    },
+    "New recipe" : {
+
+    },
+    "New to Fernlet" : {
+
+    },
+    "Next" : {
+
+    },
+    "Next cooking step" : {
+
+    },
+    "Next up" : {
+
+    },
+    "Next week" : {
+
+    },
+    "Next, iPhone will ask whether you want to share your age range with Fernlet. It's used only to unlock messaging friends nearby (13+) and intimacy tracking (16+). Fernlet never sees your birthday, and the answer stays on this device." : {
+
+    },
+    "Nicely cooked. Want to log %@ as a meal?" : {
+
+    },
+    "Nicely done" : {
+
+    },
+    "No Fernlet iCloud records were found." : {
+
+    },
+    "No active session" : {
+
+    },
+    "No activities yet" : {
+
+    },
+    "No biometric authentication available on this device." : {
+
+    },
+    "No connection sessions recorded." : {
+
+    },
+    "No duress code" : {
+
+    },
+    "No ingredients listed." : {
+
+    },
+    "No macros yet" : {
+
+    },
+    "No matching settings" : {
+
+    },
+    "No meals planned" : {
+
+    },
+    "No milestone gifts yet — the first lands with your very first log. No rush." : {
+
+    },
+    "No nearby Fernlets found" : {
+
+    },
+    "No protection" : {
+
+    },
+    "No score — nothing was logged" : {
+
+    },
+    "No shops right now" : {
+
+    },
+    "No snapshots" : {
+
+    },
+    "No worries — you can add a photo of the barcode, or just enter it by hand." : {
+
+    },
+    "None" : {
+
+    },
+    "None logged" : {
+
+    },
+    "None of this plan is logged yet, so you can still rebuild it — adjust your intensity, notes, or equipment." : {
+
+    },
+    "Not Now" : {
+
+    },
+    "Not enough coins yet" : {
+
+    },
+    "Not logged" : {
+
+    },
+    "Not nearby" : {
+
+    },
+    "Not now" : {
+
+    },
+    "Not ready yet" : {
+
+    },
+    "Not specified" : {
+
+    },
+    "Not today" : {
+
+    },
+    "Not together right now — a heart sent now is delivered while you're apart." : {
+
+    },
+    "Note (optional)" : {
+
+    },
+    "Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle." : {
+
+    },
+    "Nothing for sale right now." : {
+
+    },
+    "Nothing is added until you tap this. You can edit or delete any day afterwards." : {
+
+    },
+    "Nothing on yet — pick a slot" : {
+
+    },
+    "Nothing pressed onto the shelf just yet. Every bit of care will find a place here, in its own time." : {
+
+    },
+    "Nothing was changed. Please try pasting the plan again." : {
+
+    },
+    "Nothing's logged yet, so you can rebuild it — adjust your intensity, notes, or equipment." : {
+
+    },
+    "Notice body tension" : {
+
+    },
+    "Notifications" : {
+
+    },
+    "Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work." : {
+
+    },
+    "Nutrition targets" : {
+
+    },
+    "OK" : {
+
+    },
+    "Off in Settings" : {
+
+    },
+    "On" : {
+
+    },
+    "On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared." : {
+
+    },
+    "On your other device" : {
+
+    },
+    "On-device AI helper" : {
+
+    },
+    "Once more" : {
+
+    },
+    "Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app." : {
+
+    },
+    "One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time." : {
+
+    },
+    "One serving: %@" : {
+
+    },
+    "One small care note is still a real note." : {
+
+    },
+    "One tap notes how today feels. No writing needed." : {
+
+    },
+    "Only say yes if that phone is in front of you and it is the one you set this up with. Saying yes hands back the key to everything it had sealed." : {
+
+    },
+    "Open" : {
+
+    },
+    "Open Fernlet" : {
+
+    },
+    "Open Fernlet on the other device and keep it nearby." : {
+
+    },
+    "Open Fernlet to pick it back up" : {
+
+    },
+    "Open Fernlet to say hi" : {
+
+    },
+    "Open Health Privacy Settings" : {
+
+    },
+    "Open Moments" : {
+
+    },
+    "Open Settings" : {
+
+    },
+    "Open page" : {
+
+    },
+    "Open saved recipe" : {
+
+    },
+    "Open the Creation Studio" : {
+
+    },
+    "Open the closet" : {
+
+    },
+    "Opens %@ straight away" : {
+
+    },
+    "Opens Fernlet to a new journal entry." : {
+
+    },
+    "Opens Fernlet to log a meal." : {
+
+    },
+    "Opens calm tools: breathing, grounding, and the worry box" : {
+
+    },
+    "Opens where you train" : {
+
+    },
+    "Opens your movement goals" : {
+
+    },
+    "Optional" : {
+
+    },
+    "Optional, e.g. Saturday ride" : {
+
+    },
+    "Options for %@" : {
+
+    },
+    "Ovulation test" : {
+
+    },
+    "Owned" : {
+
+    },
+    "P %lld" : {
+
+    },
+    "P %lldg" : {
+
+    },
+    "P %lldg   C %lldg   F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P %1$lldg   C %2$lldg   F %3$lldg"
+          }
+        }
+      }
+    },
+    "P %lldg  C %lldg  F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P %1$lldg  C %2$lldg  F %3$lldg"
+          }
+        }
+      }
+    },
+    "P %lldg · C %lldg · F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P %1$lldg · C %2$lldg · F %3$lldg"
+          }
+        }
+      }
+    },
+    "P %lldg → %lldg · C %lldg → %lldg · F %lldg → %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P %1$lldg → %2$lldg · C %3$lldg → %4$lldg · F %5$lldg → %6$lldg"
+          }
+        }
+      }
+    },
+    "PER SERVING" : {
+
+    },
+    "Partial nutrition data — some meals were logged without micronutrients." : {
+
+    },
+    "Paste URL" : {
+
+    },
+    "Paste a plan" : {
+
+    },
+    "Paste a plan…" : {
+
+    },
+    "Paste the reply" : {
+
+    },
+    "Pasted in by you — Fernlet can't check who wrote this, so read it before you accept." : {
+
+    },
+    "Pasted plan" : {
+
+    },
+    "Paused" : {
+
+    },
+    "People" : {
+
+    },
+    "Per serving: %@" : {
+
+    },
+    "Period" : {
+
+    },
+    "Period tracking" : {
+
+    },
+    "Period-aware care" : {
+
+    },
+    "Personal care" : {
+
+    },
+    "Photo couldn't be opened" : {
+
+    },
+    "Photo on your other device" : {
+
+    },
+    "Photos from your hangouts\nwill appear here" : {
+
+    },
+    "Pick a code you have not used as your passcode. Fernlet will not accept the same one for both." : {
+
+    },
+    "Pick a friendlier name" : {
+
+    },
+    "Pick recipes, then share the combined list to Notes." : {
+
+    },
+    "Plan" : {
+
+    },
+    "Plan added" : {
+
+    },
+    "Plan goals" : {
+
+    },
+    "Plan workout" : {
+
+    },
+    "Plans your workouts around this space" : {
+
+    },
+    "Please try again." : {
+
+    },
+    "Prepare summary" : {
+
+    },
+    "Preparing…" : {
+
+    },
+    "Preview" : {
+
+    },
+    "Previous week" : {
+
+    },
+    "Price" : {
+
+    },
+    "Privacy" : {
+
+    },
+    "Privacy & Data" : {
+
+    },
+    "Privacy & Data asks for a fresh Face ID or device passcode check every time you enter." : {
+
+    },
+    "Privacy & Data needs a fresh Face ID or device passcode check before it can show you anything." : {
+
+    },
+    "Privacy & Data requires a fresh biometric or device passcode check every time you enter." : {
+
+    },
+    "Privacy Policy" : {
+
+    },
+    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
+
+    },
+    "Private database sync for daily logs across your Fernlet devices." : {
+
+    },
+    "Private intimacy notes, sealed on this device. Turning this off hides the feature and stops Fernlet reading it. Your notes are kept, not deleted." : {
+
+    },
+    "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health." : {
+
+    },
+    "Product name or paste a page link" : {
+
+    },
+    "Progress photo" : {
+
+    },
+    "Progress photo from %@" : {
+
+    },
+    "Protection used" : {
+
+    },
+    "Prototype only — not production-private. Debug surfaces for local inspection during development." : {
+
+    },
+    "Proximity debug tools" : {
+
+    },
+    "Qty" : {
+
+    },
+    "Quick exercise" : {
+
+    },
+    "REPS" : {
+
+    },
+    "RPE %.1g" : {
+
+    },
+    "Re-import from source" : {
+
+    },
+    "Read plan" : {
+
+    },
+    "Reading label..." : {
+
+    },
+    "Reading nutrition label..." : {
+
+    },
+    "Reading what you caught…" : {
+
+    },
+    "Ready" : {
+
+    },
+    "Ready when you are" : {
+
+    },
+    "Ready when you are." : {
+
+    },
+    "Recipe" : {
+
+    },
+    "Recipe book" : {
+
+    },
+    "Recipes and saved products, A–Z." : {
+
+    },
+    "Recover this phone" : {
+
+    },
+    "Recovery device" : {
+
+    },
+    "Release this worry" : {
+
+    },
+    "Released." : {
+
+    },
+    "Remember it anyway" : {
+
+    },
+    "Remember product" : {
+
+    },
+    "Remember this one?" : {
+
+    },
+    "Remembered" : {
+
+    },
+    "Removal Requests" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove %@" : {
+
+    },
+    "Remove %@ from this activity?" : {
+
+    },
+    "Remove %@?" : {
+
+    },
+    "Remove duress code" : {
+
+    },
+    "Remove duress code?" : {
+
+    },
+    "Remove friend?" : {
+
+    },
+    "Remove ingredient" : {
+
+    },
+    "Remove member?" : {
+
+    },
+    "Remove participant?" : {
+
+    },
+    "Remove recovery device" : {
+
+    },
+    "Remove recovery device?" : {
+
+    },
+    "Remove step %lld" : {
+
+    },
+    "Remove this workout?" : {
+
+    },
+    "Remove timer" : {
+
+    },
+    "Removed" : {
+
+    },
+    "Rename session" : {
+
+    },
+    "Repeat cooking step" : {
+
+    },
+    "Replace %@ in %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Replace %1$@ in %2$@."
+          }
+        }
+      }
+    },
+    "Replace planned" : {
+
+    },
+    "Report" : {
+
+    },
+    "Report item…" : {
+
+    },
+    "Report this item?" : {
+
+    },
+    "Report this person?" : {
+
+    },
+    "Reporting %@ blocks them and flags their shared content on your device." : {
+
+    },
+    "Reporting hides this item and blocks the sender on your device." : {
+
+    },
+    "Request access" : {
+
+    },
+    "Rescan the nutrition label" : {
+
+    },
+    "Reset" : {
+
+    },
+    "Reset app lock" : {
+
+    },
+    "Reset app lock?" : {
+
+    },
+    "Reset home widgets" : {
+
+    },
+    "Reset timer" : {
+
+    },
+    "Reset to %lld serving%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset to %1$lld serving%2$@"
+          }
+        }
+      }
+    },
+    "Rest" : {
+
+    },
+    "Rest as long as you need — the timer's only a nudge." : {
+
+    },
+    "Rest defaults come from your %@ goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Restarts the timer on the current cooking step." : {
+
+    },
+    "Resume" : {
+
+    },
+    "Resume workout" : {
+
+    },
+    "Retry oldest" : {
+
+    },
+    "Retry restore" : {
+
+    },
+    "Retrying…" : {
+
+    },
+    "Return the key?" : {
+
+    },
+    "Review goals" : {
+
+    },
+    "Review plan" : {
+
+    },
+    "Revoke access" : {
+
+    },
+    "Rework today's plan" : {
+
+    },
+    "Room for a little more" : {
+
+    },
+    "Roster as of %@ (v%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Roster as of %1$@ (v%2$lld)"
+          }
+        }
+      }
+    },
+    "SERVING SIZE" : {
+
+    },
+    "Safety & reporting" : {
+
+    },
+    "Save as a recipe" : {
+
+    },
+    "Save as new recipe" : {
+
+    },
+    "Save custom ingredient" : {
+
+    },
+    "Save item" : {
+
+    },
+    "Save recipe" : {
+
+    },
+    "Saved macros" : {
+
+    },
+    "Saved product %@" : {
+
+    },
+    "Saved recipe %@" : {
+
+    },
+    "Saved to Apple Health" : {
+
+    },
+    "Saving creates a NEW recipe — %@ — and leaves %@ exactly as it is." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saving creates a NEW recipe — %1$@ — and leaves %2$@ exactly as it is."
+          }
+        }
+      }
+    },
+    "Say hello" : {
+
+    },
+    "Scaled from %lld serving%@ for this view only — your saved recipe is unchanged, and logging still records one serving." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scaled from %1$lld serving%2$@ for this view only — your saved recipe is unchanged, and logging still records one serving."
+          }
+        }
+      }
+    },
+    "Scaled from %lld serving%@ — amounts below adjust to match. Logging still records one serving." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scaled from %1$lld serving%2$@ — amounts below adjust to match. Logging still records one serving."
+          }
+        }
+      }
+    },
+    "Scaling isn't available for imported recipes — their ingredient amounts are free text." : {
+
+    },
+    "Scan a food" : {
+
+    },
+    "Scan barcode" : {
+
+    },
+    "Scan label" : {
+
+    },
+    "Scan the nutrition label" : {
+
+    },
+    "Scan their code" : {
+
+    },
+    "Scanning the label fills in the macros — you can also add them later." : {
+
+    },
+    "Sealed backup for intimate logs" : {
+
+    },
+    "Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept." : {
+
+    },
+    "Sealed backup for journal entries" : {
+
+    },
+    "Sealed backup for period data" : {
+
+    },
+    "Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept." : {
+
+    },
+    "Sealed backup for sensitive notes" : {
+
+    },
+    "Sealed backup for your photos" : {
+
+    },
+    "Search again" : {
+
+    },
+    "Search by friend or session name" : {
+
+    },
+    "Search by name or fingerprint" : {
+
+    },
+    "Search for a replacement" : {
+
+    },
+    "Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving." : {
+
+    },
+    "Search ingredient" : {
+
+    },
+    "Search or type \"forget [keyword]\"" : {
+
+    },
+    "Search recipes" : {
+
+    },
+    "Search recipes and products" : {
+
+    },
+    "Search sessions by person or mesh" : {
+
+    },
+    "Search settings" : {
+
+    },
+    "Search workout type" : {
+
+    },
+    "Second Removal" : {
+
+    },
+    "See when friends you've kept are nearby. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable ID — and only while the app is open. You can change this anytime in Settings." : {
+
+    },
+    "See your keepsake shelf" : {
+
+    },
+    "Sell" : {
+
+    },
+    "Send good vibes to %@" : {
+
+    },
+    "Send message" : {
+
+    },
+    "Serving: %@" : {
+
+    },
+    "Servings" : {
+
+    },
+    "Session" : {
+
+    },
+    "Session access" : {
+
+    },
+    "Session messages" : {
+
+    },
+    "Session messages, new message" : {
+
+    },
+    "Session name" : {
+
+    },
+    "Set %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Set duress code" : {
+
+    },
+    "Set up a recovery device" : {
+
+    },
+    "Set up app lock" : {
+
+    },
+    "Set up app lock to access privacy settings" : {
+
+    },
+    "Set up this device again" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Share again" : {
+
+    },
+    "Share clothing shops with friends" : {
+
+    },
+    "Share outside Fernlet" : {
+
+    },
+    "Share recipe" : {
+
+    },
+    "Share shopping list" : {
+
+    },
+    "Share summary…" : {
+
+    },
+    "Share with a trainer" : {
+
+    },
+    "Share your training" : {
+
+    },
+    "Share your vibe with friends" : {
+
+    },
+    "Shared — the file has been removed from Fernlet." : {
+
+    },
+    "Share…" : {
+
+    },
+    "Sharing in person with a coach who uses Fernlet Coach is coming soon." : {
+
+    },
+    "Shop" : {
+
+    },
+    "Shop open — %lld min" : {
+
+    },
+    "Shopping list" : {
+
+    },
+    "Show calories" : {
+
+    },
+    "Show calories in Fernlet" : {
+
+    },
+    "Show my code" : {
+
+    },
+    "Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements." : {
+
+    },
+    "Sick mode" : {
+
+    },
+    "Signals" : {
+
+    },
+    "Skip rest" : {
+
+    },
+    "Sleep" : {
+
+    },
+    "Sleep summaries" : {
+
+    },
+    "Slide ↓" : {
+
+    },
+    "Slot" : {
+
+    },
+    "Slot %lld: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slot %1$lld: %2$@"
+          }
+        }
+      }
+    },
+    "Slow breathing" : {
+
+    },
+    "Small tools for a heavy moment. Pick whatever feels kind — or nothing at all." : {
+
+    },
+    "So I can plan around what's actually there." : {
+
+    },
+    "Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online." : {
+
+    },
+    "Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock." : {
+
+    },
+    "Someone wants to join" : {
+
+    },
+    "Something circling around?" : {
+
+    },
+    "Something for right now?" : {
+
+    },
+    "Source date" : {
+
+    },
+    "Space, %@" : {
+
+    },
+    "Spend time with a friend and their shop opens here for an hour after you part." : {
+
+    },
+    "Start %@ timer" : {
+
+    },
+    "Start activity" : {
+
+    },
+    "Start an activity" : {
+
+    },
+    "Start date" : {
+
+    },
+    "Start from this" : {
+
+    },
+    "Start now" : {
+
+    },
+    "Start one above, or wait for a nearby friend to invite you." : {
+
+    },
+    "Start this one instead" : {
+
+    },
+    "Start today's workout" : {
+
+    },
+    "Status" : {
+
+    },
+    "Stays sealed on this device only — worries never sync anywhere." : {
+
+    },
+    "Step %lld" : {
+
+    },
+    "Step %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Step %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Stop syncing, keep iCloud data" : {
+
+    },
+    "Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on." : {
+
+    },
+    "Storage: %@" : {
+
+    },
+    "Storage: local JSON database" : {
+
+    },
+    "Suggest" : {
+
+    },
+    "Suggest a workout" : {
+
+    },
+    "Suggest workout" : {
+
+    },
+    "Swap" : {
+
+    },
+    "Swap %@" : {
+
+    },
+    "Swap ingredient" : {
+
+    },
+    "Swipe →" : {
+
+    },
+    "Swiping this away declines everyone waiting." : {
+
+    },
+    "Swiping this away declines this request." : {
+
+    },
+    "Switch to %@" : {
+
+    },
+    "Switch your routine?" : {
+
+    },
+    "Switching…" : {
+
+    },
+    "Sync to iCloud" : {
+
+    },
+    "TWO-COLUMN LABEL DETECTED" : {
+
+    },
+    "Take a photo" : {
+
+    },
+    "Take a photo of a nutrition facts label and Fernlet will fill in the values it can read." : {
+
+    },
+    "Take it at your own pace." : {
+
+    },
+    "Take photo" : {
+
+    },
+    "Tap a slot to change it" : {
+
+    },
+    "Tap anywhere when you're ready for the next one — take all the time you like." : {
+
+    },
+    "Tap to interact. Press and hold to edit." : {
+
+    },
+    "Targets: %@" : {
+
+    },
+    "That code didn't match" : {
+
+    },
+    "That phone can no longer recover this one. Your data is untouched — but if you arm the recovery lock again you will need to enrol a device first." : {
+
+    },
+    "That was %lld whole minutes of care. Nicely done." : {
+
+    },
+    "That was a whole minute of care. Nicely done." : {
+
+    },
+    "That workout has already started or changed. Close this and open it again to edit." : {
+
+    },
+    "That's a good thing. When something feels heavy, First aid on the Home screen can tuck it in here." : {
+
+    },
+    "That's a good thing. Write one above whenever something feels heavy." : {
+
+    },
+    "That's enough. Take the calm with you — there's nothing else to do." : {
+
+    },
+    "That's the most personal care tasks Fernlet keeps (%lld). Remove one to add another." : {
+
+    },
+    "The box holds about 300 characters." : {
+
+    },
+    "The box is empty right now." : {
+
+    },
+    "The camera is ready to shoot" : {
+
+    },
+    "The camera isn't available — check camera access for Fernlet in Settings, or use the plain Connect button instead." : {
+
+    },
+    "The recovery device doesn't need its own app lock, and nothing about it is stored anywhere but on these two phones." : {
+
+    },
+    "The recovery lock needs a second phone of your own, enrolled in person. It holds the only copy of the key that can open this phone again — Fernlet never puts that key in the cloud, and there is no way to enrol a device remotely." : {
+
+    },
+    "The shelf is filling in" : {
+
+    },
+    "These aren't counted in the macros below. Adjust the numbers to include them, or log the meal without them." : {
+
+    },
+    "These body photos sit behind your Fernlet lock. Unlock to see your timeline." : {
+
+    },
+    "These choices apply when you use Share on the Move tab." : {
+
+    },
+    "These don't match what you told Fernlet you avoid or have. Turn one off to leave it out." : {
+
+    },
+    "These only ever grow, in their own time. There's nothing to keep up with here." : {
+
+    },
+    "They're recovering — scan their next code" : {
+
+    },
+    "Thinking of swaps…" : {
+
+    },
+    "This came from Health — manage it in the Health app." : {
+
+    },
+    "This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both." : {
+
+    },
+    "This entry is sealed." : {
+
+    },
+    "This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust." : {
+
+    },
+    "This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional." : {
+
+    },
+    "This is the recovery device" : {
+
+    },
+    "This isn't switched on yet. Workouts you log already sync to Apple Health when you allow it under Health." : {
+
+    },
+    "This name can't be used in your shop. Rename it in the editor, then list it again. (Private items can be named anything.)" : {
+
+    },
+    "This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)" : {
+
+    },
+    "This one lives in Apple Health" : {
+
+    },
+    "This photo is saved on this device but couldn't be opened. Its details are still here." : {
+
+    },
+    "This photo lives on the device you took it on. Its details are here; the picture stays where it was snapped." : {
+
+    },
+    "This puts back the key your recovery device was given. If you have set up a new app lock since then, anything you wrote under it will be lost — everything from before is recovered." : {
+
+    },
+    "This removes it from this device. It can't be undone." : {
+
+    },
+    "This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else." : {
+
+    },
+    "This workout is full at %lld exercises — remove one to add another." : {
+
+    },
+    "Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only." : {
+
+    },
+    "Time" : {
+
+    },
+    "Timer's up — tap Next when you're ready. Nothing advances on its own." : {
+
+    },
+    "Today" : {
+
+    },
+    "Today key: %@" : {
+
+    },
+    "Today's intent" : {
+
+    },
+    "Today's readiness suggests %@." : {
+
+    },
+    "Today's session" : {
+
+    },
+    "Today's workout" : {
+
+    },
+    "Train here" : {
+
+    },
+    "Training here" : {
+
+    },
+    "Try again" : {
+
+    },
+    "Try tilting the product slightly to reduce glare." : {
+
+    },
+    "Tucked away." : {
+
+    },
+    "Turn on" : {
+
+    },
+    "Turn on Nearby Friends to send hearts" : {
+
+    },
+    "Turn on Nearby Friends?" : {
+
+    },
+    "Turn on camera in Settings" : {
+
+    },
+    "Turn on encrypted backup?" : {
+
+    },
+    "Turn on iCloud sync?" : {
+
+    },
+    "Turn the flash off" : {
+
+    },
+    "Turn the flash on" : {
+
+    },
+    "Turns Fernlet's Health access on or off. Disabling clears locally cached Health data." : {
+
+    },
+    "Type it instead" : {
+
+    },
+    "Type to find a replacement food." : {
+
+    },
+    "USDA macros" : {
+
+    },
+    "Unblock" : {
+
+    },
+    "Undo" : {
+
+    },
+    "Unequip" : {
+
+    },
+    "Unit" : {
+
+    },
+    "Unlist" : {
+
+    },
+    "Unlock to view" : {
+
+    },
+    "Updated %@" : {
+
+    },
+    "Updating storage settings…" : {
+
+    },
+    "Use my other device's key" : {
+
+    },
+    "Use the flashlight in dim lighting." : {
+
+    },
+    "User plan" : {
+
+    },
+    "Verify" : {
+
+    },
+    "Verify passcode" : {
+
+    },
+    "Verify to continue" : {
+
+    },
+    "Verify with %@" : {
+
+    },
+    "Verifying" : {
+
+    },
+    "Viewfinder ready" : {
+
+    },
+    "Waiting for another participant to second this decision." : {
+
+    },
+    "Wardrobe" : {
+
+    },
+    "Water" : {
+
+    },
+    "We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded." : {
+
+    },
+    "We haven't met this one" : {
+
+    },
+    "We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good." : {
+
+    },
+    "We'll walk you through it set by set and time your rests — with a Live Activity on your Lock Screen. Approve it below to start from your Move tab whenever you're ready, or edit it first." : {
+
+    },
+    "Weather-aware recovery prompts" : {
+
+    },
+    "Web nutrition lookup" : {
+
+    },
+    "Weight: %lld lb" : {
+
+    },
+    "Wellbeing score" : {
+
+    },
+    "Wellness" : {
+
+    },
+    "What did you catch?" : {
+
+    },
+    "What did you eat?" : {
+
+    },
+    "What to do" : {
+
+    },
+    "What's available?" : {
+
+    },
+    "What's circling around?" : {
+
+    },
+    "What's included" : {
+
+    },
+    "When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there." : {
+
+    },
+    "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
+
+    },
+    "When enabled, Fernlet writes your logged workouts to Apple Health so they appear in the Fitness app, and pulls workouts logged elsewhere back into Fernlet." : {
+
+    },
+    "When off, your local Fernlet data is excluded from iOS and iCloud device backups." : {
+
+    },
+    "When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.\n\nTurning off Period tracking hides every cycle surface and stops Fernlet reading your cycle data. Your entries are kept, not deleted." : {
+
+    },
+    "When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only." : {
+
+    },
+    "Where will you train?" : {
+
+    },
+    "Where? (optional, e.g. \"the park\")" : {
+
+    },
+    "Which phone is this?" : {
+
+    },
+    "Wind camera" : {
+
+    },
+    "Wind to open the viewfinder" : {
+
+    },
+    "Window: %@ → %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Window: %1$@ → %2$@"
+          }
+        }
+      }
+    },
+    "Winds the camera so you can take a photo" : {
+
+    },
+    "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
+
+    },
+    "Workout in progress" : {
+
+    },
+    "Workout name (optional)" : {
+
+    },
+    "Workout setup" : {
+
+    },
+    "Worries you've set down. The box keeps them — releasing one lets it go for good." : {
+
+    },
+    "Worry box" : {
+
+    },
+    "Worry text" : {
+
+    },
+    "Write another" : {
+
+    },
+    "Write in journal" : {
+
+    },
+    "Write in my journal" : {
+
+    },
+    "Write it down — the box can hold it for a while, so you don't have to." : {
+
+    },
+    "You" : {
+
+    },
+    "You appear as" : {
+
+    },
+    "You appear as %@" : {
+
+    },
+    "You appear as %@. Change the name friends see." : {
+
+    },
+    "You can always come back and start again — no pressure." : {
+
+    },
+    "You can list up to %lld items at once. Unlist one to make room." : {
+
+    },
+    "You can list up to %lld items at once. Unlist one to make room. Your item is saved and ready whenever you are." : {
+
+    },
+    "You can set it down for now. It's kept safe in the Worry Box on your Personal tab, sealed on this device." : {
+
+    },
+    "You can set it down for now. It's kept safe in the Worry box on your Private tab, sealed on this device." : {
+
+    },
+    "You did “%@” before — it might feel good again." : {
+
+    },
+    "You don't need an app lock to delete what Fernlet has stored. This works for the entries Fernlet keeps encrypted too." : {
+
+    },
+    "You have a workout in progress" : {
+
+    },
+    "You just sent %@ some warmth — hearts settle for a few minutes." : {
+
+    },
+    "You will stop sharing with everyone in this session." : {
+
+    },
+    "You'll need to meet in person to add them again." : {
+
+    },
+    "You'll stop hosting it for everyone here." : {
+
+    },
+    "You're here." : {
+
+    },
+    "You're hosting the maximum of %lld activities. End one to start another." : {
+
+    },
+    "You're keeping %lld of %lld shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're keeping %1$lld of %2$lld shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep."
+          }
+        }
+      }
+    },
+    "You've been consistent with %@. Sticking with one routine is where progress comes from — switching restarts that momentum." : {
+
+    },
+    "You've saved %lld locations — remove one to add another." : {
+
+    },
+    "You: %@" : {
+
+    },
+    "Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet." : {
+
+    },
+    "Your closet is empty" : {
+
+    },
+    "Your companion's mood and today's water, at a glance." : {
+
+    },
+    "Your cycles vary by about ±%lld days." : {
+
+    },
+    "Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on." : {
+
+    },
+    "Your data stays on this phone unless you turn on iCloud sync.\n\nNearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped." : {
+
+    },
+    "Your duress code is the same shape as your passcode — %@. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code stops working. Your passcode and your data are untouched." : {
+
+    },
+    "Your goal" : {
+
+    },
+    "Your intimate log backup hasn't finished uploading yet. It's hidden right now — un-hide intimacy tracking, then this device will finish it." : {
+
+    },
+    "Your intimate log backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your logs are on it." : {
+
+    },
+    "Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it." : {
+
+    },
+    "Your keepsake shelf" : {
+
+    },
+    "Your local data will upload to iCloud and sync to your other Fernlet devices." : {
+
+    },
+    "Your name" : {
+
+    },
+    "Your notes come back under this new passcode. Biometric unlock is off until you turn it on again." : {
+
+    },
+    "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later." : {
+
+    },
+    "Your period backup still needs re-uploading with your other device's backup key. This device re-uploads it automatically once your cycle history is on it — if it isn't yet, tap Retry restore to pull it down first." : {
+
+    },
+    "Your photo shelf is nearly full" : {
+
+    },
+    "Your progress photos are private" : {
+
+    },
+    "Your real passcode — the one that opens your data. Fernlet uses it to unlock the key it is about to seal to your recovery device, and the key never leaves this phone unsealed." : {
+
+    },
+    "Your sealed journal, cycle and intimacy notes are still on this phone. Your recovery device holds the key to them. You will scan codes between the two phones, approve the request there, then choose a new passcode here." : {
+
+    },
+    "Your shop is closed" : {
+
+    },
+    "Your shop is full" : {
+
+    },
+    "Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved." : {
+
+    },
+    "a soft tap on each turn" : {
+
+    },
+    "as of %@" : {
+
+    },
+    "black bean bowls" : {
+
+    },
+    "bottles today" : {
+
+    },
+    "cm" : {
+
+    },
+    "completed" : {
+
+    },
+    "covered" : {
+
+    },
+    "designed by %@" : {
+
+    },
+    "designed by you" : {
+
+    },
+    "e.g. Upper strength" : {
+
+    },
+    "e.g. basketball, soccer, climbing" : {
+
+    },
+    "e.g. kettlebells, mobility, running" : {
+
+    },
+    "e.g. sore left knee, short on time" : {
+
+    },
+    "e.g. swap the squat, 30 minutes, no barbell" : {
+
+    },
+    "gap" : {
+
+    },
+    "grams — no calories here" : {
+
+    },
+    "host" : {
+
+    },
+    "intervals, distance, notes" : {
+
+    },
+    "letting it go…" : {
+
+    },
+    "max %@" : {
+
+    },
+    "min %@" : {
+
+    },
+    "not done yet" : {
+
+    },
+    "note" : {
+
+    },
+    "of %lldg" : {
+
+    },
+    "optional — we'll read the macros for you" : {
+
+    },
+    "shoulder issues, hotel gyms only" : {
+
+    },
+    "strength, running, mobility" : {
+
+    },
+    "tap to tuck away" : {
+
+    },
+    "tempo, form note" : {
+
+    },
+    "to meet your companion" : {
+
+    },
+    "woke up twice..." : {
+
+    },
+    "z" : {
+
+    },
+    "· %lld servings" : {
+
+    },
+    "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
+
+    },
+    "•" : {
+
+    },
+    "• %@" : {
+
+    },
+    "…" : {
+
+    }
+  },
+  "version" : "1.0"
+}

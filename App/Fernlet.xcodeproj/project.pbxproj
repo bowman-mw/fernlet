@@ -125,12 +125,12 @@
 			path = Fernlet;
 			sourceTree = "<group>";
 		};
-		6869C2F92FB8D39D0098A0F3 /* FernletTests */ = {
+		6869C2F92FB8D39D0098A0F3 /* ../Tests/FernletTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ../Tests/FernletTests;
 			sourceTree = "<group>";
 		};
-		6869C3032FB8D39D0098A0F3 /* FernletUITests */ = {
+		6869C3032FB8D39D0098A0F3 /* ../Tests/FernletUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ../Tests/FernletUITests;
 			sourceTree = "<group>";
@@ -200,12 +200,12 @@
 			isa = PBXGroup;
 			children = (
 				6869C2E42FB8D39D0098A0F3 /* Fernlet */,
-				6869C2F92FB8D39D0098A0F3 /* FernletTests */,
-				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
+				6869C2F92FB8D39D0098A0F3 /* ../Tests/FernletTests */,
+				6869C3032FB8D39D0098A0F3 /* ../Tests/FernletUITests */,
 				68FE5E00000000000000A001 /* FernletShareExtension */,
 				68FE5E00000000000000B001 /* FernletWidgets */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
-				6869C37B2FBBF3450098A0F3 /* Docs */,
+				6869C37B2FBBF3450098A0F3 /* ../Docs */,
 			);
 			sourceTree = "<group>";
 		};
@@ -221,7 +221,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		6869C37B2FBBF3450098A0F3 /* Docs */ = {
+		6869C37B2FBBF3450098A0F3 /* ../Docs */ = {
 			isa = PBXGroup;
 			children = (
 				6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */,
@@ -278,7 +278,7 @@
 				6869C2F82FB8D39D0098A0F3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				6869C2F92FB8D39D0098A0F3 /* FernletTests */,
+				6869C2F92FB8D39D0098A0F3 /* ../Tests/FernletTests */,
 			);
 			name = FernletTests;
 			packageProductDependencies = (
@@ -302,7 +302,7 @@
 				6869C3022FB8D39D0098A0F3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
+				6869C3032FB8D39D0098A0F3 /* ../Tests/FernletUITests */,
 			);
 			name = FernletUITests;
 			packageProductDependencies = (
@@ -390,12 +390,15 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
 			);
 			mainGroup = 6869C2D92FB8D39D0098A0F3;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
-				FE41000000000000000000A1 /* XCLocalSwiftPackageReference "FernletKit" */,
+				FE41000000000000000000A1 /* XCLocalSwiftPackageReference "../FernletKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6869C2E32FB8D39D0098A0F3 /* Products */;
@@ -1013,7 +1016,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		FE41000000000000000000A1 /* XCLocalSwiftPackageReference "FernletKit" */ = {
+		FE41000000000000000000A1 /* XCLocalSwiftPackageReference "../FernletKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../FernletKit;
 		};

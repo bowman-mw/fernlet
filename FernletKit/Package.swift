@@ -11,8 +11,19 @@ import PackageDescription
 // `defaultIsolation(MainActor.self)` is set per target up front: MainActor
 // isolation is NOT inherited from the app target's SWIFT_DEFAULT_ACTOR_ISOLATION
 // build setting, so SPM targets must opt in explicitly (plan §7).
+// `defaultLocalization` is what lets a target own a `Localizable.xcstrings` and
+// resolve `String(localized:bundle: .module)` against it. It is declared here for
+// the whole package; a module only gains a catalog once it actually has one, and
+// until then every lookup falls through to the English literal in the code.
+//
+// NOTE for anyone adding module strings: inside a package, BOTH `String(localized:)`
+// and SwiftUI's `LocalizedStringKey` resolve against `Bundle.main` unless
+// `bundle: .module` is passed — and getting that wrong FAILS SILENTLY (the string
+// simply stays English forever). `Tests/FernletTests/LocalizationBoundaryTests` is
+// the grep-wall that makes the omission a test failure instead.
 let package = Package(
     name: "FernletKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v26),
     ],

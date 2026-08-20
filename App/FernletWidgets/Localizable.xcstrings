@@ -1,0 +1,131 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    " of %lld" : {
+
+    },
+    "%@ · %lld of %lld bottles" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld of %3$lld bottles"
+          }
+        }
+      }
+    },
+    "%lld" : {
+
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "+1" : {
+
+    },
+    "Adds one bottle of water to today's Fernlet diary." : {
+
+    },
+    "Done set" : {
+
+    },
+    "Ends the current rest early and moves to your next set." : {
+
+    },
+    "Exercise %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exercise %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Fernlet" : {
+
+    },
+    "Finish" : {
+
+    },
+    "Finish workout" : {
+
+    },
+    "Log a bottle of water" : {
+
+    },
+    "Marks the current set done and starts your rest timer." : {
+
+    },
+    "Moves to the next step of the recipe you're cooking." : {
+
+    },
+    "Next" : {
+
+    },
+    "Next cooking step" : {
+
+    },
+    "Open Fernlet" : {
+
+    },
+    "Open Fernlet to pick it back up" : {
+
+    },
+    "Open Fernlet to say hi" : {
+
+    },
+    "Paused" : {
+
+    },
+    "Repeat cooking step" : {
+
+    },
+    "Rest" : {
+
+    },
+    "Restarts the timer on the current cooking step." : {
+
+    },
+    "Set %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Skip rest" : {
+
+    },
+    "Step %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Step %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Your companion's mood and today's water, at a glance." : {
+
+    },
+    "bottles today" : {
+
+    },
+    "to meet your companion" : {
+
+    }
+  },
+  "version" : "1.0"
+}

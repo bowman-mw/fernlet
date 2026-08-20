@@ -1,0 +1,149 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Log water in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log water in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log a bottle of water in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a bottle of water in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Add water to ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add water to ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log a meal in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log a meal in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Log food in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log food in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Write in my ${applicationName} journal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write in my ${applicationName} journal"
+          }
+        }
+      }
+    },
+    "Open my ${applicationName} journal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open my ${applicationName} journal"
+          }
+        }
+      }
+    },
+    "Next step in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next step in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Next cooking step in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next cooking step in ${applicationName}"
+          }
+        }
+      }
+    },
+    "${applicationName} next step": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} next step"
+          }
+        }
+      }
+    },
+    "Repeat step in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat step in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Repeat cooking step in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat cooking step in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Restart my ${applicationName} timer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart my ${applicationName} timer"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
