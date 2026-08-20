@@ -48,8 +48,12 @@ Already present on the app, share-extension, and widgets targets. Declared reaso
 key hierarchy on top of CryptoKit plus a third-party scrypt implementation (CryptoSwift), and it does
 bulk confidentiality encryption, not authentication-only. Classification is mass-market **5D992.c**,
 self-classified under License Exception ENC §740.17(b)(1) — so **no CCATS and no App Store Connect
-document upload** (except the French/ANSSI declaration if France is a release country), but a **BIS
-annual self-classification report is due each February 1**.
+document upload**, except the French/ANSSI declaration if France is a release country.
+
+Revised 2026-08-19: there is **no recurring BIS filing**. §740.17(e)(3) was rewritten in 2021 to cover
+only encryption components and "executable software", which a finished consumer app is not — at most
+one Supplement No. 8 report, once. And because Fernlet is free and its source is public, the shipped
+app can fall **outside the EAR** altogether once self-classification is done.
 
 Full determination, the App Store Connect questionnaire answers, the crypto inventory, and the
 filing checklist: [Export-Compliance-Encryption.md](Export-Compliance-Encryption.md).

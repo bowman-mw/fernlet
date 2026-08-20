@@ -1,8 +1,24 @@
 # Export Compliance — Encryption Documentation
 
-**Status:** research + determination, 2026-08-13. Supersedes the one-paragraph "Encryption" section in
-[App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md) and the compliance bullet in
-[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §1.
+**Status:** determination 2026-08-13, **materially revised 2026-08-19**. Supersedes the one-paragraph
+"Encryption" section in [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md) and the
+compliance bullet in [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §1.
+
+> **2026-08-19 revision.** The determination below — mass market, ECCN 5D992.c, self-classify, no
+> CCATS — was independently re-checked against the current eCFR text and **holds**. Its *filing
+> consequences* did not, and two things changed:
+>
+> 1. **The annual February 1 report is almost certainly not owed** (§6). §740.17(e)(3) was rewritten
+>    on 2021-03-29 to cover only encryption *components* and *"executable software"*; a finished
+>    consumer app is neither. The earlier text of this document stated a recurring legal obligation
+>    that does not exist.
+> 2. **The repository is now public** (Apache-2.0, complete crypto source). That opens the
+>    publicly-available route in §742.15(b) / §734.7(b) — omitted entirely from the first draft — and
+>    materially strengthens §7, because "non-standard cryptography" is a **conjunctive** test that
+>    publication defeats on its own.
+>
+> Every exemption in §4 was separately re-audited against the shipping code. All five, plus Note 4,
+> remain unavailable; the reasoning in §4 is now tighter but the answers are unchanged.
 
 > Not legal advice. Export classification is the developer's own responsibility — Apple explicitly
 > disclaims it, and a wrong classification is a customs/BIS matter, not an App Review matter. The
@@ -141,20 +157,26 @@ Positive case for **5D992.c**:
 
 | Item | Answer |
 |---|---|
-| `ITSAppUsesNonExemptEncryption` | **`YES`** (currently `NO` — this must change) |
+| `ITSAppUsesNonExemptEncryption` | **`YES`** — shipped in commit `4802416` |
 | CCATS / classification request to BIS | **Not required** (see §7 caveat) |
 | Documents to upload to App Store Connect | None, except the French declaration if France is a release country (§8) |
 | `ITSEncryptionExportComplianceCode` | Not applicable (Apple only issues one after a document review) |
-| BIS annual self-classification report | **Required**, by Feb 1 each year (§6) |
+| BIS annual self-classification report | **Almost certainly not required** — see the rewritten §6 |
 
 ---
 
 ## 5. Why `ITSAppUsesNonExemptEncryption` must flip to `YES`
 
+> **Done.** Both configurations of the `Fernlet` target now read `YES` (commit `4802416`).
+
 The key's meaning is precisely "does the app use encryption that is **not exempt** from the
 documentation requirements". `NO` is correct only when the app uses no encryption at all, or only
-exempt forms. Fernlet uses non-exempt (albeit standard, self-classifiable) encryption, so `NO` is a
+exempt forms. Fernlet uses non-exempt (albeit standard, self-classifiable) encryption, so `NO` was a
 misstatement in the shipped binary.
+
+Note that "publicly available / not subject to the EAR" (§6A) is a **different legal status** from
+"exempt", and is **not** on Apple's exemption list. Becoming publicly available does not let this key
+go back to `NO`.
 
 Practically: answering `YES` and having no proprietary algorithms leads App Store Connect to the
 "standard algorithms, self-classified" path — which requires no upload at all outside France. So this
@@ -171,38 +193,118 @@ the share extension in particular touches the sealed recipe-import path.
 
 ---
 
-## 6. The annual self-classification report (Obligation B)
+## 6. What is actually owed (Obligation B) — and why the annual report is not
 
-This is the one recurring, calendar-driven obligation.
+**Revised 2026-08-19.** The earlier text of this section said a Supplement No. 8 report was due every
+February 1. That was wrong, and had been since 2021.
 
-- **Who files:** the exporter — i.e. you, the developer, not Apple.
-- **What it covers:** encryption items self-classified under License Exception ENC §740.17(b)(1),
-  including mass-market items classified 5A992.c / 5D992.c, that were exported or reexported during
-  the calendar year (Jan 1 – Dec 31). Items for which a CCATS has been issued are excluded; so are
-  stand-alone toolkits (a 2021 relaxation that does **not** cover finished apps).
-- **Deadline:** must be **received by February 1** of the following year.
-- **Format:** the fields and layout of **Supplement No. 8 to Part 742**, submitted as an electronic
-  file in **CSV only** — no other format is accepted. Typical columns: product name/model, ECCN,
-  a short description, and the manufacturer, plus (where applicable) a URL for publicly available
-  source code.
-- **Where:** by email to BIS and the ENC Encryption Request Coordinator — historically
-  `crypt-supp8@bis.doc.gov` and `enc@nsa.gov`. **Verify the BIS address before filing**: BIS migrated
-  its web presence from `bis.doc.gov` to `bis.gov`, and the mailbox may have moved with it. Check the
-  [BIS annual self-classification page](https://www.bis.gov/learn-support/encryption-controls/annual-self-classification)
-  at filing time.
+### 6.1 The report was scoped out of existence for finished apps
 
-**First filing for Fernlet:** if the app ships to non-US/Canada storefronts at any point during
-calendar 2026, the first report is due **1 February 2027**. Nothing is owed for a year with no
-export. (TestFlight distribution to testers outside the US counts as export too.)
+The rule of **2021-03-29 (86 FR 16482)** rewrote §740.17(e)(3). The current text applies the report to:
 
-Two useful notes:
+> "mass market" encryption **components** and **'executable software'** that meet the criteria of the
+> Cryptography Note … and are classified under ECCN 5A992 or 5D992 following self-classification, as
+> well as to non-"mass market" encryption commodities and software that remain classified in ECCN
+> 5A002, 5B002 or 5D002 …
 
-- Filing a classification request (CCATS) instead would *remove* the annual reporting duty — but it
-  costs a SNAP-R submission and a BIS review cycle. For a single free consumer app, the annual CSV is
-  far cheaper.
-- One report can list multiple products, so Fernlet and (later) Fernlet Coach can share a filing —
-  provided Coach's own classification is settled first; it will have its own crypto surface and its
-  own closed-source/App Attest posture.
+with an attached note defining the term narrowly — `'executable software'` means software "from an
+existing hardware component," and expressly **"does not include complete binary images of the
+'software' running on an end item."** A finished consumer iOS app is neither a component nor that.
+
+BIS's own [Table of Changes for the 2021 ENC rule](https://www.bis.gov/media/documents/table-changes-enc-wa2019-rule-final-version.pdf),
+row 1, is explicit for exactly this bucket — *"5x992.c – mass market items described in 740.17(b)(1)"*:
+**before**, a report or classification was required; **after**, *"No self-classification report or
+classification required."* The preamble estimated a 60% reduction in reports on this basis.
+
+**The honest complication.** Three BIS *web guidance* artifacts still recite the broad pre-2021 rule
+without the carve-out (the annual self-classification page, the mass-market page, the ENC summary
+PDF), and the BIS Encryption FAQs are dated March 2017. The regulation governs over stale guidance —
+but the conflict is real, and it is the reason for the cheap hedge in §6.3.
+
+Even on the conservative reading this was never truly annual: §740.17(e)(3)(iii) says *"Each product
+must be included in a report only one time."*
+
+### 6.2 Filing mechanics, if a report is ever filed
+
+Confirmed current as of 2026-08-19, and correcting two errors in the first draft:
+
+- **The mailboxes did not move.** §740.17(e)(3)(ii)(A) still names `crypt-supp8@bis.doc.gov` and
+  `enc@nsa.gov`. The *website* migrated from bis.doc.gov to bis.gov; the *mail domain* did not. The
+  email subject must be **"self-classification report"** — a requirement the first draft omitted.
+- **Format:** Supplement No. 8 to Part 742, **`.csv` only**, received by **February 1**. See the
+  corrected §10.5 — the first draft's row had five columns; **twelve are mandatory**, none may be
+  blank, and the ECCN field takes **`5D992`**, not `5D992.c`.
+
+### 6.3 Recommended posture
+
+File **one** Supplement No. 8 CSV, once, if any non-US distribution happens — then never again. It is
+a single row; it resolves the regulation-versus-guidance conflict in §6.1; and it is the step BIS's
+own guidance (§6A) says to complete *"only once"* before a free app becomes publicly available. Do not
+treat it as recurring.
+
+---
+
+## 6A. The publicly-available route (added 2026-08-19)
+
+Omitted entirely from the first draft, and now the most important section here: **the shipped app can
+end up outside the EAR altogether.**
+
+### 6A.1 Two routes, one destination
+
+**Route A — mass market + free.** BIS's
+[Encryption items not subject to the EAR](https://www.bis.gov/learn-support/encryption-controls/encryption-items-not-subject-to-ear)
+addresses this fact pattern by example:
+
+> **1. Mass market encryption object code software that is made "publicly available."** … For
+> example, an App made for a smartphone or computer that … meets the Mass Market criteria … **that is
+> made available free of charge would be considered "publicly available."** In this case you would
+> have to first comply with the mass market requirement … by self-classification as 5D992.c with
+> self-classification report (or submitting classification request to BIS) **only once**. Then, if the
+> item is made publicly available (e.g., free to download) it would be considered not subject to the
+> EAR anymore.
+
+The qualifying act is that **Fernlet is free**, not that the source is on GitHub. Fernlet is
+permanently free by product decision (recorded 2026-07-19), so this is durable — **but it is
+conditional: if Fernlet ever becomes paid, this analysis must be re-run.**
+
+**Route B — published source, corresponding object code.** §742.15(b)(1) puts publicly available
+5D002 *source code* outside the EAR; §734.7(b) and the Note to §734.3(b)(2)–(3) extend that to
+*"publicly available encryption object code software … when the corresponding source code meets the
+criteria specified in § 742.15(b)."* The repository is public under Apache-2.0 with the complete
+crypto source, so the source-side condition is met.
+
+**Ordering matters.** The Note to §740.17(b) is explicit that publication alone does not release a
+mass-market item: it *"remains subject to the EAR until all applicable classification or
+self-classification requirements … are fulfilled."* Self-classify **first**; publicly-available status
+attaches after.
+
+### 6A.2 Residual uncertainty, stated plainly
+
+The App Store binary is not byte-identical to anything published — Apple re-signs, FairPlay-wraps and
+thins it, and the EULA restricts redistribution — so a strict reader could argue *that artifact* was
+never itself published. No BIS guidance was found addressing this mixed-channel case. **Route A
+sidesteps it entirely**, because BIS's own example treats "free to download" as the qualifying act.
+
+### 6A.3 The §742.15(b)(2) notification
+
+Since 2021-03-29 this is required **only** for published source that performs *non-standard
+cryptography* — so on the §7 determination it is **not owed**. Send it anyway:
+
+- One email to `crypt@bis.doc.gov` and `enc@nsa.gov` giving the **repository URL**.
+- One-time when notified by URL — re-notification is required only if the **URL changes**, expressly
+  *not* for updates to the code at that location. (Sending *copies* instead would oblige a fresh copy
+  on every crypto change. Notify by URL.)
+- It costs one email and creates a **dated government record that the source was published at a
+  URL** — precisely the evidence that defeats the second prong of the §7 test.
+
+### 6A.4 The ordering trap: TestFlight
+
+A TestFlight beta is invite-only and capped, so it is **not** "publicly available" — Route A does not
+apply during beta, while Apple's documentation confirms TestFlight to testers outside the US/Canada
+**is** an export. Until self-classification is done the item is 5D002 and EI-controlled.
+
+**Self-classify before the first overseas TestFlight tester** and this evaporates: 5D992.c is
+AT-controlled only, needing no licence outside Country Group E:1.
 
 ---
 
@@ -236,11 +338,30 @@ Three things materially strengthen the second reading for Fernlet, and are worth
    read the construction without reverse-engineering the binary.
 3. **No secret sauce**: no custom cipher, no custom hash, no obscured key schedule.
 
-**Recommendation:** self-classify as 5D992.c and file the annual report, and put the question to an
-export-controls attorney before the first paid/large-scale non-US release. If a definitive answer is
-wanted with no residual risk, file a classification request (CCATS) via SNAP-R describing the
-heart-drop and mesh protocols; a favorable CCATS both settles the classification *and* retires the
-annual reporting duty.
+**Updated 2026-08-19 — the test is CONJUNCTIVE, and publication now satisfies it.** Read the Part 772
+definition again: non-standard cryptography requires functionality that is *proprietary or
+unpublished*, including protocols not adopted by a standards body **"and have not otherwise been
+published."** Both prongs must hold. Fernlet's protocols are bespoke framings over published
+primitives, and since the repository went public under Apache-2.0 with the complete crypto source,
+**the second prong now fails on its own**. Publishing did more for this question than any argument in
+this section.
+
+**The counter-risk, which is not settled.** §740.17(b)(2)(i)(C)(2) sweeps in items whose cryptographic
+functionality *"can be easily changed by the user,"* and Note 3's mass-market criteria say the same.
+A hostile reading is that open source means user-changeable. The structural counter is strong —
+§740.17(b)(2)(i)(B) singles out *non-publicly-available* source code for CCATS, which would be
+incoherent if publishing pushed items into (b)(2) anyway — and the settled industry reading is that
+this targets user-configurable crypto in the shipped product (plug-in ciphers, open cryptographic
+interfaces), not the ability to fork and recompile. Fernlet's algorithms and parameters are
+compile-time constants with no configuration surface. Worth a lawyer's confirmation; do not treat it
+as settled.
+
+**Recommendation:** self-classify as 5D992.c; send the §6A.3 notification even though it is not owed;
+do **not** file a CCATS unless counsel says the protocols are non-standard — it is a SNAP-R submission
+plus a 30-day wait, and it buys certainty that is probably unnecessary. What is at stake if the call
+goes the other way: non-standard items fall under **§740.17(b)(3)(ii)**, which requires a
+classification request and a 30-day wait *before* License Exception ENC may be used, and makes the
+§742.15(b)(2) notification mandatory. That is the only question in this document carrying real cost.
 
 ---
 
@@ -261,22 +382,38 @@ fallback. This is a one-time filing, not annual.
 
 ## 9. Action checklist
 
-- [ ] **Code:** flip `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption` to `YES` in the `Fernlet` target
-      (both configurations); decide whether to mirror it on `FernletWidgets` and
-      `FernletShareExtension`.
-- [ ] **Docs:** correct the "Encryption" section of [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md),
-      which currently states `false` / "only exempt encryption" — that is the opposite of this
-      determination. Point it here.
-- [ ] **App Store Connect:** walk the App Encryption Documentation flow once (App Information → +).
-      Expected answers: uses cryptography **Yes** → qualifies for an exemption **No** → proprietary /
-      non-standard algorithms **No** → standard algorithms beyond the OS **Yes**.
+**Revised 2026-08-19.** The controlling deadline is the **first non-US distribution — including the
+first overseas TestFlight tester** — not App Store launch. Nothing is owed to any government today.
+
+- [x] **Code:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES` in both configurations of the
+      `Fernlet` target — done in commit `4802416`. Still open: decide whether to mirror it on
+      `FernletWidgets` and `FernletShareExtension` (separate bundles; the share extension touches the
+      sealed recipe-import path).
+- [x] **Docs:** the "Encryption" section of [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md)
+      now points here rather than asserting the old exemption — done in commit `4802416`.
+- [ ] **Write and date the self-classification memo.** One page: mass market under Note 3, all
+      primitives published standards, protocols published under Apache-2.0 at the repo URL, therefore
+      not "non-standard cryptography", **ECCN 5D992.c** under §740.17(b)(1). This memo *is* the
+      compliance artifact — nothing is filed to create it. Retain **five years** past the last export
+      (§762.6(a)).
+- [ ] **Do this before the first overseas TestFlight tester** — see §6A.4. Self-classifying first is
+      what keeps the beta out of 5D002/EI territory.
+- [ ] **Send the §742.15(b)(2) notification** to `crypt@bis.doc.gov` and `enc@nsa.gov` with the
+      repository URL (§6A.3). Not required on this determination; one email; highest value per minute.
+- [ ] **App Store Connect:** walk the App Encryption Documentation flow once. Expected answers: uses
+      cryptography **Yes** → qualifies for an exemption **No** → proprietary / non-standard algorithms
+      **No** → standard algorithms beyond the OS **Yes**.
 - [ ] **France:** prepare/submit the ANSSI declaration if France stays in the release countries.
-- [ ] **BIS:** build the Supplement No. 8 CSV (one row, ECCN 5D992.c) and diarise **1 February 2027**
-      for the first filing; confirm the current BIS mailbox before sending.
-- [ ] **Legal:** get the §7 protocol question reviewed, and confirm no CCATS is wanted.
-- [ ] **Coach app:** repeat this determination separately for Fernlet Coach — different bundle,
-      different crypto surface, closed source, App Attest. Its classification does not inherit from
-      this one.
+      Triggered by CryptoSwift's scrypt being a linked third-party implementation rather than an Apple
+      OS API. Separate regime — nothing filed with BIS satisfies it.
+- [ ] **BIS Supplement No. 8:** **one** filing, once, only if non-US distribution occurred — then
+      never again (§6.3). Use the corrected 12-column row in §10.5.
+- [ ] **Legal:** the §7 protocol question and the §7 "easily changed by the user" counter-risk are the
+      only items carrying real cost. Everything else is settled.
+- [ ] **Re-run this analysis if Fernlet ever stops being free** — Route A in §6A.1 depends on it.
+- [ ] **Coach app:** repeat separately for Fernlet Coach — different bundle, different crypto surface,
+      closed source, App Attest. Its classification does not inherit from this one, and being
+      closed-source means neither Route A nor Route B is available to it on the same terms.
 
 ---
 
@@ -336,15 +473,35 @@ product and of what the cryptography does. These are written for those forms —
 
 ### 10.5 BIS Supplement No. 8 row (CSV)
 
-One row, values to confirm against the current Supplement No. 8 column list at filing time:
+**Corrected 2026-08-19.** The first draft listed five fields and invented a source-code-URL column;
+that file would have been rejected. Supplement No. 8(b)(3) requires the header line to match
+**without alteration or variation**, **twelve** fields, and **no field may be left blank** (use
+`NONE` / `N/A`). `.csv` only.
+
+```
+PRODUCT NAME,MODEL NUMBER,MANUFACTURER,ECCN,AUTHORIZATION TYPE,ITEM TYPE,SUBMITTER NAME,TELEPHONE NUMBER,E-MAIL ADDRESS,MAILING ADDRESS,NON-U.S. COMPONENTS,NON-U.S. MANUFACTURING LOCATIONS
+```
 
 | Field | Value |
 |---|---|
-| Product name / model | Fernlet (iOS application) |
-| ECCN | 5D992.c |
-| Item type / description | Mass-market consumer wellbeing application implementing standard published encryption (AES-256-GCM, ChaCha20-Poly1305, X25519, Ed25519, HKDF, scrypt) for at-rest protection of the user's own data and end-to-end encrypted peer-to-peer messaging |
-| Manufacturer | *(your name / entity as it appears on the App Store listing)* |
-| Publicly available source code URL | *(the public repository URL)* |
+| PRODUCT NAME | Fernlet |
+| MODEL NUMBER | N/A |
+| MANUFACTURER | SELF |
+| ECCN | **`5D992`** — the enumerated list is 5A002 / 5B002 / 5D002 / 5A992 / 5D992; **the `.c` suffix is not valid in this field** |
+| AUTHORIZATION TYPE | MMKT |
+| ITEM TYPE | Mobility and mobile applications n.e.s. |
+| SUBMITTER NAME | *(your name)* |
+| TELEPHONE NUMBER | *(contact number)* |
+| E-MAIL ADDRESS | *(contact email)* |
+| MAILING ADDRESS | *(postal address)* |
+| NON-U.S. COMPONENTS | CryptoSwift (scrypt), Poland — *verify before filing* |
+| NON-U.S. MANUFACTURING LOCATIONS | NONE |
+
+There is **no** "publicly available source code URL" column. That URL belongs in the separate
+§742.15(b)(2) notification email (§6A.3), which is a different filing to a different mailbox.
+
+Send to `crypt-supp8@bis.doc.gov` and `enc@nsa.gov` with the subject line **"self-classification
+report"**.
 
 ---
 
