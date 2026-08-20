@@ -170,7 +170,7 @@ struct SleepSheet: View {
     /// — losing the whole day's save. Out-of-range or unparseable text saves as "no hours recorded"
     /// rather than as a number nothing downstream can use.
     private var validatedHours: Double? {
-        guard let parsed = Double(hours.trimmingCharacters(in: .whitespaces)),
+        guard let parsed = LocaleTolerantNumber.double(from: hours),
               parsed.isFinite, (0...24).contains(parsed) else { return nil }
         return parsed
     }

@@ -4767,7 +4767,7 @@ private struct MacroInputRow: View {
     }
 
     private func commit() {
-        if let n = Int(textValue), range.contains(n) { value = n }
+        if let n = LocaleTolerantNumber.int(from: textValue), range.contains(n) { value = n }
         isEditing = false
     }
 }

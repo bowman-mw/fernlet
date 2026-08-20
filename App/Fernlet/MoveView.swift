@@ -636,7 +636,7 @@ struct WorkoutSheet: View {
             if value >= 5 { return .moderate }
             return .light
         }
-        guard let value = Double(rpe) else { return .moderate }
+        guard let value = LocaleTolerantNumber.double(from: rpe) else { return .moderate }
         if value >= 8 { return .hard }
         if value >= 5 { return .moderate }
         return .light
@@ -847,12 +847,12 @@ struct WorkoutSheet: View {
             mode: logMode,
             activityType: logMode == .activity ? selectedActivityType : nil,
             exercises: logMode == .strengthTraining ? exerciseText : "",
-            rpe: logMode == .strengthTraining ? Double(rpe) : nil,
+            rpe: logMode == .strengthTraining ? LocaleTolerantNumber.double(from: rpe) : nil,
             notes: notes,
-            duration: Int(duration),
-            distanceMiles: logMode == .activity ? Double(distance) : nil,
-            activeEnergyKcal: logMode == .activity ? Double(energyKcal) : nil,
-            effort: logMode == .activity ? Int(effort) : nil,
+            duration: LocaleTolerantNumber.int(from: duration),
+            distanceMiles: logMode == .activity ? LocaleTolerantNumber.double(from: distance) : nil,
+            activeEnergyKcal: logMode == .activity ? LocaleTolerantNumber.double(from: energyKcal) : nil,
+            effort: logMode == .activity ? LocaleTolerantNumber.int(from: effort) : nil,
             muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
             intensity: intensity
         )
@@ -947,8 +947,8 @@ enum WorkoutSheetRules {
             return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasExercises
         case .activity:
             guard selectedActivityType != nil else { return true }
-            let parsedDuration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-            let parsedDistance = Double(distance.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            let parsedDuration = LocaleTolerantNumber.int(from: duration) ?? 0
+            let parsedDistance = LocaleTolerantNumber.double(from: distance) ?? 0
             return parsedDuration <= 0 && parsedDistance <= 0
         }
     }
@@ -997,7 +997,7 @@ struct QuickExerciseSheet: View {
     }
 
     private var intensity: WorkoutIntensity {
-        guard let value = Double(rpe) else { return .moderate }
+        guard let value = LocaleTolerantNumber.double(from: rpe) else { return .moderate }
         if value >= 8 { return .hard }
         if value >= 5 { return .moderate }
         return .light
@@ -1041,7 +1041,7 @@ struct QuickExerciseSheet: View {
 
             SheetSaveBar(disabled: entry == nil) {
                 guard let entry else { return }
-                store.addWorkout(QuickExerciseWorkoutFactory.workout(from: entry, rpe: Double(rpe), intensity: intensity))
+                store.addWorkout(QuickExerciseWorkoutFactory.workout(from: entry, rpe: LocaleTolerantNumber.double(from: rpe), intensity: intensity))
                 dismiss()
             }
         }
@@ -1874,9 +1874,9 @@ struct EditWorkoutSheet: View {
         var updated = workout
         updated.name = trimmedName
         updated.intensity = intensity
-        updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
+        updated.duration = LocaleTolerantNumber.int(from: duration)
         // Blank clears the RPE rather than pinning the old one — the field is how you correct it.
-        updated.rpe = Double(rpe.trimmingCharacters(in: .whitespacesAndNewlines))
+        updated.rpe = LocaleTolerantNumber.double(from: rpe)
         updated.notes = notes
         guard store.updateWorkout(updated, date: date) else {
             showHealthRefusalAlert = true
@@ -3530,10 +3530,10 @@ struct WorkoutPlanSheet: View {
                 exercises: exerciseText,
                 muscleGroups: plannedMuscleGroups,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                duration: Int(duration),
-                targetDistanceMiles: Double(distance),
-                targetEnergyKcal: Double(energyKcal),
-                targetEffort: Int(effort),
+                duration: LocaleTolerantNumber.int(from: duration),
+                targetDistanceMiles: LocaleTolerantNumber.double(from: distance),
+                targetEnergyKcal: LocaleTolerantNumber.double(from: energyKcal),
+                targetEffort: LocaleTolerantNumber.int(from: effort),
                 createdAt: editingPlan?.createdAt ?? Date()
             ),
             date: dateKey

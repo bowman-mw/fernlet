@@ -1796,7 +1796,7 @@ struct DayEditSheet: View {
     /// `Double("1e400")` and negatives (all reachable by paste or a hardware keyboard) are rejected
     /// here instead of corrupting the day.
     private func validatedSleepHours() -> Double? {
-        guard let parsed = Double(sleepHoursText.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        guard let parsed = LocaleTolerantNumber.double(from: sleepHoursText) else { return nil }
         guard parsed.isFinite, (0...24).contains(parsed) else { return nil }
         return parsed
     }

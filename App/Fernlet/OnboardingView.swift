@@ -17,8 +17,12 @@ struct ProfileEditor: View {
             SheetField("Body profile") {
                 VStack(alignment: .leading, spacing: 12) {
                     Stepper("Age: \(profile.age)", value: $profile.age, in: 13...100)
-                    Stepper("Weight: \(Int(profile.weightPounds.rounded())) lb", value: $profile.weightPounds, in: 70...500, step: 1)
-                    Stepper("Height: \(heightText)", value: $profile.heightInches, in: 48...84, step: 1)
+                    Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
+                            value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
+                            in: BodyMeasurementEntry.weightRange(), step: 1)
+                    Stepper(BodyMeasurementEntry.heightLabel(inches: profile.heightInches),
+                            value: BodyMeasurementEntry.heightBinding($profile.heightInches),
+                            in: BodyMeasurementEntry.heightRange(), step: 1)
                     // Same two labels the onboarding step uses (LabeledProfilePicker) — the two
                     // surfaces edit one profile and used to name these fields differently
                     // ("Gender" / "Estimated lifestyle activity" here, nothing at all there).
@@ -62,10 +66,6 @@ struct ProfileEditor: View {
         }
     }
 
-    private var heightText: String {
-        let total = Int(profile.heightInches.rounded())
-        return "\(total / 12) ft \(total % 12) in"
-    }
 }
 
 /// The two body-profile field names Settings and onboarding must agree on.

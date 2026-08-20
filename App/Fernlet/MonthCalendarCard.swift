@@ -43,7 +43,8 @@ struct MonthGridDay {
 struct MonthGridModel {
     /// The localized wide-month + year title for the displayed month.
     let monthTitle: String
-    /// The layout calendar's very-short weekday symbols, in column order.
+    /// The layout calendar's very-short weekday symbols, rotated into column order — that is,
+    /// starting at the calendar's own `firstWeekday` rather than always at Sunday.
     let weekdaySymbols: [String]
     /// How many blank pad cells precede day 1 in the 7-column grid.
     let leadingBlanks: Int
@@ -58,8 +59,8 @@ struct MonthGridModel {
         let firstWeekday = calendar.component(.weekday, from: start)
 
         self.monthTitle = date.formatted(.dateTime.month(.wide).year())
-        self.weekdaySymbols = calendar.veryShortWeekdaySymbols
-        self.leadingBlanks = firstWeekday - 1
+        self.weekdaySymbols = Self.orderedWeekdaySymbols(for: calendar)
+        self.leadingBlanks = (firstWeekday - calendar.firstWeekday + 7) % 7
 
         let year = calendar.component(.year, from: start)
         let month = calendar.component(.month, from: start)
@@ -74,6 +75,20 @@ struct MonthGridModel {
                 isFuture: key > todayKey
             )
         }
+    }
+
+    /// `veryShortWeekdaySymbols` rotated so index 0 is the calendar's own first weekday.
+    ///
+    /// Foundation always returns those symbols Sunday-first regardless of locale — the locale's
+    /// preference lives in `Calendar.firstWeekday` instead (2 in es/fr/de and most of Europe,
+    /// 7 in much of the Middle East). Rendering the array unrotated printed a Sunday-first header
+    /// over a Monday-first grid, so every day cell in those locales sat under the wrong letter.
+    private static func orderedWeekdaySymbols(for calendar: Calendar) -> [String] {
+        let symbols = calendar.veryShortWeekdaySymbols
+        // `firstWeekday` is 1-based (1 = Sunday); a malformed calendar leaves the order untouched.
+        let offset = calendar.firstWeekday - 1
+        guard offset > 0, offset < symbols.count else { return symbols }
+        return Array(symbols[offset...] + symbols[..<offset])
     }
 }
 

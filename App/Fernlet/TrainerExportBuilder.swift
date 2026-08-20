@@ -706,7 +706,12 @@ enum ExerciseLineParser {
     /// coach-planned exercise ends in a guidance suffix — `Bench press - 3 x 8 (RPE 7)`. Matching a
     /// bare number would read that 7 as a 7 lb bench press and quietly corrupt the progression
     /// rollup a coach programs from. Losing the load on `Squat 5x5 225` is the cheaper mistake.
-    private static let load = /(?:@\s*(\d{1,4}(?:\.\d{1,2})?)\s*(lbs?|kgs?|kilos?)?|(\d{1,4}(?:\.\d{1,2})?)\s*(lbs?|kgs?|kilos?))\b/
+    ///
+    /// The fraction accepts `,` as well as `.` because the load is composed from what the person
+    /// typed into the weight field, on a decimal pad whose separator follows their locale. While
+    /// this matched `.` only, `62,5 kg` did not fail visibly — the engine simply resumed at the
+    /// `5` and exported a **5 kg** bench press. Parsing is left to `LocaleTolerantNumber`.
+    private static let load = /(?:@\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*(lbs?|kgs?|kilos?)?|(\d{1,4}(?:[.,]\d{1,2})?)\s*(lbs?|kgs?|kilos?))\b/
 
     /// Removes parenthesised segments, which carry cues (`(RPE 7)`, `(2s pause)`) rather than load.
     private static func strippingParentheticals(_ text: String) -> String {
@@ -738,7 +743,7 @@ enum ExerciseLineParser {
             // form — and exactly one of them is populated per match.
             let value = loadMatch.output.1 ?? loadMatch.output.3
             let rawUnit = loadMatch.output.2 ?? loadMatch.output.4
-            weight = value.flatMap { Double($0) }
+            weight = value.flatMap { LocaleTolerantNumber.double(from: String($0)) }
             if let rawUnit {
                 unit = rawUnit.lowercased().hasPrefix("k") ? "kg" : "lb"
             }

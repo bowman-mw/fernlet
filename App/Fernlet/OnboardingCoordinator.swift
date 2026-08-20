@@ -543,8 +543,12 @@ private struct OnboardingPersonalDetailsScreen: View {
                     Stepper("Age", value: steppedAge, in: 13...100)
                         .labelsHidden()
                 }
-                Stepper("Weight: \(Int(profile.weightPounds.rounded())) lb", value: $profile.weightPounds, in: 70...500, step: 1)
-                Stepper("Height: \(heightText)", value: $profile.heightInches, in: 48...84, step: 1)
+                Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
+                        value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
+                        in: BodyMeasurementEntry.weightRange(), step: 1)
+                Stepper(BodyMeasurementEntry.heightLabel(inches: profile.heightInches),
+                        value: BodyMeasurementEntry.heightBinding($profile.heightInches),
+                        in: BodyMeasurementEntry.heightRange(), step: 1)
                 // Labelled, and with the same words Settings uses: `.menu` pickers outside a
                 // Form hide their own label, so these two rows read as a bare "Male ◇" and
                 // "Moderate ◇" with nothing saying what they set.
@@ -602,10 +606,6 @@ private struct OnboardingPersonalDetailsScreen: View {
         .requestsAgeRange(when: $isRequestingAgeRange, into: ageAssurance, onFinish: continueAction)
     }
 
-    private var heightText: String {
-        let total = Int(profile.heightInches.rounded())
-        return "\(total / 12) ft \(total % 12) in"
-    }
 }
 
 /// Onboarding step for choosing an eating pattern (balanced, higher-protein, plant-forward,

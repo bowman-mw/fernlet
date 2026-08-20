@@ -235,7 +235,7 @@ public enum FoundationFoodSelectionModel {
     private static func explicitCount(in itemName: String) -> Double? {
         FoodItemSearch.normalized(itemName)
             .split(separator: " ")
-            .compactMap { Double($0) }
+            .compactMap { LocaleTolerantNumber.double(from: String($0)) }
             .first
     }
 

@@ -3,8 +3,9 @@
 //  Fernlet
 //
 //  A calm, low-stimulation "first aid" sheet: slow breathing, 5-4-3-2-1 grounding, the
-//  Worry Box, and a static gentle-support row (988). Always reachable — from the Home
-//  affordance near the companion, the body-signals explainer, and the gentle offer card.
+//  Worry Box, and a static gentle-support row (a region-appropriate crisis line). Always
+//  reachable — from the Home affordance near the companion, the body-signals explainer,
+//  and the gentle offer card.
 //  The support row is deliberately static and always visible; it is NOT the deferred
 //  extended-low-mood auto-nudge.
 //
@@ -26,12 +27,13 @@ enum FirstAidTool: String, Hashable {
 }
 
 /// The calm, low-stimulation "first aid" menu sheet: slow breathing, 5-4-3-2-1 grounding, the
-/// Worry Box entry flow, and a static gentle-support row (call/text 988).
+/// Worry Box entry flow, and a static gentle-support row carrying the crisis line for the
+/// device's region (``CrisisResources``).
 ///
 /// Presented by ContentView from the Home affordance near the companion, the body-signals
 /// explainer (``StressExplainerSheet``), and the gentle offer card; `initialTool` lets those
 /// callers land directly on one tool. Tools push via a ``FirstAidTool`` navigation path into
-/// ``BreathingExerciseView``, ``GroundingView``, and ``WorryEntryView``. The 988 support row is
+/// ``BreathingExerciseView``, ``GroundingView``, and ``WorryEntryView``. The support row is
 /// deliberately static and always visible — it is NOT the deferred extended-low-mood auto-nudge —
 /// and a completed breathing session is counted in the milestone ledger and quietly offered to
 /// Apple Health (every consent gate is enforced inside `saveMindfulSession`; a closed gate or
@@ -54,7 +56,7 @@ struct FirstAidView: View {
     private let pillRadius: CGFloat = 13
 
     // Surface-local warm hues that override the app's cool secondary ink for this menu.
-    // Captions warm to taupe; the 988 card keeps every element in one amber-brown family.
+    // Captions warm to taupe; the support card keeps every element in one amber-brown family.
     private static let captionInk = Color(light: Color(red: 0.478, green: 0.416, blue: 0.333),
                                           dark:  Color(red: 0.663, green: 0.612, blue: 0.522))
     private static let groundingInk = Color(light: Color(red: 0.369, green: 0.486, blue: 0.549),
@@ -65,7 +67,8 @@ struct FirstAidView: View {
                                                dark:  Color(red: 0.796, green: 0.725, blue: 0.561))
     private static let supportOutlineInk = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133),
                                                  dark:  Color(red: 0.878, green: 0.722, blue: 0.376))
-    /// Text-988 outline stroke — brown @0.35 in light, goldenrod @0.4 in dark (mockup §1a).
+    /// Secondary support-button outline stroke — brown @0.35 in light, goldenrod @0.4 in dark
+    /// (mockup §1a).
     private static let supportOutlineStroke = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133).opacity(0.35),
                                                     dark:  Color(red: 0.878, green: 0.722, blue: 0.376).opacity(0.40))
     /// On-accent ink for the filled Call button — parchment in light, near-black in dark.
@@ -183,8 +186,14 @@ struct FirstAidView: View {
 
     /// Static gentle-support row — always visible, never conditional, never tracking anything.
     /// Set apart from the tools with a warmer, goldenrod-tinted card.
+    ///
+    /// The line shown is chosen by ``CrisisResources`` from the device's *region*, read at render
+    /// time rather than cached so travelling changes the number. A region Fernlet has no verified
+    /// line for renders the copy with no buttons at all — never a number that does not connect
+    /// there.
     private var supportRow: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        let resource = CrisisResources.resource(for: Locale.current.region)
+        return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
                 Image(systemName: "heart")
                     .font(.system(size: 17, weight: .regular))
@@ -193,15 +202,18 @@ struct FirstAidView: View {
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Self.supportHeadingInk)
             }
-            Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
+            Text(resource.blurb)
                 .font(.fernlet(.body))
                 .foregroundStyle(Self.supportProseInk)
                 .lineSpacing(2)
                 .fernletWrappingText()
                 .padding(.bottom, FernletMetrics.spaceXs)
-            HStack(spacing: 10) {
-                supportLink("Call 988", icon: "phone", url: "tel:988", filled: true)
-                supportLink("Text 988", icon: "message", url: "sms:988", filled: false)
+            if resource.actions.isEmpty == false {
+                HStack(spacing: 10) {
+                    ForEach(Array(resource.actions.enumerated()), id: \.element.id) { index, action in
+                        supportLink(action, filled: index == 0)
+                    }
+                }
             }
         }
         .padding(20)
@@ -220,30 +232,31 @@ struct FirstAidView: View {
         )
     }
 
-    @ViewBuilder
-    private func supportLink(_ title: String, icon: String, url: String, filled: Bool) -> some View {
-        if let destination = URL(string: url) {
-            Link(destination: destination) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.subheadline.weight(.semibold))
-                    Text(title)
-                        .font(.fernlet(.label))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .foregroundStyle(filled ? Self.supportFilledInk : Self.supportOutlineInk)
-                .background {
-                    if filled {
-                        RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
-                            .fill(Color.moss)
-                    } else {
-                        RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
-                            .stroke(Self.supportOutlineStroke, lineWidth: 1.5)
-                    }
+    /// One call/text button. The URL is already resolved by ``CrisisResources``, so — unlike the
+    /// hardcoded version this replaced — there is no optional-URL branch that could silently
+    /// render nothing.
+    private func supportLink(_ action: CrisisResourceAction, filled: Bool) -> some View {
+        Link(destination: action.url) {
+            HStack(spacing: 8) {
+                Image(systemName: action.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                Text(action.title)
+                    .font(.fernlet(.label))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .foregroundStyle(filled ? Self.supportFilledInk : Self.supportOutlineInk)
+            .background {
+                if filled {
+                    RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
+                        .fill(Color.moss)
+                } else {
+                    RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
+                        .stroke(Self.supportOutlineStroke, lineWidth: 1.5)
                 }
             }
         }
+        .accessibilityIdentifier("firstAid.support.\(action.id)")
     }
 
     /// A finished breathing session: quietly offer it to Apple Health as a mindful session.

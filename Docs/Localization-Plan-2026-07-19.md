@@ -1,7 +1,9 @@
 # Fernlet Localization Plan — Spanish, French, German
 
-**Date:** 2026-07-19 · **Status:** PLANNED — nothing implemented. Grounded in a two-agent code
-audit of `main` (2026-07-19); every claim below carries file:line evidence from that audit.
+**Date:** 2026-07-19 · **Status:** **Phase 0 SHIPPED 2026-08-19** (branch
+`claude/localization-phase0`); Phases 1–5 still planned only. Grounded in a two-agent code audit of
+`main` (2026-07-19); every claim below carries file:line evidence from that audit — see the
+Phase 0 section for where the tree has since moved.
 **Scope:** `es`, `fr`, `de` as the first localization wave, `en` stays the development language.
 All three are inside Apple Intelligence's supported language set (on-device AI keeps working) and
 all three are fully covered by the app's existing Latin fonts — the two facts that make this the
@@ -54,6 +56,37 @@ What is already safe (do not touch):
 ## 2. Phase 0 — Locale-correctness fixes (ship regardless of translation)
 
 These are live bugs for non-US users **today, in English**.
+
+> **DONE — 2026-08-19.** All four sub-sections below are implemented on
+> `claude/localization-phase0`, with `LocaleTolerantNumberTests` (26 cases) and
+> `LocaleCorrectnessTests` (month grid, crisis table, body units). Scanners clean
+> (power-of-10 0 violations, doc coverage 0 undocumented), S3 wall check passed, owning suites
+> green, and both the crisis row and the Monday-first grid verified on the simulator under
+> `de_DE`. What the tree had already moved on from since the July audit:
+>
+> - **The three calendar grids are now one file.** `ContentView`/`JournalView`/`PeriodTrackerView`
+>   were consolidated into `MonthCalendarCard.swift`'s `MonthGridModel`, so §2.1 was one fix, not
+>   three. `MoveView`'s week strip and `GroceryPlannerView` use `dateInterval(of: .weekOfYear:)`,
+>   which already honours `firstWeekday` — no bug there.
+> - **Some decimal-comma sites had been fixed ad hoc**, each with its own
+>   `replacingOccurrences(of: ",", with: ".")`. Those are now the shared parser too, so the rule
+>   lives in one place.
+> - **§2.4 was backwards, and worse than described.** The profile stores `weightPounds` /
+>   `heightInches` (`weightKilograms` is a computed read-only view), and *both* editors —
+>   onboarding and Settings' `ProfileEditor` — offered pounds and feet/inches only. A metric user
+>   had no way to enter their own body at all, and those numbers feed the BMR behind every
+>   nutrition target.
+> - **One silent-corruption bug the audit did not predict.** `TrainerExportBuilder`'s load regex
+>   matched `.` only, so a German user's `62,5 kg` did not fail visibly — the engine resumed at the
+>   `5` and exported a **5 kg** lift to their coach.
+> - **`EquipmentIcons.swift` was deliberately left alone.** The audit filed it under §2.3, but it
+>   is an SVG path-data parser over app-authored strings, where `.` is mandated by the SVG spec;
+>   making it locale-tolerant would be a bug, not a fix.
+>
+> Still open from Phase 0: **D-L5** — the hotline table below is safety copy and wants owner
+> sign-off. The shipped table covers US, CA, GB, IE, ES, FR, DE, AU, NZ (each verified against the
+> operator's own page in August 2026) and falls back to "local emergency services" with **no
+> number** everywhere else.
 
 ### 2.1 Monday-first calendar grids
 `ContentView.swift:1351-1361`, `JournalView.swift:663-675`, `PeriodTrackerView.swift:486-492` all
@@ -299,11 +332,12 @@ national tables are real, free, and good:
 | D-L2 | Localize exercise names? | **DECIDED 2026-07-19:** localize display names; matching/tokens stay canonical English via catalog IDs (§3.4-3). English terms kept as searchable aliases. |
 | D-L3 | Regional data packs go/no-go | OPEN — do v1 aliases first; green-light CIQUAL/BLS packs after verifying BLS 4.0 redistribution terms for in-app embedding and confirming pack-vs-USDA ranking UX. |
 | D-L4 | Privacy-policy translation timing | **DECIDED 2026-07-19:** ship English policy with wave 1; translated+reviewed policies as fast-follow. |
-| D-L5 | Crisis-resource table | OPEN — user signs off the final per-region hotline list before ship (safety copy; pairs with the crisis-nudge build). |
+| D-L5 | Crisis-resource table | OPEN — implemented 2026-08-19 in `CrisisResources.swift` (US, CA, GB, IE, ES, FR, DE, AU, NZ + no-number fallback), each number verified against the operator's own page. Owner still signs off the list before ship. |
 
 ## 9. Suggested execution order & rough effort
 
-1. **Phase 0** (locale bugs) — small, self-contained, testable; ship first. *Days.*
+1. ~~**Phase 0** (locale bugs) — small, self-contained, testable; ship first. *Days.*~~ **DONE
+   2026-08-19** — see the note in §2.
 2. **Phase 1** (scaffolding + token/display forks) — mechanical but wide; the §3.4 forks are the
    only genuinely delicate part. *Days, plus a clean-build + full-suite gate.*
 3. **Phase 3** (engines) — the AI output-language + English-component instruction and the unit

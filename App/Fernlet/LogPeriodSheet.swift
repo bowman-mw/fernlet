@@ -417,10 +417,10 @@ struct LogPeriodSheet: View {
     /// — nil field is fine, unusable field refuses the save with a message.
     private func validatedTemperature() -> TemperatureValidation {
         let trimmed = temperatureText.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
         guard !trimmed.isEmpty else { return .value(nil) }
         let range = temperatureRange
-        guard let parsed = Double(trimmed), parsed.isFinite, range.contains(parsed) else {
+        guard let parsed = LocaleTolerantNumber.double(from: trimmed),
+              parsed.isFinite, range.contains(parsed) else {
             return .invalid("Enter a temperature between \(Int(range.lowerBound)) and \(Int(range.upperBound)) \(temperatureUnit.symbol), or leave it blank.")
         }
         return .value(parsed)

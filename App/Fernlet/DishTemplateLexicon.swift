@@ -247,7 +247,8 @@ enum DishTemplateLexicon {
     /// `Macros.scaled(by:)` and trap.
     private static func extractLeadingCount(from normalized: String) -> Double? {
         guard let firstToken = normalized.split(separator: " ").first.map(String.init),
-              let count = Double(firstToken), count.isFinite, count > 0 else { return nil }
+              let count = LocaleTolerantNumber.double(from: firstToken),
+              count.isFinite, count > 0 else { return nil }
         return min(count, maxLeadingCount)
     }
 }
