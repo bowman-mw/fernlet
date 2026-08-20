@@ -23,3 +23,10 @@ AGENTS.md
 # Stale root-level project stub: an Xcode window still open on the pre-restructure path
 # recreates ./Fernlet.xcodeproj holding only UI state. The real project is App/Fernlet.xcodeproj.
 /Fernlet.xcodeproj/
+
+# UX-review screenshot sweeps: development-time reference only, regenerable from the app, and large
+# (the 2026-08-16 sweep alone is ~92 MB of PNGs). They go stale the moment the UI changes, so they are
+# kept locally and never committed. Consequence: the browsable index at
+# Docs/design-refs/<review>/review.html renders broken images unless you have the local sweep — the
+# ranked findings in Docs/UI-UX-Review-*.md are the durable record.
+Docs/design-refs/*/shots/
