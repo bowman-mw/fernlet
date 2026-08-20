@@ -34,6 +34,16 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
   - **Pricing — DECIDED 2026-07-19: Fernlet is always free** (no IAP). EU DSA: declare
     **non-trader** — nothing gets published on EU product pages. (Coach-app monetization is a
     separate, later question — spec D7.)
+  - **Licensing — DECIDED 2026-08-19: Fernlet is permanently open source**, Apache-2.0, with the
+    complete cryptographic source published at github.com/bowman-mw/fernlet (repo made public
+    2026-08-19).
+  - **Both of the above are now COMPLIANCE INVARIANTS, not just positioning.** Being free is what
+    makes the shipped binary "publicly available" and therefore **not subject to the EAR**; being
+    published is what defeats the "not otherwise published" prong of the non-standard-cryptography
+    test. Reversing either reopens the whole export determination — re-run
+    [Export-Compliance-Encryption.md](Export-Compliance-Encryption.md) §6A and §7 *before* shipping
+    such a change. (This does not constrain Coach, which is closed-source and may be paid; it
+    inherits none of this.)
   - **fernlet.com site: BUILT 2026-07-19** — the full static site lives in [`Site/`](../Site/README.md)
     (landing, `/privacy/` generated from Privacy-Policy.md, `/support/`, 404, Cloudflare `_headers`
     with the future-AASA content-type rule; zero JS/cookies/external requests, app theme colors,

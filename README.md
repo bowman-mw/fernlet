@@ -27,8 +27,13 @@ The social half works **only in person**: two phones held ~15 cm apart for about
 friend handshake. Hearts, recipes and hand-drawn clothing travel device-to-device over a signed,
 sealed peer-to-peer mesh. There is no friend server, no follow button and no discovery feed.
 
-**Status:** in active development, pre-App-Store. Fernlet will be free — no subscription, no ads,
-no in-app purchases.
+**Status:** in active development, pre-App-Store.
+
+**Free and open source, permanently.** Fernlet has no purchase price, no subscription, no in-app
+purchases and no ads, and its full source — including every line of the cryptography — is published
+here under Apache-2.0. These are commitments rather than launch pricing: they are load-bearing for
+the app's US export-control position, where being a free, publicly available app is what keeps the
+shipped binary outside the EAR. See [Docs/Export-Compliance-Encryption.md](Docs/Export-Compliance-Encryption.md) §6A.
 
 **Requires:** iOS 26 or later. iPhone 15 Pro or newer for the full on-device AI features; the 15 cm
 handshake needs a phone with precise ranging (U1/UWB), with an on-screen confirm as the fallback.

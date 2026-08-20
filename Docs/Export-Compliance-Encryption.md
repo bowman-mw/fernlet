@@ -162,6 +162,7 @@ Positive case for **5D992.c**:
 | Documents to upload to App Store Connect | None, except the French declaration if France is a release country (§8) |
 | `ITSEncryptionExportComplianceCode` | Not applicable (Apple only issues one after a document review) |
 | BIS annual self-classification report | **Almost certainly not required** — see the rewritten §6 |
+| Status of the shipped binary | **Not subject to the EAR** once self-classification is done, because the app is free and publicly available (§6A, Route A) |
 
 ---
 
@@ -239,8 +240,12 @@ Confirmed current as of 2026-08-19, and correcting two errors in the first draft
 
 File **one** Supplement No. 8 CSV, once, if any non-US distribution happens — then never again. It is
 a single row; it resolves the regulation-versus-guidance conflict in §6.1; and it is the step BIS's
-own guidance (§6A) says to complete *"only once"* before a free app becomes publicly available. Do not
-treat it as recurring.
+own guidance (§6A) says to complete *"only once"* before a free app becomes publicly available.
+
+Under Route A this is unambiguously one-and-done rather than a hedge with an open tail: once
+self-classification is complete and the free app is publicly available, **the item is not subject to
+the EAR at all**, so there is no subsequent year in which a report could be owed. Do not diarise it
+as recurring.
 
 ---
 
@@ -249,9 +254,15 @@ treat it as recurring.
 Omitted entirely from the first draft, and now the most important section here: **the shipped app can
 end up outside the EAR altogether.**
 
-### 6A.1 Two routes, one destination
+### 6A.1 Two routes, one destination — both resting on locked product invariants
 
-**Route A — mass market + free.** BIS's
+> **Product invariants (confirmed 2026-08-19).** Fernlet is **permanently free** — no purchase price,
+> no subscription, no IAP — and **permanently open source** under Apache-2.0 with the complete
+> cryptographic source published. These are product commitments, not current circumstances. Both
+> routes below rest on them, which is what turns this section from a conditional argument into the
+> primary compliance posture. See §9 before changing either.
+
+**Route A — mass market + free (the primary route).** BIS's
 [Encryption items not subject to the EAR](https://www.bis.gov/learn-support/encryption-controls/encryption-items-not-subject-to-ear)
 addresses this fact pattern by example:
 
@@ -263,15 +274,25 @@ addresses this fact pattern by example:
 > item is made publicly available (e.g., free to download) it would be considered not subject to the
 > EAR anymore.
 
-The qualifying act is that **Fernlet is free**, not that the source is on GitHub. Fernlet is
-permanently free by product decision (recorded 2026-07-19), so this is durable — **but it is
-conditional: if Fernlet ever becomes paid, this analysis must be re-run.**
+The qualifying act is that **Fernlet is free**, not that the source is on GitHub — and free is a
+permanent product commitment (decided 2026-07-19, reaffirmed 2026-08-19), not a launch-pricing
+choice. BIS's example is a free smartphone app, which is exactly what Fernlet is and will remain, so
+this route is available now and stays available.
 
-**Route B — published source, corresponding object code.** §742.15(b)(1) puts publicly available
-5D002 *source code* outside the EAR; §734.7(b) and the Note to §734.3(b)(2)–(3) extend that to
-*"publicly available encryption object code software … when the corresponding source code meets the
-criteria specified in § 742.15(b)."* The repository is public under Apache-2.0 with the complete
-crypto source, so the source-side condition is met.
+Note what Route A does **not** require: it needs no published source at all. A closed-source free app
+reaches the same place. That is why Route B below is genuine reinforcement rather than a substitute —
+the two are independent, and Fernlet satisfies both.
+
+**Route B — published source, corresponding object code (independent reinforcement).**
+§742.15(b)(1) puts publicly available 5D002 *source code* outside the EAR; §734.7(b) and the Note to
+§734.3(b)(2)–(3) extend that to *"publicly available encryption object code software … when the
+corresponding source code meets the criteria specified in § 742.15(b)."* The repository is public
+under Apache-2.0 with the complete crypto source — permanently, by the same product commitment — so
+the source-side condition is met and stays met.
+
+Route B also does work Route A cannot: publication is what defeats the second prong of the
+"non-standard cryptography" test in §7, which is the only question in this document that carries real
+cost. Keeping the source public is therefore load-bearing twice over.
 
 **Ordering matters.** The Note to §740.17(b) is explicit that publication alone does not release a
 mass-market item: it *"remains subject to the EAR until all applicable classification or
@@ -282,8 +303,12 @@ attaches after.
 
 The App Store binary is not byte-identical to anything published — Apple re-signs, FairPlay-wraps and
 thins it, and the EULA restricts redistribution — so a strict reader could argue *that artifact* was
-never itself published. No BIS guidance was found addressing this mixed-channel case. **Route A
-sidesteps it entirely**, because BIS's own example treats "free to download" as the qualifying act.
+never itself published. No BIS guidance was found addressing this mixed-channel case.
+
+**This uncertainty attaches to Route B only, and Route A does not depend on resolving it**, because
+BIS's own example treats "free to download" as the qualifying act rather than byte-identity with a
+published artifact. Since Fernlet is permanently free, the primary route never reaches the question.
+Route B remains available as a second, independent argument if anyone ever presses the point.
 
 ### 6A.3 The §742.15(b)(2) notification
 
@@ -410,7 +435,13 @@ first overseas TestFlight tester** — not App Store launch. Nothing is owed to 
       never again (§6.3). Use the corrected 12-column row in §10.5.
 - [ ] **Legal:** the §7 protocol question and the §7 "easily changed by the user" counter-risk are the
       only items carrying real cost. Everything else is settled.
-- [ ] **Re-run this analysis if Fernlet ever stops being free** — Route A in §6A.1 depends on it.
+- [ ] **Treat "free" and "open source" as compliance invariants, not preferences.** Both are permanent
+      product commitments, and §6A now rests on them: **free** is what makes the shipped binary
+      publicly available under Route A, and **published source** is what defeats the second prong of
+      the §7 non-standard-cryptography test under Route B. Introducing a purchase price, a
+      subscription, or an IAP — or closing the repository — does not merely change positioning; it
+      reopens this entire determination and could pull the app back under the EAR. If either is ever
+      revisited, re-run §6A and §7 *before* shipping the change, not after.
 - [ ] **Coach app:** repeat separately for Fernlet Coach — different bundle, different crypto surface,
       closed source, App Attest. Its classification does not inherit from this one, and being
       closed-source means neither Route A nor Route B is available to it on the same terms.
