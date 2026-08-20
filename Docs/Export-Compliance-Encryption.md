@@ -416,11 +416,11 @@ first overseas TestFlight tester** — not App Store launch. Nothing is owed to 
       sealed recipe-import path).
 - [x] **Docs:** the "Encryption" section of [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md)
       now points here rather than asserting the old exemption — done in commit `4802416`.
-- [ ] **Write and date the self-classification memo.** One page: mass market under Note 3, all
-      primitives published standards, protocols published under Apache-2.0 at the repo URL, therefore
-      not "non-standard cryptography", **ECCN 5D992.c** under §740.17(b)(1). This memo *is* the
-      compliance artifact — nothing is filed to create it. Retain **five years** past the last export
-      (§762.6(a)).
+- [x] **Write the self-classification memo** — drafted at
+      [Export-Self-Classification-Memo.md](Export-Self-Classification-Memo.md). This memo *is* the
+      compliance artifact; nothing is filed to create it. **Still open for the owner:** confirm the
+      legal name/entity as it appears on the App Store listing, then sign and date it. Retain **five
+      years** past the last export (§762.6(a)).
 - [ ] **Do this before the first overseas TestFlight tester** — see §6A.4. Self-classifying first is
       what keeps the beta out of 5D002/EI territory.
 - [ ] **Send the §742.15(b)(2) notification** to `crypt@bis.doc.gov` and `enc@nsa.gov` with the
