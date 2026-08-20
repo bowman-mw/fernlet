@@ -105,13 +105,13 @@ struct NutritionTargetsEditor: View {
                     }
                 }
 
-                MacroTargetRow(label: "Calories", unit: "cal", placeholder: applied.calories,
+                MacroTargetRow(label: "Calories", identifier: "nutritionTargets.calories", unit: "cal", placeholder: applied.calories,
                                maxValue: 9_999, value: binding(\.calorieTargetOverride))
                 Divider().overlay(Color.bark.opacity(0.08))
-                MacroTargetRow(label: "Protein", unit: "g", placeholder: applied.protein,
+                MacroTargetRow(label: "Protein", identifier: "nutritionTargets.protein", unit: "g", placeholder: applied.protein,
                                maxValue: 999, value: binding(\.proteinTargetOverride))
                 Divider().overlay(Color.bark.opacity(0.08))
-                MacroTargetRow(label: "Fat", unit: "g", placeholder: applied.fat,
+                MacroTargetRow(label: "Fat", identifier: "nutritionTargets.fat", unit: "g", placeholder: applied.fat,
                                maxValue: 999, value: binding(\.fatTargetOverride))
                 Divider().overlay(Color.bark.opacity(0.08))
 
@@ -202,6 +202,13 @@ struct NutritionTargetsEditor: View {
 /// or the residual math.
 private struct MacroTargetRow: View {
     let label: String
+    /// The row's stable automation id, passed explicitly rather than derived from ``label``.
+    ///
+    /// It used to be built as `"nutritionTargets.\(label.lowercased())"`. The moment `label`
+    /// localizes, that id becomes `nutritionTargets.kalorien` and five UI-test hooks break — and
+    /// because the suite runs in English, CI would stay green until the first localized run, far
+    /// from the cause. A display string can never be an identifier.
+    let identifier: String
     let unit: String
     let placeholder: Int
     let maxValue: Int
@@ -222,7 +229,7 @@ private struct MacroTargetRow: View {
                 .padding(.vertical, 7)
                 .padding(.horizontal, 10)
                 .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityIdentifier("nutritionTargets.\(label.lowercased())")
+                .accessibilityIdentifier(identifier)
             Text(unit)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)

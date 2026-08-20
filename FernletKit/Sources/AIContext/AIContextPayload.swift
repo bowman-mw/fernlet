@@ -15,6 +15,17 @@ import FernletDomainModel
 public protocol AIContextPayload: Sendable {
     /// Stable kind token for this payload family (e.g. `"companion-thought"`), recorded in the audit
     /// log and matched against `MemoryAgent.allowedPayloadKinds`.
+    ///
+    /// **DO NOT LOCALIZE ANY `payloadKind` LITERAL IN THIS FILE.** These hyphenated lowercase
+    /// strings are tokens with two consumers, neither of which is a screen: `AIAuditLog` persists
+    /// them as the audit trail's key (so a translated value orphans every historical row for that
+    /// family), and `MemoryAgent.filteredContext` compares them by exact equality against
+    /// `allowedPayloadKinds` — a fail-closed privacy gate whose miss path is `return ""`, with no
+    /// throw and no log. Localizing `"companion-thought"` on either side of that comparison does
+    /// not break the build or the prompt; it silently and permanently strips the user's behavioral
+    /// memory from every companion thought, which surfaces only as "the AI got worse in Spanish".
+    /// If a payload kind ever needs a human-readable name, add a separate `displayName` property —
+    /// never translate the token.
     var payloadKind: String { get }
     /// The NAMES of the fields this payload carries — what the audit log stores; never the values.
     var includedFieldNames: [String] { get }
@@ -28,6 +39,8 @@ public protocol AIContextPayload: Sendable {
 /// the model picks the best catalog candidates for a described meal.
 /// Forbidden: journal text, period data, health metrics, TierTwo memories, narratives.
 public struct FoodSelectionPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "food-selection"
     /// The user's free-text meal description — the only user prose this payload carries.
     public let mealDescription: String
@@ -53,6 +66,8 @@ public struct FoodSelectionPayload: AIContextPayload {
 /// foods before candidate matching. Sends strictly less than ``FoodSelectionPayload`` — no candidate
 /// list required.
 public struct MealDecompositionPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "meal-decomposition"
     public let mealDescription: String
     public let fallbackMealType: MealType?
@@ -73,6 +88,8 @@ public struct MealDecompositionPayload: AIContextPayload {
 /// search provider, so this path is opt-in, settings-gated, and audited at DISPATCH time (see
 /// ``AIAuditLog``'s dispatch-then-update contract). Built by the app's food view flow.
 public struct WebNutritionLookupPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "web-nutrition"
     public let mealDescription: String
 
@@ -95,6 +112,8 @@ public struct WebNutritionLookupPayload: AIContextPayload {
 /// free-text prompt. Sanitizing in `init` rather than at the call site makes that unbypassable: a
 /// name can no longer carry a line break and forge a prompt section, nor run unbounded.
 public struct DaySummaryPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "day-summary"
     public let mealNames: [String]
     public let workoutNames: [String]
@@ -117,6 +136,14 @@ public struct DaySummaryPayload: AIContextPayload {
     ) {
         // Sleep/journal labels are app-generated enum labels and stay verbatim; only these two
         // lists carry externally authored text.
+        //
+        // Those two labels are the double-duty risk in this type: `sleepQualityLabel` and
+        // `journalTagLabel` are today the same strings the UI shows ("Good", "Hard"), and they are
+        // interpolated straight into a free-text prompt. If the display side of those enums is ever
+        // localized, the caller must pass the enum's rawValue here instead — the prompt vocabulary
+        // has to stay one stable language, or the model's grounding shifts per device locale with
+        // no error and no test failure. Callers live in the app target, so this file cannot enforce
+        // it; the invariant is "whatever reaches these two parameters is a token, not UI copy".
         self.mealNames = mealNames.map {
             ItemNameModeration.sanitizedName($0, maxLength: AIPromptTextLimits.maxNameCharacters)
         }
@@ -155,6 +182,11 @@ public struct AISignalSummary: Equatable, Sendable {
 /// `filteredMemorySummary` MUST be the output of ``MemoryAgent/filteredContext(from:destinedFor:recencyDays:maxChars:)``
 /// — never a raw `tierTwoContextSummary` call.
 public struct CompanionThoughtPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. This is the ONE value in
+    /// `MemoryAgent.allowedPayloadKinds`, so it is the single string standing between the
+    /// user's TierTwo behavioral memory and the prompt. Translate it and the gate stops
+    /// matching, `filteredContext` returns "" forever, and nothing throws or logs.
+    /// See ``AIContextPayload/payloadKind``.
     public let payloadKind = "companion-thought"
     public let signalSummaries: [AISignalSummary]
     /// Tag label only — never journal entry text.
@@ -182,6 +214,8 @@ public struct CompanionThoughtPayload: AIContextPayload {
 /// Forbidden: journal text, period data, health metrics, narratives. Only the session's exercise
 /// names, the user's free-text request, and how many catalog candidates were offered are sent.
 public struct WorkoutAdjustmentPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "workout-adjustment"
     public let request: String
     public let currentExercises: [String]
@@ -218,6 +252,8 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
 /// receive zero TierTwo behavioral context — it needs only names — so `MemoryAgent.filteredContext`
 /// returns an empty string for `"ingredient-substitution"` by default (fail-closed).
 public struct IngredientSubstitutionPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "ingredient-substitution"
     public let recipeName: String
     public let ingredientToReplace: String
@@ -255,6 +291,8 @@ public enum AIPromptTextLimits {
 /// product page. Only the source host and approximate text length are recorded; page content is
 /// never logged.
 public struct WebPageNutritionExtractionPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "web-nutrition-extraction"
     public let sourceHost: String
     public let cleanedTextCharCount: Int
@@ -273,6 +311,8 @@ public struct WebPageNutritionExtractionPayload: AIContextPayload {
 /// recipe page. Only the source host and approximate text length are recorded; page content is
 /// never logged.
 public struct RecipeExtractionPayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
     public let payloadKind = "recipe-extraction"
     public let sourceHost: String
     public let cleanedTextCharCount: Int

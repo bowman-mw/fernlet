@@ -438,9 +438,15 @@ final class LaunchPreparationService {
         let payload = DaySummaryPayload(
             mealNames: day.meals.prefix(5).map(\.name),
             workoutNames: day.workouts.prefix(3).map(\.name),
-            sleepQualityLabel: sleep.map { $0.quality.label.lowercased() },
+            // `rawValue`, not `label`: these two fields are PROMPT VOCABULARY, and `label` is now
+            // a localized display string. Left as `.label` the on-device model would receive a
+            // German or French mood word inside otherwise-English instructions on a non-English
+            // device — degraded output with no error, no log, and no failing test (in an English
+            // run `label == rawValue.capitalized`, so a test would be green exactly when the bug is
+            // live). The change is byte-neutral today for the same reason.
+            sleepQualityLabel: sleep.map { $0.quality.rawValue.lowercased() },
             sleepHours: sleepHours,
-            journalTagLabel: day.journals.last?.tag.label.lowercased()
+            journalTagLabel: day.journals.last?.tag.rawValue.lowercased()
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
 
@@ -497,7 +503,9 @@ final class LaunchPreparationService {
         guard !signals.isEmpty else { return nil }
 
         let signalSummaries = signals.prefix(3).map { AISignalSummary(signalName: $0.signalName, value: $0.value) }
-        let journalTag = store.day.journals.last?.tag.label.lowercased() ?? ""
+        // Prompt vocabulary — the frozen token, never the localized label (see the day-summary
+        // payload above for why).
+        let journalTag = store.day.journals.last?.tag.rawValue.lowercased() ?? ""
         let filteredMemory = MemoryAgent.filteredContext(
             from: store.tierTwoMemories,
             destinedFor: "companion-thought",

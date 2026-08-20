@@ -1230,7 +1230,7 @@ struct DayDetailView: View {
                                 .foregroundStyle(Color.slate)
                         }
                         Spacer()
-                        Text(meal.mealType.rawValue)
+                        Text(verbatim: meal.mealType.displayName)
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(meal.mealType.color)
                             .padding(.horizontal, 8)
@@ -1254,7 +1254,7 @@ struct DayDetailView: View {
                         Text(workout.name)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
-                        Text("\(workout.type.rawValue) · \(workout.intensity.rawValue.capitalized)")
+                        Text(verbatim: "\(workout.type.displayName) · \(workout.intensity.rawValue.capitalized)")
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
@@ -1640,13 +1640,15 @@ struct DayEditSheet: View {
                 HStack(spacing: 8) {
                     Menu {
                         ForEach(WorkoutType.allCases) { type in
-                            Button(type.rawValue) {
+                            Button {
                                 workoutType = type
                                 workoutTouched = true
+                            } label: {
+                                Text(verbatim: type.displayName)
                             }
                         }
                     } label: {
-                        menuLabel(workoutType.rawValue)
+                        menuLabel(workoutType.displayName)
                     }
 
                     Menu {

@@ -176,7 +176,7 @@ enum MealDecompositionResolver {
             itemName: dishName,
             resolvedIngredients: deduped,
             mealType: mealType,
-            confidenceLabel: confidence.mealLabel
+            confidenceToken: confidence.mealConfidence.token
         )
         // F1(a) wire: the decomposition already computed the deduped, catalog-bound ingredient pairs a
         // recipe needs — build one from the SAME pairs (macros stay catalog-bound, never model-emitted)

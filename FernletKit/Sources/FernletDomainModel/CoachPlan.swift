@@ -572,17 +572,50 @@ public nonisolated enum CoachPlanTokens {
         raw.lowercased().filter { !$0.isWhitespace && $0 != "-" && $0 != "_" }
     }
 
+    /// FROZEN English aliases for ``MuscleGroup`` — never translate, never generate.
+    ///
+    /// These used to be read live off `MuscleGroup.displayName`. That was a display string acting
+    /// as a wire-format parser allowlist, and it breaks in two directions the moment display
+    /// localizes: a plan written today against "Upper Back" stops parsing on a translated device,
+    /// and a plan a coach authored while their phone was in German becomes un-reimportable the
+    /// moment anyone switches back to English. A parser's accepted vocabulary is a contract with
+    /// every file already in the world, so it is pinned here as literals rather than derived.
+    ///
+    /// The strings are the English display names as of the fork. Entries are folded on comparison
+    /// (see ``fold(_:)``), so "upper back", "Upper-Back", and "upperBack" all reach the same case.
+    /// ADD to this table when a case is added; never edit or remove an existing line.
+    private static let frozenMuscleAliases: [String: MuscleGroup] = [
+        "chest": .chest, "upperback": .upperBack, "lats": .lats, "lowerback": .lowerBack,
+        "traps": .traps, "frontdelts": .frontDelts, "sidedelts": .sideDelts,
+        "reardelts": .rearDelts, "biceps": .biceps, "triceps": .triceps, "forearms": .forearms,
+        "abs": .abs, "obliques": .obliques, "quads": .quads, "hamstrings": .hamstrings,
+        "glutes": .glutes, "calves": .calves, "adductors": .adductors,
+        "abductors": .abductors, "fullbody": .fullBody,
+    ]
+
+    /// FROZEN English aliases for ``Equipment`` — same contract as ``frozenMuscleAliases``.
+    ///
+    /// Equipment gates the safety filter (an exercise is only prescribable where its gear exists),
+    /// so a token that stops parsing is not a cosmetic miss: the whole plan is rejected with an
+    /// "Unknown equipment" error rather than quietly mis-prescribed, which is the right failure but
+    /// still a plan the coach cannot deliver.
+    private static let frozenEquipmentAliases: [String: Equipment] = [
+        "barbell": .barbell, "dumbbell": .dumbbell, "machine": .machine, "cable": .cable,
+        "bodyweight": .bodyweight, "kettlebell": .kettlebell, "band": .band, "bench": .bench,
+        "cardio": .cardio, "none": Equipment.none,
+    ]
+
     public static func muscle(_ raw: String) -> MuscleGroup? {
         let key = fold(raw)
         if let exact = MuscleGroup.allCases.first(where: { fold($0.rawValue) == key }) { return exact }
-        if let byDisplay = MuscleGroup.allCases.first(where: { fold($0.displayName) == key }) { return byDisplay }
+        if let byAlias = frozenMuscleAliases[key] { return byAlias }
         return MuscleGroup.fromLegacyString(raw.lowercased())
     }
 
     public static func equipment(_ raw: String) -> Equipment? {
         let key = fold(raw)
         if let exact = Equipment.allCases.first(where: { fold($0.rawValue) == key }) { return exact }
-        return Equipment.allCases.first(where: { fold($0.displayName) == key })
+        return frozenEquipmentAliases[key]
     }
 
     public static func movementPattern(_ raw: String) -> MovementPattern? {

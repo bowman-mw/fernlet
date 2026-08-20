@@ -402,7 +402,35 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
 
     public var id: String { rawValue }
 
-    public var label: String { rawValue.capitalized }
+    /// The localized mood-chip label.
+    ///
+    /// Was `rawValue.capitalized`, which cannot be localized at all — it is the token wearing a
+    /// coat of paint. `rawValue` is FROZEN: it is the value stored in the sealed journal column,
+    /// the ``MemoryNote`` category, the parked-token side channel's vocabulary, AND the
+    /// accessibility identifier the UI-test suite selects mood chips by. Only this property is
+    /// text a person reads.
+    public var label: String {
+        switch self {
+        case .bright:
+            String(localized: "feeling.bright", defaultValue: "Bright", bundle: .module,
+                   comment: "Journal mood tag: the brightest of the six moods")
+        case .good:
+            String(localized: "feeling.good", defaultValue: "Good", bundle: .module,
+                   comment: "Journal mood tag: a good day")
+        case .neutral:
+            String(localized: "feeling.neutral", defaultValue: "Neutral", bundle: .module,
+                   comment: "Journal mood tag: neither good nor bad")
+        case .quiet:
+            String(localized: "feeling.quiet", defaultValue: "Quiet", bundle: .module,
+                   comment: "Journal mood tag: a subdued, low-key day")
+        case .tired:
+            String(localized: "feeling.tired", defaultValue: "Tired", bundle: .module,
+                   comment: "Journal mood tag: a tired day")
+        case .hard:
+            String(localized: "feeling.hard", defaultValue: "Hard", bundle: .module,
+                   comment: "Journal mood tag: the hardest of the six moods")
+        }
+    }
 }
 
 /// The user's manually logged sleep for a day: hours, quality, and a note.
@@ -444,14 +472,50 @@ public nonisolated enum SleepQuality: String, Codable, CaseIterable, Identifiabl
     case poor, ok, good, great
 
     public var id: String { rawValue }
-    public var label: String { rawValue.capitalized }
 
+    /// The localized rating label.
+    ///
+    /// Was `rawValue.capitalized`, which is unlocalizable by construction. `rawValue` is FROZEN —
+    /// it is the persisted `SleepLog.quality` token (with a parked-token side channel that assumes
+    /// these exact spellings) and the vocabulary the sleep prompt quotes back at the model. A
+    /// prompt or an export wanting the stable word must read `rawValue`; only this reads as text.
+    public var label: String {
+        switch self {
+        case .poor:
+            String(localized: "sleep.quality.poor", defaultValue: "Poor", bundle: .module,
+                   comment: "Sleep quality rating, worst of four")
+        case .ok:
+            String(localized: "sleep.quality.ok", defaultValue: "Ok", bundle: .module,
+                   comment: "Sleep quality rating, second of four")
+        case .good:
+            String(localized: "sleep.quality.good", defaultValue: "Good", bundle: .module,
+                   comment: "Sleep quality rating, third of four")
+        case .great:
+            String(localized: "sleep.quality.great", defaultValue: "Great", bundle: .module,
+                   comment: "Sleep quality rating, best of four")
+        }
+    }
+
+    /// The journal-voice gloss shown under the rating. Pure display — nothing persists, matches on,
+    /// or prompts with this, so it localizes with no token to fork away from.
     public var description: String {
         switch self {
-        case .poor: "rough, broken, unrested"
-        case .ok: "enough, not great"
-        case .good: "solid, mostly through"
-        case .great: "restorative, woke easy"
+        case .poor:
+            String(localized: "sleep.quality.poor.description",
+                   defaultValue: "rough, broken, unrested", bundle: .module,
+                   comment: "Gloss under the 'Poor' sleep rating; lowercase, journal voice")
+        case .ok:
+            String(localized: "sleep.quality.ok.description",
+                   defaultValue: "enough, not great", bundle: .module,
+                   comment: "Gloss under the 'Ok' sleep rating; lowercase, journal voice")
+        case .good:
+            String(localized: "sleep.quality.good.description",
+                   defaultValue: "solid, mostly through", bundle: .module,
+                   comment: "Gloss under the 'Good' sleep rating; lowercase, journal voice")
+        case .great:
+            String(localized: "sleep.quality.great.description",
+                   defaultValue: "restorative, woke easy", bundle: .module,
+                   comment: "Gloss under the 'Great' sleep rating; lowercase, journal voice")
         }
     }
 }
@@ -465,16 +529,39 @@ public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable
 
     public var id: String { rawValue }
 
+    /// The localized checklist label.
+    ///
+    /// `rawValue` stays the token (it is the day row's `hygiene` set member and this item's
+    /// `PersonalCareTask.id`); only this reads as text. Note that ``PersonalCareTask/defaultTasks``
+    /// freezes whatever this returns into the persisted settings blob at first decode and never
+    /// refreshes it — which is why renderers must go through ``PersonalCareTask/displayLabel``,
+    /// not the stored `label`, to pick up the current language.
     public var label: String {
         switch self {
-        case .teethAM: "Brush teeth AM"
-        case .teethPM: "Brush teeth PM"
-        case .floss: "Floss"
-        case .shower: "Shower"
-        case .deodorant: "Deodorant"
-        case .skincareAM: "Skincare AM"
-        case .skincarePM: "Skincare PM"
-        case .sunscreen: "Sunscreen"
+        case .teethAM:
+            String(localized: "hygiene.teethAM", defaultValue: "Brush teeth AM", bundle: .module,
+                   comment: "Personal-care checklist item: brushing teeth in the morning")
+        case .teethPM:
+            String(localized: "hygiene.teethPM", defaultValue: "Brush teeth PM", bundle: .module,
+                   comment: "Personal-care checklist item: brushing teeth in the evening")
+        case .floss:
+            String(localized: "hygiene.floss", defaultValue: "Floss", bundle: .module,
+                   comment: "Personal-care checklist item: flossing teeth")
+        case .shower:
+            String(localized: "hygiene.shower", defaultValue: "Shower", bundle: .module,
+                   comment: "Personal-care checklist item: taking a shower")
+        case .deodorant:
+            String(localized: "hygiene.deodorant", defaultValue: "Deodorant", bundle: .module,
+                   comment: "Personal-care checklist item: applying deodorant")
+        case .skincareAM:
+            String(localized: "hygiene.skincareAM", defaultValue: "Skincare AM", bundle: .module,
+                   comment: "Personal-care checklist item: morning skincare routine")
+        case .skincarePM:
+            String(localized: "hygiene.skincarePM", defaultValue: "Skincare PM", bundle: .module,
+                   comment: "Personal-care checklist item: evening skincare routine")
+        case .sunscreen:
+            String(localized: "hygiene.sunscreen", defaultValue: "Sunscreen", bundle: .module,
+                   comment: "Personal-care checklist item: applying sunscreen")
         }
     }
 
@@ -490,12 +577,72 @@ public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable
         }
     }
 
-    public var group: String {
+    /// The care group this built-in belongs to, as a ``CareGroup`` case.
+    ///
+    /// The typed form is the one to reason with; ``group`` below is the string spelling that gets
+    /// BAKED into a ``PersonalCareTask`` row and persisted, so it must stay the raw token.
+    public var careGroup: CareGroup {
         switch self {
-        case .teethAM, .skincareAM, .sunscreen: "Morning"
-        case .teethPM, .floss, .skincarePM: "Evening"
-        case .shower, .deodorant: "Anytime"
+        case .teethAM, .skincareAM, .sunscreen: .morning
+        case .teethPM, .floss, .skincarePM: .evening
+        case .shower, .deodorant: .anytime
         }
+    }
+
+    /// FROZEN token spelling of ``careGroup`` — this exact string is written into
+    /// `PersonalCareTask.group` by ``PersonalCareTask/defaultTasks`` and then persisted in the
+    /// synced settings blob. Never localize it; localize ``CareGroup/label`` instead.
+    public var group: String { careGroup.rawValue }
+}
+
+/// The three time-of-day buckets the personal-care checklist is sectioned into.
+///
+/// This type exists because one string was doing three jobs at once: the rendered section header,
+/// the value PERSISTED into `PersonalCareTask.group` for every task (it rides the synced settings
+/// blob), and the predicate the checklist filters rows with. Localizing that one string would have
+/// made a German device write "Morgen" into the blob while the filter still asked for "Morning" —
+/// every existing checklist would silently render empty, and the rows would come back wrong on the
+/// user's other devices.
+///
+/// So the two jobs are split: `rawValue` is the frozen token — "Morning" / "Anytime" / "Evening",
+/// byte-identical to what shipped, so already-persisted rows keep matching forever — and ``label``
+/// is the only thing a person reads.
+public nonisolated enum CareGroup: String, Codable, CaseIterable, Identifiable, Sendable {
+    case morning = "Morning"
+    case anytime = "Anytime"
+    case evening = "Evening"
+
+    public var id: String { rawValue }
+
+    /// The FROZEN persisted/filter token. Spelled out as its own property so a call site that
+    /// genuinely wants the storage form says so, rather than reaching for `rawValue` and leaving
+    /// the next reader to guess whether display was intended.
+    public var token: String { rawValue }
+
+    /// The localized section header. Display only — never persist this, never compare against it.
+    public var label: String {
+        switch self {
+        case .morning:
+            String(localized: "care.group.morning", defaultValue: "Morning", bundle: .module,
+                   comment: "Personal-care checklist section for morning tasks")
+        case .anytime:
+            String(localized: "care.group.anytime", defaultValue: "Anytime", bundle: .module,
+                   comment: "Personal-care checklist section for tasks with no fixed time of day")
+        case .evening:
+            String(localized: "care.group.evening", defaultValue: "Evening", bundle: .module,
+                   comment: "Personal-care checklist section for evening tasks")
+        }
+    }
+
+    /// Resolves a persisted `PersonalCareTask.group` string back to a case, or nil when the token
+    /// is one no build has ever written.
+    ///
+    /// Deliberately an EXACT rawValue match, not a fuzzy or localized one: a task whose group the
+    /// user's device cannot name is better filed under ``anytime`` by the caller than guessed into
+    /// the wrong bucket, and a lenient match here would start accepting translated spellings and
+    /// re-open exactly the drift this type was created to close.
+    public init?(persistedToken: String) {
+        self.init(rawValue: persistedToken)
     }
 }
 
@@ -532,7 +679,49 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
     public var group: String
     public var defaultHygieneRawValue: String?
 
-    nonisolated public static let groups = ["Morning", "Anytime", "Evening"]
+    /// The FROZEN group tokens, in section order — the same three strings, in the same order, this
+    /// property has always returned. Kept `[String]` so every existing caller (the checklist's
+    /// section `ForEach`, the Settings group chips, the `normalized(_:)` validity check) compiles
+    /// and behaves identically; ``groupCases`` is the typed form to render from.
+    nonisolated public static var groups: [String] { CareGroup.allCases.map(\.token) }
+
+    /// The care groups as cases, in section order. Render section headers and group chips from
+    /// `\.label` on these — never from ``groups``, whose strings are storage tokens.
+    nonisolated public static var groupCases: [CareGroup] { CareGroup.allCases }
+
+    /// This task's group as a case; ``CareGroup/anytime`` when the persisted token is unrecognised.
+    ///
+    /// `normalized(_:)` already rewrites an unknown group to "Anytime" on every read and write, so
+    /// the fallback here is belt-and-braces for a row that reached a renderer without passing
+    /// through the seam.
+    public var careGroup: CareGroup {
+        CareGroup(persistedToken: group) ?? .anytime
+    }
+
+    /// The label to actually SHOW for this task.
+    ///
+    /// Built-in tasks resolve their label live from ``HygieneItem/label`` rather than reading the
+    /// `label` string stored on the row. That indirection is the fix for a real trap: `defaultTasks`
+    /// BAKES the English label into the settings blob the first time settings decode, and nothing
+    /// ever refreshes it — so a localized `HygieneItem.label` alone would translate the checklist
+    /// for new installs while leaving every existing user permanently on English. Resolving through
+    /// `defaultHygieneItem` means the stored label is inert for built-ins and the current language
+    /// always wins.
+    ///
+    /// User-created tasks fall through to their stored `label`, which is exactly right: that text is
+    /// the user's own words and must never be translated.
+    ///
+    /// The `id` arm is the same recovery for rows written before `defaultHygieneRawValue` existed,
+    /// which carry a nil hygiene link. ``defaultTasks`` mints built-ins with `id: item.rawValue`
+    /// and ``custom(label:group:)`` mints user tasks with a `"custom-<UUID>"` id, so an id that
+    /// parses as a ``HygieneItem`` identifies a built-in and cannot collide with a user's task.
+    /// Deliberately confined to display: `defaultHygieneItem` keeps its stricter definition,
+    /// because it also drives the day's legacy `hygiene` set and its completion mirroring.
+    public var displayLabel: String {
+        if let item = defaultHygieneItem { return item.label }
+        if let legacyBuiltIn = HygieneItem(rawValue: id) { return legacyBuiltIn.label }
+        return label
+    }
 
     nonisolated public static var defaultTasks: [PersonalCareTask] {
         HygieneItem.allCases.map { item in
@@ -551,14 +740,23 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
         return HygieneItem(rawValue: defaultHygieneRawValue)
     }
 
+    /// Mints a user-created task. `group` is a persisted CareGroup token; anything that is not one
+    /// of the three is filed under ``CareGroup/anytime`` rather than persisted as-is, so a caller
+    /// can never write a group the checklist's own section filter would then fail to match.
     public static func custom(label: String, group: String) -> PersonalCareTask {
         PersonalCareTask(
             id: "custom-\(UUID().uuidString)",
             label: label,
             systemImage: "checkmark.circle",
-            group: groups.contains(group) ? group : "Anytime",
+            group: (CareGroup(persistedToken: group) ?? .anytime).token,
             defaultHygieneRawValue: nil
         )
+    }
+
+    /// Typed convenience for ``custom(label:group:)`` — the form a picker built from
+    /// ``groupCases`` should call, since it cannot then hand over a string that isn't a group.
+    public static func custom(label: String, group: CareGroup) -> PersonalCareTask {
+        custom(label: label, group: group.token)
     }
 
     /// The validating seam: de-dupes by id, drops empty ids/labels, clamps each label to
@@ -576,7 +774,11 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
             // R5: clamp the free-text label at the domain boundary, not at the screen that typed it.
             normalizedTask.label = String(trimmedLabel.prefix(maxLabelLength))
             normalizedTask.systemImage = task.systemImage.isEmpty ? "checkmark.circle" : task.systemImage
-            normalizedTask.group = groups.contains(task.group) ? task.group : "Anytime"
+            // Exact-token match against CareGroup, NOT against a localized header: a row whose
+            // group came back from another device (or an older/newer build) must keep the token it
+            // was stored with, and anything unrecognised is filed under Anytime so it still renders
+            // in some section instead of vanishing from every one of them.
+            normalizedTask.group = (CareGroup(persistedToken: task.group) ?? .anytime).token
             return normalizedTask
         }
         // R3: the list itself is bounded here. Oldest-first (the built-ins lead the array), so a list
@@ -746,6 +948,21 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     /// nil for a token no case or alias matches (i.e. one minted by a newer build). The decode
     /// below freezes those to `.wellness`; `FernletSettings.selectedGoal` additionally parks them
     /// in a side channel so a re-save can't clobber a newer device's choice.
+    ///
+    /// FROZEN: legacy persisted display strings — never translate.
+    ///
+    /// The Title-Case arms below ("Weight Management", "Mental Health", "Sports Prep",
+    /// "Short-term", "Long-term", …) are not labels. They are the literal bytes early builds wrote
+    /// into the settings blob back when the goal picker persisted its own on-screen text, and they
+    /// are still sitting in those users' iCloud records. They read like display strings, which is
+    /// exactly the trap: run them through a localizer and a German device stops recognising its own
+    /// stored goal, `init(from:)` falls to `.wellness`, and the user's nutrition targets silently
+    /// change underneath them — `NutritionTargetCalculator` reads the goal for both the calorie
+    /// multiplier and the protein g/kg, so a legacy `.weightManagement` user quietly loses their
+    /// deficit and their higher protein floor with nothing on screen to explain it.
+    ///
+    /// The display copy for these cases lives on `displayName`/`nutritionSummary`/`trainingSummary`.
+    /// This function only ever compares against frozen bytes.
     public init?(persistedToken: String) {
         switch persistedToken {
         case Self.wellness.rawValue, "Wellness", "Short-term":

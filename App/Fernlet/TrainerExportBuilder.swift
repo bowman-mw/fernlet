@@ -435,7 +435,10 @@ extension FernletStore {
         let days = settings.workoutProfile.trainingDaysPerWeek
         return .init(
             locationName: location.name,
-            ownedEquipment: location.ownedEquipment.map(\.displayName).sorted(),
+            // rawValue, not displayName: an export field is a wire token. A coach re-importing
+            // must get the same values back regardless of the exporting device's language, and
+            // CoachPlanTokens parses equipment against frozen ENGLISH aliases.
+            ownedEquipment: location.ownedEquipment.map(\.rawValue).sorted(),
             splitName: split.name,
             splitIsUserChosen: chosenID != nil,
             trainingDaysPerWeek: days > 0 ? days : nil)
@@ -509,7 +512,7 @@ extension FernletStore {
             TrainerExportBundle.PlannedWorkoutExport(
                 id: p.id,
                 name: p.name,
-                split: p.split.title,
+                split: p.split.rawValue,
                 source: p.source.rawValue,
                 exercises: p.exerciseLines.isEmpty ? nil : p.exerciseLines,
                 notes: p.notes.isEmpty ? nil : p.notes,

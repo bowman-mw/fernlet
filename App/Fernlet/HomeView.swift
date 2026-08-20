@@ -318,7 +318,15 @@ struct HomeView: View {
 
     private var homeHeader: some View {
         HStack(alignment: .top) {
-            ScreenHeader(title: "Fernlet", subtitle: FernletDate.niceDate().uppercased(), subtitleFirst: true, identifier: "screen.home")
+            // Both halves are `Text(verbatim:)` on purpose: "Fernlet" is the product's proper
+            // noun and must never be translated, and the subtitle is an already-localized
+            // formatted date, which must not be run through a catalog lookup that can't match it.
+            ScreenHeader(
+                title: Text(verbatim: "Fernlet"),
+                subtitle: Text(verbatim: FernletDate.niceDate().uppercased()),
+                subtitleFirst: true,
+                identifier: "screen.home"
+            )
             Spacer()
             // The shared header control every other tab uses (58pt cream, stroked). The hand-rolled
             // 44pt 6%-bark circle this replaces was visibly smaller and lighter than its siblings.
@@ -1439,10 +1447,10 @@ private struct CompanionCustomizationSheet: View {
     /// colors and so get no color control. Reuses the existing customization card verbatim so all
     /// built-in pick / recolor / custom-color behavior is preserved.
     private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
-        title: String,
+        title: LocalizedStringKey,
         items: [Item],
         selection: Binding<Item>,
-        colorTitle: String,
+        colorTitle: LocalizedStringKey,
         colorSelection: Binding<CompanionAssetColor>,
         customColorHex: Binding<String?>,
         customColor: Binding<Color>,
@@ -1689,10 +1697,12 @@ private extension Color {
 /// side items; selection and color flow back through the bindings
 /// `CompanionCustomizationSheet` builds onto the store.
 private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
-    var title: String
+    /// Authored copy ("Body", "Clothing", …), so `LocalizedStringKey`: every caller passes a
+    /// literal, and only that type extracts into the string catalog.
+    var title: LocalizedStringKey
     var items: [Item]
     @Binding var selection: Item
-    var colorTitle: String
+    var colorTitle: LocalizedStringKey
     @Binding var colorSelection: CompanionAssetColor
     @Binding var customColorHex: String?
     @Binding var customColor: Color
@@ -2182,7 +2192,9 @@ struct MacroCard: View {
     var targets: NutritionTargets
     var showCalories: Bool
     /// Card heading. "Macros today" on Home/Food; pass "Macros" for a day that isn't today.
-    var title: String = "Macros today"
+    /// A `LocalizedStringKey` so both the default and the one override extract into the catalog —
+    /// the default's literal lives in the app target, so it is harvested normally.
+    var title: LocalizedStringKey = "Macros today"
     /// The day's fiber intake in grams, when the logged meals carry micronutrients. Nil ⇒ the footer
     /// names the value as a target rather than implying it was eaten.
     var fiberIntake: Double? = nil
@@ -2319,7 +2331,7 @@ struct HygieneCard: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
                         ForEach(store.personalCareTasks) { task in
                             Button { store.togglePersonalCareTask(task) } label: {
-                                Label(task.label, systemImage: task.systemImage)
+                                Label(task.displayLabel, systemImage: task.systemImage)
                                     .font(.fernlet(.label))
                                     .lineLimit(1)
                                     .padding(.horizontal, 8)
@@ -2344,18 +2356,39 @@ struct HygieneCard: View {
 /// The generic content builder keeps it a pure layout primitive; several tabs and the Private hub
 /// pages compose their row lists inside it.
 struct FernletScrollSection<Content: View>: View {
-    var title: String?
+    /// The header, already resolved to a ``SectionLabel`` so the body never has to re-decide
+    /// whether the caller's string was authored copy or a runtime value.
+    private let header: SectionLabel?
     @ViewBuilder var content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
+    /// The localizing initializer — for a heading written here as a literal, which is every
+    /// caller but one.
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.header = SectionLabel(title)
+        self.content = content()
+    }
+
+    /// The non-localizing initializer, for a heading that is already final: user data, a formatted
+    /// value, or a domain display property that resolved its own string. Kept under a distinct
+    /// label rather than a `String` overload of `init(_:)`, because a same-label `String` overload
+    /// wins for a plain literal and would quietly un-localize every other call site.
+    init(verbatim title: String, @ViewBuilder content: () -> Content) {
+        self.header = SectionLabel(verbatim: title)
+        self.content = content()
+    }
+
+    /// The untitled section. It needs its own initializer now that `title` is no longer a
+    /// defaulted optional: a `nil` default beside a `LocalizedStringKey` parameter makes an
+    /// unlabelled literal call ambiguous.
+    init(@ViewBuilder content: () -> Content) {
+        self.header = nil
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let title {
-                SectionLabel(title)
+            if let header {
+                header
                     .padding(.horizontal, 4)
             }
             VStack(alignment: .leading, spacing: 0) {

@@ -29,9 +29,25 @@ public nonisolated struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
 
     /// The single prompt line describing this candidate: number, name, equipment, movement pattern,
     /// and up to two primary muscles.
+    ///
+    /// **Prompt vocabulary, not UI copy — every descriptive term here is a `rawValue`, never a
+    /// `displayName`.** `MuscleGroup.displayName` and `Equipment.displayName` are display strings
+    /// bound for localization; their rawValues (`upperBack`, `dumbbell`, …) are frozen English
+    /// tokens. This line must be built from the tokens for two reasons:
+    ///
+    /// * The model's grounding would otherwise change with the device's language. The prompt would
+    ///   describe a "Mancuerna" to a Spanish user and a "Dumbbell" to an English one, on a model
+    ///   whose training and whose instruction text are English — a quality regression that produces
+    ///   no error, no log, and no test failure, only worse picks on non-English devices.
+    /// * Nothing is lost by using tokens. The model never echoes this text back: it answers with a
+    ///   `candidateNumber`, bound to ``id``, so the descriptive words only have to disambiguate
+    ///   candidates from each other. `upperBack` disambiguates exactly as well as "Upper Back".
+    ///
+    /// `exercise.name` stays as-is — it is the catalog's own identifier for the movement, already a
+    /// stable token, and it is what the human sees in the approve/edit sheet.
     public var promptLine: String {
-        let muscles = exercise.primaryMuscles.map(\.displayName).sorted().prefix(2).joined(separator: "/")
-        return "\(id). \(exercise.name) — \(exercise.equipment.displayName), \(exercise.movementPattern.rawValue)\(muscles.isEmpty ? "" : ", \(muscles)")"
+        let muscles = exercise.primaryMuscles.map(\.rawValue).sorted().prefix(2).joined(separator: "/")
+        return "\(id). \(exercise.name) — \(exercise.equipment.rawValue), \(exercise.movementPattern.rawValue)\(muscles.isEmpty ? "" : ", \(muscles)")"
     }
 }
 

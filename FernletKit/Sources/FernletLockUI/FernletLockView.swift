@@ -13,15 +13,274 @@ import FernletFoundation
 import FernletLock
 import FernletUI
 
-/// Copy shared by the lock setup flow and the lock gate's set-up call to action.
+/// Copy shared by the lock setup flow and the lock gate's set-up call to action — and, since the
+/// module started localizing, where the rest of the lock's long-form copy is resolved.
 ///
 /// One constant rather than two hand-written sentences: the two screens are seen back to back (the
 /// gate offers the sheet), and they used to name different things — "the period and intimacy
 /// sections" against "journal, period, and intimacy history" — with neither mentioning the worry
 /// box, which the same key also seals.
+///
+/// Why the rest of the copy moved in here rather than staying at the call sites. FernletLockUI is a
+/// PACKAGE module, so every line has to name its bundle: a bare `Text("…")` literal is harvested
+/// into *this* module's `Localizable.xcstrings` but looked up in `Bundle.main`, which never consults
+/// a package bundle — it compiles clean, looks translated to a translator, and renders English
+/// forever. `String(localized:bundle:.module)` is the fix and it costs three or four lines per
+/// string; the disclosure sheet, the reset dialog and the unrecoverable-key card each carry four to
+/// six paragraphs, so inlining pushed those `body` properties past the 60-line ceiling (Power of 10
+/// R4). Short labels that title a single view stay inline, where the reader can still see them.
 enum FernletLockCopy {
     /// What the app lock actually protects. Every surface behind ``FernletLockScope/privateHub``.
-    static let protectsSentence = "Protects your journal, cycle, intimacy notes and worry box."
+    static var protectsSentence: String {
+        String(localized: "lock.protectsSentence",
+               defaultValue: "Protects your journal, cycle, intimacy notes and worry box.",
+               bundle: .module,
+               comment: "Sub-heading on the app-lock setup screen, on the gate's set-up prompt, and on the 'You're set' screen. Names all four kinds of writing the one passcode seals; listing fewer would tell the user the lock covers less than it does.")
+    }
+
+    /// Placeholder in the password field — the same field on the setup screen and on the unlock
+    /// screen, so it lives out here rather than under ``FernletLockCopy/Setup``.
+    static var passwordFieldPlaceholder: String {
+        String(localized: "lock.field.password", defaultValue: "Password", bundle: .module,
+               comment: "Placeholder inside the secure text field where the app-lock password is typed, both when creating it and when unlocking.")
+    }
+
+    // MARK: Shared verbs
+
+    /// The buttons that several lock screens share.
+    ///
+    /// One key each rather than one per screen: "Cancel" dismisses the setup sheet, the no-recovery
+    /// disclosure and the reset dialog, and "Reset app lock" is the destructive button on three
+    /// different cards. Per-screen keys would let the same button drift into three wordings inside
+    /// one flow, in a language nobody here can proofread.
+    enum Action {
+        /// Leaves the current step without writing anything.
+        static var cancel: String {
+            String(localized: "lock.action.cancel", defaultValue: "Cancel", bundle: .module,
+                   comment: "Button. Leaves app-lock setup, the no-recovery disclosure, or the reset confirmation without changing anything.")
+        }
+
+        /// Acknowledges an alert that reports something already done.
+        static var ok: String {
+            String(localized: "lock.action.ok", defaultValue: "OK", bundle: .module,
+                   comment: "Button acknowledging an app-lock alert. It only dismisses — whatever the alert describes has already happened and cannot be declined.")
+        }
+
+        /// Advances one step of the setup wizard. `continue` is a keyword, hence the suffix.
+        static var continueButton: String {
+            String(localized: "lock.action.continue", defaultValue: "Continue", bundle: .module,
+                   comment: "Button advancing to the next step of app-lock setup.")
+        }
+
+        /// Submits a typed password on the unlock screen.
+        static var unlock: String {
+            String(localized: "lock.action.unlock", defaultValue: "Unlock", bundle: .module,
+                   comment: "Button submitting the typed password on the app-lock unlock screen.")
+        }
+
+        /// DESTRUCTIVE. Shown on the reset confirmation, the lockout card and the lost-key card.
+        static var resetAppLock: String {
+            String(localized: "lock.action.resetAppLock", defaultValue: "Reset app lock", bundle: .module,
+                   comment: "Destructive button. Deletes the passcode AND permanently destroys the sealed journal, cycle and intimacy notes — it never recovers them. Do not translate as 'reset password', 'restore' or anything that suggests the notes come back.")
+        }
+    }
+
+    // MARK: Setup wizard
+
+    /// The five-step passcode-setup wizard's own copy.
+    ///
+    /// Steps 1–4 are ordinary form copy; the consequences live in ``FernletLockCopy/Disclosure``,
+    /// the sheet the last step opens before anything is written.
+    enum Setup {
+        /// Title of the sheet, and the heading of its first step.
+        static var navTitle: String {
+            String(localized: "lock.setup.navTitle", defaultValue: "Set up app lock", bundle: .module,
+                   comment: "Title of the sheet that creates the app-lock passcode.")
+        }
+
+        /// Lock-type card: four digits.
+        static var pin4Title: String {
+            String(localized: "lock.setup.kind.pin4.title", defaultValue: "4-digit PIN", bundle: .module,
+                   comment: "Title of the lock-type card for a four-digit numeric passcode.")
+        }
+
+        /// Lock-type card: four digits, the honest trade-off.
+        static var pin4Subtitle: String {
+            String(localized: "lock.setup.kind.pin4.subtitle", defaultValue: "Fast, lower security", bundle: .module,
+                   comment: "Subtitle under the '4-digit PIN' card. Keep the warning half — this option really is the weakest of the three.")
+        }
+
+        /// Lock-type card: six digits, the recommended default.
+        static var pin6Title: String {
+            String(localized: "lock.setup.kind.pin6.title", defaultValue: "6-digit PIN", bundle: .module,
+                   comment: "Title of the lock-type card for a six-digit numeric passcode.")
+        }
+
+        /// Lock-type card: six digits, why it is the default.
+        static var pin6Subtitle: String {
+            String(localized: "lock.setup.kind.pin6.subtitle", defaultValue: "Good balance of speed and security", bundle: .module,
+                   comment: "Subtitle under the '6-digit PIN' card, which is the recommended option.")
+        }
+
+        /// Lock-type card: an alphanumeric password.
+        static var passwordTitle: String {
+            String(localized: "lock.setup.kind.password.title", defaultValue: "Password", bundle: .module,
+                   comment: "Title of the lock-type card for an alphanumeric passcode. Standalone card title, not a text-field label.")
+        }
+
+        /// Lock-type card: the length rule and the trade-off.
+        static var passwordSubtitle: String {
+            String(localized: "lock.setup.kind.password.subtitle", defaultValue: "8+ characters, highest security", bundle: .module,
+                   comment: "Subtitle under the 'Password' card. '8+' is an enforced minimum length, not a suggestion.")
+        }
+
+        /// The badge on the recommended card. Rendered uppercase by the label style.
+        static var recommendedBadge: String {
+            String(localized: "lock.setup.kind.recommendedBadge", defaultValue: "RECOMMENDED", bundle: .module,
+                   comment: "Small badge on the recommended lock-type card. Uppercase in English; use whatever a badge normally looks like in the target language.")
+        }
+
+        /// Placeholder in the confirm-password field.
+        static var confirmPasswordFieldPlaceholder: String {
+            String(localized: "lock.field.confirmPassword", defaultValue: "Confirm password", bundle: .module,
+                   comment: "Placeholder inside the secure text field where the app-lock password is typed a second time.")
+        }
+
+        /// The password step's length rule.
+        static var passwordRule: String {
+            String(localized: "lock.setup.entry.passwordRule",
+                   defaultValue: "Choose a password (8–64 characters).",
+                   bundle: .module,
+                   comment: "Instruction on the password-creation step. Both bounds are enforced by the app.")
+        }
+
+        /// The PIN step's instruction. `digits` is 4 or 6, matching the card the user picked.
+        static func pinRule(digits: Int) -> String {
+            String(localized: "lock.setup.entry.pinRule",
+                   defaultValue: "Enter your \(digits)-digit PIN.",
+                   bundle: .module,
+                   comment: "Instruction on the PIN-creation step. The number is 4 or 6, whichever lock type the user chose.")
+        }
+
+        /// The confirm step's instruction.
+        static var confirmHint: String {
+            String(localized: "lock.setup.confirmHint", defaultValue: "Re-enter to confirm.", bundle: .module,
+                   comment: "Instruction on the step that asks for the new passcode a second time.")
+        }
+
+        /// Shown when the confirmation does not match the first entry.
+        static var passcodeMismatch: String {
+            String(localized: "lock.setup.error.passcodeMismatch",
+                   defaultValue: "Passcodes don't match. Try again.",
+                   bundle: .module,
+                   comment: "Inline error when the confirmation passcode differs from the first entry. Nothing was saved; the user simply retypes.")
+        }
+
+        /// What opting into biometrics does — and what it deliberately does not cover.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func biometricExplainer(_ biometry: String) -> String {
+            String(localized: "lock.setup.biometric.explainer",
+                   defaultValue: "\(biometry) lets you unlock quickly without entering your passcode. Your passcode is still required to change lock settings.",
+                   bundle: .module,
+                   comment: "Explains the optional biometric unlock during setup. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated. The second sentence is a real limit, not reassurance — keep it.")
+        }
+
+        /// The biometric opt-in toggle.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func enableBiometric(_ biometry: String) -> String {
+            String(localized: "lock.setup.biometric.enableToggle",
+                   defaultValue: "Enable \(biometry)",
+                   bundle: .module,
+                   comment: "Label of the switch that turns on biometric unlock. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated.")
+        }
+
+        /// Heading of the settled state shown after the lock is configured.
+        static var doneTitle: String {
+            String(localized: "lock.setup.done.title", defaultValue: "You're set", bundle: .module,
+                   comment: "Heading shown once the app lock has been created, while the sheet dismisses itself.")
+        }
+
+        /// The plain success toast.
+        static var toastConfigured: String {
+            String(localized: "lock.setup.toast.configured", defaultValue: "App lock is set up.", bundle: .module,
+                   comment: "Toast confirming the app lock was created.")
+        }
+
+        /// The qualified toast: the lock exists, the biometric opt-in the user asked for did not take.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func toastBiometricFailed(_ biometry: String) -> String {
+            String(localized: "lock.setup.toast.biometricFailed",
+                   defaultValue: "App lock is set up. \(biometry) couldn't be turned on — you can enable it in Settings → App lock.",
+                   bundle: .module,
+                   comment: "Toast when the lock was created but the biometric opt-in failed. Both halves matter: the lock IS on, the biometric unlock is NOT. 'Settings → App lock' is a path through the app's own settings; translate both names the same way they are translated on those screens.")
+        }
+    }
+
+    // MARK: No-recovery disclosure
+
+    /// The disclosure sheet shown immediately before a passcode is written.
+    ///
+    /// Every line here is a warning, and each one is literally true: there is no support path, no
+    /// backdoor, and no reset that recovers anything. A translation that softens "will become
+    /// permanently unreadable" into "you may lose access", or that hints at contacting support, is
+    /// the difference between a user who accepted this trade and one who lost years of private
+    /// writing believing it was recoverable. Translate the finality, not just the words.
+    enum Disclosure {
+        /// Title of the disclosure sheet.
+        static var navTitle: String {
+            String(localized: "lock.disclosure.navTitle", defaultValue: "Before you set a passcode", bundle: .module,
+                   comment: "Title of the sheet that discloses the consequences of setting an app-lock passcode.")
+        }
+
+        /// The headline. The strongest sentence in the app.
+        static var title: String {
+            String(localized: "lock.disclosure.title", defaultValue: "There is no recovery path", bundle: .module,
+                   comment: "Headline of the no-recovery disclosure. Literally true: no support channel, no backup code, no way back. Do not soften it into 'recovery may be difficult'.")
+        }
+
+        /// Loss mode one: a forgotten passcode.
+        static var forgottenPasscode: String {
+            String(localized: "lock.disclosure.forgottenPasscode",
+                   defaultValue: "If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.",
+                   bundle: .module,
+                   comment: "First loss mode in the no-recovery disclosure. 'Permanently unreadable' means the data is destroyed for practical purposes — no support path exists. The second sentence is the one piece of good news and must stay accurate: the clinical samples in Apple Health are untouched, only Fernlet's own notes are lost.")
+        }
+
+        /// Loss mode two, on Secure-Enclave hardware: losing the device's key, passcode or not.
+        static var enclaveLoss: String {
+            String(localized: "lock.disclosure.enclaveLoss",
+                   defaultValue: "The same is true if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware. The key lives inside this device's Secure Enclave and never leaves it.",
+                   bundle: .module,
+                   comment: "Second loss mode, strictly larger than the first: remembering the passcode does not help on erased or replacement hardware. 'Secure Enclave' is Apple hardware terminology — use whatever Apple's own localization uses.")
+        }
+
+        /// The one thing that survives loss mode two, and the one thing that never does.
+        static var sealedBackup: String {
+            String(localized: "lock.disclosure.sealedBackup",
+                   defaultValue: "Turn on Sealed backup for journal, cycle, and intimate logs in Privacy & Data to keep an encrypted copy that survives. Worry Box notes are never backed up and are always lost.",
+                   bundle: .module,
+                   comment: "The only mitigation offered, plus its exception. 'Sealed backup' and 'Privacy & Data' are names of a setting and a settings screen in this app — translate them the same way they are translated there. The last sentence is an absolute: Worry Box notes have no backup at all.")
+        }
+
+        /// The ask.
+        static var onlyIfConfident: String {
+            String(localized: "lock.disclosure.onlyIfConfident",
+                   defaultValue: "Only set a passcode if you're confident you'll remember it.",
+                   bundle: .module,
+                   comment: "Closing line of the no-recovery disclosure, asking the user to opt out if unsure.")
+        }
+
+        /// The acknowledgement that actually creates the lock.
+        static var confirmButton: String {
+            String(localized: "lock.disclosure.confirmButton",
+                   defaultValue: "I understand — set up lock",
+                   bundle: .module,
+                   comment: "Button that acknowledges the no-recovery disclosure and creates the lock. The first half is the user asserting they read the warnings, so keep it in the first person.")
+        }
+    }
 }
 
 // MARK: - Setup view
@@ -92,12 +351,12 @@ public struct FernletLockSetupView: View {
                         .padding(24)
                 }
             }
-            .navigationTitle("Set up app lock")
+            .navigationTitle(FernletLockCopy.Setup.navTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !showSuccess {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
+                        Button(FernletLockCopy.Action.cancel) { dismiss() }
                             .foregroundStyle(Color.slate)
                     }
                 }
@@ -131,7 +390,13 @@ public struct FernletLockSetupView: View {
 
     private var kindPickerStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel("Choose a lock type")
+            // Package module: a bare `LocalizedStringKey` literal here would be harvested into
+            // FernletLockUI's bundle but looked up in `Bundle.main`, which never consults it — so
+            // it would read as English forever with a clean build. Resolve against `.module` and
+            // hand the finished string to `verbatim:`.
+            SectionLabel(verbatim: String(localized: "lock.chooseType", defaultValue: "Choose a lock type",
+                                          bundle: .module,
+                                          comment: "Header above the PIN/password lock-type picker"))
             // One sentence, shared verbatim with the gate's set-up call to action: naming a
             // narrower set here than the gate did (and omitting the worry box from both) told the
             // user the lock covers less than it actually does.
@@ -141,15 +406,18 @@ public struct FernletLockSetupView: View {
                 .fernletWrappingText()
 
             VStack(spacing: 12) {
-                kindCard(.pin4, title: "4-digit PIN", subtitle: "Fast, lower security")
+                kindCard(.pin4, title: FernletLockCopy.Setup.pin4Title,
+                         subtitle: FernletLockCopy.Setup.pin4Subtitle)
                 // The badge already says RECOMMENDED — the subtitle says something useful instead.
-                kindCard(.pin6, title: "6-digit PIN", subtitle: "Good balance of speed and security", recommended: true)
-                kindCard(.alphanumeric, title: "Password", subtitle: "8+ characters, highest security")
+                kindCard(.pin6, title: FernletLockCopy.Setup.pin6Title,
+                         subtitle: FernletLockCopy.Setup.pin6Subtitle, recommended: true)
+                kindCard(.alphanumeric, title: FernletLockCopy.Setup.passwordTitle,
+                         subtitle: FernletLockCopy.Setup.passwordSubtitle)
             }
 
             Spacer()
 
-            actionButton("Continue") {
+            actionButton(FernletLockCopy.Action.continueButton) {
                 passcode = ""
                 confirmation = ""
                 step = .entry
@@ -172,7 +440,7 @@ public struct FernletLockSetupView: View {
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if recommended {
-                            Text("RECOMMENDED")
+                            Text(FernletLockCopy.Setup.recommendedBadge)
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.moss)
                                 .padding(.horizontal, 6)
@@ -206,10 +474,14 @@ public struct FernletLockSetupView: View {
 
     private var entryStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel(selectedKind == .alphanumeric ? "Create password" : "Create PIN")
+            SectionLabel(verbatim: selectedKind == .alphanumeric
+                ? String(localized: "lock.createPassword", defaultValue: "Create password",
+                         bundle: .module, comment: "Header when creating an alphanumeric app lock")
+                : String(localized: "lock.createPIN", defaultValue: "Create PIN",
+                         bundle: .module, comment: "Header when creating a numeric app lock"))
             Text(selectedKind == .alphanumeric
-                 ? "Choose a password (8–64 characters)."
-                 : "Enter your \(selectedKind == .pin4 ? "4" : "6")-digit PIN.")
+                 ? FernletLockCopy.Setup.passwordRule
+                 : FernletLockCopy.Setup.pinRule(digits: selectedKind == .pin4 ? 4 : 6))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -219,7 +491,7 @@ public struct FernletLockSetupView: View {
             }
 
             if selectedKind == .alphanumeric {
-                SecureField("Password", text: $passcode)
+                SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode)
                     .textContentType(.newPassword)
                     .sheetTextInput()
             } else {
@@ -230,7 +502,7 @@ public struct FernletLockSetupView: View {
             Spacer()
 
             if selectedKind == .alphanumeric {
-                actionButton("Continue", disabled: passcode.count < 8) {
+                actionButton(FernletLockCopy.Action.continueButton, disabled: passcode.count < 8) {
                     errorMessage = nil
                     step = .confirm
                 }
@@ -249,8 +521,12 @@ public struct FernletLockSetupView: View {
 
     private var confirmStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel(selectedKind == .alphanumeric ? "Confirm password" : "Confirm PIN")
-            Text("Re-enter to confirm.")
+            SectionLabel(verbatim: selectedKind == .alphanumeric
+                ? String(localized: "lock.confirmPassword", defaultValue: "Confirm password",
+                         bundle: .module, comment: "Header when re-entering an alphanumeric app lock")
+                : String(localized: "lock.confirmPIN", defaultValue: "Confirm PIN",
+                         bundle: .module, comment: "Header when re-entering a numeric app lock"))
+            Text(FernletLockCopy.Setup.confirmHint)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
 
@@ -259,7 +535,7 @@ public struct FernletLockSetupView: View {
             }
 
             if selectedKind == .alphanumeric {
-                SecureField("Confirm password", text: $confirmation)
+                SecureField(FernletLockCopy.Setup.confirmPasswordFieldPlaceholder, text: $confirmation)
                     .textContentType(.newPassword)
                     .sheetTextInput()
             } else {
@@ -270,7 +546,7 @@ public struct FernletLockSetupView: View {
             Spacer()
 
             if selectedKind == .alphanumeric {
-                actionButton("Continue", disabled: confirmation.isEmpty) {
+                actionButton(FernletLockCopy.Action.continueButton, disabled: confirmation.isEmpty) {
                     validateAndAdvanceFromConfirm()
                 }
             }
@@ -290,7 +566,7 @@ public struct FernletLockSetupView: View {
             errorMessage = nil
             step = .biometric
         } else {
-            errorMessage = "Passcodes don't match. Try again."
+            errorMessage = FernletLockCopy.Setup.passcodeMismatch
             confirmation = ""
         }
     }
@@ -299,17 +575,21 @@ public struct FernletLockSetupView: View {
 
     private var biometricStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel("Biometric unlock (optional)")
+            SectionLabel(verbatim: String(localized: "lock.biometricHeader",
+                                          defaultValue: "Biometric unlock (optional)",
+                                          bundle: .module,
+                                          comment: "Header above the Face ID / Touch ID opt-in"))
 
             let biometryName = biometricName(lockService.biometricType)
-            Text("\(biometryName) lets you unlock quickly without entering your passcode. Your passcode is still required to change lock settings.")
+            Text(FernletLockCopy.Setup.biometricExplainer(biometryName))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             if lockService.biometricType != .none {
                 Toggle(isOn: $biometricEnabled) {
-                    Label("Enable \(biometryName)", systemImage: biometricSystemImage(lockService.biometricType))
+                    Label(FernletLockCopy.Setup.enableBiometric(biometryName),
+                          systemImage: biometricSystemImage(lockService.biometricType))
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                 }
@@ -317,12 +597,17 @@ public struct FernletLockSetupView: View {
                 .padding(16)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             } else {
-                FernletCard { EmptyState(text: "No biometric authentication available on this device.") }
+                FernletCard {
+                    EmptyState(verbatim: String(localized: "lock.noBiometrics",
+                                                defaultValue: "No biometric authentication available on this device.",
+                                                bundle: .module,
+                                                comment: "Shown when the device has no Face ID or Touch ID"))
+                }
             }
 
             Spacer()
 
-            actionButton("Continue") {
+            actionButton(FernletLockCopy.Action.continueButton) {
                 showDisclosure = true
             }
         }
@@ -339,7 +624,7 @@ public struct FernletLockSetupView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(Color.moss)
-            Text("You're set")
+            Text(FernletLockCopy.Setup.doneTitle)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
             Text(FernletLockCopy.protectsSentence)
@@ -365,11 +650,11 @@ public struct FernletLockSetupView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
 
-                    Text("There is no recovery path")
+                    Text(FernletLockCopy.Disclosure.title)
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
-                    Text("If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+                    Text(FernletLockCopy.Disclosure.forgottenPasscode)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
@@ -380,30 +665,30 @@ public struct FernletLockSetupView: View {
                     // only where an enclave exists — SE-less hardware stays legacy forever and its
                     // scrypt-wrapped key really does restore, so the old copy is still true there.
                     if FernletLockService.isSecureEnclaveBindingAvailable {
-                        Text("The same is true if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware. The key lives inside this device's Secure Enclave and never leaves it.")
+                        Text(FernletLockCopy.Disclosure.enclaveLoss)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
 
-                        Text("Turn on Sealed backup for journal, cycle, and intimate logs in Privacy & Data to keep an encrypted copy that survives. Worry Box notes are never backed up and are always lost.")
+                        Text(FernletLockCopy.Disclosure.sealedBackup)
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
 
-                    Text("Only set a passcode if you're confident you'll remember it.")
+                    Text(FernletLockCopy.Disclosure.onlyIfConfident)
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
                     Spacer()
 
-                    actionButton("I understand — set up lock", disabled: isFinalizing) {
+                    actionButton(FernletLockCopy.Disclosure.confirmButton, disabled: isFinalizing) {
                         showDisclosure = false
                         finalizeSetup()
                     }
 
-                    Button("Cancel") { showDisclosure = false }
+                    Button(FernletLockCopy.Action.cancel) { showDisclosure = false }
                         .frame(maxWidth: .infinity)
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
@@ -411,7 +696,7 @@ public struct FernletLockSetupView: View {
                 }
                 .padding(24)
             }
-            .navigationTitle("Before you set a passcode")
+            .navigationTitle(FernletLockCopy.Disclosure.navTitle)
             .navigationBarTitleDisplayMode(.inline)
         }
         .tint(Color.moss)
@@ -501,8 +786,8 @@ public struct FernletLockSetupView: View {
     /// The toast copy. The lock is always configured by the time it appears; an opt-in biometric
     /// enable that FAILED is named here rather than hidden behind an unqualified success.
     private var successToastMessage: String {
-        guard biometricSetupFailed else { return "App lock is set up." }
-        return "App lock is set up. \(biometricName(lockService.biometricType)) couldn't be turned on — you can enable it in Settings → App lock."
+        guard biometricSetupFailed else { return FernletLockCopy.Setup.toastConfigured }
+        return FernletLockCopy.Setup.toastBiometricFailed(biometricName(lockService.biometricType))
     }
 
     private var successToast: some View {
@@ -531,6 +816,209 @@ public struct FernletLockSetupView: View {
     /// disclosure) is a sheet layered over the biometric step rather than a case here.
     private enum SetupStep {
         case kindPicker, entry, confirm, biometric
+    }
+}
+
+// MARK: - Unlock copy
+
+extension FernletLockCopy {
+    /// The unlock screen's copy — the prompt, the lockout ladder, and the two terminal cards.
+    ///
+    /// Three things a translator must not soften here. The attempts line is a countdown to a real
+    /// lockout, not a hint. The lockout cards describe a ladder that ends in a reset that destroys
+    /// the sealed notes. And the lost-key card is reached only when the passcode was CORRECT — the
+    /// user did nothing wrong, the device's key is gone, and the notes are already unreadable; copy
+    /// that reads like a retry prompt would send them round the loop forever.
+    ///
+    /// Kept in the vault rather than inline because these lines are long, several are shared by two
+    /// cards, and the `body` properties that render them are already near the 60-line ceiling.
+    enum Unlock {
+        /// The lock screen's own title. "Fernlet" is the product name and stays as it is.
+        static var title: String {
+            String(localized: "lock.unlock.title", defaultValue: "Fernlet Lock", bundle: .module,
+                   comment: "Title on the app-lock unlock screen. 'Fernlet' is the app's name and is not translated.")
+        }
+
+        /// The prompt under the title.
+        ///
+        /// - Parameter credential: One of the ``credentialPIN4``/``credentialPIN6``/
+        ///   ``credentialPassword``/``credentialPasscode`` labels, already localized.
+        static func prompt(credential: String) -> String {
+            String(localized: "lock.unlock.prompt",
+                   defaultValue: "Enter your \(credential) to continue.",
+                   bundle: .module,
+                   comment: "Prompt on the unlock screen. The placeholder is the lock-type name in mid-sentence form ('4-digit PIN', '6-digit PIN', 'password', 'passcode') — the four lock.credential.* strings, which should be cased and inflected to fit this sentence.")
+        }
+
+        /// How many tries are left before the cooldown ladder starts.
+        ///
+        /// Two whole sentences chosen by a count check, because the English this replaced built the
+        /// plural by splicing an "s" onto "attempt" — a construction that cannot survive translation
+        /// into any language with more than two plural forms, or with a plural that changes the
+        /// noun's stem. The eventual fix is one key with a proper plural variation in the string
+        /// catalog (`.stringsdict`-style), authored through Xcode rather than by hand; until then
+        /// two keys are at least translatable, and a translator can leave the "other" form covering
+        /// every non-singular case.
+        static func attemptsRemaining(_ remaining: Int) -> String {
+            guard remaining != 1 else {
+                return String(localized: "lock.unlock.attemptsRemaining.one",
+                              defaultValue: "1 attempt remaining before lockout",
+                              bundle: .module,
+                              comment: "Warning above the passcode pad when exactly one try is left before the app lock stops accepting entries for a while. Singular form; see lock.unlock.attemptsRemaining.other for the rest.")
+            }
+            return String(localized: "lock.unlock.attemptsRemaining.other",
+                          defaultValue: "\(remaining) attempts remaining before lockout",
+                          bundle: .module,
+                          comment: "Warning above the passcode pad counting the tries left before the app lock stops accepting entries for a while. Used for every count except 1 (see lock.unlock.attemptsRemaining.one).")
+        }
+
+        /// Mid-sentence name of a four-digit lock, for ``prompt(credential:)``.
+        static var credentialPIN4: String {
+            String(localized: "lock.credential.pin4", defaultValue: "4-digit PIN", bundle: .module,
+                   comment: "Name of the four-digit lock type, used inside 'Enter your %@ to continue.' — inflect it for that sentence.")
+        }
+
+        /// Mid-sentence name of a six-digit lock, for ``prompt(credential:)``.
+        static var credentialPIN6: String {
+            String(localized: "lock.credential.pin6", defaultValue: "6-digit PIN", bundle: .module,
+                   comment: "Name of the six-digit lock type, used inside 'Enter your %@ to continue.' — inflect it for that sentence.")
+        }
+
+        /// Mid-sentence name of an alphanumeric lock, for ``prompt(credential:)``.
+        static var credentialPassword: String {
+            String(localized: "lock.credential.password", defaultValue: "password", bundle: .module,
+                   comment: "Name of the alphanumeric lock type, used inside 'Enter your %@ to continue.' — lower-case mid-sentence in English.")
+        }
+
+        /// Mid-sentence fallback when the configured lock kind is not yet known.
+        static var credentialPasscode: String {
+            String(localized: "lock.credential.passcode", defaultValue: "passcode", bundle: .module,
+                   comment: "Generic fallback name for the lock, used inside 'Enter your %@ to continue.' when the configured kind is not known yet.")
+        }
+
+        /// Heading of both lockout cards — the timed cooldown and the terminal reset-required state.
+        static var lockoutTitle: String {
+            String(localized: "lock.lockout.title", defaultValue: "Too many failed attempts", bundle: .module,
+                   comment: "Heading on both app-lock lockout cards: the timed cooldown and the final state where only a reset can continue.")
+        }
+
+        /// Countdown over an hour.
+        static func cooldownHoursMinutes(hours: Int, minutes: Int) -> String {
+            String(localized: "lock.cooldown.retry.hoursMinutes",
+                   defaultValue: "Try again in \(hours)h \(minutes)m",
+                   bundle: .module,
+                   comment: "Live countdown on the lockout card. First number is hours, second is minutes; 'h' and 'm' are abbreviations that should be localized to the usual short units.")
+        }
+
+        /// Countdown over a minute.
+        static func cooldownMinutesSeconds(minutes: Int, seconds: Int) -> String {
+            String(localized: "lock.cooldown.retry.minutesSeconds",
+                   defaultValue: "Try again in \(minutes)m \(seconds)s",
+                   bundle: .module,
+                   comment: "Live countdown on the lockout card. First number is minutes, second is seconds; 'm' and 's' are abbreviations that should be localized to the usual short units.")
+        }
+
+        /// Countdown under a minute.
+        static func cooldownSeconds(_ seconds: Int) -> String {
+            String(localized: "lock.cooldown.retry.seconds",
+                   defaultValue: "Try again in \(seconds)s",
+                   bundle: .module,
+                   comment: "Live countdown on the lockout card, under a minute. 's' is an abbreviation for seconds and should be localized to the usual short unit.")
+        }
+
+        /// The end of the cooldown ladder: nothing but a destructive reset continues from here.
+        static var resetRequiredBody: String {
+            String(localized: "lock.reset.required.body",
+                   defaultValue: "You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable.",
+                   bundle: .module,
+                   comment: "Body of the final lockout card. The reset is the only way forward AND it destroys the sealed notes for good — both halves have to survive translation.")
+        }
+
+        /// Heading of the lost-key card. The passcode was right; the device's key is gone.
+        static var enclaveLostTitle: String {
+            String(localized: "lock.enclaveLost.title",
+                   defaultValue: "Sealed data can't be opened on this device",
+                   bundle: .module,
+                   comment: "Heading shown when the correct passcode was entered but this device's Secure Enclave key is gone. 'On this device' is the precise part: the data is not corrupt, it is unopenable here.")
+        }
+
+        /// Body of the lost-key card, including what a reset does and does not do.
+        static var enclaveLostBody: String {
+            String(localized: "lock.enclaveLost.body",
+                   defaultValue: "Your passcode was correct. This device's Secure Enclave key — the only thing that can open your sealed journal, cycle, and intimacy notes — is gone. Resetting app lock does not bring those notes back; it clears the lock so you can use Fernlet again.",
+                   bundle: .module,
+                   comment: "Body of the lost-key card. Three things must survive: the user typed the right passcode, the notes are already unreadable, and resetting recovers nothing — it only makes the app usable again.")
+        }
+
+        /// The repair that beats a reset, when a biometric copy of the key survives.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func enclaveLostBiometricRepair(_ biometry: String) -> String {
+            String(localized: "lock.enclaveLost.biometricRepair",
+                   defaultValue: "\(biometry) can still open your notes on this device and repair its key. Try that first — resetting destroys that surviving copy.",
+                   bundle: .module,
+                   comment: "Shown on the lost-key card when a biometric copy of the key survives. This is the ONE path that recovers the notes, so the 'try that first' has to read as urgent: the reset button underneath destroys it. The placeholder is an Apple product name and is not translated.")
+        }
+
+        /// The biometric repair button on the lost-key card.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func unlockWithBiometric(_ biometry: String) -> String {
+            String(localized: "lock.enclaveLost.unlockWithBiometric",
+                   defaultValue: "Unlock with \(biometry)",
+                   bundle: .module,
+                   comment: "Button offering biometric unlock on the lost-key card. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated.")
+        }
+
+        /// Inline error when the ladder is exhausted.
+        static var errorResetRequired: String {
+            String(localized: "lock.unlock.error.resetRequired", defaultValue: "Reset required.", bundle: .module,
+                   comment: "Short inline error under the passcode field: no further attempts are accepted, only a reset continues.")
+        }
+
+        /// Inline error after a correct passcode when a biometric repair is still possible.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func errorKeyGoneTryBiometric(_ biometry: String) -> String {
+            String(localized: "lock.unlock.error.keyGoneTryBiometric",
+                   defaultValue: "Your passcode was correct, but this device's key for sealed data is gone. Try \(biometry) — it can still open and repair it.",
+                   bundle: .module,
+                   comment: "Inline error after a CORRECT passcode when this device's key is gone but biometrics can still repair it. Do not phrase it as a wrong passcode. The placeholder is an Apple product name and is not translated.")
+        }
+
+        /// Inline error after a correct passcode with no repair available; the second one raises the card.
+        static var errorKeyGone: String {
+            String(localized: "lock.unlock.error.keyGone",
+                   defaultValue: "Your passcode was correct, but sealed data can no longer be opened on this device. Enter it once more to confirm.",
+                   bundle: .module,
+                   comment: "Inline error after a CORRECT passcode when this device's key is gone. The re-entry is a deliberate double check before the app offers the destructive reset — do not phrase it as a wrong passcode.")
+        }
+
+        /// Inline error when biometry ran and did not recognise the user.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func errorBiometricUnrecognized(_ biometry: String) -> String {
+            String(localized: "lock.unlock.error.biometricUnrecognized",
+                   defaultValue: "\(biometry) didn't recognize you. Try your passcode.",
+                   bundle: .module,
+                   comment: "Inline error when the biometric check ran and failed to match. The placeholder is an Apple product name and is not translated.")
+        }
+
+        /// Inline error when biometry is refused because the ladder is exhausted.
+        static var errorTooManyAttempts: String {
+            String(localized: "lock.unlock.error.tooManyAttempts",
+                   defaultValue: "Too many attempts. Reset is required.",
+                   bundle: .module,
+                   comment: "Inline error when a biometric unlock is refused because too many passcode attempts failed and only a reset continues.")
+        }
+
+        /// VoiceOver's reading of the PIN-dot row: the only feedback a masked field can give.
+        static func pinProgress(entered: Int, total: Int) -> String {
+            String(localized: "lock.pinDots.accessibilityLabel",
+                   defaultValue: "\(entered) of \(total) digits entered",
+                   bundle: .module,
+                   comment: "Spoken by VoiceOver for the row of PIN dots. First number is how many digits have been typed, second is how many the PIN has. This is the only feedback a masked PIN field gives, so keep both numbers.")
+        }
     }
 }
 
@@ -636,7 +1124,7 @@ public struct FernletLockView: View {
                     let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
                     // Terracotta ink, not goldenrod: goldenrod on parchment measured about 2.2:1,
                     // and this line is the warning that the next mistakes cost a lockout.
-                    Text("\(remaining) attempt\(remaining == 1 ? "" : "s") remaining before lockout")
+                    Text(FernletLockCopy.Unlock.attemptsRemaining(remaining))
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.terracottaInk)
                 }
@@ -720,11 +1208,11 @@ public struct FernletLockView: View {
                 .frame(width: 72, height: 72)
                 .background(Color.moss.opacity(0.10), in: Circle())
 
-            Text("Fernlet Lock")
+            Text(FernletLockCopy.Unlock.title)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
-            Text("Enter your \(credentialLabel) to continue.")
+            Text(FernletLockCopy.Unlock.prompt(credential: credentialLabel))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
         }
@@ -764,7 +1252,7 @@ public struct FernletLockView: View {
 
     private var alphanumericInput: some View {
         VStack(spacing: 16) {
-            SecureField("Password", text: $passcode)
+            SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode)
                 .textContentType(.password)
                 .sheetTextInput()
                 .submitLabel(.go)
@@ -772,7 +1260,7 @@ public struct FernletLockView: View {
                 .disabled(isUnlocking)
 
             ZStack {
-                actionButton("Unlock") { attemptUnlock() }
+                actionButton(FernletLockCopy.Action.unlock) { attemptUnlock() }
                     .opacity(isUnlocking ? 0 : 1)
                 if isUnlocking {
                     ProgressView()
@@ -790,7 +1278,7 @@ public struct FernletLockView: View {
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(Color.goldenrod)
 
-            Text("Too many failed attempts")
+            Text(FernletLockCopy.Unlock.lockoutTitle)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
@@ -804,12 +1292,18 @@ public struct FernletLockView: View {
     }
 
     private var cooldownDisplayText: String {
+        // The thresholds stay strictly-greater, exactly as they were: at 60s on the nose the
+        // countdown still reads in seconds rather than flipping to "1m 0s" for one tick.
         if cooldownRemaining > 3600 {
-            return "Try again in \(Int(cooldownRemaining / 3600))h \(Int(cooldownRemaining.truncatingRemainder(dividingBy: 3600) / 60))m"
+            return FernletLockCopy.Unlock.cooldownHoursMinutes(
+                hours: Int(cooldownRemaining / 3600),
+                minutes: Int(cooldownRemaining.truncatingRemainder(dividingBy: 3600) / 60))
         } else if cooldownRemaining > 60 {
-            return "Try again in \(Int(cooldownRemaining / 60))m \(Int(cooldownRemaining.truncatingRemainder(dividingBy: 60)))s"
+            return FernletLockCopy.Unlock.cooldownMinutesSeconds(
+                minutes: Int(cooldownRemaining / 60),
+                seconds: Int(cooldownRemaining.truncatingRemainder(dividingBy: 60)))
         } else {
-            return "Try again in \(Int(cooldownRemaining))s"
+            return FernletLockCopy.Unlock.cooldownSeconds(Int(cooldownRemaining))
         }
     }
 
@@ -819,18 +1313,18 @@ public struct FernletLockView: View {
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(Color.terracotta)
 
-            Text("Too many failed attempts")
+            Text(FernletLockCopy.Unlock.lockoutTitle)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
-            Text("You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable.")
+            Text(FernletLockCopy.Unlock.resetRequiredBody)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
 
             if let onReset = onResetRequested {
-                Button("Reset app lock", role: .destructive, action: onReset)
+                Button(FernletLockCopy.Action.resetAppLock, role: .destructive, action: onReset)
                     .font(.fernlet(.label))
                     .padding(.top, 4)
             }
@@ -856,26 +1350,27 @@ public struct FernletLockView: View {
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(Color.terracotta)
 
-            Text("Sealed data can't be opened on this device")
+            Text(FernletLockCopy.Unlock.enclaveLostTitle)
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
 
-            Text("Your passcode was correct. This device's Secure Enclave key — the only thing that can open your sealed journal, cycle, and intimacy notes — is gone. Resetting app lock does not bring those notes back; it clears the lock so you can use Fernlet again.")
+            Text(FernletLockCopy.Unlock.enclaveLostBody)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
 
             if canRepairWithBiometrics {
-                Text("\(biometricName(lockService.biometricType)) can still open your notes on this device and repair its key. Try that first — resetting destroys that surviving copy.")
+                let biometry = biometricName(lockService.biometricType)
+                Text(FernletLockCopy.Unlock.enclaveLostBiometricRepair(biometry))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.bark)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
 
-                Button("Unlock with \(biometricName(lockService.biometricType))") { triggerBiometric() }
+                Button(FernletLockCopy.Unlock.unlockWithBiometric(biometry)) { triggerBiometric() }
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
                     .buttonStyle(.plain)
@@ -884,7 +1379,7 @@ public struct FernletLockView: View {
             }
 
             if let onReset = onResetRequested {
-                Button("Reset app lock", role: .destructive, action: onReset)
+                Button(FernletLockCopy.Action.resetAppLock, role: .destructive, action: onReset)
                     .font(.fernlet(.label))
                     .padding(.top, 4)
             }
@@ -939,7 +1434,7 @@ public struct FernletLockView: View {
             } catch FernletLockError.resetRequired {
                 passcode = ""
                 contentKeyUnrecoverableCount = 0
-                errorMessage = "Reset required."
+                errorMessage = FernletLockCopy.Unlock.errorResetRequired
             } catch FernletLockError.contentKeyUnrecoverable {
                 // The passcode was RIGHT; this device's Secure Enclave key is gone, so the sealed
                 // data is unopenable. Say so instead of inviting another attempt (nothing-silent).
@@ -948,8 +1443,8 @@ public struct FernletLockView: View {
                 passcode = ""
                 contentKeyUnrecoverableCount += 1
                 errorMessage = canRepairWithBiometrics
-                    ? "Your passcode was correct, but this device's key for sealed data is gone. Try \(biometricName(lockService.biometricType)) — it can still open and repair it."
-                    : "Your passcode was correct, but sealed data can no longer be opened on this device. Enter it once more to confirm."
+                    ? FernletLockCopy.Unlock.errorKeyGoneTryBiometric(biometricName(lockService.biometricType))
+                    : FernletLockCopy.Unlock.errorKeyGone
             } catch FernletLockError.contentKeyTemporarilyUnavailable(let status) {
                 // NOT the terminal state: the keychain would not answer, which says nothing about
                 // whether the key survives. Never advance the count, never mention reset.
@@ -982,9 +1477,14 @@ public struct FernletLockView: View {
             } catch FernletLockError.biometricNotAvailable {
                 // Quietly fall back to passcode entry.
             } catch FernletLockError.biometricFailed {
-                errorMessage = "Face ID didn't recognize you. Try your passcode."
+                // Named from the service's reported biometry rather than hard-coded "Face ID": the
+                // English literal this replaced told Touch ID and Optic ID users that a sensor they
+                // do not have failed to recognise them, and it would have baked that same wrong
+                // product name into every translation.
+                errorMessage = FernletLockCopy.Unlock.errorBiometricUnrecognized(
+                    biometricName(lockService.biometricType))
             } catch FernletLockError.resetRequired {
-                errorMessage = "Too many attempts. Reset is required."
+                errorMessage = FernletLockCopy.Unlock.errorTooManyAttempts
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -1019,12 +1519,15 @@ public struct FernletLockView: View {
         return false
     }
 
+    /// The lock kind's name as it reads INSIDE ``FernletLockCopy/Unlock/prompt(credential:)`` —
+    /// mid-sentence, which is why these are separate keys from the setup screen's card titles even
+    /// where the English happens to match.
     private var credentialLabel: String {
         switch lockService.credentialKind {
-        case .pin4: "4-digit PIN"
-        case .pin6: "6-digit PIN"
-        case .alphanumeric: "password"
-        case nil: "passcode"
+        case .pin4: FernletLockCopy.Unlock.credentialPIN4
+        case .pin6: FernletLockCopy.Unlock.credentialPIN6
+        case .alphanumeric: FernletLockCopy.Unlock.credentialPassword
+        case nil: FernletLockCopy.Unlock.credentialPasscode
         }
     }
 
@@ -1057,7 +1560,7 @@ private func pinDotsRow(current: String, total: Int) -> some View {
         }
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(current.count) of \(total) digits entered")
+    .accessibilityLabel(FernletLockCopy.Unlock.pinProgress(entered: current.count, total: total))
 }
 
 // MARK: - Numeric pad
@@ -1139,12 +1642,18 @@ public struct FernletNumericPad: View {
 
 /// User-facing name for a biometry type ("Face ID", "Touch ID", "Optic ID", or the generic
 /// "Biometrics"), shared by the setup and unlock screens and the app's lock settings.
+///
+/// The three Apple product names are deliberately NOT localized: Apple ships them untranslated in
+/// almost every locale, and a translated "Face ID" would name a feature no iPhone's own UI calls
+/// that. Only the generic fallback — which is our own word, used when the device reports a biometry
+/// we have no product name for — goes through the catalog.
 public func biometricName(_ type: LABiometryType) -> String {
     switch type {
     case .faceID: "Face ID"
     case .touchID: "Touch ID"
     case .opticID: "Optic ID"
-    default: "Biometrics"
+    default: String(localized: "lock.biometrics.generic", defaultValue: "Biometrics", bundle: .module,
+                    comment: "Generic name for the device's biometric unlock, used only when it is neither Face ID, Touch ID nor Optic ID. It is substituted into sentences like 'Enable %@' and '%@ didn't recognize you.'")
     }
 }
 

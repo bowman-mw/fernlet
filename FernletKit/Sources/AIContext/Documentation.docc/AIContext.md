@@ -57,6 +57,19 @@ session. Today only the on-device Foundation-model rung (and the distinct, setti
 web-nutrition search path) is reachable; the PCC and BYOK rungs are encoded in the ladders but
 report unavailable on the installed SDK, so the router lands on-device or deterministic everywhere.
 
+### Localization: every string in this module is a token
+
+Nothing in `AIContext` is display copy, and two families of literal here are load-bearing enough
+that translating them breaks behavior silently. The `payloadKind` values
+(`"companion-thought"`, `"food-selection"`, …) are the audit trail's key AND the input to
+``MemoryAgent``'s allowlist, which is a fail-closed gate: a kind that is not in
+``MemoryAgent/allowedPayloadKinds`` gets `""` back from `filteredContext` — no throw, no log, just a
+companion thought permanently stripped of the user's behavioral memory. `TierTwoMemoryRecord`'s
+`confidence` (`"low"`/`"medium"`/`"high"`) is compared the same way. Prompt vocabulary is the third
+case: strings that reach a model must stay in one stable language, or the model's grounding shifts
+per device locale with nothing to catch it. Where a human-readable name is genuinely needed, add a
+separate display property in the UI layer and leave the token alone.
+
 ## Topics
 
 ### Typed payloads (the de-identification contract)

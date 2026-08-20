@@ -154,6 +154,21 @@ jobs:
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/PowerOfTenBoundaryTests
 
+      - name: Localization wall
+        # Also a no-compiler-half wall, and every failure it catches is SILENT in ordinary
+        # development: a package string that resolves against the wrong bundle renders English
+        # forever with a clean build; a changed sealed-column rawValue drops symptoms out of an
+        # encrypted history with no error; a drifted widget token leaves the widget on the
+        # neutral companion in a separate process no app test observes. Nothing here is visible
+        # in an English simulator run, which is why it has to run on every push.
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -project App/Fernlet.xcodeproj \
+            -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" \
+            -only-testing:FernletTests/LocalizationBoundaryTests
+
       - name: Key-custody + at-rest-format tripwires
         # Same shape as the no-tracking wall: no compiler half, so these suites ARE the
         # enforcement (Docs/Verifiability.md §2, §4) and must run here for the "cannot merge

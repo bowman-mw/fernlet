@@ -46,9 +46,14 @@ struct CycleDayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Both halves are runtime text, so both go through `Text(verbatim:)`:
+                // `Date.formatted` has already localized itself and must not be re-looked-up, and
+                // the phase title is a domain display property that resolves its own string.
                 ScreenHeader(
-                    title: entry.date.formatted(.dateTime.month(.wide).day()),
-                    subtitle: showsPeriodHalf ? entry.phase.title : entry.date.formatted(.dateTime.weekday(.wide))
+                    title: Text(verbatim: entry.date.formatted(.dateTime.month(.wide).day())),
+                    subtitle: Text(verbatim: showsPeriodHalf
+                                   ? entry.phase.title
+                                   : entry.date.formatted(.dateTime.weekday(.wide)))
                 )
 
                 if showsPeriodHalf {

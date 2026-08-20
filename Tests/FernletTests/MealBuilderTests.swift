@@ -434,7 +434,7 @@ struct MealBuilderTests {
         #expect(updated.micronutrientSnapshot.sodium == 90)
         #expect(updated.micronutrientSnapshot.fiber == 2)
         #expect(updated.componentSnapshots == corrected)
-        #expect(updated.confidence == "Corrected")
+        #expect(updated.confidence == MealConfidence.corrected.token)
     }
 
     @Test func mealDecodingDefaultsMissingComponentSnapshots() throws {

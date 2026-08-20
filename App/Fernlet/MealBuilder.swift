@@ -96,7 +96,7 @@ struct MealBuilder {
             mealSource: .recipe,
             isAIFallback: false,
             quality: perServing.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: "Recipe",
+            confidence: MealConfidence.recipe.token,
             note: "Logged from saved recipe.",
             source: mealLogSource(for: recipe, foodItems: foodItems)
         )
@@ -109,7 +109,7 @@ struct MealBuilder {
         itemName: String,
         resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
         mealType: MealType,
-        confidenceLabel: String = "Food match"
+        confidenceToken: String = MealConfidence.foodMatch.token
     ) -> Meal {
         let components = componentSnapshots(for: resolvedIngredients)
         let totals = totals(for: components)
@@ -132,7 +132,7 @@ struct MealBuilder {
             mealSource: .manual,
             isAIFallback: false,
             quality: totals.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: confidenceLabel,
+            confidence: confidenceToken,
             note: "Matched locally from food selection: \(ingredientText).",
             source: MealLogSource.foundationModelFoodSelection
         )

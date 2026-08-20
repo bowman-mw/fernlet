@@ -18,11 +18,53 @@ import FernletScoring
 /// reproducible with no AI involvement. `DerivedSignalsRebuilder` (in `StoreCore`) is the sole
 /// production caller; it feeds a bounded oldest-first window of at most
 /// ``FernletLimits/signalWindowDays`` days. Each run yields exactly seven ``DerivedSignalRecord``
-/// values whose `value` strings are short lowercase phrases ("needs gentleness",
-/// "ready for hard", "2 possible gaps") surfaced directly by the AI-context layer and companion
-/// UI — so changing a phrase here changes user-visible text. The records are recomputed on
-/// demand and held in store state, never persisted in the ``LocalFernletDatabase`` blob.
+/// values whose `signalName` and `value` strings are both stable English tokens: `signalName`
+/// (`"moodTrend"`, `"energyTrend"`, …) is how the app finds a signal, and `value` is the short
+/// lowercase phrase (`"needs gentleness"`, `"ready for hard"`, `"2 possible gaps"`) the AI-context
+/// layer forwards verbatim and the app's gates compare against — see the freeze note below before
+/// editing either. The records are recomputed on demand and held in store state, never persisted
+/// in the ``LocalFernletDatabase`` blob.
 /// Nonisolated and Sendable-safe by virtue of having no state.
+///
+/// ## `DerivedSignalRecord.value` is a FROZEN ENGLISH TOKEN — do not localize, do not reword
+///
+/// Every `value` string this file emits — `"insufficient data"`, `"needs gentleness"`,
+/// `"improving"` / `"declining"` / `"steady"`, `"low"` / `"rising"` / `"dipping"`, `"light"` /
+/// `"protein-forward"` / `"inconsistent"` / `"consistent"`, `"ready for light"` /
+/// `"ready for moderate"` / `"ready for hard"`, `"building"` / `"deloading"`, and the counted
+/// `"N possible gap(s)"` / `"N covered"` forms — reads like a phrase written for a person, and it
+/// is not. It is a logic token. Six gates in the app target compare these literals by exact string
+/// equality, and every one of them is a behavior switch, not a label:
+///
+/// * `LaunchPreparationService.foundationModelsThought` filters on `value != "insufficient data"`
+///   and returns `nil` when nothing survives — this decides whether the AI runs AT ALL.
+/// * `GentleOffers` gates the entire gentle-offer feature on `moodTrendValue == "needs gentleness"`.
+///   That comparison is the feature's sole trigger; there is no second path in.
+/// * `AmbientCards` reads the same `moodTrend` value for its care-card trigger.
+/// * `FernletStore` maps `"ready for hard"` to the `.hard` intensity recommendation.
+/// * `HomeView` and `LaunchPreparationService` each pick their ambient line by matching
+///   `"low"` / `"needs gentleness"` / `"ready for hard"`.
+///
+/// So `String(localized:)` here, or an innocent copy edit ("needs gentleness" → "be gentle"), does
+/// not change a label: it turns six features off in six different places, with no compiler error,
+/// no test failure that names the cause, and no runtime log. The user simply stops being offered
+/// gentleness and the companion stops thinking.
+///
+/// The display layer belongs in the app, NOT here: the app target owns the mapping from these
+/// tokens to the localized sentence a person reads (another agent is adding it alongside
+/// `HomeView`'s existing `signalName`→title switch, which is already exactly this shape — a stable
+/// token in, a human string out). Adding a signal means adding a token here and a case there; it
+/// never means translating a token in place.
+///
+/// One token deserves singling out because it will tempt a localization pass hardest: the
+/// micronutrient value is built as `"\(gapCount) possible gap\(gapCount == 1 ? "" : "s")"`, which
+/// hard-codes English pluralization. That is correct FOR A TOKEN — the count has to be recoverable
+/// and the string has to be identical on every device. The plural rules that actually matter (and
+/// there are more than two of them in several target languages) belong to the app's display layer,
+/// which should re-derive the count from the structured `nutrientGaps` the record already carries
+/// (`nutrientGaps.filter { $0.status == .gap }.count` — the array holds covered nutrients too, so a
+/// bare `.count` is the wrong number) and format it with a real plural-aware localized string,
+/// rather than parsing digits back out of the token.
 public enum DerivedSignalFactory {
     /// Computes the full set of seven signal records from an oldest-first day window.
     ///

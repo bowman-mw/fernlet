@@ -214,8 +214,14 @@ public struct DerivedSignalRecord: Identifiable, Codable, Equatable {
     /// Stable signal identifier (`moodTrend`, `energyTrend`, `eatingPattern`, `progressionTrend`,
     /// `intensityReadiness`, `micronutrientGaps7Day`, `micronutrientGaps14Day`).
     public var signalName: String
-    /// Short lowercase phrase surfaced directly in UI and AI context ("needs gentleness",
-    /// "ready for hard", "2 possible gaps").
+    /// FROZEN ENGLISH TOKEN — do not localize, do not reword.
+    ///
+    /// A short lowercase phrase ("needs gentleness", "ready for hard", "2 possible gaps") that the
+    /// AI-context layer forwards verbatim into a prompt and that six gates in the app target
+    /// compare by exact string equality — including the one deciding whether the AI runs at all and
+    /// the sole trigger for the entire gentle-offer feature. Editing any phrase here silently
+    /// changes behaviour in all six places, with no error and no failing test. The localized
+    /// sentence a person reads is built in the app FROM this token; see ``DerivedSignalFactory``.
     public var value: String
     public var computedAt = Date()
     /// First day key of the window the signal was computed over.

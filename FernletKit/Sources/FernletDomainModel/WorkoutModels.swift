@@ -420,17 +420,32 @@ public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiabl
 
     public var id: String { rawValue }
 
+    /// The localized split name, for screens only.
+    ///
+    /// `rawValue` is the token: it persists on ``PlannedWorkout`` (with a parked-token side
+    /// channel) and it is the value the trainer export's `split` field must carry, because a coach
+    /// re-importing that file has to get the same split back regardless of what language the
+    /// exporting device was running. Prompts and exports read `rawValue`; only screens read this.
     public var title: String {
         switch self {
-        case .workout: "Workout"
-        case .upper: "Upper"
-        case .lower: "Lower"
-        case .fullBody: "Full Body"
-        case .push: "Push"
-        case .pull: "Pull"
-        case .legs: "Legs"
-        case .cardio: "Cardio"
-        case .recovery: "Recovery"
+        case .workout: String(localized: "split.workout", defaultValue: "Workout",
+                              bundle: .module, comment: "Workout split name: a generic session")
+        case .upper: String(localized: "split.upper", defaultValue: "Upper",
+                            bundle: .module, comment: "Workout split name: upper body")
+        case .lower: String(localized: "split.lower", defaultValue: "Lower",
+                            bundle: .module, comment: "Workout split name: lower body")
+        case .fullBody: String(localized: "split.fullBody", defaultValue: "Full Body",
+                               bundle: .module, comment: "Workout split name: whole body")
+        case .push: String(localized: "split.push", defaultValue: "Push",
+                           bundle: .module, comment: "Workout split name: pushing movements")
+        case .pull: String(localized: "split.pull", defaultValue: "Pull",
+                           bundle: .module, comment: "Workout split name: pulling movements")
+        case .legs: String(localized: "split.legs", defaultValue: "Legs",
+                           bundle: .module, comment: "Workout split name: legs")
+        case .cardio: String(localized: "split.cardio", defaultValue: "Cardio",
+                             bundle: .module, comment: "Workout split name: cardio")
+        case .recovery: String(localized: "split.recovery", defaultValue: "Recovery",
+                               bundle: .module, comment: "Workout split name: recovery / mobility")
         }
     }
 
@@ -463,6 +478,39 @@ public nonisolated enum WorkoutType: String, Codable, CaseIterable, Identifiable
     public nonisolated static let allCases: [WorkoutType] = [.upper, .lower, .fullBody, .cardio]
 
     public var id: String { rawValue }
+
+    /// The localized category name.
+    ///
+    /// This enum had no display property at all: `rawValue` WAS the on-screen text, so screens,
+    /// storage, and the model prompt were all reading one string. `rawValue` is FROZEN — it is the
+    /// persisted category on every workout row (including the four legacy spellings kept decodable
+    /// above), the vocabulary `WorkoutExerciseCatalog.inferType` matches against, and part of the
+    /// trainer export. `displayName` is the new, and only, reader-facing half.
+    ///
+    /// The legacy cases keep their literal spellings as the English default. They never appear in a
+    /// picker (see the `allCases` override) and surface only on history rows old enough to still
+    /// carry them, so they get a key each — a translator can render them, but nothing depends on
+    /// what comes back.
+    public var displayName: String {
+        switch self {
+        case .upper: String(localized: "workoutType.upper", defaultValue: "Upper",
+                            bundle: .module, comment: "Workout category: upper body")
+        case .lower: String(localized: "workoutType.lower", defaultValue: "Lower",
+                            bundle: .module, comment: "Workout category: lower body")
+        case .armsBack: String(localized: "workoutType.armsBack", defaultValue: "Arms/Back",
+                               bundle: .module, comment: "Legacy workout category, history rows only")
+        case .mixed: String(localized: "workoutType.mixed", defaultValue: "Upper/Mixed",
+                            bundle: .module, comment: "Legacy workout category, history rows only")
+        case .fullBody: String(localized: "workoutType.fullBody", defaultValue: "Full Body",
+                               bundle: .module, comment: "Workout category: whole body")
+        case .cardio: String(localized: "workoutType.cardio", defaultValue: "Cardio",
+                             bundle: .module, comment: "Workout category: cardio")
+        case .run: String(localized: "workoutType.run", defaultValue: "C210K Run",
+                          bundle: .module, comment: "Legacy workout category (Couch to 10K), history rows only")
+        case .hike: String(localized: "workoutType.hike", defaultValue: "Hike",
+                           bundle: .module, comment: "Legacy workout category, history rows only")
+        }
+    }
 }
 
 /// Whether a workout is strength training or a named activity/class.
@@ -548,28 +596,56 @@ public nonisolated enum MuscleGroup: String, Codable, CaseIterable, Identifiable
 
     public var id: String { rawValue }
 
+    /// The localized muscle name, for screens only.
+    ///
+    /// `rawValue` is the token: it is what persists on day rows and in the safety-relevant
+    /// ``WorkoutProfile`` avoided-muscles set, what the AI prompt quotes as vocabulary, and what
+    /// `CoachPlanTokens.muscleVocabulary` publishes to plan authors. A prompt, an export, or a
+    /// matcher that reaches for this property instead of `rawValue` starts producing a different
+    /// string per language — see `CoachPlanTokens.muscle(_:)`, which had to freeze an English alias
+    /// table precisely because it used to match against this.
     public var displayName: String {
         switch self {
-        case .chest: "Chest"
-        case .upperBack: "Upper Back"
-        case .lats: "Lats"
-        case .lowerBack: "Lower Back"
-        case .traps: "Traps"
-        case .frontDelts: "Front Delts"
-        case .sideDelts: "Side Delts"
-        case .rearDelts: "Rear Delts"
-        case .biceps: "Biceps"
-        case .triceps: "Triceps"
-        case .forearms: "Forearms"
-        case .abs: "Abs"
-        case .obliques: "Obliques"
-        case .quads: "Quads"
-        case .hamstrings: "Hamstrings"
-        case .glutes: "Glutes"
-        case .calves: "Calves"
-        case .adductors: "Adductors"
-        case .abductors: "Abductors"
-        case .fullBody: "Full Body"
+        case .chest: String(localized: "muscle.chest", defaultValue: "Chest",
+                            bundle: .module, comment: "Muscle group name")
+        case .upperBack: String(localized: "muscle.upperBack", defaultValue: "Upper Back",
+                                bundle: .module, comment: "Muscle group name")
+        case .lats: String(localized: "muscle.lats", defaultValue: "Lats",
+                           bundle: .module, comment: "Muscle group name (latissimus dorsi)")
+        case .lowerBack: String(localized: "muscle.lowerBack", defaultValue: "Lower Back",
+                                bundle: .module, comment: "Muscle group name")
+        case .traps: String(localized: "muscle.traps", defaultValue: "Traps",
+                            bundle: .module, comment: "Muscle group name (trapezius)")
+        case .frontDelts: String(localized: "muscle.frontDelts", defaultValue: "Front Delts",
+                                 bundle: .module, comment: "Muscle group name (anterior deltoids)")
+        case .sideDelts: String(localized: "muscle.sideDelts", defaultValue: "Side Delts",
+                                bundle: .module, comment: "Muscle group name (lateral deltoids)")
+        case .rearDelts: String(localized: "muscle.rearDelts", defaultValue: "Rear Delts",
+                                bundle: .module, comment: "Muscle group name (posterior deltoids)")
+        case .biceps: String(localized: "muscle.biceps", defaultValue: "Biceps",
+                             bundle: .module, comment: "Muscle group name")
+        case .triceps: String(localized: "muscle.triceps", defaultValue: "Triceps",
+                              bundle: .module, comment: "Muscle group name")
+        case .forearms: String(localized: "muscle.forearms", defaultValue: "Forearms",
+                               bundle: .module, comment: "Muscle group name")
+        case .abs: String(localized: "muscle.abs", defaultValue: "Abs",
+                          bundle: .module, comment: "Muscle group name (abdominals)")
+        case .obliques: String(localized: "muscle.obliques", defaultValue: "Obliques",
+                               bundle: .module, comment: "Muscle group name")
+        case .quads: String(localized: "muscle.quads", defaultValue: "Quads",
+                            bundle: .module, comment: "Muscle group name (quadriceps)")
+        case .hamstrings: String(localized: "muscle.hamstrings", defaultValue: "Hamstrings",
+                                 bundle: .module, comment: "Muscle group name")
+        case .glutes: String(localized: "muscle.glutes", defaultValue: "Glutes",
+                             bundle: .module, comment: "Muscle group name")
+        case .calves: String(localized: "muscle.calves", defaultValue: "Calves",
+                             bundle: .module, comment: "Muscle group name")
+        case .adductors: String(localized: "muscle.adductors", defaultValue: "Adductors",
+                                bundle: .module, comment: "Muscle group name (inner thigh)")
+        case .abductors: String(localized: "muscle.abductors", defaultValue: "Abductors",
+                                bundle: .module, comment: "Muscle group name (outer hip)")
+        case .fullBody: String(localized: "muscle.fullBody", defaultValue: "Full Body",
+                               bundle: .module, comment: "Muscle group name covering the whole body")
         }
     }
 
@@ -643,18 +719,36 @@ public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable, 
 
     public var id: String { rawValue }
 
+    /// The localized equipment name, for screens only.
+    ///
+    /// `rawValue` is the token: it persists on ``WorkoutLocation``/catalog rows, it is what
+    /// `CoachPlanTokens.equipmentVocabulary` publishes to plan authors, and it is what the trainer
+    /// export must carry. Same warning as ``MuscleGroup/displayName`` — a prompt or export site
+    /// reading this property produces a different string per language, and
+    /// `CoachPlanTokens.equipment(_:)` had to freeze an English alias table because it used to
+    /// match against it.
     public var displayName: String {
         switch self {
-        case .barbell: "Barbell"
-        case .dumbbell: "Dumbbell"
-        case .machine: "Machine"
-        case .cable: "Cable"
-        case .bodyweight: "Bodyweight"
-        case .kettlebell: "Kettlebell"
-        case .band: "Band"
-        case .bench: "Bench"
-        case .cardio: "Cardio"
-        case .none: "None"
+        case .barbell: String(localized: "equipment.barbell", defaultValue: "Barbell",
+                              bundle: .module, comment: "Gym equipment category")
+        case .dumbbell: String(localized: "equipment.dumbbell", defaultValue: "Dumbbell",
+                               bundle: .module, comment: "Gym equipment category")
+        case .machine: String(localized: "equipment.machine", defaultValue: "Machine",
+                              bundle: .module, comment: "Gym equipment category: a weight machine")
+        case .cable: String(localized: "equipment.cable", defaultValue: "Cable",
+                            bundle: .module, comment: "Gym equipment category: a cable machine")
+        case .bodyweight: String(localized: "equipment.bodyweight", defaultValue: "Bodyweight",
+                                 bundle: .module, comment: "Gym equipment category: no equipment, own bodyweight")
+        case .kettlebell: String(localized: "equipment.kettlebell", defaultValue: "Kettlebell",
+                                 bundle: .module, comment: "Gym equipment category")
+        case .band: String(localized: "equipment.band", defaultValue: "Band",
+                           bundle: .module, comment: "Gym equipment category: a resistance band")
+        case .bench: String(localized: "equipment.bench", defaultValue: "Bench",
+                            bundle: .module, comment: "Gym equipment category: a weight bench")
+        case .cardio: String(localized: "equipment.cardio", defaultValue: "Cardio",
+                             bundle: .module, comment: "Gym equipment category: cardio machines")
+        case .none: String(localized: "equipment.none", defaultValue: "None",
+                           bundle: .module, comment: "Gym equipment category: none required")
         }
     }
 }
@@ -822,6 +916,19 @@ public nonisolated enum ExerciseInputKind: String, Codable, Sendable {
 /// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
 public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Sendable {
     public var id: String { name }
+
+    /// FROZEN — never localize this, and never derive it from a localized string.
+    ///
+    /// `name` is doing four load-bearing jobs at once, and each of them breaks differently:
+    /// - it IS the identity (`id == name`), so translating it re-identifies the exercise;
+    /// - it is the exact-match lookup key every plan, slot, and log resolves an exercise by;
+    /// - it is the vocabulary the model is given and the vocabulary a coach plan quotes back;
+    /// - it is the KEY of `settings.workoutProgression: [String: Int]`, which syncs through
+    ///   CloudKit — so a translated name silently orphans the user's accumulated progression on
+    ///   every device, and a phone in a second language would grow a parallel set of keys.
+    ///
+    /// If a localized exercise name is ever wanted, it belongs in a lookup keyed BY this string,
+    /// never as a replacement for it.
     public var name: String
     public var primaryMuscles: Set<MuscleGroup>
     public var secondaryMuscles: Set<MuscleGroup>
@@ -846,9 +953,31 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         }
     }
 
+    /// Every muscle this exercise works, primary and secondary, as FROZEN ``MuscleGroup``
+    /// rawValue tokens in a stable order.
+    ///
+    /// This is the half that matching and ordering must use. `Set` has no order of its own, so the
+    /// sort is what makes the list deterministic — and it sorts by rawValue rather than by
+    /// `displayName` so the order is a property of the data, not of whatever language the device is
+    /// in. (For English the two orders happen to be identical, since each display name is just its
+    /// rawValue with the camel hump turned into a space.)
+    public var muscleTokens: [String] {
+        primaryMuscles.union(secondaryMuscles)
+            .map(\.rawValue)
+            .sorted()
+    }
+
+    /// The same muscles as ``muscleTokens``, in the same order, localized for display.
+    ///
+    /// Order is inherited from the token list on purpose: sorting the localized names instead would
+    /// shuffle the row's text per language for no benefit, and it would make the "first three
+    /// muscles" that several summaries show a different three in different languages.
+    ///
+    /// Display ONLY. `WorkoutExerciseCatalog.search` matches on ``muscleTokens`` (plus these, so an
+    /// English or a translated search term both work); nothing else should read this to compare.
     public var muscles: [String] {
-        (primaryMuscles.union(secondaryMuscles))
-            .sorted { $0.displayName < $1.displayName }
+        primaryMuscles.union(secondaryMuscles)
+            .sorted { $0.rawValue < $1.rawValue }
             .map(\.displayName)
     }
 
@@ -1027,6 +1156,10 @@ public nonisolated enum WorkoutExerciseCatalog {
                 let name = target.name.lowercased()
                 return text.contains(name) || name.split(separator: " ").allSatisfy { text.contains($0) }
             }
+            // Display names on purpose: this string is only ever shown ("Targets: chest, triceps")
+            // and never parsed, persisted, or prompted with. De-duping localized names is safe for
+            // the same reason — two muscles that share a display name in some language would merge
+            // into one word on screen, which is what a reader would want anyway.
             .flatMap(\.muscles)
         let unique = muscles.reduce(into: [String]()) { result, muscle in
             if !result.contains(muscle) { result.append(muscle) }
@@ -1041,6 +1174,12 @@ public nonisolated enum WorkoutExerciseCatalog {
         return allExercises.filter { exercise in
             exercise.name.lowercased().contains(normalized)
                 || exercise.category.rawValue.lowercased().contains(normalized)
+                // Match the FROZEN tokens as well as the localized names. Tokens alone would break
+                // English search ("upper back" no longer finds `upperBack`); localized names alone
+                // would break the moment the catalog and the device disagree on language. Matching
+                // both is a strict superset of today's behavior in English, and keeps a user who
+                // types an English muscle name on a translated device finding the same exercises.
+                || exercise.muscleTokens.contains { $0.lowercased().contains(normalized) }
                 || exercise.muscles.contains { $0.lowercased().contains(normalized) }
         }
     }

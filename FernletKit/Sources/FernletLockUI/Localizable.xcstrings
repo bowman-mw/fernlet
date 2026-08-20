@@ -1,0 +1,846 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "lock.action.cancel" : {
+      "comment" : "Button. Leaves app-lock setup, the no-recovery disclosure, or the reset confirmation without changing anything.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "lock.action.continue" : {
+      "comment" : "Button advancing to the next step of app-lock setup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Continue"
+          }
+        }
+      }
+    },
+    "lock.action.ok" : {
+      "comment" : "Button acknowledging an app-lock alert. It only dismisses — whatever the alert describes has already happened and cannot be declined.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "OK"
+          }
+        }
+      }
+    },
+    "lock.action.resetAppLock" : {
+      "comment" : "Destructive button. Deletes the passcode AND permanently destroys the sealed journal, cycle and intimacy notes — it never recovers them. Do not translate as 'reset password', 'restore' or anything that suggests the notes come back.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset app lock"
+          }
+        }
+      }
+    },
+    "lock.action.unlock" : {
+      "comment" : "Button submitting the typed password on the app-lock unlock screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock"
+          }
+        }
+      }
+    },
+    "lock.biometricHeader" : {
+      "comment" : "Header above the Face ID / Touch ID opt-in",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biometric unlock (optional)"
+          }
+        }
+      }
+    },
+    "lock.biometrics.generic" : {
+      "comment" : "Generic name for the device's biometric unlock, used only when it is neither Face ID, Touch ID nor Optic ID. It is substituted into sentences like 'Enable %@' and '%@ didn't recognize you.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biometrics"
+          }
+        }
+      }
+    },
+    "lock.chooseType" : {
+      "comment" : "Header above the PIN/password lock-type picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose a lock type"
+          }
+        }
+      }
+    },
+    "lock.confirmPIN" : {
+      "comment" : "Header when re-entering a numeric app lock",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Confirm PIN"
+          }
+        }
+      }
+    },
+    "lock.confirmPassword" : {
+      "comment" : "Header when re-entering an alphanumeric app lock",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Confirm password"
+          }
+        }
+      }
+    },
+    "lock.cooldown.retry.hoursMinutes" : {
+      "comment" : "Live countdown on the lockout card. First number is hours, second is minutes; 'h' and 'm' are abbreviations that should be localized to the usual short units.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Try again in %1$lldh %2$lldm"
+          }
+        }
+      }
+    },
+    "lock.cooldown.retry.minutesSeconds" : {
+      "comment" : "Live countdown on the lockout card. First number is minutes, second is seconds; 'm' and 's' are abbreviations that should be localized to the usual short units.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Try again in %1$lldm %2$llds"
+          }
+        }
+      }
+    },
+    "lock.cooldown.retry.seconds" : {
+      "comment" : "Live countdown on the lockout card, under a minute. 's' is an abbreviation for seconds and should be localized to the usual short unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Try again in %llds"
+          }
+        }
+      }
+    },
+    "lock.createPIN" : {
+      "comment" : "Header when creating a numeric app lock",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Create PIN"
+          }
+        }
+      }
+    },
+    "lock.createPassword" : {
+      "comment" : "Header when creating an alphanumeric app lock",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Create password"
+          }
+        }
+      }
+    },
+    "lock.credential.passcode" : {
+      "comment" : "Generic fallback name for the lock, used inside 'Enter your %@ to continue.' when the configured kind is not known yet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "passcode"
+          }
+        }
+      }
+    },
+    "lock.credential.password" : {
+      "comment" : "Name of the alphanumeric lock type, used inside 'Enter your %@ to continue.' — lower-case mid-sentence in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "password"
+          }
+        }
+      }
+    },
+    "lock.credential.pin4" : {
+      "comment" : "Name of the four-digit lock type, used inside 'Enter your %@ to continue.' — inflect it for that sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4-digit PIN"
+          }
+        }
+      }
+    },
+    "lock.credential.pin6" : {
+      "comment" : "Name of the six-digit lock type, used inside 'Enter your %@ to continue.' — inflect it for that sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "6-digit PIN"
+          }
+        }
+      }
+    },
+    "lock.disclosure.confirmButton" : {
+      "comment" : "Button that acknowledges the no-recovery disclosure and creates the lock. The first half is the user asserting they read the warnings, so keep it in the first person.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I understand — set up lock"
+          }
+        }
+      }
+    },
+    "lock.disclosure.enclaveLoss" : {
+      "comment" : "Second loss mode, strictly larger than the first: remembering the passcode does not help on erased or replacement hardware. 'Secure Enclave' is Apple hardware terminology — use whatever Apple's own localization uses.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The same is true if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware. The key lives inside this device's Secure Enclave and never leaves it."
+          }
+        }
+      }
+    },
+    "lock.disclosure.forgottenPasscode" : {
+      "comment" : "First loss mode in the no-recovery disclosure. 'Permanently unreadable' means the data is destroyed for practical purposes — no support path exists. The second sentence is the one piece of good news and must stay accurate: the clinical samples in Apple Health are untouched, only Fernlet's own notes are lost.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you forget your passcode, private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health."
+          }
+        }
+      }
+    },
+    "lock.disclosure.navTitle" : {
+      "comment" : "Title of the sheet that discloses the consequences of setting an app-lock passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Before you set a passcode"
+          }
+        }
+      }
+    },
+    "lock.disclosure.onlyIfConfident" : {
+      "comment" : "Closing line of the no-recovery disclosure, asking the user to opt out if unsure.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only set a passcode if you're confident you'll remember it."
+          }
+        }
+      }
+    },
+    "lock.disclosure.sealedBackup" : {
+      "comment" : "The only mitigation offered, plus its exception. 'Sealed backup' and 'Privacy & Data' are names of a setting and a settings screen in this app — translate them the same way they are translated there. The last sentence is an absolute: Worry Box notes have no backup at all.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn on Sealed backup for journal, cycle, and intimate logs in Privacy & Data to keep an encrypted copy that survives. Worry Box notes are never backed up and are always lost."
+          }
+        }
+      }
+    },
+    "lock.disclosure.title" : {
+      "comment" : "Headline of the no-recovery disclosure. Literally true: no support channel, no backup code, no way back. Do not soften it into 'recovery may be difficult'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "There is no recovery path"
+          }
+        }
+      }
+    },
+    "lock.enclaveLost.biometricRepair" : {
+      "comment" : "Shown on the lost-key card when a biometric copy of the key survives. This is the ONE path that recovers the notes, so the 'try that first' has to read as urgent: the reset button underneath destroys it. The placeholder is an Apple product name and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ can still open your notes on this device and repair its key. Try that first — resetting destroys that surviving copy."
+          }
+        }
+      }
+    },
+    "lock.enclaveLost.body" : {
+      "comment" : "Body of the lost-key card. Three things must survive: the user typed the right passcode, the notes are already unreadable, and resetting recovers nothing — it only makes the app usable again.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your passcode was correct. This device's Secure Enclave key — the only thing that can open your sealed journal, cycle, and intimacy notes — is gone. Resetting app lock does not bring those notes back; it clears the lock so you can use Fernlet again."
+          }
+        }
+      }
+    },
+    "lock.enclaveLost.title" : {
+      "comment" : "Heading shown when the correct passcode was entered but this device's Secure Enclave key is gone. 'On this device' is the precise part: the data is not corrupt, it is unopenable here.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed data can't be opened on this device"
+          }
+        }
+      }
+    },
+    "lock.enclaveLost.unlockWithBiometric" : {
+      "comment" : "Button offering biometric unlock on the lost-key card. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock with %@"
+          }
+        }
+      }
+    },
+    "lock.field.confirmPassword" : {
+      "comment" : "Placeholder inside the secure text field where the app-lock password is typed a second time.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Confirm password"
+          }
+        }
+      }
+    },
+    "lock.field.password" : {
+      "comment" : "Placeholder inside the secure text field where the app-lock password is typed, both when creating it and when unlocking.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "lock.gate.setUpCallToAction" : {
+      "comment" : "Heading and button on the overlay shown when a private screen is opened before any app-lock passcode exists. Both use this one string.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up app lock"
+          }
+        }
+      }
+    },
+    "lock.hardBinding.message" : {
+      "comment" : "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the sentence that must not soften — remembering the passcode does not save the notes on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives."
+          }
+        }
+      }
+    },
+    "lock.hardBinding.title" : {
+      "comment" : "Title of the one-time alert telling an existing user that their sealed notes are now bound to this specific iPhone. 'Tied to this iPhone' is the whole point — the passcode alone is no longer enough elsewhere.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your passcode is now tied to this iPhone"
+          }
+        }
+      }
+    },
+    "lock.lockout.title" : {
+      "comment" : "Heading on both app-lock lockout cards: the timed cooldown and the final state where only a reset can continue.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many failed attempts"
+          }
+        }
+      }
+    },
+    "lock.noBiometrics" : {
+      "comment" : "Shown when the device has no Face ID or Touch ID",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No biometric authentication available on this device."
+          }
+        }
+      }
+    },
+    "lock.pinDots.accessibilityLabel" : {
+      "comment" : "Spoken by VoiceOver for the row of PIN dots. First number is how many digits have been typed, second is how many the PIN has. This is the only feedback a masked PIN field gives, so keep both numbers.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld digits entered"
+          }
+        }
+      }
+    },
+    "lock.protectsSentence" : {
+      "comment" : "Sub-heading on the app-lock setup screen, on the gate's set-up prompt, and on the 'You're set' screen. Names all four kinds of writing the one passcode seals; listing fewer would tell the user the lock covers less than it does.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protects your journal, cycle, intimacy notes and worry box."
+          }
+        }
+      }
+    },
+    "lock.reset.confirm.message" : {
+      "comment" : "Message in the reset confirmation dialog. 'Permanently unreadable' is literal — there is no recovery. The second sentence is the one thing that survives and must stay accurate: the clinical samples in Apple Health are untouched.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health."
+          }
+        }
+      }
+    },
+    "lock.reset.confirm.title" : {
+      "comment" : "Title of the confirmation dialog for resetting the app lock. Keep it a question — it is the last chance to back out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset app lock?"
+          }
+        }
+      }
+    },
+    "lock.reset.rebuildFailed.message" : {
+      "comment" : "Message of the alert shown when the reset destroyed the passcode and the notes but could not recreate the empty sealed store. Both halves are true and neither may be dropped: the data really is gone, and the app needs relaunching. 'Fernlet' is the app's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet."
+          }
+        }
+      }
+    },
+    "lock.reset.rebuildFailed.title" : {
+      "comment" : "Title of the alert shown after the app lock was reset but the sealed store could not be recreated. Statement of fact, not a question.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock reset"
+          }
+        }
+      }
+    },
+    "lock.reset.required.body" : {
+      "comment" : "Body of the final lockout card. The reset is the only way forward AND it destroys the sealed notes for good — both halves have to survive translation.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable."
+          }
+        }
+      }
+    },
+    "lock.setup.biometric.enableToggle" : {
+      "comment" : "Label of the switch that turns on biometric unlock. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enable %@"
+          }
+        }
+      }
+    },
+    "lock.setup.biometric.explainer" : {
+      "comment" : "Explains the optional biometric unlock during setup. The placeholder is an Apple product name (Face ID / Touch ID / Optic ID) and is not translated. The second sentence is a real limit, not reassurance — keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ lets you unlock quickly without entering your passcode. Your passcode is still required to change lock settings."
+          }
+        }
+      }
+    },
+    "lock.setup.confirmHint" : {
+      "comment" : "Instruction on the step that asks for the new passcode a second time.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Re-enter to confirm."
+          }
+        }
+      }
+    },
+    "lock.setup.done.title" : {
+      "comment" : "Heading shown once the app lock has been created, while the sheet dismisses itself.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're set"
+          }
+        }
+      }
+    },
+    "lock.setup.entry.passwordRule" : {
+      "comment" : "Instruction on the password-creation step. Both bounds are enforced by the app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose a password (8–64 characters)."
+          }
+        }
+      }
+    },
+    "lock.setup.entry.pinRule" : {
+      "comment" : "Instruction on the PIN-creation step. The number is 4 or 6, whichever lock type the user chose.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter your %lld-digit PIN."
+          }
+        }
+      }
+    },
+    "lock.setup.error.passcodeMismatch" : {
+      "comment" : "Inline error when the confirmation passcode differs from the first entry. Nothing was saved; the user simply retypes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passcodes don't match. Try again."
+          }
+        }
+      }
+    },
+    "lock.setup.kind.password.subtitle" : {
+      "comment" : "Subtitle under the 'Password' card. '8+' is an enforced minimum length, not a suggestion.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "8+ characters, highest security"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.password.title" : {
+      "comment" : "Title of the lock-type card for an alphanumeric passcode. Standalone card title, not a text-field label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.pin4.subtitle" : {
+      "comment" : "Subtitle under the '4-digit PIN' card. Keep the warning half — this option really is the weakest of the three.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fast, lower security"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.pin4.title" : {
+      "comment" : "Title of the lock-type card for a four-digit numeric passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4-digit PIN"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.pin6.subtitle" : {
+      "comment" : "Subtitle under the '6-digit PIN' card, which is the recommended option.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good balance of speed and security"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.pin6.title" : {
+      "comment" : "Title of the lock-type card for a six-digit numeric passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "6-digit PIN"
+          }
+        }
+      }
+    },
+    "lock.setup.kind.recommendedBadge" : {
+      "comment" : "Small badge on the recommended lock-type card. Uppercase in English; use whatever a badge normally looks like in the target language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "RECOMMENDED"
+          }
+        }
+      }
+    },
+    "lock.setup.navTitle" : {
+      "comment" : "Title of the sheet that creates the app-lock passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up app lock"
+          }
+        }
+      }
+    },
+    "lock.setup.toast.biometricFailed" : {
+      "comment" : "Toast when the lock was created but the biometric opt-in failed. Both halves matter: the lock IS on, the biometric unlock is NOT. 'Settings → App lock' is a path through the app's own settings; translate both names the same way they are translated on those screens.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock is set up. %@ couldn't be turned on — you can enable it in Settings → App lock."
+          }
+        }
+      }
+    },
+    "lock.setup.toast.configured" : {
+      "comment" : "Toast confirming the app lock was created.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock is set up."
+          }
+        }
+      }
+    },
+    "lock.unlock.attemptsRemaining.one" : {
+      "comment" : "Warning above the passcode pad when exactly one try is left before the app lock stops accepting entries for a while. Singular form; see lock.unlock.attemptsRemaining.other for the rest.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 attempt remaining before lockout"
+          }
+        }
+      }
+    },
+    "lock.unlock.attemptsRemaining.other" : {
+      "comment" : "Warning above the passcode pad counting the tries left before the app lock stops accepting entries for a while. Used for every count except 1 (see lock.unlock.attemptsRemaining.one).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld attempts remaining before lockout"
+          }
+        }
+      }
+    },
+    "lock.unlock.error.biometricUnrecognized" : {
+      "comment" : "Inline error when the biometric check ran and failed to match. The placeholder is an Apple product name and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ didn't recognize you. Try your passcode."
+          }
+        }
+      }
+    },
+    "lock.unlock.error.keyGone" : {
+      "comment" : "Inline error after a CORRECT passcode when this device's key is gone. The re-entry is a deliberate double check before the app offers the destructive reset — do not phrase it as a wrong passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your passcode was correct, but sealed data can no longer be opened on this device. Enter it once more to confirm."
+          }
+        }
+      }
+    },
+    "lock.unlock.error.keyGoneTryBiometric" : {
+      "comment" : "Inline error after a CORRECT passcode when this device's key is gone but biometrics can still repair it. Do not phrase it as a wrong passcode. The placeholder is an Apple product name and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your passcode was correct, but this device's key for sealed data is gone. Try %@ — it can still open and repair it."
+          }
+        }
+      }
+    },
+    "lock.unlock.error.resetRequired" : {
+      "comment" : "Short inline error under the passcode field: no further attempts are accepted, only a reset continues.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset required."
+          }
+        }
+      }
+    },
+    "lock.unlock.error.tooManyAttempts" : {
+      "comment" : "Inline error when a biometric unlock is refused because too many passcode attempts failed and only a reset continues.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many attempts. Reset is required."
+          }
+        }
+      }
+    },
+    "lock.unlock.prompt" : {
+      "comment" : "Prompt on the unlock screen. The placeholder is the lock-type name in mid-sentence form ('4-digit PIN', '6-digit PIN', 'password', 'passcode') — the four lock.credential.* strings, which should be cased and inflected to fit this sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter your %@ to continue."
+          }
+        }
+      }
+    },
+    "lock.unlock.title" : {
+      "comment" : "Title on the app-lock unlock screen. 'Fernlet' is the app's name and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet Lock"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

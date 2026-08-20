@@ -365,7 +365,9 @@ struct LogPeriodSheet: View {
 
     /// The save bar's word for what the tap will do — "Remove entry" once an edit has been emptied,
     /// because that tap deletes the day's Fernlet-owned samples and sealed note instead of writing.
-    private var saveLabel: String {
+    /// `LocalizedStringKey`, not `String`: all three words are authored copy, and only this type
+    /// extracts them into the string catalog.
+    private var saveLabel: LocalizedStringKey {
         if isSaving { return "Saving" }
         return isEmptiedEdit ? "Remove entry" : "Save"
     }

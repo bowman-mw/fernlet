@@ -464,7 +464,7 @@ public enum MealParser {
             mealType: type,
             macros: macros,
             quality: macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: "Estimated",
+            confidence: MealConfidence.estimated.token,
             note: "Estimated locally from the description. Add API lookup later for branded meals.",
             source: MealLogSource.manual
         )

@@ -22,6 +22,19 @@ public enum MemoryAgent {
     // MARK: - Destination allowlist
 
     /// Only these payload kinds may receive TierTwo behavioral context.
+    ///
+    /// **DO NOT LOCALIZE — frozen English tokens, matched by exact string equality.** These are
+    /// `AIContextPayload.payloadKind` values (see `AIContextPayload.swift`), not labels: nothing
+    /// ever renders them. `filteredContext` compares the caller's `payloadKind` against this Set
+    /// with `contains`, so a translated literal here — or in any `payloadKind` declaration — stops
+    /// matching, and the guard falls through to the fail-closed `return ""`.
+    ///
+    /// That failure is completely silent. It does not throw, it does not log, it does not degrade
+    /// the prompt visibly: the companion thought is still generated, just permanently stripped of
+    /// every behavioral memory the user's history had earned. The only symptom is a user reporting
+    /// that the companion "got worse" after switching languages, with no error anywhere to explain
+    /// it. Fail-closed is the right default for a privacy gate; a localized key turns it into an
+    /// undetectable one.
     public static let allowedPayloadKinds: Set<String> = ["companion-thought"]
 
     // MARK: - Public interface
@@ -36,9 +49,14 @@ public enum MemoryAgent {
         recencyDays: Int = 30,
         maxChars: Int = 400
     ) -> String {
+        // Exact string equality against frozen English tokens — see ``allowedPayloadKinds``. This
+        // is the fail-closed half of the privacy gate: a mismatch returns "" silently, so a
+        // localized `payloadKind` anywhere would strip behavioral memory with no error to trace.
         guard allowedPayloadKinds.contains(payloadKind) else { return "" }
 
         let cutoff = Calendar.current.date(byAdding: .day, value: -recencyDays, to: Date()) ?? Date()
+        // `confidence` is likewise a frozen token ("low"/"medium"/"high"), never display copy: the
+        // comparison below is what keeps low-confidence inferences out of the prompt.
         let candidates = memories
             .filter { $0.active && $0.confidence != "low" }
             .filter { $0.extractedDate >= cutoff }

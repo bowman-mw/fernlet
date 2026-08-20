@@ -38,17 +38,48 @@ public struct FernletCard<Content: View>: View {
 /// Pairs with ``FernletCard`` groups on the Home and hub screens so section headings share one
 /// small-label treatment; it is the screen-level sibling of ``SheetField``'s in-sheet caption.
 public struct SectionLabel: View {
-    private let text: String
+    /// Resolved at init so the two initializers can settle the localize-or-not question once,
+    /// rather than the body having to branch on which kind of string it was handed.
+    private let text: Text
 
-    public init(_ text: String) {
-        self.text = text
+    /// The localizing initializer: a literal written here is extracted into the **calling target's**
+    /// string catalog and looked up in `Bundle.main` when the label renders.
+    ///
+    /// That bundle pairing is only correct for callers inside the app target, which is where all
+    /// ~83 of today's call sites live — `Bundle.main` *is* the app bundle, so the key the compiler
+    /// harvested and the key SwiftUI looks up are the same key. A caller inside another **package**
+    /// module has its literals harvested into that package's own bundle, which `Bundle.main` never
+    /// consults; such a caller must resolve the string itself with
+    /// `String(localized:bundle:.module)` and hand the result to ``init(verbatim:)``.
+    public init(_ text: LocalizedStringKey) {
+        self.text = Text(text)
+    }
+
+    /// The non-localizing initializer, for text that is *already* final: user data, a formatted
+    /// date, a persisted token used as a grouping heading, or a package caller's own
+    /// `String(localized:bundle:.module)` result.
+    ///
+    /// It is deliberately given the `verbatim:` label instead of overloading the unlabeled `_:`
+    /// with a `String`. Two same-label overloads would let Swift pick the concrete `String` one for
+    /// a plain string literal — `String` is the default type of a literal — and every call site in
+    /// the app would go on compiling while quietly no longer localizing, which is exactly the
+    /// failure this change exists to remove. A distinct label makes verbatim a decision someone
+    /// had to type.
+    public init(verbatim text: String) {
+        self.text = Text(verbatim: text)
     }
 
     public var body: some View {
-        Text(text.uppercased())
+        text
             .font(.fernlet(.labelSmall))
             .tracking(0.8)
             .foregroundStyle(Color.slate)
+            // `.textCase` rather than `String.uppercased()`: the transform now runs *after* the
+            // lookup, on the translated string, which is the only locale-correct order. German ß
+            // has to become SS, French capitals keep their accents, and Turkish i must not become
+            // I — none of which a caller-side `.uppercased()` on an English key could ever get
+            // right. It is also the only option left: `LocalizedStringKey` has no `.uppercased()`.
+            .textCase(.uppercase)
     }
 }
 
@@ -61,13 +92,34 @@ public struct SectionLabel: View {
 /// shop and milestones each drew their own with different fonts and spacing, which is what
 /// `systemImage:` is here for: an illustrated empty state in the same voice as the plain ones.
 public struct EmptyState: View {
-    private let text: String
+    /// Resolved at init, for the same reason as ``SectionLabel``'s: the body should not have to
+    /// know whether the line arrived as a catalog key or as finished text.
+    private let text: Text
     private let systemImage: String?
 
-    /// - Parameter systemImage: Optional SF Symbol drawn above the line. Decorative — it is hidden
-    ///   from VoiceOver, which reads only `text`.
-    public init(text: String, systemImage: String? = nil) {
-        self.text = text
+    /// The localizing initializer. The literal is harvested into the calling target's string
+    /// catalog and looked up in `Bundle.main`, which is correct for the app-target callers that own
+    /// every one of today's ~35 call sites. A caller in another package module must resolve its own
+    /// string with `String(localized:bundle:.module)` and use ``init(verbatim:systemImage:)`` — a
+    /// key harvested into a package bundle is invisible to `Bundle.main` and would silently render
+    /// as untranslated English.
+    ///
+    /// - Parameter systemImage: Optional SF Symbol drawn above the line. An SF Symbol name is a
+    ///   token, never display text, so it stays a plain `String` — and it is decorative here
+    ///   anyway, hidden from VoiceOver, which reads only `text`.
+    public init(text: LocalizedStringKey, systemImage: String? = nil) {
+        self.text = Text(text)
+        self.systemImage = systemImage
+    }
+
+    /// The non-localizing initializer, for a line that is already final — most often one built from
+    /// user input ("No one matches \"beans\".") or handed over pre-resolved by a package caller.
+    ///
+    /// The `verbatim:` label is load-bearing: a same-label `String` overload would win overload
+    /// resolution for every plain literal and silently un-localize the whole component. See
+    /// ``SectionLabel/init(verbatim:)`` for the full reasoning.
+    public init(verbatim text: String, systemImage: String? = nil) {
+        self.text = Text(verbatim: text)
         self.systemImage = systemImage
     }
 
@@ -79,7 +131,7 @@ public struct EmptyState: View {
                     .foregroundStyle(Color.slate.opacity(0.6))
                     .accessibilityHidden(true)
             }
-            Text(text)
+            text
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)

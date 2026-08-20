@@ -54,8 +54,10 @@ struct ProximityRecipeShareSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         ScreenHeader(
-                            title: draft.title,
-                            subtitle: "Share with a nearby Fernlet.",
+                            // The user's own recipe name — `verbatim:` so it is never treated as
+                            // a catalog key.
+                            title: Text(verbatim: draft.title),
+                            subtitle: Text("Share with a nearby Fernlet."),
                             subtitleFirst: false,
                             // The title is the user's own recipe name: three lines rather than the
                             // default two, so "Grandma's slow-cooked white bean…" keeps its name at

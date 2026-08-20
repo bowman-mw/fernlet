@@ -833,7 +833,10 @@ struct FriendListView: View {
         return peers
     }
 
-    private var emptyStateText: String {
+    /// `LocalizedStringKey`, so all three lines extract. The interpolated one becomes the format
+    /// key `No one matches "%@".` with the search term as an argument — which is what lets a
+    /// translator move the quoted term to wherever their language puts it.
+    private var emptyStateText: LocalizedStringKey {
         // Everyday words, not security-console words: this list is people you've met, not "peers".
         if !searchText.isEmpty { return "No one matches \"\(searchText)\"." }
         switch filter {

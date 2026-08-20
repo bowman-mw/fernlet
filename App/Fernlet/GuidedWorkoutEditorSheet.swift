@@ -184,7 +184,11 @@ struct GuidedWorkoutEditorSheet: View {
         .buttonStyle(.plain)
         // The drawn circle stays 30pt; the target and the VoiceOver label ("More sets") come from
         // the shared helper — without it these read as "plus" and "minus".
-        .fernletIconButton(label)
+        // `verbatim:` rather than flipping `stepButton`'s parameter: the callers build this
+        // label as "Fewer \(title.lowercased())", and lower-casing an English noun to splice into
+        // a sentence does not survive translation. Honest English beats broken German here; the
+        // real fix is per-call-site accessibility copy, which is a copy task, not a type change.
+        .fernletIconButton(verbatim: label)
     }
 
     // MARK: Add exercise

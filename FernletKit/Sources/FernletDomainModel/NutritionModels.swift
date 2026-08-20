@@ -270,6 +270,14 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         didSet { unknownQualityToken = nil }
     }
     public var unknownQualityToken: String? = nil
+
+    /// The FROZEN provenance token — how this row got its numbers.
+    ///
+    /// Stays a free-form `String` rather than becoming a `MealConfidence` so the on-disk schema is
+    /// unchanged and a stamp from a newer build survives a round trip through this one untouched
+    /// (the same posture as the parked enum tokens above, achieved here for free by never narrowing
+    /// the type). Write ``MealConfidence/token``; READ ``confidenceLabel`` — this string is storage,
+    /// not text, and until the Phase 1 fork it was both.
     public var confidence: String
     public var note: String
     public var source: String
@@ -280,6 +288,22 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         macros.calories
     }
 
+    /// ``confidence`` resolved to a case, or nil when the stored string is one this build has no
+    /// stamp for (a newer build's, or a hand-edited row).
+    public var confidenceToken: MealConfidence? {
+        MealConfidence(persistedToken: confidence)
+    }
+
+    /// The localized provenance text for the meal row — the ONLY thing that should be shown.
+    ///
+    /// Falls back to the raw stored string when the token is unrecognised. That is deliberate and
+    /// matches the file's existing tolerant-decode posture: showing a stamp this build cannot name
+    /// is honest, whereas blanking it or substituting a default would quietly misreport where the
+    /// numbers came from.
+    public var confidenceLabel: String {
+        confidenceToken?.label ?? confidence
+    }
+
     /// Re-logs this meal on today under a fresh identity.
     ///
     /// The copy is a NEW log, not a duplicate of the old row: the caller's `mealType` (the log
@@ -288,7 +312,8 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
     /// yogurt bowl at 7:35 PM filed it under Breakfast. The source `note` is dropped for the same
     /// reason: it described THAT logging ("Estimated locally from the description.", a seeded demo
     /// note) and attributing it to a meal the user never wrote is a small lie. `confidence` becomes
-    /// "Repeated" — this row is as trustworthy as the one it copies, and says how it got here.
+    /// ``MealConfidence/repeated`` — this row is as trustworthy as the one it copies, and says how
+    /// it got here.
     ///
     /// - Parameter mealType: The slot to file the copy under; `nil` keeps the source meal's slot.
     public func copyForToday(mealType: MealType? = nil) -> Meal {
@@ -298,7 +323,7 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         copy.photoID = nil
         if let mealType { copy.mealType = mealType }
         copy.note = ""
-        copy.confidence = "Repeated"
+        copy.confidence = MealConfidence.repeated.token
         return copy
     }
 
@@ -370,6 +395,114 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
     }
 }
 
+/// The provenance stamp on a logged meal — how this row got its numbers.
+///
+/// `Meal.confidence` is a free-form `String` on disk and has been since the first build, and what
+/// five different writers put in it was the finished English sentence fragment the meal row shows
+/// ("Estimated", "Food match", "Scanned label"). One string, two jobs: the persisted provenance
+/// record and the on-screen text.
+///
+/// This type is the fork. ``token`` is what persists — a stable, English-forever identifier — and
+/// ``label`` is the only thing a person reads. Because nothing in the codebase has ever COMPARED
+/// `Meal.confidence` against anything, changing the stored characters is safe exactly now; once a
+/// later phase adds an `==` it stops being safe, which is why the change is made here rather than
+/// deferred.
+///
+/// Cross-version note: a row this build writes carries the new token, and an OLDER build reading
+/// the shared blob renders `confidence` verbatim — so it shows "scannedLabel" where it used to show
+/// "Scanned label". Cosmetic and confined to the mixed-version window; the alternative (freezing
+/// the English phrases as the tokens) would have kept an English display string as the storage
+/// format forever, which is the thing this whole phase exists to stop.
+public nonisolated enum MealConfidence: String, Codable, CaseIterable, Sendable {
+    case estimated
+    case repeated
+    case reviewed
+    case corrected
+    case foodMatch
+    case roughEstimate
+    case recipe
+    /// A saved recipe with no macro data behind it — the numbers are structure, not nutrition.
+    /// Distinct from ``recipe`` because the honest thing to show is that the recipe carried nothing
+    /// to compute from, not that the row is recipe-backed and therefore trustworthy.
+    case recipeNoMacros
+    case logged
+    case savedProduct
+    case scannedProduct
+    case scannedLabel
+    case suggestedFood
+
+    /// The FROZEN persisted value. Write this into `Meal.confidence`; never write ``label``.
+    public var token: String { rawValue }
+
+    /// FROZEN legacy spellings — the exact English phrases the pre-fork writers persisted, which
+    /// are sitting in every existing user's blob today. Read-only compatibility: new writes always
+    /// use ``token``. Never edit or remove a line; a row that stops resolving here loses its
+    /// provenance stamp and falls back to showing the raw stored characters.
+    private static let legacyTokens: [String: MealConfidence] = [
+        "Estimated": .estimated,
+        "Repeated": .repeated,
+        "Reviewed": .reviewed,
+        "Corrected": .corrected,
+        "Food match": .foodMatch,
+        "Rough estimate": .roughEstimate,
+        "Recipe": .recipe,
+        "Recipe (no macros)": .recipeNoMacros,
+        "Logged": .logged,
+        "Saved product": .savedProduct,
+        "Scanned product": .scannedProduct,
+        "Scanned label": .scannedLabel,
+        "Suggested food": .suggestedFood,
+    ]
+
+    /// Resolves a persisted `Meal.confidence` string — new token or legacy English phrase — to a
+    /// case, or nil for anything else.
+    ///
+    /// nil is a real answer, not a failure: the field is free-form and a future writer (or a newer
+    /// build's stamp arriving over sync) may legitimately put something here this build has no case
+    /// for. ``Meal/confidenceLabel`` shows the raw string in that event rather than inventing a
+    /// stamp, on the same principle as the parked-token decodes elsewhere in this file.
+    public init?(persistedToken: String) {
+        if let exact = MealConfidence(rawValue: persistedToken) {
+            self = exact
+            return
+        }
+        guard let legacy = Self.legacyTokens[persistedToken] else { return nil }
+        self = legacy
+    }
+
+    /// The localized provenance text on the meal row. Display only — never persist this.
+    public var label: String {
+        switch self {
+        case .estimated: String(localized: "meal.confidence.estimated", defaultValue: "Estimated",
+                                bundle: .module, comment: "Meal provenance: macros were estimated, not matched")
+        case .repeated: String(localized: "meal.confidence.repeated", defaultValue: "Repeated",
+                               bundle: .module, comment: "Meal provenance: re-logged from an earlier meal")
+        case .reviewed: String(localized: "meal.confidence.reviewed", defaultValue: "Reviewed",
+                               bundle: .module, comment: "Meal provenance: the user confirmed the numbers")
+        case .corrected: String(localized: "meal.confidence.corrected", defaultValue: "Corrected",
+                                bundle: .module, comment: "Meal provenance: the user edited the numbers")
+        case .foodMatch: String(localized: "meal.confidence.foodMatch", defaultValue: "Food match",
+                                bundle: .module, comment: "Meal provenance: matched a known food in the catalog")
+        case .roughEstimate: String(localized: "meal.confidence.roughEstimate", defaultValue: "Rough estimate",
+                                    bundle: .module, comment: "Meal provenance: a low-confidence guess")
+        case .recipe: String(localized: "meal.confidence.recipe", defaultValue: "Recipe",
+                             bundle: .module, comment: "Meal provenance: logged from a saved recipe")
+        case .recipeNoMacros: String(localized: "meal.confidence.recipeNoMacros", defaultValue: "Recipe (no macros)",
+                                     bundle: .module, comment: "Meal provenance: a saved recipe that carried no nutrition data")
+        case .logged: String(localized: "meal.confidence.logged", defaultValue: "Logged",
+                             bundle: .module, comment: "Meal provenance: entered directly by the user")
+        case .savedProduct: String(localized: "meal.confidence.savedProduct", defaultValue: "Saved product",
+                                   bundle: .module, comment: "Meal provenance: logged from a previously saved product")
+        case .scannedProduct: String(localized: "meal.confidence.scannedProduct", defaultValue: "Scanned product",
+                                     bundle: .module, comment: "Meal provenance: logged from a barcode scan")
+        case .scannedLabel: String(localized: "meal.confidence.scannedLabel", defaultValue: "Scanned label",
+                                   bundle: .module, comment: "Meal provenance: logged from a nutrition-label scan")
+        case .suggestedFood: String(localized: "meal.confidence.suggestedFood", defaultValue: "Suggested food",
+                                    bundle: .module, comment: "Meal provenance: added from a nutrient nudge")
+        }
+    }
+}
+
 /// How much to trust a resolved meal. Drives the honest label on the meal row and whether the
 /// quick-log flow pauses for a pre-log review before committing a fabricated / low-confidence result.
 public nonisolated enum MealResolutionConfidence: String, Codable {
@@ -377,13 +510,23 @@ public nonisolated enum MealResolutionConfidence: String, Codable {
     case medium
     case low
 
-    public var mealLabel: String {
+    /// The provenance stamp a resolution at this confidence writes onto the meal.
+    public var mealConfidence: MealConfidence {
         switch self {
-        case .high: "Food match"
-        case .medium: "Estimated"
-        case .low: "Rough estimate"
+        case .high: .foodMatch
+        case .medium: .estimated
+        case .low: .roughEstimate
         }
     }
+
+    /// MISNAMED — this is a persisted TOKEN, not a label.
+    ///
+    /// Every caller feeds it straight into `Meal.confidence`, so it was never display text; the
+    /// name is a fossil from when `Meal.confidence` held the finished English phrase. Kept as a
+    /// forwarder so the fork does not have to reach outside this module, but new code should call
+    /// ``mealConfidence`` and take `.token` from it, and the remaining call site should be
+    /// repointed. To SHOW a stamp, read `Meal.confidenceLabel`.
+    public var mealLabel: String { mealConfidence.token }
 
     /// Low-confidence resolutions are routed through a pre-log review sheet instead of auto-committing.
     public var needsReview: Bool { self == .low }
@@ -2215,6 +2358,29 @@ public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable, S
     case postWorkout = "Post-workout"
 
     public var id: String { rawValue }
+
+    /// The localized slot name.
+    ///
+    /// This enum had no display property: `rawValue` WAS the picker text, so one string was the
+    /// screen label, the persisted `Meal.mealType` (with a parked-token side channel that assumes
+    /// these exact spellings), the vocabulary the meal-parsing prompt hands the model, and part of
+    /// the trainer export. `rawValue` is FROZEN; this is the reader-facing half.
+    public var displayName: String {
+        switch self {
+        case .breakfast: String(localized: "mealType.breakfast", defaultValue: "Breakfast",
+                                bundle: .module, comment: "Meal slot")
+        case .lunch: String(localized: "mealType.lunch", defaultValue: "Lunch",
+                            bundle: .module, comment: "Meal slot")
+        case .dinner: String(localized: "mealType.dinner", defaultValue: "Dinner",
+                             bundle: .module, comment: "Meal slot")
+        case .snack: String(localized: "mealType.snack", defaultValue: "Snack",
+                            bundle: .module, comment: "Meal slot")
+        case .preWorkout: String(localized: "mealType.preWorkout", defaultValue: "Pre-workout",
+                                 bundle: .module, comment: "Meal slot: eaten before training")
+        case .postWorkout: String(localized: "mealType.postWorkout", defaultValue: "Post-workout",
+                                  bundle: .module, comment: "Meal slot: eaten after training")
+        }
+    }
 }
 
 /// The four-step meal quality rating (great/good/ok/low) shown on the meal row.

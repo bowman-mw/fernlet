@@ -168,6 +168,16 @@ public nonisolated struct DateRange: Codable, Equatable, Sendable {
 ///
 /// Built by the sender to describe what a payload contains (title, item count, date range) so the
 /// receiving user can consent to it without the app decoding the body first.
+///
+/// **DO NOT LOCALIZE `title`, `subtitle`, or any `extraDetails` key or value.** They are wire
+/// tokens despite reading exactly like UI copy — which is why this banner is here, on a type whose
+/// first sentence says "human-readable", sitting in a module a bulk localization pass would
+/// reasonably assume is display-bearing. Two things break at once if they are translated:
+/// `CanonicalSignatureSerializer` folds all of them into the Ed25519 canonical signing bytes, and
+/// they render on the **receiving** device, not the sender's — so a Spanish sender's payload would
+/// arrive as Spanish consent copy on a German peer's phone. Signature verification still passes
+/// either way, so no test would catch it. A localized Connection Inspector belongs on the receiving
+/// side, mapping the frozen title to a local label keyed on the payload type token.
 public nonisolated struct PayloadSummary: Codable, Equatable, Sendable {
     public let title: String
     public let subtitle: String?

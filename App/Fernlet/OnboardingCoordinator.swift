@@ -324,8 +324,11 @@ struct OnboardingCoordinator: View {
 /// accessibility identifier stay identical across the flow; the save/continue bar sits outside it.
 struct OnboardingScreenContainer<Content: View>: View {
     var stepText: String
-    var title: String
-    var subtitle: String
+    /// Authored copy, so `LocalizedStringKey` rather than `String`: every caller passes a literal,
+    /// which is what lets the header text extract into the string catalog (a `String` here would
+    /// silently opt the whole onboarding flow out of localization).
+    var title: LocalizedStringKey
+    var subtitle: LocalizedStringKey
     /// The step's way back. Every step past Welcome passes ``OnboardingCoordinatorModel/back()``;
     /// `nil` (the first step) draws no button, since there is nowhere to go. Without this the flow
     /// was strictly forward, so a mis-tapped "Skip for now" or storage card could not be undone.

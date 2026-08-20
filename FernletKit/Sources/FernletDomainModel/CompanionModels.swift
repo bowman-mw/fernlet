@@ -395,4 +395,30 @@ public nonisolated enum CompanionState: String, Codable, Sendable {
     case tired = "Tired"
     case resting = "Resting"
     case sick = "Sick"
+
+    /// The localized state name.
+    ///
+    /// This enum had no display property: `rawValue` WAS the on-screen word. It is FROZEN, and more
+    /// firmly than most — besides persisting on `DailyHealthScore`, it is byte-mirrored by
+    /// `WidgetCompanionState` in the widget extension, which reads the raw string out of the shared
+    /// app-group snapshot and re-parses it in a SEPARATE PROCESS. Translating `rawValue` would make
+    /// every widget fail that parse and render its no-state fallback, with nothing in the app to
+    /// show why. It is also a field of the Coach export schema, which a second app has to read.
+    ///
+    /// So the raw value crosses process and app boundaries, and only this property is ever read by
+    /// a person.
+    public var displayName: String {
+        switch self {
+        case .thriving: String(localized: "companionState.thriving", defaultValue: "Thriving",
+                               bundle: .module, comment: "Companion wellbeing state: best of five")
+        case .okay: String(localized: "companionState.okay", defaultValue: "Okay",
+                           bundle: .module, comment: "Companion wellbeing state: steady")
+        case .tired: String(localized: "companionState.tired", defaultValue: "Tired",
+                            bundle: .module, comment: "Companion wellbeing state: running low")
+        case .resting: String(localized: "companionState.resting", defaultValue: "Resting",
+                              bundle: .module, comment: "Companion wellbeing state: deliberately taking it easy")
+        case .sick: String(localized: "companionState.sick", defaultValue: "Sick",
+                           bundle: .module, comment: "Companion wellbeing state: worst of five")
+        }
+    }
 }

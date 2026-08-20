@@ -155,9 +155,25 @@ public nonisolated enum FoodItemSearch {
             .map { (item: $0.foodItem, score: $0.score) }
     }
 
+    /// Folds arbitrary text to the canonical form the food index is keyed by: diacritics stripped,
+    /// case flattened, every non-alphanumeric run collapsed to a single space, trimmed.
+    ///
+    /// The `locale: nil` is load-bearing, and pinning it fixes a live bug rather than preparing for
+    /// one. This same function bakes the 118,317-row `FoodCatalog.sqlite` index at build time, on an
+    /// English machine — so the index is, permanently, whatever English folding produced. Passing
+    /// `locale: .current` meant the QUERY side folded by the user's locale instead: on any locale
+    /// whose case or diacritic rules differ from English (Turkish dotless ı is the classic — "I"
+    /// folds to "ı", not "i") the query and the index stopped agreeing, and the search returned
+    /// nothing with no error anywhere to say why. The two sides have to fold identically, and the
+    /// index side cannot be re-baked per user, so both are pinned to the locale-independent rules.
+    ///
+    /// `nil` (not `en_US_POSIX`) because it is what `folding` documents for "use the non-localized,
+    /// default Unicode rules" — the identical pin `ItemNameModeration` already uses. It is the same
+    /// invariant `FernletDate` states for its `en_US_POSIX` day keys: a value that other stored data
+    /// is matched against must never vary with the user's locale.
     nonisolated public static func normalized(_ text: String) -> String {
         text
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
             .lowercased()
             .map { character in
                 character.isLetter || character.isNumber ? character : " "

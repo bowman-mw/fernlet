@@ -194,7 +194,10 @@ struct FoodView: View {
             // Each meal type is its OWN section card, titled by a distinct small-caps
             // SectionLabel (not the meal-name font) — separate boxes rather than one long list.
             ForEach(mealsByType) { group in
-                FernletScrollSection(group.type.rawValue) {
+                // `displayName`, not `rawValue`: the rawValue is the persisted/prompt token and
+                // was being rendered as a user-visible heading. `verbatim:` because the domain
+                // property has already resolved its own localized string.
+                FernletScrollSection(verbatim: group.type.displayName) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
                             MealRow(
@@ -451,7 +454,7 @@ struct FoodView: View {
             let protein = meals.reduce(0) { $0 + $1.macros.protein }
             let calories = meals.reduce(0) { $0 + $1.calories }
             HStack(spacing: 10) {
-                Text("\(type.rawValue) total")
+                Text(verbatim: "\(type.displayName) total")
                     .foregroundStyle(Color.slate)
                 Spacer(minLength: 0)
                 Text("P \(protein)g")
@@ -2507,7 +2510,7 @@ struct MealSheet: View {
                 Button("Auto") { mealType = nil }
                     .buttonStyle(ChipButtonStyle(selected: mealType == nil))
                 ForEach(MealType.allCases) { type in
-                    Button(type.rawValue) { mealType = type }
+                    Button { mealType = type } label: { Text(verbatim: type.displayName) }
                         .buttonStyle(ChipButtonStyle(selected: mealType == type))
                 }
             }
@@ -3291,7 +3294,7 @@ private struct MealRow: View {
                 HStack {
                     Text(meal.name).font(.fernlet(.header))
                     if showsMealTypeBadge {
-                        Text(meal.mealType.rawValue)
+                        Text(verbatim: meal.mealType.displayName)
                             .font(.fernlet(.labelSmall))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -3336,7 +3339,7 @@ private struct MealRow: View {
             Text("F \(meal.macros.fat)g")
             // Bark, not goldenrod: the confidence word carries meaning, and goldenrod measured 2.4:1
             // on parchment. Goldenrod stays for fills and icons.
-            Text(meal.confidence).foregroundStyle(Color.bark)
+            Text(meal.confidenceLabel).foregroundStyle(Color.bark)
             Spacer(minLength: 0)
             // Moss, not fern (2.75:1) — this is the only way in to correcting a wrong match, so it
             // must be legible.
@@ -3462,7 +3465,7 @@ private struct MealCorrectionSheet: View {
                     SheetField("Meal type") {
                         FlowLayout(spacing: 8) {
                             ForEach(MealType.allCases) { type in
-                                Button(type.rawValue) { mealType = type }
+                                Button { mealType = type } label: { Text(verbatim: type.displayName) }
                                     .buttonStyle(ChipButtonStyle(selected: mealType == type))
                             }
                         }
@@ -3641,7 +3644,7 @@ private nonisolated struct EditableReviewMeal: Identifiable {
             meal.micronutrientSnapshot = micronutrients
         }
         meal.isAIFallback = false
-        meal.confidence = "Reviewed"
+        meal.confidence = MealConfidence.reviewed.token
         meal.quality = meal.macros.protein >= Macros.goodProteinThreshold ? .good : .ok
         return meal
     }
@@ -3770,7 +3773,7 @@ private struct MealReviewSheet: View {
                             SheetField("Meal type") {
                                 FlowLayout(spacing: 8) {
                                     ForEach(MealType.allCases) { type in
-                                        Button(type.rawValue) { $meal.mealType.wrappedValue = type }
+                                        Button { $meal.mealType.wrappedValue = type } label: { Text(verbatim: type.displayName) }
                                             .buttonStyle(ChipButtonStyle(selected: meal.mealType == type))
                                     }
                                 }
@@ -4557,7 +4560,7 @@ struct RecipeDetailView: View {
             Menu {
                 ForEach(MealType.allCases) { mealType in
                     // Pass the definition on screen — after a re-import this is the refreshed one.
-                    Button(mealType.rawValue) { onLog(recipe, mealType) }
+                    Button { onLog(recipe, mealType) } label: { Text(verbatim: mealType.displayName) }
                 }
             } label: {
                 Label("Log this recipe", systemImage: "fork.knife")
@@ -4914,8 +4917,10 @@ private struct RecipeMealTypeMenu: View {
     var body: some View {
         Menu {
             ForEach(MealType.allCases) { mealType in
-                Button(mealType.rawValue) {
+                Button {
                     onSelect(mealType)
+                } label: {
+                    Text(verbatim: mealType.displayName)
                 }
             }
         } label: {

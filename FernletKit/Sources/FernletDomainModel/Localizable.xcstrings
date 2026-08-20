@@ -1,5 +1,1158 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "care.group.anytime" : {
+      "comment" : "Personal-care checklist section for tasks with no fixed time of day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Anytime"
+          }
+        }
+      }
+    },
+    "care.group.evening" : {
+      "comment" : "Personal-care checklist section for evening tasks",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Evening"
+          }
+        }
+      }
+    },
+    "care.group.morning" : {
+      "comment" : "Personal-care checklist section for morning tasks",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Morning"
+          }
+        }
+      }
+    },
+    "companionState.okay" : {
+      "comment" : "Companion wellbeing state: steady",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Okay"
+          }
+        }
+      }
+    },
+    "companionState.resting" : {
+      "comment" : "Companion wellbeing state: deliberately taking it easy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resting"
+          }
+        }
+      }
+    },
+    "companionState.sick" : {
+      "comment" : "Companion wellbeing state: worst of five",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sick"
+          }
+        }
+      }
+    },
+    "companionState.thriving" : {
+      "comment" : "Companion wellbeing state: best of five",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thriving"
+          }
+        }
+      }
+    },
+    "companionState.tired" : {
+      "comment" : "Companion wellbeing state: running low",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tired"
+          }
+        }
+      }
+    },
+    "equipment.band" : {
+      "comment" : "Gym equipment category: a resistance band",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Band"
+          }
+        }
+      }
+    },
+    "equipment.barbell" : {
+      "comment" : "Gym equipment category",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Barbell"
+          }
+        }
+      }
+    },
+    "equipment.bench" : {
+      "comment" : "Gym equipment category: a weight bench",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bench"
+          }
+        }
+      }
+    },
+    "equipment.bodyweight" : {
+      "comment" : "Gym equipment category: no equipment, own bodyweight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bodyweight"
+          }
+        }
+      }
+    },
+    "equipment.cable" : {
+      "comment" : "Gym equipment category: a cable machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable"
+          }
+        }
+      }
+    },
+    "equipment.cardio" : {
+      "comment" : "Gym equipment category: cardio machines",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "equipment.dumbbell" : {
+      "comment" : "Gym equipment category",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dumbbell"
+          }
+        }
+      }
+    },
+    "equipment.kettlebell" : {
+      "comment" : "Gym equipment category",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kettlebell"
+          }
+        }
+      }
+    },
+    "equipment.machine" : {
+      "comment" : "Gym equipment category: a weight machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Machine"
+          }
+        }
+      }
+    },
+    "equipment.none" : {
+      "comment" : "Gym equipment category: none required",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "feeling.bright" : {
+      "comment" : "Journal mood tag: the brightest of the six moods",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bright"
+          }
+        }
+      }
+    },
+    "feeling.good" : {
+      "comment" : "Journal mood tag: a good day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good"
+          }
+        }
+      }
+    },
+    "feeling.hard" : {
+      "comment" : "Journal mood tag: the hardest of the six moods",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard"
+          }
+        }
+      }
+    },
+    "feeling.neutral" : {
+      "comment" : "Journal mood tag: neither good nor bad",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Neutral"
+          }
+        }
+      }
+    },
+    "feeling.quiet" : {
+      "comment" : "Journal mood tag: a subdued, low-key day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quiet"
+          }
+        }
+      }
+    },
+    "feeling.tired" : {
+      "comment" : "Journal mood tag: a tired day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tired"
+          }
+        }
+      }
+    },
+    "hygiene.deodorant" : {
+      "comment" : "Personal-care checklist item: applying deodorant",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deodorant"
+          }
+        }
+      }
+    },
+    "hygiene.floss" : {
+      "comment" : "Personal-care checklist item: flossing teeth",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Floss"
+          }
+        }
+      }
+    },
+    "hygiene.shower" : {
+      "comment" : "Personal-care checklist item: taking a shower",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shower"
+          }
+        }
+      }
+    },
+    "hygiene.skincareAM" : {
+      "comment" : "Personal-care checklist item: morning skincare routine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skincare AM"
+          }
+        }
+      }
+    },
+    "hygiene.skincarePM" : {
+      "comment" : "Personal-care checklist item: evening skincare routine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skincare PM"
+          }
+        }
+      }
+    },
+    "hygiene.sunscreen" : {
+      "comment" : "Personal-care checklist item: applying sunscreen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sunscreen"
+          }
+        }
+      }
+    },
+    "hygiene.teethAM" : {
+      "comment" : "Personal-care checklist item: brushing teeth in the morning",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Brush teeth AM"
+          }
+        }
+      }
+    },
+    "hygiene.teethPM" : {
+      "comment" : "Personal-care checklist item: brushing teeth in the evening",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Brush teeth PM"
+          }
+        }
+      }
+    },
+    "meal.confidence.corrected" : {
+      "comment" : "Meal provenance: the user edited the numbers",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Corrected"
+          }
+        }
+      }
+    },
+    "meal.confidence.estimated" : {
+      "comment" : "Meal provenance: macros were estimated, not matched",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Estimated"
+          }
+        }
+      }
+    },
+    "meal.confidence.foodMatch" : {
+      "comment" : "Meal provenance: matched a known food in the catalog",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food match"
+          }
+        }
+      }
+    },
+    "meal.confidence.logged" : {
+      "comment" : "Meal provenance: entered directly by the user",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged"
+          }
+        }
+      }
+    },
+    "meal.confidence.recipe" : {
+      "comment" : "Meal provenance: logged from a saved recipe",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipe"
+          }
+        }
+      }
+    },
+    "meal.confidence.recipeNoMacros" : {
+      "comment" : "Meal provenance: a saved recipe that carried no nutrition data",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipe (no macros)"
+          }
+        }
+      }
+    },
+    "meal.confidence.repeated" : {
+      "comment" : "Meal provenance: re-logged from an earlier meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Repeated"
+          }
+        }
+      }
+    },
+    "meal.confidence.reviewed" : {
+      "comment" : "Meal provenance: the user confirmed the numbers",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reviewed"
+          }
+        }
+      }
+    },
+    "meal.confidence.roughEstimate" : {
+      "comment" : "Meal provenance: a low-confidence guess",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rough estimate"
+          }
+        }
+      }
+    },
+    "meal.confidence.savedProduct" : {
+      "comment" : "Meal provenance: logged from a previously saved product",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved product"
+          }
+        }
+      }
+    },
+    "meal.confidence.scannedLabel" : {
+      "comment" : "Meal provenance: logged from a nutrition-label scan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scanned label"
+          }
+        }
+      }
+    },
+    "meal.confidence.scannedProduct" : {
+      "comment" : "Meal provenance: logged from a barcode scan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scanned product"
+          }
+        }
+      }
+    },
+    "meal.confidence.suggestedFood" : {
+      "comment" : "Meal provenance: added from a nutrient nudge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested food"
+          }
+        }
+      }
+    },
+    "mealType.breakfast" : {
+      "comment" : "Meal slot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breakfast"
+          }
+        }
+      }
+    },
+    "mealType.dinner" : {
+      "comment" : "Meal slot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dinner"
+          }
+        }
+      }
+    },
+    "mealType.lunch" : {
+      "comment" : "Meal slot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lunch"
+          }
+        }
+      }
+    },
+    "mealType.postWorkout" : {
+      "comment" : "Meal slot: eaten after training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Post-workout"
+          }
+        }
+      }
+    },
+    "mealType.preWorkout" : {
+      "comment" : "Meal slot: eaten before training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pre-workout"
+          }
+        }
+      }
+    },
+    "mealType.snack" : {
+      "comment" : "Meal slot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Snack"
+          }
+        }
+      }
+    },
+    "muscle.abductors" : {
+      "comment" : "Muscle group name (outer hip)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Abductors"
+          }
+        }
+      }
+    },
+    "muscle.abs" : {
+      "comment" : "Muscle group name (abdominals)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Abs"
+          }
+        }
+      }
+    },
+    "muscle.adductors" : {
+      "comment" : "Muscle group name (inner thigh)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adductors"
+          }
+        }
+      }
+    },
+    "muscle.biceps" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biceps"
+          }
+        }
+      }
+    },
+    "muscle.calves" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calves"
+          }
+        }
+      }
+    },
+    "muscle.chest" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest"
+          }
+        }
+      }
+    },
+    "muscle.forearms" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forearms"
+          }
+        }
+      }
+    },
+    "muscle.frontDelts" : {
+      "comment" : "Muscle group name (anterior deltoids)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Front Delts"
+          }
+        }
+      }
+    },
+    "muscle.fullBody" : {
+      "comment" : "Muscle group name covering the whole body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body"
+          }
+        }
+      }
+    },
+    "muscle.glutes" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glutes"
+          }
+        }
+      }
+    },
+    "muscle.hamstrings" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hamstrings"
+          }
+        }
+      }
+    },
+    "muscle.lats" : {
+      "comment" : "Muscle group name (latissimus dorsi)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lats"
+          }
+        }
+      }
+    },
+    "muscle.lowerBack" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower Back"
+          }
+        }
+      }
+    },
+    "muscle.obliques" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Obliques"
+          }
+        }
+      }
+    },
+    "muscle.quads" : {
+      "comment" : "Muscle group name (quadriceps)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quads"
+          }
+        }
+      }
+    },
+    "muscle.rearDelts" : {
+      "comment" : "Muscle group name (posterior deltoids)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rear Delts"
+          }
+        }
+      }
+    },
+    "muscle.sideDelts" : {
+      "comment" : "Muscle group name (lateral deltoids)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Side Delts"
+          }
+        }
+      }
+    },
+    "muscle.traps" : {
+      "comment" : "Muscle group name (trapezius)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Traps"
+          }
+        }
+      }
+    },
+    "muscle.triceps" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Triceps"
+          }
+        }
+      }
+    },
+    "muscle.upperBack" : {
+      "comment" : "Muscle group name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper Back"
+          }
+        }
+      }
+    },
+    "sleep.quality.good" : {
+      "comment" : "Sleep quality rating, third of four",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good"
+          }
+        }
+      }
+    },
+    "sleep.quality.good.description" : {
+      "comment" : "Gloss under the 'Good' sleep rating; lowercase, journal voice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "solid, mostly through"
+          }
+        }
+      }
+    },
+    "sleep.quality.great" : {
+      "comment" : "Sleep quality rating, best of four",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Great"
+          }
+        }
+      }
+    },
+    "sleep.quality.great.description" : {
+      "comment" : "Gloss under the 'Great' sleep rating; lowercase, journal voice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "restorative, woke easy"
+          }
+        }
+      }
+    },
+    "sleep.quality.ok" : {
+      "comment" : "Sleep quality rating, second of four",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ok"
+          }
+        }
+      }
+    },
+    "sleep.quality.ok.description" : {
+      "comment" : "Gloss under the 'Ok' sleep rating; lowercase, journal voice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "enough, not great"
+          }
+        }
+      }
+    },
+    "sleep.quality.poor" : {
+      "comment" : "Sleep quality rating, worst of four",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Poor"
+          }
+        }
+      }
+    },
+    "sleep.quality.poor.description" : {
+      "comment" : "Gloss under the 'Poor' sleep rating; lowercase, journal voice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "rough, broken, unrested"
+          }
+        }
+      }
+    },
+    "split.cardio" : {
+      "comment" : "Workout split name: cardio",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "split.fullBody" : {
+      "comment" : "Workout split name: whole body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body"
+          }
+        }
+      }
+    },
+    "split.legs" : {
+      "comment" : "Workout split name: legs",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Legs"
+          }
+        }
+      }
+    },
+    "split.lower" : {
+      "comment" : "Workout split name: lower body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower"
+          }
+        }
+      }
+    },
+    "split.pull" : {
+      "comment" : "Workout split name: pulling movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull"
+          }
+        }
+      }
+    },
+    "split.push" : {
+      "comment" : "Workout split name: pushing movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push"
+          }
+        }
+      }
+    },
+    "split.recovery" : {
+      "comment" : "Workout split name: recovery / mobility",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery"
+          }
+        }
+      }
+    },
+    "split.upper" : {
+      "comment" : "Workout split name: upper body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper"
+          }
+        }
+      }
+    },
+    "split.workout" : {
+      "comment" : "Workout split name: a generic session",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
+          }
+        }
+      }
+    },
+    "workoutType.armsBack" : {
+      "comment" : "Legacy workout category, history rows only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arms/Back"
+          }
+        }
+      }
+    },
+    "workoutType.cardio" : {
+      "comment" : "Workout category: cardio",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "workoutType.fullBody" : {
+      "comment" : "Workout category: whole body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body"
+          }
+        }
+      }
+    },
+    "workoutType.hike" : {
+      "comment" : "Legacy workout category, history rows only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hike"
+          }
+        }
+      }
+    },
+    "workoutType.lower" : {
+      "comment" : "Workout category: lower body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower"
+          }
+        }
+      }
+    },
+    "workoutType.mixed" : {
+      "comment" : "Legacy workout category, history rows only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper/Mixed"
+          }
+        }
+      }
+    },
+    "workoutType.run" : {
+      "comment" : "Legacy workout category (Couch to 10K), history rows only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "C210K Run"
+          }
+        }
+      }
+    },
+    "workoutType.upper" : {
+      "comment" : "Workout category: upper body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper"
+          }
+        }
+      }
+    }
+  },
   "version" : "1.0"
 }

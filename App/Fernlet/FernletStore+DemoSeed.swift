@@ -91,19 +91,19 @@ extension FernletStore {
                 name: "Greek yogurt with berries", mealType: .breakfast,
                 macros: Macros(protein: 28, carbs: 34, fat: 9),
                 mealSource: .manual, isAIFallback: false, quality: .good,
-                confidence: "Logged", note: "Seeded demo meal.", source: "manual"
+                confidence: MealConfidence.logged.token, note: "Seeded demo meal.", source: "manual"
             ),
             Meal(
                 name: "Chicken rice bowl", mealType: .lunch,
                 macros: Macros(protein: 42, carbs: 58, fat: 14),
                 mealSource: .manual, isAIFallback: false, quality: .good,
-                confidence: "Logged", note: "Seeded demo meal.", source: "manual"
+                confidence: MealConfidence.logged.token, note: "Seeded demo meal.", source: "manual"
             ),
             Meal(
                 name: "Apple and almonds", mealType: .snack,
                 macros: Macros(protein: 6, carbs: 22, fat: 12),
                 mealSource: .manual, isAIFallback: false, quality: .ok,
-                confidence: "Logged", note: "Seeded demo meal.", source: "manual"
+                confidence: MealConfidence.logged.token, note: "Seeded demo meal.", source: "manual"
             ),
         ]
         for meal in meals {

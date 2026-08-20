@@ -238,10 +238,12 @@ struct SettingsSheet: View {
 
     /// A hub section header in the app's type system rather than system SF.
     ///
-    /// `textCase(nil)` because ``SectionLabel`` uppercases the string itself — leaving the Form's own
-    /// automatic uppercasing on would double it.
-    private func hubSectionHeader(_ title: String) -> some View {
-        SectionLabel(title).textCase(nil)
+    /// ``SectionLabel`` now sets its own `.textCase(.uppercase)` inside its body, closer to the
+    /// `Text` than any environment value a Form sets — so the Form's automatic uppercasing can
+    /// neither double it nor be doubled by it, and the `.textCase(nil)` guard this used to carry
+    /// (already inert against the old `String.uppercased()`) is gone.
+    private func hubSectionHeader(_ title: LocalizedStringKey) -> some View {
+        SectionLabel(title)
     }
 
     /// A hub navigation row: the standard value-based link, drawn in DM Sans like every other list
@@ -1005,7 +1007,10 @@ struct SettingsSheet: View {
                 let keys = groupedMemoryKeys(for: displayed)
                 let groups = groupedMemories(for: displayed)
                 ForEach(keys, id: \.self) { key in
-                    SectionLabel(key)
+                    // `verbatim:` — `key` is a persisted `MemoryNote.category` token being used as
+                    // a grouping heading, not authored copy. Rendering the token is a pre-existing
+                    // defect; `verbatim:` makes it honest rather than pretending it localizes.
+                    SectionLabel(verbatim: key)
                     ForEach(groups[key] ?? []) { memory in
                         memoryRow(memory)
                     }
@@ -1734,7 +1739,7 @@ struct SettingsSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Personal care tasks")
             newCareTaskEditor
-            ForEach(PersonalCareTask.groups, id: \.self) { group in
+            ForEach(PersonalCareTask.groupCases) { group in
                 careTaskGroupList(group)
             }
         }
@@ -1754,9 +1759,14 @@ struct SettingsSheet: View {
                     }
                 }
             FlowLayout(spacing: 8) {
-                ForEach(PersonalCareTask.groups, id: \.self) { group in
-                    Button(group) { newCareTaskGroup = group }
-                        .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group))
+                // The chip SHOWS `group.label` but STORES `group.token`. Showing and storing the
+                // same string is precisely the bug ``CareGroup`` exists to prevent: the stored value
+                // is the filter predicate and rides the synced settings blob.
+                ForEach(PersonalCareTask.groupCases) { group in
+                    Button { newCareTaskGroup = group.token } label: {
+                        Text(verbatim: group.label)
+                    }
+                    .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group.token))
                 }
             }
             Button {
@@ -1790,16 +1800,16 @@ struct SettingsSheet: View {
 
     /// One group's saved tasks, each with its remove button. Renders nothing for an empty group.
     @ViewBuilder
-    private func careTaskGroupList(_ group: String) -> some View {
-        let tasks = store.personalCareTasks.filter { $0.group == group }
+    private func careTaskGroupList(_ group: CareGroup) -> some View {
+        let tasks = store.personalCareTasks.filter { $0.careGroup == group }
         if !tasks.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(group)
+                Text(verbatim: group.label)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 ForEach(tasks) { task in
                     HStack(spacing: 10) {
-                        Label(task.label, systemImage: task.systemImage)
+                        Label(task.displayLabel, systemImage: task.systemImage)
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                         Spacer()
@@ -2432,7 +2442,9 @@ struct AppLockSettingsView: View {
 
     private var biometricCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(biometricName(lockService.biometricType))
+            // `verbatim:` on the merits as well as for the type: "Face ID" and "Touch ID" are
+            // Apple product names that Apple itself ships untranslated in most locales.
+            SectionLabel(verbatim: biometricName(lockService.biometricType))
 
             if lockService.biometricType != .none {
                 Toggle(isOn: biometricToggleBinding) {

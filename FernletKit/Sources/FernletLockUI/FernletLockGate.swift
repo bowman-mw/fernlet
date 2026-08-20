@@ -20,6 +20,76 @@ import FernletFoundation
 import FernletLock
 import FernletUI
 
+// MARK: - Gate copy
+
+/// The gate's own copy: its set-up call to action, the reset confirmation, and the two alerts it
+/// raises after the fact.
+///
+/// Resolved against `bundle: .module` for the reason spelled out on ``FernletLockCopy``: a literal
+/// written into a SwiftUI view inside a PACKAGE module is harvested into this module's catalog but
+/// looked up in `Bundle.main`, so it would render untranslated English forever without anything
+/// failing. It lives out here rather than inline because `body(content:)` is a lifecycle wrapper
+/// already near the 60-line ceiling (Power of 10 R4), and three of these lines are paragraphs.
+///
+/// Everything below the call to action is DESTRUCTIVE or reports a loss that already happened. The
+/// reset confirmation is the last chance to not destroy the sealed notes; the two alerts are told
+/// after the fact and cannot be declined. A translation that reads as routine housekeeping would
+/// strip the one warning the user gets. The shared verbs ("Reset app lock", "Cancel", "OK") come
+/// from ``FernletLockCopy/Action`` so the same button never drifts between the dialog here and the
+/// cards in ``FernletLockView``.
+private enum GateCopy {
+    /// The not-configured overlay's heading and its button — deliberately the same words twice on
+    /// one screen, so one key rather than two that could drift apart.
+    static var setUpCallToAction: String {
+        String(localized: "lock.gate.setUpCallToAction", defaultValue: "Set up app lock", bundle: .module,
+               comment: "Heading and button on the overlay shown when a private screen is opened before any app-lock passcode exists. Both use this one string.")
+    }
+
+    /// Title of the confirmation that stands between the user and a destructive reset.
+    static var resetConfirmTitle: String {
+        String(localized: "lock.reset.confirm.title", defaultValue: "Reset app lock?", bundle: .module,
+               comment: "Title of the confirmation dialog for resetting the app lock. Keep it a question — it is the last chance to back out.")
+    }
+
+    /// What the reset costs, named before it happens.
+    static var resetConfirmMessage: String {
+        String(localized: "lock.reset.confirm.message",
+               defaultValue: "Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.",
+               bundle: .module,
+               comment: "Message in the reset confirmation dialog. 'Permanently unreadable' is literal — there is no recovery. The second sentence is the one thing that survives and must stay accurate: the clinical samples in Apple Health are untouched.")
+    }
+
+    /// Title of the nothing-silent alert after a reset that could not finish cleanly.
+    static var resetRebuildFailedTitle: String {
+        String(localized: "lock.reset.rebuildFailed.title", defaultValue: "App lock reset", bundle: .module,
+               comment: "Title of the alert shown after the app lock was reset but the sealed store could not be recreated. Statement of fact, not a question.")
+    }
+
+    /// What happened, and the one thing the user can do about it.
+    static var resetRebuildFailedMessage: String {
+        String(localized: "lock.reset.rebuildFailed.message",
+               defaultValue: "Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.",
+               bundle: .module,
+               comment: "Message of the alert shown when the reset destroyed the passcode and the notes but could not recreate the empty sealed store. Both halves are true and neither may be dropped: the data really is gone, and the app needs relaunching. 'Fernlet' is the app's name.")
+    }
+
+    /// Title of the one-shot disclosure owed to installs migrated onto hard Secure-Enclave binding.
+    static var hardBindingTitle: String {
+        String(localized: "lock.hardBinding.title",
+               defaultValue: "Your passcode is now tied to this iPhone",
+               bundle: .module,
+               comment: "Title of the one-time alert telling an existing user that their sealed notes are now bound to this specific iPhone. 'Tied to this iPhone' is the whole point — the passcode alone is no longer enough elsewhere.")
+    }
+
+    /// The disclosure itself: a strictly larger loss mode than the one the user originally accepted.
+    static var hardBindingMessage: String {
+        String(localized: "lock.hardBinding.message",
+               defaultValue: "Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives.",
+               bundle: .module,
+               comment: "One-time disclosure for users who set their passcode under an older build and have just acquired a larger loss mode. 'Even with the right passcode' is the sentence that must not soften — remembering the passcode does not save the notes on replaced hardware. 'Secure Enclave' is Apple hardware terminology; 'Sealed backup' and 'Privacy & Data' name a setting and a screen in this app, so match how they are translated there.")
+    }
+}
+
 // MARK: - View modifier
 
 /// View modifier that gates its content behind the Fernlet app lock, overlaying the unlock
@@ -116,24 +186,24 @@ struct FernletLockGateModifier: ViewModifier {
                 .environment(lockService)
         }
         .confirmationDialog(
-            "Reset app lock?",
+            GateCopy.resetConfirmTitle,
             isPresented: $showReset,
             titleVisibility: .visible
         ) {
-            Button("Reset app lock", role: .destructive) { performReset() }
-            Button("Cancel", role: .cancel) { }
+            Button(FernletLockCopy.Action.resetAppLock, role: .destructive) { performReset() }
+            Button(FernletLockCopy.Action.cancel, role: .cancel) { }
         } message: {
-            Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+            Text(GateCopy.resetConfirmMessage)
         }
-        .alert("App lock reset", isPresented: $showResetRebuildFailure) {
-            Button("OK", role: .cancel) { }
+        .alert(GateCopy.resetRebuildFailedTitle, isPresented: $showResetRebuildFailure) {
+            Button(FernletLockCopy.Action.ok, role: .cancel) { }
         } message: {
-            Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
+            Text(GateCopy.resetRebuildFailedMessage)
         }
-        .alert("Your passcode is now tied to this iPhone", isPresented: $showHardBindingNotice) {
-            Button("OK", role: .cancel) { lockService.acknowledgeHardBindingNotice() }
+        .alert(GateCopy.hardBindingTitle, isPresented: $showHardBindingNotice) {
+            Button(FernletLockCopy.Action.ok, role: .cancel) { lockService.acknowledgeHardBindingNotice() }
         } message: {
-            Text("Fernlet moved the key for your sealed journal, cycle, and intimacy notes into this iPhone's Secure Enclave, where it can't be copied off the device. Those notes are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware — even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives.")
+            Text(GateCopy.hardBindingMessage)
         }
         .onChange(of: lockService.state) { _, _ in
             // The flip happens inside the unlock that just landed, so the state change is the
@@ -293,7 +363,7 @@ struct FernletLockGateModifier: ViewModifier {
                     .background(Color.moss.opacity(0.10), in: Circle())
 
                 VStack(spacing: 8) {
-                    Text("Set up app lock")
+                    Text(GateCopy.setUpCallToAction)
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(FernletLockCopy.protectsSentence)
@@ -305,7 +375,7 @@ struct FernletLockGateModifier: ViewModifier {
                 }
                 .padding(.horizontal, 32)
 
-                Button("Set up app lock") { showSetup = true }
+                Button(GateCopy.setUpCallToAction) { showSetup = true }
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.onMoss)

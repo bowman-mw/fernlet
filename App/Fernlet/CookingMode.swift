@@ -583,7 +583,7 @@ struct CookingModeView: View {
                 VStack(spacing: 10) {
                     Menu {
                         ForEach(MealType.allCases) { mealType in
-                            Button(mealType.rawValue) { logMeal(mealType) }
+                            Button { logMeal(mealType) } label: { Text(verbatim: mealType.displayName) }
                         }
                     } label: {
                         primaryButtonLabel("Log this meal")

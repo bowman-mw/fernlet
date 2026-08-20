@@ -301,7 +301,7 @@ struct ActivitiesView: View {
 
     // MARK: - Building blocks
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             // The app's one section-heading treatment (uppercase, letter-spaced slate), same as
             // Move's "TODAY'S MOVEMENT" and Food's "BREAKFAST".

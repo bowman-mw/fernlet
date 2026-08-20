@@ -279,16 +279,19 @@ struct HygieneSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    ForEach(PersonalCareTask.groups, id: \.self) { group in
-                        let tasks = store.personalCareTasks.filter { $0.group == group }
+                    // Typed `CareGroup` rather than the raw `groups` strings: the heading now
+                    // renders the localized label while the filter still matches the FROZEN
+                    // persisted token, which is the whole point of the fork.
+                    ForEach(PersonalCareTask.groupCases) { group in
+                        let tasks = store.personalCareTasks.filter { $0.careGroup == group }
                         if !tasks.isEmpty {
-                            SheetField(group) {
+                            SheetField(verbatim: group.label) {
                                 VStack(spacing: 6) {
                                     ForEach(tasks) { task in
                                         let isDone = store.isPersonalCareTaskCompleted(task)
                                         Button { store.togglePersonalCareTask(task) } label: {
                                             HStack {
-                                                Label(task.label, systemImage: task.systemImage)
+                                                Label(task.displayLabel, systemImage: task.systemImage)
                                                     .foregroundStyle(Color.bark)
                                                 Spacer()
                                                 if isDone {

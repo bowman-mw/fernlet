@@ -719,7 +719,7 @@ public final class DiaryStore {
     @discardableResult public func logWebImportedFoodProduct(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Saved product", note: "Logged from saved product.", source: MealLogSource.webImport
+            confidence: MealConfidence.savedProduct.token, note: "Logged from saved product.", source: MealLogSource.webImport
         )
     }
 
@@ -729,7 +729,7 @@ public final class DiaryStore {
     @discardableResult public func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Scanned product", note: "Logged from a barcode scan.", source: MealLogSource.barcodeScan,
+            confidence: MealConfidence.scannedProduct.token, note: "Logged from a barcode scan.", source: MealLogSource.barcodeScan,
             servings: servings
         )
     }
@@ -740,7 +740,7 @@ public final class DiaryStore {
     @discardableResult public func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Scanned label", note: "Logged from a nutrition label scan.", source: MealLogSource.labelScan,
+            confidence: MealConfidence.scannedLabel.token, note: "Logged from a nutrition label scan.", source: MealLogSource.labelScan,
             servings: servings
         )
     }
@@ -753,7 +753,7 @@ public final class DiaryStore {
     @discardableResult public func logNutrientSuggestionFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Suggested food", note: "Added from a gentle nutrient nudge.", source: MealLogSource.manual
+            confidence: MealConfidence.suggestedFood.token, note: "Added from a gentle nutrient nudge.", source: MealLogSource.manual
         )
     }
 

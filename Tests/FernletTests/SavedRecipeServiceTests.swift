@@ -50,7 +50,7 @@ struct SavedRecipeServiceTests {
 
         let meal = SavedRecipeService.makeMeal(from: recipe, mealType: .dinner)
 
-        #expect(meal.confidence == "Recipe")
+        #expect(meal.confidence == MealConfidence.recipe.token)
         #expect(meal.note == "Logged from URL recipe.")
         #expect(meal.mealType == .dinner)
         #expect(meal.quality == .good)
@@ -61,7 +61,7 @@ struct SavedRecipeServiceTests {
 
         let meal = SavedRecipeService.makeMeal(from: recipe, mealType: .lunch)
 
-        #expect(meal.confidence == "Recipe (no macros)")
+        #expect(meal.confidence == MealConfidence.recipeNoMacros.token)
         #expect(meal.note.contains("Macros not available."))
         #expect(meal.mealType == .lunch)
     }

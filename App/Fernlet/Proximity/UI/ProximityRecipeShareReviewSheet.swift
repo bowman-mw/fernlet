@@ -30,8 +30,13 @@ struct ProximityRecipeShareReviewSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         ScreenHeader(
-                            title: share.payload.recipe.title,
-                            subtitle: "Shared by \(share.senderDisplayName)",
+                            // PEER-SUPPLIED data arriving over the mesh. `Text(verbatim:)` is
+                            // load-bearing, not stylistic: it guarantees the string is never
+                            // interpreted as a format key or a catalog lookup, which a
+                            // peer-controlled value reaching either would make a format-string
+                            // hazard. Do not "simplify" this to `Text(recipe.title)`.
+                            title: Text(verbatim: share.payload.recipe.title),
+                            subtitle: Text("Shared by \(share.senderDisplayName)"),
                             subtitleFirst: false,
                             // A peer-supplied recipe name, so the same three-line allowance the
                             // sending sheet gives its own: truncating what arrived hides the very

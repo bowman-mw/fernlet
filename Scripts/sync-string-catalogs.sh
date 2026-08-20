@@ -34,11 +34,19 @@ PROJECT="App/Fernlet.xcodeproj"
 SCHEME="Fernlet"
 DESTINATION="${FERNLET_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
 
-# Each shipping target that owns a Localizable.xcstrings, and where that catalog lives.
+# Every target that owns a Localizable.xcstrings, and where that catalog lives.
+#
+# The FernletKit entries are package targets. They only emit .stringsdata because
+# SWIFT_EMIT_LOC_STRINGS is forced on the xcodebuild COMMAND LINE below — a pbxproj
+# setting does not reach the SwiftPM-synthesized targets. A module appears here once
+# it has a catalog; add the .xcstrings to its Sources directory (SwiftPM auto-processes
+# it, no Package.swift edit) and add a line here in the same commit.
 TARGETS=(
     "Fernlet:App/Fernlet/Localizable.xcstrings"
     "FernletWidgets:App/FernletWidgets/Localizable.xcstrings"
     "FernletShareExtension:App/FernletShareExtension/Localizable.xcstrings"
+    "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
+    "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
 )
 
 echo "==> Building (SWIFT_EMIT_LOC_STRINGS=YES) to emit .stringsdata"
@@ -74,11 +82,18 @@ for entry in "${TARGETS[@]}"; do
     # One target's .stringsdata can be spread over several architectures and
     # configurations; sync wants that target's COMPLETE set in one invocation.
     # (Built with `while read`, not `mapfile` — macOS ships bash 3.2.)
+    #
+    # The `Objects-normal` anchor is load-bearing. The project-level intermediates
+    # directory is ALSO called `Fernlet.build`, and it CONTAINS every target's build
+    # directory — so matching on the directory name alone picked up the widget's and
+    # the test bundle's strings as well, and silently synced foreign keys into the app
+    # catalog. Requiring `<target>.build/Objects-normal/` selects the compile outputs
+    # of that target and nothing else.
     stringsdata=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && stringsdata+=("$line")
-    done < <(find "$INTERMEDIATES" -type d -name "${target}.build" \
-        -exec find {} -name '*.stringsdata' -print \; 2>/dev/null | sort -u)
+    done < <(find "$INTERMEDIATES" -path "*/${target}.build/Objects-normal/*" \
+        -name '*.stringsdata' -print 2>/dev/null | sort -u)
 
     if [[ ${#stringsdata[@]} -eq 0 ]]; then
         echo "!! $target: no .stringsdata found under $INTERMEDIATES — skipping" >&2

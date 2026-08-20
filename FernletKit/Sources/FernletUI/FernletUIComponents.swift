@@ -142,13 +142,40 @@ public extension View {
     ///
     /// Without a label VoiceOver reads the SF Symbol name — "chevron.left", "person.2" — or nothing
     /// at all. Name the *action* ("Remove tomato", "Hide widget"), not the glyph.
+    ///
+    /// The label is a `LocalizedStringKey`, so the literal at the call site is harvested into the
+    /// calling target's string catalog — including the interpolated ones, which extract as format
+    /// strings ("Remove %@") and therefore stay translatable even though the noun is runtime data.
+    /// The argument's *static type* is what picks SwiftUI's `accessibilityLabel(_: LocalizedStringKey)`
+    /// overload here: `LocalizedStringKey` is neither `Text` nor `StringProtocol`, so the `Text` and
+    /// generic-string overloads are not even applicable and there is nothing for the type checker to
+    /// prefer wrongly. Use ``fernletIconButton(verbatim:minWidth:minHeight:)`` for a label that is
+    /// already resolved.
     func fernletIconButton(
-        _ accessibilityLabel: String,
+        _ accessibilityLabel: LocalizedStringKey,
         minWidth: CGFloat = 44,
         minHeight: CGFloat = 44
     ) -> some View {
         fernletTapTarget(minWidth: minWidth, minHeight: minHeight)
             .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// The non-localizing form of ``fernletIconButton(_:minWidth:minHeight:)``, for a VoiceOver
+    /// label that is already final — one assembled from user data, or one a package caller resolved
+    /// itself with `String(localized:bundle:.module)`.
+    ///
+    /// It wraps the string in `Text(verbatim:)` before handing it over, which pins SwiftUI's
+    /// `accessibilityLabel(_: Text)` overload; passing the bare `String` would land on the
+    /// `StringProtocol` overload, which is also non-localizing but says so less clearly. As with
+    /// ``SectionLabel/init(verbatim:)``, the distinct `verbatim:` label exists so this cannot be
+    /// chosen by accident: a same-label `String` overload would capture every plain literal.
+    func fernletIconButton(
+        verbatim accessibilityLabel: String,
+        minWidth: CGFloat = 44,
+        minHeight: CGFloat = 44
+    ) -> some View {
+        fernletTapTarget(minWidth: minWidth, minHeight: minHeight)
+            .accessibilityLabel(Text(verbatim: accessibilityLabel))
     }
 }
 
@@ -163,18 +190,50 @@ public extension View {
 /// is worse than a header that takes a second line. Pass `titleLineLimit: 3` where the title is
 /// user-supplied and long (a recipe name, say); the subtitle takes up to three lines.
 public struct ScreenHeader: View {
-    var title: String
-    var subtitle: String
+    var title: Text
+    var subtitle: Text
     var subtitleFirst: Bool
     /// Optional stable accessibility identifier so UX appearance tests can anchor a
-    /// screen's header (e.g. "screen.home"). Empty when unset — a no-op for users.
+    /// screen's header (e.g. "screen.home"). An identifier is a test *token*, never display text,
+    /// so it stays a plain `String` and stays English forever. Empty when unset — a no-op for users.
     var identifier: String?
     /// How many lines the title may wrap to before truncating. Two by default.
     var titleLineLimit: Int
 
+    /// The localizing initializer, for the common case where both halves are authored copy.
+    ///
+    /// Both literals are harvested into the calling target's string catalog and looked up in
+    /// `Bundle.main`, which is the app bundle and therefore the right one for every app-target
+    /// caller. Where only *one* half is authored copy — a user's recipe name over a fixed strapline,
+    /// say — use the `Text`-taking initializer below and decide each half separately; there is
+    /// deliberately no mixed `LocalizedStringKey`/`String` overload, because one would silently
+    /// swallow a literal on the other side.
     public init(
-        title: String,
-        subtitle: String,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey,
+        subtitleFirst: Bool = false,
+        identifier: String? = nil,
+        titleLineLimit: Int = 2
+    ) {
+        self.init(
+            title: Text(title),
+            subtitle: Text(subtitle),
+            subtitleFirst: subtitleFirst,
+            identifier: identifier,
+            titleLineLimit: titleLineLimit
+        )
+    }
+
+    /// The `Text`-taking initializer: each half is localized, or not, by whoever builds it.
+    ///
+    /// This is the escape hatch for headers whose title is user or peer data — a recipe name, a
+    /// formatted date — where `Text(verbatim:)` is the *correct* answer and translating would be a
+    /// bug, and for package callers who resolved their own copy with `String(localized:bundle:.module)`.
+    /// `Text` is not expressible by a string literal, so this overload can never steal a call site
+    /// that meant to localize.
+    public init(
+        title: Text,
+        subtitle: Text,
         subtitleFirst: Bool = false,
         identifier: String? = nil,
         titleLineLimit: Int = 2
@@ -189,7 +248,7 @@ public struct ScreenHeader: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
-            Text(title)
+            title
                 .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .lineLimit(titleLineLimit)
@@ -202,7 +261,7 @@ public struct ScreenHeader: View {
     }
 
     private var subtitleView: some View {
-        Text(subtitle)
+        subtitle
             .font(.fernlet(.bodySmall))
             .italic()
             .foregroundStyle(Color.slate)
@@ -223,22 +282,32 @@ public struct ScreenHeader: View {
 ///   from what is drawn. The title never wraps: the pill grows instead, so accessibility sizes can't
 ///   break a word in half ("Shar/e").
 public struct HeaderActionButton: View {
-    var title: String?
+    /// The drawn pill title, already resolved. Nil for an icon-only button — the layout branches on
+    /// that, which is why it stays optional rather than collapsing to an empty `Text`.
+    var title: Text?
     var systemImage: String?
     /// VoiceOver label; overrides the drawn title. Required in practice for icon-only buttons.
-    var axLabel: String?
+    var axLabel: Text?
     var action: () -> Void
 
+    /// Both text parameters are `LocalizedStringKey`, so a literal at the call site is harvested
+    /// into the calling target's string catalog and resolved against `Bundle.main` — the app bundle,
+    /// and every one of today's call sites is in the app target.
+    ///
+    /// `systemImage` stays a `String` because an SF Symbol name is a token: translating
+    /// "gearshape" would not find a symbol. There is no verbatim overload here because no caller
+    /// needs one — every title and label on this control is authored copy, not user data — and each
+    /// overload added is one more chance for a literal to pick the non-localizing branch.
     public init(
-        title: String? = nil,
+        title: LocalizedStringKey? = nil,
         systemImage: String? = nil,
-        accessibilityLabel: String? = nil,
+        accessibilityLabel: LocalizedStringKey? = nil,
         action: @escaping () -> Void
     ) {
         assert(title != nil || systemImage != nil, "header action needs title or image")
-        self.title = title
+        self.title = title.map { Text($0) }
         self.systemImage = systemImage
-        self.axLabel = accessibilityLabel
+        self.axLabel = accessibilityLabel.map { Text($0) }
         self.action = action
     }
 
@@ -250,7 +319,7 @@ public struct HeaderActionButton: View {
                         .font(.title3.weight(.semibold))
                 }
                 if let title {
-                    Text(title)
+                    title
                         .font(.fernlet(.label))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -266,7 +335,21 @@ public struct HeaderActionButton: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(axLabel ?? title ?? systemImage ?? "Action")
+        .accessibilityLabel(resolvedAccessibilityLabel)
+    }
+
+    /// The VoiceOver label, resolved through the same precedence the old `??` chain expressed:
+    /// an explicit label, else the drawn title, else — as a last resort — the SF Symbol name.
+    ///
+    /// The chain had to become a computed `Text` because its links no longer share a type: the
+    /// first two are localized `Text`s and the symbol name is a token that must never be
+    /// translated. The symbol fallback is a diagnostic, not a design: a button that reaches it is
+    /// announcing "gearshape", which is the bug the `accessibilityLabel:` parameter exists to
+    /// prevent, so it is left untranslated on purpose rather than dressed up as real copy.
+    private var resolvedAccessibilityLabel: Text {
+        if let axLabel { return axLabel }
+        if let title { return title }
+        return Text(verbatim: systemImage ?? "Action")
     }
 }
 
@@ -618,20 +701,44 @@ public struct AdaptiveStack<Content: View>: View {
 /// design-system `labelSmall` caption with any input control so field labeling stays uniform
 /// across every sheet.
 public struct SheetField<Content: View>: View {
-    var label: String
+    /// Resolved at init so the body never has to know which initializer it came through.
+    var label: Text
     var content: Content
 
-    public init(_ label: String, @ViewBuilder content: () -> Content) {
-        self.label = label
+    /// The localizing initializer — the one all ~114 sheet call sites use.
+    ///
+    /// The literal is harvested into the calling target's string catalog and looked up in
+    /// `Bundle.main`; that is the app bundle, and every entry sheet lives in the app target. A
+    /// package caller must pre-resolve with `String(localized:bundle:.module)` and use
+    /// ``init(verbatim:content:)``, since a key harvested into a package bundle is invisible to
+    /// `Bundle.main` and would render as untranslated English with no error anywhere.
+    public init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.label = Text(label)
+        self.content = content()
+    }
+
+    /// The non-localizing initializer, for a caption that is already final — a persisted grouping
+    /// token used as a heading, a name the user typed, or a package caller's own resolved string.
+    ///
+    /// The `verbatim:` label is what keeps this from being chosen by accident; see
+    /// ``SectionLabel/init(verbatim:)`` for why a same-label `String` overload would quietly
+    /// capture every literal in the app.
+    public init(verbatim label: String, @ViewBuilder content: () -> Content) {
+        self.label = Text(verbatim: label)
         self.content = content()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label.uppercased())
+            label
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
+                // Uppercasing moved off the string and into the environment so it runs *after* the
+                // catalog lookup, on the translated caption rather than on the English key — the
+                // only order that gets German ß → SS and accented French capitals right. See
+                // ``SectionLabel`` for the same note; these two are the app's one caption treatment.
+                .textCase(.uppercase)
             content
         }
     }
@@ -1001,12 +1108,36 @@ public struct FernletTabBarCompactionModifier: ViewModifier {
 /// the least legible text on it. The disabled state fades only the fill and switches to bark ink —
 /// a disabled Save the user cannot read tells them nothing about what finishing the form will do.
 public struct SheetSaveBar: View {
-    var label: String
+    /// Resolved at init so the body does not branch on how the caller supplied the word.
+    var label: Text
     var disabled: Bool
     var action: () -> Void
 
-    public init(label: String = "Save", disabled: Bool = false, action: @escaping () -> Void) {
-        self.label = label
+    /// The localizing initializer. A literal at the call site is harvested into the calling target's
+    /// string catalog and looked up in `Bundle.main` — the app bundle, where all ~41 call sites are.
+    ///
+    /// - Important: the `"Save"` default is a literal *inside this package*, so it is harvested into
+    ///   FernletUI's bundle, not the app's — and `Bundle.main` never consults a package bundle. The
+    ///   ~6 sheets that omit `label:` therefore translate only if the app's own catalog happens to
+    ///   carry a `"Save"` entry. It does, because several sheets pass `label: "Save"` explicitly and
+    ///   that harvests the key from the app target; the entry must not be pruned from
+    ///   `App/Fernlet/Localizable.xcstrings` on the grounds that "nothing references it", because
+    ///   this default silently does.
+    public init(label: LocalizedStringKey = "Save", disabled: Bool = false, action: @escaping () -> Void) {
+        self.label = Text(label)
+        self.disabled = disabled
+        self.action = action
+    }
+
+    /// The non-localizing initializer, for a save word that is already final — one a package caller
+    /// resolved with `String(localized:bundle:.module)`, or one chosen at runtime from a domain
+    /// type's display property.
+    ///
+    /// As everywhere else in this file, the distinct `verbatim:` label is the safeguard: a
+    /// same-label `String` overload would win overload resolution for every plain literal and turn
+    /// the whole component back into untranslatable English without a single warning.
+    public init(verbatim label: String, disabled: Bool = false, action: @escaping () -> Void) {
+        self.label = Text(verbatim: label)
         self.disabled = disabled
         self.action = action
     }
@@ -1014,7 +1145,7 @@ public struct SheetSaveBar: View {
     public var body: some View {
         HStack {
             Spacer()
-            Button(label, action: action)
+            Button(action: action) { label }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .foregroundStyle(disabled ? Color.bark : Color.onMoss)

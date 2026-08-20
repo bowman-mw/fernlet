@@ -1,7 +1,8 @@
 # Fernlet Localization Plan — Spanish, French, German
 
-**Date:** 2026-07-19 · **Status:** **Phase 0 SHIPPED 2026-08-19** (branch
-`claude/localization-phase0`); Phases 1–5 still planned only. Grounded in a two-agent code audit of
+**Date:** 2026-07-19 · **Status:** **Phase 0 SHIPPED 2026-08-19**; **Phase 1 scaffolding +
+token/display forks SHIPPED 2026-08-19** (branch `claude/localization-phase1`). The Phase 1 *bulk
+string conversion* and Phases 2–5 are still planned only. Grounded in a two-agent code audit of
 `main` (2026-07-19); every claim below carries file:line evidence from that audit — see the
 Phase 0 section for where the tree has since moved.
 **Scope:** `es`, `fr`, `de` as the first localization wave, `en` stays the development language.
@@ -134,6 +135,77 @@ prefer the locale's separator on ambiguity) used by all free-text quantity paths
 ---
 
 ## 3. Phase 1 — String-catalog scaffolding & token/display separation
+
+> **SCAFFOLDING + FORKS DONE — 2026-08-19.** What shipped, and where this section was wrong.
+>
+> **The plumbing was already half-built.** `SWIFT_EMIT_LOC_STRINGS` was already `YES` on all three
+> shipping targets and `LOCALIZATION_PREFERS_STRING_CATALOGS` already `YES` project-wide — the
+> strings had nowhere to land, not nothing to extract. Only `knownRegions` needed editing.
+>
+> **§3.2's open question is answered: you never need to open Xcode.** `xcodebuild` never writes
+> into an `.xcstrings` (its only XCStrings task is `xcstringstool compile`; the sync half is
+> IDE-driven), but the same `xcstringstool` binary ships in the toolchain and its `sync` subcommand
+> consumes exactly the `.stringsdata` `xcodebuild` already emits. `Scripts/sync-string-catalogs.sh`
+> is that loop, with a `--check` mode for CI. Current capture: **1,278 app keys, 30 widget keys,
+> 96 FernletDomainModel keys, 70 FernletLockUI keys**, plus the 9 hand-authored `InfoPlist` keys
+> and 13 `AppShortcuts` phrases. Selecting a target's `.stringsdata` must be anchored on
+> `<target>.build/Objects-normal/` — the project-level intermediates directory carries the same
+> name as the app target's, so matching the directory name alone silently syncs the widget's and
+> the test bundle's strings into the app catalog.
+>
+> **An `.xcstrings` in an SPM target needs no manifest change.** Verified: dropping one into a
+> module's `Sources/` directory is auto-processed, produces the module resource bundle, and makes
+> `Bundle.module` resolve. Package targets also *do* emit `.stringsdata` — but only when
+> `SWIFT_EMIT_LOC_STRINGS=YES` is on the xcodebuild **command line** (the same gotcha as
+> `SUPPRESS_WARNINGS` in `Scripts/spm-wall-check.sh`).
+>
+> **The biggest item was missing from this section entirely.** ~289 app call sites passed a bare
+> English literal into a shared `FernletUI` component whose parameter was typed `String`, so the
+> literal *looked* auto-localizing and silently was not. Flipping 7 signatures to
+> `LocalizedStringKey` converted all of them with no per-call-site edit — the app catalog jumped
+> from 1,135 to 1,376 keys on that change alone. Each component gained a distinctly-labelled
+> `verbatim:` initializer rather than a same-label `String` overload: a same-label overload wins
+> for a plain literal (`String` is a literal's default type) and would have re-introduced the exact
+> bug. Uppercase captions moved from `String.uppercased()` to `.textCase(.uppercase)` so the
+> transform runs *after* the lookup.
+>
+> **§3.4 undercounted the forks — it is 8+, not 4**, and the three worst were not on the list:
+> - `PersonalCareTask.groups` was section header, persisted row value, and filter predicate at
+>   once. Localizing it would have silently emptied every existing user's care checklist. Forked to
+>   a `CareGroup` enum whose rawValues are the frozen persisted tokens.
+> - `MealType`, `WorkoutType`, `CompanionState` had **no display property at all** — the rawValue
+>   was simultaneously the on-screen text, the persisted token, the FM prompt vocabulary, and (for
+>   `CompanionState`) a byte-mirrored cross-process contract with the widget extension.
+> - `ProximityKit`'s `PayloadSummary.title` rides inside **signed canonical bytes** while reading
+>   exactly like UI copy, and renders on the *receiving* device.
+> - `CoachPlanTokens` used `displayName` as a wire-format parser allowlist; `Meal.confidence`
+>   persisted display copy written from 13 different sites; `ExerciseTarget.name` is the key of the
+>   CloudKit-synced `workoutProgression` map (so it must never localize).
+> - Two AI prompt seams were repointed from `.label` to `.rawValue`. Byte-neutral today, and
+>   untestable by assertion: in an English run `label == rawValue.capitalized`, so a test would be
+>   green exactly when the bug is live.
+>
+> **One live bug fixed in passing:** `FoodItemSearch.normalized` folded with `locale: .current`
+> while the shipped 118k-row catalog index was baked by the same function on an English machine.
+>
+> **Enforcement:** `Tests/FernletTests/LocalizationBoundaryTests` — the `bundle: .module` grep-wall
+> (omitting it fails silently), frozen-token canaries for every sealed/signed/persisted/prompt
+> rawValue, and the widget cross-process contract. Wired into `.github/workflows/s3-wall.yml`.
+>
+> **Deliberately NOT done (the bulk):** ~1,700–2,200 explicit `String(localized:)` conversions
+> across the app target and 13 more string-bearing modules; `SettingsSearchIndex`'s 489 strings
+> (369 of which are search synonyms needing per-language curation, not translation); the 80
+> `+ "…"` concatenated paragraphs and 48 hand-rolled `count == 1` plural branches; and the 207
+> literal element queries in `FernletUITests` that must become accessibility identifiers.
+>
+> **One more instance of the same species, now sized:** 43 app-local view helpers take their
+> display text as `String` (`hubToggle(_:isOn:)`, `sectionHeader(_:)`, `lockChoice(title:…)`, …),
+> so a literal passed to one of them never extracts — the identical trap the FernletUI flip removed
+> from the shared components, at file scope. They need triage rather than a blind flip: some
+> genuinely carry runtime text (`monogram(_ name:)`, `metricPill(value:)`). Until they are
+> converted, strings behind them are invisible to the catalog, which is why the app key count is
+> a floor rather than the true total. The same applies to SwiftUI's own `TextField`/`Button`
+> initializers whenever they are handed a `String` variable instead of a literal.
 
 ### 3.1 Project plumbing
 - `Localizable.xcstrings` in each of the three UI targets: **Fernlet** (app),

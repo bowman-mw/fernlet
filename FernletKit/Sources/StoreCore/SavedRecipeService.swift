@@ -174,7 +174,7 @@ public final class SavedRecipeService {
             mealSource: .recipe,
             isAIFallback: false,
             quality: macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: hasMacros ? "Recipe" : "Recipe (no macros)",
+            confidence: hasMacros ? MealConfidence.recipe.token : MealConfidence.recipeNoMacros.token,
             note: hasMacros ? "Logged from URL recipe." : "Logged from URL recipe. Macros not available.",
             source: MealLogSource.webImport
         )

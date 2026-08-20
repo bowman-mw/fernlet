@@ -365,7 +365,24 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
         object.setValue(narrative.hkExternalUUID, forKey: "hkExternalUUID")
         object.setValue(narrative.dateKey, forKey: "dateKey")
         object.setValue(try crypto.sealOptionalString(narrative.note, contentKey: contentKey), forKey: "noteCiphertext")
+        // `PeriodSymptom.rawValue` IS the storage format for this sealed column — DO NOT LOCALIZE it,
+        // and do not renumber, rename, or re-spell a case. Anything the user reads about a symptom
+        // must come from a separate display property; the rawValue is a frozen English token.
+        //
+        // The consequence of breaking that is unusually severe here, so it is worth stating in full.
+        // These bytes go into a ChaChaPoly column, and `decrypt` below reads them back with
+        // `compactMap(PeriodSymptom.init(rawValue:))`, which DROPS anything it cannot parse. Unlike
+        // the day blob, this path has no `EnumDecodeCompat` freeze/park channel — there is nowhere
+        // to park an unknown token, because parking it would mean writing symptom plaintext beside
+        // a column we deliberately sealed. So a rawValue change does not throw, does not log, and
+        // does not surface a "some data could not be read" banner: it makes every symptom the user
+        // ever logged disappear from her encrypted cycle history, permanently and unrecoverably,
+        // with the ciphertext still sitting on disk holding the values nothing can name any more.
         object.setValue(try crypto.seal(narrative.symptomFlags.map(\.rawValue), contentKey: contentKey), forKey: "symptomFlagsCiphertext")
+        // Same freeze applies to the KEYS of this dictionary: they are `PeriodSymptom.rawValue`
+        // strings (see `LogPeriodSheet`'s writer and `CycleDayDetailView`'s reader, which pairs the
+        // rawValue key with the separate `symptom.title` for display). A localized key would orphan
+        // every stored intensity rating exactly the way a localized flag orphans the flags.
         object.setValue(try crypto.seal(narrative.customSymptomScales, contentKey: contentKey), forKey: "customSymptomScalesCiphertext")
         object.setValue(createdAt, forKey: "createdAt")
         object.setValue(Date(), forKey: "updatedAt")
@@ -385,6 +402,16 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
             hkExternalUUID: hkExternalUUID,
             dateKey: dateKey,
             note: try crypto.openString(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey),
+            // The lossy seam. `compactMap` silently drops every raw value this build cannot parse,
+            // so `PeriodSymptom`'s rawValues are FROZEN ENGLISH TOKENS — never localized, never
+            // re-spelled. A translated or renamed case makes previously sealed symptoms vanish from
+            // the user's cycle history with no error, no log, and no recovery path.
+            //
+            // Deliberately NOT restructured into a freeze/park decoder like the day blob: parking an
+            // unrecognized token means persisting it somewhere the app can read it later, and the
+            // whole reason this column is sealed is that a symptom name is exactly the kind of
+            // plaintext that must not sit beside the ciphertext. Lossy-but-sealed is the chosen
+            // trade; the token freeze is what makes it safe, so the freeze is the invariant to keep.
             symptomFlags: symptomRaw.compactMap(PeriodSymptom.init(rawValue:)),
             customSymptomScales: scales,
             createdAt: object.value(forKey: "createdAt") as? Date ?? Date(),

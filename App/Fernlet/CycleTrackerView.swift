@@ -210,16 +210,23 @@ struct CycleTrackerView: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            ScreenHeader(title: "Cycle", subtitle: headerSubtitle, identifier: "screen.cycle")
+            ScreenHeader(title: Text("Cycle"), subtitle: headerSubtitle, identifier: "screen.cycle")
             Spacer()
             logButton
         }
     }
 
     /// Phase-aware while period is visible; a neutral line otherwise (never mentions the hidden half).
-    private var headerSubtitle: String {
-        guard store.isPeriodTrackingVisible else { return "Your private calendar." }
-        return periodStore.currentPhase == .unknown ? "Your cycle, at a glance." : periodStore.currentPhase.title
+    ///
+    /// Typed `Text` rather than `String` because the three branches are not the same kind of
+    /// string: two are authored copy that should translate, while the phase title is a domain
+    /// display property that has already resolved its own. Only `Text` can carry both without
+    /// feeding a runtime value into a catalog lookup that could never match it.
+    private var headerSubtitle: Text {
+        guard store.isPeriodTrackingVisible else { return Text("Your private calendar.") }
+        return periodStore.currentPhase == .unknown
+            ? Text("Your cycle, at a glance.")
+            : Text(verbatim: periodStore.currentPhase.title)
     }
 
     /// ONE plus button for the whole page: a menu when both halves can log, a direct button when

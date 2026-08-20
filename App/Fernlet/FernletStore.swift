@@ -2234,7 +2234,7 @@ final class FernletStore {
             meal.micronutrientSnapshot = Micronutrients()
             meal.note = "Corrected manually after quick logging."
         }
-        meal.confidence = "Corrected"
+        meal.confidence = MealConfidence.corrected.token
         meal.isAIFallback = false
         meal.quality = macros.protein >= Macros.goodProteinThreshold ? .good : .ok
     }

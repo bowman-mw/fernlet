@@ -2418,7 +2418,9 @@ struct ExerciseSearchPicker: View {
     }
 
     var body: some View {
-        SheetField(title) {
+        // `verbatim:` — `title` is a `String` fed from a domain enum's picker title, so it arrives
+        // already resolved rather than as authored copy written here.
+        SheetField(verbatim: title) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
@@ -2883,10 +2885,12 @@ struct MoveDayDetailView: View {
         dateKey > store.todayKey
     }
 
-    private var navigationTitle: String {
-        if dateKey == store.todayKey { return "Today" }
+    /// Typed `Text` because the two branches differ in kind: "Today" is authored copy that should
+    /// translate, while the formatted date has already localized itself and must not be looked up.
+    private var navigationTitle: Text {
+        if dateKey == store.todayKey { return Text("Today") }
         let date = FernletDate.date(fromDayKey: dateKey) ?? .now
-        return date.formatted(.dateTime.month(.abbreviated).day())
+        return Text(verbatim: date.formatted(.dateTime.month(.abbreviated).day()))
     }
 
     /// The full date under the header title. Replaces "Movement only." — which said nothing about
@@ -2996,7 +3000,7 @@ struct MoveDayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: navigationTitle, subtitle: headerSubtitle)
+                ScreenHeader(title: navigationTitle, subtitle: Text(verbatim: headerSubtitle))
                 planSection
                 workoutsSection
             }
@@ -3268,7 +3272,11 @@ struct WorkoutPlanSheet: View {
         if logMode == .activity, let selectedActivityType {
             return selectedActivityType.displayName
         }
-        return "\(split.title) workout"
+        // `rawValue`, not `title`: this string is PERSISTED as `PlannedWorkout.name`, and
+        // `WorkoutExerciseCatalog.inferType`/`targetSummary` then match ENGLISH keywords against
+        // it. A localized default name would have a plan created on a German device infer its own
+        // type differently. The placeholder below is display-only and keeps the localized title.
+        return "\(split.rawValue) workout"
     }
 
     /// The name field is optional — the placeholder shows the name the plan will actually take.
