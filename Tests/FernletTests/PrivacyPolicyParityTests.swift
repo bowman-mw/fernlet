@@ -38,6 +38,18 @@ struct PrivacyPolicyParityTests {
     /// features are in-person only": the opt-in setting leaves sealed hearts in the developer's
     /// CloudKit PUBLIC database, deletable only by the sending device and with no server-side
     /// expiry. All three copies previously said friend activity stays device-to-device, full stop.
+    ///
+    /// The two markers added 2026-08-20 pin the corrections that closed the largest accuracy gap
+    /// this document has had. All three copies previously said Fernlet wrote "only the workouts you
+    /// log" and "never" wrote period data, and that the export "excludes the encrypted sealed
+    /// categories". Both were false: `HealthKitService` also writes cycle samples, sexual activity,
+    /// mindful minutes, and height/body mass (each behind its own Apple permission prompt), and
+    /// `DataExportBuilder` deliberately includes journal text because the export sits behind a
+    /// fresh biometric check. Nothing in the app changed — the prose was wrong — but a policy that
+    /// under-describes what the app writes to Apple Health is exactly the kind of error that only
+    /// gets caught by pinning it, because every copy was consistently wrong and the parity check
+    /// was therefore green. `cervical mucus quality` pins the write list; the journal phrase pins
+    /// the export's contents.
     private static let substanceMarkers = [
         "never retroactively repurposed",
         "The no-collection guarantee does not expire",
@@ -46,7 +58,9 @@ struct PrivacyPolicyParityTests {
         "Docs/Verifiability.md",
         "Manual plan exchange",
         "signed record of that report",
-        "Deliver hearts when apart"
+        "Deliver hearts when apart",
+        "cervical mucus quality",
+        "includes your journal entries"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

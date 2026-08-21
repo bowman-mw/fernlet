@@ -1,8 +1,33 @@
 # Security-Hardening Build Runbook (2026-08-10)
 
-Execution controller for the two-track security-hardening plan. A `/loop` run reads this file
-each iteration, executes **one eligible phase** end to end (implement → adversarial review → fix →
-verify green → commit → merge), updates the ledger below, and either advances or stops.
+> ## ✅ COMPLETE — every ledger row is DONE; the loop is finished
+>
+> **All twelve phases (P0a–P8) were implemented, reviewed, verified and merged between 2026-08-10 and
+> 2026-08-11.** The last row, P8, merged as `2e6cadb`. This file is no longer a live controller: the
+> per-iteration protocol below tells a reader to "pick the first row that is not DONE and start a
+> phase," and there is no such row. **Do not start a `/loop` against this document** — step 1 of the
+> protocol already says that when every row is `DONE` the loop stops, so a fresh run would simply
+> confirm that, but a reader skimming for the next task could easily mistake a finished ledger for a
+> queue and rebuild work that is already on `main`.
+>
+> Kept as-is because the ledger's note column and the progress log are the record of *how* each phase
+> landed — the go/no-go the owner recorded on P4, the review findings each phase confirmed and fixed,
+> and the verification gate each one passed. That record is the reason to keep reading this file.
+>
+> **Three obligations outlived the build and are still open.** They are recorded here so they are not
+> lost with the loop, and they are tracked live in
+> [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md):
+> - **P5 / owner:** promote `SealedPhotoRecord` to the **Production** CloudKit schema
+>   ([`CloudKit-Schema-Deploy.md`](CloudKit-Schema-Deploy.md)). TestFlight runs against Production and
+>   Production does not auto-create record types, so until this is done sealed photo backups cannot be
+>   restored *and* the delete-everything teardown is silently incomplete.
+> - **P8:** the capture-protection spec's §7 **manual device matrix** has never been walked on real
+>   hardware, and three follow-ups (§9#1, §9#5, §9#6) were surfaced and deliberately not built.
+> - **P5 (§14, defaulted out):** the plaintext friend-wall index `MeshPhotoCache.json` is still unsealed.
+
+Execution controller for the two-track security-hardening plan. A `/loop` run read this file
+each iteration, executed **one eligible phase** end to end (implement → adversarial review → fix →
+verify green → commit → merge), updated the ledger below, and either advanced or stopped.
 
 - Plans (source of truth for each phase's design/steps/tests):
   [`Plan-Security-Hardening-OpusTrack-2026-08-10.md`](Plan-Security-Hardening-OpusTrack-2026-08-10.md)

@@ -19,10 +19,35 @@ analytics, crash telemetry, or any other form of tracking — in this version or
 
 Three concrete commitments follow from it:
 
-1. **There is no developer-operated server.** Fernlet has no backend. `fernlet.com` hosts a static,
-   JS-free marketing/privacy site ([`Site/`](../Site/README.md)) and nothing else — the app never
-   contacts it. There is no account, no login, no device ID, no install ping, no crash reporter, no
+1. **There is no developer-operated server.** Fernlet has no backend. `fernlet.com` hosts a static
+   marketing/privacy site ([`Site/`](../Site/README.md)) and nothing else — the app never contacts
+   it. There is no account, no login, no device ID, no install ping, no crash reporter, no
    feature-flag fetch, no "anonymous usage statistics".
+
+   **The site's script, stated precisely (corrected 2026-08-20).** This bullet used to call the site
+   "JS-free". It is not, and an outsider can disprove that in thirty seconds by viewing source — a
+   trivially falsifiable claim on the one page whose entire job is to be believed, which is worse
+   than a bigger honest one. What actually ships is **one first-party file, `/app.js` (~8 KB), served
+   from the same origin**, and the honest claim is: *no third-party script, no analytics, no
+   cookies, no storage, no network requests from the page.* It is progressive enhancement over
+   fully-rendered HTML — nav collapse on scroll, the companion-state demo, the poke animation, the
+   screenshot tabs, the mesh walkthrough, the encrypted-backup toggle demo — and every page is
+   complete and readable with JavaScript disabled. It calls no `fetch`/`XHR`, sets no cookie, and
+   touches neither `localStorage` nor `sessionStorage`.
+
+   The CSP is what makes that checkable rather than a promise: `default-src 'none'` with
+   `script-src 'self'` (no `'unsafe-inline'`, so no inline `<script>` and no `on*` handlers can run
+   even if one were added), `font-src 'self'` over self-hosted fonts, and `img-src 'self' data:`.
+   The one loosening is `style-src 'self' 'unsafe-inline'`, needed because the pages position
+   polaroids and cycle-dial rings with inline `style=""` attributes; it is not an external-load
+   allowance, and the site has no user-generated content for an injection to ride in on. The policy
+   lives in both `Site/_headers` (Cloudflare) and a `<meta http-equiv>` in every page, because
+   GitHub Pages ignores `_headers` entirely.
+
+   **This wall does not enforce any of that** — `Site/` is not Swift and no test in
+   `NoTrackingBoundaryTests` reads it. The site is a human-reviewed surface; adding a third-party
+   `<script>` would pass CI and break this bullet, which is precisely why the CSP is written to
+   block it at the browser instead.
 2. **The advertising ecosystem is not merely unused, it is not linked.** No `AdSupport`, no
    `AppTrackingTransparency`, no IDFA, no SKAdNetwork, no third-party SDK of any kind except one
    crypto library. The app has never shown an ATT prompt and structurally cannot.

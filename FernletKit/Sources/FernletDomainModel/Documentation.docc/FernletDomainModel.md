@@ -14,7 +14,7 @@ module in the package sits above it: `FernletScoring`, `FoodCatalog`, `FernletPe
 `LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit`,
 `DiaryStore`, and `FernletUI` all import it.
 
-That position dictates its two hard rules. First, the S3 privacy wall: because the walled
+That position dictates its three hard rules. First, the S3 privacy wall: because the walled
 `AIProviders` and `CloudKitSync` targets import this module, **nothing sensitive may be nameable
 here**. The raw cycle types (`CyclePhase`, cycle day entries) deliberately live in
 `PrivateHealthStore`, sealed journal text is stripped before the synced blob by
@@ -33,6 +33,52 @@ clear the park via `didSet`. ``FernletSettings`` extends the same idea to whole 
 keys via its ``JSONValue`` parking. The proximity *wire* types decode strictly — tolerance is for
 persisted state, not untrusted peers, whose payloads instead pass boundary sanitizers
 (`ItemGridTexture.sanitized()`, ``ItemNameModeration``, ``HeartPayload``'s day-key shape check).
+
+Third — new with localization Phase 1, and the rule most likely to be broken by a well-meant edit —
+**the TOKEN/DISPLAY fork**. This module now owns a `Localizable.xcstrings` (the package declares
+`defaultLocalization: "en"`), which makes it the place where a bulk `String(localized:)` pass does
+the most damage if it is applied by shape rather than by role. Every string here is exactly one of
+two things and never both: a **token** — a persisted `rawValue`, a mesh wire byte, a word in an AI
+prompt, a dictionary key, an export field — which is **English forever**, because it is compared,
+decoded, and signed across builds, devices, and processes; or **display**, which is the only half
+that localizes. Where one string was doing both jobs it has been forked, the raw value frozen
+byte-identical to what already shipped and a separate reader-facing property added beside it:
+
+- ``CompanionState/displayName`` — the raw value is re-parsed by `WidgetCompanionState` in the
+  widget extension, a SEPARATE PROCESS reading the app-group snapshot, and is a field of the Coach
+  export schema. A translated raw value makes every widget fail that parse and render its no-state
+  fallback, with nothing in the app to show why.
+- ``CareGroup/label`` — the raw value ("Morning"/"Anytime"/"Evening") is both persisted into
+  `PersonalCareTask.group` on the synced settings blob *and* the predicate the checklist filters
+  rows with, so translating it renders every existing checklist empty and writes a token the user's
+  other devices cannot match. ``CareGroup/init(persistedToken:)`` is deliberately an exact match.
+- ``MealConfidence/label`` — the persisted provenance stamp on `Meal.confidence`, forked from the
+  English phrases five writers used to store; ``MealConfidence/init(persistedToken:)`` still
+  resolves those legacy spellings, which is why that table is read-only and never edited.
+- ``MealType/displayName`` and ``WorkoutType/displayName`` — persisted categories that are also the
+  vocabulary the meal-parsing prompt hands the model, the input `WorkoutExerciseCatalog.inferType`
+  matches against, and fields of the trainer export.
+
+Two more strings read exactly like UI copy and are not: ``PayloadSummary``'s `title`, `subtitle`,
+and every `extraDetails` key and value are folded into the Ed25519 canonical signing bytes by
+`CanonicalSignatureSerializer` *and* render on the RECEIVER's phone (so localizing them would put
+the sender's language in someone else's audit trail); and ``CoachPlanTokens``'s frozen muscle and
+equipment aliases are an allowlist an unmatched token fails, which is what keeps an imported
+exercise inside the user's avoid lists. Inside a package, both `String(localized:)` and SwiftUI's
+`LocalizedStringKey` resolve against `Bundle.main` unless `bundle: .module` is passed — and getting
+that wrong fails silently, returning the English literal forever — so every call here passes it.
+``LocaleTolerantNumber`` is the input side of the same problem: a `.decimalPad` shows the locale's
+separator, so "2,5" is what a Spanish, French, or German user types, and bare `Double(_:)` returns
+nil and drops the value. `Tests/FernletTests/LocalizationBoundaryTests` is the wall that turns each
+of these into a test failure, and `Scripts/sync-string-catalogs.sh` repopulates the catalogs without
+opening Xcode (`--check` is the CI form).
+
+> Warning: This page named only two rules, and none of the forked types, until 2026-08-20 — the
+> whole fork landed without the landing-page update CLAUDE.md requires. The next planned work is a
+> bulk conversion of roughly 1,700–2,200 literals to `String(localized:)`, and a contributor who
+> read the old page first had no warning that translating a `rawValue` in *this* module is a
+> data-loss bug rather than a cosmetic one. If you localized anything here on the strength of the
+> old text, re-check it against the list above before shipping.
 
 Cross-device correctness without a server is handled by append-only ledgers with structurally
 deterministic row ids: ``CoinEconomy`` and ``MilestoneEconomy`` collapse duplicate-id rows in code
@@ -60,6 +106,7 @@ non-exhaustive switches and ship corrupted binaries.
 - ``SleepQuality``
 - ``HygieneItem``
 - ``PersonalCareTask``
+- ``CareGroup``
 - ``MemoryNote``
 - ``TierTwoMemoryRecord``
 - ``FitnessGoal``
@@ -99,6 +146,7 @@ non-exhaustive switches and ship corrupted binaries.
 - ``MealComponentSnapshot``
 - ``MealType``
 - ``MealQuality``
+- ``MealConfidence``
 - ``MealSource``
 - ``MealLogSource``
 - ``Macros``
@@ -334,3 +382,10 @@ what actually happened.
 
 - ``EnumDecodeCompat``
 - ``DiagnosticLanguage``
+
+### Localization and typed input
+
+The display halves of the forked enums are documented on their own types (see the third hard rule
+above); this section holds the module-level helper that has no other home.
+
+- ``LocaleTolerantNumber``

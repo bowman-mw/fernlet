@@ -1,11 +1,44 @@
 # SPM Module Carve-Up Plan
 
-**Status:** Proposed. Serves two goals with one set of cuts: the **S3 compile-time privacy walls**
-and the **cross-platform shared core** (see `RemainingWork-2026-06-23.md §2`
-for S3, and the canonical-signing prerequisite in
-`Canonical-Signing-Encoding-Fix.md`).
-**Scope:** structure + sequencing of the package split. The Proximity *internal* refactor is
-explicitly **out of scope** — Proximity is treated here as one black-box module boundary.
+**Status: BUILT AND ENFORCED.** This stopped being a proposal on 2026-06-27 and is now the shipped
+module architecture: `FernletKit/Package.swift` declares **24 library targets** under one umbrella
+product, and the wall it describes is a CI-required check
+(`Scripts/spm-wall-check.sh`, `.github/workflows/s3-wall.yml`). Sections 1–10 are the original plan
+and are preserved as the design record; **sections 11–14 are the execution handoffs and win wherever
+they disagree with 1–10.** Two disagreements are load-bearing enough to name up front, because
+following the plan text instead of the handoffs would undo enforcement:
+
+1. **The grep-wall was NOT deleted, and must not be.** §1 says the DAG "replaces" the grep-based
+   `S3BoundaryTests.swift`, and step 10 of §6 (repeated in the §10 checklist) says to delete it. That
+   was reversed once the wall was actually built: the compile half and the grep half cover different
+   failure modes, so both are kept. §12's "THE WALL" section and CLAUDE.md both record the grep-wall
+   as the **complementary** half, and every handoff since ends with "DO NOT do step 10." Corrections
+   are inlined at each of those three places below.
+2. **A forbidden import is not a "no such module" error by itself.** §3 assumes SPM search paths make
+   the sealed modules unnameable. Under one umbrella product Xcode pools every local-package module
+   into a single `…/PackageFrameworks` search path, so a forbidden `import` *resolves* and downgrades
+   to a warning. The hard error comes from building with
+   `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` — proven empirically in §12, and the reason
+   `Scripts/spm-wall-check.sh` exists at all. Believing §3 as written would mean shipping with the
+   wall silently off.
+
+**Where the shipped graph differs from §2.** The plan sized this at "~21 library targets"; the tree
+has 24, and `Package.swift` uses `swift-tools-version: 6.2` (not the 6.0 in §6 step 1). Added since:
+`WebScrapingKit` (the no-tracking wall's single outbound-fetch seam), `PrivateStoreCore`, `DiaryStore`
+(§5d's `FernletStore` decomposition landed as its own target), and `FernletLockUI`. Not built:
+`Onboarding` — the onboarding state machine and its views stayed in the app target
+(`App/Fernlet/Onboarding*.swift`). Narrower than planned: `FernletUI` is the **design system**
+(theme, primitives, components, `ModelColors`, `CaptureProtection`), not "all SwiftUI screens" —
+the screens are still app-resident, and five Proximity UI files stay there by necessity because they
+hold `FernletStore` references (§14). Also still app-resident: three of the six AI provider files,
+which need a downward inversion before they can move behind the wall (§12 "Deferred", recipe in §14).
+
+**Scope:** structure + sequencing of the package split. Serves two goals with one set of cuts: the
+**S3 compile-time privacy walls** and the **cross-platform shared core**. The Proximity *internal*
+refactor is explicitly **out of scope** — Proximity is treated here as one black-box module boundary.
+(The two companion documents cited in the original header, `RemainingWork-2026-06-23.md` and
+`Canonical-Signing-Encoding-Fix.md`, are no longer in the tree; the live successors are
+[`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) and CLAUDE.md's wall sections.)
 
 ---
 
@@ -14,7 +47,14 @@ explicitly **out of scope** — Proximity is treated here as one black-box modul
 Carve the single-target app into **one local Swift package (`FernletKit`) with ~21 library
 targets**. The package's `dependencies:` graph *is* the S3 wall: a target can `import` only the
 targets it declares, so a forbidden import (AI code reaching a sealed type) becomes a **compile
-error**, replacing the grep-based [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).
+error**, complementing the grep-based [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).
+
+> **Correction (2026-06-27, kept as standing policy).** This sentence originally said the DAG
+> *replaces* the grep test. It does not, and the grep test is still in the tree deliberately. The two
+> halves fail differently: the compile half covers every file and survives renames, but only fires on
+> recompile and only under the enforcement flag (§12); the grep half runs in the ordinary unit suite,
+> needs no special build or CI runner, and catches a sealed *symbol* travelling through an edge that
+> is legal in the DAG — something a dependency graph cannot see. Deleting either leaves a hole.
 
 The same cut delivers the Android shared core for free — the portable, Foundation/`swift-crypto`-only
 **lower half of the graph is exactly the cross-platform core**; the Apple-bound upper half is the
@@ -99,6 +139,17 @@ The privacy guarantee is realized by **edges deliberately absent** from `Package
 each target only the `.swiftmodule` search paths for its declared dependencies, so a module not in
 the list is literally not importable — `import PrivateHealthStore` from a target that doesn't depend
 on it fails with **"no such module"** at compile time.
+
+> ⚠️ **Correction — that last sentence is not true as Xcode builds this package.** Under the single
+> umbrella product, Xcode pools *every* local-package module into one `…/PackageFrameworks` search
+> path, so the forbidden `import` resolves and the build emits only a build-system **warning**;
+> splitting into separate SPM products does not change it (verified empirically). The hard error is
+> obtained by building with **`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`**, which turns the
+> missing declared dependency into `error: '<module>' is missing a dependency on '<sealed module>'`.
+> The flag must be passed on the build command — the pbxproj value does not reach the synthesized
+> package targets — which is exactly what `Scripts/spm-wall-check.sh` does, and why the wall is a CI
+> job rather than a property of the checkout. §12 has the full write-up and the proof. **The
+> forbidden-edge list below is still the guarantee; only the mechanism sentence was wrong.**
 
 **Edges that must NEVER appear:**
 - `AIProviders` → `PrivateHealthStore` / `PrivateMemoryStore` / `PrivateMediaStore` ❌
@@ -227,10 +278,15 @@ FernletStore` while the store lazily constructs them.
    sealed import now fails to compile. Same for `CloudKitSync`.
 9. **Extract remaining shims** — `HealthKitGateway`, `FernletLock` (re-declare `CryptoSwift` first),
    `AppServices`, and `ProximityKit` as one target (outward edges only; internals untouched).
-10. **Delete [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).** The DAG enforces the
-    wall for all code. Optionally keep one deliberately-failing negative-compile fixture in CI as a
-    tripwire. Add per-target `.testTarget`s; move pure logic tests there (they also run on Linux as
-    the cross-platform gate); keep CoreData/HealthKit integration in the host-app `FernletTests`.
+10. ~~**Delete [`S3BoundaryTests.swift`](../Tests/FernletTests/S3BoundaryTests.swift).**~~ **DO NOT DO
+    THIS — reversed 2026-06-27 and never performed.** The step assumed the DAG alone enforces the wall
+    for all code; §12 showed the DAG needs an enforcement *flag* on the build command to bite at all,
+    and that the grep-wall catches a class the DAG cannot (a sealed symbol crossing a legal edge). The
+    negative-compile tripwire this step called "optional" is the one part that shipped, as
+    `Scripts/spm-wall-selftest.sh`. `S3BoundaryTests.swift` stays, and was made move-tolerant
+    (basename matching across scan roots) so file relocations do not silently blind it. The per-target
+    `.testTarget` half is still open work — the tests remain in the host-app `FernletTests`, which
+    means the pure-logic ones do not yet run on Linux as the cross-platform gate.
 
 ---
 
@@ -300,7 +356,9 @@ the empty package (step 1) and move `Models`/`Scoring`/`Crypto` as the first rea
 - [ ] Extract remaining shims; `ProximityKit` as one black-box target; re-declare `CryptoSwift`.
 - [ ] Move resources to `Bundle.module`; verify `FoodCatalog.sqlite` loads.
 - [ ] Ensure the cycle-strip moved with `FernletSnapshot` into `FernletPersistence`.
-- [ ] Delete `S3BoundaryTests.swift`; add per-target test targets (pure-logic tests run on Linux).
+- [ ] ~~Delete `S3BoundaryTests.swift`~~ **— cancelled; the grep-wall is kept as the complementary
+      half of the wall (see the correction on step 10).** Add per-target test targets (pure-logic
+      tests run on Linux) — still open.
 
 ---
 

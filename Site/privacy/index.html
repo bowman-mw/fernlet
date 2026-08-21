@@ -47,7 +47,7 @@
   <div class="eyebrow">Privacy policy</div>
   <h1>What Fernlet knows about you.</h1>
   <div class="policy-meta">
-    <span>Effective August 19, 2026</span>
+    <span>Effective August 20, 2026</span>
     <span>Michael Bowman Olay</span>
     <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>
   </div>
@@ -114,7 +114,16 @@
 
     <section>
       <h2 id="s3">3. HealthKit (Apple Health)</h2>
-      <p>With your permission, Fernlet <strong>reads</strong> the following from Apple Health to reflect your day: heart rate, active energy, sleep analysis, step count, and workouts. Fernlet <strong>writes</strong> only the workouts you log (so they count toward your Apple activity rings). Fernlet <strong>never</strong> writes period, mood, journal, hydration, or hygiene data to Apple Health.</p>
+      <p>With your permission, Fernlet <strong>reads</strong> the following from Apple Health to reflect your day: heart rate, active energy, sleep analysis, step count, and workouts.</p>
+      <p>Fernlet <strong>writes</strong> to Apple Health only what you log yourself, and only in the categories you have separately granted — Apple asks per category, and declining any one of them simply turns that write off:</p>
+      <ul>
+        <li><strong>Workouts</strong> you log, so they count toward your Apple activity rings.</li>
+        <li><strong>Cycle data</strong>, if you use cycle tracking: menstrual flow, basal body temperature, cervical mucus quality, ovulation test results, and spotting. These are the clinical samples of your cycle, and they go to Apple Health so your own Health app shows a complete Cycle Tracking picture. <strong>The notes you write about your cycle are not among them</strong> — those stay sealed and encrypted on your device (Section 2).</li>
+        <li><strong>Sexual activity</strong>, if you use intimate logging: the event and, if you record it, whether protection was used. Your notes stay sealed on your device.</li>
+        <li><strong>Mindful minutes</strong>, when you finish a breathing session.</li>
+        <li><strong>Height and body mass</strong>, from the body profile you enter, when you turn on Health syncing for it.</li>
+      </ul>
+      <p>Fernlet <strong>never</strong> writes your journal text, your mood, your hydration, or your hygiene log to Apple Health.</p>
       <p>Health data accessed through HealthKit is used only on your device to compute your companion's state and your derived trends. It is <strong>never</strong> used for advertising, never sold, and never shared with us or any third party. Deleting Fernlet does not delete samples Fernlet wrote to Apple Health — remove those in the Health app if you wish.</p>
     </section>
 
@@ -180,7 +189,7 @@
         <li>Choose whether Fernlet's local data files are included in your device backup ("Include local data in iOS backup" — excluded by default for new installs; see Section 2).</li>
         <li>Set an optional <strong>duress PIN</strong>: a second app passcode with one response you choose — open a <strong>decoy</strong> view with sensitive content hidden (nothing is destroyed), perform a <strong>silent wipe</strong>, or trigger a <strong>recovery lock</strong> (both described in Section 12). Entering it looks exactly like a normal unlock — nothing on the screen, in the unlock's timing, or in the app's activity log gives away that a duress PIN is configured.</li>
         <li><strong>Reset app lock</strong> — permanently destroys every key that can open the sealed categories on this device (a crypto-erase): the sealed data on this phone becomes unreadable for good. A cloud copy in the opt-in encrypted sealed backup (Section 4), if you enabled it, is separate and survives a lock reset — turn that backup off to delete it.</li>
-        <li><strong>Export your data</strong> as a file you can save or share (this export excludes the encrypted sealed categories described in Section 2 to protect them).</li>
+        <li><strong>Export your data</strong> as a file you can save or share. The export is reached from behind a fresh biometric check, and it is <em>your</em> data, so it <strong>includes your journal entries</strong>. It leaves out period and cycle data, intimate-activity data, sensitive (Tier-2) memories, Worry Box notes, photo image data, and your private cryptographic keys. The file states its own contents in a preamble, so you can see exactly what you are about to share before you share it.</li>
         <li>Delete your iCloud copy.</li>
         <li>Delete your data.</li>
         <li>Manage or wipe the memories Fernlet keeps.</li>

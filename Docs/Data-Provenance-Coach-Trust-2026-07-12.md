@@ -1,7 +1,30 @@
 # Data Provenance & Coach Trust — Design Memo (2026-07-12)
 
-**Status:** Draft for review. No code yet. Supersedes nothing; extends the mesh/identity design in
-[FernletSpecificationV3.md](FernletSpecificationV3.md) and the proximity subsystem.
+**Status:** Design memo, **partially implemented** (as of 2026-08-20). Supersedes nothing; extends the
+mesh/identity design in [FernletSpecificationV3.md](FernletSpecificationV3.md) and the proximity
+subsystem.
+
+> ⚠️ **The header used to say "No code yet." It is no longer true, and the split matters**, because
+> the two halves of this memo have very different build status and a reader who assumes "none of this
+> exists" can easily build a second, conflicting coach trust path:
+>
+> - **Built** (2026-07-27, `fe81476`, Increment 10 of
+>   [`Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md`](Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md)):
+>   the §4.2 idea that *a coach is not a friend and does not use the friend vault* is now code —
+>   `FernletKit/Sources/ProximityKit/Trust/CoachSessionTrustPolicy.swift` answers trust from a
+>   remembered, mode-scoped `.trainer` vault record instead of the friend policy's unconditional yes,
+>   `CoachVerificationCeremony.swift` is the slot-independent coach ceremony (the friend QR ceremony is
+>   bound to `PeerSlot`, which a coach session has none of), and `TrainerAuditLog.swift` carries the
+>   provenance trail. **None of it has a production caller yet** — the coach session manager is unbuilt.
+> - **Not built:** §3.2's signed origin class and its per-class domain-separation tag (the identity
+>   envelope carries no origin-class field), §3.3's class ↔ ceremony cross-check, and all of §5 — there
+>   is **zero App Attest code anywhere in the tree** (`grep -r AppAttest` returns nothing).
+>
+> One premise also shifted underneath §5 and is worth reading before building it: the owner reversed
+> the coach channel model on 2026-07-26, making the **in-person mesh session the primary channel** with
+> iMessage + CloudKit as the off-week fallback. Pairing therefore always bootstraps in person, which
+> removes much of what the App Attest gate existed to solve on the remote path. Re-derive §5's value
+> against that model rather than inheriting it.
 
 ## 1. Goal
 

@@ -412,9 +412,43 @@ Home screen `SignalsCard` shows mood, energy, and readiness as chips. Tapping op
 
 AI tiers:
 1. Apple Foundation Models on-device by default.
-2. Third-party AI via OHTTP, explicit per-feature opt-in, off by default.
+2. Third-party AI, explicit per-feature opt-in, off by default. The transport originally specified
+   here was OHTTP; that tier has since been redesigned as the provider ladder
+   ([AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md) §8) — see §17.
 
-> **Implementation status (Phase S3 required before any OHTTP path):** Module boundaries (`PrivateHealthStore`, `PeriodContextBridge`, `PrivateMemoryStore`, `PrivateMediaStore`, `ContextBuilder`, `AIProviders`), typed per-request `AIContextPayload` allowlists, the local AI audit log, and the Memory Agent diagnostic filter are **required but not yet implemented**. Tier-2 memory must not reach any prompt except through the Memory Agent. No third-party or OHTTP AI path may be introduced until Phase S3 is complete and import-boundary build checks pass.
+> **Implementation status — Phase S3 is COMPLETE and enforced (corrected 2026-08-20).** This
+> paragraph previously read "required but not yet implemented" and made that the gate on any
+> third-party AI path. That was wrong, and dangerously so in both directions: it understated the
+> privacy protection the app actually ships, and it invited a reader to go *build* a wall that
+> already exists (or to treat the existing one as provisional and route around it). All four
+> required pieces shipped and are load-bearing today:
+>
+> - **Module boundaries.** `PrivateHealthStore`, `PeriodContextBridge`, `PrivateMemoryStore`,
+>   `PrivateMediaStore` and `AIProviders` are real SPM modules in `FernletKit/Sources/`. (The spec's
+>   `ContextBuilder` shipped under the name **`AIContext`** — same role: the AI-facing control plane
+>   that builds payloads, holds the audit log, the call quota, the model router and the Memory
+>   Agent.) A forbidden cross-wall `import` is a **hard build error**, not a review catch:
+>   `Scripts/spm-wall-check.sh` builds with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, and
+>   `Scripts/spm-wall-selftest.sh` plants a violation to prove the check still bites.
+> - **Typed per-request `AIContextPayload` allowlists.** `AIContext/AIContextPayload.swift` — a
+>   `Sendable` marker protocol whose conformers enumerate the exact fields that may enter a prompt.
+>   Anything not expressed as a payload field cannot reach a model. Each payload carries a frozen
+>   `payloadKind` token and `includedFieldNames`.
+> - **The local AI audit log.** `AIContext/AIAuditLog.swift`, device-local, recording `payloadKind`
+>   and field *names* only — never values. It is cleared by "Delete everything"
+>   (`aiAuditLogStore.clear`; see [PrivacyWipeCoverage.md](PrivacyWipeCoverage.md)).
+> - **The Memory Agent diagnostic filter.** `AIContext/MemoryAgent.swift` applies three layers to
+>   every Tier-2 record before it can reach a prompt: a fail-closed destination allowlist (only
+>   `companion-thought` payloads receive behavioral context), a recency/confidence filter, and the
+>   diagnostic-language post-classifier (`FernletDomainModel/DiagnosticLanguage.swift`), which the
+>   storage side reuses to screen memories before they are persisted (§8).
+>
+> **The invariant that remains, and is now the operative one:** Tier-2 memory must not reach any
+> prompt except through the Memory Agent, and no third-party or cloud AI path may be introduced
+> that reaches around these boundaries. `payloadKind` and `allowedPayloadKinds` are **frozen
+> English tokens** — the Memory Agent compares them by exact equality and its miss path is a silent
+> `return ""`, so localizing either side would strip behavioral memory from every companion thought
+> with no error anywhere. Do not translate them.
 
 Foundation Models notes from Apple documentation:
 - `SystemLanguageModel.default.availability` must be checked at runtime.
@@ -904,7 +938,17 @@ Third-party AI:
 
 ## 17. Third-Party Integrations and Cloud Fallbacks
 
-Default: all third-party AI off.
+Default: all third-party AI off. **Still true, and still the shipped behavior.**
+
+> **Superseded transport (noted 2026-08-20).** The OHTTP relay/gateway design below is retained for
+> its reasoning but is no longer the plan: it is superseded by
+> [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md) §8, which reaches the same
+> privacy property through Apple's Private Cloud Compute (which provides what OHTTP was
+> hand-rolling) and through BYOK, a direct user-authorized connection where OHTTP's
+> relay/gateway split buys nothing. Nothing on either track is wired today — `AIProviders` contains
+> only on-device Foundation Models providers plus the recipe web importer — so "all third-party AI
+> off" is a statement about the code, not just a default. The S3 precondition the old §7 status
+> block held this behind is met (§7); what gates the cloud tracks now is the ladder document.
 
 OHTTP architecture:
 - App encrypts payload for gateway.
@@ -918,19 +962,47 @@ Third-party AI cannot provide period-aware meal/workout adjustments because peri
 
 ## 18. App Store Compliance
 
-Privacy manifest declares:
-- Health and Fitness.
-- User Content.
-- Identifiers: public key only.
-- Diagnostics.
-- No tracking domains.
+> **Corrected 2026-08-20 — read this before filling in anything.** The five bullets that used to
+> stand here described a privacy manifest the app does not have, and they are exactly the kind of
+> text that gets retyped verbatim into App Store Connect. They claimed the manifest declares four
+> collected data types including **Diagnostics**. It declares none, and the app collects no
+> diagnostics at all. Declaring a collected type the app does not collect is not a harmless
+> over-disclosure: it is a false statement on a submission, and it contradicts the no-tracking wall
+> the app is built around. **Copy from the manifest files, never from this spec.**
 
-App privacy labels:
+Privacy manifest — what the three `PrivacyInfo.xcprivacy` files actually declare
+(`App/Fernlet/`, `App/FernletWidgets/`, `App/FernletShareExtension/`; verified 2026-08-20):
+
+- `NSPrivacyTracking`: **false**, in all three.
+- `NSPrivacyTrackingDomains`: **empty**, in all three.
+- `NSPrivacyCollectedDataTypes`: **empty**, in all three. Nothing is declared as collected —
+  because nothing is. Apple's definition of "collect" is transmission off-device to the developer
+  or a third party; Fernlet has no server, and CloudKit sync writes to the *user's own* private
+  database in the user's own iCloud account, which is not developer collection. The one place this
+  needs a human's judgement is the opt-in client-side-encrypted uploads — see the label-review flag
+  below.
+- `NSPrivacyAccessedAPITypes`: declared, with reason codes. This is the **required-reason API**
+  key, a different question entirely ("why does this binary call this API?"), and declaring it is
+  not a collection disclosure. App target: `UserDefaults` (CA92.1), `FileTimestamp` (C617.1),
+  `SystemBootTime` (35F9.1). Widgets: `UserDefaults` (1C8F.1 — the app-group reason). Share
+  extension: none.
+- **Diagnostics: not collected, not declared, and there is no code that could.** No crash reporter,
+  no analytics SDK, no MetricKit upload. `FernletAuditLog` writes to Apple's on-device unified log
+  (`os.Logger`, subsystem `com.fernlet`) and to a device-local file the wipe clears; neither leaves
+  the phone. `NoTrackingBoundaryTests/privacyManifestsDeclareNoTrackingOrAdvertising` fails the
+  build if any of the three manifests grows a tracking flag, a tracking domain, or a collected type
+  flagged for tracking/advertising/analytics.
+
+App privacy labels (App Store Connect — a separate questionnaire from the manifest above, and the
+owner's to answer; these are the facts to answer it from):
 - Data Used to Track You: None.
 - Data Linked to You: Health and Fitness (meals, workouts, sleep, hydration, hygiene — synced to user's own CloudKit private database), User Content (journal entries — synced to user's own CloudKit private database).
 
 > **Label review needed (widened 2026-08-11, security-hardening round):** journal text IS now sealed and excluded from plaintext CloudKit sync, so the "User Content (journal entries — synced to CloudKit)" label as originally written is stale. The opt-in client-side-encrypted uploads now cover journal narratives, intimacy logs, sensitive memory, period data, AND photos (Phases 3 and 5) — one review item covers them all: the privacy-label classification for every opt-in client-side-encrypted payload type must be reviewed with legal before shipping. The in-app privacy-policy text and nutrition labels were already corrected for the photo upload in Phase 5. **Ship blocker:** `SealedPhotoRecord` (queryable) is still owed a Production CloudKit schema promotion (`Docs/CloudKit-Schema-Deploy.md`) before any build ships with the photo-backup toggle reachable.
-- Data Not Linked to You: Diagnostics.
+- Data Not Linked to You: **None — corrected 2026-08-20.** This line used to read "Diagnostics",
+  matching the equally-wrong manifest bullet above. There is no diagnostics collection anywhere in
+  the app, so answering "Diagnostics" on the questionnaire would declare a data flow that does not
+  exist. Leave the category unselected.
 
 Note: CloudKit private database sync means health and journal data is associated with the user's Apple ID in Apple's infrastructure, changing the "Not Linked to You" classification for those types. Encrypted sealed backup (period data, sensitive memory, journal narratives, intimacy logs) and the encrypted photo backup may be considered separately — review with legal before shipping.
 

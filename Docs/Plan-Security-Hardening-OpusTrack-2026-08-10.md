@@ -1,5 +1,21 @@
 # Plan — Security hardening, OPUS TRACK: scoped-unlock rebase, crypto-erasure, salted escrow, backup coverage, SE-binding, media split, duress PIN (2026-08-10)
 
+> **Status: FULLY EXECUTED 2026-08-11.** Every workstream in this track shipped and merged — P0a
+> `801a3e4`, P1a `aaa4aac`, P2 `2faf53e`, P3 `4ed7437`, P4 `9f9af1b` (owner GO recorded; the scrypt
+> fallback is gone and that step is irreversible), P5 `9388aec`, P7 `d43bbce`. The ledger and the
+> per-phase progress log in
+> [`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) are the authoritative
+> record of what each phase actually landed, including the review findings it confirmed and the
+> residuals the owner accepted. **Do not execute this file as a plan** — its steps describe a tree
+> that no longer exists (it was written against `main` @ `eeec53e`, before the phases rewrote the very
+> seams it cites), and re-running them would fight the shipped design.
+>
+> Two obligations from this track are still open and are tracked in
+> [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md): promoting `SealedPhotoRecord` to the
+> **Production** CloudKit schema (P5 — without it sealed photo backups cannot be restored and the
+> delete-everything teardown is silently incomplete), and P5 §14's defaulted-out follow-up to seal the
+> plaintext friend-wall index `MeshPhotoCache.json`.
+
 **Status:** Approved build plan, Opus review track. Base branch `main` @ `eeec53e`; the first work is
 the crypto-seam rebase of the unmerged `claude/scoped-unlock-per-screen` (`b293238`) onto current
 `main`, resolving its `unlock()`/`configure()`/`reset()` conflicts with the `d68ca9a` SE-wrap. Every

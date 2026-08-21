@@ -1,7 +1,36 @@
 # Custom Clothing, Friend Shops & Coins — Implementation Plan
 
-**Status:** Increment 1 shipped (design/wear your own items) + code-reviewed + fixed. Increments 2–3 pending.
-**Branch:** `claude/wonderful-bardeen-1969f6` (Increment 1 work is **uncommitted** as of 2026-06-29).
+**Status: ALL THREE INCREMENTS SHIPPED.** Increment 1 (grid editor, wardrobe, wear-your-own-items)
+shipped as `77c1a8e`; **Increment 2** (coins as an append-only ledger) as `303317a`;
+**Increment 3** (the in-person friend shop) as `3250d33`, with the shop later moved onto the
+consolidated mesh in `256b691`. The code:
+
+| Increment | Where it lives now |
+|---|---|
+| 1 — design & wear | `App/Fernlet/CreationStudioView.swift`, `App/Fernlet/WardrobeView.swift` |
+| 2 — coins | `FernletKit/Sources/FernletDomainModel/CoinEconomy.swift`, `FernletKit/Sources/StoreCore/CoinLedgerService.swift`, `FernletKit/Sources/FernletPersistence/CoinLedgerRepositoring.swift`, `FernletKit/Sources/CloudKitSync/CoinLedgerRepository.swift` |
+| 3 — friend shop | `FernletKit/Sources/ProximityKit/ClothingSharing/MeshClothingShop.swift`, `FernletKit/Sources/FernletDomainModel/ClothingShopLimits.swift`, `App/Fernlet/FriendShopView.swift`, `App/Fernlet/ShopAlert.swift` |
+
+> ⚠️ **This header read "Increments 2–3 pending" for roughly seven weeks after both had shipped, and
+> the error propagated** — `Docs/FileIndex.md` still repeats it verbatim in its Docs table. If you
+> arrived here from an index entry saying the coins or the shop are unbuilt, that entry is downstream
+> of this line, not independent evidence. Read §5 and §6 as the design record of shipped features:
+> they describe intended behaviour accurately, but their "Definition of done" checklists and session
+> prompts (§8) are for work that no longer needs doing, and re-running those prompts would rebuild
+> what is on `main`.
+>
+> Two stale references remain in the body and are not worth rewriting: the branch line above
+> (`claude/wonderful-bardeen-1969f6` was merged long ago; nothing here is uncommitted), and §6's
+> pointer to `Docs/Coin-Ledger-Design-2026-06-29.md`, which was one of the 33 archived plans removed
+> in the `9fb86a9` repo restructure. The ledger design it described is readable from
+> `CoinLedgerService.swift` and its doc comments.
+
+**Real-device validation:** the shop's two-device flow has its own checklist,
+[`Friend-Shop-Real-Device-Validation.md`](Friend-Shop-Real-Device-Validation.md), and — like every
+other P2P flow in this app — **there is no record of it ever having been run on two physical
+devices**. That is tracked as the largest unverified risk in
+[`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) §0.
+
 **Owner-facing memory:** `~/.claude/.../memory/custom-clothing-feature-2026-06-29.md`.
 
 ## How to use this doc

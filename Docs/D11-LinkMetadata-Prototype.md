@@ -1,5 +1,17 @@
 # D11 Prototype — Do sender-supplied `LPLinkMetadata` titles survive into the sent iMessage bubble?
 
+**Status: never run.** The results table below still has every blank empty ("Tested on: iOS ______"),
+and no answer to D11 is recorded anywhere in the tree. The DEBUG-only harness
+`App/Fernlet/LinkMetadataPrototypeView.swift` is still present and still unwired — which is what the
+plan intended ("delete once D11 is decided"), so its presence is evidence the decision has not been
+made, not that it was forgotten.
+
+**The question also demoted itself.** On 2026-07-26 the owner reversed the coach channel model: the
+**in-person mesh session is the primary channel** and iMessage + CloudKit are the off-week fallback
+(see the ⚠️ banner on §3.3 of the coach spec). D11 governs the look of a *link bubble* on the
+secondary path, so it is no longer on the critical path for the coach feature — run it before
+building the remote fallback, not before the in-person session.
+
 **Question (spec D11, [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md) §3.3):**
 when Coach hands a plan link to the share sheet with custom `LPLinkMetadata`
 (title = "7/19–7/26 Workouts"), does the **sent** Messages bubble show that title — or does

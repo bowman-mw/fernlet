@@ -2,7 +2,13 @@
 
 This index maps the core store, repository, persistence, and extracted store service functions to their responsibilities. Use it before adding data mutation, save/load, derived signal, retry queue, saved recipe, launch preparation, storage preference, or sealed-buffer behavior so existing lifecycle code is reused instead of duplicated.
 
-**Last refreshed: 2026-08-09.** This pass added the AI routing/budget seam (gate, router, quota, audit log), the `AppendOnlyRowStore` engine and the three ledger services built on it, `RowPayloadCoders`, and the CloudKit heart-drop transport.
+**Last refreshed: 2026-08-20.** This pass removed a hotspot row and a whole section for
+`BundledFoodSeedingService`, a type that no longer exists in any form; corrected the
+`loadPersistentStores` entry, which advertised a corrupt-store recovery capability the app does not
+have; re-pointed the `Models.swift` section at the `FernletDomainModel` files it was split into; and
+added the localization token/display rule. The 2026-08-09 pass added the AI routing/budget seam
+(gate, router, quota, audit log), the `AppendOnlyRowStore` engine and the three ledger services built
+on it, `RowPayloadCoders`, and the CloudKit heart-drop transport.
 
 
 ## Duplication Hotspots
@@ -21,13 +27,50 @@ This index maps the core store, repository, persistence, and extracted store ser
 | AI retry queue lifecycle | `AIRetryQueueService.queueMealRetry(_:)`, `clear(id:)`, `apply(_:)`, `reset()` |
 | Derived signal rebuilds | `DerivedSignalsService.rebuild(...)`, `scheduleDeferredRebuild(...)`, `DerivedSignalsRebuilder.rebuild(...)`, `DerivedSignalFactory.makeSignals(...)`. 2026-08 consolidation: the FeelingTag-to-mood-score table previously duplicated in `DerivedSignalFactory` and `TierTwoMemoryEngine` was consolidated into `FeelingTag.moodScore` (LocalPersistence/FeelingTagMoodScale.swift). |
 | Saved URL recipe persistence and logging | `SavedRecipeService.add(_:)`, `update(_:)`, `delete(_:)`, `makeMeal(from:mealType:)`. 2026-08 consolidation: the service's debounce/pending-write plumbing now sits on the shared `DebouncedRowBuffer` (StoreCore/PendingWriteBuffer.swift), and the cloned per-row ledger repositories (coin/milestone/custom item) were consolidated onto the generic `AppendOnlyRowStore` engine (CloudKitSync). |
-| Bundled catalog loading | `BundledFoodSeedingService.load()`, `FernletStore.ensureBundledFoodItemsSeeded()` |
+| Bundled catalog loading | `FoodCatalog.bundled(bundle:)` + `FoodCatalog.setUserItems(_:)` (FoodCatalog module), and `attachBrandedSource(_:)` / `detachBrandedSource()` for the On-Demand-Resource branded catalog. There is nothing to *seed*: the ~13k bundled foods are a read-only SQLite store queried on demand, so `DiaryStore.ensureBundledFoodItemsSeeded()` and `loadBundledFoodItemsForLaunch()` are deliberate no-op shims kept only so the launch/UI call sites keep a stable seam. `BundledFoodSeedingService` is GONE — if you are here because an older copy of this index sent you to it, do not recreate it. `FoodDataCatalog` is generation-time only (`foodItems(from:)`, `sourceJSONFoodItems(directory:)`); the app never reads the source JSON at runtime. |
 | Launch photowall/day summary/companion thought prep | `LaunchPreparationService.prepare(store:)`, `PhotowallPhotoSelector.selectPhotoIDs(...)` |
 | Keychain-backed storage preferences | `StoragePreferencesStore.update(_:)`, `StoragePreferences.defaultHealthKitCapabilityEnabled`. 2026-08 consolidation: the last inline duplicate of the preferences load (in `PersistenceController.shared`) was consolidated onto `StoragePreferencesStore.currentPreferences()`. |
+| A user-visible string on a persisted model | FORK IT. See "Tokens vs. display" below — localizing a `rawValue` that a repository writes is silent data loss. |
+
+## Tokens vs. display
+
+Localization Phase 1 (2026-08-19) drew a line through every string in the codebase, and this
+subsystem is on the dangerous side of it: **what a repository writes is a token, and tokens are
+English forever.** Persist on the token, sign the token, prompt with the token, compare against the
+token; render the label. Never the reverse, and never localize a raw value in place — the sealed
+columns decode with `compactMap`, so a row whose key no longer matches is not an error, it is a row
+that quietly disappears.
+
+The types that were forked, and what to write:
+
+| Type | Persist / compare | Render |
+| --- | --- | --- |
+| `CareGroup` | `token` (== the frozen `rawValue`) | `label` |
+| `MealConfidence` | `token`; `legacyTokens` maps the pre-fork English phrases already sitting in users' blobs back to a case | `label` |
+| `MealType` | `rawValue` (FROZEN — persisted on every meal AND the vocabulary the meal-parsing prompt hands the model, round-tripped as `MealType(rawValue:)`) | `displayName` |
+| `WorkoutType` | `rawValue` (FROZEN — persisted on workout rows, matched by `WorkoutExerciseCatalog.inferType`, and part of the trainer export; the four legacy spellings stay decodable) | `displayName` |
+| `CompanionState` | `rawValue` (FROZEN — persisted on `DailyHealthScore`, byte-mirrored by `WidgetCompanionState` in a SEPARATE PROCESS via the app-group snapshot, and a field of the Coach export schema) | `displayName` |
+| `CoachPlanTokens` vocabularies | the token vocabularies, which are also what the export prompt publishes to plan authors | the app's own copy |
+
+`Tests/FernletTests/LocalizationBoundaryTests.swift` is the wall: it pins those raw values case by
+case and grep-walls `String(localized:)` inside `FernletKit/Sources` for the `bundle: .module`
+argument a package needs (without it the lookup resolves against `Bundle.main`, finds nothing, and
+silently returns the English literal). Run `Scripts/sync-string-catalogs.sh` after adding or changing
+a user-facing string and commit the catalog diff with the code change.
 
 ## Store And Snapshot Contract
 
-### `Models.swift`
+### Domain value types — `FernletKit/Sources/FernletDomainModel/` (formerly `Models.swift`)
+
+`Models.swift` no longer exists. The SPM carve-up split it into the nonisolated, portable value
+types of `FernletDomainModel`, and the rows below now live in:
+`NutritionModels.swift` (meals, macros, micronutrients, food items, recipe ingredients, meal types),
+`WorkoutModels.swift` (workouts, workout types, the exercise catalog),
+`WellbeingModels.swift` (`FernletDay`, `HealthDailyContext`, hygiene/personal care, `MemoryNote`,
+`GoalType`), `SettingsModel.swift` (`FernletSettings`, `UserNutritionProfile`, nutrition targets,
+quick-log shortcuts), `NavigationEnums.swift` (`HomeWidget`, shortcut normalization), and
+`CompanionModels.swift` (`CompanionState` and friends). Grep the symbol, not the filename — the
+split is by concern, not alphabetical.
 
 | Function Or Type | What It Does |
 | --- | --- |
@@ -41,7 +84,7 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `FernletShortcut.selectableQuickLogItems(allowsIntimacy:)` | Returns shortcut options available for settings customization. |
 | `UserNutritionProfile.weightKilograms` / `heightCentimeters` | Converts imperial profile fields for nutrition target math. |
 | `Meal.calories` | Returns the current macro-derived calorie total. |
-| `Meal.copyForToday()` | Copies a meal with a new ID and current logged timestamp for repeat logging. |
+| `Meal.copyForToday(mealType:)` | Copies a meal with a new ID and current logged timestamp for repeat logging, optionally re-slotting it. |
 | `Meal.init(from:)` | Decodes meals while preserving compatibility with older macro, source, confidence, component, and photo fields. |
 | `Macros.calories` | Computes calories from protein, carbs, and fat. |
 | `Micronutrients.totals(for:)` | Aggregates micronutrient snapshots across meals. |
@@ -274,9 +317,12 @@ The journal-sealing rows above (`activateNoLockJournals()` through `migrateExist
 | `activeStoreDescription` / `activeStoreURL` | Expose the current persistent store metadata. |
 | `makeContainer(inMemory:preferences:storeURL:iCloudAvailabilityOverride:)` | Builds the correct persistent container and store description for in-memory, local, or CloudKit-backed modes. |
 | `configure(_:inMemory:preferences:storeURL:iCloudAvailabilityOverride:)` | Sets file protection, history tracking, remote-change posting, migration, store URL, backup behavior, and CloudKit options. |
-| `loadPersistentStores(for:preferences:inMemory:recoverOnFailure:)` | Loads stores synchronously, falls back from CloudKit no-account errors, and can destroy/recreate corrupt stores when recovery is allowed. |
-| `loadPersistentStoresAsync(for:preferences:inMemory:)` | Async store loading path used by reload, with CloudKit no-account fallback. |
-| `applyBackupExclusionIfNeeded(preferences:storeDescription:inMemory:)` | Excludes the store file from iOS backup when preferences request it. |
+| `loadPersistentStores(for:preferences:inMemory:historyRetention:)` | Loads stores synchronously and RETURNS whether the load failed (latched into `didFailToLoad`). Its only recovery is the CloudKit **no-account** case (`NSCocoaErrorDomain` 134400): it clears `cloudKitContainerOptions` and retries local-only, because the store is healthy and only mirroring is unavailable. Every other error is reported, not repaired. |
+| `loadPersistentStoresAsync(for:preferences:inMemory:historyRetention:)` | The `async throws` path used by `reload(with:)`, with the same no-account fallback and the same "no other recovery" rule. |
+| `finishSuccessfulLoad(container:preferences:storeDescription:inMemory:historyRetention:)` | The single funnel every successful load goes through (first load, no-account retry, both reload variants): backup exclusion, then the local-only history prune. |
+| `localOnlyHistoryRetention` / `pruneUnconsumedHistory(before:in:)` | Persistent history is always ON (remote-change notifications need it), but only a CloudKit mirroring delegate ever CONSUMES and trims it — so on a store loaded without CloudKit options (sync off, the cold-launch default, or no iCloud account) the history tables grew for the life of the install. The prune drops everything older than the 7-day window on a background context; a prune failure is audit-logged, never allowed to fail the load. |
+| `didFailToLoad` / `PersistenceStoreLoadError.primaryStoreUnavailable` | The latch and the user-facing error the app-side startup flow throws from it. The copy deliberately stresses that **data was not deleted** and points at the two usual causes (device just restarted and still locked, storage full). |
+| `applyBackupExclusionIfNeeded(preferences:storeDescription:inMemory:)` | Excludes the store file from iOS backup when preferences request it, `includeSupportDir: true` so the sibling `.<StoreName>_SUPPORT/` directory CloudKit provisions for mirroring metadata is covered too. |
 | `configureViewContext(for:)` | Sets merge policy and automatic parent-change merging. |
 | `bindRemoteChanges(to:)` | Bridges Core Data remote-change notifications into `remoteChangePublisher`. |
 | `saveAndLockViewContext(_:)` | Saves pending changes and resets the old view context before reload. |
@@ -285,6 +331,26 @@ The journal-sealing rows above (`activateNoLockJournals()` through `migrateExist
 | `makeFernletDatabaseRecordEntity()` | Defines the single blob record entity for `LocalFernletDatabase` payload data. |
 | `makeSavedRecipeRecordEntity()` | Defines saved URL recipe records in the main store. |
 | `CoreDataModelBuilding.makeAttribute(_:type:defaultValue:allowsExternalBinaryDataStorage:)` | The shared optional-attribute factory (FernletFoundation) both programmatic model builders now call; it replaced the private `makeAttribute(...)` copy in this file. |
+| `makeCustomItemRecordEntity()` / `makeCoinLedgerRecordEntity()` / `makeMilestoneLedgerRecordEntity()` / `makeDayRecordEntity()` | The remaining programmatic entities: custom items, the two append-only ledgers, and the per-row `DayRecord` split. All cloud-safe; no sealed entity is ever modeled here (S3). |
+| `initializeCloudKitSchemaIfRequested(inMemory:)` / `performCloudKitSchemaDeploy()` / `cleanUpScratchStore(container:scratchURL:)` | DEBUG-only, launch-argument-gated schema deploy against a throwaway scratch store (see [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md)). Compiled out of Release entirely. |
+| `pruneUnconsumedHistoryForTesting(before:)` | Test seam for the prune above. |
+
+> **Correction (2026-08-20) — the app cannot recover a corrupt store, and has not been able to since
+> 2026-06-22.** This section described a `recoverOnFailure:` parameter and claimed the loader "can
+> destroy/recreate corrupt stores when recovery is allowed." That was true once: the original loader
+> took `recoverOnFailure` and, on a non-no-account error, called
+> `destroyPersistentStore(at:ofType:)` and reloaded. **A code review deleted that path in `863be33`**
+> — destroying a user's local records to make a load succeed is exactly the silent data loss this app
+> refuses — and this index never caught up.
+>
+> If you planned work on the strength of the old line, none of it is backed by code: there is no
+> corruption recovery, no "just let it rebuild" fallback, and no store to assert was destroyed. What
+> the loader does is retry local-only on the CloudKit no-account error and otherwise latch
+> `didFailToLoad`, which the app surfaces as `PersistenceStoreLoadError.primaryStoreUnavailable` —
+> copy that promises the user, in as many words, that their data was not deleted. Advertising a
+> recovery capability the app deliberately gave up is the worst kind of index error, because it is
+> the kind someone builds on.
+
 
 ### `CoreDataFernletRepository.swift`
 
@@ -485,13 +551,6 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 | `DebouncedAppendBuffer<Entry>` | The append-only variant shared by `CoinLedgerService` and `MilestoneLedgerService`; `enqueue(_:)` deliberately schedules nothing so callers batch N rows and call `scheduleSave()` once per burst. |
 | `DebouncedAppendBuffer.flush()` / `pending` / `clear()` | Same durability contract as the row buffer: `pending` is the sole un-persisted copy, cleared only after a confirmed append. |
 | `scheduleSave()` | Coalesces mutations into one debounced main-actor flush per burst; the task's weak self-capture keeps "owner gone → flush skipped" semantics. Private on `DebouncedRowBuffer` (the enqueues call it), public on `DebouncedAppendBuffer` (the ledger services call it once per batch). |
-
-### `BundledFoodSeedingService.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `init(loadBundledItems:)` | Stores an async loader, defaulting to a utility-priority bundled catalog load. |
-| `load()` | Runs once from `.notStarted`, publishes seeding/done state, and returns bundled food items. |
 
 ### `LaunchPreparationService.swift`
 

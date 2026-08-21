@@ -1,13 +1,21 @@
 # Fernlet Implementation Plan
 
-> **Status reconciled 2026-08-09.** This document is the **phase definition + rationale** reference;
-> the table below is its status layer, reconciled against the live tracker
-> ([RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md)) plus code spot-checks. The prose
-> inside each phase section is **as-written-at-the-time** and is not updated as work lands — read it
-> for intent, and take completion state from this table. For the fine-grained list of what is
-> actually left, the tracker remains authoritative.
+> **Status reconciled 2026-08-09; corrected against code 2026-08-20.** This document is the **phase
+> definition + rationale** reference; the table below is its status layer. The prose inside each
+> phase section is **as-written-at-the-time** and is not updated as work lands — read it for intent,
+> and take completion state from this table (plus any dated correction block inside a phase, which
+> always wins over the prose above it). For the fine-grained list of what is actually left, the
+> current tracker is [RemainingWork-2026-08-20.md](RemainingWork-2026-08-20.md); the
+> [2026-07-19 tracker](RemainingWork-2026-07-19.md) this table was originally reconciled against is
+> superseded.
+>
+> **Read the status layer with suspicion in one direction specifically.** Every error the 2026-08-20
+> accuracy sweep found in this file under-reported progress: shipped work still listed as pending,
+> and in one case (Phase 16) a *safety* item flagged open six weeks after it shipped. Before
+> building anything this table calls unbuilt, grep for it — the cost of the false negative here is
+> someone writing a second implementation over a working first one.
 
-## Phase status at a glance (2026-08-09)
+## Phase status at a glance (2026-08-09, corrected 2026-08-20)
 
 Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred/superseded · 🔜 next up
 
@@ -21,7 +29,7 @@ Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred
 | **M1** — Meal-tracking & food-search overhaul | ⚠️ | Core shipped (data-type classification, generic-first ranking, SQLite catalog). Residue: chain-restaurant importer, dynamic product-image discovery — see [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md). |
 | **P3** — Memory, derived signals, trends | ⚠️ | Derived signals + trends shipped. Outstanding: editable Core Memory UI, natural-language forget/edit, derived-signal inspection. |
 | **P4a** — Food KB, recipes, micronutrients | ⚠️ | Backend shipped (`micronutrientTotals(for:)`); no recipe-builder UI binding yet. |
-| **P4** — Ambient, recipe, day-history features | ⚠️ | Most ambient cards shipped; crisis nudge decided-SHIP but unbuilt (see Phase 16). |
+| **P4** — Ambient, recipe, day-history features | ⚠️ | Most ambient cards shipped, the gentle-offer nudge among them (see Phase 16 — this row previously called it unbuilt). |
 | **1** — Baseline hygiene & file split | ✅ | |
 | **2** — Scoring v3 | ✅ | |
 | **3 / S3** — Privacy modules, AI boundary, sealed stores | ✅ | The `FernletKit` carve-up + compile-time S3 wall, CI-enforced (`Scripts/spm-wall-check.sh`). One optional carve item remains (AI-file inversions, [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14). |
@@ -37,7 +45,7 @@ Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred
 | **9** — Cloud-assisted multi-person group sharing | ⏸ | Cloud cascading-trust for large group activities deferred by scope. |
 | **10** — Friends, hearts, activities, shops | ✅ | Includes remote send-heart (CloudKit E2EE dead-drop, opt-in, default OFF). |
 | **15** — Wardrobe, backgrounds, milestones, Creation Studio | ⚠️ | Increment 1 shipped; Increments 2–3 pending — [Custom-Clothing-Plan-2026-06-29.md](Custom-Clothing-Plan-2026-06-29.md). |
-| **16** — Ambient features | ⚠️ | Crisis nudge (`moodTrend` → First Aid) decided SHIP 2026-07-19, still unbuilt — closes a safety flag. |
+| **16** — Ambient features | ⚠️ | **Corrected 2026-08-20:** the `moodTrend` → First Aid nudge is BUILT, not pending — it shipped 2026-07-05 in the First Aid batch (`e3a3e1e`), two weeks *before* the decision round that queued it. See the Phase 16 section for what is and is not covered. |
 | **17** — Third-party AI via OHTTP | ⏸ | Superseded for the third-party tier by [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md) §8. Cloud/BYOK tracks gated. |
 | **18a** — iCloud sync + encrypted sealed backup | ✅ | Outstanding follow-up: BIP39 recovery codes. |
 | **18** — App Store readiness | ⚠️ | Code-side done. Remaining steps are **owner-only** in App Store Connect (hosted policy URL, support email, nutrition labels, encryption declaration) plus promoting the `HeartDrop` record type to the CloudKit Production schema. |
@@ -695,6 +703,40 @@ Exit criteria:
 - Ambient features are rate-limited and non-nagging.
 - No feature creates a streak or shame mechanic.
 
+> **Status correction, 2026-08-20 — the crisis/gentle nudge is BUILT.** Every status layer in this
+> repo (this plan's table, the P4 row, the owner queue below, and the RemainingWork trackers) has
+> carried "crisis nudge decided SHIP 2026-07-19, still unbuilt" as an open **safety** item. It is
+> not open, and leaving it flagged is the expensive kind of wrong: it puts a safety-shaped task at
+> the front of a queue where someone would build a *second* nudge over the top of the working one.
+> What actually exists, verified against code:
+>
+> - `App/Fernlet/GentleOffers.swift` — `GentleOfferEngine`, a pure, deterministic gate. It opens on
+>   either the opt-in body-signals reading being `.tense`/`.needsCare`, **or** the `moodTrend`
+>   derived signal reading `"needs gentleness"`.
+> - `App/Fernlet/AmbientCards.swift` — the Home "A gentle offer" card the engine drives. Accepting
+>   routes into the existing First Aid surface (`activeSheet = .firstAid(.breathing)` /
+>   `.firstAid(.worryBox)`); the third rotation, a short walk, is a send-off with no in-app tool.
+> - Both landed 2026-07-05 in commit `e3a3e1e` ("First Aid kit (Batch B): breathing, grounding,
+>   sealed Worry Box, gentle offers") — *before* the 2026-07-19 decision round that recorded it as a
+>   thing to go build. The decision round was reading the app, not the code.
+> - Rate-limiting is exactly what the exit criteria above ask for: at most one offer per day,
+>   persisted, and **dismissing consumes it just as accepting does** — declining is never punished
+>   with a repeat.
+>
+> **The one genuine residual, stated precisely.** The 2026-07-19 note asked for a trigger on
+> `moodTrend == declining`; the shipped gate is `"needs gentleness"`. Both are real emitted values
+> of that signal (`FernletKit/Sources/LocalPersistence/DerivedSignalFactory.swift`), and
+> `"needs gentleness"` is the *acute* one — it pre-empts the trend comparison entirely whenever a
+> recent day scored ≤ 0.4. `"declining"` is the milder case: a downward drift with no acute low day.
+> So the nudge fires on the heavier signal and stays quiet on the drift. Widening it to `"declining"`
+> is a deliberate product call against the "non-nagging" exit criterion above, not a missing
+> trigger — and safety-adjacent design deserves that argument made explicitly rather than settled by
+> a stale checkbox.
+>
+> Separately worth knowing: the crisis line itself (`CrisisResources`, region-keyed) is a **static,
+> always-visible** row on the First Aid hub — never conditional, never triggered, never tracked. The
+> nudge is an enhancement to a working safety net, not the net.
+
 ## Phase 17 — Third-Party AI via OHTTP
 
 Goal: optional advanced model fallback with explicit privacy limits.
@@ -800,17 +842,47 @@ manager must pass a real `localCapabilities` array or wire2 silently degrades to
 coach channel. Detail: [Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md](Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md)
 Increment 10 + the "Coach channel model" note.
 
-**2 — The owner-decided queue from 2026-07-19 (small, none built).** Crisis nudge (Phase 16 —
-closes a safety flag); body-photo lock-setup nudge; barcode web UPC lookup behind
-`webNutritionLookupEnabled`; wire `MeshAdmissionPromptSheet`. Plus the dead "Request access" button
-in Settings → Move, which advertises a shipped feature as unbuilt. See
-[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §2–§3.
+**2 — The owner-decided queue from 2026-07-19 (partly built — corrected 2026-08-20).** This
+paragraph used to read "small, none built", and two of its four items had in fact shipped:
+
+- **Crisis nudge — BUILT**, and built two weeks *before* the decision that queued it. See the status
+  correction in the Phase 16 section; the only thing still open there is a product argument about
+  whether to widen the trigger from `"needs gentleness"` to `"declining"`, not an unwritten feature.
+- **`MeshAdmissionPromptSheet` — WIRED**, and generalised: it is now the shared
+  `App/Fernlet/JoinPromptSheet.swift` with two live call sites (`ActivitiesView`,
+  `DisposableCameraView`).
+- **Body-photo lock-setup nudge** — still open.
+- **Barcode web UPC lookup behind `webNutritionLookupEnabled`** — still open; note neither candidate
+  host is contacted today (USDA ships bundled offline), so this is new egress, and any host added
+  for it must be allowlisted in [No-Tracking-Wall.md](No-Tracking-Wall.md) §3 in the same commit or
+  CI fails.
+- The Settings → Move "Request access" button is **half-fixed** — the dead control is gone, but the
+  screen now carries different copy denying a shipped feature.
+
+The current tracker is [RemainingWork-2026-08-20.md](RemainingWork-2026-08-20.md), which supersedes
+[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) and carries its own reconciliation of
+these items. **Its §2.8 still lists the crisis nudge as untriggered** — it is not in this document's
+ownership to edit, but a reader hitting that entry should come back to the Phase 16 correction
+above, which was checked against the code.
 
 **3 — Triage [Doc-Pass-Anomalies-2026-08-04.md](Doc-Pass-Anomalies-2026-08-04.md).** Never triaged.
 Several entries are real defects rather than smells — notably the `PeriodTrackerStore.loadEntries`
 crash-on-duplicate-`hkExternalUUID`, the in-session photo save that skips rehydration, and the
 in-app privacy policy still claiming 18+ for intimacy where the shipped gate is 16+.
 
-**Then, unsequenced:** localization Phase 0 (live locale bugs even in English), multi-device without
-iCloud Phases 2–3, BIP39 recovery codes, Background App Refresh, the memory-controls suite, and the
-coach dead-drop (Increment 9) as the secondary channel.
+**Then, unsequenced:** multi-device without iCloud Phases 2–3, BIP39 recovery codes, Background App
+Refresh, the memory-controls suite, and the coach dead-drop (Increment 9) as the secondary channel.
+
+> **Localization removed from this list 2026-08-20 — Phases 0 and 1 have merged.** This line used to
+> lead with "localization Phase 0 (live locale bugs even in English)". Phase 0 (the locale-correctness
+> fixes, `65c477d`), Phase 1a (string-catalog plumbing, `89fd6c9`) and Phase 1 (token/display forks
+> and localizable UI, `a4e0a74`) are all on `main`. What landed with them is a **new invariant a
+> contributor can break silently**, so it belongs in the plan even though the phase is done: several
+> enums now carry a **frozen `rawValue` token** used for persistence, wire format and AI prompts, plus
+> a **separate localized label** for display — `CareGroup`, `MealType`, `WorkoutType`,
+> `CompanionState`, `MealConfidence`, `CoachPlanTokens`, and ProximityKit's `PayloadSummary` titles.
+> Localizing the token half corrupts stored data or signed bytes; localizing nothing leaves the UI
+> untranslated. `Tests/FernletTests/LocalizationBoundaryTests.swift` is the wall, and
+> `Scripts/sync-string-catalogs.sh` keeps the catalogs in step. Remaining localization work is the
+> es/fr/de translation passes themselves — see
+> [Localization-Plan-2026-07-19.md](Localization-Plan-2026-07-19.md).

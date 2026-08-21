@@ -1,8 +1,11 @@
 # Privacy wipe coverage
 
-**Contract:** every persistence surface in the app appears in exactly one of the two tables below —
-either it is cleared by "Delete everything" (`FernletStore.deleteAllData`), or it is a documented
-deliberate exception. `Tests/FernletTests/PrivacyWipeCoverageTests.swift` enforces the first table
+**Contract:** every persistence surface in the app is accounted for below — either it is cleared by
+"Delete everything" (`FernletStore.deleteAllData`), or it is a documented deliberate exception, or
+(third table, added 2026-08-20) it is an **open gap**: something the wipe does not reach and nobody
+decided should survive. The third table should always be empty; that it is not is the honest state
+of the app, not a redefinition of the promise.
+`Tests/FernletTests/PrivacyWipeCoverageTests.swift` enforces the first table
 mechanically, in both directions: it scans the wipe path for one token per row, so removing a wipe
 call (or adding a store without wiring + documenting it) fails the suite — and every row's token
 must appear in the test's manifest (`everyDocumentedWipeRowIsEnforcedByTheManifest`), so a
@@ -15,10 +18,41 @@ same call spelled somewhere else in the 4,000-line store — so a deleted wipe c
 suite green while the wipe was broken.
 
 Every keychain service the app uses is named in one of the tables, so a `grep -r 'com\.fernlet\.'`
-over the sources and the two tables below return the same set.
+over the sources and the two tables below return the same set. **That sentence is true of keychain
+SERVICES and of nothing else** — see the warning immediately below.
 
 Pattern borrowed from bitchat's `privacy-assessment.md` panic-wipe checklist (bitchat adoptions
 Increment 1, Docs/Plan-Bitchat-Adoptions-2026-07-25.md).
+
+> ### ⚠️ The completeness half of that contract is NOT mechanically enforced — and it had drifted
+>
+> **2026-08-20 doc-accuracy sweep.** Read the contract paragraph above with this correction in
+> hand, because as written it over-promises, and a reader who trusted it would have concluded that
+> anything absent from both tables does not exist.
+>
+> What the suite actually enforces is **correspondence**, in both directions, over the *cleared-by*
+> table only: every documented row names a token the manifest enforces, and every manifest token is
+> documented. That is a strong check on the wipe not silently LOSING a call it already makes. It is
+> not a check on the wipe COVERING everything, and it structurally cannot be:
+>
+> - The scan is bounded to the bodies of `deleteAllData` and `resetAll`. A surface the wipe never
+>   touches leaves no trace in those bodies, so there is nothing for a scan to miss.
+> - There is a discovery floor for **keychain services** (`everyKeychainServiceIsDocumented` walks
+>   the sources for `…service`-bound `com.fernlet.*` literals and fails on any not named in this
+>   doc). There is **no equivalent for `UserDefaults` keys** — they have no `…service`-shaped
+>   binding to anchor discovery on, so per-key pins are the only tool, and today exactly one exists
+>   (the prior-use marker).
+>
+> Consequence: a new `UserDefaults`-backed store can ship, never be wiped, and never be documented,
+> with the whole suite green. That is not hypothetical — the 2026-08-20 sweep found **eight such
+> keys in neither table**, and four of them are surfaces the wipe genuinely does not reach. Those
+> four are recorded below in **"Open gaps"**, not quietly folded into the exceptions table: they are
+> code defects awaiting a fix or an owner decision, and this doc will not launder them into
+> "by design" by writing them down.
+>
+> **Until a discovery floor for defaults keys exists, the completeness half of this contract is a
+> human promise, kept by review.** If you add a `UserDefaults`-backed store: wire its clear, add its
+> row, add its token — and if you decide it should survive, say why in the exceptions table.
 
 ## What "cleared" honestly means for the sealed store
 
@@ -139,8 +173,35 @@ repository purge takes it.)
 | Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing live; it is re-used for the next note written while locked. **Asymmetry, flagged owner call (Opus track §12):** the journal and Worry Box device keys ARE deleted in the same funnel, and under the crypto-erasure baseline the difference now matters — the sealed store gets its file rebuilt, but the buffer is a plain file whose deleted bytes get no equivalent treatment, so the surviving key is what would keep any file-system residue of it openable. Deleting it in the funnel is the symmetric fix; it is deliberately NOT done here pending the owner's call | — |
 | **Sealed-store divergence latches** — `UserDefaults` (device-local, non-synced): `fernlet.menstrualNarrative.everStored`, `fernlet.journalNarrative.everStored`, `fernlet.intimacyLog.everStored` | One bit each: "this install held cycle / journal / intimacy rows at some point". They must OUTLIVE the wipe — that is the whole mechanism. Every sealed repository's `deleteAll()` SETS its latch, so after "delete everything" the store reads empty-**and**-diverged; a sealed-backup chunk that survived a failed delete then cannot be restored back onto the device at the next launch. Clearing them here would make the wipe undoable by a stale cloud copy. They hold no user content — one boolean, no timestamps, no counts — and a genuine reinstall clears them for free when iOS drops the app container, which is exactly the "never populated" state a real new device should have | Dies with the app container on uninstall / device reset |
 | **Phase-6 prior-use marker** — `UserDefaults` `com.fernlet.launch.priorUseRecorded` (device-local, non-synced) | One bit: "Fernlet has run on this install before" — `FernletPriorUseMarker`, the fresh-vs-existing input to the backup-exclusion launch gate (`BackupExclusionLaunchGate`). It must OUTLIVE the wipe for the same reason the divergence latches above do: the wipe's preference reset clears `backupExclusionChoiceMade`, so the next launch re-runs the gate — and with the marker cleared, that launch would classify a wiped-but-reused device as FRESH and silently adopt the excluded default over it, the exact silent flip the gate exists to prevent. Kept, the post-wipe launch shows the honest one-time prompt again (pinned by `BackupExclusionLaunchGateTests/priorUseMarkerSurvivesPreferenceResetSoPostWipeLaunchPromptsInsteadOfSilentlyFlipping`). It is a trace-of-use bit — one boolean, no timestamps, no counts — in the same class as the divergence latches, and it discloses nothing the surviving `hasCompletedOnboarding` key (which the gate ORs in as its legacy evidence) does not already | Dies with the app container on uninstall / device reset |
+| **One-time workout backfill latch** — `UserDefaults` `fernlet.healthkit.workoutBackfillCompleted` (device-local, non-synced) | *Added to this table 2026-08-20 — it was in neither table before, and keeping it is not merely defensible, it is load-bearing.* One bit: "the 30-day Health workout backfill has run on this install" (`HealthKitAnchorKeychain.shouldRunWorkoutBackfill`). Exactly the HealthKit-anchor argument two rows up: clearing it makes the next launch re-import the trailing 30 days of Health workouts straight back into the just-emptied day store, and with sync on, re-upload them. It records that Fernlet read, never what it read | Dies with the app container on uninstall / device reset |
+| **Saved-recipe legacy-migration latch** — `UserDefaults` `com.fernlet.savedRecipeMigrationCompleted` (device-local, non-synced) | *Added 2026-08-20.* One bit gating `SavedRecipeRepository`'s one-time JSON→Core Data migration, which fires only when the Core Data store is empty **and** the bit is unset. A wipe leaves the store empty by definition, so clearing the bit would re-run the migration on the next launch and resurrect every recipe still in the legacy JSON file. Same class as the two latches above: keeping it is what makes the wipe stick. No content, one boolean | Dies with the app container on uninstall / device reset |
+| **Home photowall rotation history** — `UserDefaults` `fernlet.homePhotowall.previousPhotoIDs` (device-local, non-synced) | *Added 2026-08-20.* The ids of the friend photos the wall showed last launch, so it rotates instead of resurfacing the same faces (`PhotowallPhotoSelector`). It holds ids of photos on the **friend photo wall — which this funnel keeps by design** (see that row above), so clearing it would delete bookkeeping about data that is still there: not a privacy gain, just a worse wall next launch. It carries ids only — no names, no bytes, no timestamps — and it is overwritten wholesale on each selection. If the kept-photo-wall decision is ever reversed, this row must be reversed with it | Overwritten each launch; dies with the wall and with the app container |
+| **App Intent pending-sheet token** — `UserDefaults` `fernlet.intent.pendingSheet` | *Added 2026-08-20.* Which sheet a Siri/Shortcuts intent asked the app to open (`"meal"`, …) plus the request time. Self-clearing on the ReplayCache pattern: `consume()` removes it on read whether or not it is honored, and anything older than a 120-second expiry window is discarded. It names a screen, never content, and cannot outlive the next launch | Consumed on read; expires after 120 s |
+| **Appearance and tool preferences** — `UserDefaults`: `fernletAppearanceMode`, `fernletDarkModeEnabled` (legacy), `fernletCustomLightBackgroundHex`, `fernletCustomDarkBackgroundHex`, `fernlet.breathing.presetID` / `.minutes` / `.haptics` | *Added 2026-08-20 as a class, not one-by-one.* How the app should look and how the breathing timer should be configured. These are settings, not records: they describe the app's chrome, hold nothing about the user's days, and clearing them would only hand someone who just deleted their data a suddenly-unfamiliar app. Named here so the tables stay a complete inventory — the contract is that every surface is *accounted for*, not that every surface is data | Changed in Settings; dies with the app container |
 | ReplayCache | Memory-only, self-expiring (24 h); dies with the process | — |
 | Identity in OTHER devices' trust vaults | Friends' devices hold the OLD public key; nothing this device can delete remotely. The wipe breaks the pairing (new identity ≠ vault row), and friends see a stranger until re-friending in person | — |
+
+## Open gaps — surfaces the wipe does NOT reach, and should (found 2026-08-20)
+
+These are **not** deliberate exceptions and are deliberately not written into the table above. Each
+is a `UserDefaults`-backed surface that survives "Delete everything" because nothing clears it, not
+because someone decided it should survive. They are listed here so the inventory is honest while
+they are open; each one should either gain a wipe call plus a cleared-by row, or an owner decision
+plus an exceptions row. **Nothing here is enforced by the suite** — that is exactly the enforcement
+hole described at the top of this document.
+
+| Surface | What actually survives | Why it matters | Severity |
+| --- | --- | --- | --- |
+| **Health capabilities ever requested** — `fernlet.healthkit.requested-capabilities` (`HealthKitAuthorizationViewModel`) | The `HealthCapability` raw values the user has ever been prompted for — including **`cycleTracking` and `intimateLogging`** | The worst of the four, and the reason this section exists. HealthKit gives apps no way to ask "did I already show this prompt?", so the view model remembers it in plain `UserDefaults` to distinguish "never asked" from "asked and denied". Nothing clears it — not the wipe, not `HealthKitService.disableIntegration()` (which clears the anchors but not this). After a user deletes everything *and* turns Health off, the phone still holds a plaintext record that this person once enabled intimate logging and cycle tracking. That is a disclosure about the user's body and sexuality surviving the one action the app promises removes their data, and unlike the sealed corpus it is not even ciphertext. It also rides into unencrypted device backups | **High** |
+| **Workout tombstones** — `fernlet.workout.tombstones` (`WorkoutTombstoneStore`, FIFO cap 200) | Up to 200 UUIDs of workouts removed locally whose app-authored Health delete never confirmed | Two problems, one row. (a) Privacy: a post-wipe device still carries 200 identifiers of things the user logged and deleted — no content, but a count and a shape. (b) Correctness, and it cuts against the user's own choice: a surviving tombstone tells the workout observer to **delete the matching Health sample and skip its import** (`WorkoutHealthKitSync`, the `isWorkoutTombstoned` branch). "Delete everything" asks separately whether to delete Apple Health entries; a user who answered *keep* can still have Fernlet-authored samples deleted afterwards by tombstones the wipe left behind. Narrow window — only ids whose delete never confirmed — but it is Fernlet deleting Health data the user explicitly asked it to keep | **Medium** |
+| **Companion petting state** — `fernlet.companionPets.count` / `.windowStart` / `.cooldownUntil` / `.settledLineShownFor` (`PetInteractionGovernor`) | How many times the companion was petted in the current rolling window, when that window opened, and when the settled period ends — timestamps, on the device | Interaction telemetry with clocks on it. The type has a `clearPersistentState(in:)` that does exactly the right thing, and its **only** caller is a `#if DEBUG` UI-test seam in `ContentView` — the wipe never calls it. Deliberately never synced (the doc comment says so), which makes the omission from the wipe look like an oversight rather than a decision. Low sensitivity on its own; it is a trace of when the user was last using the app, surviving a wipe | **Low** |
+| **Day-summary backfill day key** — `fernlet.daySummary.lastRunKey` (`LaunchPreparationService`) | One `yyyy-MM-dd` key: the last day the once-per-day summary backfill ran | A date the app was used, surviving the deletion of every day it describes. No content, and its functional effect post-wipe is benign (the backfill simply skips today). Listed for completeness, and because "one harmless date" is how every one of these starts | **Low** |
+
+Two notes on scope, so this section is not read as bigger or smaller than it is. **The sealed
+corpus is not implicated:** none of these four holds journal, cycle, intimacy, Worry Box or photo
+content — the sealed stores are covered by the cleared-by table and its rebuild leg. And **all four
+die with the app container** on uninstall or device reset, so a genuine fresh start clears them; it
+is the in-place "delete everything" — the path the dialog makes promises about — that misses them.
 
 ## Known residuals
 
@@ -162,6 +223,24 @@ repository purge takes it.)
   non-silently on next enable, so nothing is stranded.
 
 ## Audit trail
+
+- **2026-08-20 — doc-accuracy sweep (documentation only; no code changed).** A full walk of every
+  `UserDefaults`-backed surface in `App/` and `FernletKit/Sources/` against these tables found
+  **eight keys/key-families in neither table**, which means the completeness contract as previously
+  worded had quietly stopped being true. Four were genuine by-design survivors and are now rows in
+  the deliberate-exceptions table with their reasons (the one-time workout-backfill latch, the
+  saved-recipe legacy-migration latch, the photowall rotation history, the self-expiring App Intent
+  sheet token), plus one class row covering the appearance/breathing preferences so the inventory is
+  complete. **Four are real gaps** — the wipe does not reach them and nobody decided it shouldn't —
+  and they are recorded in the new "Open gaps" section rather than absorbed into the exceptions
+  table, because writing an unfixed defect into a table headed "BY DESIGN" is how a privacy doc
+  starts lying. The most serious is `fernlet.healthkit.requested-capabilities`, which retains
+  `cycleTracking` / `intimateLogging` markers in plaintext through both a full wipe and a HealthKit
+  opt-out. The contract paragraph at the top of this document has been corrected: what the suite
+  enforces is doc↔manifest correspondence over the cleared table, plus a discovery floor for
+  keychain services only. There is no discovery floor for defaults keys, so this class of gap is
+  invisible to CI — which is why it went unnoticed and why the correction is written at the top
+  rather than buried here.
 
 - **2026-08-11 — security-hardening P6 (backup-exclusion launch gate).** One new device-local
   `UserDefaults` bit is added — `com.fernlet.launch.priorUseRecorded` (`FernletPriorUseMarker`) —

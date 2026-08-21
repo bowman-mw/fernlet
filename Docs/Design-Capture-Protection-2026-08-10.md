@@ -1,17 +1,44 @@
 # Design — screenshot & screen-capture protection for the Private tab (2026-08-10)
 
-**Status:** Design brief. Not built, not scheduled. Verified against the working tree at
-`main` @ `abd983d`; every file:line below was read, not inferred.
+**Status: SHIPPED 2026-08-11** as runbook phase **P8**, merge `2e6cadb`. This is now the design
+record of a built feature, not a proposal. The implementation is
+[`FernletKit/Sources/FernletUI/CaptureProtection.swift`](../FernletKit/Sources/FernletUI/CaptureProtection.swift)
+— the `CaptureProtectionState` observable plus the
+`captureProtected(surface:active:isFrontmost:)` modifier — applied at exactly the six agreed
+surfaces: the Private hub root inside the lock gate (`App/Fernlet/PrivateHubView.swift:115`) and five
+sheets (`App/Fernlet/JournalView.swift:293`, `:661`, `:1599`;
+`App/Fernlet/LogPeriodSheet.swift:180`; `App/Fernlet/LogIntimacySheet.swift:73`).
+
+> ⚠️ **This header used to say "Design brief. Not built, not scheduled," and the paragraph below
+> still opens by asserting the tree contains nothing like it.** That was true at `main` @ `abd983d`
+> and is false now: `isCaptured`, `capturedDidChangeNotification` and
+> `userDidTakeScreenshotNotification` all resolve inside `CaptureProtection.swift`, and `UIScreen` is
+> referenced there deliberately (per-window-scene, never `UIScreen.main`). Anyone who trusted the old
+> header would have built a *second* capture-protection path beside the shipped one — two owners of
+> the same overlay is exactly the bug this warning exists to prevent. Read §2–§6 as documentation of
+> what was built; read the "nothing like it in the tree today" sentence as history.
 
 **What this is.** Two tiers of capture friction — a screenshot *reaction* (Tier 1) and a
 capture/mirroring *cover* (Tier 2) — applied only to the Private tab's surfaces: the Journal, the
 merged Cycle page (period + intimacy), the Worry Box, and their sheets and detail views. Both tiers
 are ordinary public API (`UIApplication.userDidTakeScreenshotNotification`,
-`UIScreen.capturedDidChangeNotification`, `scenePhase`) and pure UI. There is nothing like it in the
-tree today: a repo-wide grep for `isCaptured`, `capturedDidChangeNotification`,
+`UIScreen.capturedDidChangeNotification`, `scenePhase`) and pure UI. There was nothing like it in the
+tree when this was written: a repo-wide grep for `isCaptured`, `capturedDidChangeNotification`,
 `userDidTakeScreenshotNotification`, `isSecureTextEntry`, and every common "screen shield" spelling
-across `App/Fernlet/`, `FernletKit/`, and `App/FernletWidgets/` returns zero hits. `UIScreen` is never
-referenced anywhere in the app.
+across `App/Fernlet/`, `FernletKit/`, and `App/FernletWidgets/` returned zero hits, and `UIScreen` was
+never referenced anywhere in the app.
+
+**Still owed after the ship** — both recorded in the P8 row of
+[`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md), neither done:
+
+- The **§7 manual device matrix** has never been walked on real hardware. Every automated check that
+  could run did (the cover and the pulse are both injectable precisely because neither real trigger
+  can be driven from an automated iOS test), but recording, AirPlay mirroring and QuickTime capture
+  were only reasoned about, not observed. This is the gate before shipping the feature to users.
+- **Three follow-ups were surfaced and deliberately not built**: §9#1 the Home `lookingBackCard`,
+  §9#6 the First Aid worry composer, §9#5 the progress-photo `redactForSnapshot` consolidation. The
+  first two are the two scope calls the owner had not decided, so the build stayed inside §2's
+  boundary — Private tab only, never the Home tab — rather than widening scope silently.
 
 **What this is not.** This is **friction, not a guarantee.** It cannot prevent a screenshot; it
 reacts after one. It cannot prevent a photograph of the screen. A user who wants to publish their
@@ -25,14 +52,21 @@ an explicit premise, which is the whole rationale for the feature:
 That premise is worth stating plainly in the code comments too, so a future reader does not mistake
 this for a security control and start reasoning about it as one.
 
-**Relationship to the security-hardening runbook: none.** This is *not* a phase of
-[`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) and must not be folded
-into its ledger. That runbook moves key custody, at-rest formats, and deletion semantics — things
-with mechanical, testable guarantees behind them. This changes no key, no format, no store, and no
-wall; it draws rectangles over views. Sequencing it alongside runbook phases would imply an
-equivalence of strength that [`Verifiability.md`](Verifiability.md) §5 exists specifically to deny.
-Treat it as independent future work, schedulable whenever, and describable to users only in the
-weaker register (see §4's copy rules).
+**Relationship to the security-hardening runbook.** The paragraph that follows argued this work must
+*not* be folded into the runbook's ledger. The argument still holds; the fact changed. On 2026-08-10
+the owner asked for it to be queued in
+[`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) as **P8** so the build
+loop would pick it up, and that is where it was implemented, reviewed and merged from. The runbook
+answers the objection in its own words rather than by ignoring it — it carries a standing section
+saying the ledger is an **execution queue, not a strength ranking**, and that P8 sits last because it
+is lowest priority, not because anything blocked it. Nothing below is relaxed by that placement:
+
+> This is *not* a phase in the sense P0–P7 are. That runbook moves key custody, at-rest formats, and
+> deletion semantics — things with mechanical, testable guarantees behind them. This changes no key,
+> no format, no store, and no wall; it draws rectangles over views. Describing it alongside runbook
+> phases would imply an equivalence of strength that [`Verifiability.md`](Verifiability.md) §5 exists
+> specifically to deny. It is describable to users only in the weaker register (see §4's copy rules),
+> and must never be promoted into `Verifiability.md` §1.
 
 ---
 

@@ -4,6 +4,13 @@ Custom-clothing Increment 3 (in-person friend shop). The MultipeerConnectivity t
 NearbyInteraction proximity gate can't run on the simulator, so verify on **two physical iOS devices** on
 the same build, with Bluetooth and Wi-Fi enabled and both apps unlocked. Without UWB hardware the session
 falls back to manual proximity commit — confirm the connection from the Friends screen if prompted.
+> **Status: no run of this checklist has ever been recorded.** The 2026-08-20 audit of `main`
+> found that **no two-device P2P flow in this app has any recorded real-device validation**, in an
+> app whose largest module (`ProximityKit`, ~19k lines) is exactly the part a simulator cannot
+> exercise — it is the single largest unverified risk on the release path
+> ([`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) §0). This file records the steps but
+> has nowhere to record an outcome — when the walk happens, note the date, the two device/iOS
+> versions and the result at the bottom, so the next reader can tell a passed run from an unrun one.
 
 Roles below: **Seller** lists items for sale; **Buyer** browses and buys. Each device is both, so run the
 happy path once in each direction.

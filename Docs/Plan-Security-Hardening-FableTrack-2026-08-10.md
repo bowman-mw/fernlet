@@ -1,5 +1,17 @@
 # Plan — Security hardening, FABLE track: PIN-before-biometrics, deletion audit, default-on backup exclusion (2026-08-10)
 
+> **Status: FULLY EXECUTED 2026-08-11.** Every phase in this track shipped and merged — P0b
+> (PIN-before-biometrics) `f5c1f13`, P0c (`RecipeWebImageAttemptMemory` wipe gap) `2759af9`, P1b
+> (deletion-audit verification pass) `500cf5d`, P6 (default-on backup exclusion) `4a853d4`, and P8
+> (capture protection, queued into this build at the owner's request) `2e6cadb`. The ledger in
+> [`Plan-Security-Hardening-Runbook.md`](Plan-Security-Hardening-Runbook.md) is the authoritative
+> record. **Do not execute this file as a plan** — it was written against `main` @ `eeec53e` and its
+> file:line steps predate the phases that rewrote those seams.
+>
+> One obligation is still open: P8's capture-protection spec §7 **manual device matrix** has never
+> been walked on real hardware, and three §9 follow-ups were surfaced and deliberately not built. See
+> [`Design-Capture-Protection-2026-08-10.md`](Design-Capture-Protection-2026-08-10.md).
+
 **Status:** Approved build plan, **Fable review track**. Base branch `main` @ `eeec53e`, first work off
 the unmerged `claude/scoped-unlock-per-screen` (`b293238`). This file carries the **lower-risk,
 mechanical, reversible, no-novel-crypto** slice of the 2026-08-10 security-hardening effort — the work

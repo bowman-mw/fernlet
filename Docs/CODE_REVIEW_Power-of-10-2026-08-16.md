@@ -2,6 +2,17 @@
 
 Scope: every shipping Swift file (366 files, ~127k lines) in `FernletKit/Sources`, `App/Fernlet`, `App/FernletWidgets`, `App/FernletShareExtension`, audited slice by slice (16 slices, one auditor each) against [Power-of-10-Swift.md](Power-of-10-Swift.md). Mechanical baseline from `Scripts/power-of-10-scan.py`; review-only rules (R1 recursion, R2 loop bounds, R3 bounded growth, R5 validation, R7 result checking, R9 seams) from reading every file.
 
+**Status: round closed.** Every fix from this audit is on `main` (integration merge `57f1573`), the
+scanner reports **0 violations across 366 files**, and the allowlist stands at **12 reasoned entries**
+in `Scripts/power-of-10-allowlist.json` — each stating the invariant that makes its exemption safe.
+The `## Fix phase` section at the bottom is the per-slice record. The standard itself is
+[`Power-of-10-Swift.md`](Power-of-10-Swift.md); this file is the audit that established the baseline.
+
+> The counts in the next table are the **pre-fix** measurement, kept so the size of the debt is on
+> record. Do not quote them as the current state of the tree — they are two orders of magnitude off.
+> One residual is genuinely open and named in the review below: the `ProximityCoordinator` fan-out
+> under R3.
+
 ## Mechanical baseline (before the fix phase)
 
 | Check | Count |

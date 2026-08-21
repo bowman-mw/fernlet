@@ -1,5 +1,36 @@
 # Fernlet UI/UX Review — 2026-08-16
 
+> ## ⚠️ Status — 2026-08-20: the code-only half of this brief is ALREADY IMPLEMENTED
+>
+> **All 145 findings marked "Mockup needed: No" shipped on 2026-08-18 in commit `f053be2`** ("UI/UX:
+> implement the 145 code-only findings from the 2026-08-16 review", 81 files, ~5.5k insertions, on
+> `main`). Eight of the Top 12 below are in that set — `FOOD-01`, `XCUT-02`, `XCUT-03`, `XCUT-04`,
+> `FOOD-02`, `FOOD-06`, `HOME-01` and `PRIV-01` are done; only `HOME-02`, `HOME-10`, `FLOW-03` and
+> `MOVE-01` are outstanding. The instructions below still read as if none of it had been built. **Do
+> not work an entry from its text alone — read the current file first.** Re-implementing a shipped fix
+> is the cheap failure; the expensive one is re-applying a *superseded* recommendation, because
+> several fixes were deliberately built differently from what the entry proposed (most notably the
+> paged `TabView` was removed outright rather than having swipe suppressed, after
+> `.scrollDisabled(true)` turned out to be an environment write that froze every ScrollView in the app).
+>
+> **What actually remains: the 45 entries marked "Mockup needed: Yes."** By severity that is **3 High**
+> — `HOME-02` (water sheet locked at medium; add/remove below the fold at AX), `FLOW-03` (guided
+> workout start buried three sheets deep), `MOVE-01` (runner finish strands the user on an empty Plan
+> sheet) — plus 34 Medium and 8 Low. By tier it is **12 Tier 2 and 33 Tier 1**.
+>
+> The **12 Tier 2 entries are product decisions, not drawing work**: `HOME-10`, `HOME-13`, `HOME-22`,
+> `FLOW-18`, `FOOD-35`, `FLOW-03`, `MOVE-01`, `FRND-25`, `FRND-12`, `SETT-14`, `SETT-15`, `SETT-27`.
+> Each moves where a feature lives or changes the shape of a flow, so it needs an owner call before
+> any mockup is worth making — that is what the "decide Tier 2 before mocking Tier 1" rule below is
+> for. The remaining **33 Tier 1 entries carry a concrete written recommendation and are implementable
+> from that text**; the "Mockup needed" flag on them means a design pass would produce a *better*
+> result (they change layout, spacing or visual treatment rather than behaviour), not that the work is
+> blocked. Treat the flag as a preference, not a gate — several of them are accessibility and contrast
+> fixes that should not wait on a design round trip.
+>
+> Screenshots referenced throughout are the pre-fix state of the app and are untracked (~93 MB, held out of
+> git pending an LFS-vs-prune call). Where a shot contradicts the current build, the build is right.
+
 A full-app review of every in-app surface: the five tabs, ~50 sheets and pushed routes, onboarding, Settings and Privacy & Data, the Private hub (journal, cycle, worry box, first aid), the Friends/mesh surfaces, coach exchange and trainer export. Eight surface reviewers read the code against three screenshot galleries (light, dark, accessibility-extra-large) plus 311 hand-walked screenshots, then adversarial verifiers tried to refute every high- and medium-severity claim. **271 findings were raised, 12 were refuted outright, and 190 survive here** after cross-surface dedupe — 28 high, 108 medium, 54 low; 18 of them are Tier 2 (structural).
 
 The lenses were **daily-use speed**, **consistency & polish** and **accessibility** — not first-run education. Recommendations are tiered so the structural moves can be accepted or rejected separately: **Tier 1** changes something inside the current screen, **Tier 2** changes where a feature lives or the shape of a flow.

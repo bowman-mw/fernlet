@@ -75,6 +75,25 @@ with nothing. Above that, the coordinator skips the payload entirely while hidde
 reconcile is a silent no-op, never a preference flip, because turning the preference off would
 delete the iCloud backup and make hiding destructive.
 
+One invariant *inside* those sealed columns is easy to mistake for a display concern, and it is
+the most destructive thing on this page to get wrong. ``PeriodSymptom``'s raw values ARE the storage
+format for the `symptomFlagsCiphertext` column — and they are also the KEYS of
+`customSymptomScalesCiphertext` — and both are read back with
+`compactMap(PeriodSymptom.init(rawValue:))`, which silently DROPS whatever it cannot parse. Unlike
+the day blob, this path has no `EnumDecodeCompat` freeze/park channel, and deliberately so:
+parking an unrecognized token means persisting it somewhere the app can read it later, and the whole
+reason this column is sealed is that a symptom name is exactly the kind of plaintext that must not
+sit beside the ciphertext. Lossy-but-sealed is the chosen trade, and the token freeze is what makes
+it safe. So renaming, re-spelling, or **localizing** a case does not throw, does not log, and raises
+no "some data could not be read" banner — it makes every symptom the user ever logged disappear from
+her encrypted cycle history, permanently and unrecoverably, with the ciphertext still on disk
+holding values nothing can name any more. ``PeriodSymptom/title`` is the display half; the raw value
+is frozen English forever. ``PeriodTrackerStore/drainPendingBuffer(contentKey:)`` decodes the
+locked-path buffer through the same lossy `compactMap`, so it is bound by the same freeze.
+`Tests/FernletTests/LocalizationBoundaryTests` pins the nine literal raw values as a canary; this
+page did not state the invariant at all until 2026-08-20, so a localization pass that read only the
+landing page would have had nothing here to stop it.
+
 Prediction is pure computation layered on top: ``CyclePredictionEngine`` is a stateless,
 `nonisolated` fitter that detects periods from observed flow days, rejects implausible or
 suspected-missed-log intervals, and blends a recency-weighted median with an EWMA into a
@@ -121,6 +140,9 @@ types), and the prediction engine is `nonisolated` pure math callable from any e
 - ``PredictedFlowLevel``
 
 ### Raw Cycle Vocabulary
+
+Raw values in this section are storage and HealthKit-correlation tokens, not copy. ``PeriodSymptom``
+in particular is FROZEN — see the sealed-column note in the Overview before touching it.
 
 - ``CyclePhase``
 - ``PeriodFlowLevel``

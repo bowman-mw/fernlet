@@ -48,16 +48,46 @@ names the exact command, test, or file that backs it, so "trust us" can be repla
 All commands run from the repo root and need Xcode with an iOS simulator. Build once:
 
 ```
-xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
+
+Then run any single suite by name:
+
+```
+xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:FernletTests/NoTrackingBoundaryTests
+```
+
+> **Two things this section got wrong until 2026-08-20, both of which made every command here fail
+> to run.** A verification document whose commands do not execute is worse than none — it invites an
+> outsider to check the claims and then hands them a command that errors, which reads as evasion.
+> Corrected, and worth knowing if you have an old copy:
+>
+> - **`-project App/Fernlet.xcodeproj` was missing.** The 2026-08-12 repo restructure moved the
+>   sources under `App/` and the tests under `Tests/`; there is no `.xcodeproj` at the repo root any
+>   more, so a bare `xcodebuild -scheme Fernlet` from the root finds no project. Same invocation
+>   shape as `Scripts/spm-wall-check.sh` and the build/test commands in `CLAUDE.md`.
+> - **`-only-testing:` takes a TEST-TARGET path, not a filesystem path.** The old commands read
+>   `-only-testing:Tests/FernletTests/<Suite>`, which mirrors where the file lives on disk.
+>   `xcodebuild` wants `<TestTarget>/<Suite>`, and the target is named **`FernletTests`** — so it is
+>   `-only-testing:FernletTests/<Suite>`. The disk-path form does not error usefully; it matches
+>   nothing and the run passes having executed **zero tests**, which is the worst possible failure
+>   mode for a verification command. Whatever you run, confirm the `Test case` lines you expected
+>   actually appear — never accept the success banner alone.
+>
+> Suite identifiers are matched **exactly**, with no prefix matching, so a file declaring several
+> suites needs each one named. The `-only-testing:` fragments in the table below all assume the
+> `xcodebuild test-without-building -project … -scheme Fernlet -destination …` prefix above.
 
 | Claim | Verification |
 |---|---|
-| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:Tests/FernletTests/NoTrackingBoundaryTests` — eight independent scans, each with planted-violation fixtures proving the scan itself works. What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. |
-| AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:Tests/FernletTests/S3BoundaryTests`. |
+| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eight independent scans, each with planted-violation fixtures proving the scan itself works. What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. |
+| AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
-| Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:Tests/FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
-| The at-rest crypto formats cannot drift silently | `-only-testing:Tests/FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:Tests/FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:Tests/FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
+| Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
+| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
 | Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 

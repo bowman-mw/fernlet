@@ -2,7 +2,21 @@
 
 This index maps the proximity and mesh subsystem functions to their responsibilities. Use it before adding proximity, mesh, recipe-share, friend-photo, identity, audit, or trust logic so existing behavior is reused instead of duplicated.
 
-**Last refreshed: 2026-08-09.** This pass added the away-hearts dead-drop subsystem, the `ProtectedSidecar` durability primitive, wire2 sealed-payload framing, the QR verification ceremony, and the coach trust/ceremony types (which have no production callers yet).
+**Last refreshed: 2026-08-20.** This pass corrected the `JSONSidecarFile` entry (it documented an
+API that was deliberately deleted — see below), added the twenty-one ProximityKit files that had no
+section at all (presence, hearts ledger, activities, clothing shop, session messages, moderation,
+the `Wire/` payload types, and `CanonicalSignatureSerializer`), and recorded the
+localization token/display rule now that ProximityKit carries wire strings that *look* like UI copy.
+The 2026-08-09 pass added the away-hearts dead-drop subsystem, the `ProtectedSidecar` durability
+primitive, wire2 sealed-payload framing, the QR verification ceremony, and the coach trust/ceremony
+types (which still have no production callers).
+
+> **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
+> cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
+> minting", "Phase 5", …). **That document does not exist in this tree.** The phase numbers are still
+> meaningful as labels and are used consistently, and
+> [Proximity-Security-Followups-2026-08-18.md](Proximity-Security-Followups-2026-08-18.md) stands in
+> for the two items it still owed. This index is the surviving map of what those phases built.
 
 
 ## Duplication Hotspots
@@ -10,6 +24,9 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Need | Prefer Reusing |
 | --- | --- |
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, and a moderation row, each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
+| A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation()` |
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
@@ -23,6 +40,35 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `syncPhotoManifest(to:)`, `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)` |
 | Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `TrainerAuditEvent`, `ProximityRecipeShareDiagnostics` |
+| A string that is both a token and a label | FORK IT — never localize in place. See "Tokens vs. display in ProximityKit" below. |
+
+### Tokens vs. display in ProximityKit
+
+Localization Phase 1 (2026-08-19) split every string in the codebase into exactly one of two jobs,
+and ProximityKit is where getting it wrong is most expensive: **a token here is inside a signature.**
+
+* **TOKEN** — persisted `rawValue`s, mesh wire bytes, AI prompt vocabulary, dictionary keys, and
+  anything compared with `==`. Tokens are English forever. Persist on the token, sign the token,
+  prompt with the token, match against the token.
+* **DISPLAY** — what a person reads. Only display localizes.
+
+The types that were forked, repo-wide, are `CareGroup` (`token` / `label`), `MealType`,
+`WorkoutType`, `CompanionState` (all three keep a FROZEN `rawValue` and gained a `displayName`),
+`MealConfidence` (`token` / `label`, with a `legacyTokens` table for the pre-fork English spellings
+already sitting in users' blobs), and the `CoachPlanTokens` vocabularies. In this subsystem the one
+to know is `PayloadSummary.title` — it is sender-authored, reads exactly like UI copy ("Recipe
+share", "Session ended", "Heartbeat"), and is **frozen English for two independent reasons**:
+`CanonicalSignatureSerializer` writes it into the signing bytes, so localizing it makes the same
+logical envelope sign differently per locale; and `ProximityCoordinator.recordEnvelope` feeds it to
+the *receiving* user's Connection Inspector, so a localized sender would put its own language into
+someone else's audit trail. A localized inspector is still possible later — render
+`payloadTypeToken` through a receiver-side lookup table instead of showing the sender's string.
+
+The rule is enforced mechanically by `Tests/FernletTests/LocalizationBoundaryTests.swift` (the
+localization wall — sibling of the S3, no-tracking and Power-of-10 walls), which pins the frozen raw
+values case by case and grep-walls `String(localized:)` inside `FernletKit/Sources` for the
+`bundle: .module` argument a package needs. Every failure it guards is silent: a localized token does
+not crash, it just stops matching itself in a language nobody on the team reads.
 
 ## Engine
 
@@ -491,6 +537,79 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `beginVerification(...)` | Starts a round against a scanned QR, minting the challenge nonce. |
 | `handleResponse(...)` | Validates the peer's response; **a wrong-peer response must be dropped without clearing the pending round**, or an attacker could cancel a legitimate ceremony. |
 
+### `Wire/CanonicalSignatureSerializer.swift`
+
+The signing-input serializer for every signed type in the subsystem. Canonical v2 is a positional,
+length-prefixed BINARY format — no key names, no locale-dependent number formatting, integers
+big-endian, dates floored to whole seconds, `[String: String]` maps sorted by the RAW UTF-8 bytes of
+the key. It exists because the original encoder was `JSONEncoder(.sortedKeys)`, whose byte output
+Foundation does not guarantee across versions or a non-Apple stack; a one-byte divergence turns a
+legitimately-signed envelope into `signatureInvalid`, which is an interoperability fault nobody can
+reproduce. This is signing INPUT only — never the wire format, never persisted, never transmitted.
+Every declaration in the file is `nonisolated`, so `verify` can run off the main actor over untrusted
+bytes. **The field order in each function IS the schema.**
+
+| Function | What It Does |
+| --- | --- |
+| `canonicalBytes(for: FernletIdentityEnvelope)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
+| `canonicalBytes(for: MeshAdmissionToken)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
+| `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
+| `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
+| `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
+| `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
+| `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |
+
+Each signed type gets its **own domain tag** (`fernlet.canonical.<type>.v2`) as the leading
+length-prefixed field, so a signature computed over one type can never validate over another. A new
+signed type needs a new tag; reusing one is a cross-type forgery seam.
+
+### `Wire/SealedIntroductionEnvelope.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `SealedIntroductionEnvelope` | A presence-heart identity intro/ack, sealed to the intended friend's key-agreement key. Carries only the ciphertext of a JSON-encoded `FernletIdentityEnvelope` — no cleartext identity — which is what makes a tag-replay forger learn nothing from the handshake. |
+
+### `Wire/ActivityPayloads.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `ActivityParamsHash.of(_:)` | SHA-256 over the canonical descriptor bytes: the stable identity of an activity's parameters that the signed join token binds. Lives in ProximityKit, not the domain model, so the domain model stays crypto-free (same reasoning as `ModerationContentHash`). |
+| `ActivityOfferPayload` | A host advertises a running activity to a committed friend, sealed. Carries the full descriptor (so the joiner can pin the host key + params hash) plus the current roster version — display only; the signed snapshot in the grant is the trust input. |
+| `ActivityJoinRequestPayload` | A committed peer asks to join. Deliberately UNSEALED (mirroring `clothingCatalogRequest`): it carries only public keys and a display name, and the host re-validates the claimed fingerprint/signing key against the transport-verified slot and binds the grant to the VERIFIED key, so a spoofable body is harmless. |
+| `ActivityJoinGrantPayload` | The host's signed grant: an invitee-key-bound `ActivityJoinToken` plus the roster snapshot at grant time, sealed. The joiner verifies both under the host key it pinned from the offer before considering itself a member. |
+| `ActivityRosterSnapshotPayload` | A host-signed roster snapshot on its own, for convergence outside a grant. |
+| `ActivitySyncPayload` | A sealed version digest between committed members (`[activityID: versionHeld]`); whichever peer holds the higher VERIFIED version replies with the snapshot, and the reply is rate-limited. Max-version-wins is the whole convergence rule. |
+| `isWellFormed` (on each payload) | Format-string + version shape check at the wire boundary, before anything is trusted. |
+
+### `Wire/ClothingSharePayloads.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `ClothingCatalogPayload` | A peer's current shop on the wire: the capped, deterministically ordered items on offer plus the anonymous designer id and display name, so a buyer can resolve "designed by <friend>" and learn the id→name mapping in person. Ephemeral by design — only items actually purchased persist. |
+| `ProximityClothingCatalog` | The received-side holder, kept in memory from receipt through the 1-hour post-session shop window. Keyed by the transport-VERIFIED sender fingerprint so a re-broadcast replaces the prior catalog instead of stacking. The shop is the inverse of recipe-share: the BUYER holds the SELLER's broadcast catalog. |
+
+### `Wire/MessagePayloads.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `TempMessagePayload` | One session-scoped chat message. Always delivered sealed (`.tempMessage` is in `sealingRequiredTypes`); `id` drives receive-side dedup, and `sentAt` is the sender's clock — display only, never trusted for ordering security. |
+
+### `Wire/TrainerPayloads.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `TrainerExportPayload` | Wire envelope body for the curated trainer/nutritionist export bundle. The bundle bytes are opaque to ProximityKit — the app owns the allowlist-projected shape — so this type only carries, bounds (`maxBundleBytes` 2 MB, `maxTrainerWireBytes` 4 MB) and shape-checks them. It is the seam the future `fernlet-coach` trainer channel will use; until that ships, the app shares the reviewed bundle as a file. |
+
+### `Trust/FriendMintingReview.swift`
+
+Pure decision logic for the post-session "keep as friend" prompt (mesh redesign Phase 2), kept
+view-free so the session-end flows in `ConnectView` / `DisposableCameraView` stay unit-testable.
+
+| Function | What It Does |
+| --- | --- |
+| `FriendMintingReview.sessionEndReview(hasPhotos:eligibleCandidateCount:)` | Decides which session-end surface to show: the photo review sheet (with keep-as-friend rows embedded), the standalone keep-friends prompt, or nothing. |
+| `FriendMintingReview.eligibleCandidates(roster:trustedPeers:)` | Filters the session roster down to peers that may be offered as new friends, computed against the trust vault at PRESENTATION time so a peer trusted or blocked mid-session never reaches the sheet. Blocked excludes (a ban is never re-offered), active excludes (already a friend), **revoked-only does not** — "Removed" is a reversible unfriend, and a fresh verified in-person session re-offers the peer. Entries missing either key are dropped defensively. |
+
 ## Photos And Recipe Sharing
 
 ### `FriendPhotoImageHelpers.swift`
@@ -594,6 +713,24 @@ Shipped in the bitchat-adoptions round (Increment 3) and hardened in the prekeys
 `HeartDropTransporting` conformer (`CloudKitSync/HeartDropCloudTransport`) only ever sees a rotating
 day tag and ciphertext. Opt-in via `heartsAwayDelivery`, default OFF.
 
+### `HeartSharing/ProximityHeartLedger.swift`
+
+The device-local ledger every heart transport shares — presence, in-session mesh, and the dead-drop
+below all rate-limit and de-dupe through this one type, which is why it sits at the top of this
+section rather than inside any one of them.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `ReceivedHeartRecord` | One received heart. `senderDisplayName` is sanitized at the wire boundary (see `PresenceManager`) before it reaches the ledger, so nothing peer-controlled lands here raw. |
+| `canSendHeart(to:)` | The send-side half of the rate model: one heart per friend per 5 minutes, each direction. Owner decision — there is deliberately no daily cap. |
+| `recordHeartSent(to:)` | Arms the send window. Consume-on-send: called only AFTER the wire write succeeds, so a failed send does not cost the user their window. |
+| `recordReceivedHeart(id:senderDisplayName:senderFingerprint:)` | Records an in-person heart with id-dedup, retention trimming, and the 5-minute receive window. |
+| `recordReceivedDropHeart(id:senderDisplayName:senderFingerprint:)` | The dead-drop variant: keeps id-dedup and retention but deliberately neither checks nor arms the 5-minute receive window, because a multi-day pickup batch must not collapse into a single heart. |
+| `pendingBubbleHeart` / `dismissBubble(id:)` | The Home bubble's undismissed heart, and its dismissal. |
+| `activeGlow(at:)` | The 24-hour health-bar glow decay. |
+| `isLoaded` / `retryLoad()` | Sidecar state. Persistence rides a `ProtectedSidecar` (`HeartLedger.json`, `.completeFileProtection`, never synced) and **fails closed while unloaded** — sends are refused and receives are left unrecorded, with the drop record deliberately left on the server for a later pass, rather than a locked-device read being mistaken for "no hearts". |
+| `clearAll()` | Wired from reset-everything. Retention is 48 h / 32 hearts. |
+
 ### `HeartDropService.swift`
 
 | Function | What It Does |
@@ -668,6 +805,202 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 | `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores, all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
 | `JSONSidecarFile.fileURL(in:name:)` | The one definition of the sidecar layout. There is deliberately no argument-less `defaultFileURL(name:)`: every owner states its root, or the omission silently rejoins the process-wide race. |
 
+## Presence And Nearby Friends
+
+The standing `fernlet-near` radio and the two device-local ledgers that hang off it. Everything here
+is opt-in and device-local; none of it is ever in the synced snapshot.
+
+### `Presence/PresenceManager.swift`
+
+The presence radio: KEPT friends recognize each other nearby without connecting, and hearts are
+delivered over on-demand pairwise connections formed on that recognition.
+
+Privacy posture is the design centre, and it is worth reading before touching anything here. The
+advertisement carries ONLY rotating pairwise-DH tags (truncated HMACs of the 15-minute epoch under
+per-friend-pair static-static X25519 secrets — `IdentityService.presenceTag`), the `MCPeerID` is
+per-start random and never persisted, and all state (nearby set, connections, diagnostics) is
+memory-only with no identities in any log line. Matching spans ±1 epoch; three self-exclusion layers
+drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch advertiser restart.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. |
+| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster. |
+| `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
+| `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the 8-peer `MCSession` cap. |
+| `heartAffordance(...)` (`nonisolated static`) | The friend row's decision about which heart affordance to show. Takes the away-delivery setting as an explicit parameter rather than reading it off the host, so the affordance and the enforcement cannot drift apart. |
+| `queueAwayHeart` / `heartDropBundleProvider` / `onPeerPrekeyBundle` | The dead-drop seams: race-window sends and prekey-bundle gossip are handed to `HeartDropService` (see Away Hearts) instead of being reimplemented here. |
+| `proximityCoordinator(_:didReceive:plaintext:from:)` | Receive side. Accepts invitations only from tag-matched peers, and enforces the `allowNearbyHearts` opt-out, the trusted-friend gate, and the shared `ProximityHeartLedger` 5-minute receive window. |
+| `wipeIdentityForDeleteAll()` | Delete-all participation. |
+
+Every escaping `Task` captures `[weak self]` — the manager-Task lifetime rule; the owning store holds
+this `unowned`.
+
+### `Presence/FriendStateCache.swift`
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `CachedFriendState` | One friend's shared fuzzy wellbeing state + companion appearance, stamped with the meeting it was captured at, and shown with "as of last time you met" staleness treatment. |
+| `record(fingerprint:fuzzyState:appearance:)` | Stores what a verified `.friendState` payload from a committed, vault-trusted friend carried. |
+| `state(for:)` | The Friends UI read. |
+| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and from reset-everything, so a removed friend leaves nothing behind. |
+
+Persistence is a `JSONSidecarFile` in the host's proximity support directory with
+`.completeFileProtection`, deliberately **never** in the synced snapshot: a friend's struggling state
+is theirs and must not follow this user into iCloud. Entries expire from the UI after 30 days, the
+map is bounded at `maxStates` (newest kept), and decode is per-row tolerant so one unknown future
+value can never wipe the cache.
+
+### `Presence/ClosenessLedger.swift`
+
+Per-friend in-person interaction counts — the input to the deterministic closeness score and the
+close-slot assignment with hysteresis.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `recordSession` / `recordPhotoSession` / `recordShareAccepted` / `recordHeartSent` / `recordHeartReceived` | Bump a day-granularity capped counter. No timestamps, no names, no durations — this is a warmth signal, never a who-met-whom surveillance log. |
+| `closeness(fingerprint:)` / `closenessMap(for:)` | Derive closeness via `ClosenessMath` over age-bucketed daily counts. |
+| `needsDailyEvaluation` / `evaluateSlots(eligibleFingerprints:firstAcceptedAt:)` | Runs at most once per day and persists `slotState`, so hysteresis dwell survives relaunch. |
+| `isClose(fingerprint:)` | Slot membership. |
+| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and reset-everything. |
+
+Same sidecar posture as `FriendStateCache`, never synced; retention is 31 days and at most 64 tracked
+friends (least-close dropped). Day keys pin one timezone-stable formatter/calendar pair so bucketing
+and diffing always agree.
+
+## Group Activities
+
+### `Activities/ProximityActivityManager.swift`
+
+Hosting, joining, offers, pending join requests, and host-authoritative roster convergence — riding
+the friend mesh with **no radio of its own**. Owned by `MeshNetworkManager` as a sub-manager (like
+`MeshClothingShop`), which wires in the two seams this type uses instead of touching `MCSession`:
+`send` (seal + sign + transmit to one verified fingerprint's committed slot) and
+`committedActivityPeerFingerprints`.
+
+Authorization is deliberately independent of the shared handshake: membership is carried by the
+host-signed, invitee-key-bound `ActivityJoinToken`, snapshots verify only under the host key PINNED
+at join, and roster convergence is max-version-wins.
+
+| Function | What It Does |
+| --- | --- |
+| `host(...)` / `endHosting(activityID:)` | Start and stop hosting an activity. |
+| `removeParticipant(activityID:fingerprint:)` | Host-side removal; bumps the roster version. |
+| `receiveOffer(_:fromFingerprint:verifiedHostSigningPublicKey:)` | Ingests an offer and pins the host key it will verify every later snapshot under. |
+| `receiveJoinRequest(...)` / `admitJoin(_:)` / `declineJoin(_:)` | Host side of joining. The grant is bound to the TRANSPORT-VERIFIED key, never the claimed one. |
+| `requestJoin(_:)` / `receiveGrant(_:fromFingerprint:)` / `leaveJoined(activityID:)` / `dismissOffer(activityID:)` | Joiner side. |
+| `receiveSnapshot(_:)` / `receiveSync(_:fromFingerprint:)` / `onPeerCommitted(fingerprint:)` | Convergence: version digests between committed members, higher verified version wins, and a rate-limited reply. Never serves a roster to a non-member. |
+| `gcExpired()` / `clearAll()` | Lifetime sweep and reset-everything. |
+
+Receive paths reject oversized or hand-crafted descriptors, and the 7-day lifetime ceiling is
+re-enforced here **by rejection rather than clamping** — clamping would rewrite the signed params
+hash. Hosted and joined activities persist in a device-local sidecar (`ActivityLedger.json`,
+`.completeFileProtection`, never synced) until `expiresAt`; offers and pending joins are memory-only.
+
+## Clothing Shop
+
+### `ClothingSharing/MeshClothingShop.swift`
+
+The friend-mesh clothing shop. It replaced the standalone `fernlet-clothes` radio
+(`ProximityClothingShareManager`, deleted): catalogs now ride the friend mesh as `.clothingCatalog`
+payloads exchanged pairwise-sealed during the live session, and the shop **opens at session end** as
+a 1-hour, memory-only browse window on the Friends tab.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `receiveCatalog(...)` | Inbound. The manager dispatches verified `.clothingCatalog` envelopes here from COMMITTED slots only — that committed-slot gate is the security boundary, because the coordinator dispatches known non-core payloads with `connectedIdentity ?? pendingPeerIdentity` and no state gate. Catalogs accumulate for the whole session. |
+| `isSharingEnabled` | The payload-layer opt-out. `allowNearbyClothingShares` no longer stops a radio; the app wires `isSharingEnabledProvider` + `localCatalogProvider` (both gating app-side, so `ProximityHost` stays unchanged), the provider returns nil when off, inbound drops when off, and turning it off calls `clearAll()`. |
+| `openWindowAtSessionEnd(now:)` | Opens the browse window at the same last-committed-slot-gone moment that promotes `pendingFriendReview`. |
+| `beginNewSession()` | Closes the window early on the next session FORMATION — called from the manager's first-slot-commit hook, **never** from `startJoin`/`startNewMesh`, which fire automatically on every Social-tab entry and scene reactivation and must not touch the window. |
+| `isWindowOpen(at:)` / `remainingWindowMinutes(at:)` / `cleanupIfExpired(now:)` | Expiry is lazy — pure reads plus a drop, no background timers. |
+| `clearAll()` | Reset. |
+
+Buying stays fully local (`FernletStore.buyClothingItem`); this type is pure receive/window state and
+never touches coins or the closet. Everything here is memory-only: never persisted, never synced.
+Note the asymmetry with `pendingFriendReview` — the review survives search starts *and* session
+formations, the shop window survives searches but not formations.
+
+## Session Messages
+
+### `Messaging/SessionMessageStore.swift`
+
+Messages are exchanged ONLY during a live friend session and VANISH at session end — an owner
+decision, and a binding one: nothing retained on device, nothing synced, no dead-drop, no offline
+queue. This type is the only in-memory holder, and it is deliberately **not `Codable`**, so it is
+structurally impossible for a message to enter a `FernletSnapshot` (same technique as
+`MeshSessionRosterEntry` / `MeshFriendReviewBatch`).
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `appendOutgoing(...)` | Local echo for `MeshNetworkManager.sendTempMessage(_:)`, which sanitizes and caps the text before room-broadcasting it sealed to every committed slot advertising the `messages` capability. |
+| `receiveIncoming(...)` | Inbound from the manager's `.tempMessage` dispatch (committed-slot gate and blocked-fingerprint drop already applied, mirroring `.friendPhoto`): de-dupes by id, rate-limits per sender, sanitizes, caps. |
+| `sanitize(_:)` (`static`) | The one text-coercion point for both directions. |
+| `hasUnread` / `beginViewing()` / `endViewing()` / `markAllRead()` | Unread signalling for the Friends tab. |
+| `clear()` | Called at EVERY session-end path (the `stopSearching` teardown funnel, `removeSlot`, `disconnectSlot`) and again on the next session formation. Unlike the shop's post-session window, messages do not outlive the session. |
+
+## Moderation
+
+Reported clothing designs. The honest-client half (a self-ban stops this device listing) is
+convenience; the load-bearing enforcement is receiver-side.
+
+### `Moderation/ModerationContentHash.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ModerationContentHash.of(texture:slot:)` / `of(_ item:)` | SHA-256 over an item's sanitized ARTWORK — never its id, name, or price — so a designer cannot escape a report by relisting the same artwork under a new id. Pure stateless namespace enum, CryptoKit only. |
+
+### `Moderation/ModerationLedger.swift`
+
+Device-local, append-only store of report rows: this device's own reports and retracts, plus peers'
+one-hop-verified rows. It is the evidence base `ModerationBanStore.reconcile(...)` reads.
+
+| Function | What It Does |
+| --- | --- |
+| `recordLocalReport(...)` / `recordLocalRetract(...)` | This device's own rows. Rows carry a deterministic `ModerationLedgerEntry.rowID`, so a repeat report de-dupes and a retract supersedes its report via a higher `reporterSeq`. |
+| `ingestForeign(_:)` | Upserts peer rows, keeping the higher-seq row — which makes re-delivery idempotent. |
+| `isLocallyReported(contentHash:reporterFingerprint:)` | The shop's hide-reported-items check. |
+| `clearAll()` | Reset-everything. |
+
+Bounded MAX-MIN FAIRLY rather than by age (Power-of-10 R3): at most `maxRowsPerReporter` per reporter
+fingerprint and `maxRows` overall, and on overflow the per-reporter allowance is lowered uniformly
+until it fits — so a flooding reporter is drained down to everyone else's level before a quiet
+reporter loses a single row. That is what stops a hostile peer evicting THIS device's own reports,
+without the ledger ever needing to know its own signing key. The same rule is applied on the way in
+from disk. Persistence is a `.completeFileProtection` JSON sidecar, never synced: who reported whom is
+sensitive social data.
+
+### `Moderation/ModerationReportRelay.swift`
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `SignedModerationReport` | One row plus the reporter's Ed25519 signature over its canonical bytes. |
+| `ModerationReportPayload` | The sealed wire bundle of the sender's OWN signed rows (capped at `maxReports` = 32), carrying retractions alongside reports so an undo propagates to peers who already stored the original. |
+| `buildPayload(ownReports:identity:)` | Called by `MeshNetworkManager` on slot commit. A reporter hands over only rows they personally signed. |
+| `verifiedRows(from:senderSigningKey:now:)` | The `.itemReport` handler's gate: stores only rows the TRANSPORT-VERIFIED sender signed. |
+
+**No transitive relay** is the Sybil defense — each device tallies only over reports it verified
+itself. Stateless namespace enum; storage is owned by `ModerationLedger`.
+
+### `Moderation/ModerationBanStore.swift`
+
+The tamper-resistant 30-day store ban for repeatedly-reported designers: self-bans (this device's
+shop) and local peer bans (their catalogs are dropped).
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `applySelfBan(durationDays:...)` / `applyPeerBan(fingerprint:durationDays:...)` | Arm a ban. |
+| `isSelfBanned` / `selfBanRemainingSeconds()` / `isPeerBanned(fingerprint:)` | Countdown reads (which also refresh the credited-time record). |
+| `selfBanTamperCount()` | How often a clock rollback was detected. |
+| `reconcile(rows:localSigningKey:)` | Applies the bans the verified report set warrants, re-arming a served ban only on a NEW qualifying artwork. |
+
+Two survival properties, both deliberate: it survives **app delete + reinstall** (records live in the
+Keychain under the dedicated `com.fernlet.moderation` service, ThisDeviceOnly, and are never wiped by
+identity resets — the self-ban is keyed to a constant device account, not the identity key), and it
+survives **device clock changes** (a credited-time countdown over `mach_continuous_time` plus a
+wall-clock high-water ratchet: a rollback voids wall credit and flags tampering, a forward jump
+credits almost nothing, and the reboot-gap credit is capped). It is deliberately NOT cleared by
+"Reset everything".
+
 ## UI Diagnostics
 
 ### `ConnectionInspectorView.swift`
@@ -702,7 +1035,40 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 | `ActivityShareView.makeUIViewController(context:)` | Creates a UIKit share sheet for exported logs. |
 | `ActivityShareView.updateUIViewController(_:context:)` | No-op representable update. |
 
+## Session And Friend UI
+
+### `UI/KeepFriendsPromptSheet.swift`
+
+The per-participant "keep as a friend?" affordance at session end. One-sided and local-only: keeping
+mints a trust-vault record on THIS device only, skipping does nothing, and the peer is never notified
+either way.
+
+| Type | What It Does |
+| --- | --- |
+| `KeepFriendsSection` (internal) | The keep-as-friend rows. Embedded in `FriendPhotoReviewSheet` when the session produced photos; hosted by the sheet below when it didn't. Its row toggles flip membership in a shared kept-fingerprints binding. |
+| `KeepFriendsPromptSheet` | The compact standalone prompt for sessions that ended with no photos to review but with eligible candidates. Dismissing without choosing = skip all: the host clears the roster in `onDismiss` and mints only what was toggled. |
+
+Which of the two appears is decided by `FriendMintingReview.sessionEndReview(...)`, and the candidate
+list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
+
+### `UI/FingerprintText.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `FingerprintText` | A peer's identity fingerprint, rendered identically everywhere one is shown. Fingerprints appear on four surfaces — the friend detail card, the join prompt (where two people read them off each other's screens), the activity roster, and the keep-as-friend rows — and each had hand-rolled its own `.system(.caption, design: .monospaced)`, a system font in an app whose type is entirely bundled. Centralized on the design system's `stat` role (DM Sans Medium, tabular figures) with extra tracking so a hex string still reads character by character. Truncation is MIDDLE, deliberately: the head and tail are what people compare, so a clipped tail would defeat the only thing the string is for. |
+
 ## Shared Support
+
+### `ProximityHost.swift`
+
+| Type Or Member | What It Does |
+| --- | --- |
+| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
+| `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
+| `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
+| `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |
+| `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |
+| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path, and the default the protocol extension hands hosts that do not redirect it. Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
 
 ### `PeerDisplayNames.swift`
 
@@ -715,12 +1081,33 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 
 | Function | What It Does |
 | --- | --- |
-| `JSONSidecarFile.defaultFileURL(name:)` | Builds the production sidecar path (`Application Support/App/Fernlet/<name>`). |
+| `JSONSidecarFile.fileURL(in:name:)` | The ONE definition of the sidecar layout: `<directory>/<name>`. Owners resolve `directory` from their host's `ProximityHost.proximitySupportDirectory`; tests inject their own root. |
 | `JSONSidecarFile.load()` | Reads and decodes the sidecar, returning `nil` on any failure (absent, unreadable, or undecodable) — deliberately the naive idiom, so callers substitute their own defaults. Data of record must use `ProtectedSidecar` instead, which classifies read failures. |
 | `JSONSidecarFile.save(_:)` | Encodes, creates the parent directory, and writes atomically with `.completeFileProtection`; failures are silently dropped. Unlike `ProtectedSidecar`, it does not exclude the file from backup. |
 | `JSONSidecarFile.removeFile()` | Best-effort delete for the clear-all/reset path. |
 
 Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityActivityManager`, and the mesh photo-wall preferences.
+
+> **Correction (2026-08-20) — this section previously documented a `defaultFileURL(name:)` that was
+> deliberately deleted (`02d2ba3`, "put the last four sidecars on the per-store root"), and printed
+> the wrong runtime path.** If you read the old text and added a
+> convenience default back, or wrote `Application Support/App/Fernlet/…` into anything, undo it.
+>
+> There is deliberately **no** argument-less default. A process-wide default root is exactly how a
+> store rejoins the shared-root race this codebase spent a round eliminating: these sidecars are
+> shared *mutable on-disk state* that wipes reach, the test runner puts many stores in one process,
+> and a default that silently resolves to the process-wide root would let one store read and
+> overwrite another's file — while compiling cleanly, because the omission is invisible. Every owner
+> states its root, the same way every heart-drop caller states its `HeartDropStorageScope`. The
+> in-source comment where `defaultFileURL(name:)` used to be says so; do not re-add it.
+>
+> The production root is `Application Support/Fernlet`, defined once in
+> `ProximitySupportLayout.defaultDirectory` and reached through
+> `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
+> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root).
+> The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
+> seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
+> caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.
 
 ## Expansion Plan For The Rest Of The App
 
@@ -729,8 +1116,8 @@ The rest of the function index should not be one long alphabetical dump. Group i
 | Next Group | Files To Include | Why This Group Belongs Together | Duplicate-Effort Questions |
 | --- | --- | --- | --- |
 | App shell and shared UI | `FernletApp.swift`, `ContentView.swift`, `FernletUIComponents.swift`, `FernletTheme.swift`, `SettingsSheet.swift`, `SharedSheets.swift` | These files define app entry, tab/sheet routing, theme, reusable controls, and cross-feature sheet patterns. | Are we adding a new view component when a shared Fernlet component already exists? Are sheet/navigation states duplicated in feature views instead of routed through the shell? |
-| Store, repositories, persistence | `Models.swift`, `FernletStore.swift`, `FernletStoreLoader.swift`, `LocalFernletRepository.swift`, `CoreDataFernletRepository.swift`, `Persistence.swift`, `PrivatePersistenceController.swift`, `SnapshotSaveCoordinator.swift`, `StoragePreferences.swift` | This is the core data contract and save/load orchestration. It should be indexed before most feature files because many feature functions delegate here. | Is persistence logic repeated in a view? Is mutation going through `FernletStore` or bypassing it? Are repository snapshot conversions duplicated? |
-| Extracted store services | `AIRetryQueueService.swift`, `DerivedSignalsService.swift`, `DerivedSignalsRebuilder.swift`, `SavedRecipeService.swift`, `BundledFoodSeedingService.swift`, `LaunchPreparationService.swift`, `PendingNarrativeBuffer.swift` | These are sub-services extracted from the store and are common places to accidentally reimplement scheduling, queueing, rebuild, seed, or save behavior. | Is there already a service handling this lifecycle? Are delayed tasks, retry queues, or rebuild windows being duplicated? |
+| Store, repositories, persistence *(done — see [StoreRepositoryFunctionIndex.md](StoreRepositoryFunctionIndex.md))* | the `FernletDomainModel` value types (the former `Models.swift`, split across `NutritionModels.swift` / `WorkoutModels.swift` / `WellbeingModels.swift` / `SettingsModel.swift` / `NavigationEnums.swift` / `CompanionModels.swift` in the SPM carve-up), `FernletStore.swift`, `FernletStoreLoader.swift`, `LocalFernletRepository.swift`, `CoreDataFernletRepository.swift`, `Persistence.swift`, `PrivatePersistenceController.swift`, `SnapshotSaveCoordinator.swift`, `StoragePreferences.swift` | This is the core data contract and save/load orchestration. It should be indexed before most feature files because many feature functions delegate here. | Is persistence logic repeated in a view? Is mutation going through `FernletStore` or bypassing it? Are repository snapshot conversions duplicated? |
+| Extracted store services *(done — see [StoreRepositoryFunctionIndex.md](StoreRepositoryFunctionIndex.md))* | `AIRetryQueueService.swift`, `DerivedSignalsService.swift`, `DerivedSignalsRebuilder.swift`, `SavedRecipeService.swift`, `PendingWriteBuffer.swift`, `LaunchPreparationService.swift`, `PendingNarrativeBuffer.swift` (the old `BundledFoodSeedingService.swift` is gone — bundled foods are a read-only SQLite store opened lazily by `FoodCatalog`, with no seed step to schedule) | These are sub-services extracted from the store and are common places to accidentally reimplement scheduling, queueing, rebuild, seed, or save behavior. | Is there already a service handling this lifecycle? Are delayed tasks, retry queues, or rebuild windows being duplicated? |
 | Lock, privacy, keychain, sealed backup | `FernletLockService.swift`, `FernletLockGate.swift`, `FernletLockView.swift`, `KeychainHelpers.swift`, `PrivacyDataSettingsView.swift`, `SealedBackupService.swift` if present in the project | Security-sensitive code should have its own section because duplicate crypto/keychain flows increase risk. | Are there two passcode/keychain/biometric paths? Is lock gating done through `FernletLockGate`? Are sealed backup and proximity identity sharing helper primitives correctly? |
 | Onboarding and startup choice flow | `OnboardingCoordinator.swift`, `OnboardingView.swift`, `OnboardingWelcomeView.swift`, `OnboardingPermissionsView.swift`, `OnboardingStorageChoiceView.swift`, `OnboardingLockSetupView.swift` | Onboarding coordinates profile, storage, permissions, and lock setup. These files share one state machine and should be read together. | Is first-run logic duplicated in app shell/settings? Are permission/storage decisions centralized in the coordinator? |
 | Food, nutrition, recipes | `FoodView.swift`, `FoodDataCatalog.swift`, `MealBuilder.swift`, `RecipeWebImporter.swift`, `FoodProductWebImporter.swift`, `RecipeShareCodec.swift`, `SavedRecipe.swift`, `CustomIngredientUpsert.swift`, `DishTemplateLexicon.swift`, `FoundationFoodSelection.swift`, `FoundationDishDecomposition.swift`, `NutritionLabelScanner.swift`, `NutritionLabelCameraSheet.swift` | This cluster owns food search, scan/import, recipes, meal construction, and nutrition parsing. It has high duplication risk because multiple entry points create ingredients/meals/recipes. | Is ingredient normalization already in `CustomIngredientUpsert` or `MealBuilder`? Are recipe import/share formats duplicated? Are scanner/importer parsing paths converging on the same models? |

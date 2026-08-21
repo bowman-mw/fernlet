@@ -1,6 +1,13 @@
 # Recipe P2P Real-Device Validation
 
 Use two physical iOS devices on the same build. Keep Bluetooth and Wi-Fi enabled.
+> **Status: no run of this checklist has ever been recorded.** The 2026-08-20 audit of `main`
+> found that **no two-device P2P flow in this app has any recorded real-device validation**, in an
+> app whose largest module (`ProximityKit`, ~19k lines) is exactly the part a simulator cannot
+> exercise — it is the single largest unverified risk on the release path
+> ([`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) §0). This file records the steps but
+> has nowhere to record an outcome — when the walk happens, note the date, the two device/iOS
+> versions and the result at the bottom, so the next reader can tell a passed run from an unrun one.
 
 ## Happy Path
 

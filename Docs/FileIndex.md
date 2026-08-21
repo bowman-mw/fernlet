@@ -2,7 +2,7 @@
 
 This index maps the main project files to their responsibilities. It is intended as a quick orientation guide for app navigation, feature work, tests, and documentation.
 
-Last updated: 2026-08-09. Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/App/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/Tests/FernletTests/…` etc. are the sibling test/extension targets.
+Last updated: 2026-08-20 (this pass rebuilt the Documentation table from the actual contents of `Docs/`, added the twenty-five test files and three scripts that had no row, and added the Localization section below). Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/App/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/Tests/FernletTests/…` etc. are the sibling test/extension targets.
 
 ## FernletKit Package (Module Map)
 
@@ -33,6 +33,43 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `FernletLock` | Layer 6 — app-lock service (Scrypt via CryptoSwift); drains the sealed pending-narrative buffer on unlock. |
 | `AppServices` | Layer 6 — assorted platform services: notifications, WeatherKit, nutrition-label OCR, barcode scanning, food image classification, share-extension import queue. |
 | `ProximityKit` | Layer 6 — the peer-to-peer subsystem as one black-box shim: mesh transport, identity, trust, ranging, and the recipe/photo/clothing/heart/message/moderation flows. |
+
+## Localization And The Token/Display Fork
+
+Phase 0 (locale-correctness fixes) and Phase 1 (string-catalog plumbing + the token/display forks)
+merged on 2026-08-19; `en` remains the development language and `es`/`fr`/`de` are the planned first
+wave (see [Localization-Plan-2026-07-19.md](Localization-Plan-2026-07-19.md)).
+
+| Path | Purpose |
+| --- | --- |
+| `Fernlet/App/Fernlet/Localizable.xcstrings` | App-target string catalog. |
+| `Fernlet/App/Fernlet/InfoPlist.xcstrings` | Localized Info.plist values (permission-purpose strings, display name). |
+| `Fernlet/App/Fernlet/AppShortcuts.xcstrings` | Localized App Intents / Siri shortcut phrases. |
+| `Fernlet/App/FernletWidgets/Localizable.xcstrings`, `Fernlet/App/FernletShareExtension/Localizable.xcstrings` | Extension-target catalogs. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/Localizable.xcstrings`, `Fernlet/FernletKit/Sources/FernletLockUI/Localizable.xcstrings` | Package catalogs. A `String(localized:)` inside a package MUST pass `bundle: .module` — without it the lookup resolves against `Bundle.main`, finds nothing, and silently returns the English literal. |
+| `Fernlet/Scripts/sync-string-catalogs.sh` | Repopulates the catalogs without opening Xcode (`xcodebuild` never writes into an `.xcstrings`; the sync half lives in the IDE, but the same `xcstringstool sync` ships in the toolchain and consumes the `.stringsdata` a build already emits). Run it after adding or changing user-facing strings and commit the catalog diff in the same commit; `--check` for CI. It is additive — keys that disappear are marked stale, never deleted, so a translation is never silently thrown away. |
+| `Fernlet/Tests/FernletTests/LocalizationBoundaryTests.swift` | The localization wall (sibling of the S3, no-tracking and Power-of-10 walls). Enforces the rule below. |
+
+**The rule: every string does exactly one job.** A TOKEN is a persisted `rawValue`, a mesh wire byte,
+an AI prompt word, a dictionary key, a matching input, an accessibility identifier, or an
+export/schema field — tokens are English forever, because they are compared, decoded, signed, and
+shipped between processes and devices. DISPLAY is what a person reads, and only display localizes.
+Where one string did both jobs it was FORKED: the token keeps its exact characters so already-persisted
+data still decodes, and a separate display property sits beside it.
+
+| Forked type | Token (persist / sign / prompt / compare) | Display |
+| --- | --- | --- |
+| `CareGroup` | `token` | `label` |
+| `MealConfidence` | `token`, plus a `legacyTokens` table for the pre-fork English phrases already in users' blobs | `label` |
+| `MealType` | `rawValue` — persisted on every meal AND the meal-parsing prompt's vocabulary, round-tripped as `MealType(rawValue:)` | `displayName` |
+| `WorkoutType` | `rawValue` — persisted on workout rows, matched by the exercise catalog, part of the trainer export | `displayName` |
+| `CompanionState` | `rawValue` — persisted on `DailyHealthScore`, byte-mirrored by `WidgetCompanionState` in a SEPARATE PROCESS, and a Coach-export field | `displayName` |
+| `CoachPlanTokens` vocabularies | the token vocabularies the export prompt publishes to plan authors | the app's own copy |
+| ProximityKit `PayloadSummary.title` / `subtitle` / `extraDetails` | frozen English — they are written into the canonical signing bytes and rendered in the RECEIVER's Connection Inspector | (none yet; a localized inspector would render `payloadTypeToken` through a receiver-side table) |
+
+Every failure mode here is silent: nothing crashes, no test goes red on its own, and the damage
+surfaces as lost rows or wrong behaviour in a language nobody on the team reads. That is why it is a
+wall and not a review checklist.
 
 ## App Entry And Shell
 
@@ -676,6 +713,29 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Tests/FernletTests/SessionMessageUnreadTests.swift` | Mesh session message unread signalling. |
 | `Fernlet/Tests/FernletTests/MeshFavoriteObservationTests.swift` | Favorite-peer observation and its effect on home weighting. |
 | `Fernlet/Tests/FernletTests/WeightedPhotowallOrderingTests.swift` | Weighted photo-wall ordering. |
+| `Fernlet/Tests/FernletTests/RepoRoot.swift` | Locates the repository root for every grep-wall suite, anchored on marker files rather than a hardcoded `deletingLastPathComponent()` depth. It exists because the App/+Tests/ restructure made every hand-counted depth resolve one directory short — and a wall suite handed a wrong root enumerates *nothing*, finds no violations, and **passes vacuously**. Marker anchoring either still resolves or fails loudly. |
+| `Fernlet/Tests/FernletTests/LocalizationBoundaryTests.swift` | The localization wall: pins the frozen raw values of every enum whose tokens are persisted/sealed/signed/prompted, grep-walls `String(localized:)` inside `FernletKit/Sources` for `bundle: .module`, pins the app↔widget cross-process companion-state contract no type system spans, and pins the derived-signal phrases six call sites string-compare. Every scan discovers its inputs via `RepoRoot` and carries a hard floor. |
+| `Fernlet/Tests/FernletTests/PasteboardBoundaryTests.swift` | Pasteboard grep-wall: every shipping write to `UIPasteboard.general` must go through `setItems(_:options:)` with `.localOnly: true`. A plain `UIPasteboard.general.string = …` is Handoff-synced to every device on the account, and there is no API to read an item's options back — this static check is the whole enforcement. |
+| `Fernlet/Tests/FernletTests/TestHookBoundaryTests.swift` | Debug/test-hook grep-wall: every shipping line reading a `FERNLET_UI_TEST_`/`FERNLET_SKIP_` launch flag must sit inside an open `#if DEBUG`, and `UITestSupport`'s `#else` block must define a no-op for every `static var` its DEBUG half declares. |
+| `Fernlet/Tests/FernletTests/PhotoDirectoryIsolationTests.swift` | Grep-wall keeping every test `FernletStore` on its own own-photo root. The three own-photo corpora are shared on-disk state that `resetAll`/`deleteAllData`/the duress wipe all clear, and parallel suites share one process — a store on the process-wide root has its photos deleted out from under it by any concurrent wipe. |
+| `Fernlet/Tests/FernletTests/PrivacyPolicyParityTests.swift` | Pins the privacy-policy triple in sync (in-app view, `Docs/Privacy-Policy.md`, `Site/privacy/index.html`): same effective date, same load-bearing clauses. Exists because the in-app copy once shipped without the verifiability paragraph the other two had. |
+| `Fernlet/Tests/FernletTests/FernletLockScopeTests.swift` | Per-surface unlock scopes: one unlock covers ONE locked surface. Before scoping, unlocking the progress-photo strip also opened the Private tab, with only an `onDisappear` re-lock in between — which a covering sheet or scene transition legitimately suppresses. |
+| `Fernlet/Tests/FernletTests/DuressLockTests.swift` | Duress PIN steps 1–4: the duress verifier's own salt, the unconditional derivation that closes the timing oracle, duress-FIRST ordering in every credential entry point, and the keyless decoy session. The property under test is indistinguishability from a benign unlock — same state, same audit line, no attempt/cooldown residue — while never handing over the real content key. |
+| `Fernlet/Tests/FernletTests/DuressDecoyAndWipeTests.swift` | Duress steps 5–6: the decoy must change NOTHING on disk (an in-memory flag riding the existing hide machinery, so the real passcode restores every surface exactly), and the silent wipe's crypto-erase must actually destroy. |
+| `Fernlet/Tests/FernletTests/DuressRecoveryTests.swift` | Duress steps 7–8: `DuressMode.recoveryLock` destroys every local way into the content key while KEEPING the sealed corpus and a recovery blob only the user's own second device can open, plus the two in-person ceremonies that enroll that device and get the key back. |
+| `Fernlet/Tests/FernletTests/DuressHardeningTests.swift` | The properties the duress PIN was supposed to have and did not — each suite pins one confirmed defect from the adversarial review (e.g. a duress session can never hold the `.appLockSettings` scope, the one screen that announces a duress code exists). |
+| `Fernlet/Tests/FernletTests/DuressSetupUITests.swift` | The duress setup screen's testable half: `DuressSetupAvailability` (which response may be armed, whether the recovery device may be un-enrolled) and the rejection copy the view surfaces rather than restates. Unit-level despite the name. |
+| `Fernlet/Tests/FernletTests/BackupExclusionLaunchGateTests.swift` | The default-on backup-exclusion launch gate — fresh installs default excluded, existing installs get a one-time honest prompt, nobody is silently flipped — plus the `LocalFernletRepository` day-blob exclusion that closes the last local Fernlet-data file the Privacy & Data toggle did not reach. |
+| `Fernlet/Tests/FernletTests/OwnPhotoKeyMigrationTests.swift` | The media-key split: own photos migrate off the shared friend-wall key onto their own key, with a dual-open safety net for stragglers. Pins `OwnPhotoMigrationLatch`'s CLOSED directions at least as hard as its open one — a latch set while one file was still sealed under the old key turns that file into unreadable bytes on a phone the user still owns. |
+| `Fernlet/Tests/FernletTests/OwnPhotoKeyBindingTests.swift` | The follow-on flip: the own-photos at-rest key becomes device-bound and the dual-open fallback goes away. Runs against REAL keychain rows (isolated `UserDefaults` for the latch/consent) because the thing under test is a keychain attribute. |
+| `Fernlet/Tests/FernletTests/SealedPhotoBackupTests.swift` | The own-photo escrow route: one sealed CloudKit record per photo id plus a sealed manifest written LAST as the commit marker, driven over a mock record database with a planted escrow identity. Pins incrementality — sealing photo B leaves A's record byte-identical, which a chunked scheme cannot do. |
+| `Fernlet/Tests/FernletTests/SealedBackupPayloadCoverageTests.swift` | Journal narratives and intimacy logs as first-class sealed-backup payloads, driven through `SealedBackupCoordinator` with a fake context: insert-into-empty, the one-way divergence latch, the locked-key deferral, and the empty-store-clobber guard, all against isolated sealed stores. |
+| `Fernlet/Tests/FernletTests/IntimacyLogRepositoryTests.swift` | The sealed-backup surface on `IntimacyLogRepository`: keyless row count, paged reader in a TOTAL order, all-or-nothing restore insert, and the one-way "this device has diverged" latch that stops a stale cloud backup resurrecting deliberately-deleted logs. |
+| `Fernlet/Tests/FernletTests/CoachPlanExchangeTests.swift` | The manual coach exchange (clipboard export → pasted `CoachPlan` → dated `PlannedWorkout` rows). The paste path takes untrusted text, so most of the suite is what the importer REFUSES: oversize blobs, truncated JSON, plans over the day cap, exercises with no safety metadata. |
+| `Fernlet/Tests/FernletTests/LocaleCorrectnessTests.swift` | Locale Phase 0: the month grid must start its week where `Calendar.firstWeekday` says. `veryShortWeekdaySymbols` is always Sunday-indexed, so rendering it unrotated over `firstWeekday - 1` blanks put every day cell under the wrong letter across most of Europe. |
+| `Fernlet/Tests/FernletTests/LocaleTolerantNumberTests.swift` | The shared free-text number parser behind every decimal field: iOS shows `.decimalPad` with the locale's separator, so es/fr/de users type `"2,5"` and bare `Double("2,5")` is nil — the value was silently dropped. Pins both spellings, grouped forms, the ambiguous `"1,500"` split, and the charset guard that keeps hex/inf/nan spellings out of clinical samples. |
+| `Fernlet/Tests/FernletTests/MicronutrientBoundsTests.swift` | Micronutrients arrive from two untrusted sources (a peer's recipe payload, a web page's JSON-LD) and were carried into the synced snapshot unbounded. Covers the wire half (`sanitizedForImport()` drops an implausible amount to "not measured" rather than fabricating a clamp) and the presentation half, which must be TOTAL because `Int(_: Double)` traps and already-poisoned days are synced. |
+| `Fernlet/Tests/FernletTests/WebScrapingKitTests.swift` | `WebScrapingKit`'s HTML/JSON-LD extraction primitives — net-new in the 2026-08-18 security round. The old `scriptContents(from:)` regex retried from every `<script` position, so a page with a few hundred thousand unclosed tags cost ~N²/2 comparisons for zero matches and could stall the main actor into a watchdog kill. Flood cases prove linearity; equivalence cases pin the rewrite's output against the regex it replaced. |
 
 ### Test Mocks
 
@@ -710,45 +770,88 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Tests/FernletUITests/DeleteAllDataUITests.swift` | End-to-end UI test proving "Delete everything" empties the app and stays deleted across a relaunch. |
 | `Fernlet/Tests/FernletUITests/DeleteAllDialogAppearanceUITests.swift` | Screenshots the "Delete everything?" confirm dialog and logs its rendered copy/buttons for review. |
 | `Fernlet/Tests/FernletUITests/TrainerExportShareUITests.swift` | Trainer-summary share flow, including the delete-on-share-completion path. |
+| `Fernlet/Tests/FernletUITests/CoachExchangeUITests.swift` | The manual coach exchange from the Move tab: that the gate gates, that both coach cards are reachable (the screen moved off Settings → Privacy & Data on 2026-08-12), and that the paste sheet refuses junk with a visible error. The copy button is only checked for existence and hittability — tapping it presents a data-leaves-the-device confirmation, and a UI test should not be what teaches anyone that dialog is skippable. |
+| `Fernlet/Tests/FernletUITests/MoveHeaderActionsUITests.swift` | The Move header after Suggest moved into the plan sheet and Share took its slot — pins BOTH ends, since Suggest missing from the header *and* the plan sheet would strand the whole suggestion engine behind a working-looking app. Deliberately contains no `XCTSkip`: an earlier draft's skips let both plan-sheet tests pass while verifying nothing. |
 
 ## Documentation
 
 DocC landing pages (one per SPM module, plus the app and extension targets) are the orientation
 layer and live in-source at `Documentation.docc/`; the tables below are the planning-doc layer.
 
-### Active
+### Trackers and orientation
 
 | File | Purpose |
 | --- | --- |
 | `Docs/FernletSpecificationV3.md` | Canonical product & architecture specification — the source of truth for intended behavior. |
 | `Docs/ImplementationPlan.md` | Phase definitions and rationale, with a reconciled phase-status table and the current "Next up" ordering at the end. |
-| `Docs/RemainingWork-2026-07-19.md` | The live work tracker: App Store items, user-visible defects, the owner-decided implementation queue, unstarted feature work, tech debt, and the real-device verification queue. |
+| `Docs/RemainingWork-2026-08-20.md` | **The live work tracker.** Compiled from a five-track audit that verified every claim in the previous tracker against code rather than against its own status lines; roughly a third of the old tracker was wrong, in both directions. Almost nothing left is feature work — the critical path is owner paperwork plus the unvalidated two-device P2P flows. |
+| `Docs/RemainingWork-2026-07-19.md` | **SUPERSEDED** by the 2026-08-20 tracker above. Kept for history only; its status lines understated what had shipped. Do not plan from it. |
+| `Docs/Next-Round-Prompt-2026-08-20.md` | Self-contained working prompt for the next session, drawn from the live tracker: four cheap defect fixes, two features whose infrastructure is already finished, and the CODEOWNERS repair. Every claim carries a `path:line` anchor that was true on 2026-08-20 and should be re-grepped. |
+| `Docs/FileIndex.md` | This file index. |
+| `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, recipe-share, presence, activities, clothing shop, messaging, and moderation code. Read before adding proximity behavior. |
+| `Docs/StoreRepositoryFunctionIndex.md` | Function-level map for `FernletStore`, repositories, persistence, storage preferences, snapshot saves, and the extracted store services. Read before adding data-mutation or save/load behavior. |
+
+### Privacy commitments, walls, and process
+
+| File | Purpose |
+| --- | --- |
+| `Docs/Privacy-Policy.md` | The published privacy policy text, mirrored by the in-app view and the hosted page; the triple is kept in sync by `PrivacyPolicyParityTests`. |
+| `Docs/Verifiability.md` | Standing commitment: the bridge between the promises in the privacy policy and the machinery that backs them. Every guarantee names the exact command, test, or file an outside auditor can run, so "trust us" can be replaced with "run this". The repo is public and `fernlet.com` is deployed. |
+| `Docs/Release-Process.md` | Standing process, and the governance half of `Verifiability.md`: branch protection, code-owner review, signed release tags, checksum publication, and the two one-time publish steps. The walls make a privacy regression loud; this makes shipping one attributable and gated. |
+| `Docs/No-Tracking-Wall.md` | The enforced no-tracking boundary: permitted network destinations and why each exists, mechanical vs. policy enforcement, and how to add a destination. Backed by `NoTrackingBoundaryTests`. |
+| `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
+| `Docs/Power-of-10-Swift.md` | The Power-of-10 wall: NASA's ten rules adapted to Swift/SwiftUI, rule by rule — what is enforced by `Scripts/power-of-10-scan.py` + `PowerOfTenBoundaryTests` (zero baseline + reasoned allowlist) and what is enforced by review. Read before writing any function. |
+| `Docs/SPM-Module-Carveup-Plan.md` | The `FernletKit` carve-up: the S3 compile-time privacy wall and cross-platform layering. One optional item remains (§14 AI-file inversions). |
+| `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
+| `Docs/Export-Compliance-Encryption.md` | Encryption export compliance: mass-market, ECCN 5D992.c, self-classified under License Exception ENC with no CCATS. Materially revised 2026-08-19 — the determination held, its *filing consequences* did not: §740.17(e)(3) was rewritten in 2021 to cover only encryption components and "executable software", so the annual February 1 report is almost certainly not owed, and the earlier text of this document asserted a recurring legal obligation that does not exist. |
+| `Docs/Export-Self-Classification-Memo.md` | The self-classification memorandum itself — the record §740.17(b)(1) obliges the developer to have made and be able to produce. Five-year retention past the last export. Engineering and regulatory analysis, explicitly not legal advice; §8 lists the two questions that warrant counsel. |
+
+### Reviews and audits (records, not plans)
+
+| File | Purpose |
+| --- | --- |
+| `Docs/Security-Review-External-Surfaces-2026-08-18.md` | Read-only review of every surface where data or control enters from outside the user's own in-app actions (mesh, CloudKit dead-drop, web import, share extension, camera, bundled SQLite, the AI ladder, HealthKit). **Resolved:** 30 of 35 findings fixed, 5 deliberately not. The original review is preserved as written; where it and the *Disposition* section disagree, the Disposition is correct. |
+| `Docs/Proximity-Security-Followups-2026-08-18.md` | The two items deliberately kept OUT of that round's guard commits because they change wire or key-exchange surface, recorded with their deadlines. Also stands in for the referenced `Proximity-Mesh-Redesign-2026-07-10.md`, which does not exist in this tree. |
+| `Docs/Memory-Leak-Review-2026-08-17.md` | Whole-codebase leak review (366 files, ~136k lines) plus a verification pass, fixes for every confirmed defect, and the two-part memory-lifecycle wall (`MemoryLifecycleTests` + the grep half) that stops the confirmed classes coming back. |
+| `Docs/CODE_REVIEW_Power-of-10-2026-08-16.md` | The audit that established the Power-of-10 baseline: findings per rule and slice, what was fixed, and the residual allowlist. |
+| `Docs/UI-UX-Review-2026-08-16.md` | Full-app UI/UX review across every surface: 271 findings raised, 12 refuted, **190 surviving** (28 high, 108 medium, 54 low; 18 Tier 2/structural). The 145 entries marked "Mockup needed: No" have since been implemented; the mockup-needed remainder is still open and keyed by stable id (`FOOD-01`, …). |
+| `Docs/Doc-Pass-Anomalies-2026-08-04.md` | Bugs, dead code, and smells logged during the DocC pass. **Never triaged** — several entries are real defects, not smells. |
+
+### Security-hardening track (2026-08-10)
+
+| File | Purpose |
+| --- | --- |
+| `Docs/Plan-Security-Hardening-Runbook.md` | The execution controller across both tracks: fixed global phase order, one phase per iteration, and the ledger. **All phases P0a–P8 are DONE**; the ledger records each merge commit and the residuals accepted or surfaced per phase. |
+| `Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md` | The crypto-critical / irreversible / novel-trust-model track: scoped-unlock rebase, crypto-erasure normalization, v2 salted escrow, journal+intimacy backup coverage, hard Secure-Enclave binding, the media-key split, and the duress PIN. |
+| `Docs/Plan-Security-Hardening-FableTrack-2026-08-10.md` | The lower-risk, mechanical, reversible, no-novel-crypto slice: PIN-before-biometrics, the deletion-audit verification pass, and default-on backup exclusion. |
+| `Docs/Design-Capture-Protection-2026-08-10.md` | Screenshot / screen-capture protection for the Private tab — **shipped** as runbook phase P8. Now the design record of a built feature (`FernletUI/CaptureProtection.swift`, six agreed surfaces), including the follow-ups deliberately not built and the manual device matrix still owed. |
+
+### Feature and design plans
+
+| File | Purpose |
+| --- | --- |
 | `Docs/FernletCoach-Specification-2026-07-19.md` | The Fernlet Coach track (P0→P4), both apps. **§3.3/§3.6/§6/§8 need revising** — they still describe the iMessage+CloudKit hybrid as primary, reversed by the owner on 2026-07-26. |
 | `Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md` | Sidecar durability, signed prekey, and the coach path. Tracks A and B shipped; Track C stopped at Increment 10's hardening subset — the coach session manager/UI is the outstanding work. |
 | `Docs/Data-Provenance-Coach-Trust-2026-07-12.md` | The coach trust model the coach spec builds on: origin class, trust basis, and per-source revocation. |
 | `Docs/D11-LinkMetadata-Prototype.md` | Harness for the coach P0 `LPLinkMetadata` device test. |
 | `Docs/AI-Provider-Ladder-2026-07-23.md` | The routed provider ladder. Provider seam shipped; the cloud/PCC, BYOK, and iOS-27 tracks remain gated. |
 | `Docs/AI-Feature-Expansion-2026-07-23.md` | Seven features riding the ladder, and the canonical build order for both AI docs. F3/F4/F5 shipped; F6/F7 deferred by decision D-C. |
-| `Docs/SPM-Module-Carveup-Plan.md` | The `FernletKit` carve-up: the S3 compile-time privacy wall and cross-platform layering. One optional item remains (§14 AI-file inversions). |
-| `Docs/Doc-Pass-Anomalies-2026-08-04.md` | Bugs, dead code, and smells logged during the DocC pass. **Never triaged** — several entries are real defects, not smells. |
 | `Docs/Meal-Estimation-Overhaul-Plan.md` | Meal-estimation overhaul. Partially shipped; the chain-restaurant importer and dynamic product-image discovery were not re-audited item-by-item. |
 | `Docs/Multi-Device-Without-iCloud-Design-2026-06-29.md` | Multi-device without iCloud. Phase 1 shipped; Phases 2–3 (owned-device pairing, mesh backup transfer, offline escrow, live merge) unstarted. |
-| `Docs/Custom-Clothing-Plan-2026-06-29.md` | Custom clothing: Increment 1 shipped (grid editor / wardrobe); Increments 2 (coins) and 3 (in-person friend shop) pending. |
-| `Docs/Localization-Plan-2026-07-19.md` | es/fr/de localization. Nothing implemented; Phase 0 fixes are live locale bugs even in English. |
-| `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow follow-ups, including BIP39 recovery codes. Not started. |
-| `Docs/Privacy-Policy.md` | The published privacy policy text, mirrored by the in-app view. |
-| `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
-| `Docs/No-Tracking-Wall.md` | The enforced no-tracking boundary: permitted network destinations and why each exists, mechanical vs. policy enforcement, and how to add a destination. Backed by `NoTrackingBoundaryTests`. |
-| `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
-| `Docs/Power-of-10-Swift.md` | The Power-of-10 wall: NASA's ten rules adapted to Swift/SwiftUI, rule by rule — what is enforced by `Scripts/power-of-10-scan.py` + `PowerOfTenBoundaryTests` (zero baseline + reasoned allowlist) and what is enforced by review. Read before writing any function. |
-| `Docs/CODE_REVIEW_Power-of-10-2026-08-16.md` | The audit that established the Power-of-10 baseline: findings per rule and slice, what was fixed, and the residual allowlist. |
-| `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. |
+| `Docs/Custom-Clothing-Plan-2026-06-29.md` | Custom clothing, coins, and the in-person friend shop. **All three increments have shipped** — the grid editor/wardrobe, the coin ledger (`StoreCore/CoinLedgerService.swift`), and the friend shop (`ProximityKit/ClothingSharing/MeshClothingShop.swift` + `App/Fernlet/FriendShopView.swift`). The plan's own status header still reads "Increments 2–3 pending" and is stale; trust the code. |
+| `Docs/Localization-Plan-2026-07-19.md` | es/fr/de localization. **Phase 0 (locale-correctness fixes) and Phase 1 (string-catalog plumbing + the token/display forks) shipped 2026-08-19**; the Phase 1 bulk string conversion and Phases 2–5 remain planned only. See the Localization section above for the token/display rule the forks established. |
+| `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow recovery (including BIP39 recovery codes) and the "nothing destructive happens silently" settings contract. **SHIPPED** — all five workstreams landed; the doc's own header once read "not started" long after the work was done. |
+
+### Runbooks and validation scripts
+
+| File | Purpose |
+| --- | --- |
+| `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. Record types added since the last deploy are listed in the persistence sections of the store index. |
 | `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |
 | `Docs/Recipe-P2P-Real-Device-Validation.md` | Two-device validation script for recipe sharing. |
-| `Docs/FileIndex.md` | This file index. |
-| `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, and recipe-share code. Read before adding proximity behavior. |
-| `Docs/StoreRepositoryFunctionIndex.md` | Function-level map for `FernletStore`, repositories, persistence, storage preferences, snapshot saves, and the extracted store services. Read before adding data-mutation or save/load behavior. |
 | `Docs/design-refs/*.html` | Design mockups the shipped UI was ported from (widget, first aid, companion moments, home ambiance, milestones, good vibes, barcode handoff). Cited from `FernletWidgetsBundle.swift`. |
+| `Docs/design-refs/ux-review-2026-08-16/` | The screenshot galleries and per-finding "Current" shots the UI/UX review keys its entries to. |
+
 
 ## Scripts And CI
 
@@ -757,6 +860,9 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Fernlet/Scripts/spm-wall-check.sh` | The ONE strict build: `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (S3 wall — a forbidden cross-wall `import` fails the build) plus `SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES` (Power-of-10 rule 10 — every warning, including the package warnings Xcode otherwise hides, is an error). Run pre-merge and in CI. |
 | `Fernlet/Scripts/power-of-10-scan.py` | Power-of-10 mechanical scan (rules 2/4/5/6/7/8/9 + assertion-density floor + allowlist hygiene); zero-violation baseline; `--advisory` lists the review-only signals; `--json` for tooling. |
 | `Fernlet/Scripts/power-of-10-allowlist.json` | The single reasoned allowlist read by both the scanner and `PowerOfTenBoundaryTests`; every entry names the invariant that makes the exemption safe. |
+| `Fernlet/Scripts/doc-coverage-scan.py` | Scans Swift sources for type declarations with no adjacent `///` doc comment. Zero undocumented is the enforced baseline; runs in the Power-of-10 CI workflow. |
+| `Fernlet/Scripts/sync-string-catalogs.sh` | Repopulates the `.xcstrings` catalogs outside Xcode via `xcstringstool sync` over the `.stringsdata` a build emits. Run after changing user-facing strings and commit the catalog diff with the code; `--check` for CI. Additive — vanished keys are marked stale, never deleted. |
+| `Fernlet/Scripts/release-checksum.sh` | Builds a release archive, emits SHA-256 checksums, and cuts a signed tag ([Release-Process.md](Release-Process.md), [Verifiability.md](Verifiability.md) §2). Honest limit, stated in the script itself: byte-exact verification of an App Store binary is impossible — Apple re-signs and re-encrypts every submission. What this gives is the self-build baseline: the signed tag pins the source, the checksums let two independent builders compare for drift, and a user can sideload their own build of the tag. |
 | `Fernlet/Scripts/spm-wall-selftest.sh` | Negative test proving the wall is load-bearing: plants a forbidden `import PrivateHealthStore` in `AIProviders`, asserts the build fails, then reverts. |
 | `Fernlet/Scripts/install-git-hooks.sh` | Once per clone: points `core.hooksPath` at the versioned `Scripts/git-hooks` so pushes run the wall check. |
 | `Fernlet/Scripts/git-hooks/pre-push` | Versioned pre-push hook: runs `power-of-10-scan.py` on every push and `spm-wall-check.sh` when a push touches any Swift/manifest/project file. |

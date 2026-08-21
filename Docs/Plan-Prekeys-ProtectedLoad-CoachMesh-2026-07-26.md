@@ -1,5 +1,20 @@
 # Plan — sidecar durability, prekey coverage, coach-path posture (2026-07-26)
 
+> **Status: EXECUTED and merged 2026-07-27 as `fe81476`** — Tracks **A** and **B** in full, Track C
+> **Increment 8**, and **Increment 10** as the test-driven hardening subset. Track C's **Increment 9
+> is the one part still unbuilt, and it was always a checklist rather than build work**: the coach
+> dead-drop is the off-week *secondary* channel, so it waits behind the in-person session. What
+> Increment 10 shipped is the hardening *ahead* of that session — the trainer tap gate that deadlocked
+> on all hardware, `CoachVerificationCeremony`, `CoachSessionTrustPolicy` (a coach is not a friend, so
+> the friend policy's unconditional `isTrustedProximityPeer` must never be injected into a coach
+> coordinator), the pre-decrypt wire-size gate, and the role split written down as an executable
+> contract. **None of it has a production caller yet** — the coach session manager and its UI are the
+> outstanding work, and `Docs/FileIndex.md` flags those types accordingly. Read the increments below
+> as built specifications except Increment 9.
+>
+> Two adversarial review rounds on this branch found 11 real defects in the work, two of which would
+> have shipped silent data loss; the merge commit message is the record.
+
 Branch: `claude/heartdrop-durability` (off `main` @ `db40340`). Source: three research passes over the
 just-merged bitchat-adoptions round (the bitchat-adoptions plan, since retired from the tree)
 plus a spot-check of the shipped code. bitchat remains the pattern reference (Unlicense); nothing is
