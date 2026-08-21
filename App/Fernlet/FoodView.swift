@@ -23,6 +23,11 @@ import ImageIO
 /// from the app group so a step advance made from the Live Activity or Siri is picked up.
 struct FoodView: View {
     var store: FernletStore
+    /// Reports meals logged from THIS tab's own surfaces (the Planned-today card, recipe rows,
+    /// the recipe detail and book) so the host can raise the post-log toast (FLOW-15). The host
+    /// (ContentView) passes its `showMealLogNotification` here; the MealSheet keeps its separate
+    /// `onLogged` wiring. Defaults to a no-op so construction sites compile before wiring.
+    var onMealsLogged: ([Meal]) -> Void = { _ in }
     @Binding var activeSheet: FernletSheet?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
@@ -56,6 +61,7 @@ struct FoodView: View {
 
                     macrosSection
 
+                    plannedTodaySection
                     cookingResumeSection
                     pendingRetrySection
                     todayMealsSection
@@ -108,6 +114,79 @@ struct FoodView: View {
                     .foregroundStyle(Color.moss)
                     .accessibilityIdentifier("food.adjustTargets")
             }
+        }
+    }
+
+    /// The "Planned today" card (2026-08-21, FOOD-35): one Log pill per recipe planned on today,
+    /// each logging against the meal slot it was planned for — a plan made on Sunday costs one tap
+    /// on Wednesday. Renders ONLY on days with a plan: no empty state, no nagging.
+    @ViewBuilder private var plannedTodaySection: some View {
+        let items = plannedTodayItems
+        if !items.isEmpty {
+            FernletScrollSection("Planned today") {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { FernletRowDivider() }
+                        plannedTodayRow(item)
+                    }
+                }
+            }
+        }
+    }
+
+    /// One planned recipe: name over "slot · P n g", with the Log pill at the trailing edge.
+    private func plannedTodayRow(_ item: PlannedTodayItem) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.recipe.name)
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                plannedTodayDetailLine(item)
+            }
+            Spacer(minLength: 0)
+            Button("Log") {
+                logRecipe(item.recipe, mealType: item.entry.mealType, isSaved: item.isSaved)
+            }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .accessibilityLabel("Log \(item.recipe.name)")
+            .accessibilityIdentifier("food.plannedToday.log")
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// The planned slot (omitted for a legacy slotless entry) beside the per-serving protein.
+    private func plannedTodayDetailLine(_ item: PlannedTodayItem) -> some View {
+        HStack(spacing: 6) {
+            if let mealType = item.entry.mealType {
+                Text(verbatim: mealType.displayName)
+                Text(verbatim: "\u{00B7}")
+            }
+            Text("P \(plannedPerServingProtein(item))g")
+        }
+        .font(.fernlet(.labelSmall))
+        .foregroundStyle(Color.slate)
+    }
+
+    /// Per-serving protein for a planned recipe: the import's own per-serving figure for a
+    /// saved/web recipe, the resolved totals divided by yield for a manual one.
+    private func plannedPerServingProtein(_ item: PlannedTodayItem) -> Int {
+        if let webImport = item.recipe.webImport { return webImport.macros.protein }
+        let divisor = max(item.recipe.servings, 1)
+        return Int((Double(store.macroTotals(for: item.recipe).protein) / Double(divisor)).rounded())
+    }
+
+    /// Today's plan resolved against both recipe stores (merged typed+legacy read); a dangling id
+    /// resolves to nothing and is dropped silently, exactly as the planner does.
+    private var plannedTodayItems: [PlannedTodayItem] {
+        store.day.plannedMealEntries.compactMap { entry in
+            if let recipe = store.recipes.first(where: { $0.id == entry.recipeID }) {
+                return PlannedTodayItem(entry: entry, recipe: recipe, isSaved: false)
+            }
+            if let saved = store.savedRecipes.first(where: { $0.id == entry.recipeID }) {
+                return PlannedTodayItem(entry: entry, recipe: saved, isSaved: true)
+            }
+            return nil
         }
     }
 
@@ -232,7 +311,8 @@ struct FoodView: View {
                         store: store,
                         editingRecipe: $editingRecipe,
                         editingSavedRecipe: $editingSavedRecipe,
-                        isEmbeddedInNavigationStack: true
+                        isEmbeddedInNavigationStack: true,
+                        onMealsLogged: onMealsLogged
                     )
                 } label: {
                     Text("Recipe book")
@@ -304,11 +384,9 @@ struct FoodView: View {
             }
             .buttonStyle(.plain)
             #endif
-            HStack(spacing: 12) {
-                Spacer()
-                RecipeMealTypeMenu { mealType in
-                    logRecipe(recipe, mealType: mealType, isSaved: isSaved)
-                }
+            RecipeRowLogControl(onLog: { mealType in
+                logRecipe(recipe, mealType: mealType, isSaved: isSaved)
+            }) {
                 RecipeShareButton {
                     recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
                 }
@@ -344,13 +422,17 @@ struct FoodView: View {
         if isSaved { editingSavedRecipe = recipe } else { editingRecipe = recipe }
     }
 
-    /// Logs a recipe through the store method that matches its half (manual vs saved/web).
-    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType, isSaved: Bool) {
+    /// Logs a recipe through the store method that matches its half (manual vs saved/web) and
+    /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
+    /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
+    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
+        let meal: Meal
         if isSaved {
-            store.logSavedRecipe(recipe, mealType: mealType)
+            meal = store.logSavedRecipe(recipe, mealType: mealType)
         } else {
-            store.logRecipe(recipe, mealType: mealType)
+            meal = store.logRecipe(recipe, mealType: mealType)
         }
+        onMealsLogged([meal])
     }
 
     /// The proximity share draft for a recipe, using its half's share-text builder.
@@ -468,6 +550,17 @@ struct FoodView: View {
             .padding(.top, 10)
         }
     }
+}
+
+/// One row of the Food root's "Planned today" card: a plan entry resolved to its live recipe,
+/// with the store half (`isSaved`) that owns it so the Log pill routes to the right log method.
+///
+/// Identifiable by the plan entry's recipe id (the plan holds at most one entry per recipe).
+private struct PlannedTodayItem: Identifiable {
+    let entry: PlannedMealEntry
+    let recipe: RecipeDefinition
+    let isSaved: Bool
+    var id: UUID { entry.recipeID }
 }
 
 /// One meal-type group in the "Today" card.
@@ -1768,11 +1861,81 @@ private struct CollapsedIngredientRow: View {
     }
 }
 
+/// The shared debounce + detached-query mechanics behind every catalog typeahead in the food
+/// surfaces — the recipe editor's ingredient search and Adjust meal's Replace/"Add an item"
+/// fields (FOOD-05), extracted so the two can't drift.
+///
+/// `matches` settles the keystroke (220 ms; a newer `.task(id:)` keystroke cancels the sleep and
+/// aborts before any work), runs `FoodCatalog.results(for:)` — real SQLite + hydrate + score work
+/// over a catalog growing toward ~482k rows — on a detached task off the main actor, then returns
+/// nil when superseded so the caller keeps its current list instead of applying a stale result.
+/// An empty query returns `[]` immediately. Callers must invoke it from `.task(id:)` keyed on the
+/// live text, never synchronously in `body`.
+enum CatalogTypeahead {
+    /// One settled-keystroke query. nil = this call was superseded; apply nothing.
+    static func matches(for text: String, catalog: FoodCatalog) async -> [FoodItem]? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
+        do {
+            try await Task.sleep(for: .milliseconds(220))
+        } catch {
+            return nil
+        }
+        // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
+        let hits = await Task.detached { [catalog] in
+            catalog.results(for: trimmed)
+        }.value
+        // Drop the result if this task was superseded while the query was running.
+        guard !Task.isCancelled else { return nil }
+        return hits
+    }
+}
+
+/// One catalog typeahead suggestion: name + provenance badge over the reference serving/macros.
+///
+/// Shared by the recipe editor's ingredient search and Adjust meal's Replace/"Add an item" fields
+/// so a suggestion reads identically wherever it appears (FOOD-05).
+private struct CatalogSuggestionRow: View {
+    var foodItem: FoodItem
+    var onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(foodItem.name)
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                        Text(foodItem.dataSourceLabel)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.parchment, in: Capsule())
+                    }
+                    Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(Color.slate)
+                }
+                Spacer()
+                Image(systemName: "plus.circle")
+                    .foregroundStyle(Color.moss)
+            }
+            .padding(10)
+            .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// The expanded editor for one recipe ingredient: a debounced catalog typeahead, quantity/unit
 /// controls, and either locked catalog macros or manual macro entry.
 ///
 /// Typeahead results come from `FoodCatalog.results(for:)` — real SQLite + index + score work over a
-/// catalog growing toward ~482k rows — so the query runs debounced and off the main actor. Selecting a
+/// catalog growing toward ~482k rows — so the query runs debounced and off the main actor (the
+/// shared ``CatalogTypeahead`` mechanics). Selecting a
 /// suggestion binds the ingredient to the catalog item (locking its macros); editing the name away
 /// unbinds it, and the editor deliberately never auto-binds on an exact name match so branded products
 /// can't hijack common words like "chicken". "Save custom ingredient" persists manual macros as a user
@@ -1853,42 +2016,10 @@ private struct RecipeIngredientEditor: View {
         if !matchingFoodItems.isEmpty && selectedFoodItem == nil {
             VStack(spacing: 4) {
                 ForEach(matchingFoodItems) { foodItem in
-                    suggestionRow(foodItem)
+                    CatalogSuggestionRow(foodItem: foodItem) { select(foodItem) }
                 }
             }
         }
-    }
-
-    /// One catalog typeahead suggestion: name + provenance badge over the reference serving/macros.
-    private func suggestionRow(_ foodItem: FoodItem) -> some View {
-        Button {
-            select(foodItem)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(foodItem.name)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                        Text(foodItem.dataSourceLabel)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Color.parchment, in: Capsule())
-                    }
-                    Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer()
-                Image(systemName: "plus.circle")
-                    .foregroundStyle(Color.moss)
-            }
-            .padding(10)
-            .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var saveCustomIngredientButton: some View {
@@ -1947,8 +2078,9 @@ private struct RecipeIngredientEditor: View {
         }
     }
 
-    /// The debounced typeahead query behind `.task(id: ingredient.name)`: settle the keystroke, run
-    /// the catalog search off the main actor, and drop the result if a newer keystroke superseded it.
+    /// The debounced typeahead query behind `.task(id: ingredient.name)`: the shared
+    /// ``CatalogTypeahead`` mechanics (settle the keystroke, run the catalog search off the main
+    /// actor, drop a superseded result), plus this editor's own gating on a chosen food.
     private func refreshTypeahead() async {
         let text = ingredient.trimmedName
         // Mirror the render gating: nothing to show when a food is chosen or the field is empty.
@@ -1956,18 +2088,8 @@ private struct RecipeIngredientEditor: View {
             matchingFoodItems = []
             return
         }
-        // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
-        do {
-            try await Task.sleep(for: .milliseconds(220))
-        } catch {
-            return
-        }
-        // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
-        let hits = await Task.detached { [catalog] in
-            catalog.results(for: text)
-        }.value
-        // Drop the result if this task was superseded while the query was running.
-        guard !Task.isCancelled else { return }
+        // nil = superseded by a newer keystroke: keep the current list rather than a stale one.
+        guard let hits = await CatalogTypeahead.matches(for: text, catalog: catalog) else { return }
         matchingFoodItems = hits
     }
 
@@ -2076,6 +2198,21 @@ struct MealSheet: View {
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     @State private var isResolvingMeal = false
+    /// True while the by-hand macro fields (FOOD-24) are revealed. With any nonzero value typed,
+    /// Save logs those numbers directly instead of running the resolve cascade.
+    @State private var isEnteringMacrosByHand = false
+    @State private var manualProtein = 0
+    @State private var manualCarbs = 0
+    @State private var manualFat = 0
+    /// Presents the dedicated Recent-meals surface (FOOD-07) from the capture row.
+    @State private var showingRecentMeals = false
+    /// Set when a repeat was logged FROM the Recent surface, so that sheet's dismissal also closes
+    /// this composer — the same deferred-exit pattern as `pendingScannedFood`'s onDismiss.
+    @State private var didLogFromRecent = false
+    /// Drives the chips' accessibility degradations (4a·AX3/AX5): one chip per row at
+    /// accessibility sizes; the Auto chip drops its inferred value and the section label goes at
+    /// the AX5 floor.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// True once a meal has been committed but the sheet stayed open (photo-save failure notice). The
     /// save bar then becomes a Done/dismiss — a second "Save" tap must never log the same meal twice.
     @State private var didLogMeal = false
@@ -2147,6 +2284,7 @@ struct MealSheet: View {
     private var hasUnsavedDraft: Bool {
         guard !didLogMeal else { return false }
         if !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        if handEnteredMacros != nil { return true }
         #if canImport(UIKit)
         if mealPhoto != nil || mealPhotoData != nil { return true }
         #endif
@@ -2220,6 +2358,15 @@ struct MealSheet: View {
             .sheet(item: $reviewContext) { context in
                 reviewSheet(context)
             }
+            .sheet(isPresented: $showingRecentMeals, onDismiss: {
+                // A repeat logged from the Recent surface finishes the whole log flow — the
+                // composer beneath has nothing left to do, so it exits once that sheet settles
+                // (the same deferred-exit pattern as `pendingScannedFood`'s onDismiss). A plain
+                // Done/swipe-away without a log just returns to the composer.
+                if didLogFromRecent { dismiss() }
+            }) {
+                recentMealsSurface
+            }
         #if canImport(UIKit)
             .sheet(item: $captureChooser) { context in
                 captureChooserSheet(context)
@@ -2235,6 +2382,23 @@ struct MealSheet: View {
                 servingStepSheet(pending)
             }
         #endif
+    }
+
+    /// The dedicated Recent surface (FOOD-07), configured to file the repeat for NOW: the sheet's
+    /// own Meal-type choice when the user made one, otherwise the same by-time "Auto" rule a typed
+    /// log follows — never the source meal's old slot or note (the store drops the carried note
+    /// and stamps the copy "Repeated"; see `FernletStore.copyMeal`).
+    private var recentMealsSurface: some View {
+        RecentMealsSheet(store: store) { meal in
+            let copiedMeal = store.copyMeal(
+                meal, mealType: mealType ?? MealParser.classifyMealType(meal.name))
+            onLogged([copiedMeal])
+            didLogFromRecent = true
+            showingRecentMeals = false
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(20)
     }
 
     /// The pre-log review sheet for a low-confidence or partially-matched resolution.
@@ -2359,11 +2523,10 @@ struct MealSheet: View {
     private var mealContent: some View {
         VStack(spacing: 0) {
             ScrollView {
+                // FOOD-08 order: field → meal-type chips DIRECTLY under it → the capture row —
+                // type, slot, Save, without a drag. The title lives in the pinned template header
+                // (the draft guard below), not in the scroll.
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Log meal")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     photoAndIdentifySection
 
                     SheetField("What did you eat?") {
@@ -2375,9 +2538,13 @@ struct MealSheet: View {
                         }
                     }
 
+                    mealTypeChips
+
                     captureButtonsSection
 
-                    mealTypeChips
+                    if isEnteringMacrosByHand {
+                        manualMacrosSection
+                    }
 
                     noticeSection
                 }
@@ -2400,8 +2567,9 @@ struct MealSheet: View {
         // Cancel dismisses a clean sheet outright and asks first when there's something to lose;
         // discarding mid-resolve also disarms the in-flight commit (`abandonedResolve`). It sits on
         // the composer rather than the whole stack so a pushed page (Scan, Import) keeps its own
-        // back chevron instead of growing a second bar above it.
-        .fernletDraftGuard(isDirty: isResolvingMeal || hasUnsavedDraft) {
+        // back chevron instead of growing a second bar above it. The title-bearing form is the
+        // 2026-08-21 template chrome: the pinned header carries Cancel and the sheet's serif title.
+        .fernletDraftGuard(isDirty: isResolvingMeal || hasUnsavedDraft, title: "Log meal") {
             abandonedResolve = isResolvingMeal
             dismiss()
         }
@@ -2432,32 +2600,41 @@ struct MealSheet: View {
         #endif
     }
 
-    /// One primary, quiet helpers. "Capture" opens the camera as the delightful default; barcode
-    /// Scan, Recent history, and Import stay reachable but demoted.
+    /// Quiet helpers only (XCUT-14): Capture drops to a cream secondary BESIDE "Scan label" — it
+    /// was a full-width moss button one screen-third above the moss Save, and the louder green
+    /// wasn't the commit. Recent (its own surface now — FOOD-07) and Import share a second row,
+    /// and the stated by-hand macros path (FOOD-24) sits beneath.
     private var captureButtonsSection: some View {
         VStack(spacing: 10) {
             #if canImport(UIKit)
-            // A camera shot goes through the auto-detect front door; a library pick is just
-            // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
-            PhotoCaptureControl(
-                onCameraCapture: { handleCapturedPhoto($0) },
-                onLibraryPickData: { data, _ in setLibraryPickedMealPhoto(data) }
-            ) {
-                mealCapturePrimaryLabel
-            }
-            .accessibilityLabel("Capture food")
-
             HStack(spacing: 8) {
-                mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
+                // A camera shot goes through the auto-detect front door; a library pick is just
+                // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
+                PhotoCaptureControl(
+                    onCameraCapture: { handleCapturedPhoto($0) },
+                    onLibraryPickData: { data, _ in setLibraryPickedMealPhoto(data) }
+                ) {
+                    mealSecondaryLabel("Capture", icon: "camera.fill")
+                }
+                .accessibilityLabel("Capture food")
+                mealSecondaryButton("Scan label", icon: "barcode.viewfinder") {
                     path.append(.scanBarcode)
                 }
-                recentMealsMenu
-                // Import is a web lookup end to end. Offering it with web nutrition lookup switched
-                // off led to a screen that accepted a search and then refused it, so it only appears
-                // when the lookup it depends on is actually available.
-                if store.allowsWebNutritionLookup {
-                    mealSecondaryButton("Import", icon: "link.badge.plus") {
-                        path.append(.productPageImport)
+            }
+            // Import is a web lookup end to end. Offering it with web nutrition lookup switched
+            // off led to a screen that accepted a search and then refused it, so it only appears
+            // when the lookup it depends on is actually available.
+            if !store.recentMeals.isEmpty || store.allowsWebNutritionLookup {
+                HStack(spacing: 8) {
+                    if !store.recentMeals.isEmpty {
+                        mealSecondaryButton("Recent", icon: "clock.arrow.circlepath") {
+                            showingRecentMeals = true
+                        }
+                    }
+                    if store.allowsWebNutritionLookup {
+                        mealSecondaryButton("Import", icon: "link.badge.plus") {
+                            path.append(.productPageImport)
+                        }
                     }
                 }
             }
@@ -2468,45 +2645,81 @@ struct MealSheet: View {
                 }
             }
             #endif
+            macrosByHandToggle
         }
     }
 
-    #if canImport(UIKit)
-    /// The "Recent" one-tap re-log menu (the store caps `recentMeals`; this shows the newest eight).
-    @ViewBuilder private var recentMealsMenu: some View {
-        if !store.recentMeals.isEmpty {
-            Menu {
-                ForEach(store.recentMeals.prefix(8)) { meal in
-                    Button(meal.name) {
-                        // File the repeat for NOW: the sheet's own Meal-type choice when the user made
-                        // one, otherwise the same by-time "Auto" rule a typed log follows. Without a
-                        // slot the copy inherited the source meal's, so yogurt repeated at 7:35 PM
-                        // landed under Breakfast. (The store drops the carried note and stamps the copy
-                        // "Repeated" — see `FernletStore.copyMeal`.)
-                        let copiedMeal = store.copyMeal(
-                            meal, mealType: mealType ?? MealParser.classifyMealType(meal.name))
-                        onLogged([copiedMeal])
-                        dismiss()
-                    }
-                }
-            } label: {
-                mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
-            }
+    /// The stated path to typing macros (FOOD-24), on the sheet rather than buried behind a scan:
+    /// reveals the three protein/carbs/fat fields inline. There is no "you can add them later" —
+    /// the fields are right here.
+    private var macrosByHandToggle: some View {
+        Button {
+            withAnimation(FernletMotion.ui) { isEnteringMacrosByHand.toggle() }
+        } label: {
+            mealSecondaryLabel("Enter macros by hand", icon: "square.and.pencil")
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The three by-hand macro fields. Editable always; a label scan that reached this composer
+    /// would prefill them, but the scan flows commit through their own confirm step, so they
+    /// start at zero here. Any nonzero value routes Save through the direct by-hand log.
+    private var manualMacrosSection: some View {
+        SheetField("Macros") {
+            MealMacroEditorRows(protein: $manualProtein, carbs: $manualCarbs, fat: $manualFat)
         }
     }
-    #endif
 
-    private var mealTypeChips: some View {
-        SheetField("Meal type") {
-            FlowLayout(spacing: 8) {
-                Button("Auto") { mealType = nil }
-                    .buttonStyle(ChipButtonStyle(selected: mealType == nil))
-                ForEach(MealType.allCases) { type in
-                    Button { mealType = type } label: { Text(verbatim: type.displayName) }
-                        .buttonStyle(ChipButtonStyle(selected: mealType == type))
-                }
+    /// The meal-slot chips, DIRECTLY under the description field (FOOD-08): six chips in one
+    /// fixed order, Breakfast first, wrapping to two rows. The preselected Auto chip STATES its
+    /// inference (FOOD-14), recomputed as the text and clock imply. At accessibility sizes the
+    /// chips stack one per row (4a·AX3); at the AX5 floor the section label goes (4a·AX5).
+    @ViewBuilder private var mealTypeChips: some View {
+        if dynamicTypeSize >= .accessibility5 {
+            mealTypeChipList
+        } else {
+            SheetField("Meal type") { mealTypeChipList }
+        }
+    }
+
+    /// The chip stack itself: a wrapping flow normally, one chip per row at accessibility sizes.
+    @ViewBuilder private var mealTypeChipList: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) { mealTypeChipButtons }
+        } else {
+            FlowLayout(spacing: 8) { mealTypeChipButtons }
+        }
+    }
+
+    @ViewBuilder private var mealTypeChipButtons: some View {
+        autoMealTypeChip
+        ForEach(MealType.allCases) { type in
+            Button { mealType = type } label: { Text(verbatim: type.displayName) }
+                .buttonStyle(ChipButtonStyle(selected: mealType == type))
+        }
+    }
+
+    /// The Auto chip, stating what it inferred ("Auto · Breakfast") so the user can confirm
+    /// rather than guess. The inferred value scales down slightly before wrapping (4a·AX3) and is
+    /// dropped entirely at the AX5 floor.
+    private var autoMealTypeChip: some View {
+        Button { mealType = nil } label: {
+            if dynamicTypeSize >= .accessibility5 {
+                Text("Auto")
+            } else {
+                Text("Auto \u{00B7} \(inferredMealType.displayName)")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
+        .buttonStyle(ChipButtonStyle(selected: mealType == nil))
+    }
+
+    /// The slot the "Auto" rule would file this meal under right now — the same
+    /// `MealParser.classifyMealType` keyword-then-hour inference the resolve path applies, shown
+    /// pre-save for the first time (FOOD-14).
+    private var inferredMealType: MealType {
+        MealParser.classifyMealType(description)
     }
 
     /// The calm inline notice line plus the "couldn't read that one" capture banner.
@@ -2534,6 +2747,11 @@ struct MealSheet: View {
             dismiss()
             return
         }
+        // By-hand macros first (FOOD-24): typed numbers ARE the meal — no resolve, no AI.
+        if let macros = handEnteredMacros {
+            logHandEnteredMeal(macros)
+            return
+        }
         let mealDescription = description
         let selectedMealType = mealType
         if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
@@ -2553,6 +2771,33 @@ struct MealSheet: View {
             }
         }
         resolveTypedMeal(mealDescription, type: selectedMealType)
+    }
+
+    /// The by-hand macros to log directly, or nil when the section is closed or all-zero (Save
+    /// then runs the normal resolve cascade).
+    private var handEnteredMacros: Macros? {
+        guard isEnteringMacrosByHand else { return nil }
+        guard manualProtein > 0 || manualCarbs > 0 || manualFat > 0 else { return nil }
+        return Macros(protein: manualProtein, carbs: manualCarbs, fat: manualFat)
+    }
+
+    /// Logs the described meal with the typed macros (FOOD-24) — attaching any held photo through
+    /// the same disarm-on-photo-failure path the resolve commit uses, so a photo that fails to
+    /// seal can never be answered with a second Save that logs the meal twice.
+    private func logHandEnteredMeal(_ macros: Macros) {
+        let meal = store.logHandEnteredMacroMeal(description: description, mealType: mealType, macros: macros)
+        #if canImport(UIKit)
+        let photoAttached = attachPhoto(mealPhoto, data: mealPhotoData, to: [meal])
+        #else
+        let photoAttached = true
+        #endif
+        onLogged([meal])
+        if photoAttached {
+            dismiss()
+        } else {
+            didLogMeal = true
+            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        }
     }
 
     /// Runs the normal free-text resolve cascade for a typed description: a low-confidence result
@@ -2810,34 +3055,17 @@ struct MealSheet: View {
     }
     #endif
 
-    #if canImport(UIKit)
-    /// The styled label for the single prominent capture affordance — "one button points at food."
-    /// It opens the camera (the delightful default); barcode/scan/import remain quiet helpers beneath
-    /// it. The tap behavior (camera, or library fallback) lives in the shared `PhotoCaptureControl`
-    /// that wraps this.
-    private var mealCapturePrimaryLabel: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 18, weight: .semibold))
-            Text("Capture")
-                .font(.fernlet(.label))
-        }
-        .foregroundStyle(Color.cream)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-        .fernletSmallShadow()
-    }
-    #endif
-
-    private func mealSecondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+    /// A quiet cream secondary in the capture row. `LocalizedStringKey`, not `String` — a `String`
+    /// parameter would silently opt every call site out of localization (the wall's one silent
+    /// failure mode); the icon name is a token and stays a plain `String`.
+    private func mealSecondaryButton(_ title: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             mealSecondaryLabel(title, icon: icon)
         }
         .buttonStyle(.plain)
     }
 
-    private func mealSecondaryLabel(_ title: String, icon: String) -> some View {
+    private func mealSecondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
@@ -2871,6 +3099,117 @@ struct MealSheet: View {
         }
     }
     #endif
+}
+
+/// The dedicated Recent-meals surface (2026-08-21, FOOD-07/FOOD-06), replacing the bare Menu in
+/// the log-meal composer's capture row.
+///
+/// Done top-right is the whole exit (read-only template chrome). Rows are the store's recent
+/// meals deduped case-insensitively with the most recent log winning, top eight
+/// (`FernletStore.dedupedRecentMeals`); each states meal type, when it was last eaten, and its
+/// protein — the only things that tell two identical names apart. The Log pill hands the meal to
+/// `onLog`, whose owner copies it onto today (fresh time, re-derived slot, note dropped). At
+/// accessibility sizes each row becomes a card — name, then slot and time, then a full-width Log —
+/// and the protein figure drops (4d·AX3).
+private struct RecentMealsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var store: FernletStore
+    /// Logs the chosen meal again; the owning composer copies it onto today and closes the flow.
+    var onLog: (Meal) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeader(
+                title: "Recent",
+                subtitle: "Tap to log it again with today's time.",
+                onDone: { dismiss() }
+            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    let meals = store.dedupedRecentMeals
+                    ForEach(Array(meals.enumerated()), id: \.element.id) { index, meal in
+                        if index > 0 { FernletRowDivider() }
+                        recentRow(meal)
+                    }
+                    Text("Repeats collapse into one row \u{2014} the most recent time wins.")
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                        .padding(.top, 16)
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+        }
+        .background(Color.parchment)
+    }
+
+    /// One recent meal: summary beside the Log pill, unstacking into a card at accessibility sizes.
+    @ViewBuilder private func recentRow(_ meal: Meal) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                recentTitle(meal)
+                recentDetailLine(meal, includesProtein: false)
+                logButton(meal)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.vertical, 8)
+        } else {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    recentTitle(meal)
+                    recentDetailLine(meal, includesProtein: true)
+                }
+                Spacer(minLength: 0)
+                logButton(meal)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func recentTitle(_ meal: Meal) -> some View {
+        Text(meal.name)
+            .font(.fernlet(.header))
+            .foregroundStyle(Color.bark)
+            .fernletWrappingText()
+    }
+
+    /// "<meal type> · <when> · P <n>g" — the disambiguating line. Protein drops at accessibility
+    /// sizes (meal type and time are what tell two identical names apart). Built with `Text`
+    /// interpolation (the `+` operator is deprecated-as-error on iOS 26); each interpolated half
+    /// keeps its own localization.
+    private func recentDetailLine(_ meal: Meal, includesProtein: Bool) -> some View {
+        let typeAndWhen = Text(
+            "\(Text(verbatim: meal.mealType.displayName)) \u{00B7} \(loggedAtText(meal.loggedAt))"
+        )
+        let line = includesProtein
+            ? Text("\(typeAndWhen) \u{00B7} P \(meal.macros.protein)g")
+            : typeAndWhen
+        return line
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+    }
+
+    private func logButton(_ meal: Meal) -> some View {
+        Button("Log") { onLog(meal) }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .accessibilityLabel("Log \(meal.name) again")
+    }
+
+    /// The row's "when": bare time for today, "Yesterday 7:40" for yesterday, weekday plus time
+    /// beyond that.
+    private func loggedAtText(_ date: Date) -> Text {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return Text(date, format: .dateTime.hour().minute())
+        }
+        if calendar.isDateInYesterday(date) {
+            return Text("Yesterday \(date, format: .dateTime.hour().minute())")
+        }
+        return Text(date, format: .dateTime.weekday(.abbreviated).hour().minute())
+    }
 }
 
 /// The "Import product" screen: search the web (or paste a product-page URL) for a packaged food,
@@ -3241,8 +3580,15 @@ struct FoodProductReviewSheet: View {
     }
 }
 
-/// One logged meal in the day list: name, note or component breakdown, macros, confidence tag,
-/// optional photo thumb, and delete / "Looks off?" correction actions.
+/// One logged meal in the day list: name, note or component breakdown, macros, a quiet provenance
+/// capsule, optional photo thumb, and the delete / Adjust correction actions.
+///
+/// 2026-08-21 (FOOD-15/FOOD-02): the WHOLE summary is the button — tapping it opens Adjust — with
+/// a right-aligned "Adjust ›" on its own trailing 44pt line so it can never wrap. The jargon tag
+/// became a quiet slate capsule in plain words (Estimated / Reviewed / From recipe) and is absent
+/// entirely for seeded demo logs; the X keeps its confirmation but takes the destructive tint. At
+/// accessibility sizes the thumbnail and the C/F figures drop so the name and Adjust stay whole
+/// (4b·AX3).
 ///
 /// The photo closures are injected so the row reads the sealed `MealPhotoStore` lazily and can
 /// distinguish a photo on another device from one that's here but unreadable (see
@@ -3260,56 +3606,100 @@ private struct MealRow: View {
     /// The row's own meal-type capsule. Suppressed when the row already sits under a meal-type section
     /// header (the "Today" card) so the type isn't labelled twice; defaults to shown for any other use.
     var showsMealTypeBadge: Bool = true
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                // The whole summary opens Adjust; delete stays OUTSIDE the button so the two
+                // targets can't nest (a Button inside a Button label never fires).
+                Button(action: onCorrect) {
+                    summaryContent
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                trailingColumn
+            }
+            adjustLine
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// The tappable summary: optional thumb beside name/note, breakdown, and the macros line.
+    private var summaryContent: some View {
         HStack(alignment: .top, spacing: 10) {
             #if canImport(UIKit)
-            if let loadData = loadPhotoData {
+            // The thumbnail is the first thing to give way at accessibility sizes (4b·AX3).
+            if let loadData = loadPhotoData, !dynamicTypeSize.isAccessibilitySize {
                 MealPhotoThumb(loadData: loadData, hasSealedData: hasPhotoSealedFile ?? { false })
             }
             #endif
             VStack(alignment: .leading, spacing: 8) {
-                titleRow
+                titleBlock
                 if let breakdownText {
                     breakdownCard(breakdownText)
                 }
                 macrosRow
             }
         }
-        .padding(.vertical, 4)
     }
 
-    /// Name, optional meal-type badge and note on the left; calories and delete on the right.
-    private var titleRow: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(meal.name).font(.fernlet(.header))
-                    if showsMealTypeBadge {
-                        Text(verbatim: meal.mealType.displayName)
-                            .font(.fernlet(.labelSmall))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(meal.mealType.color.opacity(0.25), in: Capsule())
-                    }
+    /// Name, optional meal-type badge, and the provenance note beneath.
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(meal.name).font(.fernlet(.header))
+                if showsMealTypeBadge {
+                    Text(verbatim: meal.mealType.displayName)
+                        .font(.fernlet(.labelSmall))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(meal.mealType.color.opacity(0.25), in: Capsule())
                 }
-                Text(displayNote)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
             }
-            Spacer()
-            VStack(alignment: .trailing) {
-                if showCalories {
-                    Text("\(meal.calories) cal").font(.fernlet(.stat))
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "xmark")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete meal")
+            Text(displayNote)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    /// Calories over the delete X — which keeps its "Remove this meal?" confirmation and now
+    /// carries the destructive tint (2b): it stopped reading as a neutral dismiss.
+    private var trailingColumn: some View {
+        VStack(alignment: .trailing) {
+            if showCalories {
+                Text("\(meal.calories) cal").font(.fernlet(.stat))
             }
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "xmark")
+                    .foregroundStyle(Color.terracottaInk)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete meal")
+        }
+    }
+
+    /// The right-aligned "Adjust ›" on its own trailing line, in a 44pt frame so it can never
+    /// wrap into the macros (FOOD-15). Same action as the row itself — the labelled affordance is
+    /// what makes the correction path discoverable.
+    private var adjustLine: some View {
+        HStack {
+            Spacer(minLength: 0)
+            Button(action: onCorrect) {
+                HStack(spacing: 4) {
+                    Text("Adjust")
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Adjust meal")
         }
     }
 
@@ -3327,21 +3717,46 @@ private struct MealRow: View {
     private var macrosRow: some View {
         HStack(spacing: 14) {
             Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
-            Text("C \(meal.macros.carbs)g")
-            Text("F \(meal.macros.fat)g")
-            // Bark, not goldenrod: the confidence word carries meaning, and goldenrod measured 2.4:1
-            // on parchment. Goldenrod stays for fills and icons.
-            Text(meal.confidenceLabel).foregroundStyle(Color.bark)
+            // C and F give way at accessibility sizes so the name and Adjust stay whole (4b·AX3).
+            if !dynamicTypeSize.isAccessibilitySize {
+                Text("C \(meal.macros.carbs)g")
+                Text("F \(meal.macros.fat)g")
+            }
+            confidenceTag
             Spacer(minLength: 0)
-            // Moss, not fern (2.75:1) — this is the only way in to correcting a wrong match, so it
-            // must be legible.
-            Button("Looks off?", action: onCorrect)
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
         }
         .font(.fernlet(.stat))
         .foregroundStyle(Color.slate)
+    }
+
+    /// The quiet slate provenance capsule, in plain words (FOOD-02) — absent entirely for seeded
+    /// demo logs, whose provenance is a demo artifact rather than something the user did.
+    @ViewBuilder private var confidenceTag: some View {
+        if !isSeededDemoMeal {
+            confidenceTagText
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.slate.opacity(0.10), in: Capsule())
+        }
+    }
+
+    /// Seeded demo meals carry this exact note (`FernletStore+DemoSeed`); it is the identifying
+    /// signal because their confidence token (`logged`) is also a legitimate user stamp.
+    private var isSeededDemoMeal: Bool {
+        meal.note == "Seeded demo meal."
+    }
+
+    /// Plain words for the capsule: recipe-backed rows say "From recipe"; everything else shows
+    /// its localized `confidenceLabel` (already plain: Estimated, Reviewed, Scanned label, …).
+    private var confidenceTagText: Text {
+        switch meal.confidenceToken {
+        case .recipe, .recipeNoMacros:
+            Text("From recipe")
+        default:
+            Text(verbatim: meal.confidenceLabel)
+        }
     }
 
     /// The line under the meal name. A component breakdown says where the numbers came from — but
@@ -3412,14 +3827,36 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
             micronutrients: baseMicronutrients.scaled(by: scale)
         )
     }
+
+    /// A fresh input for an item ADDED (or swapped in) during correction (FOOD-05): resolved
+    /// through the catalog at the food item's own reference serving. A new item has no captured
+    /// meal base to scale from, so its base IS that reference — macros and micronutrients scaled
+    /// exactly as `MealBuilder`'s component snapshots are, never invented.
+    static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput {
+        let unit = foodItem.preferredRecipeUnit
+        let quantity = foodItem.defaultRecipeQuantity(for: unit)
+        let ingredient = RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit.rawValue)
+        return MealComponentCorrectionInput(snapshot: MealComponentSnapshot(
+            foodItemId: foodItem.id,
+            name: foodItem.name,
+            quantity: quantity,
+            unit: unit.rawValue,
+            macros: ingredient.scaledMacros(using: foodItem),
+            micronutrients: ingredient.scaledMicronutrients(using: foodItem)
+        ))
+    }
 }
 
-/// The "Adjust meal" sheet behind every meal row's "Looks off?" action.
+/// The "Adjust meal" sheet behind every meal row's Adjust action (and the post-log toast's —
+/// which is why the type is internal with a stable `init(store:meal:)`).
 ///
-/// Edits the meal's name, type, and either its raw macros (when it has no components) or its matched
-/// component quantities, then persists through `FernletStore.updateMealCorrection` with totals
-/// recomputed from the corrected snapshots.
-private struct MealCorrectionSheet: View {
+/// Edits the meal's name, type, and either its raw macros (when it has no components) or its
+/// matched items — which, per FOOD-05, can now be removed outright, replaced when a match looks
+/// wrong (a low-confidence match is outlined in sun and says so in words), re-quantified through
+/// a real field, or added to via the same debounced catalog typeahead the recipe editor uses.
+/// Persists through `FernletStore.updateMealCorrection` with totals recomputed from the corrected
+/// snapshots; template chrome — Cancel + pinned title via the draft guard, Save bottom-right.
+struct MealCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     var meal: Meal
@@ -3429,6 +3866,9 @@ private struct MealCorrectionSheet: View {
     @State private var carbs: Int
     @State private var fat: Int
     @State private var components: [MealComponentCorrectionInput]
+    /// Ids outlined as "Probably not what you meant", decided ONCE at open over the ORIGINAL
+    /// matched items — never over items the user adds or swaps in here.
+    private let lowConfidenceComponentIDs: Set<UUID>
 
     init(store: FernletStore, meal: Meal) {
         self.store = store
@@ -3439,16 +3879,13 @@ private struct MealCorrectionSheet: View {
         _carbs = State(initialValue: meal.macros.carbs)
         _fat = State(initialValue: meal.macros.fat)
         _components = State(initialValue: meal.componentSnapshots.map(MealComponentCorrectionInput.init(snapshot:)))
+        lowConfidenceComponentIDs = Self.lowConfidenceComponentIDs(for: meal)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Adjust meal")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     SheetField("Meal name") {
                         TextField("Meal", text: $name)
                             .sheetTextInput()
@@ -3469,7 +3906,11 @@ private struct MealCorrectionSheet: View {
                         }
                     } else {
                         SheetField("Matched items") {
-                            MealComponentEditorRows(components: $components)
+                            MealCorrectionItemsEditor(
+                                components: $components,
+                                lowConfidenceComponentIDs: lowConfidenceComponentIDs,
+                                catalog: store.foodCatalog
+                            )
                         }
                     }
                 }
@@ -3477,7 +3918,7 @@ private struct MealCorrectionSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: "Save correction", disabled: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+            SheetSaveBar(label: "Save", disabled: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                 store.updateMealCorrection(
                     mealID: meal.id,
                     name: name,
@@ -3489,11 +3930,291 @@ private struct MealCorrectionSheet: View {
             }
         }
         .background(Color.parchment)
+        // Template chrome (2026-08-21): pinned header with Cancel + the sheet's serif title;
+        // Cancel raises the discard prompt while edits are unsaved.
+        .fernletDraftGuard(isDirty: isDirty, title: "Adjust meal") {
+            dismiss()
+        }
     }
 
     private var componentMacros: Macros {
         let totals = MealBuilder.totals(for: components.map(\.snapshot))
         return Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat)
+    }
+
+    /// Whether the sheet holds unsaved edits — drives the swipe-away block and Cancel's discard
+    /// prompt in the template chrome.
+    private var isDirty: Bool {
+        if name != meal.name || mealType != meal.mealType { return true }
+        if components.isEmpty {
+            return Macros(protein: protein, carbs: carbs, fat: fat) != meal.macros
+        }
+        return components.map(\.snapshot) != meal.componentSnapshots
+    }
+
+    /// Component ids to outline as "Probably not what you meant" (FOOD-05).
+    ///
+    /// Heuristic, honestly so: there is no stored per-item match score, so the mismatch is
+    /// reconstructed from the names — a component is suspect when more than half of its
+    /// meaningful tokens have nothing to do with what the user typed ("French toast sticks"
+    /// against "Scrambled eggs and toast" leaves french/sticks unexplained). Single-token names
+    /// are never flagged; one shared word is how they matched at all.
+    private static func lowConfidenceComponentIDs(for meal: Meal) -> Set<UUID> {
+        let mealTokens = meaningfulTokens(in: meal.name)
+        guard !mealTokens.isEmpty else { return [] }
+        var flagged = Set<UUID>()
+        for component in meal.componentSnapshots {
+            let componentTokens = meaningfulTokens(in: component.name)
+            guard componentTokens.count > 1 else { continue }
+            let unexplained = componentTokens.subtracting(mealTokens).count
+            if unexplained * 2 > componentTokens.count {
+                flagged.insert(component.id)
+            }
+        }
+        return flagged
+    }
+
+    /// Tokens worth comparing: lowercased words of length ≥ 3, non-numeric (mirrors
+    /// `MealBuilder`'s matching tokens).
+    private static func meaningfulTokens(in text: String) -> Set<String> {
+        Set(
+            text.lowercased()
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+                .filter { $0.count >= 3 && Double($0) == nil }
+        )
+    }
+}
+
+/// The Adjust-meal matched-items editor (FOOD-05): per-item remove, a Replace path for a
+/// low-confidence match (sun outline + "Probably not what you meant"), a field-styled editable
+/// quantity, an "Add an item" catalog typeahead, and a "New total" footer recomputed from the
+/// item list through `MealBuilder` — so the number always matches what is on screen.
+///
+/// Distinct from ``MealComponentEditorRows`` (the pre-log review's editor, which deliberately
+/// only re-quantifies): review components map 1:1 onto a suggested recipe's ingredients, so
+/// add/remove there would break that invariant — here the meal is already logged and the list is
+/// the user's to edit.
+private struct MealCorrectionItemsEditor: View {
+    @Binding var components: [MealComponentCorrectionInput]
+    /// Ids outlined in sun with the Replace affordance (decided at open by the owning sheet).
+    let lowConfidenceComponentIDs: Set<UUID>
+    var catalog: FoodCatalog
+    /// True while the "Add an item" typeahead is revealed (mutually exclusive with Replace).
+    @State private var isAddingItem = false
+    /// The component whose Replace typeahead is open, if any.
+    @State private var replacingComponentID: UUID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach($components) { $component in
+                componentCard($component)
+            }
+            addItemSection
+            newTotalRow
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// One matched item: name + quantity field + stepper + scaled macros, the low-confidence
+    /// notice and Replace typeahead when flagged, and the labelled remove.
+    private func componentCard(_ component: Binding<MealComponentCorrectionInput>) -> some View {
+        let isLowConfidence = lowConfidenceComponentIDs.contains(component.wrappedValue.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(component.wrappedValue.name)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                Spacer()
+                quantityField(component)
+                Text(component.wrappedValue.unit)
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.moss)
+            }
+            Stepper(
+                "",
+                value: component.quantity,
+                in: 0...2000,
+                step: component.wrappedValue.unit == RecipeUnit.gram.rawValue ? 5 : 0.25
+            )
+            .labelsHidden()
+            scaledMacrosLine(component.wrappedValue)
+            if isLowConfidence {
+                lowConfidenceNotice(component.wrappedValue)
+            }
+            if replacingComponentID == component.wrappedValue.id {
+                replaceField(for: component.wrappedValue)
+            }
+            removeButton(component.wrappedValue)
+        }
+        .padding(12)
+        .background(Color.parchment.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+        // The sun outline says "look at this one" without shouting (FOOD-05).
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isLowConfidence ? Color.goldenrod : Color.clear, lineWidth: 1.5)
+        )
+    }
+
+    /// The quantity as a real FIELD — cream fill, taupe underline — so it stops reading as
+    /// static text (FOOD-05).
+    private func quantityField(_ component: Binding<MealComponentCorrectionInput>) -> some View {
+        TextField("Qty", value: component.quantity, format: .number.precision(.fractionLength(0...1)))
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .textContentType(.none)
+            .font(.fernlet(.stat))
+            .foregroundStyle(Color.bark)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: 76)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.softTaupe)
+                    .frame(height: 1.5)
+                    .padding(.horizontal, 6)
+            }
+    }
+
+    private func scaledMacrosLine(_ component: MealComponentCorrectionInput) -> some View {
+        let macros = component.snapshot.macros
+        return Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
+            .font(.fernlet(.stat))
+            .foregroundStyle(Color.slate)
+    }
+
+    /// "Probably not what you meant" in words beside the Replace affordance — a bad match can be
+    /// replaced rather than deleted-and-re-logged.
+    private func lowConfidenceNotice(_ component: MealComponentCorrectionInput) -> some View {
+        HStack(spacing: 10) {
+            Text("Probably not what you meant")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.bark)
+            Spacer(minLength: 0)
+            Button("Replace") {
+                replacingComponentID = replacingComponentID == component.id ? nil : component.id
+                isAddingItem = false
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .fernletTapTarget()
+        }
+    }
+
+    /// The Replace typeahead, prefilled with the suspect match's name. A pick swaps the item for
+    /// a FRESH catalog resolution (`MealComponentCorrectionInput.fresh`).
+    private func replaceField(for component: MealComponentCorrectionInput) -> some View {
+        MealItemSearchField(catalog: catalog, prompt: "Search the catalog", initialText: component.name) { foodItem in
+            if let index = components.firstIndex(where: { $0.id == component.id }) {
+                components[index] = .fresh(from: foodItem)
+            }
+            replacingComponentID = nil
+        }
+    }
+
+    /// The labelled per-item remove (FOOD-05) — a word in the destructive ink, not a bare x.
+    private func removeButton(_ component: MealComponentCorrectionInput) -> some View {
+        Button {
+            components.removeAll { $0.id == component.id }
+        } label: {
+            Text("Remove")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.terracottaInk)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Remove \(component.name)")
+    }
+
+    /// "Add an item" opens the same debounced catalog typeahead the recipe editor uses; new items
+    /// resolve fresh through the catalog (they have no micronutrient base to scale).
+    @ViewBuilder private var addItemSection: some View {
+        Button {
+            isAddingItem.toggle()
+            replacingComponentID = nil
+        } label: {
+            Label("Add an item", systemImage: "plus.circle")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        if isAddingItem {
+            MealItemSearchField(catalog: catalog, prompt: "sourdough toast", initialText: "") { foodItem in
+                components.append(.fresh(from: foodItem))
+                isAddingItem = false
+            }
+        }
+    }
+
+    /// The named total, recomputed from the item list via `MealBuilder.totals` — always the same
+    /// number Save would persist.
+    private var newTotalRow: some View {
+        let totals = MealBuilder.totals(for: components.map(\.snapshot))
+        return HStack(spacing: 14) {
+            Text("New total")
+                .foregroundStyle(Color.bark)
+            Text("P \(totals.macros.protein)g").foregroundStyle(Color.moss)
+            Text("C \(totals.macros.carbs)g")
+            Text("F \(totals.macros.fat)g")
+            Spacer(minLength: 0)
+        }
+        .font(.fernlet(.stat))
+        .foregroundStyle(Color.slate)
+    }
+}
+
+/// The debounced catalog typeahead field used by Adjust meal's Replace and "Add an item" paths —
+/// the recipe editor's search mechanics (``CatalogTypeahead``) and suggestion rows
+/// (``CatalogSuggestionRow``), reusable outside the ingredient editor's binding model.
+///
+/// Picks hand back the raw `FoodItem`; the owner decides what to build from it. The query never
+/// runs in `body` — the `.task(id:)` keystroke cancellation is what keeps stale results out.
+private struct MealItemSearchField: View {
+    var catalog: FoodCatalog
+    /// The field's placeholder (authored copy).
+    var prompt: LocalizedStringKey
+    /// Seed text — the suspect match's name on the Replace path, empty for Add.
+    var initialText: String
+    var onPick: (FoodItem) -> Void
+    @State private var searchText: String
+    @State private var matches: [FoodItem] = []
+
+    init(catalog: FoodCatalog, prompt: LocalizedStringKey, initialText: String, onPick: @escaping (FoodItem) -> Void) {
+        self.catalog = catalog
+        self.prompt = prompt
+        self.initialText = initialText
+        self.onPick = onPick
+        _searchText = State(initialValue: initialText)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Color.slate)
+                TextField(prompt, text: $searchText)
+                    .font(.fernlet(.body))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .textContentType(.none)
+            }
+            ForEach(matches) { foodItem in
+                CatalogSuggestionRow(foodItem: foodItem) { onPick(foodItem) }
+            }
+        }
+        // One settled-keystroke query at a time, off the main actor — the same contract as the
+        // recipe editor's typeahead (see `CatalogTypeahead.matches`).
+        .task(id: searchText) {
+            guard let hits = await CatalogTypeahead.matches(for: searchText, catalog: catalog) else { return }
+            matches = hits
+        }
     }
 }
 
@@ -4089,6 +4810,13 @@ struct RecipeDetailView: View {
     /// Presents the F5 full-screen cooking-mode flow (mise-en-place → step walker → finish/log).
     @State private var showingCookingMode = false
 
+    /// True while "Log this recipe" has its inline meal-slot chip row open (2026-08-21, FOOD-14 —
+    /// the same chip row as the meal sheet, replacing the old Menu). A chip tap logs and closes it.
+    @State private var showingLogMealTypes = false
+    /// Drives the Steps card's timer-capsule drop and the Cook/Log unstack at accessibility
+    /// sizes (4f·AX3).
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @State private var photo: UIImage?
     @State private var didLoadPhoto = false
     /// Calm inline notice when a photo couldn't be sealed to disk (fail-closed save returned false), so
@@ -4189,6 +4917,7 @@ struct RecipeDetailView: View {
                 macrosCard
                 yieldControl
                 ingredientsCard
+                stepsCard
                 if !recipe.notes.isEmpty { notesCard }
                 actionsRow
             }
@@ -4547,34 +5276,73 @@ struct RecipeDetailView: View {
         }
     }
 
+    /// The Steps card (2026-08-21, FOOD-22): the recipe's authored steps, readable WITHOUT
+    /// starting cooking mode — Cook stays the hands-free walker, no longer the only way to see
+    /// what you wrote. Numbered 44pt circles beside the step text; a quiet timer capsule renders
+    /// where `durationSeconds` is set (and drops at accessibility sizes — 4f·AX3).
+    @ViewBuilder private var stepsCard: some View {
+        if let steps = recipe.steps, !steps.isEmpty {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionLabel("Steps")
+                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                        stepRow(number: index + 1, step: step)
+                    }
+                }
+            }
+        }
+    }
+
+    /// One step: the 44pt numbered circle, the step text, and the trailing timer capsule.
+    private func stepRow(number: Int, step: RecipeStep) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(width: 44, height: 44)
+                .background(Color.moss.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            Text(step.text)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+                .padding(.top, 11)
+            Spacer(minLength: 0)
+            if let seconds = step.durationSeconds, seconds > 0, !dynamicTypeSize.isAccessibilitySize {
+                stepTimerCapsule(seconds)
+                    .padding(.top, 11)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Step \(number). \(step.text)")
+    }
+
+    /// The quiet duration capsule — locale-aware unit formatting so an overnight step reads
+    /// "8 hr" and a short one "8 min" (seconds appear only for a sub-minute remainder).
+    private func stepTimerCapsule(_ seconds: Int) -> some View {
+        Label {
+            Text(
+                Duration.seconds(seconds),
+                format: .units(allowed: [.hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 2)
+            )
+        } icon: {
+            Image(systemName: "timer")
+        }
+        .font(.fernlet(.labelSmall))
+        .foregroundStyle(Color.slate)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color.parchment, in: Capsule())
+    }
+
+    /// "Log this recipe" is the ONE primary (FOOD-14) and opens the same meal-slot chip row the
+    /// meal sheet uses, inline — replacing the old Menu; Cook is its cream sibling. At
+    /// accessibility sizes the pair unstacks full-width, primary on top (4f·AX3).
     private var actionsRow: some View {
         VStack(spacing: 10) {
-            Menu {
-                ForEach(MealType.allCases) { mealType in
-                    // Pass the definition on screen — after a re-import this is the refreshed one.
-                    Button { onLog(recipe, mealType) } label: { Text(verbatim: mealType.displayName) }
-                }
-            } label: {
-                Label("Log this recipe", systemImage: "fork.knife")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-            }
-            .accessibilityIdentifier("recipeDetail.log")
-            if CookingModeAvailability.canCook(recipe) {
-                Button { showingCookingMode = true } label: {
-                    Label("Cook", systemImage: "flame")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("recipeDetail.cook")
+            logAndCookRow
+            if showingLogMealTypes {
+                logMealTypeChips
             }
             // Stacks at accessibility sizes rather than breaking "Share" mid-word.
             AdaptiveStack(spacing: 10) {
@@ -4586,6 +5354,70 @@ struct RecipeDetailView: View {
                     secondaryActionLabel("Share", icon: "square.and.arrow.up")
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Cook (cream) beside the primary Log; the pair stacks primary-first at accessibility sizes.
+    @ViewBuilder private var logAndCookRow: some View {
+        if CookingModeAvailability.canCook(recipe) {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 10) {
+                    logPrimaryButton
+                    cookButton
+                }
+            } else {
+                HStack(spacing: 10) {
+                    cookButton
+                    logPrimaryButton
+                }
+            }
+        } else {
+            logPrimaryButton
+        }
+    }
+
+    private var logPrimaryButton: some View {
+        Button {
+            withAnimation(FernletMotion.ui) { showingLogMealTypes.toggle() }
+        } label: {
+            Label("Log this recipe", systemImage: "fork.knife")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.onMoss)
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("recipeDetail.log")
+    }
+
+    private var cookButton: some View {
+        Button { showingCookingMode = true } label: {
+            Label("Cook", systemImage: "flame")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("recipeDetail.cook")
+    }
+
+    /// The inline meal-slot chips under the primary — a chip tap logs the definition ON SCREEN
+    /// (after a re-import this is the refreshed one) and collapses the row.
+    private var logMealTypeChips: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(MealType.allCases) { mealType in
+                Button {
+                    showingLogMealTypes = false
+                    onLog(recipe, mealType)
+                } label: {
+                    Text(verbatim: mealType.displayName)
+                }
+                .buttonStyle(ChipButtonStyle(selected: false))
             }
         }
     }
@@ -4899,38 +5731,51 @@ private struct RecipeShareButton: View {
     }
 }
 
-/// The fork-and-knife menu on a recipe row that logs the recipe as a chosen meal type.
+/// A recipe row's trailing controls line plus its inline log flow (2026-08-21, FOOD-19/FOOD-14):
+/// a labelled "Log" pill — replacing the bare fork-icon menu — that opens the meal-slot chip row
+/// INLINE beneath the controls; a chip tap logs and collapses it. `trailing` carries the row's
+/// other controls (the share button, or nothing).
 ///
-/// Shared by the Food-root preview and the recipe book so one-tap logging behaves identically in
-/// both.
-private struct RecipeMealTypeMenu: View {
-    var onSelect: (MealType) -> Void
+/// Shared by the Food-root recipe preview, the recipe book's rows, and the imported-products list
+/// so logging behaves identically everywhere a recipe row appears.
+private struct RecipeRowLogControl<Trailing: View>: View {
+    /// Logs the row's recipe as the chosen slot (the owner routes to the right store half).
+    var onLog: (MealType) -> Void
+    @ViewBuilder var trailing: () -> Trailing
+    @State private var showingMealTypes = false
 
     var body: some View {
-        Menu {
-            ForEach(MealType.allCases) { mealType in
-                Button {
-                    onSelect(mealType)
-                } label: {
-                    Text(verbatim: mealType.displayName)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Spacer(minLength: 0)
+                Button("Log") {
+                    withAnimation(FernletMotion.ui) { showingMealTypes.toggle() }
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityLabel("Log recipe as meal")
+                trailing()
+            }
+            if showingMealTypes {
+                FlowLayout(spacing: 8) {
+                    ForEach(MealType.allCases) { mealType in
+                        Button {
+                            showingMealTypes = false
+                            onLog(mealType)
+                        } label: {
+                            Text(verbatim: mealType.displayName)
+                        }
+                        .buttonStyle(ChipButtonStyle(selected: false))
+                    }
                 }
             }
-        } label: {
-            Image(systemName: "fork.knife")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Log recipe as meal")
     }
 }
 
 /// A row for a saved web-imported product in the recipe book's "Imported products" section.
 ///
-/// Shows name, brand/source host, serving description, and macros; logging happens via the adjacent
-/// ``RecipeMealTypeMenu``.
+/// Shows name, brand/source host, serving description, and macros; logging happens via the row's
+/// ``RecipeRowLogControl`` beneath.
 private struct WebImportedFoodRow: View {
     var foodItem: FoodItem
 
@@ -4971,12 +5816,16 @@ private struct WebImportedFoodRow: View {
     }
 }
 
-/// The full recipe book: searchable A–Z lists of manual recipes, saved/web recipes, and imported
-/// products, plus entry points for recipe creation and the F3 grocery planner.
+/// The full recipe book: searchable, labelled A–Z lists (Your recipes / Saved from web /
+/// Imported products), plus the Create/Planner/List entry points as three equal secondaries
+/// (2026-08-21, FOOD-19/FOOD-14).
 ///
-/// Rows push the read-only ``RecipeDetailView``; edit requests are handed back to ``FoodView`` via
-/// the two editing bindings (the book dismisses and the owning view presents the right editor sheet).
-/// Sharing goes through the proximity recipe-share sheet.
+/// Sheet mode carries the template's pinned header with Done in the trailing slot — the book's
+/// first close control; pushed mode keeps the back chevron and no Done. Rows push the read-only
+/// ``RecipeDetailView``; edit requests are handed back to ``FoodView`` via the two editing
+/// bindings (the book dismisses and the owning view presents the right editor sheet). Sharing
+/// goes through the proximity recipe-share sheet; row logging goes through ``RecipeRowLogControl``
+/// and reports to `onMealsLogged` for the post-log toast.
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -4987,6 +5836,10 @@ struct RecipeBookSheet: View {
     /// started here returns to the recipe instead of dropping to the Food root — and it titles itself
     /// in the nav bar. The Home shortcut still presents it as a sheet, which keeps its own stack.
     var isEmbeddedInNavigationStack = false
+    /// Reports meals logged from the book's rows and details so the host can raise the post-log
+    /// toast (FLOW-15). FoodView threads its own callback through; the Home sheet route passes
+    /// ContentView's. Defaults to a no-op so construction sites compile before wiring.
+    var onMealsLogged: ([Meal]) -> Void = { _ in }
     @State private var searchText = ""
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
     /// Calm confirmation after a recipe is created, shown here because this is where the create flow
@@ -5004,24 +5857,34 @@ struct RecipeBookSheet: View {
         if isEmbeddedInNavigationStack {
             bookContent
         } else {
+            // Sheet mode gets the template's pinned header with Done in the TRAILING slot — the
+            // same slot every sheet uses (FOOD-19: the book finally has a close control). Pushed
+            // mode keeps the back chevron and no Done; there is nothing to close.
             NavigationStack {
-                bookContent
+                VStack(spacing: 0) {
+                    SheetHeader(
+                        title: "Recipe book",
+                        subtitle: "Recipes and saved products, A\u{2013}Z.",
+                        onDone: { dismissIfPresented() }
+                    )
+                    bookContent
+                }
             }
             .background(Color.parchment)
         }
     }
 
-    /// Header, search field, and the three A–Z lists — the scrolling half of ``bookContent``.
+    /// Header line, toolbar, search field, and the three labelled A–Z lists — the scrolling half
+    /// of ``bookContent``.
     private var bookScrollContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Pushed: the nav bar carries the title. Presented: no bar, so the header draws it.
+            // Pushed: the nav bar carries the title. Presented: the pinned SheetHeader above the
+            // scroll carries it, so only the pushed mode draws its subtitle here.
             if isEmbeddedInNavigationStack {
                 Text("Recipes and saved products, A\u{2013}Z.")
                     .font(.fernlet(.bodySmall))
                     .italic()
                     .foregroundStyle(Color.slate)
-            } else {
-                ScreenHeader(title: "Recipe book", subtitle: "Recipes and saved products, A\u{2013}Z.", subtitleFirst: false)
             }
             if let createdNotice {
                 Text(createdNotice)
@@ -5035,12 +5898,16 @@ struct RecipeBookSheet: View {
 
             TextField("Search recipes and products", text: $searchText)
                 .sheetTextInput()
+            // Section labels name what you are looking at (FOOD-19): Your recipes, Saved from
+            // web, Imported products — only the products had a heading before.
             let allManual = filteredManualRecipes
             if !allManual.isEmpty {
+                sectionHeading("Your recipes")
                 recipesCard(allManual, isSaved: false)
             }
             let allSaved = filteredSavedRecipes
             if !allSaved.isEmpty {
+                sectionHeading("Saved from web")
                 recipesCard(allSaved, isSaved: true)
             }
             let allProducts = filteredWebImportedProducts
@@ -5101,51 +5968,53 @@ struct RecipeBookSheet: View {
         dismiss()
     }
 
-    /// Create-recipe plus the F3 grocery entry points: a weekly planner (persists a per-day plan)
-    /// and a one-off list builder. Both aggregate through the shared Phase A pipeline and share to
-    /// Notes.
+    /// Create-recipe plus the F3 grocery entry points, as THREE EQUAL secondaries (XCUT-14 —
+    /// Create lost its moss fill: entering the book is not the same as committing anything). The
+    /// planner persists a per-day plan; the list builder is one-off; both aggregate through the
+    /// shared Phase A pipeline and share to Notes.
     private var createAndPlannerButtons: some View {
-        VStack(spacing: 16) {
+        // Stacks at accessibility sizes: side by side these broke mid-word at different heights.
+        AdaptiveStack(spacing: 12) {
             // A Button rather than a NavigationLink: the push is driven by `isCreatingRecipe`, the
             // one value that also un-pushes the whole branch when a recipe is saved.
             Button {
                 isCreatingRecipe = true
             } label: {
-                Label("Create recipe", systemImage: "plus")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.onMoss)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
+                plannerLabel("Create", systemImage: "plus")
             }
             .buttonStyle(.plain)
-
-            // Stacks at accessibility sizes: side by side these two broke to "planne/r" and
-            // "Shopp/ing list" at different heights.
-            AdaptiveStack(spacing: 12) {
-                NavigationLink {
-                    WeeklyMealPlannerView(store: store)
-                } label: {
-                    plannerLabel("Meal planner", systemImage: "calendar")
-                }
-                .buttonStyle(.plain)
-                NavigationLink {
-                    ShoppingListBuilderView(store: store)
-                } label: {
-                    plannerLabel("Shopping list", systemImage: "cart")
-                }
-                .buttonStyle(.plain)
+            NavigationLink {
+                WeeklyMealPlannerView(store: store)
+            } label: {
+                plannerLabel("Planner", systemImage: "calendar")
             }
+            .buttonStyle(.plain)
+            NavigationLink {
+                ShoppingListBuilderView(store: store)
+            } label: {
+                plannerLabel("List", systemImage: "cart")
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    private func plannerLabel(_ title: String, systemImage: String) -> some View {
+    /// One of the three equal toolbar secondaries. `LocalizedStringKey` — a `String` parameter
+    /// would silently opt the call sites out of localization.
+    private func plannerLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
             .frame(maxWidth: .infinity)
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    /// A named section heading over one of the book's three lists (FOOD-19).
+    private func sectionHeading(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.fernlet(.header))
+            .foregroundStyle(Color.bark)
     }
 
     /// One A–Z card of recipes. `isSaved` selects the saved/web store's methods (edit sheet, log,
@@ -5161,10 +6030,11 @@ struct RecipeBookSheet: View {
         }
     }
 
-    /// A recipe-book row: the tappable summary (pushing the read-only detail), the log menu and the
-    /// share button.
+    /// A recipe-book row in the Food-root layout (FOOD-19/FOOD-14): the tappable summary above —
+    /// so "2 servings" sits at the trailing edge instead of drifting to the middle — with the
+    /// labelled Log pill (inline meal-slot chips) and the share button on their own trailing line.
     private func recipeRow(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             #if canImport(UIKit)
             // Tapping a recipe opens a read-only detail view (photo, per-serving macros, ingredients,
             // notes) rather than jumping straight into the editor — the detail offers edit/log/share.
@@ -5181,12 +6051,13 @@ struct RecipeBookSheet: View {
             }
             .buttonStyle(.plain)
             #endif
-            RecipeMealTypeMenu { mealType in
+            RecipeRowLogControl(onLog: { mealType in
                 logRecipe(recipe, mealType: mealType, isSaved: isSaved)
                 dismissIfPresented()
-            }
-            RecipeShareButton {
-                recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+            }) {
+                RecipeShareButton {
+                    recipeShareDraft = shareDraft(for: recipe, isSaved: isSaved)
+                }
             }
         }
     }
@@ -5232,13 +6103,17 @@ struct RecipeBookSheet: View {
         if isSaved { editingSavedRecipe = recipe } else { editingRecipe = recipe }
     }
 
-    /// Logs a recipe through the store method that matches its half (manual vs saved/web).
-    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType, isSaved: Bool) {
+    /// Logs a recipe through the store method that matches its half (manual vs saved/web) and
+    /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
+    /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
+    private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
+        let meal: Meal
         if isSaved {
-            store.logSavedRecipe(recipe, mealType: mealType)
+            meal = store.logSavedRecipe(recipe, mealType: mealType)
         } else {
-            store.logRecipe(recipe, mealType: mealType)
+            meal = store.logRecipe(recipe, mealType: mealType)
         }
+        onMealsLogged([meal])
     }
 
     /// The proximity share draft for a recipe, using its half's share-text builder.
@@ -5252,18 +6127,19 @@ struct RecipeBookSheet: View {
 
     private func importedProductsCard(_ products: [FoodItem]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Imported products")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+            sectionHeading("Imported products")
             FernletCard {
                 VStack(spacing: 0) {
                     ForEach(Array(products.enumerated()), id: \.element.id) { index, product in
                         if index > 0 { FernletRowDivider() }
-                        HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
                             WebImportedFoodRow(foodItem: product)
-                            RecipeMealTypeMenu { mealType in
-                                store.logWebImportedFoodProduct(product, mealType: mealType)
+                            RecipeRowLogControl(onLog: { mealType in
+                                let meal = store.logWebImportedFoodProduct(product, mealType: mealType)
+                                onMealsLogged([meal])
                                 dismissIfPresented()
+                            }) {
+                                EmptyView()
                             }
                         }
                     }

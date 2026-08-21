@@ -937,23 +937,39 @@ public final class DiaryStore {
 
     // MARK: - Planned recipes (F3 weekly shopping-list planner)
 
-    /// Assigns a recipe to a day in the shopping-list planner. Idempotent (a recipe already planned on
-    /// the day is not duplicated). Mirrors `planWorkout`'s per-day-row mutation exactly — the field
-    /// rides `DayRecord.payloadData` via Codable, so no schema change and per-row sync for free.
-    public func planRecipe(_ recipeID: UUID, date: String) {
+    /// Assigns a recipe to a day in the meal planner, remembering the meal slot it was planned for
+    /// (2026-08-21, FOOD-35). Idempotent per recipe (a recipe already planned on the day is not
+    /// duplicated). Mirrors `planWorkout`'s per-day-row mutation exactly — the fields ride
+    /// `DayRecord.payloadData` via Codable, so no schema change and per-row sync for free.
+    ///
+    /// Writes BOTH plan fields: the typed `plannedMeals` entry (recipe id + meal-type token) and
+    /// the legacy `plannedRecipeIDs` id in parallel, so an un-updated device's planner keeps
+    /// rendering the plan. `mealType: nil` records a slotless entry (logging then falls back to
+    /// the by-time "Auto" classification).
+    public func planRecipe(_ recipeID: UUID, mealType: MealType? = nil, date: String) {
         assert(!date.isEmpty, "planned recipe date required")
         let written = mutateDay(date: date) { day in
             guard !day.plannedRecipeIDs.contains(recipeID) else { return }
             day.plannedRecipeIDs.append(recipeID)
+            var entries = day.plannedMeals ?? []
+            entries.removeAll { $0.recipeID == recipeID }
+            entries.append(PlannedMealEntry(recipeID: recipeID, mealType: mealType))
+            day.plannedMeals = entries
         }
         noteDayWrite(written, operation: "planRecipe", date: date)
     }
 
-    /// Removes a recipe from a day's plan. A no-op if it was not planned there.
+    /// Removes a recipe from a day's plan — BOTH the typed `plannedMeals` entry and the legacy
+    /// `plannedRecipeIDs` id, so the two parallel fields can't drift. A no-op if it was not
+    /// planned there. An emptied typed list collapses back to nil (key absent on re-encode).
     public func unplanRecipe(_ recipeID: UUID, date: String) {
         assert(!date.isEmpty, "planned recipe date required")
         let written = mutateDay(date: date) { day in
             day.plannedRecipeIDs.removeAll { $0 == recipeID }
+            if var entries = day.plannedMeals {
+                entries.removeAll { $0.recipeID == recipeID }
+                day.plannedMeals = entries.isEmpty ? nil : entries
+            }
         }
         noteDayWrite(written, operation: "unplanRecipe", date: date)
     }

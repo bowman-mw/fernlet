@@ -190,13 +190,20 @@ struct ShoppingListBuilderView: View {
 
 // MARK: - Phase B — weekly meal planner
 
-/// The Phase B weekly meal planner: assign recipes to each day of a browsable week, then run the
-/// week's de-duplicated plan through ``ShoppingListBuilderView``.
+/// The Phase B weekly meal planner: assign recipes (with a meal slot) to each day of a browsable
+/// week, then run the week's de-duplicated plan through ``ShoppingListBuilderView``.
 ///
-/// The plan is the only persisted state in the grocery feature — recipe ids ride
-/// `FernletDay.plannedRecipeIDs` via `FernletStore.planRecipe`/`unplanRecipe`. Past/future day rows
-/// aren't the observed `store.day`, so the view keeps its own `plannedByDay` copy and reloads it
-/// after every mutation and week switch. Dangling ids (recipes since deleted) are dropped silently.
+/// The plan is the only persisted state in the grocery feature — typed
+/// `FernletDay.plannedMeals` entries (recipe id + meal slot) written in parallel with the legacy
+/// `plannedRecipeIDs` via `FernletStore.planRecipe(_:mealType:date:)`/`unplanRecipe`, read merged
+/// through `FernletDay.plannedMealEntries`. Past/future day rows aren't the observed `store.day`,
+/// so the view keeps its own `plannedByDay` copy and reloads it after every mutation and week
+/// switch. Dangling ids (recipes since deleted) are dropped silently.
+///
+/// 2026-08-21 (FOOD-35 / XCUT-21): today's card carries the moss outline, a "N planned" count and
+/// per-recipe Log pills that log against the planned meal slot; other days keep remove only, now
+/// in the destructive tint. Logging confirms inline (a quiet line under the header) rather than
+/// through the cross-tab toast — the planner is a pushed page, not a tab root.
 struct WeeklyMealPlannerView: View {
     var store: FernletStore
 
@@ -206,8 +213,12 @@ struct WeeklyMealPlannerView: View {
     private struct DayPick: Identifiable { let id: String }
 
     @State private var weekOffset = 0
-    @State private var plannedByDay: [String: [UUID]] = [:]
+    @State private var plannedByDay: [String: [PlannedMealEntry]] = [:]
     @State private var pickingForDay: DayPick?
+    /// The recipe name a Log pill just committed — drives the quiet inline confirmation line,
+    /// which clears itself after a beat (same pattern as the recipe book's created notice).
+    @State private var loggedRecipeName: String?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let calendar = Calendar.current
 
@@ -226,8 +237,11 @@ struct WeeklyMealPlannerView: View {
     private var plannedIDsThisWeek: [UUID] {
         // Union across the visible week, de-duplicated (a recipe planned twice is bought once).
         var seen = Set<UUID>()
-        return weekDayKeys.flatMap { plannedByDay[$0] ?? [] }.filter { seen.insert($0).inserted }
+        return weekDayKeys.flatMap { plannedByDay[$0] ?? [] }.map(\.recipeID).filter { seen.insert($0).inserted }
     }
+
+    /// Today's plan key — the ONE day whose card gets the moss outline and Log pills.
+    private var todayKey: String { FernletDate.dayKey(for: Date()) }
 
     var body: some View {
         ScrollView {
@@ -241,6 +255,15 @@ struct WeeklyMealPlannerView: View {
                     .fernletWrappingText()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("screen.mealPlanner")
+
+                if let loggedRecipeName {
+                    Text("\u{201C}\(loggedRecipeName)\u{201D} logged to today.")
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.moss)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("mealPlanner.loggedNotice")
+                }
 
                 weekSwitcher
 
@@ -269,9 +292,19 @@ struct WeeklyMealPlannerView: View {
         .navigationTitle("Meal planner")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reload)
+        // The confirmation line clears after a beat; a newer log supersedes the sleeper.
+        .task(id: loggedRecipeName) {
+            guard loggedRecipeName != nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(4))
+            } catch {
+                return
+            }
+            loggedRecipeName = nil
+        }
         .sheet(item: $pickingForDay) { pick in
-            RecipePickerSheet(store: store) { recipeID in
-                store.planRecipe(recipeID, date: pick.id)
+            RecipePickerSheet(store: store) { recipeID, mealType in
+                store.planRecipe(recipeID, mealType: mealType, date: pick.id)
                 reload()
             }
         }
@@ -305,49 +338,128 @@ struct WeeklyMealPlannerView: View {
 
     @ViewBuilder
     private func dayCard(_ key: String) -> some View {
-        let ids = plannedByDay[key] ?? []
+        let entries = plannedByDay[key] ?? []
+        let isToday = key == todayKey
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(dayHeading(key))
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                    Button { pickingForDay = DayPick(id: key) } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(Color.moss)
-                    }
-                    .fernletIconButton("Add a meal to \(dayHeading(key))")
-                    .accessibilityIdentifier("mealPlanner.add")
-                }
-                if ids.isEmpty {
-                    Text("No meals planned")
+                dayCardHeader(key, plannedCount: entries.count, isToday: isToday)
+                if entries.isEmpty {
+                    Text("Nothing planned.")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 } else {
-                    ForEach(ids, id: \.self) { id in
+                    ForEach(entries) { entry in
                         // A dangling id (recipe since deleted) resolves to nothing and is dropped silently.
-                        if let recipe = recipeByID[id] {
-                            HStack {
-                                Text(recipe.name)
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                Spacer()
-                                Button {
-                                    store.unplanRecipe(id, date: key)
-                                    reload()
-                                } label: {
-                                    Image(systemName: "minus.circle")
-                                        .foregroundStyle(Color.slate)
-                                }
-                                .fernletIconButton("Remove \(recipe.name) from \(dayHeading(key))")
-                            }
+                        if let recipe = recipeByID[entry.recipeID] {
+                            plannedEntryRow(entry, recipe: recipe, dayKey: key, isToday: isToday)
                         }
                     }
                 }
             }
         }
+        // Today's card is the one with the moss outline, so it is findable at a glance (FOOD-35).
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(isToday ? Color.moss.opacity(0.55) : Color.clear, lineWidth: 1.5)
+        )
+    }
+
+    /// A day card's heading row: the day name (with a "N planned" count on today), and the add
+    /// affordance. The `mealPlanner.add` identifier is a UI-test token and stays on the button.
+    private func dayCardHeader(_ key: String, plannedCount: Int, isToday: Bool) -> some View {
+        HStack(spacing: 8) {
+            dayHeadingText(key, isToday: isToday)
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+            if isToday, plannedCount > 0 {
+                Text("\(plannedCount) planned")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.parchment, in: Capsule())
+            }
+            Spacer()
+            Button { pickingForDay = DayPick(id: key) } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.moss)
+            }
+            .fernletIconButton("Add a meal to \(dayHeading(key))")
+            .accessibilityIdentifier("mealPlanner.add")
+        }
+    }
+
+    /// One planned recipe on a day card: name over its planned meal slot, with a Log pill (today
+    /// only — logging Saturday's dinner on Friday is almost always a mis-tap) and the
+    /// destructive-tinted remove. At accessibility sizes the controls drop to their own line so
+    /// neither target shrinks.
+    @ViewBuilder
+    private func plannedEntryRow(_ entry: PlannedMealEntry, recipe: RecipeDefinition, dayKey: String, isToday: Bool) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                plannedEntrySummary(entry, recipe: recipe)
+                HStack(spacing: 12) {
+                    if isToday { logPill(entry, recipe: recipe) }
+                    Spacer(minLength: 0)
+                    removeButton(entry, recipe: recipe, dayKey: dayKey)
+                }
+            }
+        } else {
+            HStack(spacing: 12) {
+                plannedEntrySummary(entry, recipe: recipe)
+                Spacer(minLength: 0)
+                if isToday { logPill(entry, recipe: recipe) }
+                removeButton(entry, recipe: recipe, dayKey: dayKey)
+            }
+        }
+    }
+
+    /// The planned recipe's name over its meal slot (omitted for a legacy slotless entry).
+    private func plannedEntrySummary(_ entry: PlannedMealEntry, recipe: RecipeDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(recipe.name)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            if let mealType = entry.mealType {
+                Text(verbatim: mealType.displayName)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+    }
+
+    /// The Log pill: logs one serving against the meal slot the recipe was planned for — the plan
+    /// already knows, so the user isn't asked twice. A slotless legacy entry falls back to the
+    /// by-time "Auto" rule inside `logRecipe`.
+    private func logPill(_ entry: PlannedMealEntry, recipe: RecipeDefinition) -> some View {
+        Button("Log") { logPlanned(entry, recipe: recipe) }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .accessibilityLabel("Log \(recipe.name)")
+            .accessibilityIdentifier("mealPlanner.log")
+    }
+
+    /// The remove control, in the destructive tint (XCUT-21) — no neutral minus.
+    private func removeButton(_ entry: PlannedMealEntry, recipe: RecipeDefinition, dayKey: String) -> some View {
+        Button {
+            store.unplanRecipe(entry.recipeID, date: dayKey)
+            reload()
+        } label: {
+            Image(systemName: "minus.circle")
+                .foregroundStyle(Color.terracottaInk)
+        }
+        .fernletIconButton("Remove \(recipe.name) from \(dayHeading(dayKey))")
+    }
+
+    /// Logs a planned recipe to today through the store half that owns it, then raises the quiet
+    /// inline confirmation. The plan entry is kept — a plan describes the day, not a to-do list.
+    private func logPlanned(_ entry: PlannedMealEntry, recipe: RecipeDefinition) {
+        if store.savedRecipes.contains(where: { $0.id == recipe.id }) {
+            store.logSavedRecipe(recipe, mealType: entry.mealType)
+        } else {
+            store.logRecipe(recipe, mealType: entry.mealType)
+        }
+        loggedRecipeName = recipe.name
     }
 
     private func dayHeading(_ key: String) -> String {
@@ -355,12 +467,23 @@ struct WeeklyMealPlannerView: View {
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
-    /// Reloads the visible week's plan from the store. Past/future day rows aren't the observed
-    /// `store.day`, so the view holds its own copy and refreshes it after every mutation.
+    /// The card's heading: "Today · Friday" for today (FOOD-35's at-a-glance marker beside the
+    /// moss outline), the full formatted date for every other day.
+    private func dayHeadingText(_ key: String, isToday: Bool) -> Text {
+        guard isToday, let date = FernletDate.date(fromDayKey: key) else {
+            return Text(verbatim: dayHeading(key))
+        }
+        return Text("Today \u{00B7} \(date, format: .dateTime.weekday(.wide))")
+    }
+
+    /// Reloads the visible week's plan from the store — the MERGED typed+legacy read
+    /// (`plannedMealEntries`), so a plan written by an older build still renders. Past/future day
+    /// rows aren't the observed `store.day`, so the view holds its own copy and refreshes it after
+    /// every mutation.
     private func reload() {
-        var next: [String: [UUID]] = [:]
+        var next: [String: [PlannedMealEntry]] = [:]
         for key in weekDayKeys {
-            next[key] = store.loadDay(for: key).plannedRecipeIDs
+            next[key] = store.loadDay(for: key).plannedMealEntries
         }
         plannedByDay = next
     }
@@ -370,15 +493,18 @@ struct WeeklyMealPlannerView: View {
 
 /// The searchable "Add a meal" sheet the planner presents to assign one recipe to a day.
 ///
-/// Lists both recipe stores unioned A–Z (matching the recipe book); tapping a row fires `onPick`
-/// with the recipe id and dismisses — the owning ``WeeklyMealPlannerView`` performs the actual
-/// `planRecipe` write and reload.
+/// Two steps (2026-08-21, FOOD-35): tapping a recipe row opens the meal-slot chip step inline in
+/// place of the list, and choosing a slot fires `onPick` with the recipe id AND the meal type,
+/// then dismisses — the owning ``WeeklyMealPlannerView`` performs the actual `planRecipe` write
+/// and reload. Lists both recipe stores unioned A–Z (matching the recipe book).
 private struct RecipePickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
-    var onPick: (UUID) -> Void
+    var onPick: (UUID, MealType) -> Void
 
     @State private var searchText = ""
+    /// The recipe awaiting its meal-slot choice — non-nil switches the sheet to the chip step.
+    @State private var pendingRecipe: RecipeDefinition?
 
     private var recipes: [RecipeDefinition] {
         let all = (store.recipes + store.savedRecipes)
@@ -391,35 +517,10 @@ private struct RecipePickerSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    TextField("Search recipes", text: $searchText)
-                        .sheetTextInput()
-                    if recipes.isEmpty {
-                        EmptyState(text: "No recipes to add.")
-                            .frame(maxWidth: .infinity)
+                    if let pendingRecipe {
+                        mealTypeStep(pendingRecipe)
                     } else {
-                        FernletCard {
-                            VStack(spacing: 0) {
-                                ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
-                                    if index > 0 { FernletRowDivider() }
-                                    Button {
-                                        onPick(recipe.id)
-                                        dismiss()
-                                    } label: {
-                                        HStack {
-                                            Text(recipe.name)
-                                                .font(.fernlet(.body))
-                                                .foregroundStyle(Color.bark)
-                                            Spacer()
-                                            Image(systemName: "plus")
-                                                .foregroundStyle(Color.moss)
-                                        }
-                                        .contentShape(Rectangle())
-                                        .padding(.vertical, 6)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        recipeListStep
                     }
                 }
                 .padding(20)
@@ -432,6 +533,64 @@ private struct RecipePickerSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    /// Step 1: the searchable A–Z recipe list. Tapping a row advances to the meal-slot step.
+    @ViewBuilder private var recipeListStep: some View {
+        TextField("Search recipes", text: $searchText)
+            .sheetTextInput()
+        if recipes.isEmpty {
+            EmptyState(text: "No recipes to add.")
+                .frame(maxWidth: .infinity)
+        } else {
+            FernletCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
+                        if index > 0 { FernletRowDivider() }
+                        Button {
+                            pendingRecipe = recipe
+                        } label: {
+                            HStack {
+                                Text(recipe.name)
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.bark)
+                                Spacer()
+                                Image(systemName: "plus")
+                                    .foregroundStyle(Color.moss)
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Step 2: the meal-slot chips for the chosen recipe — the choice the plan carries so logging
+    /// it later never asks again. "Back" returns to the list without planning anything.
+    private func mealTypeStep(_ recipe: RecipeDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(recipe.name)
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+            SheetField("Plan it for") {
+                FlowLayout(spacing: 8) {
+                    ForEach(MealType.allCases) { type in
+                        Button { onPick(recipe.id, type); dismiss() } label: {
+                            Text(verbatim: type.displayName)
+                        }
+                        .buttonStyle(ChipButtonStyle(selected: false))
+                    }
+                }
+            }
+            Button("Back to recipes") { pendingRecipe = nil }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .fernletTapTarget()
         }
     }
 }

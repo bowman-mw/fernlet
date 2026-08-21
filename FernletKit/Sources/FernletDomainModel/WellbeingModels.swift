@@ -3,13 +3,52 @@
 
 import Foundation
 
+/// One planned recipe on a day's meal plan, carrying the meal slot it was planned for (2026-08-21
+/// redesign, FOOD-35: "each planned recipe logs against the meal type it was planned for").
+///
+/// The typed successor to a bare id in ``FernletDay/plannedRecipeIDs``. The meal type persists as
+/// its FROZEN ``MealType`` rawValue token in `mealTypeToken` — a plain optional `String`, so a
+/// token only a newer build knows (or a legacy entry with none) decodes without failure and
+/// round-trips untouched; read the typed slot through ``mealType``, which is `nil` for both. The
+/// struct is additive and tolerant: `recipeID` is the only required key, mirroring the
+/// `plannedRecipeIDs` element it upgrades.
+public nonisolated struct PlannedMealEntry: Codable, Hashable, Identifiable, Sendable {
+    /// The planned recipe's id (either recipe store half). A dangling id — recipe since deleted —
+    /// resolves to nothing at render time and is dropped silently, exactly like the legacy list.
+    public var recipeID: UUID
+    /// The FROZEN persisted ``MealType`` rawValue token, or nil for a legacy/untyped entry.
+    /// Kept as a `String` so an unknown token from a newer build survives a round trip here.
+    public var mealTypeToken: String?
+
+    /// Keyed by the recipe id — the plan holds at most one entry per recipe per day.
+    public var id: UUID { recipeID }
+
+    /// The typed meal slot, or nil when the entry carries no (or an unrecognised) token.
+    public var mealType: MealType? {
+        mealTypeToken.flatMap(MealType.init(rawValue:))
+    }
+
+    public init(recipeID: UUID, mealType: MealType?) {
+        self.recipeID = recipeID
+        self.mealTypeToken = mealType?.rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        recipeID = try container.decode(UUID.self, forKey: .recipeID)
+        mealTypeToken = try container.decodeIfPresent(String.self, forKey: .mealTypeToken)
+    }
+}
+
 /// One calendar day's diary: meals, workouts, plans, journals, sleep, water, care, and HealthKit
 /// context.
 ///
 /// The per-day unit of persistence (a `DayRecord` row on the synced store), keyed by its
 /// `yyyy-MM-dd` `date`. `hygiene` decodes tolerantly with parked tokens; `plannedRecipeIDs` is an
 /// additive F3 field with a documented strip-on-write landmine for un-updated peers (see the
-/// decode note). ``hasLoggedContent`` is the single shared definition of "a day with something on
+/// decode note), and `plannedMeals` is its typed 2026-08-21 successor (recipe id + meal slot),
+/// written in parallel with it and read new-first via ``plannedMealEntries``.
+/// ``hasLoggedContent`` is the single shared definition of "a day with something on
 /// it", feeding both fresh-install detection and the coin economy's active-day accrual — a bare
 /// HealthKit sync stamp deliberately does NOT count.
 public nonisolated struct FernletDay: Codable {
@@ -37,6 +76,17 @@ public nonisolated struct FernletDay: Codable {
     /// share artifact. Render degrades gracefully: a deleted recipe leaves a DANGLING id here and the
     /// planner/aggregator drop it silently (no such recipe in either store), so no cleanup pass is owed.
     public var plannedRecipeIDs: [UUID]
+    /// The typed meal plan (2026-08-21, FOOD-35): each entry pairs a planned recipe id with the
+    /// meal slot it was planned for, so logging a planned recipe never asks the user twice.
+    ///
+    /// Additive-optional FOREVER, following the `plannedRecipeIDs`/`steps` pattern exactly:
+    /// `decodeIfPresent`, absent (`nil`) on every day written before the field existed and on rows
+    /// re-encoded by an un-updated peer — never a decode failure. Writers keep `plannedRecipeIDs`
+    /// populated IN PARALLEL (write both) so an older build's planner keeps rendering the plan;
+    /// readers go through ``plannedMealEntries``, which prefers this field and falls back per-id to
+    /// the legacy list. The same per-day strip-on-write landmine documented on `plannedRecipeIDs`
+    /// applies here, with the same bounded acceptance.
+    public var plannedMeals: [PlannedMealEntry]?
 
     public init(
         date: String,
@@ -49,7 +99,8 @@ public nonisolated struct FernletDay: Codable {
         hygiene: Set<HygieneItem> = [],
         completedPersonalCareTaskIDs: Set<String>? = nil,
         healthContext: HealthDailyContext? = nil,
-        plannedRecipeIDs: [UUID] = []
+        plannedRecipeIDs: [UUID] = [],
+        plannedMeals: [PlannedMealEntry]? = nil
     ) {
         self.date = date
         self.meals = meals
@@ -62,6 +113,7 @@ public nonisolated struct FernletDay: Codable {
         self.completedPersonalCareTaskIDs = completedPersonalCareTaskIDs ?? Set(hygiene.map(\.rawValue))
         self.healthContext = healthContext
         self.plannedRecipeIDs = plannedRecipeIDs
+        self.plannedMeals = plannedMeals
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +147,25 @@ public nonisolated struct FernletDay: Codable {
         // precedent, so it's tolerated until every device is updated — but note it's a strip-on-write, not
         // a decode default.
         plannedRecipeIDs = try container.decodeIfPresent([UUID].self, forKey: .plannedRecipeIDs) ?? []
+        // Additive-optional, tolerant of absence FOREVER (2026-08-21): nil on every pre-field day
+        // and on rows an un-updated peer re-encoded. Written in parallel with `plannedRecipeIDs`;
+        // read new-first through `plannedMealEntries`.
+        plannedMeals = try container.decodeIfPresent([PlannedMealEntry].self, forKey: .plannedMeals)
+    }
+
+    /// The day's meal plan, read new-first: every typed ``plannedMeals`` entry, then a slotless
+    /// entry for each legacy `plannedRecipeIDs` id the typed list doesn't already cover.
+    ///
+    /// This is the ONE read surface for the plan — it makes a mixed-state day (legacy ids written
+    /// by an older build alongside typed entries written by this one) render whole instead of
+    /// whichever field happened to be read.
+    public var plannedMealEntries: [PlannedMealEntry] {
+        let typed = plannedMeals ?? []
+        let typedIDs = Set(typed.map(\.recipeID))
+        let legacy = plannedRecipeIDs
+            .filter { !typedIDs.contains($0) }
+            .map { PlannedMealEntry(recipeID: $0, mealType: nil) }
+        return typed + legacy
     }
 
     /// True when the day carries *any* recorded content — a logged meal/workout/planned-workout/journal,

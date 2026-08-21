@@ -782,7 +782,9 @@ struct BarcodeNotFoundView: View {
             }
 
             if scanResult == nil {
-                Text("Scanning the label fills in the macros — you can also add them later.")
+                // "add them later" retired with FOOD-24 (2026-08-21): the meal sheet now has a
+                // stated "Enter macros by hand" path, so the honest pointer names it.
+                Text("Scanning the label fills in the macros — or enter them by hand on the meal sheet.")
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
