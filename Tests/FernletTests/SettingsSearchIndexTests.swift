@@ -74,6 +74,23 @@ struct SettingsSearchIndexTests {
         #expect(SettingsSearchIndex.results(for: "DÁRK").first?.route == .appearance)
     }
 
+    /// The fold is locale-independent (`locale: nil`), mirroring `FoodItemSearch.normalized` —
+    /// whose doc comment records the live bug this pins against: `.current` case-folds by the
+    /// user's locale, and under Turkish rules "I" folds to dotless "ı", so the catalog's
+    /// "Face ID" tokens ("face ıd") and a typed "id" stopped agreeing and the query missed.
+    /// The behavioural fixture is green-regardless on an English runner (en `.current` folding
+    /// matches nil folding), so the source pin is the half that actually catches a regression —
+    /// same reasoning as `hubRowsTakeALocalizedTitleNotAString` below.
+    @Test func normalizationFoldsLocaleIndependently() throws {
+        // Dotted capital İ decomposes to I + a combining dot; the locale-independent fold strips
+        // the mark and case-folds to plain "i". Turkish-locale folding would keep İ→i but send
+        // the plain capital I of "ID" to dotless "ı".
+        #expect(SettingsSearchIndex.normalized("FACE ID İÇ") == "face id ic")
+        let source = try RepoRoot.source("App/Fernlet/SettingsSearchIndex.swift")
+        #expect(source.contains(".folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)"),
+                "normalized no longer folds with locale: nil — settings search goes quietly empty on locales whose case rules differ from English")
+    }
+
     // MARK: - Token/display fork
 
     /// The MATCHING half: every searchable token comes from `title` + `keywords` and nothing else, so
