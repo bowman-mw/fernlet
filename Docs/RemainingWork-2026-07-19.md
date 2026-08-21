@@ -1,5 +1,11 @@
 # Remaining Work — 2026-07-19
 
+> **SUPERSEDED 2026-08-20 by [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md).**
+> Kept for history only — **do not plan from this file.** A five-track audit on 2026-08-20 checked
+> every claim below against the code and found roughly a third of them wrong, almost all in the
+> direction of under-reporting progress: items listed as pending had shipped, and two of the most
+> consequential defects were not listed at all. The successor supersedes it in full.
+
 **Supersedes** `RemainingWork-2026-06-23.md`.
 Compiled from a two-track code audit of `main` on 2026-07-19 (doc-tracker reconciliation + a
 source-level sweep for stubs, dead seams, and stale copy). Everything shipped was verified in code,

@@ -1,6 +1,8 @@
 # Follow-up plan — Sealed-backup escrow recovery + "nothing silent" settings (2026-06-28)
 
-Status: **proposed follow-up** (not started). Spun out of the S3-hardening review
+Status: **SHIPPED** — all five workstreams landed; see the Implementation-status section
+below. (This header read "proposed follow-up (not started)" long after the work was done, which
+made the top of the document contradict its own middle.) Spun out of the S3-hardening review
 (branch `s3-hardening-followups`, commit `4a18528`). The hardening commit fixed the
 backup-exclusion default and the sealed-store exclusion path; this plan covers the
 **escrow-key provisioning race** (review finding #4) and turns the app's

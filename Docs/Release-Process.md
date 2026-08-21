@@ -13,10 +13,11 @@ On `main`, enable branch protection with:
 
 1. **Require status checks to pass before merging**, with
    [`s3-wall.yml`](../.github/workflows/s3-wall.yml) as a **required** check. That workflow runs
-   the S3 enforcement self-test plus exactly five wall suites — `S3BoundaryTests`,
-   `NoTrackingBoundaryTests`, `KeyCustodyBoundaryTests`, `ColumnCryptoDeviceBindingTests`, and
-   `SealedBackupFormatPinTests` — so a cross-wall import, tracking, key-custody, or at-rest-format
-   regression cannot merge green. (Everything else in `FernletTests`, `FernletLockCryptoTests`
+   the S3 enforcement self-test plus exactly seven wall suites — `S3BoundaryTests`,
+   `NoTrackingBoundaryTests`, `PowerOfTenBoundaryTests`, `LocalizationBoundaryTests`,
+   `KeyCustodyBoundaryTests`, `ColumnCryptoDeviceBindingTests`, and `SealedBackupFormatPinTests`
+   — so a cross-wall import, tracking, Power-of-10, localization-bundle, key-custody, or
+   at-rest-format regression cannot merge green. (Everything else in `FernletTests`, `FernletLockCryptoTests`
    included, is gated by the per-release full-suite run in §2, not per-merge.) The workflow needs
    a macOS runner carrying the **iOS 26.5 SDK or newer** (`runs-on: macos-26`), because the app
    uses API introduced in that SDK; it selects the newest Xcode 26+ on the image and fails fast
@@ -43,6 +44,17 @@ Local complement: every clone runs `Scripts/install-git-hooks.sh` once, so the c
 4. If any network destination or dependency changed: the change is allowlisted in
    `NoTrackingBoundaryTests` **and** documented in
    [`Docs/No-Tracking-Wall.md`](No-Tracking-Wall.md), in the same commit (§5 of that doc).
+5. **A Release archive builds and validates.** CI only ever builds Debug, so whole-module
+   optimization, `ENABLE_NS_ASSERTIONS = NO`, distribution code signing, and the entitlements
+   the distribution profile actually carries are exercised **nowhere else**. Archive and run
+   Organizer → Validate App before every submission.
+6. **The CloudKit Production schema is current.** TestFlight and the App Store both run against
+   the **Production** container, and Production does not auto-create record types the way
+   Development does. Check [`CloudKit-Schema-Deploy.md`](CloudKit-Schema-Deploy.md) for any row
+   still marked pending, promote it in the console, and confirm it is *queryable*. A missing
+   record type does not crash — it silently breaks restore, and it makes the delete-everything
+   teardown (which enumerates by record type) quietly incomplete, which turns the app's central
+   privacy promise into a false statement.
 
 ## 3. Signed tag + checksums
 
@@ -72,17 +84,18 @@ they can fully account for.
    custody, or an at-rest format — these are the changes users are being asked to trust.
 4. Submit to App Store Connect from the same archive the checksums describe.
 
-## 5. The two one-time publish steps (owner actions)
+## 5. The two one-time publish steps — DONE 2026-08-19/20
 
-Everything above runs today, visible only to the owner. Two steps make it third-party-checkable
-([`Verifiability.md`](Verifiability.md) §7):
+Both steps that made this repo third-party-checkable ([`Verifiability.md`](Verifiability.md) §7)
+have landed:
 
-1. **Flip the repository public** (it currently 404s for outsiders). This turns the walls from
-   internal guardrails into public commitments: removing one becomes a visible, attributable
-   diff, and the traffic-audit invitation gains an audience.
-2. **Deploy [`Site/`](../Site/README.md) to `fernlet.com`** (currently a parking page). This
-   hosts the privacy policy at the public URL App Store Connect requires, and should link
-   `Docs/Verifiability.md`.
+1. ✅ **Repository is public** — <https://github.com/bowman-mw/fernlet>. The walls are now public
+   commitments rather than internal guardrails: removing one is a visible, attributable diff.
+2. ✅ **[`Site/`](../Site/README.md) is deployed** — `fernlet.com` serves the landing page and
+   <https://fernlet.com/privacy/> carries the policy at the effective date in
+   [`Privacy-Policy.md`](Privacy-Policy.md). That is the public URL App Store Connect requires;
+   entering it in ASC is a remaining owner step, tracked in
+   [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md) §1.
 
 ## 6. Related
 

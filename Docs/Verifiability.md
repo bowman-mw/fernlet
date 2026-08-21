@@ -10,10 +10,12 @@ The premise: **a privacy policy is a claim; this repo is the evidence.** Every g
 names the exact command, test, or file that backs it, so "trust us" can be replaced with
 "run this".
 
-> **Publishing status.** The repository is not yet public and `fernlet.com` is not yet deployed
-> (see §7). Everything in this document is written so that the moment the owner flips the repo
-> public and deploys [`Site/`](../Site/README.md), every verification step below works for anyone
-> — nothing here depends on being an insider except access to the source itself.
+> **Publishing status — DONE 2026-08-19/20.** The repository is public at
+> <https://github.com/bowman-mw/fernlet> and `fernlet.com` is deployed, with the privacy policy
+> live at <https://fernlet.com/privacy/>. Every verification step below is now runnable by anyone;
+> nothing here depends on being an insider. (This note previously said the opposite, and stayed
+> that way for a day after both steps landed — a trust document that is wrong about its own
+> premise is worse than one that says nothing, so re-read it whenever §7 changes.)
 
 ---
 
