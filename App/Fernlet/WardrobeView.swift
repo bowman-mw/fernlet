@@ -7,9 +7,10 @@ import FernletUI
 /// Tap a row to edit in ``CreationStudioView``; swipe leading to equip/unequip, trailing to
 /// delete or (for self-designed items only — provenance forbids reselling) list/unlist in the
 /// shop, with the same refusal alerts as the studio's confirmation step. Items received from
-/// friends show "designed by <friend>", the toolbar carries the always-reachable coin balance,
-/// and a status line summarizes the shop. Pushed within the customization sheet's navigation
-/// stack, so it pushes the Creation Studio without nesting sheets.
+/// friends show "designed by <friend>", and a status line summarizes the shop (the coin balance
+/// lives one screen up, in the customization sheet's leading header slot). Pushed within the
+/// customization sheet's navigation stack, so it pushes the Creation Studio without nesting
+/// sheets.
 struct WardrobeView: View {
     var store: FernletStore
     /// Forwarded to every ``CreationStudioView`` pushed from here so the hosting customization sheet
@@ -48,14 +49,9 @@ struct WardrobeView: View {
         .tint(Color.moss)
         .navigationTitle("Wardrobe")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // The always-reachable coin-balance surface (Phase 3a): the friend shop is now a
-            // post-session window, so the wallet lives here too, not only inside the shop.
-            ToolbarItem(placement: .topBarTrailing) {
-                CoinBalancePill(balance: store.coinBalance)
-                    .accessibilityIdentifier("wardrobe.coinBalance")
-            }
-        }
+        // The coin balance moved to the customization sheet's leading header slot (3e /
+        // XCUT-14): the wallet now greets the user one screen EARLIER on the same stack, so
+        // the closet no longer needs its own copy in the toolbar.
         .alert(item: $shopAlert) { $0.alert(in: .wardrobe) }
         .destructiveConfirmation($pendingDelete)
         .navigationDestination(isPresented: $isDesigningNewItem) {

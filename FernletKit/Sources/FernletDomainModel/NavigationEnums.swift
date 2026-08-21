@@ -206,7 +206,10 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .journal: "Journal"
         case .care: "Care"
         case .logPeriod: "Log period"
-        case .periodTracking: "Period"
+        // Display fork (SETT-23, 2026-08-21): the tile OPENS the Cycle page, and next to
+        // "Log period" a bare "Period" read as a second logging action. The rawValue token
+        // stays `periodTracking` — persisted quick-log layouts must keep decoding.
+        case .periodTracking: "Cycle page"
         case .intimacyTracking: "Intimacy"
         case .friends: "Friends"
         case .breathing: "Slow breathing"

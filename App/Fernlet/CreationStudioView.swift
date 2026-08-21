@@ -6,8 +6,10 @@ import FernletUI
 ///
 /// The user paints a per-slot pixel grid from a fixed palette on a ``ZoomablePixelCanvas`` (with
 /// per-stroke undo, mirror mode, and per-slot draft buffers so switching slots never loses a
-/// drawing), then taps Next into the confirmation step to name it and optionally list it in their
-/// shop — the save is unlisted-first, so a flagged name or a full shop still keeps the item. New
+/// drawing — the slot picker is Fernlet chips, and the palette is pinned above the Next bar so a
+/// colour is pickable before the first stroke), then taps Next into the confirmation step to name
+/// it and optionally list it in their shop — the save is unlisted-first, so a flagged name or a
+/// full shop still keeps the item. New
 /// creations auto-equip so the result is immediately visible on the companion. Pushed within the
 /// Wardrobe's navigation stack; pass `editingItem` to edit an existing item in place (id /
 /// createdAt / designer preserved, with cross-dimension textures resampled via
@@ -115,7 +117,6 @@ struct CreationStudioView: View {
                 }
                 canvasTools
                 editorCanvas
-                paletteRow
                 clearCanvasButton
             }
             // 12pt, not 20. The canvas is the point of this screen and its cell size is
@@ -128,8 +129,13 @@ struct CreationStudioView: View {
         .navigationTitle(editingItem == nil ? "New item" : "Edit item")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
-            // The editor screen is just the drawing now; naming + listing move to a confirmation step.
-            SheetSaveBar(label: "Next", disabled: !canSave) { showingConfirmation = true }
+            // The editor screen is just the drawing now; naming + listing move to a confirmation
+            // step. The palette is pinned here, above Next (3e): a colour is pickable before the
+            // first stroke, wherever the canvas is scrolled.
+            VStack(spacing: 0) {
+                pinnedPalette
+                SheetSaveBar(label: "Next", disabled: !canSave) { showingConfirmation = true }
+            }
         }
         .navigationDestination(isPresented: $showingConfirmation) {
             confirmationScreen
@@ -206,13 +212,16 @@ struct CreationStudioView: View {
         .padding(.vertical, 6)
     }
 
+    /// The slot picker as Fernlet chips (3e), replacing the system segmented control — the one
+    /// non-Fernlet control this screen carried. Selection state and the buffer-stashing
+    /// `onChange` below are unchanged.
     private var slotPicker: some View {
-        Picker("Slot", selection: $slot) {
-            ForEach(ItemSlot.allCases) { slot in
-                Text(slot.label).tag(slot)
+        FlowLayout(spacing: 8) {
+            ForEach(ItemSlot.allCases) { candidate in
+                Button(candidate.label) { slot = candidate }
+                    .buttonStyle(ChipButtonStyle(selected: slot == candidate))
             }
         }
-        .pickerStyle(.segmented)
         .onChange(of: slot) { oldSlot, newSlot in
             guard oldSlot != newSlot else { return }
             // Stash the slot we're leaving so its drawing — and its undo history — survives the trip.
@@ -310,23 +319,27 @@ struct CreationStudioView: View {
         !pixels.contains { $0 != ItemGridTexture.transparent }
     }
 
-    private var paletteRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Palette".uppercased())
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .tracking(0.8)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    eraserSwatch
-                    ForEach(Array(palette.enumerated()), id: \.offset) { index, hex in
-                        swatch(index: index, hex: hex)
-                    }
+    /// The palette, pinned above the Next bar since the 2026-08-21 redesign (3e) — it used to
+    /// scroll below the canvas, so picking a colour before the first stroke meant scrolling past
+    /// the thing you were about to paint.
+    private var pinnedPalette: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                eraserSwatch
+                ForEach(Array(palette.enumerated()), id: \.offset) { index, hex in
+                    swatch(index: index, hex: hex)
                 }
-                .padding(.vertical, 2)
             }
+            .padding(.vertical, 2)
+            .padding(.horizontal, 12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .background(Color.parchment)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.bark.opacity(0.08)).frame(height: 1)
+        }
     }
 
     private var eraserSwatch: some View {

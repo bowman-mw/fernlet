@@ -25,21 +25,54 @@ import FernletUI
 /// The lifetime-milestones screen: warm cumulative counts of care plus the coin gifts each
 /// milestone added.
 ///
-/// Pushed from Home. Rows come from ``MilestoneRowModel`` over the store's append-only milestone
-/// ledger (plus the device-local worries-let-go count), so numbers only ever grow — no rates,
-/// streaks, or completion percentages, by design. A mostly-empty shelf swaps in a gentler header;
-/// otherwise a link opens the `KeepsakeShelfView` medallion view, and the coins summary uses
-/// the reset-aware `CoinEconomy.milestoneAwardCoins` so it can never disagree with the wallet.
+/// A large sheet since the 2026-08-21 redesign (HOME-13: one rule for read-only destinations from
+/// Home — they present as sheets, like Trends and First aid), with its own `NavigationStack` so
+/// the keepsake shelf pushes INSIDE the sheet. Rows come from ``MilestoneRowModel`` over the
+/// store's append-only milestone ledger (plus the device-local worries-let-go count), so numbers
+/// only ever grow — no rates, streaks, or completion percentages, by design. Every gift figure on
+/// the screen — each row's shelf line, the shelf link's count, and the coins footer — derives from
+/// the ONE coin-ledger read in `body` (HOME-20's one-source rule), so no two of them can disagree.
 struct MilestonesView: View {
     var store: FernletStore
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
+        // Read each ledger ONCE per render and derive every surface from the same values
+        // (HOME-20): the milestone counts, the worry total, and the coin rows behind both the
+        // per-row gift lines and the footer.
+        let coinEntries = store.coinLedgerService.entries
+        let gifts = MilestoneRowModel.giftCounts(in: coinEntries)
+        let rows = MilestoneRowModel.rows(
+            counts: store.milestoneCounts,
+            worriesLetGo: store.lifetimeWorriesLetGo,
+            giftCounts: gifts
+        )
+        let coins = CoinEconomy.milestoneAwardCoins(in: coinEntries)
+        return NavigationStack {
+            VStack(spacing: 0) {
+                SheetHeader(
+                    title: "Milestones",
+                    subtitle: "Everything here is cumulative. Nothing resets.",
+                    onDone: { dismiss() }
+                )
+                content(rows: rows, totalGifts: gifts.values.reduce(0, +), totalCoins: coins)
+            }
+            .background(Color.parchment)
+            // The sheet root draws its own SheetHeader; the pushed keepsake shelf keeps its
+            // system navigation bar and back button.
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    // MARK: - Content
+
+    private func content(rows: [MilestoneRowModel], totalGifts: Int, totalCoins: Int) -> some View {
+        let mostlyEmpty = isMostlyEmpty(rows: rows, totalCoins: totalCoins)
+        return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // The nav bar already says "Milestones"; a spaced "MILESTONES" eyebrow above
-                // "All of it, added up" made it three titles in a stack. The screen anchor UI tests
-                // assert on moves onto the header itself so the string survives the trim.
-                header
+                // The screen-anchor UI tests assert on the intro, so the anchor survives the
+                // sheet conversion exactly where it lived on the push.
+                intro(mostlyEmpty: mostlyEmpty)
                     .uxScreenAnchor("screen.milestones")
 
                 VStack(spacing: 11) {
@@ -48,43 +81,34 @@ struct MilestonesView: View {
                     }
                 }
 
-                coinsSummary
+                if !mostlyEmpty {
+                    shelfLink(rows: rows, totalGifts: totalGifts, totalCoins: totalCoins)
+                }
+
+                coinsSummary(totalCoins: totalCoins)
             }
             .padding(20)
         }
-        .background(Color.parchment)
-        .navigationTitle("Milestones")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Data
-
-    private var rows: [MilestoneRowModel] {
-        MilestoneRowModel.rows(counts: store.milestoneCounts, worriesLetGo: store.lifetimeWorriesLetGo)
-    }
-
-    /// Coins gifted by milestone awards so far. Reset-aware (the same voiding the wallet applies to
-    /// milestone earns), so it can never disagree with the balance after a "Reset everything".
-    private var totalMilestoneCoins: Int {
-        CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
-    }
-
-    /// True while the shelf is barely filling in — a gentler header + softer coins note, and zero
+    /// True while the shelf is barely filling in — a gentler intro + softer coins note, and zero
     /// kinds show as a quiet dashed "your first … will land here" row rather than a full sentence.
     /// Threshold is deliberately loose: "mostly empty" is a feeling, not a metric. No gifts yet
     /// (nothing has crossed a threshold) and every kind is still in single digits.
-    private var isMostlyEmpty: Bool {
-        totalMilestoneCoins == 0 && rows.allSatisfy { $0.count < 10 }
+    private func isMostlyEmpty(rows: [MilestoneRowModel], totalCoins: Int) -> Bool {
+        totalCoins == 0 && rows.allSatisfy { $0.count < 10 }
     }
 
-    // MARK: - Header
+    // MARK: - Intro
 
+    /// The line under the header. The sheet's subtitle already carries the cumulative promise, so
+    /// this stays one warm line — gentler while the shelf is mostly empty.
     @ViewBuilder
-    private var header: some View {
-        if isMostlyEmpty {
+    private func intro(mostlyEmpty: Bool) -> some View {
+        if mostlyEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The shelf is filling in")
-                    .font(.fernlet(.header))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Text("These only ever grow, in their own time. There's nothing to keep up with here.")
@@ -93,41 +117,45 @@ struct MilestonesView: View {
                     .fernletWrappingText()
             }
         } else {
-            Text("All of it, added up")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-
-            Text("Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak.")
+            Text("Every bit of care you've logged, added up over all time.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
-
-            NavigationLink {
-                KeepsakeShelfView(rows: rows, totalMilestoneCoins: totalMilestoneCoins)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "seal")
-                        .font(.footnote.weight(.semibold))
-                    Text("See your keepsake shelf")
-                        .font(.fernlet(.label))
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.forward")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .foregroundStyle(Color.bark)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.goldenrod.opacity(0.28), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
         }
+    }
+
+    /// The keepsake-shelf row (HOME-20): its gift count comes from the same coin-ledger read as
+    /// the rows and the footer, so the link can never promise a shelf the footer contradicts.
+    private func shelfLink(rows: [MilestoneRowModel], totalGifts: Int, totalCoins: Int) -> some View {
+        NavigationLink {
+            KeepsakeShelfView(rows: rows, totalMilestoneCoins: totalCoins)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "seal")
+                    .font(.footnote.weight(.semibold))
+                Text("Keepsake shelf")
+                    .font(.fernlet(.label))
+                Spacer(minLength: 0)
+                if totalGifts > 0 {
+                    Text(totalGifts == 1 ? "1 gift" : "\(totalGifts) gifts")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.goldenrod)
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(Color.bark)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.goldenrod.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Rows (7a)
@@ -163,19 +191,19 @@ struct MilestonesView: View {
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
-                    if row.reachedCount > 0 {
-                        HStack(spacing: 5) {
+                    if row.giftCount > 0 {
+                        HStack(alignment: .top, spacing: 5) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.goldenrod)
-                            // "reached", not "gifts": this counts THRESHOLDS crossed (append-only,
-                            // survives a reset) while the footer below counts COINS from the ledger
-                            // (voided by a reset). Wording them the same let the page say
-                            // "2 milestone gifts" on a row and "No milestone gifts yet" underneath.
-                            // Only the footer talks about coins now.
-                            Text(row.reachedCount == 1 ? "1 milestone reached" : "\(row.reachedCount) milestones reached")
+                            // "on the shelf", from the COIN ledger (HOME-20): the row states what
+                            // is actually there, counted from the same award rows the footer sums
+                            // — never a threshold count that can disagree with it after a reset.
+                            // Wraps rather than truncates at accessibility sizes (3f·AX3).
+                            Text(row.giftCount == 1 ? "1 gift on the shelf" : "\(row.giftCount) gifts on the shelf")
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.goldenrod)
+                                .fernletWrappingText()
                         }
                     }
                 }
@@ -202,7 +230,7 @@ struct MilestonesView: View {
     // MARK: - Coins summary
 
     @ViewBuilder
-    private var coinsSummary: some View {
+    private func coinsSummary(totalCoins totalMilestoneCoins: Int) -> some View {
         if totalMilestoneCoins > 0 {
             HStack(spacing: 15) {
                 CoinGlyph(diameter: 46)
@@ -376,7 +404,10 @@ struct MilestoneRowModel {
     let icon: String
     let tint: Color
     let headline: String
-    let reachedCount: Int
+    /// Gifts on the shelf for this kind, counted from the COIN ledger's milestone award rows —
+    /// the same rows `CoinEconomy.milestoneAwardCoins` sums for the footer (HOME-20's one-source
+    /// rule), so a row's gift line can never disagree with the coins summary.
+    let giftCount: Int
     /// Raw lifetime count — drives the shelf medallions, empty-vs-filled row styling, and the
     /// mostly-empty header decision. (The sentence in `headline` already folds this in.)
     let count: Int
@@ -408,7 +439,14 @@ struct MilestoneRowModel {
         }
     }
 
-    static func rows(counts: [MilestoneEventKind: Int], worriesLetGo: Int) -> [MilestoneRowModel] {
+    /// Builds the display rows. `giftCounts` is ``giftCounts(in:)``'s coin-ledger derivation —
+    /// defaulted empty so callers (and tests) that only care about counts/headlines still build;
+    /// a row without a gift entry simply shows no shelf line.
+    static func rows(
+        counts: [MilestoneEventKind: Int],
+        worriesLetGo: Int,
+        giftCounts: [MilestoneEventKind: Int] = [:]
+    ) -> [MilestoneRowModel] {
         let order: [(MilestoneEventKind, String, String)] = [
             (.journal, "journal", "Your first journal moment will land here."),
             (.meal, "meals", "Your first noticed meal will land here."),
@@ -422,18 +460,41 @@ struct MilestoneRowModel {
             // Worry counts come from the device-local Worry Box (never the synced ledger), and worries
             // award no coins (a device-local coin award would desync the wallet), so their "gifts" is 0.
             let count = kind == .worry ? worriesLetGo : (counts[kind] ?? 0)
-            let reachedCount = kind == .worry ? 0 : MilestoneEconomy.thresholds.filter { $0 <= count }.count
             return MilestoneRowModel(
                 kind: kind,
                 icon: icon,
                 tint: tint,
                 headline: headline(kind: kind, count: count),
-                reachedCount: reachedCount,
+                giftCount: kind == .worry ? 0 : (giftCounts[kind] ?? 0),
                 count: count,
                 shelfLabel: shelfLabel,
                 emptyPrompt: emptyPrompt
             )
         }
+    }
+
+    /// Gifts on the shelf per kind, derived from the COIN ledger's counted milestone award rows —
+    /// the SAME rows `CoinEconomy.milestoneAwardCoins` sums for the footer, filtered by the same
+    /// reset rule the wallet applies (a stale pre-reset award re-synced from an offline device is
+    /// excluded by `createdAt`). This is HOME-20's one source: the old per-row figure counted
+    /// thresholds crossed on the append-only event ledger, which a reset voids differently, so a
+    /// row could claim gifts the coins footer denied. `.resetBoundary` can never appear — award
+    /// ids only ever carry counted kinds, and the `countedKinds` guard makes that structural.
+    static func giftCounts(in coinEntries: [CoinLedgerEntry]) -> [MilestoneEventKind: Int] {
+        let deduped = CoinEconomy.deduplicatedByID(coinEntries)
+        let reset = CoinEconomy.latestReset(in: deduped)
+        var counts: [MilestoneEventKind: Int] = [:]
+        for entry in deduped {
+            guard entry.kind == .earn, entry.id.hasPrefix("milestone:") else { continue }
+            if let reset, entry.createdAt <= reset.createdAt { continue }
+            // Award ids are `milestone:<kind>:<threshold>` (see `MilestoneEconomy.awardID`).
+            let parts = entry.id.split(separator: ":")
+            guard parts.count == 3,
+                  let kind = MilestoneEventKind(rawValue: String(parts[1])),
+                  MilestoneEconomy.countedKinds.contains(kind) else { continue }
+            counts[kind, default: 0] += 1
+        }
+        return counts
     }
 
     private static func headline(kind: MilestoneEventKind, count: Int) -> String {
