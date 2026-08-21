@@ -151,6 +151,10 @@ struct SettingsSheet: View {
 
     /// Search results: one value-based link per matching leaf (title + breadcrumb subtitle), routed
     /// through the same `.navigationDestination`. A quiet row stands in when nothing matches.
+    ///
+    /// Rows render ``SettingsSearchEntry/displayTitle`` — the display half of the entry's
+    /// token/display fork. `entry.title` is the frozen English matching input and must never reach a
+    /// `Text`: as a `String` it would take `Text`'s verbatim initializer and render untranslated.
     private var searchResultsList: some View {
         List {
             let results = SettingsSearchIndex.results(for: settingsSearch)
@@ -163,7 +167,7 @@ struct SettingsSheet: View {
                 ForEach(results) { entry in
                     NavigationLink(value: entry.route) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.title)
+                            Text(entry.displayTitle)
                                 .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                             Text(entry.breadcrumb)
@@ -250,7 +254,14 @@ struct SettingsSheet: View {
 
     /// A hub navigation row: the standard value-based link, drawn in DM Sans like every other list
     /// in the app (a bare `NavigationLink("…", value:)` renders in system SF).
-    private func hubLink(_ title: String, _ route: SettingsRoute) -> some View {
+    ///
+    /// `title` is `LocalizedStringKey`, never `String`: a `String` parameter silently opts every
+    /// call site out of localization — the literal looks auto-localizing, extracts into no catalog,
+    /// and renders English forever on a clean build. All fifteen call sites pass a literal, so none
+    /// needed editing and none carries runtime text; if one ever must, it gets a distinctly-labelled
+    /// `verbatim:` sibling rather than a same-label `String` overload (which would win for a plain
+    /// literal and quietly re-introduce the bug).
+    private func hubLink(_ title: LocalizedStringKey, _ route: SettingsRoute) -> some View {
         NavigationLink(value: route) {
             Text(title)
                 .font(.fernlet(.label))

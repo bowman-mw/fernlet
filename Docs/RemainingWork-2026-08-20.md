@@ -83,9 +83,9 @@ Ordered by what a tester hits first. The previous tracker's seven items are reco
    `manager.hydratedPhotos(…)` like the ConnectView siblings, and FRND-12 landed with it: **Keep**
    is the primary action (no Photos authorization involved) with "Also save to Photos" secondary,
    so a Photos denial can no longer cost the in-app keep. Covered by `DisposableCameraSaveTests`
-   (behavioral + source-wall). Residual: ConnectView's disconnect-review flow still uses the fused
-   flow (hydrates correctly, but the keep is still gated behind Photos authorization) — one-call-site
-   follow-up now that the sheet takes a `saveToPhotos:` parameter.
+   (behavioral + source-wall). Residual closed 2026-08-21: ConnectView's disconnect-review now uses the
+   same keep/export split (`ConnectReviewKeepTests`); the album carousel's per-photo Photos save was
+   assessed and deliberately left — export is that button's point, no keep is at stake.
 2. ✅ 2026-08-20 — **Settings → Health** now triages by real cause (`HealthAvailabilityState`):
    device-unavailable keeps the old message; integration-off says "Health is switched off for
    Fernlet." with a link to Privacy & Data (the toggle stays there, with its consent copy and audit
@@ -139,15 +139,20 @@ screen exists. All three were understated or missing in the old tracker.
    QuickExerciseSheet), and an "Exercise history" Move sub-screen (recency-ordered; last / best /
    times logged) — both driven by the one existing `rollUpExerciseHistory` implementation, no
    re-derived parsing, factual-only per the spec constraint. `ExerciseLastTimeTests` +
-   `ExerciseHistoryScreenTests`. Residual: the recall line is not yet in GuidedWorkoutEditorSheet's
-   per-exercise cards (the API is ready: `store.exerciseHistoryEntry(named:)`).
+   `ExerciseHistoryScreenTests`. Residual closed 2026-08-21: GuidedWorkoutEditorSheet's per-exercise cards
+   carry the same recall line (shared catalog key, own a11y id; `GuidedEditorLastTimeTests`).
 2. ✅ 2026-08-20 — **AI audit log screen** shipped as "AI activity log" in Settings (Privacy
    section + settings search): every AI call, newest first — kind, destination, boundary badge,
    outcome incl. failures, field names only. The parked-token contract is honored and PINNED by
    test: a token recorded by a newer build renders verbatim with boundary "can't say", never the
-   privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: hub row label rides the
-   existing String-typed `hubLink` idiom (hub-wide localization fork is a separate change); screen
-   snapshots once per push (no live update while open, deliberate).
+   privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: the `hubLink` String idiom was
+   forked 2026-08-21 (labels are `LocalizedStringKey`; `SettingsSearchEntry` split into frozen
+   matching tokens + `displayTitle`, matching pinned English-stable by test). Screen still snapshots
+   once per push (deliberate). NEW same-species follow-ups from that fork, small and deferred:
+   `hubToggle(_ title: String)` still opts its ~11 literal call sites out of localization, and
+   `SettingsSearchIndex.normalized` folds with `locale: .current` (Turkish-İ query miss — the same
+   species FoodItemSearch already fixed). The 61 dynamic search-title keys await the deferred
+   search-catalog curation pass; the 4 new hub-label keys are in the synced catalog.
 3. **The coach proximity channel.** Trust policy, verification ceremony, sealed wire envelope and
    pre-decode DoS caps — all hardened, all referenced only by tests. See §5.
 

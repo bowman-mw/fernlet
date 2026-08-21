@@ -7,7 +7,9 @@ import FernletUI
 /// reorder, and add exercises from the catalog. Saving replaces the session in today's committed plan
 /// (preserving its `SessionSuggestion.id` so completions stay valid). Rest is stored as a per-exercise
 /// override — the same field the guided runner reads and the future coach app will write — so an edit
-/// here changes the rest timer for that exercise.
+/// here changes the rest timer for that exercise. Each exercise card also carries the same one-line
+/// factual "last time" recall the shared row editor shows (``WorkoutExerciseBuilder``) — refreshed
+/// when the set of exercise names changes, absent when an exercise has no parsed history.
 struct GuidedWorkoutEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -18,6 +20,11 @@ struct GuidedWorkoutEditorSheet: View {
     @State private var pickerResetToken = 0
     @State private var showDiscardConfirm = false
     @State private var showCouldNotSave = false
+
+    /// The resolved "Last time" recall values keyed by row name — held as state so the per-name
+    /// history rollups run once per name-set change (see ``refreshLastTime()``), not on every
+    /// sets/reps/rest edit.
+    @State private var lastTimeByName: [String: String] = [:]
 
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion) {
         self.store = store
@@ -56,6 +63,10 @@ struct GuidedWorkoutEditorSheet: View {
             }
             SheetSaveBar(label: "Save changes") { save() }
         }
+        // Attached to the always-rendered VStack, never to the conditional recall line — an empty
+        // view's onAppear/onChange silently never fire (same discipline as ``WorkoutExerciseBuilder``).
+        .onAppear { refreshLastTime() }
+        .onChange(of: rows.map(\.name)) { _, _ in refreshLastTime() }
         .background(Color.parchment)
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
@@ -119,6 +130,8 @@ struct GuidedWorkoutEditorSheet: View {
                     onRemove: { removeRow(at: index) }
                 )
             }
+
+            lastTimeLine(for: row.name)
 
             if row.fromCatalog {
                 HStack(alignment: .center, spacing: 12) {
@@ -189,6 +202,43 @@ struct GuidedWorkoutEditorSheet: View {
         // a sentence does not survive translation. Honest English beats broken German here; the
         // real fix is per-call-site accessibility copy, which is a copy task, not a type change.
         .fernletIconButton(verbatim: label)
+    }
+
+    // MARK: Last-time recall
+
+    /// The one-line factual recall of the last logged session for `name` — the same phrasing,
+    /// styling, and round-2.1 constraint (no praise, deltas, or trends) as
+    /// ``WorkoutExerciseBuilder``'s line. Renders nothing when the exercise has no parsed history.
+    @ViewBuilder private func lastTimeLine(for name: String) -> some View {
+        if let values = lastTimeByName[name] {
+            Text("Last time: \(values)")
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("workout.editor.lastTime")
+        }
+    }
+
+    /// Recomputes ``lastTimeByName`` for the current rows, reading the store's day history once.
+    private func refreshLastTime() {
+        lastTimeByName = Self.lastTimeRecall(names: rows.map(\.name),
+                                             days: Array(store.loadDays().values))
+    }
+
+    /// The "Last time" recall values for each name in `names` that has parsed history in `days`,
+    /// keyed by the name exactly as the row spells it (the matching itself is case/whitespace-
+    /// insensitive via ``FernletStore/exerciseHistoryEntry(named:days:)``, so "bench PRESS" still
+    /// finds "Bench press"). A name with no history is absent from the map — the card's `if let`
+    /// then renders no line at all, the honest display for "never logged".
+    @MainActor static func lastTimeRecall(names: [String], days: [FernletDay]) -> [String: String] {
+        var values: [String: String] = [:]
+        // Bounded: `names` comes from `rows`, capped at ``maxExercises``.
+        for name in names {
+            guard values[name] == nil else { continue }
+            values[name] = FernletStore.exerciseHistoryEntry(named: name, days: days)?
+                .lastTimeRecallValues
+        }
+        return values
     }
 
     // MARK: Add exercise
