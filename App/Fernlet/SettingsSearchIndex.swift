@@ -10,8 +10,14 @@
 // each carrying the synonyms a user would actually type ("dark mode", "face id", "icloud", …).
 // Matching mirrors `FernletDomainModel.FoodItemSearch`'s token style (diacritic/case-insensitive,
 // prefix-AND over title + keywords) but is deliberately self-contained: no food-catalog import.
+//
+// LOCALIZATION: `title` and `keywords` were one string doing two jobs — the matching input AND the
+// text of the result row. They are FORKED here (the localization wall's rule, see
+// `Tests/FernletTests/LocalizationBoundaryTests`): both stay frozen English tokens, and the display
+// half moved to ``SettingsSearchEntry/displayTitle``, which is the only thing the row renders.
 
 import Foundation
+import SwiftUI
 
 /// Every addressable destination reachable from the Settings hub.
 ///
@@ -39,12 +45,23 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case appLock
 }
 
-/// One searchable leaf: the label shown in results, its search synonyms, a breadcrumb subtitle for
-/// context, and the route the row navigates to.
+/// One searchable leaf: the frozen English label it is FOUND by, its search synonyms, a breadcrumb
+/// subtitle for context, and the route the row navigates to.
 ///
 /// Instances live only in ``SettingsSearchIndex/entries``; ``SettingsSheet`` renders matches as
 /// navigation rows. `searchableTokens` is precomputed at construction so per-keystroke matching
 /// never re-normalizes the catalog.
+///
+/// **Token/display fork.** `title` used to be both halves of the localization wall's forbidden
+/// one-string-two-jobs shape: the matching input AND the text drawn on the result row. The split is:
+/// - `title` and `keywords` are TOKENS. Frozen English forever — they feed
+///   ``SettingsSearchIndex/tokens(in:)``, and `title` is also a component of `id` (the `ForEach`
+///   identity). A translated token would stop matching the queries the catalog was written for and
+///   would re-identify every row on a language change.
+/// - ``displayTitle`` is DISPLAY. The only thing a person reads, and the only half that localizes.
+///
+/// So an edit to `title` is a behaviour change (search + identity), never a copy change; new wording
+/// belongs in the string catalog against the existing key.
 nonisolated struct SettingsSearchEntry: Identifiable {
     let title: String
     let keywords: [String]
@@ -60,8 +77,25 @@ nonisolated struct SettingsSearchEntry: Identifiable {
         self.searchableTokens = SettingsSearchIndex.tokens(in: ([title] + keywords).joined(separator: " "))
     }
 
+    /// The localized label the result row renders — the display half of the fork.
+    ///
+    /// The frozen English `title` IS the catalog key: `Text` resolves a `LocalizedStringKey` built
+    /// from a `String` at render time against the app bundle's table, and falls back to the key
+    /// itself when no translation exists (which is why an English run is byte-identical to the
+    /// pre-fork behaviour). Because the key is formed from a variable rather than a literal, the
+    /// build-time extractor cannot see these strings — every title is listed in the round's
+    /// `stringsAdded` so the catalog sync seeds them by hand; an unseeded title simply renders its
+    /// English self.
+    ///
+    /// Computed rather than stored so the display can never silently drift away from the token it is
+    /// keyed by. Deliberately confined to `title`: `breadcrumb` stays English until the search
+    /// catalog's 369 synonyms get their per-language curation pass (`Docs/Localization-Plan-2026-07-19.md` §3).
+    var displayTitle: LocalizedStringKey { LocalizedStringKey(title) }
+
     // Stable and unique across the catalog (no two entries share route + breadcrumb + title), so
     // `ForEach` keeps rows identified without a per-launch UUID that would break value equality.
+    // Built from the frozen tokens, never `displayTitle`: a row's identity must not change with the
+    // user's language.
     var id: String { "\(route)|\(breadcrumb)|\(title)" }
 }
 

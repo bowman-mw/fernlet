@@ -86,6 +86,22 @@ public nonisolated enum KeychainItem {
         case unreadable(OSStatus)
     }
 
+    /// Two-way result of a keychain ENUMERATION that distinguishes "this service holds nothing"
+    /// from "this service could not be read" — the distinction ``loadAll(service:synchronizable:)``
+    /// deliberately collapses into `[]`. Callers whose contract is a promise ABOUT the row set (the
+    /// delete-everything funnel, which reports a store as incompletely cleared) use it so an
+    /// unreadable keychain cannot read as an empty one.
+    public enum EnumerationResult {
+        /// The enumeration succeeded; carries every matching item. An EMPTY array is a genuine
+        /// empty slot (`errSecItemNotFound`, or a success with no decodable rows), not a failure.
+        case rows([(account: String, data: Data)])
+        /// The keychain call failed (any status other than success and `errSecItemNotFound`), or
+        /// reported success without returning the attribute array the query asked for. The row set
+        /// is UNKNOWN — never treat it as empty. In the second case the carried status is
+        /// `errSecSuccess`: the *case*, not the status, is the failure signal.
+        case unreadable(OSStatus)
+    }
+
     /// Service string for the app-lock credentials (`FernletLockService`'s production slot).
     nonisolated public static let productionService = "com.fernlet.lock"
     /// Service string under which the ``StoragePreferences`` blob is stored.
@@ -190,8 +206,37 @@ public nonisolated enum KeychainItem {
     /// DIFFERENT accounts and coexist rather than overwrite one another — so the reconcile path must
     /// enumerate to discover the full set (a fresh device does not know the account name a priori). Query
     /// `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no match/error.
+    ///
+    /// - Important: the error collapse is the whole difference from
+    ///   ``loadAllDistinguishingFailure(service:synchronizable:)``, and it is only safe where an
+    ///   unreadable service and an empty one warrant the same behavior — the escrow reconcile
+    ///   discovers nothing to reconcile and simply retries later. A caller that PROMISES something
+    ///   about the row set (that it cleared them all, that none remain) must use the distinguishing
+    ///   variant instead: `[]` from an unreadable keychain would make that promise a lie.
     public static func loadAll(service: String, synchronizable: SynchronizableScope = .any) -> [(account: String, data: Data)] {
-        guard !service.isEmpty else { return [] }   // R5: an empty service slot holds nothing of Fernlet's.
+        switch loadAllDistinguishingFailure(service: service, synchronizable: synchronizable) {
+        case .rows(let rows):  return rows
+        case .unreadable:      return []   // the documented collapse; see the note above.
+        }
+    }
+
+    /// ``loadAll(service:synchronizable:)`` reporting its outcome: the rows, or the `OSStatus` that
+    /// stopped the enumeration from producing them.
+    ///
+    /// The distinction is load-bearing exactly where a promise is being made about the row set.
+    /// `ModerationBanStore.clearPeerBansForDeleteAll` is the caller it was added for: it enumerates
+    /// the moderation service to find every peer-ban row to delete, and under the collapsing
+    /// variant a failed enumeration produced an empty account list — zero deletes, zero failures,
+    /// and a CLEAN result reported to the "Delete everything" dialog over peer-ban records still
+    /// sitting in the keychain. `errSecItemNotFound` is NOT such a failure: a service that holds
+    /// nothing is a legitimately empty one, and it lands in ``EnumerationResult/rows(_:)`` as `[]`.
+    public static func loadAllDistinguishingFailure(
+        service: String,
+        synchronizable: SynchronizableScope = .any
+    ) -> EnumerationResult {
+        // R5: an empty service is a caller bug rather than an empty slot — report it as unreadable
+        // so a caller promising it cleared the slot fails closed instead of promising it cleared "".
+        guard !service.isEmpty else { return .unreadable(errSecParam) }
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -202,12 +247,39 @@ public nonisolated enum KeychainItem {
             kSecReturnData as String: true,
             kSecUseDataProtectionKeychain as String: true
         ]
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let items = result as? [[String: Any]] else { return [] }
-        return items.compactMap { item in
-            guard let account = item[kSecAttrAccount as String] as? String,
-                  let data = item[kSecValueData as String] as? Data else { return nil }
-            return (account, data)
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        return enumerationResult(status: status, matches: result as? [[String: Any]])
+    }
+
+    /// Classifies one `SecItemCopyMatching` enumeration into an ``EnumerationResult`` — the pure
+    /// status-to-outcome mapping inside ``loadAllDistinguishingFailure(service:synchronizable:)``.
+    ///
+    /// Split out (and reachable) because it is the half the wipe funnel's honesty rests on —
+    /// `errSecItemNotFound` is an empty slot, every other failing status is an unknown one — while
+    /// the statuses that matter most (`errSecInteractionNotAllowed` before first unlock,
+    /// `errSecNotAvailable`) cannot be provoked against a simulator keychain. Pure: it performs no
+    /// keychain call and holds no state.
+    ///
+    /// - Parameters:
+    ///   - status: the status `SecItemCopyMatching` returned.
+    ///   - matches: its out-parameter cast to the attribute dictionaries the query asked for, or
+    ///     `nil` when it returned nothing (as `errSecItemNotFound` does) or a value of another shape.
+    public static func enumerationResult(status: OSStatus, matches: [[String: Any]]?) -> EnumerationResult {
+        switch status {
+        case errSecSuccess:
+            guard let matches else { return .unreadable(status) }
+            // Bounded: one pass over the finite row set the keychain returned. A row missing either
+            // attribute is dropped rather than failing the whole enumeration — it is not one of ours.
+            let rows: [(account: String, data: Data)] = matches.compactMap { item in
+                guard let account = item[kSecAttrAccount as String] as? String,
+                      let data = item[kSecValueData as String] as? Data else { return nil }
+                return (account, data)
+            }
+            return .rows(rows)
+        case errSecItemNotFound:
+            return .rows([])
+        default:
+            return .unreadable(status)
         }
     }
 

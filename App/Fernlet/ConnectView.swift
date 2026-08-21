@@ -129,14 +129,17 @@ struct FriendsView: View {
     }
 
     /// The end-of-session photo review sheet (keep/discard the session's photos, and the friend
-    /// candidates alongside them).
+    /// candidates alongside them), using the split (FRND-12) action bar: keeping to the in-app
+    /// wall is the primary action and the Photos-library export is a separate, optional button —
+    /// so a Photos permission denial can never cost the user the keep.
     private var disconnectReviewSheet: some View {
         FriendPhotoReviewSheet(
             photos: manager.sessionPhotos,
             selectedIDs: $selectedForSave,
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
-            saveSelected: { await saveSelectedSessionPhotos() },
+            saveSelected: { await keepSelectedSessionPhotos() },
+            saveToPhotos: { await exportSelectedPhotosToLibrary() },
             discardAll: { discardAllSessionPhotos() },
             loadImageData: { manager.imageData(for: $0) }
         )
@@ -144,18 +147,32 @@ struct FriendsView: View {
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
     }
 
-    /// Saves the ticked session photos to the photo library, then finalizes keeps and leaves the
-    /// session; a save failure surfaces on the sheet and leaves the session up.
-    private func saveSelectedSessionPhotos() async {
-        // Session photos are stored metadata-only to bound memory; rehydrate the
-        // selected ones from the disk cache before saving to the photo library.
+    /// FRND-12: the primary review action of the disconnect flow. Keeps the ticked photos on the
+    /// in-app wall, mints the kept friends, and leaves the session — deliberately with NO
+    /// Photos-library involvement, so a system-permission denial can never cost the user their
+    /// pictures. The optional export is `exportSelectedPhotosToLibrary`.
+    private func keepSelectedSessionPhotos() async {
+        manager.finishSessionPhotos(keeping: selectedForSave)
+        finalizeFriendKeeps()
+        await manager.leaveSessionAfterNotifyingPeers()
+        disconnectReviewPresented = false
+    }
+
+    /// The optional "Also save to Photos" export. Session payloads are held metadata-only to bound
+    /// memory, so the ticked ones are rehydrated from the disk cache first — handing them to the
+    /// saver directly would skip every payload (`imageData` is nil) and throw `NothingSavedError`.
+    /// Purely additive: a failure (including a Photos permission denial) surfaces on the
+    /// still-present sheet and never touches the keep flow.
+    private func exportSelectedPhotosToLibrary() async {
         let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
+        // If no bytes could be loaded/decrypted, don't report a false success.
+        guard !toSave.isEmpty else {
+            photoSaveError = .generic
+            return
+        }
         do {
             try await FriendPhotoLibrarySaver.save(toSave)
-            manager.finishSessionPhotos(keeping: selectedForSave)
-            finalizeFriendKeeps()
-            await manager.leaveSessionAfterNotifyingPeers()
-            disconnectReviewPresented = false
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
         }

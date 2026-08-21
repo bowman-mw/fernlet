@@ -1708,6 +1708,9 @@
     "Goal" : {
 
     },
+    "Goal & nutrition" : {
+
+    },
     "Goal · %@" : {
 
     },
@@ -1745,6 +1748,9 @@
 
     },
     "Heads up: this iCloud account already has Fernlet data. Choosing “Just on this device” won’t bring it in, and anything you log here won’t reach your other devices." : {
+
+    },
+    "Health" : {
 
     },
     "Health data is not available on this device." : {
@@ -1960,6 +1966,9 @@
           }
         }
       }
+    },
+    "Layout & shortcuts" : {
+
     },
     "Leave" : {
 
@@ -3445,6 +3454,9 @@
 
     },
     "Side item" : {
+
+    },
+    "Signals" : {
 
     },
     "Skip rest" : {
