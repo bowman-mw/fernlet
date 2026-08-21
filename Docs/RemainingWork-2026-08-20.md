@@ -185,9 +185,16 @@ legacy direct-CloudKit sweep (previously gated on sync-off + kept-copy), and a m
 checkpoint+vacuum residue pass (destroy is deliberately banned for the CloudKit-backed store; the
 weaker guarantee is documented in `PrivacyWipeCoverage.md`).
 
-The reason these accumulated is structural: `PrivacyWipeCoverageTests` only checks correspondence
-between three human-written artifacts and has no discovery, so a surface nobody wrote down is
-invisible to it. Part 4.4 specifies the wall that closes it — **still open**, queued this round.
+✅ 2026-08-20/21 — the structural cause is closed: `PersistedSurfaceWipeBoundaryTests` now
+DISCOVERS every UserDefaults-backed surface from source (accessor-anchored incl. receiver-checked
+KVC `setValue`, `@AppStorage`, symbolic/interpolated key resolution, DEBUG stripped on both sides,
+unresolvable keys become declared seams — never dropped) and requires each of the 52 discovered
+surfaces to carry a `cleared`/`kept`/`unreachableByDesign`/`openGap` disposition, with cleared
+tokens bound to their key through the coverage doc's table. Built adversarially: 4 attacker agents
+produced 49 evasions; ~20 folded classes confirmed and fixed with planted fixtures (incl. two live
+findings: a compound `#if DEBUG &&` the stripper missed, and an unregistered internal wipe leg),
+6 documented as the honest ceiling in `PrivacyWipeCoverage.md`. Floors: ≥350 files, ≥52 surfaces,
+16 always-rediscovered known keys. `DeleteAllDataTests` remains the behavioural complement.
 
 ---
 
