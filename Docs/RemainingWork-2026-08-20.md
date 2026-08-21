@@ -148,13 +148,14 @@ screen exists. All three were understated or missing in the old tracker.
    privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: the `hubLink` String idiom was
    forked 2026-08-21 (labels are `LocalizedStringKey`; `SettingsSearchEntry` split into frozen
    matching tokens + `displayTitle`, matching pinned English-stable by test). Screen still snapshots
-   once per push (deliberate). NEW same-species follow-ups from that fork, small and deferred —
-   now PLANNED with decisions locked in
-   [`Next-Round-Prompt-2026-08-21.md`](Next-Round-Prompt-2026-08-21.md) (Parts 1–2), alongside the
-   milestone reset-boundary marker (Part 3; owner decided 2026-08-21: milestone marker + dialog
-   disclosure for custom items/days, type-only hubToggle fork). The 61 dynamic search-title keys
-   still await the deferred search-catalog curation pass; the 4 new hub-label keys are in the
-   synced catalog.
+   once per push (deliberate). ✅ 2026-08-21 — the two same-species follow-ups landed
+   ([`Next-Round-Prompt-2026-08-21.md`](Next-Round-Prompt-2026-08-21.md) Parts 1–2): the settings
+   search fold is locale-independent (`locale: nil`, pinned — `.current`'s Turkish case rules
+   silently emptied results), and `hubToggle` took the same `LocalizedStringKey` fork as `hubLink`
+   (type-only per the owner decision; the 11 switch labels are in the synced catalog, signature
+   pinned beside `hubLink`'s). Still planned from that prompt: the milestone reset-boundary marker
+   (Part 3; owner decided 2026-08-21: milestone marker + dialog disclosure for custom items/days).
+   The 61 dynamic search-title keys still await the deferred search-catalog curation pass.
 3. **The coach proximity channel.** Trust policy, verification ceremony, sealed wire envelope and
    pre-decode DoS caps — all hardened, all referenced only by tests. See §5.
 

@@ -518,7 +518,15 @@ struct SettingsSheet: View {
 
     /// A hub switch in the app's type system. The moss switch colour comes from the sheet-level
     /// `.tint(Color.moss)`, so every hub toggle now matches the Privacy & Data ones.
-    private func hubToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+    ///
+    /// `title` is `LocalizedStringKey`, never `String` — same rule and same reasoning as
+    /// ``hubLink(_:_:)``: a `String` parameter silently opts every call site out of localization
+    /// (the literal looks auto-localizing, extracts into no catalog, and renders English forever on
+    /// a clean build). All eleven call sites pass a literal, so none needed editing and none
+    /// carries runtime text; if one ever must, it gets a distinctly-labelled `verbatim:` sibling
+    /// rather than a same-label `String` overload (which would win for a plain literal and quietly
+    /// re-introduce the bug).
+    private func hubToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(title)
                 .font(.fernlet(.label))

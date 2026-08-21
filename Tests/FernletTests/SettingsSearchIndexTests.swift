@@ -159,12 +159,15 @@ struct SettingsSearchIndexTests {
                 "the settings-search result row renders the frozen token — it will never localize")
     }
 
-    /// The hub rows' half of the same rule. Reverting `hubLink` to a `String` parameter still
-    /// COMPILES — every call site passes a literal, `String` is a literal's default type, and the
-    /// hub then renders English forever with no warning and no red test. Only a source pin catches it.
+    /// The hub rows' half of the same rule. Reverting `hubLink` or `hubToggle` to a `String`
+    /// parameter still COMPILES — every call site passes a literal, `String` is a literal's default
+    /// type, and the hub then renders English forever with no warning and no red test. Only a
+    /// source pin catches it.
     @Test func hubRowsTakeALocalizedTitleNotAString() throws {
         let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
         #expect(sheet.contains("func hubLink(_ title: LocalizedStringKey,"),
                 "hubLink's title is no longer a LocalizedStringKey — the ~15 hub labels stopped localizing")
+        #expect(sheet.contains("func hubToggle(_ title: LocalizedStringKey,"),
+                "hubToggle's title is no longer a LocalizedStringKey — the 11 hub switch labels stopped localizing")
     }
 }
