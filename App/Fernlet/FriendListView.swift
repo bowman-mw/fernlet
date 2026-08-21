@@ -459,7 +459,7 @@ struct FriendListView: View {
                         peerToBlock = peer
                         blockConfirmShown = true
                     }
-                    .buttonStyle(ActionPillButtonStyle(.secondary))
+                    .buttonStyle(ActionPillButtonStyle(.destructive))
                 } else {
                     Button("Unblock") {
                         store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
@@ -473,7 +473,7 @@ struct FriendListView: View {
 
                 if peer.reportedAt == nil {
                     Button("Report") { peerToReport = peer }
-                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .buttonStyle(ActionPillButtonStyle(.destructive))
                 }
             }
         }

@@ -63,17 +63,18 @@ struct WorkoutLocationSetupView: View {
 
     private var locationStep: some View {
         VStack(spacing: 0) {
+            // Live-editing sheet under the 2026-08-21 template: deletes and the active switch
+            // persist as they happen, so Done top-right is the whole exit — no bottom bar.
+            SheetHeader(
+                title: "Where will you train?",
+                subtitle: "So I can plan around what's actually there.",
+                onDone: {
+                    store.setWorkoutLocations(locations, activeID: activeID)
+                    dismiss()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Where will you train?")
-                            .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
-                        Text("So I can plan around what's actually there.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                    }
-
                     if locations.isEmpty == false {
                         sectionHeader("Your locations")
                         LazyVGrid(columns: twoColumns, spacing: 14) {
@@ -111,11 +112,6 @@ struct WorkoutLocationSetupView: View {
                 }
                 .padding(20)
                 .padding(.bottom, 10)
-            }
-
-            SheetSaveBar(label: "Done") {
-                store.setWorkoutLocations(locations, activeID: activeID)
-                dismiss()
             }
         }
     }

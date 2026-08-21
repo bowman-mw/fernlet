@@ -569,9 +569,10 @@ struct PrivacyDataSettingsView: View {
 
     /// The delete-the-iCloud-copy control, sized to what is actually up there.
     ///
-    /// Full-width terracotta while iCloud holds (or may hold) Fernlet records; a quiet terracotta
-    /// text link once the account is known to be empty — the loudest control on the card used to be
-    /// an offer to delete nothing, directly under "No Fernlet iCloud records were found".
+    /// A full-width destructive card (``DestructiveCardButtonStyle``) while iCloud holds (or may
+    /// hold) Fernlet records; a quiet terracotta text link once the account is known to be empty —
+    /// the loudest control on the card used to be an offer to delete nothing, directly under
+    /// "No Fernlet iCloud records were found".
     @ViewBuilder
     private var deleteCloudDataControl: some View {
         if showsProminentCloudDelete {
@@ -579,13 +580,8 @@ struct PrivacyDataSettingsView: View {
                 prepareDisableICloudFlow(deleteOnly: true)
             } label: {
                 Label("Delete iCloud data", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onTerracotta)
-            .padding(.vertical, 11)
-            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .buttonStyle(DestructiveCardButtonStyle())
             .accessibilityIdentifier("privacy.icloud.delete")
         } else {
             Button(role: .destructive) {
@@ -1173,16 +1169,8 @@ struct PrivacyDataSettingsView: View {
                 )
             } label: {
                 Label("Delete everything", systemImage: "trash.fill")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(deleteFlow.isDeleting ? Color.bark : Color.onTerracotta)
-            .padding(.vertical, 11)
-            .background(
-                Color.terracotta.opacity(deleteFlow.isDeleting ? 0.55 : 1),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
+            .buttonStyle(DestructiveCardButtonStyle())
             .disabled(deleteFlow.isDeleting)
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
         }

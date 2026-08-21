@@ -19,7 +19,8 @@ import FernletUI
 /// possibly-unwell annotation, and a confidence line — plus an explicit not-medical disclaimer
 /// (App Store 1.4.1). The optional `onFirstAid` hook, wired by ContentView, chains into the
 /// ``FirstAidView`` sheet as an offer, never an instruction. Purely presentational: it computes
-/// nothing and stores nothing.
+/// nothing and stores nothing. A read-only sheet under the 2026-08-21 template: Done sits
+/// top-right in the pinned header and is the whole exit — no bottom bar.
 struct StressExplainerSheet: View {
     /// Nil during cold start (fewer than ~7 days of body signals).
     var assessment: StressAssessment?
@@ -28,68 +29,67 @@ struct StressExplainerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("Body signals")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                    Button("Done") { dismiss() }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                }
+        VStack(spacing: 0) {
+            SheetHeader(title: "Body signals", onDone: { dismiss() })
+            ScrollView {
+                readingContent
+            }
+        }
+        .background(Color.parchment)
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(currentReadingTitle)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Text(currentReadingBody)
+    /// The scrolling half: the current-reading card, the First Aid offer, and the two prose
+    /// sections (how it's estimated, and the not-medical note).
+    private var readingContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(currentReadingTitle)
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                Text(currentReadingBody)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                if let annotationLine {
+                    Text(annotationLine)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
-                    if let annotationLine {
-                        Text(annotationLine)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-                    if let confidenceLine {
-                        Text(confidenceLine)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
-                firstAidLink
-
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("How Fernlet estimates this")
-                    Text("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                    Text("Everything is estimated and stored on this device only.")
+                if let confidenceLine {
+                    Text(confidenceLine)
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("A gentle note")
-                    Text("This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
             }
-            .padding(20)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
+            firstAidLink
+
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("How Fernlet estimates this")
+                Text("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Text("Everything is estimated and stored on this device only.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("A gentle note")
+                Text("This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
-        .background(Color.parchment)
+        .padding(20)
     }
 
     /// A soft door to the First Aid tools — worded as an offer, shown whenever the host wired it.

@@ -1978,22 +1978,24 @@ enum SignalPresentation {
 /// ``SignalDetailRow``, with an empty-state invitation when there isn't enough logged data.
 ///
 /// Read-only over the signals the store already computed — presenting it never triggers a
-/// recompute.
+/// recompute. Read-only means Done top-right is the whole exit under the 2026-08-21 sheet
+/// template: the pinned ``SheetHeader`` carries the title and Done, and there is no bottom bar
+/// (the 36pt `ScreenHeader` treatment belongs to tab roots, never sheets).
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
     var signals: [DerivedSignalRecord]
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetHeader(
+                title: "Trends",
+                // Was "Prototype only — not production-private": developer copy, shown to
+                // users, contradicting the privacy promise the screen is actually keeping.
+                subtitle: "Local signals from your logs — worked out on this device.",
+                onDone: { dismiss() }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ScreenHeader(
-                        title: "Trends",
-                        // Was "Prototype only — not production-private": developer copy, shown to
-                        // users, contradicting the privacy promise the screen is actually keeping.
-                        subtitle: "Local signals from your logs — worked out on this device.",
-                        subtitleFirst: false
-                    )
                     if signals.isEmpty {
                         FernletCard { EmptyState(text: "More logs will make trends useful.") }
                     } else {
@@ -2003,12 +2005,8 @@ struct TrendsModal: View {
                     }
                 }
                 .padding(20)
-                .padding(.bottom, 80)
+                .padding(.bottom, 10)
             }
-            // The shared save bar: right-aligned like every other sheet's (this was the app's only
-            // bottom-CENTRED Done), and it draws the contrast-safe `onMoss`-on-`mossFill` pair
-            // instead of white on `moss` (4.29:1 light, 2.53:1 dark).
-            SheetSaveBar(label: "Done") { dismiss() }
         }
         .background(Color.parchment)
     }

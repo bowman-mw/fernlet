@@ -584,7 +584,8 @@ private struct CookingResumeCard: View {
 }
 
 /// The Food tab's way in to ``NutritionTargetsEditor`` — the same card Settings shows, wrapped in a
-/// sheet with a title and a Done bar.
+/// sheet under the pinned ``SheetHeader``. The editor commits live, so Done sits top-right and is
+/// the whole exit (2026-08-21 template) — no bottom bar.
 ///
 /// The macro card names targets the user can't reach from here otherwise; this keeps "nudge a target"
 /// a tap away from the numbers it changes, without duplicating the editor.
@@ -594,17 +595,14 @@ private struct NutritionTargetsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetHeader(title: "Nutrition targets", onDone: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Nutrition targets")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
                     NutritionTargetsEditor(store: store)
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
-            SheetSaveBar(label: "Done") { dismiss() }
         }
         .background(Color.parchment)
     }
@@ -944,8 +942,10 @@ private struct SavedRecipeRow: View {
 ///
 /// Web imports carry free-text ingredient lines and no structured ingredients, so unlike
 /// ``RecipeSheet`` there is nothing structural to edit: ingredients and macros render read-only, the
-/// source link opens in an in-app Safari sheet, and Done persists via
-/// `FernletStore.updateSavedRecipe`.
+/// source link opens in an in-app Safari sheet, and the pinned ``SheetHeader``'s Done (top-right,
+/// the whole exit — 2026-08-21 template, no bottom bar) commits the notes via
+/// `FernletStore.updateSavedRecipeNotes`. The header title is the recipe's name — runtime text, so
+/// it renders through the `Text(verbatim:)` initializer.
 struct SavedRecipeNotesSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -969,9 +969,16 @@ struct SavedRecipeNotesSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetHeader(title: Text(verbatim: recipe.name), onDone: {
+                // Merge only the field this sheet edits into the LIVE row — writing the whole
+                // at-open snapshot back would revert store updates that landed while the sheet
+                // was up (e.g. the image fetch stamping a suppression, or a cloud refresh).
+                store.updateSavedRecipeNotes(recipe.notes, forRecipeID: recipe.id)
+                dismiss()
+            })
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    titleAndSourceSection
+                    sourceLinkSection
 
                     macrosCard
 
@@ -985,13 +992,6 @@ struct SavedRecipeNotesSheet: View {
                 }
                 .padding(20)
                 .padding(.bottom, 10)
-            }
-            SheetSaveBar(label: "Done") {
-                // Merge only the field this sheet edits into the LIVE row — writing the whole
-                // at-open snapshot back would revert store updates that landed while the sheet
-                // was up (e.g. the image fetch stamping a suppression, or a cloud refresh).
-                store.updateSavedRecipeNotes(recipe.notes, forRecipeID: recipe.id)
-                dismiss()
             }
         }
         .background(Color.parchment)
@@ -1008,15 +1008,11 @@ struct SavedRecipeNotesSheet: View {
         }
     }
 
-    private var titleAndSourceSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(recipe.name)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-            if let sourceURL = webImport?.sourceURL {
-                SourceLinkRow(url: sourceURL) { showingSafari = true }
-            }
+    /// The web import's source-link row, when there is one. The recipe's name itself lives in the
+    /// pinned ``SheetHeader`` (2026-08-21 template), not in the scroll content.
+    @ViewBuilder private var sourceLinkSection: some View {
+        if let sourceURL = webImport?.sourceURL {
+            SourceLinkRow(url: sourceURL) { showingSafari = true }
         }
     }
 
@@ -1064,6 +1060,8 @@ struct SavedRecipeNotesSheet: View {
         }
     }
 
+    /// Full-width destructive action in the canonical ``DestructiveCardButtonStyle`` token
+    /// (2026-08-21 template, artboard 2b) — the tap still only raises the confirmation.
     private var deleteButton: some View {
         Button(role: .destructive) {
             pendingDestructiveAction = DestructiveConfirmation(
@@ -1078,11 +1076,8 @@ struct SavedRecipeNotesSheet: View {
             )
         } label: {
             Label("Delete recipe", systemImage: "trash")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.terracottaInk)
-                .frame(maxWidth: .infinity)
-                .padding(14)
         }
+        .buttonStyle(DestructiveCardButtonStyle())
     }
 }
 
@@ -1237,7 +1232,9 @@ struct RecipeSheet: View {
                 recipeContent
             }
             // Presented as a sheet: a swipe-down used to discard a typed recipe with no warning.
-            .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+            // The guard also renders the pinned ``SheetHeader`` (Cancel + title) — the sheet's
+            // title lives there, not in the scroll content (2026-08-21 template).
+            .fernletDraftGuard(isDirty: isDirty, title: editorTitle) { dismiss() }
         }
     }
 
@@ -1245,14 +1242,8 @@ struct RecipeSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Pushed pages title themselves in the nav bar (see `.navigationTitle` below); only
-                    // the sheet, which has no bar, draws the display-serif title in the body.
-                    if !isEmbeddedInNavigationStack {
-                        Text(editorTitle)
-                            .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
-                    }
-
+                    // Pushed pages title themselves in the nav bar (see `.navigationTitle` below);
+                    // the sheet presentation titles itself in the draft guard's pinned header.
                     SheetField("Recipe name") {
                         TextField("black bean bowls", text: $name)
                             .submitLabel(.done)
@@ -1410,6 +1401,9 @@ struct RecipeSheet: View {
         }
     }
 
+    /// Full-width destructive action in the canonical ``DestructiveCardButtonStyle`` token
+    /// (2026-08-21 template, artboard 2b); edit mode only, and the tap still only raises the
+    /// confirmation.
     @ViewBuilder private var deleteRecipeButton: some View {
         if let editingRecipe {
             Button(role: .destructive) {
@@ -1427,16 +1421,14 @@ struct RecipeSheet: View {
                 )
             } label: {
                 Label("Delete recipe", systemImage: "trash")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.terracottaInk)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
             }
+            .buttonStyle(DestructiveCardButtonStyle())
         }
     }
 
-    /// The editor's own title, used in the nav bar when pushed and in the body when presented.
-    private var editorTitle: String { editingRecipe == nil ? "New recipe" : "Edit recipe" }
+    /// The editor's own title, used in the nav bar when pushed and in the draft-guard's pinned
+    /// ``SheetHeader`` when presented as a sheet. `LocalizedStringKey` so both call sites localize.
+    private var editorTitle: LocalizedStringKey { editingRecipe == nil ? "New recipe" : "Edit recipe" }
 
     /// Leaves the editor after a save/delete: pops all the way back to the host's landing screen when
     /// one asked for that (`onSaved`), otherwise the plain dismiss (sheet close, or one pop).

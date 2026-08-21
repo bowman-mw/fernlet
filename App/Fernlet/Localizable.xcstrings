@@ -40,16 +40,6 @@
         }
       }
     },
-    "%@ - %lld oz total" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ - %2$lld oz total"
-          }
-        }
-      }
-    },
     "%@ asked to remove %@ from this session. A different participant must second the decision." : {
       "localizations" : {
         "en" : {
@@ -220,6 +210,19 @@
         }
       }
     },
+    "%lld bottles" : {
+
+    },
+    "%lld bottles · %lld oz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bottles · %2$lld oz"
+          }
+        }
+      }
+    },
     "%lld cal" : {
 
     },
@@ -320,15 +323,41 @@
     "%lld of 10" : {
 
     },
-    "%lld oz each · target %lld" : {
+    "%lld oz each · target %lld bottles" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld oz each · target %2$lld"
+            "value" : "%1$lld oz each · target %2$lld bottles"
           }
         }
       }
+    },
+    "%lld oz each. Target %lld, met." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld oz each. Target %2$lld, met."
+          }
+        }
+      }
+    },
+    "%lld oz each. Target %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld oz each. Target %2$lld."
+          }
+        }
+      }
+    },
+    "%lld oz today." : {
+
+    },
+    "%lld oz today. Plenty." : {
+
     },
     "%lld oz total" : {
 
@@ -429,6 +458,12 @@
 
     },
     "--" : {
+
+    },
+    "1 bottle" : {
+
+    },
+    "1 bottle · %lld oz" : {
 
     },
     "1 event logged in Apple Health" : {
@@ -958,9 +993,6 @@
     "Close" : {
 
     },
-    "Close editor" : {
-
-    },
     "Close photo viewer" : {
 
     },
@@ -1386,6 +1418,9 @@
 
     },
     "Edit plan" : {
+
+    },
+    "Edit recipe" : {
 
     },
     "Edit workout" : {
@@ -2296,6 +2331,9 @@
     "New password" : {
 
     },
+    "New recipe" : {
+
+    },
     "New to Fernlet" : {
 
     },
@@ -3010,6 +3048,9 @@
 
     },
     "Remove %@?" : {
+
+    },
+    "Remove a bottle" : {
 
     },
     "Remove duress code" : {
@@ -4297,6 +4338,12 @@
 
     },
     "black bean bowls" : {
+
+    },
+    "bottle" : {
+
+    },
+    "bottles" : {
 
     },
     "cm" : {

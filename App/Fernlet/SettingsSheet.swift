@@ -1082,12 +1082,13 @@ struct SettingsSheet: View {
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 HStack(spacing: 16) {
-                    Button("Delete \(matches.count)", role: .destructive) {
+                    Button(role: .destructive) {
                         matches.forEach { store.deleteMemory($0) }
                         memorySearch = ""
+                    } label: {
+                        Label("Delete \(matches.count)", systemImage: "trash")
                     }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.terracottaInk)
+                    .buttonStyle(DestructiveCardButtonStyle())
                     Button("Cancel") { memorySearch = "" }
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
@@ -1234,13 +1235,8 @@ struct SettingsSheet: View {
                     openHealthPermissionSettings(for: capability)
                 } label: {
                     Label("Revoke access", systemImage: "xmark.shield")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onTerracotta)
-                .padding(.vertical, 11)
-                .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+                .buttonStyle(DestructiveCardButtonStyle())
             }
         }
         .padding(14)

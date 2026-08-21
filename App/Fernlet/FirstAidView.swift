@@ -33,7 +33,9 @@ enum FirstAidTool: String, Hashable {
 /// Presented by ContentView from the Home affordance near the companion, the body-signals
 /// explainer (``StressExplainerSheet``), and the gentle offer card; `initialTool` lets those
 /// callers land directly on one tool. Tools push via a ``FirstAidTool`` navigation path into
-/// ``BreathingExerciseView``, ``GroundingView``, and ``WorryEntryView``. The support row is
+/// ``BreathingExerciseView``, ``GroundingView``, and ``WorryEntryView``. A read-only menu under
+/// the 2026-08-21 template: Done sits top-right in the pinned header — rendered on the menu root
+/// only, never on pushed tools — and is the whole exit. The support row is
 /// deliberately static and always visible — it is NOT the deferred extended-low-mood auto-nudge —
 /// and a completed breathing session is counted in the milestone ledger and quietly offered to
 /// Apple Health (every consent gate is enforced inside `saveMindfulSession`; a closed gate or
@@ -77,42 +79,20 @@ struct FirstAidView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
-                    header
-
-                    VStack(spacing: 12) {
-                        toolCard(
-                            .breathing,
-                            icon: "wind",
-                            tileFill: Color.fern.opacity(0.20),
-                            iconColor: .moss,
-                            title: "Slow breathing",
-                            caption: "A quiet minute or three with a slowly swelling circle."
-                        )
-                        toolCard(
-                            .grounding,
-                            icon: "target",
-                            tileFill: Color.journalQuiet.opacity(0.24),
-                            iconColor: Self.groundingInk,
-                            title: "5·4·3·2·1 grounding",
-                            caption: "Arrive back in the room, one gentle sense at a time."
-                        )
-                        toolCard(
-                            .worryBox,
-                            icon: "archivebox",
-                            tileFill: Color.goldenrod.opacity(0.20),
-                            iconColor: .goldenrod,
-                            title: "Worry box",
-                            caption: "Write a worry down and let the box hold it for a while."
-                        )
+            // The pinned header lives on the menu ROOT only — pushed tool screens replace this
+            // whole VStack, so they never carry the sheet's Done.
+            VStack(spacing: 0) {
+                SheetHeader(title: "First aid", onDone: { dismiss() })
+                ScrollView {
+                    VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
+                        strapline
+                        toolList
+                        supportRow
                     }
-
-                    supportRow
+                    .padding(.horizontal, FernletMetrics.spaceLg)
+                    .padding(.top, FernletMetrics.spaceSm)
+                    .padding(.bottom, FernletMetrics.spaceXl)
                 }
-                .padding(.horizontal, FernletMetrics.spaceLg)
-                .padding(.top, FernletMetrics.spaceSm)
-                .padding(.bottom, FernletMetrics.spaceXl)
             }
             .background(Color.parchment)
             .navigationDestination(for: FirstAidTool.self) { tool in
@@ -133,20 +113,42 @@ struct FirstAidView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel("First aid")
-                Spacer()
-                Button("Done") { dismiss() }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-            }
-            Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-                .font(.custom(FernletFontName.instrumentSerif, size: 22, relativeTo: .title2))
-                .foregroundStyle(Color.bark)
-                .lineSpacing(9)  // ~1.42 leading at 22pt
-                .fernletWrappingText()
+    /// The Instrument Serif strapline — the first content line under the pinned header.
+    private var strapline: some View {
+        Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
+            .font(.custom(FernletFontName.instrumentSerif, size: 22, relativeTo: .title2))
+            .foregroundStyle(Color.bark)
+            .lineSpacing(9)  // ~1.42 leading at 22pt
+            .fernletWrappingText()
+    }
+
+    /// The three tool cards, in the menu's fixed order: breathing, grounding, worry box.
+    private var toolList: some View {
+        VStack(spacing: 12) {
+            toolCard(
+                .breathing,
+                icon: "wind",
+                tileFill: Color.fern.opacity(0.20),
+                iconColor: .moss,
+                title: "Slow breathing",
+                caption: "A quiet minute or three with a slowly swelling circle."
+            )
+            toolCard(
+                .grounding,
+                icon: "target",
+                tileFill: Color.journalQuiet.opacity(0.24),
+                iconColor: Self.groundingInk,
+                title: "5·4·3·2·1 grounding",
+                caption: "Arrive back in the room, one gentle sense at a time."
+            )
+            toolCard(
+                .worryBox,
+                icon: "archivebox",
+                tileFill: Color.goldenrod.opacity(0.20),
+                iconColor: .goldenrod,
+                title: "Worry box",
+                caption: "Write a worry down and let the box hold it for a while."
+            )
         }
     }
 

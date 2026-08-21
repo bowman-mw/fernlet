@@ -716,8 +716,10 @@ struct ContentView: View {
             RecipeSheet(store: store)
                 .fernletSheetChrome(anchor: "sheet.recipe", detents: [.large])
         case .water:
+            // [.medium, .large] per the 2026-08-21 template (artboard 2c): the whole task fits
+            // above the medium line; the drag is for context, never for reaching a control.
             WaterSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.water", detents: [.medium])
+                .fernletSheetChrome(anchor: "sheet.water", detents: [.medium, .large])
         case .sleep:
             // `[.medium, .large]` like Care: locked at medium the fourth quality option, the Hours
             // field and the Note field all sat below the fold behind the floating Save pill.

@@ -535,6 +535,46 @@ public extension View {
     ) -> some View {
         modifier(FernletDraftGuardModifier(isDirty: isDirty, showsCancelBar: showsCancelBar, onDismiss: onDismiss))
     }
+
+    /// The draft-guard contract with the canonical ``SheetHeader`` instead of the bare cancel bar
+    /// (2026-08-21 template, artboard 2a): the pinned header carries Cancel top-left and the
+    /// sheet's serif title, Cancel raises the discard prompt while dirty, and swipe-dismiss stays
+    /// blocked while there are unsaved edits. For draft sheets that commit via ``SheetSaveBar`` —
+    /// a sheet that also commits in place passes its own header with `onDone` and drives
+    /// `interactiveDismissDisabled` itself.
+    ///
+    /// The title/subtitle literals are harvested into the calling target's string catalog — every
+    /// sheet lives in the app target, so `Bundle.main` is the right lookup.
+    func fernletDraftGuard(
+        isDirty: Bool,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
+        onDismiss: @escaping () -> Void
+    ) -> some View {
+        modifier(FernletDraftGuardModifier(
+            isDirty: isDirty,
+            title: Text(title),
+            subtitle: subtitle.map { Text($0) },
+            onDismiss: onDismiss
+        ))
+    }
+
+    /// The `Text`-taking form of the header-bearing draft guard, for a sheet whose title is
+    /// runtime data (an edited recipe's name). `Text` is not expressible by a string literal, so
+    /// this overload can never steal a call site that meant to localize.
+    func fernletDraftGuard(
+        isDirty: Bool,
+        title: Text,
+        subtitle: Text? = nil,
+        onDismiss: @escaping () -> Void
+    ) -> some View {
+        modifier(FernletDraftGuardModifier(
+            isDirty: isDirty,
+            title: title,
+            subtitle: subtitle,
+            onDismiss: onDismiss
+        ))
+    }
 }
 
 /// Implements ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)`` — see there.
@@ -546,26 +586,50 @@ public struct FernletDraftGuardModifier: ViewModifier {
     let isDirty: Bool
     let showsCancelBar: Bool
     let onDismiss: () -> Void
+    /// When set, the top inset renders the full ``SheetHeader`` (Cancel + title/subtitle) instead
+    /// of the bare ``SheetCancelBar`` — the 2026-08-21 template's pinned header (artboard 2a).
+    let title: Text?
+    let subtitle: Text?
     @State private var askingToDiscard = false
 
     public init(isDirty: Bool, showsCancelBar: Bool = true, onDismiss: @escaping () -> Void) {
         self.isDirty = isDirty
         self.showsCancelBar = showsCancelBar
         self.onDismiss = onDismiss
+        self.title = nil
+        self.subtitle = nil
+    }
+
+    /// The header-bearing form: the guard owns the sheet's pinned ``SheetHeader`` so Cancel and
+    /// the discard prompt stay wired together and `sheet.cancel` renders exactly once.
+    public init(isDirty: Bool, title: Text, subtitle: Text? = nil, onDismiss: @escaping () -> Void) {
+        self.isDirty = isDirty
+        self.showsCancelBar = true
+        self.onDismiss = onDismiss
+        self.title = title
+        self.subtitle = subtitle
     }
 
     public func body(content: Content) -> some View {
         content
             .interactiveDismissDisabled(isDirty)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if showsCancelBar {
-                    SheetCancelBar {
-                        if isDirty { askingToDiscard = true } else { onDismiss() }
-                    }
-                    .background(Color.parchment)
-                }
-            }
+            .safeAreaInset(edge: .top, spacing: 0) { topInset }
             .discardConfirmation(isPresented: $askingToDiscard, onDiscard: onDismiss)
+    }
+
+    /// The pinned chrome: full header when a title was given, the legacy cancel bar otherwise.
+    @ViewBuilder
+    private var topInset: some View {
+        if let title {
+            SheetHeader(title: title, subtitle: subtitle, onCancel: cancelTapped)
+        } else if showsCancelBar {
+            SheetCancelBar(action: cancelTapped)
+                .background(Color.parchment)
+        }
+    }
+
+    private func cancelTapped() {
+        if isDirty { askingToDiscard = true } else { onDismiss() }
     }
 }
 
@@ -792,8 +856,11 @@ public enum FernletActionPillKind {
     case primary
     /// A secondary action beside a primary one: cream with a bark hairline.
     case secondary
-    /// Deletes or ends something: filled `terracotta` with ``Color/onTerracotta`` ink. Always pair it
-    /// with a confirmation — see ``SwiftUI/View/confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)``.
+    /// Deletes or ends something: the 2026-08-21 destructive token — ``Color/terracottaInk`` ink on
+    /// a 10% terracotta fill with a 35% edge (artboard 2b), NOT solid terracotta. Solid terracotta
+    /// is reserved for the confirm button inside a confirmation alert, the one place the keep-it
+    /// button is guaranteed to render beside it. Always pair with a confirmation — see
+    /// ``SwiftUI/View/confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)``.
     case destructive
 }
 
@@ -809,9 +876,10 @@ public enum FernletActionPillKind {
 /// primary actions as chips were shipping undersized buttons. The label wraps rather than
 /// truncating, and the pill grows to fit at accessibility sizes.
 ///
-/// Disabled state fades the *fill* only and switches to bark ink: fading white ink along with the
-/// fill is what made the disabled Save pill unreadable (1.8:1), and a user who can't read a disabled
-/// button can't tell what completing the form would do.
+/// Disabled state fades the *fill* only and switches to a legible ink (bark on primary, taupe on
+/// the destructive tint): fading white ink along with the fill is what made the disabled Save pill
+/// unreadable (1.8:1), and a user who can't read a disabled button can't tell what completing the
+/// form would do. Disabled destructive stays an opacity drop, never a red error (artboard 2b).
 public struct ActionPillButtonStyle: ButtonStyle {
     var kind: FernletActionPillKind
 
@@ -833,21 +901,26 @@ public struct ActionPillButtonStyle: ButtonStyle {
             switch kind {
             case .primary:     return Color.mossFill.opacity(isEnabled ? 1 : 0.55)
             case .secondary:   return Color.cream
-            case .destructive: return Color.terracotta.opacity(isEnabled ? 1 : 0.55)
+            // 2026-08-21 destructive token: tinted card, never solid — disabled drops the
+            // fill to 6%, an opacity change rather than a color change (artboard 2b).
+            case .destructive: return Color.terracotta.opacity(isEnabled ? 0.10 : 0.06)
             }
         }
 
         private var ink: Color {
-            guard isEnabled else { return .bark }
             switch kind {
-            case .primary:     return .onMoss
+            case .primary:     return isEnabled ? .onMoss : .bark
             case .secondary:   return .bark
-            case .destructive: return .onTerracotta
+            case .destructive: return isEnabled ? .terracottaInk : .softTaupe
             }
         }
 
-        private var strokeOpacity: Double {
-            kind == .secondary ? 0.14 : 0
+        private var stroke: Color {
+            switch kind {
+            case .primary:     return .clear
+            case .secondary:   return Color.bark.opacity(0.14)
+            case .destructive: return Color.terracottaInk.opacity(isEnabled ? 0.35 : 0.18)
+            }
         }
 
         var body: some View {
@@ -860,7 +933,7 @@ public struct ActionPillButtonStyle: ButtonStyle {
                 .padding(.vertical, 12)
                 .frame(minHeight: 44)
                 .background(fill, in: shape)
-                .overlay(shape.stroke(Color.bark.opacity(strokeOpacity), lineWidth: 1))
+                .overlay(shape.stroke(stroke, lineWidth: 1))
                 .contentShape(shape)
                 .opacity(configuration.isPressed ? 0.78 : 1.0)
         }
@@ -1151,6 +1224,7 @@ public struct SheetSaveBar: View {
                 .foregroundStyle(disabled ? Color.bark : Color.onMoss)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
+                .frame(minHeight: 52)
                 .background(
                     Color.mossFill.opacity(disabled ? 0.55 : 1),
                     in: RoundedRectangle(cornerRadius: 16)
@@ -1159,6 +1233,11 @@ public struct SheetSaveBar: View {
         }
         .padding(20)
         .background(Color.parchment)
+        // The template's hairline above the commit bar (2026-08-21, artboard 2a): the bar reads
+        // as a fixed footer beneath the one scroll surface rather than part of it.
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.bark.opacity(0.08)).frame(height: 1)
+        }
     }
 }
 

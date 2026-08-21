@@ -2836,6 +2836,14 @@ final class FernletStore {
         diary.removeBottle()
     }
 
+    /// Commits the transactional Water sheet's drafted count for today in one write (2026-08-21
+    /// redesign, artboard 2c). Clamped 0…30 at the diary boundary; rides the same
+    /// `mutateDay`/save-coordinator path as `addBottle`, so the widget mirror and milestone
+    /// catch-up follow from the flush exactly as per-tap writes did.
+    func setTodayBottleCount(_ count: Int) {
+        diary.setBottleCount(count, date: todayKey)
+    }
+
     func toggleHygiene(_ item: HygieneItem) {
         diary.toggleHygiene(item)
     }

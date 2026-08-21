@@ -20,6 +20,8 @@ Three consequences follow, and each is a trap if forgotten. First, **the key is 
 
 Confirmations are the other module-level rule. Both `discardConfirmation(isPresented:onDiscard:)` and `confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)` are **alerts, deliberately**: on iOS 26 a `.confirmationDialog` renders as a popover that suppresses the `.cancel`-role button, so the user is shown a lone destructive action and no visible way out. Any new destructive prompt in a package module goes through `confirmDestructive`; app-target surfaces use the richer `DestructiveConfirmation` type in `App/Fernlet/`, which adds the audit trail. `fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)` packages the whole dirty-sheet contract — blocked swipe-dismiss, a ``SheetCancelBar``, and the discard alert — into one modifier.
 
+**Sheet chrome is the 2026-08-21 three-slot template** (design canvas artboards 2a/2b). ``SheetHeader`` is the canonical pinned header — Cancel top-left when a draft can be lost, Done top-right to dismiss or commit in place, an optional leading accessory (a coin balance) when the sheet leads with information — above a Fraunces-28 title and an optional one-line italic subtitle that is the first thing to go at accessibility sizes. Draft sheets adopt it through the title-bearing `fernletDraftGuard(isDirty:title:subtitle:onDismiss:)` overload, which wires Cancel to the discard prompt and keeps the `sheet.cancel` identifier unique; ``SheetSaveBar`` stays the bottom-right commit for drafts (now with the template's hairline), and the bottom-right moss "Done" pill is retired everywhere. The destructive vocabulary is one token in three forms: ``ChipButtonStyle`` with `destructive: true` for chips that destroy, ``ActionPillButtonStyle`` `.destructive` (the tinted token — terracotta ink on a 10% fill, never solid) for 44pt pills, and ``DestructiveCardButtonStyle`` for full-width actions; solid terracotta is reserved for the confirm button inside a confirmation alert, and a disabled destructive control drops opacity, never color.
+
 Two other conventions matter before changing this module. First, **fonts resolve by PostScript name only** — the font files themselves stay registered by the app's Info.plist `UIAppFonts`, and `FernletFontRegistrationTests` asserts every name in ``FernletFontName`` resolves, so a wrong name fails the test run instead of silently falling back to the system font. Second, several tokens (``FernletMotion``, the `lichen`/`state*`/`journal*` colors, the `.wordmark` type role) are **reserved design-export vocabulary**: they may have no call site yet, but they are the documented system palette for surfaces still being built out — they are intentionally kept and should not be flagged or removed as dead code.
 
 ## Topics
@@ -51,6 +53,8 @@ Two other conventions matter before changing this module. First, **fonts resolve
 
 ### Entry-sheet components
 
+- ``SheetHeader``
+- ``DestructiveCardButtonStyle``
 - ``SheetCancelBar``
 - ``SheetSaveBar``
 - ``SheetField``
