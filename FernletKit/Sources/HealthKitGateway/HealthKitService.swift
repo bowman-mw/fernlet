@@ -2040,6 +2040,24 @@ public final class HealthKitService: HealthKitServicing {
     }
 }
 
+/// The three-way availability triage the Health settings surfaces present, separating the two
+/// causes ``AuthorizationSnapshot/isAvailable`` folds into one `false`.
+///
+/// The master toggle defaults to OFF, so on every fresh install the folded Bool is `false` for a
+/// reason the user can fix — rendering the device-incapable message for that state told every new
+/// user their hardware can't do Health, with no way out. Derived by
+/// ``HealthKitAuthorizationViewModel/availabilityState``.
+public enum HealthAvailabilityState: Equatable {
+    /// This hardware has no Health store (`HKHealthStore.isHealthDataAvailable()` is false).
+    /// Nothing in Fernlet can change that, so the UI states the fact and offers no action.
+    case deviceUnavailable
+    /// The device has a Health store, but the master integration toggle (Privacy & Data) is off —
+    /// the state every fresh install starts in. The UI must name that cause and route to the toggle.
+    case integrationOff
+    /// The integration is live: present the per-capability rows.
+    case available
+}
+
 /// Observable view model behind the Health authorization UI (Settings sheet, period-tracker and
 /// log-period sheets): drives per-capability permission requests, body-profile import/sync, and
 /// per-capability context refreshes, publishing progress and user-facing status text.
@@ -2068,6 +2086,15 @@ public final class HealthKitAuthorizationViewModel {
     public private(set) var statusMessage: String = ""
     /// True while an authorization or Health fetch is in flight (drives progress UI).
     public private(set) var isRequesting = false
+    /// Which ``HealthAvailabilityState`` the Health settings surfaces should present.
+    ///
+    /// The device fact is read live from the service (hardware capability never changes mid-run);
+    /// the master toggle arrives through the observation-tracked ``snapshot``, so ``refresh()``
+    /// and every request flow keep this current.
+    public var availabilityState: HealthAvailabilityState {
+        guard service.isHealthDataAvailable() else { return .deviceUnavailable }
+        return snapshot.isAvailable ? .available : .integrationOff
+    }
     /// Capabilities the user has ever been prompted for — read through to
     /// ``HealthCapabilityRequestLedger`` on every access, never cached (see the type's Important note).
     var requestedCapabilities: Set<HealthCapability> {
@@ -2101,7 +2128,11 @@ public final class HealthKitAuthorizationViewModel {
         self.snapshot = resolvedService.currentAuthorizationSnapshot()
         self.ledgerKeychainService = ledgerKeychainService
         self.ledgerDefaults = ledgerDefaults
-        if !snapshot.isAvailable {
+        // The DEVICE fact, not the folded `snapshot.isAvailable`: the folded flag is also false
+        // when merely the master toggle is off — every fresh install — and claiming device
+        // incapability there stated the wrong cause. The settings screen presents its own routed
+        // integration-off card for that state, so no status text is set for it here.
+        if !resolvedService.isHealthDataAvailable() {
             statusMessage = "Health data is not available on this device."
         }
     }

@@ -1120,21 +1120,48 @@ struct SettingsSheet: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            if !healthKit.snapshot.isAvailable {
+            // `snapshot.isAvailable` folds "no Health store on this hardware" and "master toggle
+            // off" into one false — and the toggle defaults to off, so a single branch here told
+            // every fresh install their device can't do Health. Triage the real cause instead.
+            switch healthKit.availabilityState {
+            case .deviceUnavailable:
                 FernletCard { EmptyState(text: "Health data is not available on this device.", systemImage: "heart.slash") }
-            } else {
+            case .integrationOff:
+                healthIntegrationOffCard
+            case .available:
                 ForEach(store.visibleHealthCapabilities) { capability in
                     healthCapabilityRow(capability)
                 }
             }
 
-            // The empty state above already says the device has no Health data; repeating the
-            // service's own copy of that sentence underneath it read as a glitch.
-            if !healthKit.statusMessage.isEmpty && healthKit.snapshot.isAvailable {
+            // The cards above already explain both unavailable states; repeating the service's own
+            // copy of that sentence underneath them read as a glitch.
+            if !healthKit.statusMessage.isEmpty && healthKit.availabilityState == .available {
                 Text(healthKit.statusMessage)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+            }
+        }
+    }
+
+    /// The integration-off state: the device can do Health, but the master toggle is off — where
+    /// every fresh install starts, since the toggle defaults to off. Names the real cause and
+    /// routes to Privacy & Data through the same value-based `.privacyData` destination the hub
+    /// links push; the toggle itself stays on that screen with its consent copy and audit logging.
+    private var healthIntegrationOffCard: some View {
+        FernletCard {
+            VStack(spacing: 12) {
+                EmptyState(text: "Health is switched off for Fernlet.", systemImage: "heart.slash")
+                NavigationLink(value: SettingsRoute.privacyData) {
+                    Label("Turn on Health in Privacy & Data", systemImage: "heart.text.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.onMoss)
+                .padding(.vertical, 11)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
             }
         }
     }

@@ -54,10 +54,9 @@ never once been done.
   the real entitlements have been exercised nowhere. Highest information per hour on this list —
   and it settles the entitlement item below. Now a per-release checklist item in
   [`Release-Process.md`](Release-Process.md) §2.
-- **`TARGETED_DEVICE_FAMILY = "1"`.** The app target ships `"1,2,7"` — iPad *and* visionOS — with
-  zero iPad adaptation (one comment in the whole app target mentions iPad), while `README.md` and
-  `Site/index.html` both say "iPhone". Family 2 commits you to 13" iPad screenshots and an App
-  Review pass on an iPhone-only layout; family 7 is meaningless in an `iphoneos`-only build.
+- ✅ 2026-08-20 — **`TARGETED_DEVICE_FAMILY = "1"`** set on every configuration of all five
+  targets that carried the setting (app, widgets, share extension, both test targets); the pbxproj
+  diff touched exactly those ten lines.
 - **Entitlements.** `App/Fernlet/Fernlet.entitlements` carries `aps-environment = development`
   plus a stray macOS-only `com.apple.developer.aps-environment` key. Keep the capability —
   `NSPersistentCloudKitContainer` needs the silent-push path — but delete the macOS key and
@@ -80,28 +79,23 @@ never once been done.
 
 Ordered by what a tester hits first. The previous tracker's seven items are reconciled at the end.
 
-1. **Disposable camera "Develop → Save selected" can never succeed.**
-   `DisposableCameraView.swift:1298` hands `manager.sessionPhotos.filter { … }` straight to the
-   Photos saver, but `MeshNetworkManager.swift:2917` stores `cachedPhoto.withoutImageData()`, so
-   every payload has `imageData == nil`. The saver skips nil payloads and throws
-   `NothingSavedError`; because `finishSessionPhotos(keeping:)` runs only on success, the photos
-   are **never kept on the in-app wall either**. Two sibling call sites do it correctly
-   (`ConnectView.swift:152`, `:868`) by wrapping in `manager.hydratedPhotos(…)`. End-of-session
-   flow of a flagship social feature; logged 2026-08-04 and still open. No test covers this path.
-2. **Settings → Health tells every new user their device can't do Health.**
-   `SettingsSheet.swift:1122` renders "Health data is not available on this device" whenever
-   `healthKit.snapshot.isAvailable` is false — but that flag is *not* device capability:
-   `HealthKitService.swift:757` sets it to `isIntegrationEnabled`, and the master toggle defaults
-   to **off** and lives on a different screen. So the default state of every fresh install names
-   the wrong cause and offers no route out, on the gateway to a headline feature. Split the
-   branch: `HKHealthStore.isHealthDataAvailable()` false ⇒ the device message; integration-off ⇒
-   "Health is switched off for Fernlet" plus a control.
-3. **Recipe web-image decompression bomb.** `MealPhotoStore.swift:337` caps each dimension at
-   20,000 with no area clause, so a declared 20000×20000 (400 MP) image passes — a few hundred KB
-   on the wire, ~1.6 GB decoded. The correct predicate already exists and is tested two files
-   away (`PrivateMediaStore.isWithinSafePixelBounds`, enforcing dimension **and** pixel count) and
-   MealPhotoStore already calls it on *restore* but not on `save`. Reachable from a shared recipe
-   link via `FernletStore.swift:4126` / `:4294`.
+1. ✅ 2026-08-20 — **Disposable camera "Develop → Save selected"** now hydrates via
+   `manager.hydratedPhotos(…)` like the ConnectView siblings, and FRND-12 landed with it: **Keep**
+   is the primary action (no Photos authorization involved) with "Also save to Photos" secondary,
+   so a Photos denial can no longer cost the in-app keep. Covered by `DisposableCameraSaveTests`
+   (behavioral + source-wall). Residual: ConnectView's disconnect-review flow still uses the fused
+   flow (hydrates correctly, but the keep is still gated behind Photos authorization) — one-call-site
+   follow-up now that the sheet takes a `saveToPhotos:` parameter.
+2. ✅ 2026-08-20 — **Settings → Health** now triages by real cause (`HealthAvailabilityState`):
+   device-unavailable keeps the old message; integration-off says "Health is switched off for
+   Fernlet." with a link to Privacy & Data (the toggle stays there, with its consent copy and audit
+   logging). `HealthAvailabilityMessageTests` pins the three states.
+3. ✅ 2026-08-20 — **Recipe web-image decompression bomb** closed with an 80 MP area clause at
+   the shared `normalizedJPEG` funnel (both save paths). Deliberate deviation from reusing the
+   24 MP peer predicate: that would reject stock iPhone camera output (5712×4284 = 24.47 MP) and
+   the documented 48 MP picks. Worst hostile transient decode is now ~320 MB (bounded, same order
+   as the user's own photos) vs ~1.6 GB. `MealPhotoDecompressionBombTests` includes a genuinely
+   decodable declared-20000×20000 PNG fixture.
 4. **Reset-app-lock confirmation still uses `.confirmationDialog`.** The systemic XCUT-02 fix
    landed and five siblings were converted to `.alert`; `FernletLockGate.swift:188` was left
    behind — and it is the one whose destructive button destroys the only key to the sealed

@@ -1705,6 +1705,9 @@
     "Health integration" : {
 
     },
+    "Health is switched off for Fernlet." : {
+
+    },
     "Health samples" : {
 
     },
@@ -3678,6 +3681,9 @@
 
     },
     "Turn on" : {
+
+    },
+    "Turn on Health in Privacy & Data" : {
 
     },
     "Turn on Nearby Friends to send hearts" : {

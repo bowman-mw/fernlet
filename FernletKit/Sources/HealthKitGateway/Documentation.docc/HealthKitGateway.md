@@ -35,6 +35,7 @@ Concurrency: the target compiles with `defaultIsolation(MainActor.self)` but in 
 - ``AuthorizationSnapshot``
 - ``AuthorizationOutcome``
 - ``HealthAuthorizationPresentation``
+- ``HealthAvailabilityState``
 - ``HealthKitAuthorizationViewModel``
 
 ### Workout sync

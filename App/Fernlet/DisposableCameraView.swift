@@ -1294,18 +1294,8 @@ struct DisposableCameraView: View {
             selectedIDs: $selectedForSave,
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
-            saveSelected: {
-                let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
-                do {
-                    try await FriendPhotoLibrarySaver.save(toSave)
-                    manager.finishSessionPhotos(keeping: selectedForSave)
-                    finalizeFriendKeeps()
-                    await manager.leaveSessionAfterNotifyingPeers()
-                    reviewPresented = false
-                } catch {
-                    photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
-                }
-            },
+            saveSelected: { await keepSelectedSessionPhotos() },
+            saveToPhotos: { await exportSelectedPhotosToLibrary() },
             discardAll: {
                 manager.deleteAllSessionPhotos()
                 finalizeFriendKeeps()
@@ -1313,9 +1303,41 @@ struct DisposableCameraView: View {
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
                 }
-            }
+            },
+            loadImageData: { manager.imageData(for: $0) }
         )
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
+    }
+
+    /// FRND-12: the primary review action. Keeps the ticked photos on the in-app wall, mints the
+    /// kept friends, and ends the session — deliberately with NO Photos-library involvement, so a
+    /// system-permission denial can never cost the user their pictures. The optional export is
+    /// `exportSelectedPhotosToLibrary`.
+    private func keepSelectedSessionPhotos() async {
+        manager.finishSessionPhotos(keeping: selectedForSave)
+        finalizeFriendKeeps()
+        await manager.leaveSessionAfterNotifyingPeers()
+        reviewPresented = false
+    }
+
+    /// The optional "Also save to Photos" export. Session payloads are held metadata-only to bound
+    /// memory, so the ticked ones are rehydrated from the disk cache first — handing them to the
+    /// saver directly would skip every payload (`imageData` is nil) and throw `NothingSavedError`.
+    /// Purely additive: a failure (including a Photos permission denial) surfaces on the sheet and
+    /// never touches the keep flow.
+    private func exportSelectedPhotosToLibrary() async {
+        let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
+        // If no bytes could be loaded/decrypted, don't report a false success.
+        guard !toSave.isEmpty else {
+            photoSaveError = .generic
+            return
+        }
+        do {
+            try await FriendPhotoLibrarySaver.save(toSave)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {
+            photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
+        }
     }
 
     // MARK: - Info sheet
