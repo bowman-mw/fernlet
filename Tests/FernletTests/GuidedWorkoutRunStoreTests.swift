@@ -104,6 +104,47 @@ struct GuidedWorkoutRunStoreTests {
         #expect(store.guidedRunState == nil)
     }
 
+    // MARK: Skip to next exercise (MOVE-26)
+
+    @Test func skipToNextExerciseJumpsPastRemainingSetsWithoutFinishing() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let s = session("Push", [
+            PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true),
+            PrescribedExercise(name: "Curl", sets: 2, reps: "12", role: .accessory, fromCatalog: true),
+        ])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        store.guidedMarkSetDone()   // Bench set 1 done → resting, 2 sets remain
+
+        store.guidedSkipToNextExercise()
+
+        let run = try #require(store.guidedRunState)
+        #expect(run.isWorking == true)
+        #expect(run.exerciseIndex == 1)
+        #expect(run.currentSet == 1)
+        // Skipping walked through markSetDone/skipRest, so it must NOT have finished (and logged).
+        #expect(run.isDone == false)
+        #expect(store.day.workouts.filter { $0.name == "Push" }.isEmpty)
+    }
+
+    @Test func skipToNextExerciseIsANoOpOnTheLastExercise() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let s = session("Solo", [PrescribedExercise(name: "Bench", sets: 2, reps: "8", role: .main, fromCatalog: true)])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+
+        store.guidedSkipToNextExercise()
+
+        // Nothing next → guarded no-op: still working the same exercise, nothing logged.
+        let run = try #require(store.guidedRunState)
+        #expect(run.isWorking == true)
+        #expect(run.exerciseIndex == 0)
+        #expect(run.currentSet == 1)
+        #expect(store.day.workouts.filter { $0.name == "Solo" }.isEmpty)
+    }
+
     // MARK: Editor
 
     @Test func updateGuidedSessionReplacesExercisesWhileNothingLogged() throws {

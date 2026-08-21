@@ -351,6 +351,50 @@ struct WorkoutProgramTests {
         #expect(run.completedNaturally == true)
     }
 
+    // MARK: Runner display derivations (MOVE-26)
+
+    @Test func setsCompletedForCurrentIsCounterMinusOneInBothPhases() {
+        var run = makeRun([ex("Squat", sets: 3)])
+        #expect(run.setsCompletedForCurrent == 0)   // working set 1: nothing done yet
+        run.markSetDone(now: fixedNow)              // → resting, counter already on set 2
+        #expect(run.setsCompletedForCurrent == 1)
+        run.skipRest()                              // → working set 2, same answer
+        #expect(run.setsCompletedForCurrent == 1)
+    }
+
+    @Test func canSkipToNextExerciseOnlyWhileSomethingIsNext() {
+        var run = makeRun([ex("Squat", sets: 1), ex("Bench", sets: 1)])
+        #expect(run.canSkipToNextExercise)          // Bench is next
+        run.markSetDone(now: fixedNow)              // last set of Squat → working Bench
+        #expect(run.canSkipToNextExercise == false) // nothing after the last exercise
+        run.markSetDone(now: fixedNow)              // finish
+        #expect(run.canSkipToNextExercise == false)
+    }
+
+    @Test func estimatedSecondsRemainingCountsSetsAndRestsAcrossPhases() {
+        var run = makeRun([ex("Squat", sets: 2), ex("Bench", sets: 2)], restSeconds: 90)
+        // Working ex0 set 1: (2×45 + 1×90) + (2×45 + 1×90) = 360.
+        #expect(run.estimatedSecondsRemaining() == 360)
+        run.markSetDone(now: fixedNow)
+        // Resting before ex0 set 2: (1×45 + the in-flight 90) + 180 = 315.
+        #expect(run.estimatedSecondsRemaining() == 315)
+        run.skipRest()
+        run.markSetDone(now: fixedNow)  // last Squat set → working Bench
+        run.markSetDone(now: fixedNow)  // → resting before Bench set 2
+        run.skipRest()
+        run.markSetDone(now: fixedNow)  // done
+        #expect(run.estimatedSecondsRemaining() == 0)
+    }
+
+    @Test func estimatedSecondsRemainingCountsDescriptorsAsFixedSteps() {
+        let run = makeRun([
+            ex("Squat", sets: 1),
+            ex("Cooldown walk", sets: 0, role: .accessory, reps: "", fromCatalog: false),
+        ], restSeconds: 60)
+        // One set (45s, no rest — it's the exercise's only set) + one 300s descriptor step.
+        #expect(run.estimatedSecondsRemaining() == 345)
+    }
+
     // MARK: - Rest guidance (WorkoutRestGuidance)
 
     @Test func restSecondsVaryByDemandAndGoalAsIntended() {

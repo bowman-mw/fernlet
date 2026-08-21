@@ -55,27 +55,19 @@ final class FernletUITests: XCTestCase {
         XCTAssertTrue(app.textFields["activity.search"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Save"].isEnabled)
 
-        app.buttons["activity.row.running"].tap()
+        // MOVE-10: the everyday types are one-tap chips above the search; picking one collapses
+        // the picker to the chosen row (with Change) and seeds a default duration, so Save enables.
+        app.buttons["activity.common.running"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["activity.change"].waitForExistence(timeout: 3),
+                      "picking a type must collapse the picker to the chosen row with a Change action")
+        XCTAssertFalse(app.textFields["activity.search"].exists,
+                       "the search must give way to the chosen row once a type is picked")
         XCTAssertTrue(app.buttons["Save"].isEnabled)
     }
 
-    @MainActor
-    func testSettingsMoveTabHasNoFocusTagsSection() throws {
-        let app = launchSettingsApp()
-
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 6))
-        let moveSettingsButton = app.buttons["settings.move"]
-        XCTAssertTrue(moveSettingsButton.waitForExistence(timeout: 3))
-        for _ in 0..<6 where !moveSettingsButton.isHittable || moveSettingsButton.frame.midY > app.frame.height * 0.72 {
-            app.swipeUp()
-        }
-        XCTAssertTrue(moveSettingsButton.isHittable)
-        moveSettingsButton.tap()
-
-        let fitnessText = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "Fitness")).firstMatch
-        XCTAssertTrue(fitnessText.waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["Workout focus tags"].exists)
-    }
+    // testSettingsMoveTabHasNoFocusTagsSection was retired with the Settings Move tab itself
+    // (SETT-26, 2026-08-21 redesign): the hub row it tapped no longer exists, and its regression —
+    // no focus-tags section returning to SettingsSheet — is pinned by MoveRefactorTests' source grep.
 
     @MainActor
     func testLaunchPerformance() throws {

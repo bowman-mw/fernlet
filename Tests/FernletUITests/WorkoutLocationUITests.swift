@@ -81,7 +81,7 @@ final class WorkoutLocationUITests: XCTestCase {
         // Leave the equipment step via the BACK chevron (not the save bar), then swipe the whole sheet
         // away — the same "no explicit save" path that used to lose a delete. The rename must survive it.
         app.descendants(matching: .any)["workout.location.back"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Where will you train?"].waitForExistence(timeout: 5),
+        XCTAssertTrue(app.staticTexts["Your spaces"].waitForExistence(timeout: 5),
                       "back chevron did not return to the location list")
         dismissSheet(app)
         _ = try openLocationSheet(in: app)
@@ -140,17 +140,21 @@ final class WorkoutLocationUITests: XCTestCase {
         XCTAssertTrue(space.waitForExistence(timeout: 10), "no Space entry point on Move")
         space.tap()
 
-        let header = app.staticTexts["Where will you train?"].firstMatch
+        let header = app.staticTexts["Your spaces"].firstMatch
         XCTAssertTrue(header.waitForExistence(timeout: 8), "the location sheet did not open")
         return header
     }
 
     /// Adds a second location from the "Home setup" template so there is something deletable (the last
-    /// location can't be removed — there'd be nothing to fall back to).
+    /// location can't be removed — there'd be nothing to fall back to). Presets live BEHIND the
+    /// "Add a location" tile now (MOVE-34), so the walk is tile → preset → Save location.
     ///
     /// Matches the button's own label, not `.containing()`: that matcher tests DESCENDANTS, so it
     /// silently found nothing and turned this test into a skip that verified the delete never ran.
     private func addTemplateLocation(in app: XCUIApplication, sheet: XCUIElement) -> Bool {
+        let addTile = app.descendants(matching: .any)["workout.location.add"].firstMatch
+        guard addTile.waitForExistence(timeout: 5), addTile.isHittable else { return false }
+        addTile.tap()
         let template = app.buttons["Home setup, Your own space"].firstMatch
         guard template.waitForExistence(timeout: 5), template.isHittable else { return false }
         template.tap()

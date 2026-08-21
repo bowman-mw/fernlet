@@ -2,30 +2,36 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// Location creator + equipment selection, per the design: pick where you train (saved locations or
-/// a preset template), then check off the equipment that's there in a categorized grid.
+/// "Your spaces" — the saved-location list plus equipment selection (2026-08-21 redesign, MOVE-34).
 ///
-/// Equipment is stored granularly and mapped to coarse capabilities the planning engine reasons
-/// about. Edits accumulate in local `@State` and commit through `commitEdits()` at every exit from
-/// the equipment step (save bar, back chevron, and the swipe-dismiss `onDisappear` backstop, guarded
-/// so a brand-new not-yet-saved location isn't committed by a cancel-swipe). Deletes persist
-/// immediately at their confirm, because a swipe-dismiss after a delete must not silently resurrect
-/// the location.
+/// Three steps: the saved rows (with an "In use" badge on the active space and a one-line
+/// equipment summary), an "Add a location" step where the presets live — filtered to the ones not
+/// already saved, matched by name since `LocationTemplate.makeLocation()` mints fresh UUIDs — and
+/// the equipment checklist. Saved rows own the first screen; presets are a step inside Add, so a
+/// space never appears twice.
+///
+/// Chrome: Cancel + Done in the pinned ``SheetHeader``. Done commits the draft (including which
+/// space is "In use" — tapping a row only moves the badge until Done); Cancel discards the
+/// not-yet-committed active switch. Deletes still persist at their confirm — a swipe-dismiss after
+/// a delete must not silently resurrect the location — and the equipment step keeps committing on
+/// every exit (save bar, back chevron, and the swipe-dismiss `onDisappear` backstop, guarded so a
+/// brand-new not-yet-saved location isn't committed by a cancel-swipe).
 ///
 /// Adding a location never changes which one is ACTIVE: tapping a preset used to append it *and*
 /// make it active, so merely peeking at "Home setup" and backing out re-pointed every future
 /// suggestion at a gym the user doesn't train in — with no Save tapped and nothing said. The switch
-/// is now an explicit "Train here" (or a tap on the saved card), and backing out of a location that
-/// was never saved discards it.
+/// is the row tap (badge moves, Done commits) or "Train here" on the equipment step; backing out
+/// of a location that was never saved discards it.
 struct WorkoutLocationSetupView: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
 
-    /// Which of the sheet's two steps is showing: the location grid or the equipment checklist.
+    /// Which of the sheet's three steps is showing: the saved-spaces list, the add-a-location
+    /// step (presets + custom name), or the equipment checklist.
     ///
     /// Advancing to `.equipment` always sets `editingIndex` first, so the checklist always has a
     /// concrete location to edit.
-    private enum Step { case location, equipment }
+    private enum Step { case location, add, equipment }
 
     @State private var step: Step = .location
     @State private var locations: [WorkoutLocation]
@@ -35,7 +41,6 @@ struct WorkoutLocationSetupView: View {
     /// against it so backing out of an untouched peek discards the location, while a location the
     /// user actually edited (equipment ticked, name changed) is committed rather than thrown away.
     @State private var newLocationSeed: WorkoutLocation?
-    @State private var addingCustom = false
     @State private var customName = ""
     @State private var pendingDestructiveAction: DestructiveConfirmation?
 
@@ -52,6 +57,7 @@ struct WorkoutLocationSetupView: View {
         Group {
             switch step {
             case .location: locationStep
+            case .add: addStep
             case .equipment: equipmentStep
             }
         }
@@ -59,15 +65,17 @@ struct WorkoutLocationSetupView: View {
         .destructiveConfirmation($pendingDestructiveAction)
     }
 
-    // MARK: - Location step
+    // MARK: - Location step (Your spaces)
 
     private var locationStep: some View {
         VStack(spacing: 0) {
-            // Live-editing sheet under the 2026-08-21 template: deletes and the active switch
-            // persist as they happen, so Done top-right is the whole exit — no bottom bar.
+            // Cancel + Done per the template (1c): Done commits the draft — including the active
+            // switch a row tap staged — Cancel discards it. The subtitle is the explanatory
+            // caption, and SheetHeader already drops it at accessibility sizes (1c·AX3).
             SheetHeader(
-                title: "Where will you train?",
-                subtitle: "So I can plan around what's actually there.",
+                title: "Your spaces",
+                subtitle: "Suggestions only use what's here.",
+                onCancel: { dismiss() },
                 onDone: {
                     store.setWorkoutLocations(locations, activeID: activeID)
                     dismiss()
@@ -76,38 +84,21 @@ struct WorkoutLocationSetupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if locations.isEmpty == false {
-                        sectionHeader("Your locations")
-                        LazyVGrid(columns: twoColumns, spacing: 14) {
+                        sectionHeader("Saved")
+                        VStack(spacing: 10) {
                             ForEach(Array(locations.enumerated()), id: \.element.id) { index, location in
-                                savedLocationCard(location, index: index)
+                                savedSpaceRow(location, index: index)
                             }
                         }
                     }
 
                     if locations.count >= Self.maxLocations {
-                        sectionHeader("Add a location")
                         Text("You've saved \(Self.maxLocations) locations — remove one to add another.")
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     } else {
-                        sectionHeader("Add a location")
-                        LazyVGrid(columns: twoColumns, spacing: 14) {
-                            ForEach(LocationTemplate.all) { template in
-                                templateCard(template)
-                            }
-                            addLocationCard
-                        }
-                    }
-
-                    if addingCustom {
-                        HStack(spacing: 8) {
-                            TextField("Location name", text: $customName)
-                                .sheetTextInput()
-                            Button("Add") { addCustomLocation() }
-                                .buttonStyle(ChipButtonStyle(selected: true))
-                                .disabled(customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
+                        addLocationTile
                     }
                 }
                 .padding(20)
@@ -116,63 +107,134 @@ struct WorkoutLocationSetupView: View {
         }
     }
 
-    private func savedLocationCard(_ location: WorkoutLocation, index: Int) -> some View {
-        let isActive = location.id == activeID
-        return Button {
-            activeID = location.id
-            store.setWorkoutLocations(locations, activeID: location.id)
-            dismiss()
-        } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 6) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.moss)
-                    Spacer()
-                    // Delete used to be context-menu-only — a long-press with no affordance, sitting next
-                    // to a clearly visible pencil, so it read as "you can edit but not delete".
-                    if locations.count > 1 {
-                        LocationCardChip(systemImage: "trash", tint: Color.terracotta) {
-                            confirmRemoveLocation(index: index)
-                        }
-                        .accessibilityLabel("Delete \(location.name)")
-                        .accessibilityIdentifier("workout.location.delete")
-                    }
-                    LocationCardChip(systemImage: "pencil", tint: Color.slate) {
-                        // Edit equipment/name only — deliberately does NOT set `activeID`. It used to,
-                        // and because a later delete persists `activeID`, peeking at one location and
-                        // then deleting an unrelated one silently switched the user's active gym.
-                        editingIndex = index
-                        step = .equipment
-                    }
-                    .accessibilityLabel("Edit \(location.name)")
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(location.name)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("\(location.ownedEquipment.count) items\(isActive ? " · active" : "")")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(isActive ? Color.moss : Color.slate)
-                }
+    /// One saved row, wired to select (stage the active switch), edit, and delete.
+    private func savedSpaceRow(_ location: WorkoutLocation, index: Int) -> some View {
+        SavedSpaceRow(
+            location: location,
+            isActive: location.id == activeID,
+            summary: Self.equipmentSummary(location),
+            canDelete: locations.count > 1,
+            onSelect: {
+                // Draft semantics: the badge moves now, Done commits, Cancel reverts.
+                activeID = location.id
+            },
+            onEdit: {
+                // Edit equipment/name only — deliberately does NOT set `activeID`. It used to,
+                // and because a later delete persists `activeID`, peeking at one location and
+                // then deleting an unrelated one silently switched the user's active gym.
+                editingIndex = index
+                step = .equipment
+            },
+            onDelete: { confirmRemoveLocation(index: index) }
+        )
+    }
+
+    /// "Free weights, Machines, Cardio" — the categories this space has anything in, at most three.
+    /// `static` so it is unit-testable without standing up the view.
+    static func equipmentSummary(_ location: WorkoutLocation) -> String {
+        EquipmentCategory.allCases
+            .filter { location.selectedCount(in: $0) > 0 }
+            .prefix(3)
+            .map(\.label)
+            .joined(separator: ", ")
+    }
+
+    /// The ONE "Add a location" tile the four always-shown preset cards collapsed into (MOVE-34);
+    /// presets now live behind it, filtered to the ones not already saved.
+    private var addLocationTile: some View {
+        Button { step = .add } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.moss)
+                    .frame(width: 34, height: 34)
+                    .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+                Text("Add a location")
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate)
             }
-            .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+            .background(Color.cream.opacity(0.45), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
-                    .stroke(isActive ? Color.moss.opacity(0.5) : Color.bark.opacity(0.07), lineWidth: isActive ? 2 : 1)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5]))
+                    .foregroundStyle(Color.bark.opacity(0.22))
             )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("workout.location.card")
-        .contextMenu {
-            if locations.count > 1 {
-                Button(role: .destructive) { confirmRemoveLocation(index: index) } label: {
-                    Label("Remove", systemImage: "trash")
+        .accessibilityIdentifier("workout.location.add")
+    }
+
+    // MARK: - Add step (presets + custom)
+
+    private var addStep: some View {
+        VStack(spacing: 0) {
+            addHeader
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    if availableTemplates.isEmpty == false {
+                        sectionHeader("Start from a preset")
+                        LazyVGrid(columns: twoColumns, spacing: 14) {
+                            ForEach(availableTemplates) { template in
+                                templateCard(template)
+                            }
+                        }
+                    }
+
+                    sectionHeader("Somewhere else")
+                    HStack(spacing: 8) {
+                        TextField("Location name", text: $customName)
+                            .sheetTextInput()
+                        Button("Add") { addCustomLocation() }
+                            .buttonStyle(ChipButtonStyle(selected: true))
+                            .disabled(customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
                 }
+                .padding(20)
+                .padding(.bottom, 10)
             }
         }
+    }
+
+    /// The presets not already saved. `makeLocation()` mints fresh UUIDs, so the template NAME is
+    /// the only saved-vs-preset identity there is — which also makes a duplicate save impossible
+    /// from here (a saved "Home setup" simply hides that preset).
+    private var availableTemplates: [LocationTemplate] {
+        let savedNames = Set(locations.map(\.name))
+        return LocationTemplate.all.filter { savedNames.contains($0.name) == false }
+    }
+
+    /// The add step's chrome: back chevron + title.
+    private var addHeader: some View {
+        HStack(spacing: 10) {
+            Button {
+                customName = ""
+                step = .location
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.bark)
+                    .frame(width: 34, height: 34)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to your spaces")
+            .accessibilityIdentifier("workout.location.addBack")
+            Text("Add a location")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
     }
 
     private func templateCard(_ template: LocationTemplate) -> some View {
@@ -193,35 +255,6 @@ struct WorkoutLocationSetupView: View {
             .padding(16)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.bark.opacity(0.07), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var addLocationCard: some View {
-        Button { addingCustom.toggle() } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 34, height: 34)
-                    .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Add location")
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("A new place you visit")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-            .padding(16)
-            .background(Color.cream.opacity(0.45), in: RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5]))
-                    .foregroundStyle(Color.bark.opacity(0.22))
-            )
         }
         .buttonStyle(.plain)
     }
@@ -482,10 +515,11 @@ struct WorkoutLocationSetupView: View {
         step = .location
     }
 
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text.uppercased())
+    private func sectionHeader(_ text: LocalizedStringKey) -> some View {
+        Text(text)
             .font(.fernlet(.labelSmall))
             .tracking(0.6)
+            .textCase(.uppercase)
             .foregroundStyle(Color.slate)
     }
 
@@ -499,11 +533,11 @@ struct WorkoutLocationSetupView: View {
     }
 
     /// R3: the saved-location list is fed by repeated user adds and persisted, so it carries an
-    /// explicit cap at the point the input enters (both adders guard on it, and the add cards hide).
+    /// explicit cap at the point the input enters (both adders guard on it, and the add tile hides).
     private static let maxLocations = 12
 
     // Neither adder touches `activeID`: adding a place you sometimes train must not silently move
-    // your training there. "Train here" on the equipment step (or tapping the saved card) does that.
+    // your training there. "Train here" on the equipment step (or tapping the saved row) does that.
     private func addFromTemplate(_ template: LocationTemplate) {
         guard locations.count < Self.maxLocations else { return }
         let location = template.makeLocation()
@@ -521,7 +555,6 @@ struct WorkoutLocationSetupView: View {
         editingIndex = locations.count - 1
         newLocationSeed = location
         customName = ""
-        addingCustom = false
         step = .equipment
     }
 
@@ -558,8 +591,8 @@ struct WorkoutLocationSetupView: View {
         let removed = locations.remove(at: index)
         if activeID == removed.id { activeID = locations.first?.id ?? activeID }
         // Persist NOW, not at "Done". `locations` is @State seeded from the store at init, so every
-        // mutation here is local until a save bar is tapped — and both steps of this sheet can be
-        // swipe-dismissed. A delete that only edited @State looked like it worked and then silently
+        // mutation here is local until Done or a save bar is tapped — and every step of this sheet can
+        // be swipe-dismissed. A delete that only edited @State looked like it worked and then silently
         // came back on the next open, which is the worst shape for a destructive action: the user
         // believes it's gone. Add/edit still commit at their save bars, where the user has an explicit
         // "I'm finished" moment; a delete's moment is the confirm they just tapped.
@@ -567,10 +600,99 @@ struct WorkoutLocationSetupView: View {
     }
 }
 
-/// One trailing action chip on a saved-location card (delete / edit).
+/// One saved row on the "Your spaces" list (MOVE-34): name, item count with an equipment summary,
+/// the "In use" badge on the active space, and the edit / delete chips.
+///
+/// Tapping the row stages the active switch (the badge moves; the sheet's Done commits it). At
+/// accessibility sizes the badge moves under the name instead of competing for its line, and the
+/// summary drops to the count alone (1c·AX3).
+private struct SavedSpaceRow: View {
+    let location: WorkoutLocation
+    let isActive: Bool
+    /// "Free weights, Machines, Cardio" — empty when nothing is ticked.
+    let summary: String
+    /// The last space can't be deleted — there'd be nothing to fall back to.
+    let canDelete: Bool
+    let onSelect: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.moss)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 3) {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Text(location.name)
+                            .font(.fernlet(.headerMedium))
+                            .foregroundStyle(Color.bark)
+                        if isActive { inUseBadge }
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(location.name)
+                                .font(.fernlet(.headerMedium))
+                                .foregroundStyle(Color.bark)
+                            if isActive { inUseBadge }
+                        }
+                    }
+                    Text(verbatim: metaLine)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                }
+                Spacer(minLength: 8)
+                if canDelete {
+                    LocationCardChip(systemImage: "trash", tint: Color.terracottaInk) { onDelete() }
+                        .accessibilityLabel("Delete \(location.name)")
+                        .accessibilityIdentifier("workout.location.delete")
+                }
+                LocationCardChip(systemImage: "pencil", tint: Color.slate) { onEdit() }
+                    .accessibilityLabel("Edit \(location.name)")
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(isActive ? Color.moss.opacity(0.5) : Color.bark.opacity(0.07), lineWidth: isActive ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workout.location.card")
+        .accessibilityHint("Suggestions will use this space")
+        .contextMenu {
+            if canDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    /// "22 items · Free weights, Machines, Cardio"; count only at accessibility sizes (1c·AX3).
+    private var metaLine: String {
+        let count = "\(location.ownedEquipment.count) items"
+        guard !dynamicTypeSize.isAccessibilitySize, !summary.isEmpty else { return count }
+        return "\(count) · \(summary)"
+    }
+
+    private var inUseBadge: some View {
+        Text("In use")
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.moss)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.moss.opacity(0.14), in: Capsule())
+    }
+}
+
+/// One trailing action chip on a saved-location row (delete / edit).
 ///
 /// The glyph stays ~26pt; the frame + contentShape expand only the tap target to Apple's 44pt
-/// minimum, so a near-miss doesn't fall through to the card button underneath. Accessibility label
+/// minimum, so a near-miss doesn't fall through to the row button underneath. Accessibility label
 /// and identifier stay at the call site, where each chip names itself.
 private struct LocationCardChip: View {
     let systemImage: String
