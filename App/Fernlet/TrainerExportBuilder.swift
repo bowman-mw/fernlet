@@ -617,6 +617,37 @@ extension FernletStore {
             .map { $0.entry() }
         return (entries, unparsed)
     }
+
+    /// The rolled-up history for the single exercise named `name`, or `nil` when it has never been
+    /// logged — the "what did I lift last time?" lookup behind the row editor's recall line.
+    ///
+    /// A thin filter over ``rollUpExerciseHistory(days:)``, so the parsing, the "last means most
+    /// recent day" ordering, and the name grouping stay one implementation. Matching uses
+    /// `WorkoutExerciseCatalog.normalizedName(_:)` — the same key the rollup groups by — so
+    /// "bench PRESS" and " Bench  press " resolve to one history.
+    static func exerciseHistoryEntry(named name: String,
+                                     days: [FernletDay]) -> TrainerExportBundle.ExerciseHistoryEntry? {
+        let key = WorkoutExerciseCatalog.normalizedName(name)
+        guard !key.isEmpty else { return nil }
+        return rollUpExerciseHistory(days: days).entries
+            .first { WorkoutExerciseCatalog.normalizedName($0.name) == key }
+    }
+
+    /// ``exerciseHistoryEntry(named:days:)`` over the live full day history — the instance form the
+    /// workout sheets call when the user picks an exercise in the row editor.
+    func exerciseHistoryEntry(named name: String) -> TrainerExportBundle.ExerciseHistoryEntry? {
+        Self.exerciseHistoryEntry(named: name, days: Array(loadDays().values))
+    }
+
+    /// Every logged exercise's rolled-up history over the live full day history, in the rollup's
+    /// own most-recently-trained-first order — the single data call behind the Exercise history
+    /// screen (``ExerciseHistoryView``).
+    ///
+    /// One ``rollUpExerciseHistory(days:)`` pass covers the whole screen; per-row values are read
+    /// off the returned entries rather than recomputed per exercise.
+    func exerciseHistoryEntries() -> [TrainerExportBundle.ExerciseHistoryEntry] {
+        Self.rollUpExerciseHistory(days: Array(loadDays().values)).entries
+    }
 }
 
 /// Mutable per-exercise rollup state; converted to the immutable export entry once every logged day

@@ -23,8 +23,8 @@ import FernletLockUI
 /// `destination(for:)` factory — the scroll-wrapped tabs (appearance, goal & nutrition, layout,
 /// health, sleep, move, memories, signals, debug, connection inspector) are built inline here, while
 /// the standalone screens (``PrivacyDataSettingsView``, ``PrivacyPolicyView``, `SafetyReportingView`,
-/// ``AppLockSettingsView``) return with their own chrome. A non-empty search query swaps the Form
-/// for a ``SettingsSearchIndex`` results list.
+/// ``AIAuditLogView``, ``AppLockSettingsView``) return with their own chrome. A non-empty search
+/// query swaps the Form for a ``SettingsSearchIndex`` results list.
 ///
 /// Key collaborators: ``FernletStore`` (`@Bindable`, all setting mutations), `FernletLockService`
 /// and `StoragePreferencesStore` from the environment, `HealthKitAuthorizationViewModel` for the
@@ -210,6 +210,8 @@ struct SettingsSheet: View {
         case .privacyData:
             PrivacyDataSettingsView(store: store)
                 .environment(lockService)
+        case .aiAuditLog:
+            AIAuditLogView()
         case .privacyPolicy:
             PrivacyPolicyView()
         case .safetyReporting:
@@ -355,6 +357,10 @@ struct SettingsSheet: View {
     private var privacySection: some View {
         Section {
             hubLink("Privacy & Data", .privacyData)
+            // The "what left my device" ledger. It belongs beside the privacy screens rather than
+            // under the AI switches: it is a disclosure surface, not a control.
+            hubLink("AI activity log", .aiAuditLog)
+                .accessibilityIdentifier("settings.aiAuditLog")
             hubLink("Privacy Policy", .privacyPolicy)
             hubLink("Safety & reporting", .safetyReporting)
             hubLink("App lock", .appLock)

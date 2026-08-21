@@ -134,18 +134,20 @@ Ordered by what a tester hits first. The previous tracker's seven items are reco
 The most expensive category in the repo: work that is done, tested, and returns nothing until a
 screen exists. All three were understated or missing in the old tracker.
 
-1. **Per-exercise progress.** `TrainerExportBuilder.swift:587` computes, per exercise: sessions,
-   total sets, first/last logged, last sets/reps/weight, best weight, and an Epley 1RM estimate.
-   Its only production consumer is the trainer export. Fernlet ships a guided runner, a Live
-   Activity, a plan approver and a logger, and cannot answer *"what did I lift last time?"* The
-   parse-and-rollup half is already covered by `CoachPlanExchangeTests.swift:349`.
-   **Highest-value unbuilt thing for an actual user.**
-2. **AI audit log screen.** The log is an actor with a file-backed sink, a 500-entry ring, an
-   `outcome` field with dispatch-then-update discipline, tolerant enum decode with parked tokens,
-   four live call sites, and delete-all wiring — and `entries` is read by nobody.
-   `AIAuditLog.swift:92` even spells out the display contract for the screen that does not exist.
-   For a privacy-first app this is the strongest available proof point: *every AI call this device
-   made, what kind, where it went, how it turned out.*
+1. ✅ 2026-08-20 — **Per-exercise progress** shipped in both increments: a factual "Last time:
+   3×8 @ 135 lb" recall line in the shared exercise row editor (WorkoutSheet / WorkoutPlanSheet /
+   QuickExerciseSheet), and an "Exercise history" Move sub-screen (recency-ordered; last / best /
+   times logged) — both driven by the one existing `rollUpExerciseHistory` implementation, no
+   re-derived parsing, factual-only per the spec constraint. `ExerciseLastTimeTests` +
+   `ExerciseHistoryScreenTests`. Residual: the recall line is not yet in GuidedWorkoutEditorSheet's
+   per-exercise cards (the API is ready: `store.exerciseHistoryEntry(named:)`).
+2. ✅ 2026-08-20 — **AI audit log screen** shipped as "AI activity log" in Settings (Privacy
+   section + settings search): every AI call, newest first — kind, destination, boundary badge,
+   outcome incl. failures, field names only. The parked-token contract is honored and PINNED by
+   test: a token recorded by a newer build renders verbatim with boundary "can't say", never the
+   privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: hub row label rides the
+   existing String-typed `hubLink` idiom (hub-wide localization fork is a separate change); screen
+   snapshots once per push (no live update while open, deliberate).
 3. **The coach proximity channel.** Trust policy, verification ceremony, sealed wire envelope and
    pre-decode DoS caps — all hardened, all referenced only by tests. See §5.
 

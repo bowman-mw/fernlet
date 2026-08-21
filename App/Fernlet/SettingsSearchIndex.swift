@@ -33,6 +33,7 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case connectionInspector
     case connectionHistory
     case privacyData
+    case aiAuditLog
     case privacyPolicy
     case safetyReporting
     case appLock
@@ -443,6 +444,15 @@ nonisolated enum SettingsSearchIndex {
             keywords: ["delete everything", "delete all", "erase", "wipe", "reset", "remove all data", "delete", "reset everything"],
             breadcrumb: "Privacy & Data › App lock data",
             route: .privacyData
+        ),
+
+        // AI activity log
+        SettingsSearchEntry(
+            title: "AI activity log",
+            keywords: ["ai activity", "ai log", "ai calls", "ai history", "audit", "ai audit",
+                       "what left my device", "left my device", "on device model", "sent"],
+            breadcrumb: "AI activity log",
+            route: .aiAuditLog
         ),
 
         // Privacy Policy

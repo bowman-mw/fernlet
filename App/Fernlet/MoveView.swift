@@ -14,7 +14,8 @@ import FernletUI
 /// the guided cards derive from ``FernletStore``'s committed plan and persisted run state rather than
 /// local `@State`. Day rollover and Live Activity progress are reconciled on scene activation
 /// because a foreground can cross local midnight without re-firing `onAppear`. Navigation pushes a
-/// day-key `String` for ``MoveDayDetailView`` and a `ProgressPhotoRecord` for the photo detail.
+/// day-key `String` for ``MoveDayDetailView``, a `ProgressPhotoRecord` for the photo detail, and a
+/// ``MoveRoute`` for the parameterless screens (``ExerciseHistoryView``).
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -240,6 +241,34 @@ struct MoveView: View {
     }
     #endif
 
+    /// The quiet "Exercise history" link under the week strip — the factual per-exercise recall
+    /// list (``ExerciseHistoryView``). The same row chrome as the plan sheet's "Equipment & limits"
+    /// entry, so a navigation row reads the same everywhere in Move.
+    private var exerciseHistoryLink: some View {
+        Button {
+            path.append(MoveRoute.exerciseHistory)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                Text("Exercise history")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("move.exerciseHistory")
+    }
+
     /// The Move root's scrolling column, in order.
     private var scrollContent: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -262,6 +291,8 @@ struct MoveView: View {
                 showsPlanSourceTag: showsCoachPlanSourceTag,
                 onDayTapped: { key in path.append(key) }
             )
+
+            exerciseHistoryLink
 
             todaysMovementSection
 
@@ -306,6 +337,38 @@ struct MoveView: View {
         refreshAllDays()
     }
 
+    /// The pushed day detail for `dateKey`, refreshing the root's snapshots when it pops.
+    private func dayDetail(_ dateKey: String) -> some View {
+        MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: showsCoachPlanSourceTag)
+            .onDisappear { refreshAllDays() }
+    }
+
+    #if canImport(UIKit)
+    /// The pushed progress-photo detail for `record`. The detail view refreshes us itself after
+    /// each persisted change (save → refresh in one step), so there's no racing `onDisappear` and
+    /// no stale caption on return.
+    private func photoDetail(_ record: ProgressPhotoRecord) -> some View {
+        ProgressPhotoDetailView(
+            store: store,
+            record: record,
+            onChanged: { progressPhotos = store.progressPhotoRecords() },
+            // Pop-back vs genuine departure: by the time the detail's onDisappear fires on a
+            // pop, the record is already off the path (empty → back at the strip, which owns
+            // the session's re-lock); on a tab switch away the detail stays pushed (non-empty)
+            // and the gate re-locks as before. One unlock covers strip → detail → pop-back.
+            shouldLockOnDisappear: { !path.isEmpty }
+        )
+    }
+    #endif
+
+    /// Resolves a fixed ``MoveRoute`` to its screen.
+    @ViewBuilder private func routedScreen(_ route: MoveRoute) -> some View {
+        switch route {
+        case .exerciseHistory:
+            ExerciseHistoryView(store: store)
+        }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
@@ -314,25 +377,10 @@ struct MoveView: View {
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
-            .navigationDestination(for: String.self) { dateKey in
-                MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: showsCoachPlanSourceTag)
-                    .onDisappear { refreshAllDays() }
-            }
+            .navigationDestination(for: String.self) { dayDetail($0) }
+            .navigationDestination(for: MoveRoute.self) { routedScreen($0) }
             #if canImport(UIKit)
-            .navigationDestination(for: ProgressPhotoRecord.self) { record in
-                // The detail view refreshes us itself after each persisted change (save → refresh in one
-                // step), so there's no racing `onDisappear` and no stale caption on return.
-                ProgressPhotoDetailView(
-                    store: store,
-                    record: record,
-                    onChanged: { progressPhotos = store.progressPhotoRecords() },
-                    // Pop-back vs genuine departure: by the time the detail's onDisappear fires on a
-                    // pop, the record is already off the path (empty → back at the strip, which owns
-                    // the session's re-lock); on a tab switch away the detail stays pushed (non-empty)
-                    // and the gate re-locks as before. One unlock covers strip → detail → pop-back.
-                    shouldLockOnDisappear: { !path.isEmpty }
-                )
-            }
+            .navigationDestination(for: ProgressPhotoRecord.self) { photoDetail($0) }
             #endif
         }
         .onAppear {
@@ -701,6 +749,7 @@ struct WorkoutSheet: View {
             searchPlaceholder: logMode.searchPlaceholder,
             mode: logMode,
             addLabel: logMode.addLabel,
+            historyStore: store,
             onAdd: addDraftExercise
         )
 
@@ -1026,6 +1075,7 @@ struct QuickExerciseSheet: View {
                         showAddButton: false,
                         // This sheet exists for speed — open it and you're already typing.
                         autofocusSearch: true,
+                        historyStore: store,
                         onAdd: {}
                     )
 
@@ -2272,12 +2322,38 @@ struct WorkoutExerciseDraft {
     }
 }
 
+/// Display half of the row editor's "last time" recall (``WorkoutExerciseBuilder``).
+extension TrainerExportBundle.ExerciseHistoryEntry {
+    /// The values half of the "Last time: 3x8 @ 135 lb" line — the most recent session's sets×reps
+    /// as logged, plus its weight in the unit the user wrote (bare number when no unit was ever
+    /// stated). `nil` when the entry carries neither a prescription nor a load, so the caller shows
+    /// nothing rather than an empty recall. Factual only: no comparison against today's draft, no
+    /// trend, no praise (round 2.1 design constraint).
+    var lastTimeRecallValues: String? {
+        var parts: [String] = []
+        if let sets = lastSets, let reps = lastReps, sets > 0, !reps.isEmpty {
+            parts.append("\(sets)x\(reps)")
+        }
+        if let weight = lastWeight {
+            let number = weight.formatted(.number.precision(.fractionLength(0...1)))
+            let unit = weightUnit.map { " \($0)" } ?? ""
+            parts.append("@ \(number)\(unit)")
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " ")
+    }
+}
+
 /// The shared exercise-entry form: catalog search picker plus the input fields for the selected
 /// exercise's kind (sets/reps/weight, or speed/incline), with an optional Add button.
 ///
 /// Reused by ``WorkoutSheet``, ``WorkoutPlanSheet``, and ``QuickExerciseSheet``; all field state is
 /// bound to the presenting sheet, which owns the draft and decides what an Add (or an implicit
 /// save-time fold) does with it.
+///
+/// When `historyStore` is set, picking an exercise also surfaces a one-line factual recall of the
+/// last logged session for it ("Last time: 3x8 @ 135 lb") — refreshed once per pick, never per
+/// keystroke, and absent entirely when that exercise has no parsed history.
 struct WorkoutExerciseBuilder: View {
     @Binding var selectedExercise: ExerciseTarget?
     @Binding var sets: String
@@ -2294,10 +2370,29 @@ struct WorkoutExerciseBuilder: View {
     var showAddButton = true
     /// Forwarded to ``ExerciseSearchPicker`` — see there.
     var autofocusSearch = false
+    /// Backs the "last time" recall line with the store's logged day history; `nil` (the default)
+    /// hides the line entirely, so call sites without a store are untouched.
+    var historyStore: FernletStore? = nil
     var onAdd: () -> Void
+
+    /// The resolved recall values for the current pick — held as state so the rollup runs once per
+    /// exercise selection (see ``refreshLastTime()``), not on every keystroke in the fields below.
+    @State private var lastTimeValues: String?
 
     private var inputKind: ExerciseInputKind {
         selectedExercise?.inputKind ?? .strength
+    }
+
+    /// Recomputes ``lastTimeValues`` for the current selection. `nil` (no store, no pick, or no
+    /// parsed history for that exercise) renders no line at all — nothing is the honest display for
+    /// "never logged".
+    private func refreshLastTime() {
+        guard let historyStore, let selectedExercise else {
+            lastTimeValues = nil
+            return
+        }
+        lastTimeValues = historyStore.exerciseHistoryEntry(named: selectedExercise.name)?
+            .lastTimeRecallValues
     }
 
     /// Sets / reps / weight / details — the strength prescription fields.
@@ -2372,6 +2467,14 @@ struct WorkoutExerciseBuilder: View {
                 autofocus: autofocusSearch
             )
 
+            if let lastTimeValues {
+                Text("Last time: \(lastTimeValues)")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("exercise.lastTime")
+            }
+
             switch inputKind {
             case .strength:
                 strengthFields
@@ -2385,6 +2488,10 @@ struct WorkoutExerciseBuilder: View {
                 addButton
             }
         }
+        // Attached to the always-rendered VStack, never to the conditional line — an empty view's
+        // onAppear/onChange silently never fire.
+        .onAppear { refreshLastTime() }
+        .onChange(of: selectedExercise) { _, _ in refreshLastTime() }
     }
 }
 
@@ -3416,6 +3523,7 @@ struct WorkoutPlanSheet: View {
             searchPlaceholder: logMode.searchPlaceholder,
             mode: logMode,
             addLabel: logMode.addLabel,
+            historyStore: store,
             onAdd: addDraftExercise
         )
 
