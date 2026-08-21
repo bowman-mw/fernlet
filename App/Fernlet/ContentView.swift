@@ -61,6 +61,9 @@ struct ContentView: View {
     @State private var selectedTab: FernletTab = .home
     @State private var privateHubSection: PrivateHubSection = .journal
     @State private var isHomeTabBarCompact = false
+    /// The floating tab bar's live measured height (the whole `safeAreaInset` block), fed to the
+    /// pages as `\.fernletTabBarClearance` so their scroll content ends clear of the bar.
+    @State private var tabBarMeasuredHeight: CGFloat = 0
     @State private var tabResetTokens: [FernletTab: Int] = Dictionary(uniqueKeysWithValues: FernletTab.allCases.map { ($0, 0) })
     @State private var activeSheet: FernletSheet?
     @State private var mealLogNotification: MealLogNotification?
@@ -495,6 +498,13 @@ struct ContentView: View {
 
     private var mainInterface: some View {
         mainTabContent
+            // The bar's measured height + 8pt breathing room, zeroed while the camera session
+            // hides the bar. Consumed by fernletTabBarBottomClearance() on each page's scroll
+            // content — the fix for the last card resting behind the floating bar at max scroll.
+            .environment(
+                \.fernletTabBarClearance,
+                isDisposableCameraSessionActive ? 0 : tabBarMeasuredHeight + 8
+            )
             .overlay(alignment: .bottom) {
                 if !isDisposableCameraSessionActive {
                     LinearGradient(
@@ -521,6 +531,15 @@ struct ContentView: View {
                         // main tab content still receives the keyboard region in its safe area, so
                         // scroll views and focused fields inside the pages keep avoiding the keyboard.
                         .ignoresSafeArea(.keyboard, edges: .bottom)
+                        // Measure the bar's live block height for the pages' bottom clearance:
+                        // this safeAreaInset positions the bar but does NOT reach the pages'
+                        // scroll views through the UIKit-backed TabView, so each page ends its
+                        // own scroll content clear of the bar via fernletTabBarBottomClearance().
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            tabBarMeasuredHeight = height
+                        }
                 }
             }
             .tint(Color.moss)

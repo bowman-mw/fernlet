@@ -69,6 +69,7 @@ struct FoodView: View {
                 }
                 .padding(20)
                 .padding(.bottom, 24)
+                .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)

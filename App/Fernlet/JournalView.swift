@@ -38,6 +38,7 @@ struct JournalView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 pageContent
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)

@@ -1104,6 +1104,46 @@ public extension View {
     func fernletTabBarCompaction(_ isCompact: Binding<Bool>, resetToken: Binding<Int>) -> some View {
         modifier(FernletTabBarCompactionModifier(isCompact: isCompact, resetToken: resetToken))
     }
+
+    /// Ends a tab page's scroll content clear of the floating tab bar.
+    ///
+    /// Apply to the page's root scroll **content** (the outer stack inside the `ScrollView`), after
+    /// its own padding. The floating bar rides a `safeAreaInset` applied OUTSIDE the tab container,
+    /// which positions the bar correctly but never reaches the pages' scroll views as a content
+    /// inset — so without this, every tab's scroll range ends at the physical screen bottom and the
+    /// last card sits permanently behind the bar (the "can't scroll all the way down" defect).
+    /// Padding the *content* — rather than insetting the scroll view — keeps the floating-bar look:
+    /// content still paints beneath the bar mid-scroll, and only the resting end clears it.
+    func fernletTabBarBottomClearance() -> some View {
+        modifier(FernletTabBarBottomClearanceModifier())
+    }
+}
+
+/// Publishes the floating tab bar's measured on-screen height (its whole `safeAreaInset` block)
+/// from the tab container down to the pages. Zero when no bar is showing (the camera session).
+private struct FernletTabBarClearanceKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    /// The floating tab bar's current height plus breathing room, set by the tab container and
+    /// consumed by ``SwiftUI/View/fernletTabBarBottomClearance()`` on each page's scroll content.
+    var fernletTabBarClearance: CGFloat {
+        get { self[FernletTabBarClearanceKey.self] }
+        set { self[FernletTabBarClearanceKey.self] = newValue }
+    }
+}
+
+/// Implements ``SwiftUI/View/fernletTabBarBottomClearance()`` — see there. A separate modifier so
+/// the environment read lives here rather than in every page.
+public struct FernletTabBarBottomClearanceModifier: ViewModifier {
+    @Environment(\.fernletTabBarClearance) private var clearance
+
+    public init() {}
+
+    public func body(content: Content) -> some View {
+        content.padding(.bottom, clearance)
+    }
 }
 
 /// Drives the app's compacting tab bar from a page's scroll position, with hysteresis so the bar

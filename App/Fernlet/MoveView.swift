@@ -387,6 +387,7 @@ struct MoveView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 scrollContent
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
