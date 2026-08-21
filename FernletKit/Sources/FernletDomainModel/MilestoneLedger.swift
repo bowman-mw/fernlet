@@ -3,23 +3,28 @@
 // ledger's proven shape (see CoinEconomy.swift + Docs/Coin-Ledger-Design-2026-06-29.md).
 //
 // Why its own store (and not new kinds inside the coin ledger): the two have deliberately DIFFERENT
-// reset semantics. Coins are spendable currency and a full "reset all data" zeroes them (reset
-// boundary). Milestone events are lifetime memories of care — "you've written 40 journal moments" —
-// and deliberately SURVIVE a reset (the repository doesn't even expose a delete; see
-// `MilestoneLedgerRepositoring`). Folding them into `CoinEconomy` would force one store to carry two
-// contradictory reset rules.
+// reset MECHANISMS. Coins are spendable currency and a full "reset all data" zeroes them via an
+// in-band reset-boundary marker row that voids pre-reset rows sync-safely. Milestone events reset
+// by row DELETION: since 2026-08-20 the wipe clears the ledger too (`MilestoneLedgerRepository.
+// deleteAll()`, reached only through the deletion funnel — the protocol still exposes no delete;
+// see `MilestoneLedgerRepositoring`), reversing the earlier product rule that milestone counts
+// survive a reset — the rows are a dated metadata trail of the very content the wipe destroys.
+// The milestone vocabulary has no marker kind, so rows held by another signed-in device can sync
+// back after a wipe. Folding the two into `CoinEconomy` would force one store to carry both rules.
 //
 // Idempotency is structural, exactly like coins:
 //   • An event row's id is DETERMINISTIC from the counted thing (`event:journal:<entry UUID>`,
 //     `event:water:<dayKey>`), so two devices that both see the same journal entry mint the SAME id
 //     → the application-level union-merge (`deduplicatedByID`) collapses them → counted exactly once.
-//   • Lifetime counts = distinct-row counts. Rows are never deleted, so counts are monotonic:
-//     deleting a meal, disabling HealthKit, or resetting the diary never shrinks a lifetime count.
+//   • Lifetime counts = distinct-row counts. Outside the full wipe (which empties the whole
+//     ledger), rows are never deleted, so between wipes counts are monotonic: deleting a meal or
+//     disabling HealthKit never shrinks a lifetime count.
 //   • Milestone COIN awards are `CoinLedgerEntry` earn rows with deterministic ids
 //     (`milestone:journal:40`), so two devices crossing the same threshold offline collapse to one
 //     award under the coin ledger's own dedup. Award rows carry the threshold-crossing day as their
 //     `dayKey`, so the coin ledger's reset boundary voids pre-reset awards like any other earn —
-//     coins keep their existing reset semantics even though the milestone events themselves survive.
+//     load-bearing even now that the wipe deletes the milestone events too (2026-08-20), because
+//     event rows held by another signed-in device can sync back and must not re-award coins.
 //
 // NO streaks, no windows, no expiry — every value here is a lifetime cumulative count.
 // Wall-safe: pure value types + math in `FernletDomainModel`, never a `Private*` store (S3 wall).
@@ -49,8 +54,8 @@ public nonisolated enum MilestoneEventKind: String, Codable, Sendable, CaseItera
     case worry
     /// A day on which the hydration target was met (day-grain: one row per day, `event:water:<dayKey>`).
     /// Judged against the CURRENT hydration target at reconcile time — a later target change does not
-    /// retroactively re-judge past days that already earned their row (rows are never deleted), but
-    /// un-rowed past days are re-judged against the new target. Accepted simplification.
+    /// retroactively re-judge past days that already earned their row (an earned row is never revoked),
+    /// but un-rowed past days are re-judged against the new target. Accepted simplification.
     case water
 }
 
@@ -123,15 +128,16 @@ public nonisolated enum MilestoneEconomy {
     /// Events the ledger SHOULD hold (derived from the surviving day history) — the idempotent
     /// backfill/reconcile input. Undercount is accepted and deliberate: history pruned or reset
     /// before this ran can't be re-derived, so lifetime counts start from what survives (they only
-    /// ever grow from there — the rows themselves are never deleted).
+    /// ever grow from there — normal operation never deletes a row).
     ///
     /// Day-history kinds only (journal/meal/workout/water). Breathing + worry events are not in the
     /// diary and arrive exclusively through their live hooks.
     ///
     /// `excludingMealIDs` skips meals still pending AI resolution (queued in the retry service): an
     /// AI-fallback placeholder is replaced by a fresh-UUID resolved meal on retry, so counting the
-    /// placeholder now AND the resolved meal later would count one logged meal twice (rows are never
-    /// deleted). Excluding the pending placeholder means only the resolved meal is ever counted, once.
+    /// placeholder now AND the resolved meal later would count one logged meal twice (normal operation
+    /// never deletes a row). Excluding the pending placeholder means only the resolved meal is ever
+    /// counted, once.
     public static func derivedEvents(
         from days: [String: FernletDay],
         hydrationTarget: Int,
@@ -161,13 +167,13 @@ public nonisolated enum MilestoneEconomy {
     /// the idempotent delta a reconcile appends to the COIN ledger. Deterministic and sync-safe:
     ///   • Award ids are threshold-deterministic, so two devices crossing 40 offline mint one award.
     ///   • A threshold already REACHED as of the latest reset instant belongs to pre-reset milestone
-    ///     coins that the reset zeroed — it is never (re-)minted here (otherwise the surviving events
-    ///     would silently re-award coins seconds after "Reset everything" with no user action), and
-    ///     `CoinEconomy.totals` voids any stale pre-reset award that re-syncs (createdAt <= reset). A
-    ///     threshold reached only once POST-reset events are counted is a genuine new milestone and
-    ///     mints normally with a post-reset `createdAt` that survives. So a full reset zeroes milestone
-    ///     coins like all other coins, even though the milestone EVENTS survive; the user then earns
-    ///     toward the next-higher threshold from there.
+    ///     coins that the reset zeroed — it is never (re-)minted here, and `CoinEconomy.totals` voids
+    ///     any stale pre-reset award that re-syncs (createdAt <= reset). Since 2026-08-20 the wipe
+    ///     also deletes the milestone EVENTS, but the milestone store has no reset-boundary marker,
+    ///     so pre-reset events held by another signed-in device can sync back — this guard is what
+    ///     keeps them from silently re-awarding coins with no user action. A threshold reached only
+    ///     once POST-reset events are counted is a genuine new milestone and mints normally with a
+    ///     post-reset `createdAt` that survives.
     public static func missingAwards(
         events: [MilestoneLedgerEntry],
         coinEntries: [CoinLedgerEntry],

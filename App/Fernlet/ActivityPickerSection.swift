@@ -3,6 +3,25 @@ import FernletDomainModel
 import HealthKitGateway
 import FernletUI
 
+/// Device-local memory of the last five workout types picked, backing ``ActivityPickerSection``'s
+/// Recent chips.
+///
+/// The `BarcodeServingMemory` sidecar pattern: plain `UserDefaults`, never synced, never in the
+/// snapshot. Exposed as a named seam so the store's wipe paths (`resetAll` / `deleteAllData`) can
+/// clear it — otherwise opening Log activity on a wiped phone still shows the previous owner's
+/// recent picks. The view's `@AppStorage` reads the same constant, so key and clear cannot drift.
+enum RecentActivityTypeMemory {
+    /// Frozen persisted token (a comma-joined `WorkoutActivityType` rawValue list) — never rename
+    /// or localize; renaming strands every device's existing chips.
+    static let defaultsKey = "fernlet.recentActivityTypes"
+
+    /// Forgets the recent picks. A plain `UserDefaults` removal — no failure signal, so the wipe
+    /// funnel reports no incomplete store for it.
+    static func clearAll(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: defaultsKey)
+    }
+}
+
 /// The activity half of the workout sheets' Kind toggle: search and pick a `WorkoutActivityType`,
 /// then fill its duration / distance / energy / effort fields.
 ///
@@ -20,7 +39,7 @@ struct ActivityPickerSection: View {
     /// user who turned calories off shouldn't be asked for kcal on every activity log. Energy that
     /// arrives from Health is still stored — it just isn't asked for here.
     var showsEnergyField: Bool = false
-    @AppStorage("fernlet.recentActivityTypes") private var recentActivityTypeRawValues = ""
+    @AppStorage(RecentActivityTypeMemory.defaultsKey) private var recentActivityTypeRawValues = ""
     @State private var query = ""
 
     private var recentActivityTypes: [WorkoutActivityType] {

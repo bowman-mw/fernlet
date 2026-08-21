@@ -15,17 +15,24 @@ import FernletFoundation
 /// graph enforces that wall).
 ///
 /// Image and thumbnail bytes are encrypted with AES-256-GCM before they touch disk (spec §11:
-/// "Photos are stored in `PrivateMediaStore` with encryption"); only metadata lives in the
-/// (unencrypted) JSON index. Files retain `.completeFileProtection` as defense-in-depth.
+/// "Photos are stored in `PrivateMediaStore` with encryption"), and so is the metadata index —
+/// `senderName`, `senderFingerprint` and `addedAt` used to sit in the clear beside the sealed
+/// bytes they describe. Files retain `.completeFileProtection` as defense-in-depth.
 /// Because the photos arrive from PEERS, every write path is guarded against decompression
 /// bombs: a byte-size cap plus an ImageIO pixel-dimension/area check that never decodes the
 /// full bitmap (``isWithinSafePixelBounds(_:)``). Fail-closed throughout — when no key is
 /// available, plaintext bytes are dropped rather than written; bytes that neither GCM-open nor
 /// parse as a safe image read back as missing, never as garbage handed to the UI.
 ///
-/// On-disk names (`MeshPhotoCache.json`, `MeshPhotos/`, `MeshPhotoThumbnails/`) are kept from the
-/// former `MeshPhotoCacheStore` so existing caches load without migration; legacy plaintext files
-/// are recognised on read and re-encrypted in place on first access.
+/// On-disk names (`MeshPhotos/`, `MeshPhotoThumbnails/`) are kept from the former
+/// `MeshPhotoCacheStore` so existing caches load without migration; legacy plaintext files are
+/// recognised on read and re-encrypted in place on first access. The index is the one file that
+/// moved: the plaintext `MeshPhotoCache.json` a caller passes as `indexURL` is read once, rewritten
+/// sealed as `MeshPhotoCache.sealed`, and only then deleted (``loadIndex()``).
+///
+/// - Important: the index is also the wall's file manifest — ``save(_:)`` deletes every photo file
+///   the index does not name. An index that cannot be READ therefore must never be mistaken for an
+///   empty wall, which is why ``loadIndex()`` reports a deferred read instead of an empty array.
 ///
 /// Concurrency: a plain nonisolated value type with no internal locking. All state is on disk;
 /// in practice every instance is confined to `MeshNetworkManager`'s main actor. The default
@@ -33,6 +40,7 @@ import FernletFoundation
 /// sharing a provider must share an isolation domain.
 public struct PrivateMediaStore {
     private let indexURL: URL
+    private let sealedIndexURL: URL
     private let imageDirectoryURL: URL
     private let thumbnailDirectoryURL: URL
     private let keyProvider: PrivateMediaKeyProviding
@@ -54,11 +62,16 @@ public struct PrivateMediaStore {
     public static let maxCachedPhotos = 1000
     /// Soft threshold at which the UI warns the user the photo cache is nearly full.
     public static let cacheWarningThreshold = 900
+    // Frozen on-disk token: the extension the sealed index is written under, beside the legacy
+    // plaintext index it replaces. Never localized, never renamed — a rename strands every
+    // existing wall's index behind a file nothing looks for.
+    private static let sealedIndexExtension = "sealed"
 
     /// Creates a store rooted at `indexURL`'s directory.
     ///
     /// - Parameters:
-    ///   - indexURL: Location of the metadata index JSON; the `MeshPhotos/` and
+    ///   - indexURL: Location of the LEGACY plaintext metadata index; the sealed index replaces it
+    ///     at the same path with the `.sealed` extension, and the `MeshPhotos/` and
     ///     `MeshPhotoThumbnails/` directories are created as its siblings.
     ///   - keyProvider: Source of the AES-256-GCM at-rest key; defaults to the keychain-backed
     ///     FRIEND-WALL provider — the original, backup-restorable row, which the Phase-5 key split
@@ -66,6 +79,8 @@ public struct PrivateMediaStore {
     ///     one. This store has no dual-open fallback and needs none: its key never changed.
     public init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .friendWall)) {
         self.indexURL = indexURL
+        self.sealedIndexURL = indexURL.deletingPathExtension()
+            .appendingPathExtension(Self.sealedIndexExtension)
         let baseURL = indexURL.deletingLastPathComponent()
         self.imageDirectoryURL = baseURL.appendingPathComponent("MeshPhotos", isDirectory: true)
         self.thumbnailDirectoryURL = baseURL.appendingPathComponent("MeshPhotoThumbnails", isDirectory: true)
@@ -84,15 +99,41 @@ public struct PrivateMediaStore {
 
     /// Loads the cached photo metadata, newest first, with image bytes stripped.
     ///
-    /// Also re-runs ``save(_:)`` on the decoded entries as a normalization pass (cap enforcement +
-    /// orphan-file sweep). Bytes are fetched lazily per photo via ``imageData(for:)`` /
-    /// ``thumbnailData(for:)``. An unreadable or absent index reads as empty.
+    /// Convenience over ``loadIndex()`` for callers that have nothing to do about a deferred read:
+    /// both failure classes read as an empty wall. `MeshNetworkManager` — the one owner that also
+    /// SAVES the index — uses ``loadIndex()`` instead, because an empty array it cannot tell apart
+    /// from a locked keychain is exactly what a later save would write over the real index.
     /// - Returns: The index entries (metadata only; `imageData` is nil on every payload).
     public func load() -> [FriendPhotoPayload] {
-        guard let data = try? Data(contentsOf: indexURL), !data.isEmpty,
-              let photos = try? decoder.decode([FriendPhotoPayload].self, from: data) else { return [] }
-        save(photos)
-        return photos.map { $0.withoutImageData() }
+        guard case .entries(let photos) = loadIndex() else { return [] }
+        return photos
+    }
+
+    /// Loads the metadata index, classifying a read that produced nothing (see ``IndexLoad``).
+    ///
+    /// Also re-runs ``save(_:)`` on the decoded entries as a normalization pass (cap enforcement +
+    /// orphan-file sweep) — and for a pre-sealing plaintext index that same pass IS the migration:
+    /// the entries are rewritten sealed, and the plaintext original is deleted only once the sealed
+    /// file exists. Bytes are fetched lazily per photo via ``imageData(for:)`` /
+    /// ``thumbnailData(for:)``.
+    public func loadIndex() -> IndexLoad {
+        switch readIndex() {
+        case .absent:
+            return .entries([])
+        case .entries(let photos, let legacyPlaintext):
+            save(photos)
+            if legacyPlaintext { removeMigratedPlaintextIndex() }
+            // The COMMITTED view, not the decoded one: `save` caps and reorders, and a caller
+            // holding entries the file manifest no longer names would re-save photos whose bytes
+            // were just swept (a legacy index could carry more than the cap).
+            return .entries(Self.cappedNewestFirst(photos).map { $0.withoutImageData() })
+        case .deferred:
+            FernletAuditLog.log("privateMedia.indexDeferred", context: ["reason": "noKey"])
+            return .deferred
+        case .unrecoverable:
+            FernletAuditLog.log("privateMedia.indexUnrecoverable")
+            return .unrecoverable
+        }
     }
 
     /// Persists the photo set: seals each payload's in-memory bytes to disk, writes the
@@ -100,13 +141,15 @@ public struct PrivateMediaStore {
     ///
     /// The set is capped at ``maxCachedPhotos`` (newest by `addedAt` win). Per photo, bytes are
     /// written only after passing the size cap and ``isWithinSafePixelBounds(_:)``, and only
-    /// sealed — with no key available the bytes are skipped (the metadata entry is still indexed
-    /// and the photo rehydrates from the mesh on demand). Payloads without in-memory bytes keep
-    /// whatever file already exists for their id.
+    /// sealed. Payloads without in-memory bytes keep whatever file already exists for their id.
+    /// With no key available NOTHING is written — neither the bytes nor the index, which now
+    /// carries the sender names and times under the same seal — and the previous index therefore
+    /// stays authoritative until a key returns.
     /// - Important: This is a full-index rewrite; pass the COMPLETE set, not a delta —
-    ///   any photo omitted here has its on-disk files deleted as orphans.
+    ///   any photo omitted here has its on-disk files deleted as orphans. Never pass a set derived
+    ///   from an index that ``loadIndex()`` reported as ``IndexLoad/deferred``.
     public func save(_ photos: [FriendPhotoPayload]) {
-        let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(Self.maxCachedPhotos))
+        let capped = Self.cappedNewestFirst(photos)
         createDirectories()
         for photo in capped {
             guard let imageData = photo.imageData else { continue }
@@ -138,19 +181,68 @@ public struct PrivateMediaStore {
                 keyProvider.sealAndWriteBestEffort(thumbnailData, to: thumbnailURL(for: photo.id), reason: "thumbnail")
             }
         }
-        guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return }
+        // NEVER sweep against an index that was not committed: the on-disk index still names the
+        // OLD photo set, so a sweep keyed on the NEW set would delete files it still references.
+        guard writeSealedIndex(capped) else { return }
+        removeOrphanedFiles(keeping: Set(capped.map(\.id)))
+    }
+
+    /// The canonical index view: newest first, capped at ``maxCachedPhotos``. ``save(_:)`` commits
+    /// exactly this, and ``loadIndex()`` returns exactly this, so a caller's in-memory list can
+    /// never disagree with the file manifest that was written.
+    private static func cappedNewestFirst(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
+        Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(maxCachedPhotos))
+    }
+
+    /// Seals and writes the metadata index (sender names, fingerprints, times), replacing whichever
+    /// generation is on disk.
+    ///
+    /// Fail-closed like the photo bytes: with no key NOTHING is written, so the index never lands in
+    /// the clear and the previous file — sealed or legacy plaintext — is left exactly as it was for
+    /// the next attempt.
+    /// - Returns: whether the index was committed; ``save(_:)``'s orphan sweep depends on it.
+    private func writeSealedIndex(_ capped: [FriendPhotoPayload]) -> Bool {
+        guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return false }
+        guard let sealed = keyProvider.gcmSeal(data) else {
+            FernletAuditLog.log(
+                "privateMedia.indexSealSkipped",
+                context: ["reason": "noKey", "recovery": "orphanSweepSkipped"]
+            )
+            return false
+        }
         do {
-            try data.write(to: indexURL, options: [.atomic, .completeFileProtection])
+            try sealed.write(to: sealedIndexURL, options: [.atomic, .completeFileProtection])
+            return true
         } catch {
-            // NEVER sweep against an index that was not committed: the on-disk index still names the
-            // OLD photo set, so a sweep keyed on the NEW set would delete files it still references.
             FernletAuditLog.log(
                 "privateMedia.indexWriteFailed",
                 context: ["error": "\(error)", "recovery": "orphanSweepSkipped"]
             )
+            return false
+        }
+    }
+
+    /// Completes the plaintext→sealed index migration by deleting the legacy file — but only once
+    /// the sealed index it was rewritten into actually exists.
+    ///
+    /// The ordering is the whole point: a reseal that could not run (no key) or failed to write must
+    /// leave the plaintext index in place, because it is then still the wall's only index. Retried
+    /// on every later load until it lands.
+    private func removeMigratedPlaintextIndex() {
+        guard FileManager.default.fileExists(atPath: sealedIndexURL.path) else {
+            FernletAuditLog.log("privateMedia.indexMigrationDeferred")
             return
         }
-        removeOrphanedFiles(keeping: Set(capped.map(\.id)))
+        do {
+            try FileManager.default.removeItem(at: indexURL)
+        } catch {
+            // Named, not dropped: the entries are safe in the sealed file, but a plaintext copy of
+            // every sender name and fingerprint is still on disk until a later load retries.
+            FernletAuditLog.log(
+                "privateMedia.legacyIndexRemoveFailed",
+                context: ["error": "\(error)"]
+            )
+        }
     }
 
     /// Returns the full-resolution plaintext bytes for a photo, preferring in-memory bytes,
@@ -212,6 +304,62 @@ public struct PrivateMediaStore {
             senderSigningPublicKey: photo.senderSigningPublicKey,
             session: photo.session
         )
+    }
+
+    // MARK: - Metadata index
+
+    /// Outcome of reading the metadata index: the "genuinely empty" vs "not readable right now"
+    /// distinction the wall's owner needs before it saves anything.
+    ///
+    /// The hazard this exists for is the one `ProtectedSidecar` documents for the heart sidecars —
+    /// a store that treats every failed read as "no data" lets the next save write that emptiness
+    /// over the real file. Here it is worse than losing metadata: ``save(_:)`` sweeps every photo
+    /// file the index does not name, so an index read as empty would take the kept wall's bytes
+    /// with it.
+    public enum IndexLoad: Equatable {
+        /// The index was read. An absent index is an empty wall — genuinely no photos.
+        case entries([FriendPhotoPayload])
+        /// A sealed index exists but no media key is available right now (an `AfterFirstUnlock`
+        /// keychain row before the first post-boot unlock). Transient: retry, never write over it.
+        case deferred
+        /// The index exists, a key IS available, and the bytes still neither open nor decode —
+        /// corruption, or a key row swept by the duress wipe. Nothing can recover these entries;
+        /// the caller may start empty and let the next save replace the file.
+        case unrecoverable
+    }
+
+    /// What the on-disk index turned out to be — the private, generation-aware form of
+    /// ``IndexLoad`` that ``loadIndex()`` maps (running the migration for the legacy case).
+    private enum IndexReadResult {
+        case absent
+        case entries([FriendPhotoPayload], legacyPlaintext: Bool)
+        case deferred
+        case unrecoverable
+    }
+
+    /// Reads the index, sealed generation first, and classifies what it found.
+    ///
+    /// The sealed file wins whenever it exists: once migration has written it, a plaintext file
+    /// left behind by a failed delete is stale by construction and must never be preferred.
+    private func readIndex() -> IndexReadResult {
+        if let stored = try? Data(contentsOf: sealedIndexURL), !stored.isEmpty {
+            guard let opened = keyProvider.gcmOpen(stored),
+                  let photos = try? decoder.decode([FriendPhotoPayload].self, from: opened) else {
+                // No key at all is transient (the row is `AfterFirstUnlock`); a key that is present
+                // and still does not open these bytes is not.
+                return keyProvider.mediaKey() == nil ? .deferred : .unrecoverable
+            }
+            return .entries(photos, legacyPlaintext: false)
+        }
+        guard let legacy = try? Data(contentsOf: indexURL), !legacy.isEmpty else { return .absent }
+        // Pre-sealing generation. Deliberately NOT gated on a key being available, unlike the photo
+        // bytes in `openSealed`: these bytes are already plaintext on disk, so reading them
+        // discloses nothing new, while refusing would strand the wall's whole index — and its file
+        // manifest — behind a locked keychain. Sealing is retried on the next load.
+        guard let photos = try? decoder.decode([FriendPhotoPayload].self, from: legacy) else {
+            return .unrecoverable
+        }
+        return .entries(photos, legacyPlaintext: true)
     }
 
     // MARK: - At-rest encryption

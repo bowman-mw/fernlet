@@ -23,8 +23,8 @@ import FernletLockUI
 /// `destination(for:)` factory — the scroll-wrapped tabs (appearance, goal & nutrition, layout,
 /// health, sleep, move, memories, signals, debug, connection inspector) are built inline here, while
 /// the standalone screens (``PrivacyDataSettingsView``, ``PrivacyPolicyView``, `SafetyReportingView`,
-/// ``AppLockSettingsView``) return with their own chrome. A non-empty search query swaps the Form
-/// for a ``SettingsSearchIndex`` results list.
+/// ``AIAuditLogView``, ``AppLockSettingsView``) return with their own chrome. A non-empty search
+/// query swaps the Form for a ``SettingsSearchIndex`` results list.
 ///
 /// Key collaborators: ``FernletStore`` (`@Bindable`, all setting mutations), `FernletLockService`
 /// and `StoragePreferencesStore` from the environment, `HealthKitAuthorizationViewModel` for the
@@ -210,6 +210,8 @@ struct SettingsSheet: View {
         case .privacyData:
             PrivacyDataSettingsView(store: store)
                 .environment(lockService)
+        case .aiAuditLog:
+            AIAuditLogView()
         case .privacyPolicy:
             PrivacyPolicyView()
         case .safetyReporting:
@@ -355,6 +357,10 @@ struct SettingsSheet: View {
     private var privacySection: some View {
         Section {
             hubLink("Privacy & Data", .privacyData)
+            // The "what left my device" ledger. It belongs beside the privacy screens rather than
+            // under the AI switches: it is a disclosure surface, not a control.
+            hubLink("AI activity log", .aiAuditLog)
+                .accessibilityIdentifier("settings.aiAuditLog")
             hubLink("Privacy Policy", .privacyPolicy)
             hubLink("Safety & reporting", .safetyReporting)
             hubLink("App lock", .appLock)
@@ -1120,21 +1126,48 @@ struct SettingsSheet: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            if !healthKit.snapshot.isAvailable {
+            // `snapshot.isAvailable` folds "no Health store on this hardware" and "master toggle
+            // off" into one false — and the toggle defaults to off, so a single branch here told
+            // every fresh install their device can't do Health. Triage the real cause instead.
+            switch healthKit.availabilityState {
+            case .deviceUnavailable:
                 FernletCard { EmptyState(text: "Health data is not available on this device.", systemImage: "heart.slash") }
-            } else {
+            case .integrationOff:
+                healthIntegrationOffCard
+            case .available:
                 ForEach(store.visibleHealthCapabilities) { capability in
                     healthCapabilityRow(capability)
                 }
             }
 
-            // The empty state above already says the device has no Health data; repeating the
-            // service's own copy of that sentence underneath it read as a glitch.
-            if !healthKit.statusMessage.isEmpty && healthKit.snapshot.isAvailable {
+            // The cards above already explain both unavailable states; repeating the service's own
+            // copy of that sentence underneath them read as a glitch.
+            if !healthKit.statusMessage.isEmpty && healthKit.availabilityState == .available {
                 Text(healthKit.statusMessage)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+            }
+        }
+    }
+
+    /// The integration-off state: the device can do Health, but the master toggle is off — where
+    /// every fresh install starts, since the toggle defaults to off. Names the real cause and
+    /// routes to Privacy & Data through the same value-based `.privacyData` destination the hub
+    /// links push; the toggle itself stays on that screen with its consent copy and audit logging.
+    private var healthIntegrationOffCard: some View {
+        FernletCard {
+            VStack(spacing: 12) {
+                EmptyState(text: "Health is switched off for Fernlet.", systemImage: "heart.slash")
+                NavigationLink(value: SettingsRoute.privacyData) {
+                    Label("Turn on Health in Privacy & Data", systemImage: "heart.text.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.onMoss)
+                .padding(.vertical, 11)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
             }
         }
     }

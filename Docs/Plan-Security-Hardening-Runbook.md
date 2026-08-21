@@ -23,7 +23,7 @@
 >   restored *and* the delete-everything teardown is silently incomplete.
 > - **P8:** the capture-protection spec's §7 **manual device matrix** has never been walked on real
 >   hardware, and three follow-ups (§9#1, §9#5, §9#6) were surfaced and deliberately not built.
-> - **P5 (§14, defaulted out):** the plaintext friend-wall index `MeshPhotoCache.json` is still unsealed.
+> - **P5 (§14, defaulted out):** the plaintext friend-wall index `MeshPhotoCache.json` is still unsealed. *(Closed 2026-08-20: the index is now GCM-sealed as `MeshPhotoCache.sealed` with one-way migration.)*
 
 Execution controller for the two-track security-hardening plan. A `/loop` run read this file
 each iteration, executed **one eligible phase** end to end (implement → adversarial review → fix →
@@ -61,7 +61,7 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
 | P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | DONE | 2faf53e — owner deployed formatVersion/keySalt to the production CloudKit schema 2026-08-11 ✔ |
 | P3 | Backup coverage — Journal + Intimacy | Opus | P2 | auto | DONE | 4ed7437 |
 | P4 | Hardening #1 — hard SE-binding (deletes scrypt fallback) | Opus | P3 | **OWNER GO/NO-GO** | DONE | 9f9af1b — owner GO 2026-08-11 ("no real users yet"); §14 residuals accepted (SE wraps the RAW key; current disclosure copy). CI Apple-silicon pinning declined as N/A (solo dev, M5-only). |
-| P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | DONE | 9388aec — OWNER ACTION: promote `SealedPhotoRecord` (queryable) to the Production CloudKit schema before shipping with the photo-backup toggle reachable (Docs/CloudKit-Schema-Deploy.md). Follow-up surfaced (§14, defaulted OUT): seal the plaintext friend-wall index `MeshPhotoCache.json`. |
+| P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | DONE | 9388aec — OWNER ACTION: promote `SealedPhotoRecord` (queryable) to the Production CloudKit schema before shipping with the photo-backup toggle reachable (Docs/CloudKit-Schema-Deploy.md). Follow-up surfaced (§14, defaulted OUT): seal the plaintext friend-wall index `MeshPhotoCache.json` — done 2026-08-20 (`MeshPhotoCache.sealed`). |
 | P6 | Hardening #6 — default-on backup exclusion | Fable | P4 | auto | DONE | 4a853d4 |
 | P7 | Duress PIN — decoy, silent-wipe, recovery-lock | Opus | P0a, P1a, P4 | auto | DONE | d43bbce |
 | P8 | Capture protection — Tiers 1+2 on the Private tab | Fable | — | auto | DONE | 2e6cadb — six agreed surfaces only; follow-ups surfaced, NOT built: §9#1 lookingBackCard (lean: modifier on the card), §9#6 First Aid worry composer (lean: protect `WorryEntryView` where hosted), §9#5 progress-photo `redactForSnapshot` consolidation. Manual device matrix (spec §7) still owed before ship. Spec is [`Design-Capture-Protection-2026-08-10.md`](Design-Capture-Protection-2026-08-10.md) — see §"P8 is queued here, not ranked here" below |

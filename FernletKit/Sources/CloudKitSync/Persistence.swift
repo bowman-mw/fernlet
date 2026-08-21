@@ -12,6 +12,17 @@ import Foundation
 import Observation
 import FernletDomainModel
 
+/// Why ``PersistenceController/compactStoreAfterWipe()`` declined to run.
+///
+/// Not user-presentable: the wipe funnel turns it into the generic "leftover traces in your local
+/// records" line, because the ROWS are already gone by the time this leg runs and only the file's
+/// residue pass is affected.
+public enum StoreCompactionError: Error {
+    /// Another container reload was already in flight. Two concurrent reloads swap the live
+    /// container out from under each other, so the compaction refuses rather than racing one.
+    case reloadInFlight
+}
+
 /// User-presentable failure for when the primary Core Data store cannot be opened.
 ///
 /// Thrown by the app-side startup flow when ``PersistenceController`` reports `didFailToLoad`;
@@ -174,16 +185,32 @@ nonisolated public final class PersistenceController {
         #endif
     }
 
+    /// The ordinary reload — every caller outside the wipe funnel. Forwards without compaction.
+    ///
+    /// Kept as a distinct overload (not a default on `compacting:`) because a defaulted extra
+    /// parameter cannot witness a protocol requirement: the app target's
+    /// `PrivacyPersistenceReloading` conformance resolves against exactly this signature.
+    @MainActor
+    public func reload(with preferences: StoragePreferences) async throws {
+        try await reload(with: preferences, compacting: false)
+    }
+
     /// Rebuilds the whole stack under new preferences (the sync-toggle path): saves and resets
     /// the old view context, loads a fresh container, swaps it in, detaches the old stores, and
     /// notifies subscribers via a synthesized remote-change event.
     ///
+    /// - Parameters:
+    ///   - preferences: the preferences the fresh container is configured from.
+    ///   - compacting: one-shot SQLite compaction for ``compactStoreAfterWipe()`` — see that
+    ///     method and ``configure(_:inMemory:preferences:storeURL:iCloudAvailabilityOverride:compacting:)``.
+    ///     Never set by the ordinary sync-toggle path (use ``reload(with:)``).
     /// - Throws: the store-load error when the new container cannot load (the old container has
     ///   already been locked; `didFailToLoad` is not set by a failed reload).
     @MainActor
-    public func reload(with preferences: StoragePreferences) async throws {
+    public func reload(with preferences: StoragePreferences, compacting: Bool) async throws {
         FernletAuditLog.log("persistence.reload.started", context: [
-            "iCloudSync": preferences.iCloudSyncEnabled ? "enabled" : "disabled"
+            "iCloudSync": preferences.iCloudSyncEnabled ? "enabled" : "disabled",
+            "compacting": compacting ? "true" : "false"
         ])
         let start = Date()
         isReloading = true
@@ -204,7 +231,8 @@ nonisolated public final class PersistenceController {
                 inMemory: inMemory,
                 preferences: preferences,
                 storeURL: reloadStoreURL,
-                iCloudAvailabilityOverride: iCloudAvailabilityOverride
+                iCloudAvailabilityOverride: iCloudAvailabilityOverride,
+                compacting: compacting
             )
             try await Self.loadPersistentStoresAsync(
                 for: configuration.container,
@@ -233,6 +261,64 @@ nonisolated public final class PersistenceController {
         }
     }
 
+    /// Removes the deleted-row residue from the synced store's FILE, after "delete everything" has
+    /// dropped every row from it. The main-store counterpart of
+    /// `PrivatePersistenceController.rebuildStore()`, and deliberately **not** the same mechanism.
+    ///
+    /// Why not a destroy-and-re-add. The sealed store is local-only, so destroying its file loses
+    /// nothing but the file. This store is mirrored by `NSPersistentCloudKitContainer`, and the
+    /// mirror's export queue is *persistent history inside this very file*: at the moment the wipe
+    /// finishes, the deletes it just made may not have reached the server yet. Destroying the file
+    /// would throw that queue away — the server copy would survive with nothing left able to
+    /// address it, and the fresh, empty store would then IMPORT it all back down. A wipe that
+    /// resurrects the data is far worse than the residue this method exists to remove, so a destroy
+    /// is banned here, not merely avoided.
+    ///
+    /// What it does instead, both through the ordinary reload path so the CloudKit mirror is
+    /// re-established by a real `loadPersistentStores` (a hand-rolled `addPersistentStore` would
+    /// leave sync silently dead for the session):
+    /// 1. `journal_mode=DELETE` checkpoints the `-wal` into the database file and removes it. In WAL
+    ///    mode the main file still holds the PRE-delete page images, so this is the step that makes
+    ///    the file itself reflect the deletes.
+    /// 2. `NSSQLiteManualVacuumOption` then rebuilds the file, so the freed pages carrying those old
+    ///    row images are not copied forward. VACUUM preserves logical content — rows, persistent
+    ///    history, and the mirror's metadata all survive it, which is exactly why it is safe here.
+    ///
+    /// A second reload restores WAL journalling for the rest of the session.
+    ///
+    /// - Important: honest limits, same as the sealed rebuild — this removes the *logical* residue.
+    ///   It cannot promise the underlying flash blocks are gone (APFS copy-on-write and
+    ///   wear-levelling), and it does not vacuum the app-group or sealed stores, which have their
+    ///   own legs. Rows still queued for export are preserved on purpose, so a wiped device that is
+    ///   offline finishes deleting the server copy when it next has a network.
+    /// - Throws: ``StoreCompactionError/reloadInFlight``, or the load error from the compaction
+    ///   reload. The container is only swapped on success, so a throw leaves the app on its old,
+    ///   working store with the rows already gone — the caller reports it rather than the wipe
+    ///   claiming residue it did not remove.
+    @MainActor
+    public func compactStoreAfterWipe() async throws {
+        // An in-memory (`/dev/null`) store has no file and no residue; tests take this path.
+        guard !inMemory else { return }
+        // Never a second concurrent reload: two of them swap `container` out from under each other
+        // and can leave two coordinators over one file. The wipe funnel orders this leg BEFORE the
+        // preference reset precisely so the app's own preference-driven reload cannot be in flight
+        // here; this guard is what makes any other arrival safe rather than corrupting.
+        guard !isReloading else { throw StoreCompactionError.reloadInFlight }
+        let preferences = StoragePreferencesStore.currentPreferences()
+        try await reload(with: preferences, compacting: true)
+        do {
+            try await reload(with: preferences)
+        } catch {
+            // The compaction landed — the residue is gone. All that failed is the return to WAL
+            // journalling, which costs write throughput until the next launch re-loads normally.
+            // Named rather than discarded (R7), but NOT rethrown: failing the wipe here would
+            // report a privacy failure that did not happen.
+            FernletAuditLog.log("persistence.compact.journalRestoreFailed", context: [
+                "errorType": "\(type(of: error))"
+            ])
+        }
+    }
+
     /// The live container's first (only) store description.
     public var activeStoreDescription: NSPersistentStoreDescription? {
         container.persistentStoreDescriptions.first
@@ -247,7 +333,8 @@ nonisolated public final class PersistenceController {
         inMemory: Bool,
         preferences: StoragePreferences,
         storeURL: URL?,
-        iCloudAvailabilityOverride: Bool? = nil
+        iCloudAvailabilityOverride: Bool? = nil,
+        compacting: Bool = false
     ) -> (container: NSPersistentContainer, storeDescription: NSPersistentStoreDescription) {
         // Use plain NSPersistentContainer for in-memory stores — NSPersistentCloudKitContainer
         // dispatches its loadPersistentStores completion via the main actor on iOS 26+, which
@@ -256,23 +343,34 @@ nonisolated public final class PersistenceController {
             ? NSPersistentContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
             : NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
         let storeDescription = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
-        configure(storeDescription, inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride)
+        configure(storeDescription, inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride, compacting: compacting)
         container.persistentStoreDescriptions = [storeDescription]
         return (container, storeDescription)
     }
 
+    /// - Parameter compacting: adds the one-shot SQLite options ``compactStoreAfterWipe()`` needs.
+    ///   Both are applied while the store is being added and neither survives the load, so the
+    ///   ordinary path is unaffected.
     private static func configure(
         _ storeDescription: NSPersistentStoreDescription,
         inMemory: Bool,
         preferences: StoragePreferences,
         storeURL: URL?,
-        iCloudAvailabilityOverride: Bool? = nil
+        iCloudAvailabilityOverride: Bool? = nil,
+        compacting: Bool = false
     ) {
         storeDescription.setOption(FileProtectionType.complete as NSString, forKey: NSPersistentStoreFileProtectionKey)
         storeDescription.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
         storeDescription.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
         storeDescription.shouldMigrateStoreAutomatically = true
         storeDescription.shouldInferMappingModelAutomatically = true
+        if compacting {
+            // Order matters and is why both ride the SAME load: the pragma is applied when the
+            // connection opens (checkpointing the `-wal` into the file and removing it), so the
+            // vacuum that follows rebuilds a file that already reflects the deletes.
+            storeDescription.setOption(["journal_mode": "DELETE"] as NSDictionary, forKey: NSSQLitePragmasOption)
+            storeDescription.setOption(true as NSNumber, forKey: NSSQLiteManualVacuumOption)
+        }
 
         if inMemory {
             storeDescription.url = URL(fileURLWithPath: "/dev/null")

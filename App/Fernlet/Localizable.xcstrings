@@ -524,6 +524,9 @@
     "AI" : {
 
     },
+    "AI activity log" : {
+
+    },
     "Accept" : {
 
     },
@@ -679,6 +682,9 @@
     "Analyzing your photo" : {
 
     },
+    "Anthropic, with your own key" : {
+
+    },
     "Anyone you're with right now can ask to join. It stays on your devices — nothing is uploaded." : {
 
     },
@@ -713,6 +719,9 @@
 
     },
     "Apple Health sync is on" : {
+
+    },
+    "Apple Private Cloud Compute" : {
 
     },
     "Approve workout" : {
@@ -767,6 +776,9 @@
 
     },
     "Begin again" : {
+
+    },
+    "Best: %@" : {
 
     },
     "Block" : {
@@ -827,6 +839,9 @@
 
     },
     "C %lldg" : {
+
+    },
+    "Calls" : {
 
     },
     "Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split." : {
@@ -959,6 +974,12 @@
 
     },
     "Color" : {
+
+    },
+    "Companion thought" : {
+
+    },
+    "Completed" : {
 
     },
     "Conditioning / mobility — walked as a single step, no rest timer." : {
@@ -1175,6 +1196,9 @@
     "Day 1 lands here; the rest follow day by day." : {
 
     },
+    "Day summary" : {
+
+    },
     "Days per week" : {
 
     },
@@ -1188,6 +1212,9 @@
 
     },
     "Decline all" : {
+
+    },
+    "Declined by the model" : {
 
     },
     "Delete" : {
@@ -1311,6 +1338,9 @@
 
     },
     "Duress password" : {
+
+    },
+    "Each exercise as logged, most recent first." : {
 
     },
     "Easy" : {
@@ -1449,6 +1479,9 @@
     "Events" : {
 
     },
+    "Every AI call this device has made, newest first." : {
+
+    },
     "Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak." : {
 
     },
@@ -1476,6 +1509,9 @@
           }
         }
       }
+    },
+    "Exercise history" : {
+
     },
     "Experience" : {
 
@@ -1541,6 +1577,9 @@
     "Fernlet couldn't seal this photo to your private timeline. Please try again." : {
 
     },
+    "Fernlet keeps the most recent %lld calls." : {
+
+    },
     "Fernlet nearby" : {
 
     },
@@ -1556,7 +1595,13 @@
     "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week." : {
 
     },
+    "Fernlet records metadata only: which feature asked, where the call went, when, how it turned out, and the names of the fields that were sent — never your words, your entries, or the model's reply." : {
+
+    },
     "Fernlet removed everything it stored on this device." : {
+
+    },
+    "Fields sent, names only: %@" : {
 
     },
     "Film remaining: %lld" : {
@@ -1587,6 +1632,9 @@
 
     },
     "Food eaten" : {
+
+    },
+    "Food match" : {
 
     },
     "For anything a report or block can't resolve, reach the developer, Michael Bowman Olay." : {
@@ -1705,6 +1753,9 @@
     "Health integration" : {
 
     },
+    "Health is switched off for Fernlet." : {
+
+    },
     "Health samples" : {
 
     },
@@ -1819,6 +1870,9 @@
     "Include picture" : {
 
     },
+    "Ingredient substitution" : {
+
+    },
     "Ingredients" : {
 
     },
@@ -1891,7 +1945,26 @@
     "Last sleep logged for today." : {
 
     },
+    "Last time: %@" : {
+
+    },
+    "Last: %@" : {
+
+    },
+    "Last: %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last: %1$@ · %2$@"
+          }
+        }
+      }
+    },
     "Leave" : {
+
+    },
+    "Left this device" : {
 
     },
     "Length" : {
@@ -1910,6 +1983,9 @@
 
     },
     "List in my shop" : {
+
+    },
+    "Loading AI activity…" : {
 
     },
     "Loading tier 2 memories…" : {
@@ -1978,7 +2054,20 @@
     "Log workout" : {
 
     },
+    "Logged %lld times · first on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged %1$lld times · first on %2$@"
+          }
+        }
+      }
+    },
     "Logged a bottle of water." : {
+
+    },
+    "Logged once" : {
 
     },
     "Looking for a barcode..." : {
@@ -2051,6 +2140,9 @@
     "Meal" : {
 
     },
+    "Meal breakdown" : {
+
+    },
     "Meal micronutrient snapshots will appear here." : {
 
     },
@@ -2067,6 +2159,9 @@
 
     },
     "Memory" : {
+
+    },
+    "Memory context: %lld characters" : {
 
     },
     "Message" : {
@@ -2097,6 +2192,9 @@
 
     },
     "Mode" : {
+
+    },
+    "Model: %@" : {
 
     },
     "Moisturizer, meds, stretch..." : {
@@ -2195,6 +2293,9 @@
     "Nicely done" : {
 
     },
+    "No AI calls have been made from this device." : {
+
+    },
     "No Fernlet iCloud records were found." : {
 
     },
@@ -2220,6 +2321,12 @@
 
     },
     "No envelopes recorded." : {
+
+    },
+    "No exercises logged yet." : {
+
+    },
+    "No fields were recorded for this call." : {
 
     },
     "No friends yet — meet up in person to add one." : {
@@ -2300,6 +2407,9 @@
     "No tier 2 memories yet. They are extracted from journals when Foundation Models are available." : {
 
     },
+    "No usable answer — Fernlet used its own logic" : {
+
+    },
     "No workouts logged" : {
 
     },
@@ -2337,6 +2447,9 @@
 
     },
     "Not ready yet" : {
+
+    },
+    "Not recorded" : {
 
     },
     "Not specified" : {
@@ -2393,6 +2506,9 @@
     "Nutrition targets" : {
 
     },
+    "Nutrition web search" : {
+
+    },
     "OK" : {
 
     },
@@ -2409,6 +2525,9 @@
 
     },
     "On-device AI helper" : {
+
+    },
+    "On-device model" : {
 
     },
     "Once more" : {
@@ -2748,6 +2867,12 @@
     "Read plan" : {
 
     },
+    "Reading a nutrition page" : {
+
+    },
+    "Reading a recipe page" : {
+
+    },
     "Reading label..." : {
 
     },
@@ -2788,6 +2913,9 @@
 
     },
     "Recipes and saved products, A–Z." : {
+
+    },
+    "Recorded by a newer version of Fernlet. Shown exactly as it was recorded, because this version has no name for it." : {
 
     },
     "Recover this phone" : {
@@ -2965,6 +3093,9 @@
 
     },
     "Restarts the timer on the current cooking step." : {
+
+    },
+    "Result" : {
 
     },
     "Resume" : {
@@ -3184,6 +3315,9 @@
 
     },
     "Send message" : {
+
+    },
+    "Sent to" : {
 
     },
     "Serving: %@" : {
@@ -3410,6 +3544,9 @@
     "Status" : {
 
     },
+    "Stayed on this device" : {
+
+    },
     "Stays sealed on this device only — worries never sync anywhere." : {
 
     },
@@ -3590,6 +3727,9 @@
     "This isn't switched on yet. Workouts you log already sync to Apple Health when you allow it under Health." : {
 
     },
+    "This log stays on this device. It is never synced to iCloud, is kept out of your device backup, and is never part of a data export. “Delete everything” erases it." : {
+
+    },
     "This name can't be used in your shop. Rename it in the editor, then list it again. (Private items can be named anything.)" : {
 
     },
@@ -3609,6 +3749,9 @@
 
     },
     "This tunes suggestions without locking you into rules." : {
+
+    },
+    "This version can't say where this went" : {
 
     },
     "This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else." : {
@@ -3680,6 +3823,9 @@
     "Turn on" : {
 
     },
+    "Turn on Health in Privacy & Data" : {
+
+    },
     "Turn on Nearby Friends to send hearts" : {
 
     },
@@ -3732,6 +3878,9 @@
 
     },
     "Unlock to view" : {
+
+    },
+    "Unusable answer — discarded" : {
 
     },
     "Update plan" : {
@@ -3794,6 +3943,9 @@
     "Web nutrition lookup" : {
 
     },
+    "Web nutrition search" : {
+
+    },
     "Weight" : {
 
     },
@@ -3816,6 +3968,9 @@
 
     },
     "What should we call it?" : {
+
+    },
+    "What this is" : {
 
     },
     "What to do" : {
@@ -3883,6 +4038,9 @@
 
     },
     "Workout" : {
+
+    },
+    "Workout adjustment" : {
 
     },
     "Workout exercises" : {
@@ -4052,6 +4210,9 @@
 
     },
     "Your notes come back under this new passcode. Biometric unlock is off until you turn it on again." : {
+
+    },
+    "Your own provider endpoint" : {
 
     },
     "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later." : {

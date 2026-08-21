@@ -4,10 +4,13 @@
 // The persistence contract for the milestone (cumulative achievements) ledger — its own per-row
 // store beside the coin ledger, union-merging across devices instead of last-writer-wins. The
 // Core Data + iCloud implementation lives in `CloudKitSync`. Mirrors `CoinLedgerRepositoring` with
-// one deliberate difference: there is NO delete API at all. Milestone rows are lifetime memories of
-// care and survive `FernletStore.resetAll` by design — the contract makes that structural rather
-// than a call-site convention. (The rows carry no content, only kind + day of a counted event;
-// that metadata retention is the accepted cost of "your history of showing up can't be lost".)
+// one deliberate difference: this contract carries NO delete API. The one row delete —
+// `deleteAll()`, added 2026-08-20 when "delete everything" stopped keeping the milestone trail
+// (reversing the earlier survive-a-reset product rule) — lives only on the concrete CloudKitSync
+// conformer, so the app's deletion funnel, which narrows to that type, is the only caller that can
+// remove rows; every protocol-typed caller stays append-only, structurally. (The rows carry no
+// content, only kind + day of a counted event — a dated metadata trail of the very content the
+// wipe destroys, which is why the wipe now clears it.)
 
 import Foundation
 import FernletDomainModel
@@ -16,10 +19,12 @@ import FernletDomainModel
 ///
 /// Sits beside the coin ledger as its own union-merging row store — ``append(_:)`` upserts by `id` and
 /// never deletes rows it didn't receive — with one deliberate difference from
-/// ``CoinLedgerRepositoring``: there is NO delete API at all. Milestone rows are lifetime memories of
-/// care and survive `FernletStore.resetAll` by design; the contract makes that structural rather than
-/// a call-site convention. The rows carry no content, only the kind and day of a counted event — that
-/// metadata retention is the accepted cost of "your history of showing up can't be lost". The Core
+/// ``CoinLedgerRepositoring``: this contract carries NO delete API. The one row delete, `deleteAll()`,
+/// lives only on the concrete conformer (added 2026-08-20, when `FernletStore.resetAll` started
+/// clearing the ledger — reversing the earlier "milestone rows survive a reset" product rule), so
+/// only the deletion funnel's `as?` narrowing can reach it and protocol-typed callers stay
+/// append-only, structurally. The rows carry no content, only the kind and day of a counted event —
+/// a dated metadata trail of the content the wipe destroys. The Core
 /// Data + iCloud conformer is `MilestoneLedgerRepository` (in `CloudKitSync`);
 /// `MilestoneLedgerService` (in `StoreCore`) computes lifetime counts over the loaded rows. `@MainActor`.
 @MainActor

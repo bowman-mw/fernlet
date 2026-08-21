@@ -54,6 +54,17 @@ public struct MealPhotoStore {
     /// Refuse to even downscale a source whose dimensions are absurd (OOM guard), matching
     /// `PrivateMediaStore`. The user's own camera photos are far below this.
     private static let maxSourcePixelDimension = 20_000
+    /// AREA clause of the same OOM guard. Per-dimension bounds alone admit a declared
+    /// 20,000 × 20,000 source — 400 MP, ~1.6 GB decoded, yet a few hundred KB on the wire as a
+    /// solid-colour PNG, and PNG has no reduced-size decode so even the thumbnail path in
+    /// ``normalizedJPEG(from:)`` materialises the full bitmap. Reachable with attacker-declared
+    /// dimensions via a shared recipe's web image (`FernletStore.saveRecipePhoto(data:for:)`).
+    /// Deliberately looser than `PrivateMediaStore`'s 24 MP peer gate: this store also takes the
+    /// user's OWN camera/library picks — 24 MP default iPhone output (5712 × 4284 ≈ 24.5 MP),
+    /// 48 MP HEIC, ~63 MP panoramas — which must stay bounded-then-downscaled, never rejected
+    /// (see the type doc). 80 MP clears every real photo while capping the worst transient
+    /// decode near ~320 MB.
+    private static let maxSourcePixelCount = 80_000_000
     /// R5: byte cap on anything entering this store. Photos now arrive from a library picker and from
     /// an escrow restore, not only from the camera, so the incoming BYTE count is validated before
     /// ImageIO is asked to look at it — mirroring `PrivateMediaStore.maxIncomingPhotoBytes`.
@@ -99,7 +110,8 @@ public struct MealPhotoStore {
     }
 
     /// Normalizes, seals and stores `data`, returning the new id. Returns nil — writing NOTHING — when
-    /// the bytes aren't a decodable image or no encryption key is available: a photo is dropped rather
+    /// the bytes aren't a decodable image within the source pixel caps (dimension AND area — the
+    /// decompression-bomb gate) or no encryption key is available: a photo is dropped rather
     /// than persisted in the clear (fail-closed, as with the sealed peer store).
     public func save(_ data: Data) -> UUID? {
         guard data.count <= Self.maxIncomingPhotoBytes else { return nil }
@@ -115,7 +127,9 @@ public struct MealPhotoStore {
     /// like `save`: writes nothing on non-image bytes or no key.
     ///
     /// R7: not `@discardableResult` — the `Bool` IS the success/failure signal (false means NOTHING
-    /// was written), so every caller must act on it.
+    /// was written), so every caller must act on it. This id-keyed overload is the recipe web-image
+    /// sink, so the bytes can carry ATTACKER-declared dimensions from a shared link's page — the
+    /// same source-cap gate (dimension AND area) applies inside the normalize funnel.
     public func save(_ data: Data, forID id: UUID) -> Bool {
         guard data.count <= Self.maxIncomingPhotoBytes else { return false }
         guard let normalized = Self.normalizedJPEG(from: data) else { return false }
@@ -325,16 +339,19 @@ public struct MealPhotoStore {
     // MARK: - Normalization
 
     /// Downscales `data` so its longest side is at most `maxStoredPixelSize` and re-encodes it as a
-    /// JPEG, using ImageIO's thumbnail path so the full-resolution bitmap is never materialised (the
-    /// bomb-safe decode). Returns nil for non-image or absurdly-dimensioned input. Images already
-    /// within the cap are re-encoded at their native size (never upscaled).
+    /// JPEG via ImageIO's thumbnail path. That path decodes JPEG at reduced size, but formats with
+    /// no reduced-size decode (PNG) materialise the FULL source bitmap first — which is why the
+    /// guard below enforces the per-dimension AND total-area caps on the DECLARED size before
+    /// ImageIO decodes any pixels. Returns nil for non-image or absurdly-dimensioned input. Images
+    /// already within the cap are re-encoded at their native size (never upscaled).
     static func normalizedJPEG(from data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
             let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
             let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
             guard width > 0, height > 0,
-                  width <= maxSourcePixelDimension, height <= maxSourcePixelDimension else { return nil }
+                  width <= maxSourcePixelDimension, height <= maxSourcePixelDimension,
+                  width * height <= maxSourcePixelCount else { return nil }
         } else {
             return nil
         }

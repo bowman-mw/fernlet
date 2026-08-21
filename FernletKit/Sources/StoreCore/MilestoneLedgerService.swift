@@ -4,11 +4,16 @@ import FernletPersistence
 import FernletDomainModel
 
 /// Owns the milestone (cumulative achievements) ledger in memory and persists it to its own
-/// per-row store — a direct mirror of ``CoinLedgerService``'s debounced append-only shape, minus any
-/// reset: milestone rows are lifetime memories of care and deliberately survive
-/// `FernletStore.resetAll` (the repository protocol has no delete; see
-/// `MilestoneLedgerRepositoring`). Lifetime counts are distinct-row counts over the union-merged
-/// rows (`MilestoneEconomy`), so they are monotonic and sync-safe across devices.
+/// per-row store — a direct mirror of ``CoinLedgerService``'s debounced append-only shape, down to
+/// the reset: ``reset(deletingRowsWith:)`` empties the ledger on "delete everything", because the
+/// rows are a dated record that journal entries and Worry Box releases HAPPENED, kept in Core Data
+/// and mirrored into the user's CloudKit private database — metadata about the very content the
+/// wipe destroys. Lifetime counts are distinct-row counts over the union-merged rows
+/// (`MilestoneEconomy`), so between resets they are monotonic and sync-safe across devices.
+///
+/// One deliberate difference from the coin ledger: there is no reset-boundary marker (the milestone
+/// row vocabulary has no such kind), so rows still held by another signed-in device can sync back
+/// after a wipe. That is the same residual every per-row store except the coin ledger carries.
 ///
 /// Collaborators: the injected `MilestoneLedgerRepositoring` store (concretely CloudKitSync's
 /// `MilestoneLedgerRepository`, behind the FernletPersistence protocol) and `FernletStore`, which
@@ -34,6 +39,15 @@ public final class MilestoneLedgerService {
         self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
         self.entries = initialEntries
     }
+
+    /// The store this service persists through, exposed read-only for exactly one caller: the app's
+    /// single deletion funnel, which narrows it to the concrete CloudKit conformer to reach
+    /// `deleteAll()` and hands that call to ``reset(deletingRowsWith:)``. The row delete is not on
+    /// `MilestoneLedgerRepositoring`, and this module has no dependency edge to CloudKitSync, so the
+    /// narrowing can only happen app-side (the same `as?` the app already uses to reach
+    /// `CoreDataFernletRepository`'s async loader). Nothing else should write through it — every
+    /// mutation belongs to this service, which owns the pending-append queue.
+    public var persistedStore: any MilestoneLedgerRepositoring { repository }
 
     // MARK: - Derived counts
 
@@ -81,6 +95,29 @@ public final class MilestoneLedgerService {
             added = true
         }
         if added { buffer.scheduleSave() }
+    }
+
+    // MARK: - Reset
+
+    /// Empties the ledger for "delete everything": the in-memory rows, the pending-append queue, and
+    /// the persisted rows `deleteRows` removes.
+    ///
+    /// The deleter is passed in rather than taken from ``persistedStore`` because the row delete
+    /// lives on the concrete CloudKit conformer and this module cannot name it; the funnel narrows
+    /// the store and supplies the call. A `deleteRows` that cannot reach the rows must return
+    /// `false` — a wipe that could not delete them has to say so.
+    ///
+    /// Ordering is why this is one method and not two calls: the pending queue is dropped BEFORE the
+    /// stored rows, so a queued row can never be flushed back on top of a just-emptied store.
+    ///
+    /// - Returns: whether the persisted rows were confirmed deleted. Threaded back (R7, exactly like
+    ///   ``CoinLedgerService/reset()``) so the funnel can report a milestone trail it failed to
+    ///   remove instead of claiming a complete wipe. The in-memory ledger is emptied either way —
+    ///   a failed delete leaves rows on disk, not counts on screen.
+    public func reset(deletingRowsWith deleteRows: @MainActor () -> Bool) -> Bool {
+        entries = []
+        buffer.clear()
+        return deleteRows()
     }
 
     // MARK: - Flush

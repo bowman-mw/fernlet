@@ -54,10 +54,9 @@ never once been done.
   the real entitlements have been exercised nowhere. Highest information per hour on this list —
   and it settles the entitlement item below. Now a per-release checklist item in
   [`Release-Process.md`](Release-Process.md) §2.
-- **`TARGETED_DEVICE_FAMILY = "1"`.** The app target ships `"1,2,7"` — iPad *and* visionOS — with
-  zero iPad adaptation (one comment in the whole app target mentions iPad), while `README.md` and
-  `Site/index.html` both say "iPhone". Family 2 commits you to 13" iPad screenshots and an App
-  Review pass on an iPhone-only layout; family 7 is meaningless in an `iphoneos`-only build.
+- ✅ 2026-08-20 — **`TARGETED_DEVICE_FAMILY = "1"`** set on every configuration of all five
+  targets that carried the setting (app, widgets, share extension, both test targets); the pbxproj
+  diff touched exactly those ten lines.
 - **Entitlements.** `App/Fernlet/Fernlet.entitlements` carries `aps-environment = development`
   plus a stray macOS-only `com.apple.developer.aps-environment` key. Keep the capability —
   `NSPersistentCloudKitContainer` needs the silent-push path — but delete the macOS key and
@@ -80,28 +79,23 @@ never once been done.
 
 Ordered by what a tester hits first. The previous tracker's seven items are reconciled at the end.
 
-1. **Disposable camera "Develop → Save selected" can never succeed.**
-   `DisposableCameraView.swift:1298` hands `manager.sessionPhotos.filter { … }` straight to the
-   Photos saver, but `MeshNetworkManager.swift:2917` stores `cachedPhoto.withoutImageData()`, so
-   every payload has `imageData == nil`. The saver skips nil payloads and throws
-   `NothingSavedError`; because `finishSessionPhotos(keeping:)` runs only on success, the photos
-   are **never kept on the in-app wall either**. Two sibling call sites do it correctly
-   (`ConnectView.swift:152`, `:868`) by wrapping in `manager.hydratedPhotos(…)`. End-of-session
-   flow of a flagship social feature; logged 2026-08-04 and still open. No test covers this path.
-2. **Settings → Health tells every new user their device can't do Health.**
-   `SettingsSheet.swift:1122` renders "Health data is not available on this device" whenever
-   `healthKit.snapshot.isAvailable` is false — but that flag is *not* device capability:
-   `HealthKitService.swift:757` sets it to `isIntegrationEnabled`, and the master toggle defaults
-   to **off** and lives on a different screen. So the default state of every fresh install names
-   the wrong cause and offers no route out, on the gateway to a headline feature. Split the
-   branch: `HKHealthStore.isHealthDataAvailable()` false ⇒ the device message; integration-off ⇒
-   "Health is switched off for Fernlet" plus a control.
-3. **Recipe web-image decompression bomb.** `MealPhotoStore.swift:337` caps each dimension at
-   20,000 with no area clause, so a declared 20000×20000 (400 MP) image passes — a few hundred KB
-   on the wire, ~1.6 GB decoded. The correct predicate already exists and is tested two files
-   away (`PrivateMediaStore.isWithinSafePixelBounds`, enforcing dimension **and** pixel count) and
-   MealPhotoStore already calls it on *restore* but not on `save`. Reachable from a shared recipe
-   link via `FernletStore.swift:4126` / `:4294`.
+1. ✅ 2026-08-20 — **Disposable camera "Develop → Save selected"** now hydrates via
+   `manager.hydratedPhotos(…)` like the ConnectView siblings, and FRND-12 landed with it: **Keep**
+   is the primary action (no Photos authorization involved) with "Also save to Photos" secondary,
+   so a Photos denial can no longer cost the in-app keep. Covered by `DisposableCameraSaveTests`
+   (behavioral + source-wall). Residual: ConnectView's disconnect-review flow still uses the fused
+   flow (hydrates correctly, but the keep is still gated behind Photos authorization) — one-call-site
+   follow-up now that the sheet takes a `saveToPhotos:` parameter.
+2. ✅ 2026-08-20 — **Settings → Health** now triages by real cause (`HealthAvailabilityState`):
+   device-unavailable keeps the old message; integration-off says "Health is switched off for
+   Fernlet." with a link to Privacy & Data (the toggle stays there, with its consent copy and audit
+   logging). `HealthAvailabilityMessageTests` pins the three states.
+3. ✅ 2026-08-20 — **Recipe web-image decompression bomb** closed with an 80 MP area clause at
+   the shared `normalizedJPEG` funnel (both save paths). Deliberate deviation from reusing the
+   24 MP peer predicate: that would reject stock iPhone camera output (5712×4284 = 24.47 MP) and
+   the documented 48 MP picks. Worst hostile transient decode is now ~320 MB (bounded, same order
+   as the user's own photos) vs ~1.6 GB. `MealPhotoDecompressionBombTests` includes a genuinely
+   decodable declared-20000×20000 PNG fixture.
 4. **Reset-app-lock confirmation still uses `.confirmationDialog`.** The systemic XCUT-02 fix
    landed and five siblings were converted to `.alert`; `FernletLockGate.swift:188` was left
    behind — and it is the one whose destructive button destroys the only key to the sealed
@@ -140,18 +134,20 @@ Ordered by what a tester hits first. The previous tracker's seven items are reco
 The most expensive category in the repo: work that is done, tested, and returns nothing until a
 screen exists. All three were understated or missing in the old tracker.
 
-1. **Per-exercise progress.** `TrainerExportBuilder.swift:587` computes, per exercise: sessions,
-   total sets, first/last logged, last sets/reps/weight, best weight, and an Epley 1RM estimate.
-   Its only production consumer is the trainer export. Fernlet ships a guided runner, a Live
-   Activity, a plan approver and a logger, and cannot answer *"what did I lift last time?"* The
-   parse-and-rollup half is already covered by `CoachPlanExchangeTests.swift:349`.
-   **Highest-value unbuilt thing for an actual user.**
-2. **AI audit log screen.** The log is an actor with a file-backed sink, a 500-entry ring, an
-   `outcome` field with dispatch-then-update discipline, tolerant enum decode with parked tokens,
-   four live call sites, and delete-all wiring — and `entries` is read by nobody.
-   `AIAuditLog.swift:92` even spells out the display contract for the screen that does not exist.
-   For a privacy-first app this is the strongest available proof point: *every AI call this device
-   made, what kind, where it went, how it turned out.*
+1. ✅ 2026-08-20 — **Per-exercise progress** shipped in both increments: a factual "Last time:
+   3×8 @ 135 lb" recall line in the shared exercise row editor (WorkoutSheet / WorkoutPlanSheet /
+   QuickExerciseSheet), and an "Exercise history" Move sub-screen (recency-ordered; last / best /
+   times logged) — both driven by the one existing `rollUpExerciseHistory` implementation, no
+   re-derived parsing, factual-only per the spec constraint. `ExerciseLastTimeTests` +
+   `ExerciseHistoryScreenTests`. Residual: the recall line is not yet in GuidedWorkoutEditorSheet's
+   per-exercise cards (the API is ready: `store.exerciseHistoryEntry(named:)`).
+2. ✅ 2026-08-20 — **AI audit log screen** shipped as "AI activity log" in Settings (Privacy
+   section + settings search): every AI call, newest first — kind, destination, boundary badge,
+   outcome incl. failures, field names only. The parked-token contract is honored and PINNED by
+   test: a token recorded by a newer build renders verbatim with boundary "can't say", never the
+   privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: hub row label rides the
+   existing String-typed `hubLink` idiom (hub-wide localization fork is a separate change); screen
+   snapshots once per push (no live update while open, deliberate).
 3. **The coach proximity channel.** Trust policy, verification ceremony, sealed wire envelope and
    pre-decode DoS caps — all hardened, all referenced only by tests. See §5.
 
@@ -163,22 +159,42 @@ A four-track audit on 2026-08-20 enumerated every persisted surface and checked 
 wipe funnel. **~20 surfaces are not cleared**, five seriously. The full, verified list with fixes is
 Part 4 of [`Next-Round-Prompt-2026-08-20.md`](Next-Round-Prompt-2026-08-20.md); the headline items:
 
-1. `fernlet.healthkit.requested-capabilities` survives as a **plaintext** record that the user
-   enabled **intimate logging** and cycle tracking. Content gone, the fact of use not — and it
-   survives turning Health off, too.
-2. The pre-database `LegacyKeys` corpus holds **unsealed journal text**, and the wipe does not merely
-   leave it: the next launch treats the emptied store as a first launch and **re-imports** it. Only
-   affects installs carrying those keys, but this repo has fixed resurrection-after-wipe once before.
-3. The "delete from Apple Health" option is offered only when the Health master toggle is **on**, so
-   the most privacy-conscious user cannot remove the sexual-activity and cycle samples Fernlet wrote.
+1. ✅ 2026-08-20 — `fernlet.healthkit.requested-capabilities` is now `HealthCapabilityRequestLedger`,
+   a device-only keychain row (never rides a backup, not `defaults read`-able), with a one-shot drain
+   of the legacy plaintext key; cleared by the wipe funnel **and** by `disableIntegration()`.
+2. ✅ 2026-08-20 — `purgeAllPersistedData()` now clears the whole `LegacyKeys` corpus (all six fixed
+   families plus every `fernlet-day-*` row), so the wipe removes the unsealed JSON and the next
+   launch has nothing to re-import. `LegacyKeysPurgeTests` pins the no-resurrection property.
+3. ✅ 2026-08-20 — the Health-deletion offer now keys off "has Fernlet ever been prompted for a
+   write-capable Health capability" (the persisted ledger from item 1), not the master toggle, and
+   `deleteAllAuthoredSamples()` was verified ungated. Toggle-off users get the offer and honest copy.
 4. Sealed photos are torn down by enumerating `SealedPhotoRecord` — the type still unpromoted in the
-   Production CloudKit schema (§1). Skipping that owner action does not just break restore; it makes
-   the wipe incomplete.
-5. `SavedRecipes.json`, a plaintext pre-migration recipe file, is never cleared.
+   Production CloudKit schema (§1). **Still open, owner action** (console-only; preflight in
+   `Release-Process.md` §2 and `CloudKit-Schema-Deploy.md` both verified in place 2026-08-20).
+5. ✅ 2026-08-20 — `SavedRecipes.json` gained a delete with a real failure signal, called from
+   `resetAll`.
 
-The reason these accumulated is structural: `PrivacyWipeCoverageTests` only checks correspondence
-between three human-written artifacts and has no discovery, so a surface nobody wrote down is
-invisible to it. Part 4.4 specifies the wall that closes it.
+Also landed 2026-08-20 from the same audit's §4.2/§4.3 list: workout tombstone ring cleared (the
+over-reach question was resolved: no funnel over-reach, but a surviving unconfirmed tombstone could
+delete a kept Health sample on re-enable — the ring is now cleared), Recent-activity chips,
+moderation **peer** bans (self-ban kept per the 2026-07-17 decision), the milestone ledger
+(local + CloudKit, reversing the survive-by-design rule), the sealed friend photo-wall **index**
+(now GCM-sealed under the wall key, with plaintext migration), `FernletPeerID.archive` (cleared with
+identity rotation), companion petting state (the clear is no longer DEBUG-only), an unconditional
+legacy direct-CloudKit sweep (previously gated on sync-off + kept-copy), and a main-store
+checkpoint+vacuum residue pass (destroy is deliberately banned for the CloudKit-backed store; the
+weaker guarantee is documented in `PrivacyWipeCoverage.md`).
+
+✅ 2026-08-20/21 — the structural cause is closed: `PersistedSurfaceWipeBoundaryTests` now
+DISCOVERS every UserDefaults-backed surface from source (accessor-anchored incl. receiver-checked
+KVC `setValue`, `@AppStorage`, symbolic/interpolated key resolution, DEBUG stripped on both sides,
+unresolvable keys become declared seams — never dropped) and requires each of the 52 discovered
+surfaces to carry a `cleared`/`kept`/`unreachableByDesign`/`openGap` disposition, with cleared
+tokens bound to their key through the coverage doc's table. Built adversarially: 4 attacker agents
+produced 49 evasions; ~20 folded classes confirmed and fixed with planted fixtures (incl. two live
+findings: a compound `#if DEBUG &&` the stripper missed, and an unregistered internal wipe leg),
+6 documented as the honest ceiling in `PrivacyWipeCoverage.md`. Floors: ≥350 files, ≥52 surfaces,
+16 always-rediscovered known keys. `DeleteAllDataTests` remains the behavioural complement.
 
 ---
 
@@ -197,10 +213,11 @@ four independent mechanical walls, and near-zero dead code. Weak in two places t
 2. **CI never runs the test suite** — only the seven boundary suites gate a push, by a decision
    (`Release-Process.md` §1) that made sense when CI was fragile and stopped making sense at eight
    commits a day. The pre-push hook builds but runs no tests. ~5-line workflow diff.
-3. **CODEOWNERS is stale after the repo restructure** — 11 of 26 paths match nothing, including
-   *all seven* wall/crypto test files, which now live under `Tests/`. `Release-Process.md` and
-   `KeyCustodyBoundaryTests.swift:197` both assert a protection that is currently false. Fifteen
-   minutes, plus a check that every CODEOWNERS path resolves so the next restructure fails loudly.
+3. ✅ 2026-08-20 — **CODEOWNERS repaired**: the 11 stale pre-restructure paths fixed, the three
+   never-added wall tests plus the Power-of-10 scanner/allowlist added, and
+   `CodeOwnersResolutionTests` now fails loudly if any pattern stops resolving (anchored/trailing-slash
+   semantics modeled; globs rejected; required-pattern floor set). `Release-Process.md` §1 and the
+   `KeyCustodyBoundaryTests` tripwire comment are true again.
 4. Two-device sync has no integration test. Don't build an automated two-device suite — run a
    scripted manual smoke on TestFlight instead (log on A → confirm on B → conflicting same-day
    edits → delete-all on A → confirm B).

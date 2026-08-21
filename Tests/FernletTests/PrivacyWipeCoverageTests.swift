@@ -7,11 +7,19 @@
 // a new store without wiring + documenting it, fails here. To add a store: add its wipe call in
 // `FernletStore.deleteAllData`, a row in the doc, and its token here — same commit.
 //
-// The scan is bounded to the BODIES of `deleteAllData` and `resetAll` (its one delegated leg), with
-// comments stripped. It used to scan the whole 4,000-line `FernletStore.swift`, which meant a row
-// could be satisfied by the same call spelled in an unrelated function — deleting
-// `clothingShop.clearAll()` from the wipe kept the suite green because
-// `setAllowNearbyClothingShares` also calls it. Bounded, that deletion fails.
+// The scan is bounded to the BODIES of the funnel and its numbered legs, with comments stripped. It
+// used to scan the whole 4,000-line `FernletStore.swift`, which meant a row could be satisfied by
+// the same call spelled in an unrelated function — deleting `clothingShop.clearAll()` from the wipe
+// kept the suite green because `setAllowNearbyClothingShares` also calls it. Bounded, that deletion
+// fails.
+//
+// 2026-08-20 — the scan gained two properties it was missing:
+//   • It also covers `ContentView.attachDeleteAllHooks` / `attachCloudDeleteAllHooks`. Several real
+//     clears live inside those hook closures, and a `FernletStore`-only scan could not see a hook
+//     that stopped being wired.
+//   • `everyPrivateWipeHelperIsRegistered` closes the evasion the bounding itself created: only
+//     REGISTERED bodies are scanned, so a banned call moved into a new, unregistered private leg
+//     was invisible. Every private helper the wipe path calls must now be registered.
 //
 // VERIFY-BATCH NOTE: this file declares THREE top-level suites — `PrivacyWipeCoverageTests`
 // (the source scan above), `PrivacyWipeMediaKeySurvivalTests`, and
@@ -34,7 +42,12 @@ struct PrivacyWipeCoverageTests {
 
     /// One token per row of the doc's "Cleared by Delete everything" table. Tokens are call-site
     /// spellings inside the bodies of `FernletStore.deleteAllData` and `resetAll`.
-    private static let wipeManifest: [String] = [
+    ///
+    /// Internal, not private, because it is **shared with `PersistedSurfaceWipeBoundaryTests`** (Part
+    /// 4.4): a `.cleared` disposition over there must name a token this manifest already enforces, so
+    /// the discovery wall can never certify a clear that this wall does not also pin. Read-only from
+    /// there — the widening is access only, no behaviour change.
+    static let wipeManifest: [String] = [
         // Pending work & cloud
         "snapshotSaveCoordinator.cancelPending",
         "setSealedBackupEnabled",
@@ -48,6 +61,16 @@ struct PrivacyWipeCoverageTests {
         // manifest does not name is a backup "delete everything" would leave in iCloud.
         "deleteOwnPhotoEscrowBackups",
         "cloudCopyDeleteHook",
+        // The LEGACY direct-CloudKit records (2026-08-20). Its own token, and unconditional in the
+        // funnel, because neither cloud leg above reaches it: `cloudCopyDeleteHook` runs only on
+        // "stop syncing, keep the copy", and a live sync deletes the server copy by PROPAGATING the
+        // local row deletes — which `NSPersistentCloudKitContainer` can do only for the `CD_`-prefixed
+        // types it wrote. A bare-named record has no local row to propagate from.
+        "legacyCloudRecordDeleteHook",
+        // …and the service call the hook is wired to, pinned through the ContentView half of the
+        // scan (see `wipePathSource`): the hook alone would stay green if `attachCloudDeleteAllHooks`
+        // stopped wiring it.
+        "deleteLegacyDirectCloudKitRecords",
         // Sealed narratives + buffers
         "periodDataDeleteHook",
         "intimacyDataDeleteHook",
@@ -56,6 +79,13 @@ struct PrivacyWipeCoverageTests {
         // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
         // destroys and re-creates the FILE they lived in.
         "sealedStoreRebuildHook",
+        // The same residue pass for the MAIN (synced) store, added 2026-08-20 — until then the day
+        // rows were row-deleted only, so their page images stayed in the database file. Separate
+        // mechanism, not just a separate hook: this file carries the CloudKit mirror's pending
+        // export queue in its persistent history, so it is checkpointed and vacuumed, never
+        // destroyed. The second token pins the wiring through the ContentView half of the scan.
+        "mainStoreRebuildHook",
+        "compactStoreAfterWipe",
         // The opt-in HealthKit leg. The token is the HOOK's spelling, not the
         // `includingHealthKitSamples` parameter name — the parameter appears on the funnel's own
         // signature line (which the bounded scan includes by construction), so a parameter-named
@@ -77,16 +107,33 @@ struct PrivacyWipeCoverageTests {
         "friendStateCache.clearAll",
         "closenessLedger.clearAll",
         "activities.clearAll",
+        // The peer half of the moderation ban store: 30-day bans keyed to OTHER designers'
+        // fingerprints. The SELF-ban row in the same keychain service is a deliberate survivor
+        // (2026-07-17), which is why the token names the peer-scoped call and not a service sweep.
+        "moderationBanStore.clearPeerBansForDeleteAll",
         // Per-row + local stores
         "resetDiary",
         "savedRecipeService.reset",
+        // The pre-Core-Data `SavedRecipes.json` file. Its own token beside the per-row reset above:
+        // the migration latch survives the wipe by design, so nothing re-reads the file — but until
+        // 2026-08-20 nothing deleted it either, and it holds plaintext recipe text.
+        "LegacySavedRecipeJSONRepository().deleteFile",
         "customItemService.reset",
         "coinLedgerService.reset",
+        // The milestone ledger stopped being a deliberate survivor on 2026-08-20: it is a dated
+        // trail of WHEN the destroyed content happened, and it mirrors to the user's CloudKit
+        // private database. The token is the service call; the row delete rides its closure.
+        "milestoneLedgerService.reset",
         "aiRetryQueueService.reset",
         "scrubStressLocalState",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
+        "RecentActivityTypeMemory.clearAll",
         "RecipeWebImageAttemptMemory.clearAll",
+        // The workout tombstone ring. Not only privacy: a surviving tombstone tells the workout
+        // observer to DELETE a still-existing app-authored Health sample on the next re-enable,
+        // which would override an explicit "keep my Health samples" answer at the wipe.
+        "workoutTombstones.clearAll",
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
@@ -103,6 +150,13 @@ struct PrivacyWipeCoverageTests {
         "pendingWidgetActionQueue.clear",
         "aiCallQuotaStore.reset",
         "aiAuditLogStore.clear",
+        // The record of which Apple Health prompts have ever been shown — `cycleTracking` and
+        // `intimateLogging` among them. A plaintext `UserDefaults` array cleared by nothing until
+        // 2026-08-20; now a device-only keychain row with a real failure signal.
+        "HealthCapabilityRequestLedger.clear",
+        // Companion petting counts + window/settle timestamps. `clearPersistentState` existed and
+        // its only caller was a `#if DEBUG` UI-test seam, so RELEASE never cleared it.
+        "PetInteractionGovernor.clearPersistentState",
         // Keychain identity + at-rest keys (the Increment 1 gap fixes)
         "wipeIdentityForDeleteAll",
         // The consequence of the row above, and the reason it is a separate token: rotating the
@@ -166,37 +220,121 @@ struct PrivacyWipeCoverageTests {
         "func resetAll() -> [String]"
     ]
 
+    /// The `ContentView` half of the wipe path: five real clears live inside the hook closures
+    /// wired here (the sealed row deletes, the locked-note buffer purge, the two store rebuilds,
+    /// the HealthKit sweep and both direct-CloudKit sweeps), and a scan bounded to `FernletStore`
+    /// cannot see any of them — a hook could stop being wired with every token still green.
+    /// Scanning them makes hook-side spellings usable as manifest tokens.
+    private static let hookWiringFunctionSignatures = [
+        "func attachDeleteAllHooks()",
+        "func attachCloudDeleteAllHooks()"
+    ]
+
+    /// Private `FernletStore` helpers the wipe path calls that are deliberately NOT registered
+    /// above, with the reason. Everything else must be registered — see
+    /// `everyPrivateWipeHelperIsRegistered`, which is what stops a banned call being smuggled into
+    /// an unscanned leg.
+    private static let unregisteredWipeHelpers: [(name: String, why: String)] = [
+        (
+            "hasSealedBackup",
+            "a pure predicate over StoragePreferences — it reads four Bools and touches no store, so there is nothing in it for a banned call to be hidden behind"
+        ),
+        (
+            "clearSensitiveVisibilityResolution",
+            "registering it would let its own manifest token be satisfied by its declaration line (the extractor includes it), making the token unfalsifiable — the P1b defect class. It removes three UserDefaults keys and calls nothing"
+        )
+    ]
 
     private static func fernletStoreSource() throws -> String {
         try String(contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/FernletStore.swift"), encoding: .utf8)
     }
 
-    /// The comment-stripped bodies of the wipe functions, concatenated. Throws if either function
+    private static func contentViewSource() throws -> String {
+        try String(contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/ContentView.swift"), encoding: .utf8)
+    }
+
+    /// The comment-stripped bodies of the wipe functions, concatenated. Throws if any function
     /// cannot be located, so a rename fails loudly instead of scanning an empty string.
-    private static func wipePathSource() throws -> String {
+    ///
+    /// Internal, not private, because it is **shared with `PersistedSurfaceWipeBoundaryTests`** (Part
+    /// 4.4), which resolves its `.cleared` tokens against exactly this text (after also stripping
+    /// `#if DEBUG` branches). One definition of "the wipe path" for both walls, so they cannot
+    /// disagree about what the funnel is. Access-only widening — no behaviour change.
+    static func wipePathSource() throws -> String {
+        try storeWipePathSource() + "\n" + hookWiringSource()
+    }
+
+    /// The `FernletStore` half only — the funnel and its numbered legs. Kept separate because the
+    /// private-helper wall below is a property of the store's own methods.
+    private static func storeWipePathSource() throws -> String {
         let source = try fernletStoreSource()
         return try wipeFunctionSignatures.map { try functionBody(matching: $0, in: source) }.joined(separator: "\n")
     }
 
-    /// Extracts one method body from `source`: from the declaration line down to the first line that
-    /// is exactly the method-level closing brace. Every `FernletStore` method sits at one level of
-    /// class indentation, so `"    }"` is an exact, unambiguous terminator — no brace counting, and
-    /// nothing to get wrong on a nested closure. Comments are stripped line by line.
+    private static func hookWiringSource() throws -> String {
+        let source = try contentViewSource()
+        return try hookWiringFunctionSignatures.map { try functionBody(matching: $0, in: source) }.joined(separator: "\n")
+    }
+
+    /// Extracts one method body from `source`: from the declaration line down to the first
+    /// method-level closing brace. Every `FernletStore` method sits at one level of type
+    /// indentation, so a `}` at exactly four spaces is an unambiguous terminator — no brace
+    /// counting, and nothing to get wrong on a nested closure.
+    ///
+    /// Three properties the naive version did not have, each an evasion the 2026-08-21 adversary
+    /// round demonstrated against it:
+    ///
+    /// - Comments are stripped **before** the search, not after, so a doc comment that merely
+    ///   MENTIONS a signature cannot become the first matching line and silently swap one leg's
+    ///   body for an unrelated one. (Stripping preserves line count, so nothing shifts.)
+    /// - The match must be a real declaration and must be UNIQUE. Two declarations sharing a
+    ///   signature substring throw rather than silently binding to whichever comes first.
+    /// - The terminator tolerates trailing whitespace. A stray space on a leg's closing brace used
+    ///   to run the extraction on into the next function, whose calls could then satisfy tokens.
     static func functionBody(matching signature: String, in source: String) throws -> String {
-        let lines = source.components(separatedBy: "\n")
-        guard let start = lines.firstIndex(where: { $0.contains(signature) }) else {
-            throw BoundingError.functionNotFound(signature)
+        let lines = strippingComments(source).components(separatedBy: "\n")
+        let declarations = lines.indices.filter { lines[$0].contains(signature) && isDeclarationLine(lines[$0]) }
+        guard let start = declarations.first else { throw BoundingError.functionNotFound(signature) }
+        guard declarations.count == 1 else {
+            throw BoundingError.ambiguousSignature(signature, count: declarations.count)
         }
-        guard let end = lines[(start + 1)...].firstIndex(of: "    }") else {
+        guard let end = lines[(start + 1)...].firstIndex(where: isMethodClosingBrace) else {
             throw BoundingError.closingBraceNotFound(signature)
         }
-        return lines[start...end].map(strippingComments).joined(separator: "\n")
+        return lines[start...end].joined(separator: "\n")
+    }
+
+    /// Whether `line` DECLARES a function — attributes and access modifiers, then `func`. A line
+    /// that merely calls or names one does not qualify, which is what makes the signature match in
+    /// `functionBody(matching:in:)` a declaration match rather than a substring match.
+    static func isDeclarationLine(_ line: String) -> Bool {
+        let modifiers = [
+            "public ", "internal ", "fileprivate ", "private ", "static ", "final ", "class ",
+            "nonisolated ", "override ", "mutating ", "@discardableResult ", "@MainActor ", "@objc "
+        ]
+        var rest = line.trimmingCharacters(in: .whitespaces)
+        var budget = 0
+        while budget < modifiers.count {
+            guard let modifier = modifiers.first(where: { rest.hasPrefix($0) }) else { break }
+            rest = String(rest.dropFirst(modifier.count)).trimmingCharacters(in: .whitespaces)
+            budget += 1
+        }
+        return rest.hasPrefix("func ")
+    }
+
+    /// Whether `line` is a method-level closing brace: `}` alone at exactly one level of type
+    /// indentation. Trailing whitespace is tolerated deliberately — the old exact `"    }"` match
+    /// was defeated by a single stray space.
+    static func isMethodClosingBrace(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespaces) == "}"
+            && line.prefix(while: { $0 == " " }).count == 4
     }
 
     enum BoundingError: Error, CustomStringConvertible {
         case functionNotFound(String)
         case closingBraceNotFound(String)
         case malformedCoverageDoc(String)
+        case ambiguousSignature(String, count: Int)
 
         var description: String {
             switch self {
@@ -206,31 +344,159 @@ struct PrivacyWipeCoverageTests {
                 return "Could not find the method-level closing brace after '\(signature)' — indentation changed?"
             case .malformedCoverageDoc(let detail):
                 return "Docs/PrivacyWipeCoverage.md no longer parses as the reverse-direction check expects: \(detail)"
+            case .ambiguousSignature(let signature, let count):
+                return "'\(signature)' matches \(count) function declarations — the extraction would bind to whichever came first. Make the registered signature unique."
             }
         }
     }
 
-    /// Drops a `//` comment tail so a token surviving only in prose (or in commented-out code) can't
-    /// satisfy the manifest. `://` is left alone — that is a URL inside a string literal, not a
-    /// comment.
-    static func strippingComments(_ line: String) -> String {
-        let characters = Array(line)
-        var index = 0
-        while index + 1 < characters.count {
-            if characters[index] == "/", characters[index + 1] == "/" {
-                if index > 0, characters[index - 1] == ":" {
-                    index += 2
+    /// Blanks every COMMENT out of Swift source, so a token surviving only in prose — or in
+    /// commented-out code — cannot satisfy the manifest. Removed characters become spaces and
+    /// newlines are preserved, so offsets and line numbers are unchanged and callers may keep
+    /// reasoning line by line.
+    ///
+    /// Source-level rather than line-level since 2026-08-21, because the line version had three
+    /// demonstrated holes: it could not see a `/* … */` span at all (a deleted clear stayed
+    /// certified by its own TODO), a `//` inside a string literal truncated the rest of the
+    /// physical line (silently eating a defaults write sitting on it), and its `://` carve-out
+    /// preserved a genuine comment written after a `case …:` or a ternary's colon. Quote tracking
+    /// subsumes that carve-out: a `//` inside a literal is literal text either way.
+    ///
+    /// A multi-line `"""` body is blanked too. It is prose, a template or a code sample — never a
+    /// defaults key and never a call — and leaving it in let a `#if DEBUG` line inside a string
+    /// read as a real directive.
+    static func strippingComments(_ source: String) -> String {
+        var scanner = CommentScanner(source)
+        return scanner.stripped()
+    }
+
+    /// `strippingComments(_:)`, and additionally blanks the BODY of every string literal.
+    ///
+    /// Used wherever a token is matched as evidence that a CALL is present. A bare
+    /// `wipePath.contains("aiAuditLogStore.clear")` is also satisfied by an audit-log event NAMED
+    /// after the call it replaced, and the extracted funnel already carries 41 machine-readable
+    /// event strings of exactly that shape (`"deleteAll.cloudCopyDeleteFailed"`,
+    /// `"identityRotated"`, …). Blanking the bodies makes prose-in-a-literal stop counting as code
+    /// without touching the code itself.
+    static func strippingCommentsAndStringLiteralBodies(_ source: String) -> String {
+        var scanner = CommentScanner(source, blanksStringLiterals: true)
+        return scanner.stripped()
+    }
+
+    /// A single forward pass over Swift source that blanks comment spans — and, optionally, the
+    /// bodies of string literals — leaving everything else exactly where it was.
+    ///
+    /// Blanking rather than deleting is load-bearing: offsets and line numbers stay put, so the
+    /// `#if` line machine in `PersistedSurfaceWipeBoundaryTests` and every line-oriented caller keep
+    /// working on the same coordinates as the original file. Not thread-shared and not stored: each
+    /// call builds its own scanner, so there is no mutable global here.
+    struct CommentScanner {
+        /// The source being scanned.
+        private let characters: [Character]
+        /// Whether string-literal bodies are blanked as well as comments.
+        private let blanksStringLiterals: Bool
+        /// The next character to read.
+        private var index = 0
+        /// The rewritten source built so far.
+        private var output: [Character] = []
+
+        /// Prepares a scan over `source`.
+        init(_ source: String, blanksStringLiterals: Bool = false) {
+            self.characters = Array(source)
+            self.blanksStringLiterals = blanksStringLiterals
+        }
+
+        /// The rewritten source. Every loop below is bounded by the character count, and every
+        /// branch advances the cursor by at least one.
+        mutating func stripped() -> String {
+            output.reserveCapacity(characters.count)
+            while index < characters.count {
+                if matches("//") { blankLineComment(); continue }
+                if matches("/*") { blankBlockComment(); continue }
+                if matches("\"\"\"") { blankMultilineString(); continue }
+                if characters[index] == "\"" { copyStringLiteral(); continue }
+                output.append(characters[index])
+                index += 1
+            }
+            return String(output)
+        }
+
+        /// Whether `text` starts at the cursor.
+        private func matches(_ text: String) -> Bool {
+            let target = Array(text)
+            guard index + target.count <= characters.count else { return false }
+            for offset in 0..<target.count where characters[index + offset] != target[offset] { return false }
+            return true
+        }
+
+        /// Replaces the next `count` characters with spaces, preserving newlines.
+        private mutating func blank(_ count: Int) {
+            var remaining = count
+            while remaining > 0, index < characters.count {
+                output.append(characters[index] == "\n" ? "\n" : " ")
+                index += 1
+                remaining -= 1
+            }
+        }
+
+        /// Copies the next `count` characters through unchanged.
+        private mutating func copy(_ count: Int) {
+            var remaining = count
+            while remaining > 0, index < characters.count {
+                output.append(characters[index])
+                index += 1
+                remaining -= 1
+            }
+        }
+
+        /// Blanks a `//` comment through to — but not including — the newline that ends it.
+        private mutating func blankLineComment() {
+            while index < characters.count, characters[index] != "\n" { blank(1) }
+        }
+
+        /// Blanks a `/* … */` span. Depth-counted because Swift block comments nest.
+        private mutating func blankBlockComment() {
+            var depth = 0
+            while index < characters.count {
+                if matches("/*") { depth += 1; blank(2); continue }
+                if matches("*/") {
+                    depth -= 1
+                    blank(2)
+                    if depth <= 0 { return }
                     continue
                 }
-                return String(characters[0..<index])
+                blank(1)
             }
-            index += 1
         }
-        return line
+
+        /// Blanks the body of a `"""…"""` literal, keeping both delimiters.
+        private mutating func blankMultilineString() {
+            copy(3)
+            while index < characters.count {
+                if matches("\"\"\"") { copy(3); return }
+                blank(1)
+            }
+        }
+
+        /// Handles a single-line `"…"` literal: copied through, or blanked when the caller asked
+        /// for that. Stops at a newline — a single-line literal cannot span one, and refusing to
+        /// run past it is what keeps an unbalanced quote from swallowing the rest of the file.
+        private mutating func copyStringLiteral() {
+            copy(1)
+            while index < characters.count, characters[index] != "\n" {
+                if characters[index] == "\\", index + 1 < characters.count {
+                    if blanksStringLiterals { blank(2) } else { copy(2) }
+                    continue
+                }
+                if characters[index] == "\"" { copy(1); return }
+                if blanksStringLiterals { blank(1) } else { copy(1) }
+            }
+        }
     }
 
     @Test func deleteAllCoversEveryManifestSurface() throws {
-        let wipePath = try Self.wipePathSource()
+        // Literal bodies blanked: a token named in an audit-log string is not a call.
+        let wipePath = Self.strippingCommentsAndStringLiteralBodies(try Self.wipePathSource())
         let missing = Self.wipeManifest.filter { !wipePath.contains($0) }
         #expect(missing.isEmpty, "Wipe calls missing from the deleteAllData/resetAll bodies for: \(missing) — either restore the call or move the surface to the doc's deliberate-exceptions table AND remove its token here.")
     }
@@ -251,6 +517,32 @@ struct PrivacyWipeCoverageTests {
         #expect(Self.strippingComments("        // heartLedger.clearAll()").trimmingCharacters(in: .whitespaces).isEmpty)
         #expect(Self.strippingComments("        heartLedger.clearAll()  // takes the sidecar").contains("heartLedger.clearAll()"))
         #expect(Self.strippingComments(#"let u = "https://example.com""#).contains("example.com"))
+
+        // 2026-08-21 adversary round — three demonstrated escapes from the line-based stripper.
+        #expect(
+            !Self.strippingComments("/* restore heartLedger.clearAll() in b21 */").contains("clearAll"),
+            "a block comment still certifies a deleted clear — the stripper cannot see /* … */"
+        )
+        #expect(
+            !Self.strippingComments("        case .full://heartLedger.clearAll()").contains("clearAll"),
+            "the ':' lookbehind is preserving a real comment written after a case label"
+        )
+        #expect(
+            Self.strippingComments(#"if p.hasPrefix("//") { d.set(1, forKey: "k") }"#).contains("forKey"),
+            "a '//' inside a string literal truncated the line and ate the write on it"
+        )
+        #expect(
+            !Self.strippingCommentsAndStringLiteralBodies(#"log("aiAuditLogStore.clear skipped")"#).contains("aiAuditLogStore.clear"),
+            "a token named inside a string literal still counts as a call"
+        )
+        #expect(
+            Self.strippingCommentsAndStringLiteralBodies(#"aiAuditLogStore.clear()"#).contains("aiAuditLogStore.clear"),
+            "blanking literal bodies is eating real code"
+        )
+        #expect(
+            Self.strippingComments("a\n/* x\ny */\nb").components(separatedBy: "\n").count == 4,
+            "the stripper changed the line count — every line-oriented caller is now reading shifted coordinates"
+        )
     }
 
     /// The extractor, on a synthetic source — so a failure above points at the wipe path, not at the
@@ -273,6 +565,129 @@ struct PrivacyWipeCoverageTests {
         #expect(body.contains("inside()"))
         #expect(!body.contains("outside()"))
         #expect(throws: (any Error).self) { try Self.functionBody(matching: "func missing()", in: source) }
+
+        // 2026-08-21 adversary round: a doc comment naming a signature above an EARLIER method used
+        // to win the `firstIndex(where:)` race and silently swap one leg's body for another's.
+        let decoyed = """
+        final class Thing {
+            /// Mirrors func wipe() for the un-hide path.
+            func decoy() {
+                wrongBody()
+            }
+
+            func wipe() {
+                inside()
+            }
+        }
+        """
+        let afterDecoy = try Self.functionBody(matching: "func wipe()", in: decoyed)
+        #expect(afterDecoy.contains("inside()"), "a doc-comment mention of the signature captured the extraction")
+        #expect(!afterDecoy.contains("wrongBody()"))
+
+        // A trailing space on the closing brace used to run the extraction into the next function.
+        let sloppy = "final class Thing {\n    func wipe() {\n        inside()\n    } \n\n    func other() {\n        outside()\n    }\n}"
+        let bounded = try Self.functionBody(matching: "func wipe()", in: sloppy)
+        #expect(!bounded.contains("outside()"), "a stray space on the terminator let the scan run into the next function")
+
+        // Two declarations sharing the signature must throw rather than bind to the first.
+        let ambiguous = """
+        final class Thing {
+            func wipe() {
+                first()
+            }
+        }
+        extension Thing {
+            func wipe() {
+                second()
+            }
+        }
+        """
+        #expect(throws: (any Error).self) { try Self.functionBody(matching: "func wipe()", in: ambiguous) }
+    }
+
+    /// The ContentView half of the scan is really in there, and really bounded — otherwise the two
+    /// hook-side tokens (`compactStoreAfterWipe`, `deleteLegacyDirectCloudKitRecords`) are
+    /// satisfied by nothing and the extension is decorative.
+    @Test func theScanReachesTheHookWiringInContentView() throws {
+        let wipePath = try Self.wipePathSource()
+        let contentView = try Self.contentViewSource()
+
+        #expect(wipePath.contains("store.periodDataDeleteHook ="), "the hook-wiring half of the scan is missing — the clears living in ContentView closures are invisible again.")
+        #expect(wipePath.contains("store.legacyCloudRecordDeleteHook ="))
+        // Bounded to the two wiring functions, not the whole 1,500-line view: `refreshPeriodContext`
+        // is elsewhere in the file and must not be reachable, or a hook-side token could be
+        // satisfied by an unrelated closure.
+        #expect(contentView.contains("func refreshPeriodContext()"))
+        #expect(!wipePath.contains("func refreshPeriodContext()"), "the ContentView extraction is not bounded to the wiring functions")
+    }
+
+    /// The registration wall (round 2026-08-20, Part 4.4). `wipePathMakesNoBannedCall` scans only
+    /// the REGISTERED bodies, so the cheapest way to defeat it is to move a banned call into a new
+    /// private leg and not register it — the suite stays green and the scan silently shrinks.
+    ///
+    /// So: every private `FernletStore` helper the wipe path calls must be registered in
+    /// `wipeFunctionSignatures`, or named in `unregisteredWipeHelpers` with the reason it is safe
+    /// to leave unscanned. Dot-qualified calls are ignored (`proximityTrustVault.apply(…)` is not a
+    /// call to the store's own `apply`), `Self.`-qualified ones are not.
+    @Test func everyPrivateWipeHelperIsRegistered() throws {
+        let source = try Self.fernletStoreSource()
+        let path = try Self.storeWipePathSource()
+        let exempt = Set(Self.unregisteredWipeHelpers.map(\.name))
+        let unregistered = Self.privateFunctionNames(in: source)
+            .filter { !exempt.contains($0) }
+            .filter { name in !Self.wipeFunctionSignatures.contains { $0.contains("func \(name)(") } }
+            .filter { Self.wipePathCalls($0, in: path) }
+            .sorted()
+        #expect(
+            unregistered.isEmpty,
+            "the wipe path calls private helper(s) \(unregistered) that no signature in wipeFunctionSignatures covers — their bodies are never scanned, so a banned call inside one is invisible. Register each (or add it to unregisteredWipeHelpers with the reason it cannot hide one)."
+        )
+        // And the exemptions are real declarations, so a stale entry can't silently widen the hole.
+        let declared = Set(Self.privateFunctionNames(in: source))
+        let stale = exempt.subtracting(declared).sorted()
+        #expect(stale.isEmpty, "unregisteredWipeHelpers names \(stale), which no longer exist — drop the entries rather than leaving a blanket exemption behind.")
+    }
+
+    /// Every registered signature still resolves in its own file. `wipePathSource()` throws when one
+    /// does not, but it throws from inside other tests — this names the rename directly.
+    @Test func everyRegisteredWipeFunctionStillResolves() throws {
+        let store = try Self.fernletStoreSource()
+        for signature in Self.wipeFunctionSignatures {
+            #expect(throws: Never.self, "FernletStore.swift no longer declares '\(signature)'") {
+                _ = try Self.functionBody(matching: signature, in: store)
+            }
+        }
+        let contentView = try Self.contentViewSource()
+        for signature in Self.hookWiringFunctionSignatures {
+            #expect(throws: Never.self, "ContentView.swift no longer declares '\(signature)'") {
+                _ = try Self.functionBody(matching: signature, in: contentView)
+            }
+        }
+    }
+
+    /// Names of every `private func` / `private static func` declared in `source`.
+    static func privateFunctionNames(in source: String) -> [String] {
+        matches(of: #"private\s+(?:static\s+)?func\s+([A-Za-z_][A-Za-z0-9_]*)"#, in: source)
+    }
+
+    /// Whether `path` contains an unqualified — or `Self.`-qualified — call to `name`. The
+    /// lookbehind is what keeps a same-named method on a collaborator (`…vault.apply(…)`) from
+    /// counting as a call to the store's own private helper.
+    static func wipePathCalls(_ name: String, in path: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: name)
+        let unqualified = "(?<![A-Za-z0-9_.])\(escaped)\\("
+        let selfQualified = "Self\\.\(escaped)\\("
+        return !matches(of: unqualified, in: path).isEmpty || !matches(of: selfQualified, in: path).isEmpty
+    }
+
+    /// Capture group 1 of every match, or the whole match when the pattern has no group.
+    private static func matches(of pattern: String, in source: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        return regex.matches(in: source, range: range).compactMap { match in
+            let group = match.numberOfRanges > 1 ? 1 : 0
+            return Range(match.range(at: group), in: source).map { String(source[$0]) }
+        }
     }
 
     /// The banned-call check: a wipe call that DESTROYS a deliberately-kept surface must not come

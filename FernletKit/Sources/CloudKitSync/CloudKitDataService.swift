@@ -195,8 +195,9 @@ public final class CloudKitDataService {
     private static let aggregateDatabaseRecordTypes = ["CD_FernletDatabaseRecord", "FernletDatabaseRecord"]
     /// Every record type the full deletion sweep covers — mirrored (`CD_`) and bare spellings,
     /// legacy direct-CloudKit log types, sealed backups, and the sealed narrative mirror named
-    /// only as a string literal (S3 wall). Milestone-ledger records are deliberately absent:
-    /// milestone rows survive a full data reset by design (see `MilestoneLedgerRepositoring`).
+    /// only as a string literal (S3 wall). Milestone-ledger records joined the list on 2026-08-20,
+    /// when the wipe stopped keeping the milestone trail: the row delete propagates over a live
+    /// session, and this sweep is what reaches the copy when there is no session to propagate over.
     private static let allRecordTypes = [
         "CD_FernletDatabaseRecord",
         "FernletDatabaseRecord",
@@ -217,9 +218,38 @@ public final class CloudKitDataService {
         "CustomItemRecord",
         "CD_CoinLedgerRecord",
         "CoinLedgerRecord",
+        "CD_MilestoneLedgerRecord",
+        "MilestoneLedgerRecord",
         "CD_DayRecord",
         "DayRecord",
         "CD_MenstrualNarrative",
+        "MenstrualNarrative"
+    ]
+
+    /// The record types no mirror can ever delete on the app's behalf: every type in
+    /// ``allRecordTypes`` with no `CD_` spelling of its own, minus the two the wipe funnel already
+    /// owns by their own legs (`SealedBackupRecord` via the per-payload disable,
+    /// `SealedPhotoRecord` via the escrow teardown — both gated on the user having enabled them, so
+    /// sweeping them here would report failures for backups that were never uploaded).
+    ///
+    /// `NSPersistentCloudKitContainer` writes `CD_`-prefixed types and nothing else, so a bare name
+    /// is by definition a record from a build that wrote to CloudKit directly. Those records have no
+    /// local row behind them: deleting the local store cannot propagate a delete for something the
+    /// mirror never knew about, which is why they need ``deleteLegacyDirectCloudKitRecords()``
+    /// rather than riding the ordinary sync.
+    private static let legacyDirectRecordTypes = [
+        "FernletDatabaseRecord",
+        "MealLogRecord",
+        "JournalLogRecord",
+        "WorkoutLogRecord",
+        "HygieneLogRecord",
+        "HydrationLogRecord",
+        "SleepRecord",
+        "SavedRecipeRecord",
+        "CustomItemRecord",
+        "CoinLedgerRecord",
+        "MilestoneLedgerRecord",
+        "DayRecord",
         "MenstrualNarrative"
     ]
 
@@ -388,6 +418,57 @@ public final class CloudKitDataService {
         } catch {
             let mapped = CloudKitDataServiceError.cloudKitOperationFailed(error.localizedDescription)
             FernletAuditLog.log("cloudkit.delete.failed", context: ["error": mapped.auditValue])
+            throw mapped
+        }
+    }
+
+    /// Deletes every legacy direct-CloudKit record — the ``legacyDirectRecordTypes`` — from the
+    /// private database, regardless of whether iCloud sync is on.
+    ///
+    /// The gap this closes. `deleteAllData` reaches the user's cloud copy two ways, and neither
+    /// reaches these: with sync ON it relies on the local row deletes PROPAGATING over the live
+    /// mirror, which only knows `CD_`-prefixed types; with sync OFF it calls
+    /// ``deleteAllCloudKitData(confirmation:)``, but only when the user chose "stop syncing, keep
+    /// the copy". A user on live sync who once ran a build that wrote CloudKit directly therefore
+    /// kept meal, journal, workout, hygiene, hydration and sleep records — content, not metadata —
+    /// through a wipe that promised otherwise, with no local row left able to name them.
+    ///
+    /// Narrowly scoped on purpose: it never touches a `CD_` type (the mirror owns those, and
+    /// deleting one out from under a live session invites the mirror to re-upload it) and never
+    /// touches the two sealed-backup namespaces, which the funnel's own legs delete under their
+    /// enable flags.
+    ///
+    /// - Returns: how many records were removed; `0` when there is nothing left, which is the
+    ///   overwhelmingly common answer.
+    /// - Throws: ``CloudKitDataServiceError/confirmationRequired`` without a confirmation, or
+    ///   ``CloudKitDataServiceError/cloudKitOperationFailed(_:)`` when the sweep could not run.
+    ///   NOT thrown for a missing iCloud account: with no account there is no private database to
+    ///   reach and nothing the user could do about it, so that case is audit-logged and reported as
+    ///   a clean sweep rather than as a failure the wipe dialog would blame them for.
+    public func deleteLegacyDirectCloudKitRecords(confirmation: DeletionConfirmation) async throws -> Int {
+        try validate(confirmation)
+        do {
+            try await ensureSignedIn()
+            let zoneIDs = try await appZoneIDs()
+            var recordIDs: [CKRecord.ID] = []
+            // Bounded by the static type list; a bare name appears exactly once, so unlike the
+            // full sweep there is no `CD_`/bare pair to de-duplicate.
+            for recordType in Self.legacyDirectRecordTypes {
+                recordIDs.append(contentsOf: try await recordIDsForExistingType(recordType, in: zoneIDs))
+            }
+            if !recordIDs.isEmpty {
+                try await database.deleteRecords(with: recordIDs)
+            }
+            FernletAuditLog.log("cloudkit.legacyDelete.completed", context: [
+                "deletedRecordCount": "\(recordIDs.count)"
+            ])
+            return recordIDs.count
+        } catch CloudKitDataServiceError.notSignedIn {
+            FernletAuditLog.log("cloudkit.legacyDelete.skippedNoAccount")
+            return 0
+        } catch {
+            let mapped = CloudKitDataServiceError.cloudKitOperationFailed(error.localizedDescription)
+            FernletAuditLog.log("cloudkit.legacyDelete.failed", context: ["error": mapped.auditValue])
             throw mapped
         }
     }

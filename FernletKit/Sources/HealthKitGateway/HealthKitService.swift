@@ -443,7 +443,11 @@ struct NoopHealthKitCacheClearer: HealthKitCacheClearing {
 /// rather than resuming from a stale position.
 public struct HealthKitAnchorKeychain {
     /// Keychain service string shared by every anchor item.
-    public static let service = "com.fernlet.healthkit-anchors"
+    ///
+    /// `nonisolated`: an immutable constant, and it is used as a DEFAULT ARGUMENT (the capability
+    /// ledger's test seams) — under the module's MainActor default the strict standalone package
+    /// build rejects an isolated static in default-argument position.
+    public nonisolated static let service = "com.fernlet.healthkit-anchors"
     /// Account-name prefix for per-sample-type anchors.
     public static let accountPrefix = "healthKitAnchors."
     /// Dedicated account name for the workout observation anchor.
@@ -542,6 +546,153 @@ public struct HealthKitAnchorKeychain {
     }
 }
 
+/// The device-local record of which ``HealthCapability`` system prompts Fernlet has ever shown.
+///
+/// HealthKit gives apps no way to ask "have I already presented this prompt?", so Fernlet has to
+/// remember it — which is the only reason a record naming `intimateLogging` and `cycleTracking`
+/// exists at all. Until 2026-08-20 that record was a plaintext `UserDefaults` string array: readable
+/// with `defaults read`, carried into unencrypted device backups, and cleared by nothing — not the
+/// "delete everything" wipe, not ``HealthKitService/disableIntegration()``. A wiped phone still said
+/// the user had enabled intimate logging. It now lives in the keychain with after-first-unlock,
+/// this-device-only accessibility (so it never rides a backup) and has a clear on both paths.
+///
+/// Invariants:
+/// - **Nothing caches it.** Every accessor reads the persisted row fresh. Several
+///   ``HealthKitAuthorizationViewModel``s and ``HealthKitService``s coexist (the app store's, the
+///   Privacy screen's), so an in-memory `Set` held by one of them would survive a ``clear(keychainService:legacyDefaults:)``
+///   performed by another, and the next ``record(_:keychainService:legacyDefaults:)`` would re-persist
+///   the whole pre-wipe union: the ledger would resurrect itself after the wipe that removed it.
+/// - **Frozen storage token.** ``storageKey`` is both the keychain account and the legacy defaults
+///   key it drains; renaming it strands the row. The stored bytes are the ``HealthCapability`` raw
+///   values sorted and joined by `\n` — frozen too, and unambiguous because a raw value is a Swift
+///   identifier and can never contain a newline.
+/// - **Failure errs toward forgetting.** An unreadable row reports "never requested", so the app
+///   re-prompts (harmless — iOS answers an already-settled prompt immediately) rather than keeping a
+///   claim about the user's body it can no longer prove.
+///
+/// The row is filed under ``HealthKitAnchorKeychain/service`` deliberately: that slot already IS this
+/// gateway's device-local keychain state, and a second `com.fernlet.*` service would be one more row
+/// for the wipe-coverage tables to carry for no privacy gain.
+///
+/// - Warning: the clear must stay ACCOUNT-scoped. The anchor rows sharing this service SURVIVE the
+///   wipe by design (Docs/PrivacyWipeCoverage.md's deliberate-exceptions table): a reset anchor makes
+///   the next anchored query replay Fernlet's whole Health history back into the just-emptied day
+///   store, so a `KeychainItem.deleteAll(service:)` "simplification" here would un-stick the wipe it
+///   is part of.
+///
+/// `@MainActor` by the module's default isolation, like ``HealthKitAnchorKeychain``; the underlying
+/// keychain calls are `nonisolated` and the isolation is bookkeeping only.
+public enum HealthCapabilityRequestLedger {
+    /// Keychain account for the ledger row — and the legacy `UserDefaults` key the migration drains.
+    /// A FROZEN persisted token: never localize it, never rename it.
+    public static let storageKey = "fernlet.healthkit.requested-capabilities"
+
+    /// The capabilities recorded so far, read fresh from the keychain (see the no-caching invariant).
+    ///
+    /// Drains any pre-keychain plaintext copy first, so the migration needs no launch hook and no
+    /// install can keep the plaintext once the ledger has been read once.
+    public static func requestedCapabilities(
+        keychainService: String = HealthKitAnchorKeychain.service,
+        legacyDefaults: UserDefaults = .standard
+    ) -> Set<HealthCapability> {
+        drainLegacyPlaintextLedger(keychainService: keychainService, legacyDefaults: legacyDefaults)
+        guard let data = KeychainItem.load(account: storageKey, service: keychainService) else { return [] }
+        return decode(data)
+    }
+
+    /// Records that `capability`'s system prompt has been shown.
+    ///
+    /// Read-modify-write against the PERSISTED row, never a cached set — that is what makes a clear
+    /// performed elsewhere in the process stick instead of being undone by the next prompt.
+    public static func record(
+        _ capability: HealthCapability,
+        keychainService: String = HealthKitAnchorKeychain.service,
+        legacyDefaults: UserDefaults = .standard
+    ) {
+        var capabilities = requestedCapabilities(keychainService: keychainService, legacyDefaults: legacyDefaults)
+        guard capabilities.insert(capability).inserted else { return }
+        persist(capabilities, keychainService: keychainService)
+    }
+
+    /// Removes the ledger from both media — the "delete everything" funnel's leg and the second half
+    /// of ``HealthKitService/disableIntegration()``.
+    ///
+    /// - Returns: `true` when the keychain row is gone (a legacy defaults key is removed
+    ///   unconditionally and has no failure signal). `false` means a record naming the user's
+    ///   intimate logging survived a wipe that promised otherwise, so the caller must report it
+    ///   rather than claim a complete delete.
+    @discardableResult
+    public static func clear(
+        keychainService: String = HealthKitAnchorKeychain.service,
+        legacyDefaults: UserDefaults = .standard
+    ) -> Bool {
+        legacyDefaults.removeObject(forKey: storageKey)
+        let status = KeychainItem.deleteReportingStatus(account: storageKey, service: keychainService)
+        guard status != errSecSuccess else { return true }
+        FernletAuditLog.log("healthkit.capabilityLedger.clearFailed", context: ["status": "\(status)"])
+        return false
+    }
+
+    /// Whether Fernlet has ever prompted for a capability whose grant lets it WRITE samples into
+    /// Apple Health.
+    ///
+    /// Answered from the PERSISTED ledger, so it is still correct with the master toggle off and with
+    /// no service instance alive — which is the whole point: it decides whether "delete everything"
+    /// offers to clear the samples Fernlet wrote, and the user who turned Health off is exactly the
+    /// user who was never offered that before.
+    public static func hasEverRequestedWritableCapability(
+        keychainService: String = HealthKitAnchorKeychain.service,
+        legacyDefaults: UserDefaults = .standard
+    ) -> Bool {
+        requestedCapabilities(keychainService: keychainService, legacyDefaults: legacyDefaults)
+            .contains(where: HealthKitService.writesSamplesToHealth)
+    }
+
+    /// Moves any pre-keychain plaintext ledger into the keychain and REMOVES the defaults key.
+    ///
+    /// Idempotent, and free on every install past the first read: the key is absent, so this is one
+    /// in-memory `CFPreferences` lookup. Reads the keychain row directly rather than going back
+    /// through ``requestedCapabilities(keychainService:legacyDefaults:)`` — that call is this one's
+    /// caller, and Power-of-10 R1 forbids the recursion.
+    private static func drainLegacyPlaintextLedger(keychainService: String, legacyDefaults: UserDefaults) {
+        guard let rawValues = legacyDefaults.stringArray(forKey: storageKey) else { return }
+        legacyDefaults.removeObject(forKey: storageKey)
+        var merged = Set(rawValues.compactMap(HealthCapability.init(rawValue:)))
+        guard !merged.isEmpty else { return }
+        if let existing = KeychainItem.load(account: storageKey, service: keychainService) {
+            merged.formUnion(decode(existing))
+        }
+        persist(merged, keychainService: keychainService)
+        FernletAuditLog.log("healthkit.capabilityLedger.migrated", context: ["count": "\(merged.count)"])
+    }
+
+    /// Writes the ledger row. An empty set is stored as no row at all — the keychain rejects empty
+    /// payloads, and "nothing recorded" and "no row" are the same state by construction.
+    private static func persist(_ capabilities: Set<HealthCapability>, keychainService: String) {
+        let joined = capabilities.map(\.rawValue).sorted().joined(separator: "\n")
+        guard !joined.isEmpty else {
+            KeychainItem.delete(account: storageKey, service: keychainService)
+            return
+        }
+        let status = KeychainItem.store(
+            Data(joined.utf8),
+            account: storageKey,
+            service: keychainService,
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        guard status != errSecSuccess else { return }
+        // R7: a failed write means the prompt is not remembered, so the settings row keeps offering
+        // to request a capability the user already answered. Named rather than dropped.
+        FernletAuditLog.log("healthkit.capabilityLedger.storeFailed", context: ["status": "\(status)"])
+    }
+
+    /// Parses the frozen `\n`-joined raw-value encoding, discarding tokens no longer in the enum.
+    private static func decode(_ data: Data) -> Set<HealthCapability> {
+        let rawValues = String(decoding: data, as: UTF8.self).split(separator: "\n")
+        return Set(rawValues.compactMap { HealthCapability(rawValue: String($0)) })
+    }
+}
+
 /// Outcome of ``HealthKitService/deleteAllAuthoredSamples()``.
 ///
 /// An enum rather than `Bool` because the
@@ -616,6 +767,15 @@ public final class HealthKitService: HealthKitServicing {
     /// Keychain-backed preferences access; the master toggle and per-capability opt-ins are always
     /// re-read live from here, never cached (see `isIntegrationEnabled`).
     private let preferencesStore: StoragePreferencesStore
+    /// Keychain slot holding the ``HealthCapabilityRequestLedger`` this service clears on disable.
+    ///
+    /// Injectable purely for test isolation: several suites share one process, and a fixture that
+    /// wrote the production row would have every other suite's `disableIntegration()` delete it
+    /// mid-test. Production always uses ``HealthKitAnchorKeychain/service``.
+    private let capabilityLedgerKeychainService: String
+    /// Defaults suite holding any pre-keychain plaintext ledger, cleared alongside the keychain row.
+    /// Injectable for the same reason as ``capabilityLedgerKeychainService``.
+    private let capabilityLedgerDefaults: UserDefaults
     /// The single long-lived workout anchored query, if observation is running.
     private var workoutObservationQuery: HKAnchoredObjectQuery?
     /// Every currently executing long-lived query, so disable can stop them all.
@@ -640,16 +800,24 @@ public final class HealthKitService: HealthKitServicing {
     ///   - cacheCleaner: Falls back to ``defaultCacheClearer`` *as of construction*; ``disableIntegration()``
     ///     re-checks the static at call time to close the construction-order window.
     ///   - preferencesStore: Keychain preferences access; defaults to a fresh store on the standard service.
+    ///   - capabilityLedgerKeychainService: Slot for the ``HealthCapabilityRequestLedger`` that
+    ///     ``disableIntegration()`` clears. Test-isolation seam only — see the property.
+    ///   - capabilityLedgerDefaults: Defaults suite carrying the ledger's legacy plaintext copy.
+    ///     Test-isolation seam only.
     public init(
         healthStore: HKHealthStore = HKHealthStore(),
         storeController: HealthKitStoreControlling? = nil,
         cacheCleaner: HealthKitCacheClearing? = nil,
-        preferencesStore: StoragePreferencesStore? = nil
+        preferencesStore: StoragePreferencesStore? = nil,
+        capabilityLedgerKeychainService: String = HealthKitAnchorKeychain.service,
+        capabilityLedgerDefaults: UserDefaults = .standard
     ) {
         self.healthStore = healthStore
         self.storeController = storeController ?? SystemHealthKitStoreController(healthStore: healthStore)
         self.cacheCleaner = cacheCleaner ?? Self.defaultCacheClearer
         self.preferencesStore = preferencesStore ?? StoragePreferencesStore()
+        self.capabilityLedgerKeychainService = capabilityLedgerKeychainService
+        self.capabilityLedgerDefaults = capabilityLedgerDefaults
     }
 
     public func isHealthDataAvailable() -> Bool {
@@ -1326,9 +1494,16 @@ public final class HealthKitService: HealthKitServicing {
 
     /// Turns the HealthKit integration off, fail-closed: stops every query, disables background
     /// delivery, purges the cached HealthKit-derived values via the cache clearer, deletes all
-    /// stored anchors, and only then flips the master toggle off and resets the per-capability
-    /// opt-ins. Throws (before any teardown) when no cache clearer is available, and rethrows any
-    /// step's failure so the opt-out never half-applies; every attempt/outcome is audited.
+    /// stored anchors and the ``HealthCapabilityRequestLedger``, and only then flips the master
+    /// toggle off and resets the per-capability opt-ins. Throws (before any teardown) when no cache
+    /// clearer is available, and rethrows any step's failure so the opt-out never half-applies;
+    /// every attempt/outcome is audited.
+    ///
+    /// The ledger clear is the one step that does NOT throw on failure. "Turn Health off" must not
+    /// leave behind the record that intimate logging was once enabled, but that record is not
+    /// clinical data: aborting here would half-apply the opt-out (anchors already gone, master toggle
+    /// still on) over a residue the "delete everything" funnel clears again anyway. The failure is
+    /// named in the audit log instead of being silent.
     public func disableIntegration() async throws {
         FernletAuditLog.log("healthkit.disable.attempt")
         // Fail-closed: disabling HealthKit MUST purge the cached HealthKit-derived clinical values.
@@ -1357,6 +1532,10 @@ public final class HealthKitService: HealthKitServicing {
             try cacheCleaner.clearHealthKitCachedValues()
             HealthKitAnchorKeychain.deleteAll(for: observedObjectTypes().map(\.identifier))
             HealthKitAnchorKeychain.deleteWorkoutAnchor()
+            HealthCapabilityRequestLedger.clear(
+                keychainService: capabilityLedgerKeychainService,
+                legacyDefaults: capabilityLedgerDefaults
+            )
             preferencesStore.update { preferences in
                 preferences.healthKitMasterEnabled = false
                 preferences.healthKitCapabilityEnabled = StoragePreferences.defaultHealthKitCapabilityEnabled
@@ -1557,6 +1736,29 @@ public final class HealthKitService: HealthKitServicing {
         Dictionary(uniqueKeysWithValues: types.map { type in
             (type.identifier, storeController.authorizationStatus(for: type))
         })
+    }
+
+    /// Whether granting `capability` lets Fernlet WRITE samples into Apple Health — i.e. whether its
+    /// authorization bundle has a non-empty SHARE set.
+    ///
+    /// Derived from ``types(for:)`` rather than an enumerated list, so the classification can never
+    /// drift from the types actually requested. Today that is body profile (height/weight write-back),
+    /// cycle tracking, workout logging, mindfulness and intimate logging; body context and activity
+    /// context are read-only.
+    ///
+    /// Consumed by ``HealthCapabilityRequestLedger/hasEverRequestedWritableCapability(keychainService:legacyDefaults:)``,
+    /// which decides whether "delete everything" offers to clear Apple Health. A capability whose
+    /// types will not resolve is reported as write-capable on purpose: over-offering costs one no-op
+    /// delete pass, while under-offering leaves Fernlet-authored samples in Health with no in-app
+    /// route to remove them.
+    nonisolated public static func writesSamplesToHealth(_ capability: HealthCapability) -> Bool {
+        do {
+            let share = try types(for: capability).share
+            return !share.isEmpty
+        } catch {
+            FernletAuditLog.log("healthkit.capability.typesUnavailable", context: ["capability": capability.rawValue])
+            return true
+        }
     }
 
     /// The authoritative share/read type sets for each capability — the single mapping every
@@ -1842,17 +2044,43 @@ public final class HealthKitService: HealthKitServicing {
     }
 }
 
+/// The three-way availability triage the Health settings surfaces present, separating the two
+/// causes ``AuthorizationSnapshot/isAvailable`` folds into one `false`.
+///
+/// The master toggle defaults to OFF, so on every fresh install the folded Bool is `false` for a
+/// reason the user can fix — rendering the device-incapable message for that state told every new
+/// user their hardware can't do Health, with no way out. Derived by
+/// ``HealthKitAuthorizationViewModel/availabilityState``.
+public enum HealthAvailabilityState: Equatable {
+    /// This hardware has no Health store (`HKHealthStore.isHealthDataAvailable()` is false).
+    /// Nothing in Fernlet can change that, so the UI states the fact and offers no action.
+    case deviceUnavailable
+    /// The device has a Health store, but the master integration toggle (Privacy & Data) is off —
+    /// the state every fresh install starts in. The UI must name that cause and route to the toggle.
+    case integrationOff
+    /// The integration is live: present the per-capability rows.
+    case available
+}
+
 /// Observable view model behind the Health authorization UI (Settings sheet, period-tracker and
 /// log-period sheets): drives per-capability permission requests, body-profile import/sync, and
 /// per-capability context refreshes, publishing progress and user-facing status text.
 ///
 /// A thin, stateless-by-intent layer over ``HealthKitServicing`` — it holds no health data, only
 /// the latest ``AuthorizationSnapshot``, an `isRequesting` flag, and a `statusMessage` the views
-/// render verbatim. Which capabilities the user has EVER requested is remembered in `UserDefaults`
-/// (HealthKit itself never reveals whether a prompt was shown), so the UI can distinguish
-/// "never asked" from "asked and denied". Errors are absorbed into `statusMessage` rather than
-/// thrown — every flow degrades to "manual entries remain available" messaging. `@MainActor`
-/// `@Observable`; the injected service is `@ObservationIgnored`.
+/// render verbatim. Which capabilities the user has EVER requested is remembered by
+/// ``HealthCapabilityRequestLedger`` (HealthKit itself never reveals whether a prompt was shown), so
+/// the UI can distinguish "never asked" from "asked and denied". Errors are absorbed into
+/// `statusMessage` rather than thrown — every flow degrades to "manual entries remain available"
+/// messaging. `@MainActor` `@Observable`; the injected service is `@ObservationIgnored`.
+///
+/// - Important: the ledger is read through on every access and never cached here, because several of
+///   these view models coexist (Settings, the period sheets) and a wipe or a "turn Health off" on one
+///   must not be undone by another's stale copy. The consequence is that ``requestedCapabilities`` is
+///   NOT observation-tracked: a view re-reads it because the same flows publish ``statusMessage`` and
+///   ``isRequesting``, not because the ledger changed. A future surface that needs to react to a
+///   ledger change made elsewhere in the process must observe something else — do not reintroduce a
+///   cached `Set` to get invalidation.
 @MainActor
 @Observable
 public final class HealthKitAuthorizationViewModel {
@@ -1862,18 +2090,53 @@ public final class HealthKitAuthorizationViewModel {
     public private(set) var statusMessage: String = ""
     /// True while an authorization or Health fetch is in flight (drives progress UI).
     public private(set) var isRequesting = false
-    /// Capabilities the user has ever been prompted for, persisted in `UserDefaults`.
-    private(set) var requestedCapabilities: Set<HealthCapability>
+    /// Which ``HealthAvailabilityState`` the Health settings surfaces should present.
+    ///
+    /// The device fact is read live from the service (hardware capability never changes mid-run);
+    /// the master toggle arrives through the observation-tracked ``snapshot``, so ``refresh()``
+    /// and every request flow keep this current.
+    public var availabilityState: HealthAvailabilityState {
+        guard service.isHealthDataAvailable() else { return .deviceUnavailable }
+        return snapshot.isAvailable ? .available : .integrationOff
+    }
+    /// Capabilities the user has ever been prompted for — read through to
+    /// ``HealthCapabilityRequestLedger`` on every access, never cached (see the type's Important note).
+    var requestedCapabilities: Set<HealthCapability> {
+        HealthCapabilityRequestLedger.requestedCapabilities(
+            keychainService: ledgerKeychainService,
+            legacyDefaults: ledgerDefaults
+        )
+    }
 
     @ObservationIgnored
     private let service: HealthKitServicing
+    /// Keychain slot for the request ledger. Test-isolation seam only — production uses
+    /// ``HealthKitAnchorKeychain/service``.
+    @ObservationIgnored
+    private let ledgerKeychainService: String
+    /// Defaults suite carrying the ledger's legacy plaintext copy. Test-isolation seam only.
+    @ObservationIgnored
+    private let ledgerDefaults: UserDefaults
 
-    public init(service: HealthKitServicing? = nil) {
+    /// - Parameters:
+    ///   - service: The gateway to drive; defaults to a fresh ``HealthKitService``.
+    ///   - ledgerKeychainService: Slot for the ``HealthCapabilityRequestLedger``. Test seam.
+    ///   - ledgerDefaults: Defaults suite holding the ledger's legacy plaintext copy. Test seam.
+    public init(
+        service: HealthKitServicing? = nil,
+        ledgerKeychainService: String = HealthKitAnchorKeychain.service,
+        ledgerDefaults: UserDefaults = .standard
+    ) {
         let resolvedService = service ?? HealthKitService()
         self.service = resolvedService
         self.snapshot = resolvedService.currentAuthorizationSnapshot()
-        self.requestedCapabilities = Self.loadRequestedCapabilities()
-        if !snapshot.isAvailable {
+        self.ledgerKeychainService = ledgerKeychainService
+        self.ledgerDefaults = ledgerDefaults
+        // The DEVICE fact, not the folded `snapshot.isAvailable`: the folded flag is also false
+        // when merely the master toggle is off — every fresh install — and claiming device
+        // incapability there stated the wrong cause. The settings screen presents its own routed
+        // integration-off card for that state, so no status text is set for it here.
+        if !resolvedService.isHealthDataAvailable() {
             statusMessage = "Health data is not available on this device."
         }
     }
@@ -1986,21 +2249,19 @@ public final class HealthKitAuthorizationViewModel {
         }
     }
 
+    /// Records the prompt in the persisted ledger.
+    ///
+    /// Straight through to ``HealthCapabilityRequestLedger/record(_:keychainService:legacyDefaults:)``,
+    /// which read-modify-writes the stored row. It deliberately does NOT union a set held here: this
+    /// instance may have been alive across a wipe or a "turn Health off" performed by another
+    /// instance, and writing a remembered union would resurrect the whole pre-clear ledger.
     private func markRequested(_ capability: HealthCapability) {
-        requestedCapabilities.insert(capability)
-        Self.saveRequestedCapabilities(requestedCapabilities)
+        HealthCapabilityRequestLedger.record(
+            capability,
+            keychainService: ledgerKeychainService,
+            legacyDefaults: ledgerDefaults
+        )
     }
-
-    private static func loadRequestedCapabilities() -> Set<HealthCapability> {
-        let rawValues = UserDefaults.standard.stringArray(forKey: requestedCapabilitiesKey) ?? []
-        return Set(rawValues.compactMap(HealthCapability.init(rawValue:)))
-    }
-
-    private static func saveRequestedCapabilities(_ capabilities: Set<HealthCapability>) {
-        UserDefaults.standard.set(capabilities.map(\.rawValue).sorted(), forKey: requestedCapabilitiesKey)
-    }
-
-    private static let requestedCapabilitiesKey = "fernlet.healthkit.requested-capabilities"
 }
 
 extension HKAuthorizationStatus {

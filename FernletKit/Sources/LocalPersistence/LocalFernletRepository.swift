@@ -139,7 +139,11 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 ///   ``purgeAllPersistedData()`` lifts the block.
 /// - **Legacy migration.** When no file exists, `LegacyKeys` UserDefaults data (the
 ///   pre-database persistence) seeds the first database, and the first successful save clears
-///   those keys.
+///   those keys. ``purgeAllPersistedData()`` clears them too, and must: that corpus holds
+///   journal and memory JSON *unsealed* in the preferences plist, and because an absent file is
+///   indistinguishable from a first launch, keys left behind are re-read by
+///   ``migratedDatabase(todayKey:)`` on the very next load — a wipe the user watched succeed,
+///   undone at relaunch (and re-uploaded, with sync on).
 /// - **Backup exclusion (security-hardening Phase 6).** When
 ///   `StoragePreferences.localBackupExcludedFromiOSBackup` is set, the day-blob file itself is
 ///   flagged `isExcludedFromBackup` — at `init` (covering launch) and again after every
@@ -163,8 +167,8 @@ public struct LocalFernletRepository: FernletRepository {
     /// A reference-type box so every copy of the enclosing struct observes the same
     /// `persistenceBlockedByDecodeFailure` (read-only recovery mode after a corrupt read) and
     /// `pendingLegacyCleanup` (legacy UserDefaults keys awaiting removal after the first
-    /// successful save). Unsynchronized — safety relies on single-actor confinement of the
-    /// repository, not on locking.
+    /// successful save, or dropped outright by ``purgeAllPersistedData()``). Unsynchronized —
+    /// safety relies on single-actor confinement of the repository, not on locking.
     private final class State {
         var persistenceBlockedByDecodeFailure = false
         var pendingLegacyCleanup = false
@@ -180,6 +184,14 @@ public struct LocalFernletRepository: FernletRepository {
     /// resolves to `StoragePreferencesStore.currentPreferences()` — the same live-read pattern
     /// `PrivatePersistenceController` uses, so a stale in-memory copy can never mis-flag the file.
     private let backupExclusionPreference: () -> Bool
+    /// The defaults domain holding the pre-database ``LegacyKeys`` corpus: read by
+    /// ``migratedDatabase(todayKey:)``, cleared by the post-migration cleanup and by
+    /// ``purgeAllPersistedData()``. Production is `.standard`.
+    ///
+    /// Injectable because those keys are process-global state with no per-instance path: a test
+    /// that seeds them on `.standard` — or asserts a wipe removed them there — reads and destroys
+    /// the same keys as every concurrently running suite, and as the developer's own install.
+    private let legacyDefaults: UserDefaults
 
     /// Creates a repository backed by the given file, defaulting to
     /// `Application Support/Fernlet/FernletDatabase.json` (see ``defaultFileURL()``).
@@ -194,7 +206,13 @@ public struct LocalFernletRepository: FernletRepository {
     ///     custom location; `nil` selects the production path.
     ///   - backupExclusionPreference: Test seam for the exclusion choice; `nil` selects the live
     ///     `StoragePreferencesStore.currentPreferences()` read.
-    public init(fileURL: URL? = nil, backupExclusionPreference: (() -> Bool)? = nil) {
+    ///   - legacyDefaults: Test seam for the pre-database ``LegacyKeys`` domain; `nil` selects
+    ///     `.standard`, the domain the pre-database builds actually wrote.
+    public init(
+        fileURL: URL? = nil,
+        backupExclusionPreference: (() -> Bool)? = nil,
+        legacyDefaults: UserDefaults? = nil
+    ) {
         let resolvedURL = fileURL ?? Self.defaultFileURL()
         assert(!resolvedURL.path.isEmpty, "repository path must not be empty")
         self.fileURL = resolvedURL
@@ -202,6 +220,7 @@ public struct LocalFernletRepository: FernletRepository {
         self.decoder = RowPayloadCoders.makeDecoder()
         self.backupExclusionPreference = backupExclusionPreference
             ?? { StoragePreferencesStore.currentPreferences().localBackupExcludedFromiOSBackup }
+        self.legacyDefaults = legacyDefaults ?? .standard
         applyBackupExclusionFromPreferenceIfSet()
     }
 
@@ -354,13 +373,29 @@ public struct LocalFernletRepository: FernletRepository {
         state.persistenceBlockedByDecodeFailure = true
     }
 
-    /// Deletes the whole local store file. Removing the file rather than writing an empty database
-    /// leaves nothing on disk to be recovered, and the next `loadDatabase` already treats an absent
-    /// file as a fresh database — so this is the same end state a first launch sees.
+    /// Deletes the whole local store file AND the pre-database ``LegacyKeys`` UserDefaults corpus.
+    /// Removing the file rather than writing an empty database leaves nothing on disk to be
+    /// recovered, and the next `loadDatabase` already treats an absent file as a fresh database —
+    /// so this is the same end state a first launch sees.
+    ///
+    /// The legacy keys are the other half of "the same end state", not an extra: they hold
+    /// `[JournalEntry]` and `[MemoryNote]` as UNSEALED JSON in the preferences plist, and an
+    /// absent file routes the next load straight through ``migratedDatabase(todayKey:)``, which
+    /// re-reads all seven families. Clearing only the file leaves the plaintext behind and lets
+    /// relaunch put the data back.
+    ///
+    /// Cleared BEFORE the file-existence guard on purpose: production runs
+    /// `CoreDataFernletRepository`, which holds this repository only as its legacy-migration
+    /// source, so the common wipe reaches here with no JSON file at all — an early return would
+    /// skip the keys in exactly the configuration that ships.
     ///
     /// - Returns: `false` when the file could not be removed. Not discardable (R7): "delete
     ///   everything" reports the store it could not clear.
     public func purgeAllPersistedData() -> Bool {
+        clearLegacyUserDefaultsIfPresent()
+        // The keys are gone, so nothing is awaiting the post-save cleanup any more; a later
+        // migration re-arms this when it finds something to migrate.
+        state.pendingLegacyCleanup = false
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
         do {
             try FileManager.default.removeItem(at: fileURL)
@@ -394,7 +429,7 @@ public struct LocalFernletRepository: FernletRepository {
         applyBackupExclusionFromPreferenceIfSet()
         if state.pendingLegacyCleanup {
             state.pendingLegacyCleanup = false
-            Self.clearLegacyUserDefaultsIfPresent()
+            clearLegacyUserDefaultsIfPresent()
         }
         return true
     }
@@ -432,41 +467,46 @@ public struct LocalFernletRepository: FernletRepository {
     private func migratedDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
         var database = LocalFernletDatabase()
-        database.days[todayKey] = Self.loadLegacy(FernletDay.self, key: LegacyKeys.day(todayKey)) ?? FernletDay(date: todayKey)
-        database.settings = Self.loadLegacy(FernletSettings.self, key: LegacyKeys.settings) ?? FernletSettings()
-        database.recentMeals = Self.loadLegacy([Meal].self, key: LegacyKeys.recentMeals) ?? []
-        database.previousJournals = Self.loadLegacy([JournalEntry].self, key: LegacyKeys.previousJournals) ?? []
-        database.memories = Self.loadLegacy([MemoryNote].self, key: LegacyKeys.memories) ?? []
-        database.goals = Self.loadLegacy([FitnessGoal].self, key: LegacyKeys.goals) ?? []
-        database.workshop = Self.loadLegacy(WorkshopData.self, key: LegacyKeys.workshop) ?? WorkshopData()
+        database.days[todayKey] = loadLegacy(FernletDay.self, key: LegacyKeys.day(todayKey)) ?? FernletDay(date: todayKey)
+        database.settings = loadLegacy(FernletSettings.self, key: LegacyKeys.settings) ?? FernletSettings()
+        database.recentMeals = loadLegacy([Meal].self, key: LegacyKeys.recentMeals) ?? []
+        database.previousJournals = loadLegacy([JournalEntry].self, key: LegacyKeys.previousJournals) ?? []
+        database.memories = loadLegacy([MemoryNote].self, key: LegacyKeys.memories) ?? []
+        database.goals = loadLegacy([FitnessGoal].self, key: LegacyKeys.goals) ?? []
+        database.workshop = loadLegacy(WorkshopData.self, key: LegacyKeys.workshop) ?? WorkshopData()
         database.rebuildDerivedTables(todayKey: todayKey)
         state.pendingLegacyCleanup = true
         return database
     }
 
-    /// Removes the pre-database UserDefaults keys (including the per-day `fernlet-day-*`
-    /// entries) once their content has been safely persisted to the database file.
-    private static func clearLegacyUserDefaultsIfPresent() {
-        let knownKeys = [
-            LegacyKeys.settings,
-            LegacyKeys.recentMeals,
-            LegacyKeys.previousJournals,
-            LegacyKeys.memories,
-            LegacyKeys.goals,
-            LegacyKeys.workshop
-        ]
-        guard knownKeys.contains(where: { UserDefaults.standard.data(forKey: $0) != nil }) else { return }
-        knownKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
-        UserDefaults.standard.dictionaryRepresentation().keys
-            .filter { $0.hasPrefix("fernlet-day-") }
-            .forEach { UserDefaults.standard.removeObject(forKey: $0) }
+    /// Removes every pre-database UserDefaults key present — the six fixed ``LegacyKeys`` families
+    /// plus every interpolated `fernlet-day-*` row.
+    ///
+    /// The single removal path, shared by the post-migration cleanup (once the content is safely in
+    /// the database file) and by ``purgeAllPersistedData()``, so the wipe can never clear a
+    /// narrower set than the migration reads.
+    ///
+    /// Two shape notes. The day rows are discovered by prefix because their count is not knowable
+    /// at compile time; `dictionaryRepresentation()` is a snapshot of a finite domain, so the scan
+    /// and the removals are bounded loops (R2). And the presence check spans BOTH families: the
+    /// earlier fixed-keys-only guard returned early on an install whose surviving legacy data was
+    /// day rows alone, leaving them behind for the next migration to re-read.
+    private func clearLegacyUserDefaultsIfPresent() {
+        // `object(forKey:)`, not `data(forKey:)`: a key holding something other than the expected
+        // Data is still a legacy key a wipe has to remove.
+        let fixedKeys = LegacyKeys.fixedKeys.filter { legacyDefaults.object(forKey: $0) != nil }
+        let dayKeys = legacyDefaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(LegacyKeys.dayPrefix) }
+        guard !fixedKeys.isEmpty || !dayKeys.isEmpty else { return }
+        fixedKeys.forEach { legacyDefaults.removeObject(forKey: $0) }
+        dayKeys.forEach { legacyDefaults.removeObject(forKey: $0) }
     }
 
     /// Decodes one legacy UserDefaults value, returning `nil` (not throwing) when the key is
     /// absent or the stored data no longer decodes.
-    private static func loadLegacy<T: Decodable>(_ type: T.Type, key: String) -> T? {
+    private func loadLegacy<T: Decodable>(_ type: T.Type, key: String) -> T? {
         assert(!key.isEmpty, "legacy key required")
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        guard let data = legacyDefaults.data(forKey: key) else { return nil }
         assert(!data.isEmpty, "legacy data should not be empty")
         return try? JSONDecoder().decode(type, from: data)
     }
@@ -484,8 +524,10 @@ public struct LocalFernletRepository: FernletRepository {
     /// The pre-database UserDefaults keys the original app persisted under.
     ///
     /// Retained solely so ``migratedDatabase(todayKey:)`` can hydrate a first database from an
-    /// old install's data and ``clearLegacyUserDefaultsIfPresent()`` can remove the keys once
-    /// that data is safely in the file. New code must never write these keys.
+    /// old install's data and ``clearLegacyUserDefaultsIfPresent()`` can remove the keys — once
+    /// that data is safely in the file, or on "delete everything". New code must never write these
+    /// keys. The spellings are frozen persisted tokens: renaming one strands an old install's data
+    /// in the plist forever, unreadable and undeletable.
     private enum LegacyKeys {
         static let settings = "fernlet-settings"
         static let recentMeals = "fernlet-recent-meals"
@@ -493,10 +535,17 @@ public struct LocalFernletRepository: FernletRepository {
         static let memories = "fernlet-memories"
         static let goals = "fernlet-goals"
         static let workshop = "fernlet-workshop"
+        /// The per-day family's frozen prefix. One constant so what ``day(_:)`` writes and what the
+        /// cleanup's prefix scan looks for cannot drift apart.
+        static let dayPrefix = "fernlet-day-"
+
+        /// Every fixed (non-interpolated) family in one list — the migration reads these and the
+        /// cleanup removes them, so a family added here reaches both instead of only one.
+        static let fixedKeys = [settings, recentMeals, previousJournals, memories, goals, workshop]
 
         static func day(_ key: String) -> String {
             assert(!key.isEmpty, "legacy day key required")
-            return "fernlet-day-\(key)"
+            return "\(dayPrefix)\(key)"
         }
     }
 }

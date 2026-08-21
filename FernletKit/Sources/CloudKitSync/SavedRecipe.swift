@@ -478,7 +478,9 @@ extension SavedRecipeRepository: SavedRecipeRepositoring {}
 /// Retained as the one-time migration source for ``SavedRecipeRepository`` so recipes saved by
 /// pre-Core-Data builds survive without loss: `load` tolerates a missing or undecodable file by
 /// returning `[]`, and `save` writes atomically with complete file protection, encoding through
-/// the shared `RowPayloadCoders` config with the pretty-printed opt-in.
+/// the shared `RowPayloadCoders` config with the pretty-printed opt-in. `deleteFile` removes the
+/// file itself — the "Delete everything" leg, since the migration marks itself complete without
+/// ever deleting the plaintext source file.
 nonisolated public struct LegacySavedRecipeJSONRepository {
     private let fileURL: URL
     private let encoder: JSONEncoder
@@ -511,6 +513,25 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
             return true
         } catch {
             assertionFailure("saved recipe write failed")
+            return false
+        }
+    }
+
+    /// Removes the legacy JSON file itself — the "Delete everything" path.
+    ///
+    /// The one-time migration into Core Data marks itself complete but never deletes this file, so
+    /// on any install predating the migration the recipe names, ingredients, notes, macros and
+    /// source URLs sit in Application Support in plaintext until something removes them. A missing
+    /// file counts as success — there is nothing left to leak; a failed removal returns `false`
+    /// (the type's `save` idiom) so the wipe funnel can name the surviving copy instead of
+    /// promising a clean device. Not discardable (R7), same as `SavedRecipeRepository.deleteAll`.
+    public func deleteFile() -> Bool {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            return true
+        } catch {
+            assertionFailure("saved recipe legacy file delete failed")
             return false
         }
     }

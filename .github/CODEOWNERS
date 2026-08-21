@@ -9,23 +9,36 @@
 #
 # Deliberately narrow: ordinary feature code is NOT listed, so this gate cannot rot into a
 # rubber stamp. If a path is added here, say in the PR why it is wall-load-bearing.
+#
+# Every pattern must resolve to an existing file or directory —
+# Tests/FernletTests/CodeOwnersResolutionTests.swift enforces it, so a restructure that moves
+# a protected file fails CI instead of silently unprotecting the wall (which is exactly what
+# the 2026-08-12 App/+Tests/ restructure did to 11 of the 26 entries here).
 
 # The mechanical enforcement (grep-walls + custody tripwires)
-/FernletTests/NoTrackingBoundaryTests.swift   @bowman-mw
-/FernletTests/S3BoundaryTests.swift           @bowman-mw
-/FernletTests/KeyCustodyBoundaryTests.swift   @bowman-mw
-/FernletTests/ColumnCryptoDeviceBindingTests.swift @bowman-mw
-/FernletTests/SealedBackupFormatPinTests.swift @bowman-mw
-/FernletTests/SecureEnclaveWrapTests.swift    @bowman-mw
-/FernletTests/FernletLockCryptoTests.swift    @bowman-mw
+/Tests/FernletTests/NoTrackingBoundaryTests.swift        @bowman-mw
+/Tests/FernletTests/S3BoundaryTests.swift                @bowman-mw
+/Tests/FernletTests/KeyCustodyBoundaryTests.swift        @bowman-mw
+/Tests/FernletTests/ColumnCryptoDeviceBindingTests.swift @bowman-mw
+/Tests/FernletTests/SealedBackupFormatPinTests.swift     @bowman-mw
+/Tests/FernletTests/SecureEnclaveWrapTests.swift         @bowman-mw
+/Tests/FernletTests/FernletLockCryptoTests.swift         @bowman-mw
+/Tests/FernletTests/PowerOfTenBoundaryTests.swift        @bowman-mw
+/Tests/FernletTests/LocalizationBoundaryTests.swift      @bowman-mw
+/Tests/FernletTests/CodeOwnersResolutionTests.swift      @bowman-mw
 
-# Wall scripts, hooks, and CI
+# Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
+# job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
+# exception, so adding one deserves the same review as weakening a wall test.
 /Scripts/spm-wall-check.sh                    @bowman-mw
 /Scripts/spm-wall-selftest.sh                 @bowman-mw
 /Scripts/install-git-hooks.sh                 @bowman-mw
 /Scripts/git-hooks/                           @bowman-mw
 /Scripts/release-checksum.sh                  @bowman-mw
+/Scripts/power-of-10-scan.py                  @bowman-mw
+/Scripts/power-of-10-allowlist.json           @bowman-mw
 /.github/workflows/s3-wall.yml                @bowman-mw
+/.github/workflows/power-of-10.yml            @bowman-mw
 /.github/CODEOWNERS                           @bowman-mw
 
 # The stated guarantees
@@ -34,15 +47,15 @@
 /Docs/Privacy-Policy.md                       @bowman-mw
 /Docs/Release-Process.md                      @bowman-mw
 /Site/privacy/                                @bowman-mw
-/Fernlet/PrivacyPolicyView.swift              @bowman-mw
+/App/Fernlet/PrivacyPolicyView.swift          @bowman-mw
 
 # The dependency DAG is the S3 wall's compiler half
 /FernletKit/Package.swift                     @bowman-mw
 
 # App Store privacy manifests (the NoTracking tests pin their contents)
-/Fernlet/PrivacyInfo.xcprivacy                @bowman-mw
-/FernletWidgets/PrivacyInfo.xcprivacy         @bowman-mw
-/FernletShareExtension/PrivacyInfo.xcprivacy  @bowman-mw
+/App/Fernlet/PrivacyInfo.xcprivacy            @bowman-mw
+/App/FernletWidgets/PrivacyInfo.xcprivacy     @bowman-mw
+/App/FernletShareExtension/PrivacyInfo.xcprivacy @bowman-mw
 
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw

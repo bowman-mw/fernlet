@@ -42,14 +42,15 @@ from `FernletFoundation`, which is where it lives rather than here so the local-
 `LocalPersistence` encodes under the same configuration. The coin-ledger, milestone-ledger, and
 custom-item stores are thin wrappers over one internal load/upsert engine (`AppendOnlyRowStore`,
 parameterized by entity name and labels); the engine deliberately has no delete method, so each
-repository's deletion policy — or its total absence — stays visible on the repository type
-itself.
+repository's deletion policy stays visible on the repository type itself.
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
 duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself (most
 recent `updatedAt` wins, with a deliberately tie-conservative self-heal that makes a mutual
 cross-device wipe impossible) — the ledgers and items are union-merged by their aggregation
-services instead. ``MilestoneLedgerRepository`` additionally has *no delete path at all*: milestone
-rows survive a full data reset by design.
+services instead. ``MilestoneLedgerRepository``'s one delete is `deleteAll()`, the
+delete-everything wipe path (added 2026-08-20, when the wipe stopped keeping the milestone trail —
+reversing the earlier survive-a-reset rule); its protocol still exposes no delete, so only the
+app's deletion funnel, which narrows to the concrete type, can reach it.
 
 The third tier is direct CloudKit, bypassing the Core Data mirror. ``CloudKitDataService`` handles
 what `NSPersistentCloudKitContainer` cannot: counting the data already in an iCloud account (feeding

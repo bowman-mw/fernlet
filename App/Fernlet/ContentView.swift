@@ -948,12 +948,18 @@ struct ContentView: View {
         await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
     }
 
-    /// Wires the "delete everything" seams for the sealed stores `FernletStore` doesn't own. Each drops
-    /// rows WITHOUT decrypting them, so deletion stays available even while the app is locked and the
-    /// data itself is unreadable.
+    /// Wires the "delete everything" seams for the stores `FernletStore` doesn't own — the sealed
+    /// repositories, the locked-note buffer, both store rebuilds, HealthKit, the duress purge, the
+    /// identity reconcile, the preferences, and (via ``attachCloudDeleteAllHooks()``) CloudKit. The
+    /// sealed row deletes drop rows WITHOUT decrypting them, so deletion stays available even while
+    /// the app is locked and the data itself is unreadable.
     ///
     /// Extracted from the launch `.task` rather than inlined: the closures pushed that already-large
     /// body past the type-checker's budget.
+    ///
+    /// - Important: this function is part of the wipe path scanned by `PrivacyWipeCoverageTests` —
+    ///   several of the funnel's real clears live only inside these closures. A hook wired here
+    ///   needs its manifest token and doc row like any funnel leg.
     private func attachDeleteAllHooks() {
         // `(try? …) != nil` rather than a bare `try?`: a throw here means the user's sealed rows are
         // still on disk, and the dialog promises they are gone. The failure has to reach the outcome.
@@ -976,6 +982,15 @@ struct ContentView: View {
         // repository above writes through.
         store.sealedStoreRebuildHook = {
             (try? PrivatePersistenceController.shared.rebuildStore()) != nil
+        }
+        // The synced store's residue pass. Checkpoint + vacuum, NOT the sealed store's
+        // destroy-and-re-add: this file carries the CloudKit mirror's pending export queue in its
+        // persistent history, and destroying it would strand the server copy of the deletes that
+        // have not shipped yet. `compactStoreAfterWipe()` is a no-op success on the in-memory
+        // (`/dev/null`) store, so a preview/test container reports a clean pass rather than a
+        // failure that means nothing there.
+        store.mainStoreRebuildHook = {
+            (try? await PersistenceController.shared.compactStoreAfterWipe()) != nil
         }
         store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
             await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
@@ -1009,9 +1024,33 @@ struct ContentView: View {
                 FernletAuditLog.log("duress.recoveryEnrollment.retired", context: ["site": "identityRotated"])
             }
         }
-        // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone with
-        // sync off. `deleteAllCloudKitData` opens its own connection (no live sync session needed) and the
-        // user already confirmed the wipe via the destructive dialog, so "DELETE" is passed programmatically.
+        attachCloudDeleteAllHooks()
+        // Both preference hooks forward to the static helpers below (see their docs for the
+        // single-writer and keep-what-a-retry-needs invariants).
+        store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
+            Self.persistSealedBackupDeferral(deferred, payloadType: payloadType, in: storagePreferencesStore)
+        }
+        store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
+            Self.resetStoragePreferencesAfterWipe(
+                keepSealedBackupFlags: keepSealedBackupFlags,
+                keepCloudCopyFlag: keepCloudCopyFlag,
+                in: storagePreferencesStore
+            )
+        }
+    }
+
+    /// The two direct-CloudKit legs of "delete everything" — split out of ``attachDeleteAllHooks()``
+    /// for the Power-of-10 60-line rule, and kept together because they are the pair: between them
+    /// they cover every server-side record the local row deletes cannot reach by propagating.
+    ///
+    /// Both pass "DELETE" programmatically: the user already confirmed the wipe on the destructive
+    /// dialog, and neither call needs a live sync session (each opens its own connection).
+    ///
+    /// - Important: this function is part of the wipe path scanned by `PrivacyWipeCoverageTests`.
+    ///   A new hook wired here needs its manifest token and doc row like any funnel leg.
+    private func attachCloudDeleteAllHooks() {
+        // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone
+        // with sync off, which the funnel invokes only when `cloudCopyKept` is set.
         store.cloudCopyDeleteHook = {
             do {
                 _ = try await CloudKitDataService().deleteAllCloudKitData(
@@ -1025,17 +1064,21 @@ struct ContentView: View {
                 return false
             }
         }
-        // Both preference hooks forward to the static helpers below (see their docs for the
-        // single-writer and keep-what-a-retry-needs invariants).
-        store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
-            Self.persistSealedBackupDeferral(deferred, payloadType: payloadType, in: storagePreferencesStore)
-        }
-        store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
-            Self.resetStoragePreferencesAfterWipe(
-                keepSealedBackupFlags: keepSealedBackupFlags,
-                keepCloudCopyFlag: keepCloudCopyFlag,
-                in: storagePreferencesStore
-            )
+        // The legacy direct-CloudKit records, which the hook above cannot reach: it runs only on the
+        // "stop syncing, keep the copy" path, and a live sync deletes the server copy by propagating
+        // the local row deletes — which the mirror can only do for the `CD_`-prefixed types it wrote
+        // itself. Unconditional for that reason, which is why the service reports a missing iCloud
+        // account as a clean sweep rather than a failure.
+        store.legacyCloudRecordDeleteHook = {
+            do {
+                _ = try await CloudKitDataService().deleteLegacyDirectCloudKitRecords(
+                    confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE")
+                )
+                return true
+            } catch {
+                FernletAuditLog.log("deleteAll.legacyCloudDeleteFailed", context: ["error": String(describing: error)])
+                return false
+            }
         }
     }
 
