@@ -128,10 +128,15 @@ nonisolated enum SettingsSearchIndex {
     }
 
     /// Diacritic/case-insensitive fold, non-alphanumerics collapsed to single spaces. Mirrors
-    /// `FoodItemSearch.normalized` without importing it (kept self-contained by design).
+    /// `FoodItemSearch.normalized` without importing it (kept self-contained by design) — including
+    /// its load-bearing `locale: nil`. The catalog's frozen English tokens and the typed query both
+    /// fold through here, but locale-sensitive case rules break their agreement across case
+    /// variants: Turkish case-folds "I" to dotless "ı", so `.current` indexed "Face ID" as
+    /// "face ıd" while a typed "id" stayed "id" — the query silently missed. `FoodItemSearch`'s
+    /// doc comment carries the full record of the same bug.
     static func normalized(_ text: String) -> String {
         text
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
             .lowercased()
             .map { $0.isLetter || $0.isNumber ? $0 : " " }
             .reduce(into: "") { result, character in

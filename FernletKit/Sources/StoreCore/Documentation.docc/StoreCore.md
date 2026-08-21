@@ -38,10 +38,14 @@ milestone per event) plus dedup-by-id on
 every load form the union-merge that makes earning idempotent and double-spends structurally
 impossible, because `NSPersistentCloudKitContainer` does not enforce id uniqueness itself. The
 ledgers differ deliberately at the edges: the coin ledger's `reset()` appends a reset-boundary
-marker that voids pre-reset rows sync-safely, while the milestone ledger's
-`reset(deletingRowsWith:)` empties the ledger outright on "delete everything" (since 2026-08-20,
-reversing the earlier rule that lifetime counts survive a wipe) — its row vocabulary has no
-boundary marker, so rows still held by another signed-in device can sync back afterwards.
+marker that voids pre-reset rows sync-safely and deletes nothing, while the milestone ledger's
+`reset(deletingRowsWith:)` does both halves on "delete everything" — it empties the ledger
+(since 2026-08-20, reversing the earlier rule that lifetime counts survive a wipe) AND, since
+2026-08-21, appends a `resetBoundary` marker of its own, so event rows still held by another
+signed-in device raise no count and re-mint no award when they sync back into the emptied store
+(`MilestoneEconomy` counts only rows whose day is at or after the marker's day AND whose
+`createdAt` is strictly after its instant — the day half also voids rows re-derived from
+re-synced day records, which carry fresh reconcile-time timestamps).
 
 ``DerivedSignalsService`` and the pure ``DerivedSignalsRebuilder`` cover Tier-2 derived data:
 signals recomputed deterministically from raw day history (via LocalPersistence's

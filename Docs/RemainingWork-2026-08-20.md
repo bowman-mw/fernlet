@@ -148,13 +148,26 @@ screen exists. All three were understated or missing in the old tracker.
    privacy-worst freeze default. `AIAuditLogScreenTests`. Residuals: the `hubLink` String idiom was
    forked 2026-08-21 (labels are `LocalizedStringKey`; `SettingsSearchEntry` split into frozen
    matching tokens + `displayTitle`, matching pinned English-stable by test). Screen still snapshots
-   once per push (deliberate). NEW same-species follow-ups from that fork, small and deferred —
-   now PLANNED with decisions locked in
-   [`Next-Round-Prompt-2026-08-21.md`](Next-Round-Prompt-2026-08-21.md) (Parts 1–2), alongside the
-   milestone reset-boundary marker (Part 3; owner decided 2026-08-21: milestone marker + dialog
-   disclosure for custom items/days, type-only hubToggle fork). The 61 dynamic search-title keys
-   still await the deferred search-catalog curation pass; the 4 new hub-label keys are in the
-   synced catalog.
+   once per push (deliberate). ✅ 2026-08-21 — the two same-species follow-ups landed
+   ([`Next-Round-Prompt-2026-08-21.md`](Next-Round-Prompt-2026-08-21.md) Parts 1–2): the settings
+   search fold is locale-independent (`locale: nil`, pinned — `.current`'s Turkish case rules
+   silently emptied results), and `hubToggle` took the same `LocalizedStringKey` fork as `hubLink`
+   (type-only per the owner decision; the 11 switch labels are in the synced catalog, signature
+   pinned beside `hubLink`'s). ✅ 2026-08-21 — Part 3 of the same prompt landed too: the milestone
+   ledger now writes a `resetBoundary` marker at the wipe (the coin ledger's mechanism), so counts
+   and awards see only rows from the wipe day onward created strictly after its instant — voiding
+   both a second signed-in device's re-synced offline event rows AND rows re-derived from a re-synced
+   day record (the derive also refuses pre-boundary days at the mint); and the wipe dialog's
+   multi-device caveat now discloses the stores that genuinely can re-add — most recent days and
+   custom clothing designs — per the owner's disclose-don't-tombstone decision for those two.
+   `MilestoneResetBoundaryTests`. **Known residual, deferred (both ledgers, not just milestones):**
+   marker durability is best-effort — a reset-boundary marker whose write fails lives only in the
+   service's in-memory pending queue, and a process death before the next flush loses the boundary
+   silently (the fresh-launch load path does not re-merge pending rows), leaving that device unable
+   to void rows another device syncs back. The wipe's own verdict deliberately reports the row delete
+   only. Documented in [`PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md) "Known residuals"; a fix
+   belongs to `CoinLedgerService` and `MilestoneLedgerService` together. The 61 dynamic search-title
+   keys still await the deferred search-catalog curation pass.
 3. **The coach proximity channel.** Trust policy, verification ceremony, sealed wire envelope and
    pre-decode DoS caps — all hardened, all referenced only by tests. See §5.
 

@@ -141,7 +141,7 @@ container reload cannot race it). See the numbered commentary inside `deleteAllD
 | Legacy saved-recipes JSON file — the pre-Core-Data `SavedRecipes.json`: plaintext recipe names, ingredients, notes, macros and source URLs on any install predating the migration | Application Support/Fernlet (disk) | `LegacySavedRecipeJSONRepository().deleteFile` (a missing file counts as success; the migration latch that survives the wipe — see the deliberate-exceptions table — means nothing re-reads the file, but until this call nothing deleted it either) |
 | Custom items + clothing designs (per-row) | Core Data/CloudKit | `customItemService.reset` |
 | Coin ledger (per-row) | Core Data/CloudKit | `coinLedgerService.reset` |
-| Milestone ledger — the dated rows recording THAT a journal entry, meal, workout, breathing session, worry release or hydration day happened (kind + dayKey + timestamp; never any content), i.e. metadata about the very entries this funnel destroys | Core Data `MilestoneLedgerRecord` + its CloudKit private-database mirror | `milestoneLedgerService.reset` (the funnel narrows the service's `persistedStore` to `MilestoneLedgerRepository` for the row delete the protocol does not carry; the delete is object-by-object through the view context, which is what propagates it to iCloud — a batch delete would leave the cloud copies. In-memory counts and the pending-append queue are dropped in the same call). Reverses the pre-2026-08-20 product decision that milestone counts outlive a reset: "we deleted your journal and kept the dates you journaled" is not a wipe |
+| Milestone ledger — the dated rows recording THAT a journal entry, meal, workout, breathing session, worry release or hydration day happened (kind + dayKey + timestamp; never any content), i.e. metadata about the very entries this funnel destroys | Core Data `MilestoneLedgerRecord` + its CloudKit private-database mirror | `milestoneLedgerService.reset` (the funnel narrows the service's `persistedStore` to `MilestoneLedgerRepository` for the row delete the protocol does not carry; the delete is object-by-object through the view context, which is what propagates it to iCloud — a batch delete would leave the cloud copies. In-memory counts and the pending-append queue are dropped in the same call). Reverses the pre-2026-08-20 product decision that milestone counts outlive a reset: "we deleted your journal and kept the dates you journaled" is not a wipe. **Sync-safe since 2026-08-21**, by the coin ledger's mechanism: the same call appends a `resetBoundary` marker row after the delete, and `MilestoneEconomy` counts and awards only rows whose day is at or after the marker's day AND whose `createdAt` is strictly after its instant — so event rows a second signed-in device was holding while offline raise no lifetime count and re-mint no milestone coin when they sync back into the emptied store. Both halves are load-bearing: the instant catches a threshold crossed earlier on the wipe day, and the DAY catches rows re-derived from a day record that came back (day records keep no tombstones, and a re-derived row carries a fresh reconcile-time timestamp, so the instant alone could never void it — the reconcile also refuses to mint for pre-boundary days at all). The delete is what honors the wipe; the marker is what makes it stick. The marker itself is never counted, displayed or awarded, and an app version that predates it drops just that row at decode (the store's per-row `try?`), which leaves the wiped device's own aggregation unaffected. **Two residuals, both shared with the coin ledger — see "Known residuals"** |
 | AI retry queue | Disk | `aiRetryQueueService.reset` |
 | Proximity trust vault (friends/blocks) | Snapshot + memory | `proximityTrustVault.apply` |
 | Stress scoring local state | Disk | `scrubStressLocalState` |
@@ -403,6 +403,23 @@ preprocessor conditional at all inside the wipe path throws.
   14-day sender lifetime. The user is told at the time ("hearts parked in iCloud" in the incomplete
   list) and again on every retry within that process; a relaunch clears the latch, because by then
   there is nothing left to act on.
+- **The two append-only ledgers' reset boundary has two residuals, and they are identical for coins
+  and milestones** (the milestone marker landed 2026-08-21; the coin one has always worked this way).
+  Neither leaves the user's data on the device — the rows really are deleted — so neither is named in
+  the delete dialog; both are about how well the wipe resists a SECOND signed-in device syncing back.
+  - **The wipe DAY itself stays countable and earnable.** Rows are voided when their day is before
+    the marker's day (or when they predate its instant), so content from earlier on the wipe day that
+    re-syncs from another device can re-derive and count on that one day. Voiding the wipe day
+    instead would permanently lock out genuine post-wipe care on the day the user wiped — the same
+    trade `CoinEconomy` documents for `earn:<resetDay>`, made the same way.
+  - **Marker durability is best-effort.** If the marker row's own write fails it survives only in the
+    service's in-memory pending queue and is retried on the next debounced flush; a process death
+    before that flush loses the boundary silently, because the fresh-launch load path does not
+    re-merge pending rows. The wipe's reported verdict deliberately covers the row DELETE only —
+    reporting an incomplete wipe because a boundary marker did not persist would tell the user their
+    data survived when it did not. Fixing this belongs to both ledgers at once; it is open, not done.
+  - (Same family, no fix: a marker stamped by a badly future-set device clock voids events until that
+    instant. Inherent to instant-based boundaries without a trusted clock.)
 - The `invalidateCachedKey` calls are now hygiene, not a correctness requirement: with the shared
   key row kept, a provider holding a stale in-memory copy holds the SAME key the keychain still has,
   so a photo captured between wipe and relaunch stays readable either way. (They earned their keep

@@ -124,13 +124,31 @@ enum DeleteAllDataConfirmation {
 
         var paragraphs = [scope]
 
-        // A multi-device caveat, only when there is a day-blob copy in iCloud. Fernlet keeps no
-        // tombstones, so a device you are actively using can re-upload its most recent days after the
-        // wipe reaches the cloud — say so rather than imply the cloud is instantly and permanently empty.
+        // A multi-device caveat, only when there is a day-blob copy in iCloud. Day records and custom
+        // items keep no tombstones, so a device you are actively using can re-upload its most recent
+        // days — and re-add the clothing designs it still holds — after the wipe reaches the cloud.
+        // Say so rather than imply the cloud is instantly and permanently empty (owner decision
+        // 2026-08-21: disclose these two, don't tombstone them).
+        //
+        // Two per-row stores are deliberately NOT in this sentence, because they genuinely resist it:
+        // the coin ledger and — since 2026-08-21 — the milestone ledger both write a reset-boundary
+        // marker at the wipe, and their aggregation voids every row from before it (milestones by day
+        // AND instant, which is what also voids rows re-derived from a day that came back). Rows that
+        // sync back from an offline device raise no balance and no lifetime count. Naming them here
+        // would be the says-more-than-it-does gap in reverse: a survival that no longer happens.
+        //
+        // Two residuals keep that claim honest, both shared with the coin ledger and both written up
+        // in Docs/PrivacyWipeCoverage.md: (1) the wipe DAY itself stays countable/earnable, so
+        // same-day pre-wipe content re-synced from another device can re-derive on that one day —
+        // voiding it instead would lock out genuine post-wipe care on the day the user wiped;
+        // (2) if the marker's own write fails it lives only in an in-memory retry queue, so a process
+        // death before it flushes loses the boundary silently. Neither is big enough to name in the
+        // dialog — the user's data is deleted in both — but neither may be quietly forgotten either.
         if hasICloudDayCopy {
             paragraphs.append("""
                 If you use Fernlet on another device, this reaches it the next time that device syncs — \
-                and a device you're using right then may re-add its most recent days.
+                and a device you're using right then may re-add its most recent days and any custom \
+                clothing designs it still has.
                 """)
         }
 

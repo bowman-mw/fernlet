@@ -647,6 +647,12 @@
     "Allow" : {
 
     },
+    "Allow nearby hearts" : {
+
+    },
+    "Allow nearby recipe shares" : {
+
+    },
     "Already did this — log it" : {
 
     },
@@ -1265,6 +1271,9 @@
     "Deleting everything…" : {
 
     },
+    "Deliver hearts when apart" : {
+
+    },
     "Deliver hearts when you're apart?" : {
 
     },
@@ -1783,6 +1792,12 @@
     "Hidden" : {
 
     },
+    "Hide fertile window" : {
+
+    },
+    "Hide predictions" : {
+
+    },
     "Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again." : {
 
     },
@@ -1898,6 +1913,9 @@
 
     },
     "Intimacy surfaces are hidden and Fernlet isn't reading them. Your notes are kept — turn this back on any time. Entries in Apple Health stay there either way." : {
+
+    },
+    "Intimacy tracking" : {
 
     },
     "It came from Health, so manage it in the Health app." : {
@@ -2252,6 +2270,9 @@
 
     },
     "Nearby Friends is off" : {
+
+    },
+    "Nearby friends presence" : {
 
     },
     "Nearby invites" : {
@@ -2697,6 +2718,9 @@
 
     },
     "Period" : {
+
+    },
+    "Period tracking" : {
 
     },
     "Period-aware care" : {
@@ -3393,6 +3417,9 @@
     "Share again" : {
 
     },
+    "Share clothing shops with friends" : {
+
+    },
     "Share outside Fernlet" : {
 
     },
@@ -3412,6 +3439,9 @@
 
     },
     "Share your training" : {
+
+    },
+    "Share your vibe with friends" : {
 
     },
     "Shared by %@" : {

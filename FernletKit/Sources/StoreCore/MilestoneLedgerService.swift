@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import FernletPersistence
 import FernletDomainModel
+import FernletFoundation
 
 /// Owns the milestone (cumulative achievements) ledger in memory and persists it to its own
 /// per-row store — a direct mirror of ``CoinLedgerService``'s debounced append-only shape, down to
@@ -11,16 +12,32 @@ import FernletDomainModel
 /// wipe destroys. Lifetime counts are distinct-row counts over the union-merged rows
 /// (`MilestoneEconomy`), so between resets they are monotonic and sync-safe across devices.
 ///
-/// One deliberate difference from the coin ledger: there is no reset-boundary marker (the milestone
-/// row vocabulary has no such kind), so rows still held by another signed-in device can sync back
-/// after a wipe. That is the same residual every per-row store except the coin ledger carries.
+/// The reset does BOTH halves as of 2026-08-21: it deletes the rows (which the coin ledger does not)
+/// **and** appends a `resetBoundary` marker (which it previously did not). The delete is what honors
+/// "delete everything" — the trail is metadata about destroyed content and has to go, on this device
+/// and, through the mirror, in iCloud. The marker is what makes the delete stick: rows a second
+/// signed-in device was holding offline sync back into the emptied store afterwards, and
+/// `MilestoneEconomy` counts only rows on the far side of the latest boundary (day at or after the
+/// marker's day AND created strictly after its instant), so they raise no count and re-mint no coin
+/// award. In-memory state after a reset is therefore `[marker]`, never `[]`.
+///
+/// **Known durability ceiling, shared verbatim with ``CoinLedgerService`` and written down in
+/// Docs/PrivacyWipeCoverage.md.** If the marker's own append fails, the marker survives only in the
+/// pending queue — process memory. ``loadSync()`` does not re-merge pending rows (only
+/// ``reloadFromStore()`` does, within the same process), so a process death before a successful
+/// flush loses the boundary silently. The delete itself already happened, so nothing on THIS device
+/// returns; the exposure is that rows re-synced from another device would no longer be voided. The
+/// reset's returned verdict deliberately covers the row DELETE only — widening it would report an
+/// incomplete wipe when the user's data really is gone. Deliberately not fixed here: any fix belongs
+/// to both ledgers at once.
 ///
 /// Collaborators: the injected `MilestoneLedgerRepositoring` store (concretely CloudKitSync's
 /// `MilestoneLedgerRepository`, behind the FernletPersistence protocol) and `FernletStore`, which
 /// records events from both the live logging hooks and the day-history reconcile — deterministic
 /// event ids make those overlapping inputs safe. Same durability invariant as the coin ledger:
 /// pending rows are the sole un-persisted copy, cleared only after a confirmed append, with
-/// ``reloadFromStore()`` re-merging them after a failed flush. `@MainActor` and `@Observable`.
+/// ``reloadFromStore()`` re-merging them after a failed flush. `@MainActor` and `@Observable`; the
+/// injected `now` clock keeps the marker's timestamp testable.
 @MainActor
 @Observable
 public final class MilestoneLedgerService {
@@ -32,12 +49,20 @@ public final class MilestoneLedgerService {
     /// appended surgically per-row so the persisted store never re-writes the rest of the ledger
     /// (see ``DebouncedAppendBuffer``). Its append closure captures `repository`, never `self`.
     @ObservationIgnored private let buffer: DebouncedAppendBuffer<MilestoneLedgerEntry>
+    /// The clock the reset-boundary marker is stamped with — injected exactly like
+    /// ``CoinLedgerService``'s, so a test can place the boundary relative to its own rows.
+    @ObservationIgnored private let now: () -> Date
 
     /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
-    public init(repository: any MilestoneLedgerRepositoring, initialEntries: [MilestoneLedgerEntry] = []) {
+    public init(
+        repository: any MilestoneLedgerRepositoring,
+        initialEntries: [MilestoneLedgerEntry] = [],
+        now: @escaping () -> Date = Date.init
+    ) {
         self.repository = repository
         self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
         self.entries = initialEntries
+        self.now = now
     }
 
     /// The store this service persists through, exposed read-only for exactly one caller: the app's
@@ -85,11 +110,17 @@ public final class MilestoneLedgerService {
     /// pending-append queue, then schedules a flush. Re-recording a known event is a no-op — the
     /// structural guarantee behind idempotent counting (deterministic ids make this safe to call
     /// from both the live hooks and the day-history reconcile with overlapping inputs).
+    ///
+    /// `resetBoundary` rows are REFUSED here, mirroring `CoinLedgerService.grantEarns`'s refusal of
+    /// non-earn rows: the marker is minted by ``reset(deletingRowsWith:)`` alone, and a caller that
+    /// could record one (this method is public, and `FernletStore.recordMilestoneEvent` takes a kind
+    /// from its caller) could void every count on the device with an ordinary logging call.
     public func record(_ newEntries: [MilestoneLedgerEntry]) {
-        guard !newEntries.isEmpty else { return }
+        let events = newEntries.filter { $0.kind != .resetBoundary }
+        guard !events.isEmpty else { return }
         var existingIDs = Set(entries.map(\.id))
         var added = false
-        for entry in newEntries where existingIDs.insert(entry.id).inserted {
+        for entry in events where existingIDs.insert(entry.id).inserted {
             entries.append(entry)
             buffer.enqueue(entry)
             added = true
@@ -99,25 +130,43 @@ public final class MilestoneLedgerService {
 
     // MARK: - Reset
 
-    /// Empties the ledger for "delete everything": the in-memory rows, the pending-append queue, and
-    /// the persisted rows `deleteRows` removes.
+    /// Empties the ledger for "delete everything": the in-memory rows, the pending-append queue and
+    /// the persisted rows `deleteRows` removes — then appends the reset-boundary marker that keeps
+    /// them from coming back.
     ///
     /// The deleter is passed in rather than taken from ``persistedStore`` because the row delete
     /// lives on the concrete CloudKit conformer and this module cannot name it; the funnel narrows
     /// the store and supplies the call. A `deleteRows` that cannot reach the rows must return
     /// `false` — a wipe that could not delete them has to say so.
     ///
-    /// Ordering is why this is one method and not two calls: the pending queue is dropped BEFORE the
-    /// stored rows, so a queued row can never be flushed back on top of a just-emptied store.
+    /// Ordering is why this is one method and not three calls, and every step of it is load-bearing:
+    /// the pending queue is dropped BEFORE the stored rows (a queued row flushed back onto a
+    /// just-emptied store is a resurrection), and the marker is appended AFTER the delete (a marker
+    /// written first would be deleted by the very sweep it exists to survive). The marker is written
+    /// through the repository directly, exactly like `CoinLedgerService.reset()`, and a failed append
+    /// is re-queued for the debounced retry rather than dropped — a wipe whose boundary never
+    /// persists is a wipe another device can undo.
+    ///
+    /// The in-memory ledger afterwards is `[marker]`, not `[]`; `MilestoneEconomy` never counts,
+    /// awards or displays a marker row, so every lifetime count still reads 0.
     ///
     /// - Returns: whether the persisted rows were confirmed deleted. Threaded back (R7, exactly like
     ///   ``CoinLedgerService/reset()``) so the funnel can report a milestone trail it failed to
-    ///   remove instead of claiming a complete wipe. The in-memory ledger is emptied either way —
-    ///   a failed delete leaves rows on disk, not counts on screen.
+    ///   remove instead of claiming a complete wipe. It reflects only the row DELETE — the marker
+    ///   append below is a new row whose write has its own retry, not data left behind. The
+    ///   in-memory ledger is zeroed either way — a failed delete leaves rows on disk, not counts on
+    ///   screen.
     public func reset(deletingRowsWith deleteRows: @MainActor () -> Bool) -> Bool {
-        entries = []
         buffer.clear()
-        return deleteRows()
+        let deleted = deleteRows()
+        let at = now()
+        let marker = MilestoneLedgerEntry.resetBoundary(dayKey: FernletDate.dayKey(for: at), at: at)
+        entries = [marker]
+        if !repository.append([marker]) {
+            buffer.enqueue(marker)
+            buffer.scheduleSave()
+        }
+        return deleted
     }
 
     // MARK: - Flush

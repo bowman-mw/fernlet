@@ -10,6 +10,10 @@
 // no in-memory cache can fake it), the service's reset drops the pending-append queue as well as the
 // stored rows (a queued row flushed back onto a just-emptied store is a resurrection), and the
 // delete stays object-by-object through the view context — the shape that makes it reach CloudKit.
+//
+// Since 2026-08-21 the reset also APPENDS a `resetBoundary` marker, so "emptied" means exactly one
+// marker row rather than zero rows. The boundary suite for what the marker then voids is
+// MilestoneResetBoundaryTests; this file pins only the reset's own end state.
 
 import Foundation
 import Testing
@@ -91,16 +95,26 @@ struct MilestoneLedgerWipeTests {
         // rejects the non-Sendable repository capture.
         let didReset = service.reset(deletingRowsWith: { repository.deleteAll() })
         #expect(didReset)
-        #expect(service.entries.isEmpty)
-        #expect(repository.load().isEmpty)
+        // SEMANTIC CHANGE (2026-08-21), not a weakened expectation: these three assertions used to
+        // read `.isEmpty`. The reset now deletes every row and then appends ONE reset-boundary
+        // marker — the coin ledger's mechanism — so "emptied" means exactly the marker and nothing
+        // else, in memory and in the store. The marker is what stops rows another signed-in device
+        // still holds from resurrecting the trail when they sync back; an `.isEmpty` ledger here
+        // would mean the boundary was never written and the wipe is undoable. Every EVENT row is
+        // still gone, which the counts below assert independently.
+        #expect(service.entries.map(\.kind) == [.resetBoundary])
+        #expect(repository.load().map(\.kind) == [.resetBoundary])
 
         // The queued row must be DROPPED, not flushed back on top of the emptied store: reload
         // flushes first, so a surviving pending row would reappear here as both a count and a row.
         service.reloadFromStore()
-        #expect(service.entries.isEmpty)
-        #expect(repository.load().isEmpty)
+        #expect(service.entries.map(\.kind) == [.resetBoundary])
+        #expect(repository.load().map(\.kind) == [.resetBoundary])
         let countsAllZero = service.lifetimeCounts.values.allSatisfy({ $0 == 0 })
         #expect(countsAllZero)
+        // The marker is never a count of its own: `lifetimeCounts` is keyed by the counted kinds, so
+        // it cannot even appear as a zero.
+        #expect(service.lifetimeCounts[.resetBoundary] == nil)
     }
 
     @MainActor @Test func resetReportsAFailedRowDeleteAndStillEmptiesMemory() {
@@ -116,8 +130,21 @@ struct MilestoneLedgerWipeTests {
         let didReset = service.reset(deletingRowsWith: { false })
         #expect(didReset == false)
         // In-memory state goes regardless — a failed delete leaves rows on disk, not counts on screen.
-        #expect(service.entries.isEmpty)
+        // Same semantic change as above: "emptied" is exactly the boundary marker, and the marker is
+        // written even when the row delete failed. That is deliberate: the rows this deleter could
+        // not reach are precisely the ones the boundary has to void.
+        #expect(service.entries.map(\.kind) == [.resetBoundary])
         #expect(service.lifetimeCounts[.journal] == 0)
+
+        // The claim above is only worth making if the surviving row is actually harmless, so prove
+        // it: reload from the store (the path a remote change takes) and the undeleted row comes
+        // back into memory beside the marker — counted by nobody, because its day and its instant
+        // both fall before the boundary. This is the same protection a row re-synced from another
+        // device gets; here the row never left.
+        service.reloadFromStore()
+        #expect(repository.load().count == 2, "expected the undeleted event row plus the boundary marker on disk")
+        #expect(service.entries.count == 2, "the reload did not bring the undeleted row back — this test would prove nothing")
+        #expect(service.lifetimeCounts[.journal] == 0, "a row the deleter could not reach is being counted again after a reload")
     }
 
     @MainActor @Test func theFunnelCanNarrowTheExposedStoreToTheRowDeleter() {

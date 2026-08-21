@@ -15,6 +15,7 @@ import PrivateHealthStore
 import PrivateMemoryStore
 import PrivateStoreCore
 import FernletScoring
+import StoreCore
 @testable import Fernlet
 
 /// Covers "delete everything" actually deleting everything.
@@ -786,6 +787,37 @@ struct DeleteAllDataTests {
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(legacy.load().isEmpty, "the plaintext legacy recipe file survived the wipe")
+    }
+
+    // MARK: - The milestone trail's boundary marker (2026-08-21)
+
+    /// The funnel-level half of `MilestoneResetBoundaryTests`: after a real `deleteAllData` the
+    /// milestone ledger holds EXACTLY the reset-boundary marker, and every lifetime count reads zero.
+    ///
+    /// Both halves matter and neither implies the other. Zero counts over an EMPTY ledger would mean
+    /// the boundary was never written — and the event rows another signed-in device was holding
+    /// offline would restore the dated trail (and re-mint its coin awards) the moment they synced
+    /// back into the emptied store. A marker with a non-zero count would mean the wipe's own
+    /// bookkeeping row is being counted as care.
+    ///
+    /// Uses `makeTestStore()` rather than this suite's `makeStore(_:)`: the latter leaves the
+    /// milestone ledger on the default, process-global on-disk store, which a wipe here would empty
+    /// for every concurrently running suite.
+    @Test func deleteAllLeavesTheMilestoneLedgerHoldingExactlyItsBoundaryMarker() async {
+        let store = makeTestStore()
+        store.recordMilestoneEvent(.breathing, ref: "session-1")
+        store.recordMilestoneEvent(.worry, ref: "worry-1")
+        #expect(store.milestoneCounts[.breathing] == 1, "precondition: the milestone event was not recorded")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(
+            store.milestoneLedgerService.entries.map(\.kind) == [.resetBoundary],
+            "the milestone ledger is not exactly its boundary marker after the wipe — either an event row survived, or the boundary that stops re-synced rows resurrecting the trail was never written"
+        )
+        let countsAllZero = store.milestoneCounts.values.allSatisfy({ $0 == 0 })
+        #expect(countsAllZero, "the wipe left a lifetime milestone count standing")
+        #expect(store.milestoneCounts[.resetBoundary] == nil, "the boundary marker is being published as a countable kind")
     }
 
     private func wireSucceedingSealedHooks(_ store: FernletStore) {
