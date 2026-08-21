@@ -31,8 +31,15 @@ final class DeleteEverythingFlow {
     /// owning screen decides what its success alert's button does (dismiss the sheet, or just clear this).
     var showSuccess = false
 
-    /// Builds the shared confirm dialog (``DeleteAllDataConfirmation``) wired to this flow's state:
-    /// on confirm, ``isDeleting`` goes up before the multi-second `FernletStore.deleteAllData` wipe so
+    /// Builds the shared confirm dialog (``DeleteAllDataConfirmation``) wired to this flow's state.
+    ///
+    /// Since the 2026-08-21 redesign the shipping entry points present the typed-gate
+    /// ``DeleteEverythingSheet`` and call ``runWipe(store:includingHealthSamples:onWipeFinished:)``
+    /// instead; this alert-shaped builder remains because `DeleteHealthOfferTests` pins the offer
+    /// derivation and dialog copy through it, and because the copy it carries is the reconciled
+    /// record the sheet's lists must keep agreeing with.
+    ///
+    /// On confirm, ``isDeleting`` goes up before the multi-second `FernletStore.deleteAllData` wipe so
     /// the busy overlay covers all of it; on finish it comes down, `onWipeFinished` runs, and the
     /// outcome lands in ``showSuccess`` or ``failure``.
     ///
@@ -77,6 +84,34 @@ final class DeleteEverythingFlow {
         )
     }
 
+    /// Runs the wipe directly, for the typed-gate ``DeleteEverythingSheet`` (2026-08-21 redesign,
+    /// artboard 5e) — the sheet renders its own confirm surface, so unlike ``makeConfirmation(preferences:store:everRequestedWritableHealthCapability:onWipeFinished:)``
+    /// there is no `DestructiveConfirmation` in the middle. The state contract is identical:
+    /// ``isDeleting`` goes up before the multi-second `FernletStore.deleteAllData` wipe (busy
+    /// overlay, disabled buttons, blocked dismissal at the entry screen), comes down when it
+    /// finishes, `onWipeFinished` runs, and the outcome lands in ``showSuccess`` or ``failure``.
+    ///
+    /// The caller is responsible for the audit event — the sheet logs the same
+    /// `settings.deleteAll.confirmed` / `settings.deleteAll.withHealthSamplesConfirmed` tokens the
+    /// alert path's `commitDestructive` logged, so the trail is unchanged.
+    func runWipe(
+        store: FernletStore,
+        includingHealthSamples: Bool,
+        onWipeFinished: (() -> Void)? = nil
+    ) {
+        isDeleting = true
+        Task {
+            let outcome = await store.deleteAllData(includingHealthKitSamples: includingHealthSamples)
+            self.isDeleting = false
+            onWipeFinished?()
+            if outcome.isComplete {
+                self.showSuccess = true
+            } else {
+                self.failure = outcome
+            }
+        }
+    }
+
     /// Which Apple Health outcome the dialog offers, from the two signals that outlive each other.
     ///
     /// The master toggle answers "is Fernlet integrated with Health right now"; the persisted
@@ -88,7 +123,10 @@ final class DeleteEverythingFlow {
     ///
     /// The ledger is only consulted when the toggle is off: with it on the offer is already made, and
     /// a keychain read the answer cannot change is wasted work on a dialog build.
-    private func healthSampleOffer(
+    ///
+    /// Internal (not private) so the ``DeleteEverythingSheet`` entry points can build the same
+    /// offer the alert path builds — one derivation, two presentations.
+    func healthSampleOffer(
         masterEnabled: Bool,
         everRequestedWritableCapability: Bool?
     ) -> DeleteAllDataConfirmation.HealthSampleOffer {

@@ -29,10 +29,10 @@ import SwiftUI
 nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case appearance
     case goalNutrition
+    case personalCare
     case layoutShortcuts
+    case aiDataSources
     case health
-    case sleep
-    case move
     case coreMemory
     case signals
     case debug
@@ -43,6 +43,8 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case privacyPolicy
     case safetyReporting
     case appLock
+    case nearbyFriends
+    case periodSensitive
 }
 
 /// One searchable leaf: the frozen English label it is FOUND by, its search synonyms, a breadcrumb
@@ -117,9 +119,13 @@ nonisolated enum SettingsSearchIndex {
         guard !queryTokens.isEmpty else { return [] }
         return entries.filter { entry in
             // The hub's Debug row compiles out of release builds; search must not be the back door
-            // that puts the development page in a shipping user's hands anyway.
+            // that puts the development page in a shipping user's hands anyway. Since the 2026-08-21
+            // hub restructure (SETT-28) the Connection log pages ride the same DEBUG-only "Advanced"
+            // section, so their entries are withheld from release search too.
             #if !DEBUG
-            if entry.route == .debug { return false }
+            if entry.route == .debug || entry.route == .connectionInspector || entry.route == .connectionHistory {
+                return false
+            }
             #endif
             return queryTokens.allSatisfy { queryToken in
                 entry.searchableTokens.contains { $0 == queryToken || $0.hasPrefix(queryToken) }
@@ -174,6 +180,14 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Appearance › Backgrounds",
             route: .appearance
         ),
+        // Home-widget layout moved onto the Appearance page in the 2026-08-21 hub restructure
+        // (SETT-14): the old Layout & shortcuts page became the Quick-log shortcuts editor (5g).
+        SettingsSearchEntry(
+            title: "Home widgets",
+            keywords: ["home widgets", "widgets", "home screen", "layout", "main page", "rearrange", "order"],
+            breadcrumb: "Appearance › Home widgets",
+            route: .appearance
+        ),
 
         // Goal & nutrition
         SettingsSearchEntry(
@@ -213,36 +227,6 @@ nonisolated enum SettingsSearchIndex {
             route: .goalNutrition
         ),
         SettingsSearchEntry(
-            title: "AI status",
-            keywords: ["ai", "artificial intelligence", "on device", "assistant", "status"],
-            breadcrumb: "Goal & nutrition › AI",
-            route: .goalNutrition
-        ),
-        SettingsSearchEntry(
-            title: "Turn AI off",
-            keywords: ["ai off", "turn off ai", "disable ai", "manual off", "manual off mode"],
-            breadcrumb: "Goal & nutrition › AI",
-            route: .goalNutrition
-        ),
-        SettingsSearchEntry(
-            title: "Web nutrition lookup",
-            keywords: ["web nutrition", "web lookup", "internet", "online", "search provider", "packaged food", "chain food", "web"],
-            breadcrumb: "Goal & nutrition › AI",
-            route: .goalNutrition
-        ),
-        SettingsSearchEntry(
-            title: "Weather-aware recovery prompts",
-            keywords: ["weather", "recovery", "gloomy", "rain", "location", "prompts"],
-            breadcrumb: "Goal & nutrition › AI",
-            route: .goalNutrition
-        ),
-        SettingsSearchEntry(
-            title: "Notice body tension",
-            keywords: ["stress", "body tension", "tension", "hrv", "heart rate variability", "resting heart rate", "respiration", "body signals", "anxiety"],
-            breadcrumb: "Goal & nutrition › Body signals",
-            route: .goalNutrition
-        ),
-        SettingsSearchEntry(
             title: "Daily check-in reminder",
             keywords: ["reminder", "daily check-in", "check in", "nudge", "alert", "notify"],
             breadcrumb: "Goal & nutrition › Reminders",
@@ -272,25 +256,53 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Goal & nutrition › Hydration",
             route: .goalNutrition
         ),
+        // Personal care tasks (its own hub row under "Your day" since 2026-08-21, SETT-14)
         SettingsSearchEntry(
             title: "Personal care tasks",
             keywords: ["personal care", "tasks", "moisturizer", "meds", "medication", "stretch", "hygiene", "care task", "habit", "routine"],
-            breadcrumb: "Goal & nutrition › Personal care",
-            route: .goalNutrition
+            breadcrumb: "Personal care tasks",
+            route: .personalCare
         ),
 
-        // Layout & shortcuts
-        SettingsSearchEntry(
-            title: "Home widgets",
-            keywords: ["home widgets", "widgets", "home screen", "layout", "main page", "rearrange", "order"],
-            breadcrumb: "Layout & shortcuts",
-            route: .layoutShortcuts
-        ),
+        // Quick-log shortcuts (the old Layout & shortcuts page, rebuilt as the 5g editor)
         SettingsSearchEntry(
             title: "Quick log shortcuts",
             keywords: ["quick log", "shortcuts", "quick actions", "home shortcuts", "buttons", "log shortcuts"],
-            breadcrumb: "Layout & shortcuts",
+            breadcrumb: "Quick-log shortcuts",
             route: .layoutShortcuts
+        ),
+
+        // AI & data sources (the grouping page that took the AI/web/weather/body-signal switches
+        // out from under the nutrition heading, SETT-14)
+        SettingsSearchEntry(
+            title: "AI status",
+            keywords: ["ai", "artificial intelligence", "on device", "assistant", "status"],
+            breadcrumb: "AI & data sources",
+            route: .aiDataSources
+        ),
+        SettingsSearchEntry(
+            title: "Turn AI off",
+            keywords: ["ai off", "turn off ai", "disable ai", "manual off", "manual off mode"],
+            breadcrumb: "AI & data sources",
+            route: .aiDataSources
+        ),
+        SettingsSearchEntry(
+            title: "Web nutrition lookup",
+            keywords: ["web nutrition", "web lookup", "internet", "online", "search provider", "packaged food", "chain food", "web"],
+            breadcrumb: "AI & data sources",
+            route: .aiDataSources
+        ),
+        SettingsSearchEntry(
+            title: "Weather-aware recovery prompts",
+            keywords: ["weather", "recovery", "gloomy", "rain", "location", "prompts"],
+            breadcrumb: "AI & data sources",
+            route: .aiDataSources
+        ),
+        SettingsSearchEntry(
+            title: "Notice body tension",
+            keywords: ["stress", "body tension", "tension", "hrv", "heart rate variability", "resting heart rate", "respiration", "body signals", "anxiety"],
+            breadcrumb: "AI & data sources › Body signals",
+            route: .aiDataSources
         ),
 
         // Health
@@ -336,42 +348,40 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Health",
             route: .health
         ),
-
-        // Sleep
+        // The master switch and its jump into the Health app moved onto the one Health surface
+        // (SETT-27); the frozen titles stay so saved queries keep resolving.
         SettingsSearchEntry(
-            title: "Sleep",
-            keywords: ["sleep", "rest", "hours", "sleep quality", "bedtime", "nap"],
-            breadcrumb: "Sleep",
-            route: .sleep
+            title: "Health integration",
+            keywords: ["health", "healthkit", "apple health", "health integration", "permissions"],
+            breadcrumb: "Health",
+            route: .health
+        ),
+        SettingsSearchEntry(
+            title: "Open Health Privacy Settings",
+            keywords: ["health privacy", "ios settings", "revoke health", "health permissions"],
+            breadcrumb: "Health",
+            route: .health
         ),
 
-        // Move
-        SettingsSearchEntry(
-            title: "Apple Fitness sync",
-            keywords: ["move", "workout", "fitness", "apple fitness", "exercise", "activity sync", "sync"],
-            breadcrumb: "Move",
-            route: .move
-        ),
-
-        // Core memory
+        // Core memory (reached through AI & data sources since 2026-08-21)
         SettingsSearchEntry(
             title: "Core memory",
             keywords: ["memory", "memories", "core memory", "remember", "notes", "journal memory"],
-            breadcrumb: "Core memory",
+            breadcrumb: "AI & data sources › Core memory",
             route: .coreMemory
         ),
         SettingsSearchEntry(
             title: "Forget a memory",
             keywords: ["forget", "delete memory", "remove memory", "erase memory"],
-            breadcrumb: "Core memory",
+            breadcrumb: "AI & data sources › Core memory",
             route: .coreMemory
         ),
 
-        // Signals
+        // Signals (reached through AI & data sources since 2026-08-21)
         SettingsSearchEntry(
             title: "Signals",
             keywords: ["signals", "trends", "derived signals", "insights", "patterns"],
-            breadcrumb: "Signals",
+            breadcrumb: "AI & data sources › Signals",
             route: .signals
         ),
 
@@ -395,19 +405,18 @@ nonisolated enum SettingsSearchIndex {
             route: .debug
         ),
 
-        // Connection Inspector
+        // Connection log (the folded Debug + Connection Inspector row, DEBUG-only — SETT-28;
+        // `results(for:)` withholds these routes from release search)
         SettingsSearchEntry(
             title: "Connection Inspector",
             keywords: ["connection inspector", "proximity", "pairing", "diagnostics", "mesh", "nearby", "inspector"],
-            breadcrumb: "Connection Inspector",
+            breadcrumb: "Connection log",
             route: .connectionInspector
         ),
-
-        // Connection History
         SettingsSearchEntry(
             title: "Connection History",
             keywords: ["connection history", "history", "past connections", "sessions", "log", "connections"],
-            breadcrumb: "Connection History",
+            breadcrumb: "Connection log › History",
             route: .connectionHistory
         ),
 
@@ -449,18 +458,6 @@ nonisolated enum SettingsSearchIndex {
             route: .privacyData
         ),
         SettingsSearchEntry(
-            title: "Health integration",
-            keywords: ["health", "healthkit", "apple health", "health integration", "permissions"],
-            breadcrumb: "Privacy & Data › HealthKit",
-            route: .privacyData
-        ),
-        SettingsSearchEntry(
-            title: "Open Health Privacy Settings",
-            keywords: ["health privacy", "ios settings", "revoke health", "health permissions"],
-            breadcrumb: "Privacy & Data › HealthKit",
-            route: .privacyData
-        ),
-        SettingsSearchEntry(
             title: "Include local data in iOS backup",
             keywords: ["local backup", "ios backup", "device backup", "icloud backup", "exclude backup", "backup"],
             breadcrumb: "Privacy & Data › Local backup",
@@ -472,10 +469,15 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Privacy & Data › Your data",
             route: .privacyData
         ),
+        // The coach toggles live on the trainer screen itself now (Move tab › Share, SETT-14).
+        // The route stays `.privacyData`: search can only push Settings destinations, the frozen
+        // "export" keyword pins every export hit to `.privacyData` (SettingsSearchIndexTests), and
+        // Privacy & Data still holds the neighbouring "Export my data" card. The breadcrumb tells
+        // the user where the feature actually lives.
         SettingsSearchEntry(
             title: "Share with a trainer",
             keywords: ["trainer", "coach", "share", "nutritionist", "trainer export", "export"],
-            breadcrumb: "Privacy & Data › Share with a trainer",
+            breadcrumb: "Move tab › Share with a trainer",
             route: .privacyData
         ),
         SettingsSearchEntry(
@@ -552,6 +554,59 @@ nonisolated enum SettingsSearchIndex {
             keywords: ["reset app lock", "reset lock", "forgot passcode", "remove lock"],
             breadcrumb: "App lock › Danger zone",
             route: .appLock
+        ),
+
+        // Nearby friends (the six in-person sharing consents left the Privacy list for their own
+        // sub-page in the 2026-08-21 hub restructure, SETT-29)
+        SettingsSearchEntry(
+            title: "Nearby friends",
+            keywords: ["nearby friends", "nearby", "friends", "presence", "proximity", "sharing"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
+            title: "Share your vibe",
+            keywords: ["vibe", "mood", "share vibe", "friend state", "friends"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
+            title: "Nearby hearts",
+            keywords: ["hearts", "heart", "send heart", "nearby hearts", "friends"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
+            title: "Deliver hearts when apart",
+            keywords: ["hearts", "away", "apart", "deliver", "drop off", "later"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
+            title: "Nearby recipe shares",
+            keywords: ["recipe share", "share recipes", "nearby recipes", "recipes", "friends"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
+            title: "Clothing shops with friends",
+            keywords: ["clothing", "shop", "shops", "designs", "share clothing", "friends"],
+            breadcrumb: "Nearby friends",
+            route: .nearbyFriends
+        ),
+
+        // Period & sensitive content (the visibility gates as a first-class hub page, SETT-14)
+        SettingsSearchEntry(
+            title: "Period tracking",
+            keywords: ["period", "cycle", "menstrual", "visibility", "hide period", "period tracking"],
+            breadcrumb: "Period & sensitive content",
+            route: .periodSensitive
+        ),
+        SettingsSearchEntry(
+            title: "Intimacy tracking",
+            keywords: ["intimacy", "intimate", "visibility", "hide intimacy", "sensitive"],
+            breadcrumb: "Period & sensitive content",
+            route: .periodSensitive
         ),
     ]
 }

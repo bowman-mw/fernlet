@@ -13,6 +13,15 @@ import FernletUI
 /// The copy follows the house rule for destructive confirmations: name the exact data, say whether it
 /// can be recovered, and never use a category word ("all other protected data") where an enumeration is
 /// what makes the sentence true.
+///
+/// **2026-08-21 (artboard 5e):** the shipping confirm surface is now the typed-gate
+/// ``DeleteEverythingSheet``; both entry points present it instead of the `make(...)` alert. The
+/// alert builder stays because `DeleteHealthOfferTests` pins the offer derivation and the copy
+/// invariants through it — `message(...)`'s hand-reconciled claims (what goes, what is kept on
+/// purpose, the conditional iCloud sentences, the three Apple Health paragraphs) are the record the
+/// sheet's scannable lists were ported from, and any change to the wipe funnel must keep BOTH
+/// tellings true. ``HealthSampleOffer``, ``failureMessage(for:)`` and ``DeletingEverythingOverlay``
+/// are shared by both presentations.
 enum DeleteAllDataConfirmation {
 
     /// What the dialog offers — and says — about the samples Fernlet wrote into Apple Health.

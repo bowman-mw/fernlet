@@ -56,12 +56,17 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         XCTAssertTrue(element("privacy.storage.spinner", app: app).waitForExistence(timeout: 2))
     }
 
+    /// SETT-27: the Health master switch and per-capability controls moved onto the one Health
+    /// surface (Settings › Health), reached from this page's single "Health access" row. Disabling
+    /// the master still warns (it purges cached clinical data) before committing, and every card
+    /// then reads "Not shared".
     @MainActor
     func testHealthKitMasterToggleDisablesAllCapabilities() throws {
         let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, healthEnabled: true)
         openVerifiedPrivacyData(app)
+        openHealthAccessPage(app)
 
-        let master = labeledElement(containing: "Health integration", app: app)
+        let master = labeledElement(containing: "Share with Health", app: app)
         XCTAssertTrue(master.waitForExistence(timeout: 3))
         master.tap()
 
@@ -70,34 +75,32 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         XCTAssertTrue(warning.waitForExistence(timeout: 3))
         app.buttons["Turn off"].tap()
 
-        for title in [
-            "Body profile",
-            "Cycle tracking",
-            "Body context",
-            "Activity context",
-            "Mindfulness",
-            "Intimate logging"
-        ] {
-            XCTAssertEqual(labeledElement(containing: title, app: app).value as? String, "0")
+        for card in ["bodyMeasurements", "workoutsActivity", "bodySignals", "mindfulness"] {
+            let state = element("health.card.state.\(card)", app: app)
+            XCTAssertTrue(state.waitForExistence(timeout: 3), "no state line for \(card)")
+            XCTAssertEqual(state.label, "Not shared", "\(card) still reads shared after the master went off")
         }
     }
 
     /// WS-5: cancelling the HealthKit-disable warning must leave the integration ON (only mutates on
-    /// confirm). The capabilities seeded enabled stay enabled.
+    /// confirm). The seeded capabilities stay shared.
     @MainActor
     func testHealthKitMasterDisableWarningCancelKeepsItOn() throws {
         let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, healthEnabled: true)
         openVerifiedPrivacyData(app)
+        openHealthAccessPage(app)
 
-        let master = labeledElement(containing: "Health integration", app: app)
+        let master = labeledElement(containing: "Share with Health", app: app)
         XCTAssertTrue(master.waitForExistence(timeout: 3))
         master.tap()
 
         XCTAssertTrue(app.staticTexts["Turn off Health integration?"].waitForExistence(timeout: 3))
         app.buttons["Cancel"].tap()
 
-        // Still on: a seeded capability remains enabled (value "1").
-        XCTAssertEqual(labeledElement(containing: "Body profile", app: app).value as? String, "1")
+        // Still on: a seeded card remains shared.
+        let state = element("health.card.state.bodyMeasurements", app: app)
+        XCTAssertTrue(state.waitForExistence(timeout: 3))
+        XCTAssertEqual(state.label, "Shared")
     }
 
     /// WS-5: excluding local data from device backups drops the sealed store with no cloud recovery, so
@@ -166,5 +169,14 @@ final class PrivacyDataSettingsUITests: XCTestCase {
             verifyButton.tap()
         }
         XCTAssertTrue(labeledElement(containing: "Sync to iCloud", app: app).waitForExistence(timeout: 3))
+    }
+
+    /// Pushes the Health surface from this page's single "Health access" row (SETT-27).
+    @MainActor
+    private func openHealthAccessPage(_ app: XCUIApplication) {
+        let row = element("privacy.health.access", app: app)
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "no Health access row on Privacy & Data")
+        row.tap()
+        XCTAssertTrue(app.navigationBars["Health"].waitForExistence(timeout: 4), "the Health page did not open")
     }
 }

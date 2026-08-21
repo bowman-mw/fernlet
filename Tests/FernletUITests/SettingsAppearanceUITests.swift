@@ -13,19 +13,27 @@ final class SettingsAppearanceUITests: XCTestCase {
         continueAfterFailure = true
     }
 
-    /// (button label used to tap the row, nav-bar title of the pushed screen).
+    /// (row accessibility identifier used to tap, nav-bar title of the pushed screen).
+    ///
+    /// The 2026-08-21 hub restructure (artboard 5a): four groups, every row addressed by its
+    /// `settings.row.*` identifier because rows now carry sub-label breadcrumbs (a combined
+    /// accessibility label no longer equals the row name). The Reminders row deliberately lands on
+    /// the Goal & nutrition page (its card lives there); Sleep and Move are deleted (SETT-26);
+    /// Core memory / Signals moved inside AI & data sources (walked below); Debug + Connection
+    /// Inspector folded into the DEBUG-only Connection log row (SETT-28 — this suite runs Debug,
+    /// so the row is present).
     private let subscreens: [(tap: String, title: String)] = [
-        ("Appearance", "Appearance"),
-        ("Goal & nutrition", "Goal & nutrition"),
-        ("Layout & shortcuts", "Layout & shortcuts"),
-        ("Health", "Health"),
-        ("Sleep", "Sleep"),
-        ("settings.move", "Move"),
-        ("Core memory", "Core memory"),
-        ("Signals", "Signals"),
-        ("Debug", "Debug"),
-        ("Connection Inspector", "Connection Inspector"),
-        ("App lock", "App lock"),
+        ("settings.row.appearance", "Appearance"),
+        ("settings.row.goalNutrition", "Goal & nutrition"),
+        ("settings.row.reminders", "Goal & nutrition"),
+        ("settings.row.personalCare", "Personal care tasks"),
+        ("settings.row.quickLog", "Quick-log shortcuts"),
+        ("settings.row.aiDataSources", "AI & data sources"),
+        ("settings.row.health", "Health"),
+        ("settings.row.appLock", "App lock"),
+        ("settings.row.nearbyFriends", "Nearby friends"),
+        ("settings.row.periodSensitive", "Period & sensitive content"),
+        ("settings.row.connectionLog", "Connection log"),
     ]
 
     @MainActor
@@ -41,6 +49,33 @@ final class SettingsAppearanceUITests: XCTestCase {
 
         for screen in subscreens {
             openAndProbe(tap: screen.tap, title: screen.title, app: app)
+        }
+    }
+
+    /// The pages nested one level down since the restructure: Core memory and Signals live inside
+    /// AI & data sources.
+    @MainActor
+    func testNestedMemoryAndSignalsAppearance() {
+        let app = UXTestApp.launch(openSheet: "settings")
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "settings sheet did not open")
+
+        let aiRow = scrollToRow("settings.row.aiDataSources", app: app)
+        XCTAssertTrue(aiRow.isHittable, "AI & data sources row not reachable")
+        aiRow.tap()
+        XCTAssertTrue(app.navigationBars["AI & data sources"].waitForExistence(timeout: 4))
+
+        for (label, title) in [("Core memory", "Core memory"), ("Signals", "Signals")] {
+            let link = scrollToRow(label, app: app)
+            XCTAssertTrue(link.isHittable, "'\(label)' link not reachable inside AI & data sources")
+            link.tap()
+            let bar = app.navigationBars[title]
+            UXScreenProbe(app, "Settings · \(title)", in: self)
+                .assertElementOnScreen(bar, "\(title) nav bar")
+                .capture()
+            let back = bar.buttons.firstMatch
+            if back.exists { back.tap() }
+            XCTAssertTrue(app.navigationBars["AI & data sources"].waitForExistence(timeout: 4),
+                          "did not return to AI & data sources after '\(title)'")
         }
     }
 

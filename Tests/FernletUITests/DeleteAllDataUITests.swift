@@ -32,28 +32,48 @@ final class DeleteAllDataUITests: XCTestCase {
         scrollUntilHittable(deleteButton, in: app)
         XCTAssertTrue(deleteButton.isHittable, "the delete-everything button is not reachable in Settings")
 
-        let alert = app.alerts["Delete everything?"]
-        XCTAssertTrue(presentDialog(tapping: deleteButton, alert: alert), "no confirm dialog")
+        // 2026-08-21 (artboard 5e): the confirm is a typed-gate SHEET, not a system alert.
+        let sheetTitle = app.staticTexts["Delete everything?"]
+        XCTAssertTrue(presentSheet(tapping: deleteButton, title: sheetTitle), "no confirm sheet")
 
-        // The confirm dialog must name what it deletes and disclose what it keeps — a delete that
+        // The sheet must name what it deletes and disclose what it keeps — a delete that
         // overpromises is the defect being fixed, so the disclosure is asserted, not assumed.
-        let body = alert.staticTexts.element(boundBy: 1).label
-        XCTAssertTrue(body.contains("journal entries"), "dialog does not name the data it deletes: \(body)")
-        XCTAssertTrue(body.contains("Kept on purpose"), "dialog does not disclose the survivors: \(body)")
+        XCTAssertTrue(app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS 'Journal entries'")).firstMatch.exists,
+            "the sheet does not name the data it deletes")
+        XCTAssertTrue(app.descendants(matching: .any)["deleteAll.keptList"].exists,
+                      "the sheet does not disclose the survivors")
 
-        // Cancelling must mutate nothing — the destructive-confirmation contract.
-        alert.buttons["Cancel"].tap()
-        XCTAssertFalse(alert.exists, "dialog stayed up after Cancel")
+        // Cancelling must mutate nothing — the mutation-only-on-confirm contract. Cancel is a
+        // real, always-rendered button (XCUT-02), in the sheet header.
+        app.descendants(matching: .any)["sheet.cancel"].tap()
+        XCTAssertFalse(sheetTitle.waitForExistence(timeout: 2), "sheet stayed up after Cancel")
 
-        XCTAssertTrue(presentDialog(tapping: deleteButton, alert: alert), "no confirm dialog on second tap")
-        // "Delete" when Health is off; "Delete, keep Health" when the Health choice is offered.
-        let confirm = alert.buttons["Delete"].exists ? alert.buttons["Delete"] : alert.buttons["Delete, keep Health"]
-        XCTAssertTrue(confirm.exists, "no destructive confirm button: \(alert.buttons.allElementsBoundByIndex.map(\.label))")
+        XCTAssertTrue(presentSheet(tapping: deleteButton, title: sheetTitle), "no confirm sheet on second tap")
+
+        // The terracotta confirm stays disabled — opacity, never a red error — until the word is
+        // typed. ("Delete everything" when Health is not offered; "Delete, keep Health" when it is —
+        // both carry the same identifier.)
+        let confirm = app.descendants(matching: .any)["deleteAll.confirm"]
+        scrollUntilHittable(confirm, in: app)
+        XCTAssertTrue(confirm.exists, "no confirm button on the sheet")
+        XCTAssertFalse(confirm.isEnabled, "the confirm button must be disabled before the word is typed")
+
+        let field = app.textFields["deleteAll.confirmText"]
+        scrollUntilHittable(field, in: app)
+        XCTAssertTrue(field.isHittable, "the typed gate is not reachable")
+        field.tap()
+        field.typeText("DELETE\n")
+
+        XCTAssertTrue(confirm.waitForExistence(timeout: 2))
+        XCTAssertTrue(confirm.isEnabled, "typing the word did not arm the confirm button")
         confirm.tap()
 
-        // A clean wipe dismisses Settings; a failed one raises the failure alert instead.
+        // A clean wipe raises the success alert; a failed one raises the failure alert instead.
         XCTAssertFalse(app.alerts["Couldn't delete everything"].waitForExistence(timeout: 3),
                        "the wipe reported a failure")
+        let successDone = app.alerts["Everything deleted"].buttons["Done"]
+        if successDone.waitForExistence(timeout: 8) { successDone.tap() }
 
         assertMealAbsent(in: app, context: "immediately after deleting")
         app.terminate()
@@ -93,16 +113,16 @@ final class DeleteAllDataUITests: XCTestCase {
         }
     }
 
-    /// Taps until the dialog is up, retrying once.
+    /// Taps until the confirm sheet is up, retrying once.
     ///
     /// Not papering over a product bug: a tap issued while the Settings list is still decelerating from
-    /// the scroll above lands on nothing, and XCUITest reports that as "the alert never appeared" — which
+    /// the scroll above lands on nothing, and XCUITest reports that as "the sheet never appeared" — which
     /// looks exactly like a broken button. Retrying keeps the failure meaning "the button doesn't open
-    /// the dialog", which is what this test is actually here to catch.
-    private func presentDialog(tapping button: XCUIElement, alert: XCUIElement) -> Bool {
+    /// the sheet", which is what this test is actually here to catch.
+    private func presentSheet(tapping button: XCUIElement, title: XCUIElement) -> Bool {
         for _ in 0..<2 {
             button.tap()
-            if alert.waitForExistence(timeout: 5) { return true }
+            if title.waitForExistence(timeout: 5) { return true }
         }
         return false
     }
