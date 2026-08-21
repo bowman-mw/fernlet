@@ -1360,6 +1360,13 @@ final class FernletStore {
         let derived = MilestoneEconomy.derivedEvents(
             from: allDays,
             hydrationTarget: settings.hydrationTarget,
+            // The ledger's current rows, for the reset boundary inside: days BEFORE a wipe are never
+            // re-derived. Day records keep no tombstones (the delete dialog discloses that another
+            // device may re-add its most recent days), and a re-derived row carries a fresh
+            // reconcile-time `createdAt` — post-boundary by construction — so without this the wiped
+            // dated trail would come back through the day history. Not defaulted at the callee, so
+            // this can't be forgotten.
+            ledgerEntries: milestoneLedgerService.entries,
             // Meals still pending AI resolution are placeholders that will be replaced by a
             // fresh-UUID resolved meal — exclude them so one logged meal isn't counted twice.
             // Scope to meal records: a non-meal retry's sourceId is not a meal id and must not be

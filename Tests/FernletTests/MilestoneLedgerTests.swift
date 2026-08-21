@@ -77,7 +77,7 @@ struct MilestoneLedgerTests {
         day.workouts = [userWorkout, importedWorkout]
         day.bottleCount = 4
 
-        let events = MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, at: now)
+        let events = MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, ledgerEntries: [], at: now)
         let ids = Set(events.map(\.id))
         #expect(ids.contains("event:journal:\(journal.id.uuidString)"))
         #expect(ids.contains("event:meal:\(meal.id.uuidString)"))
@@ -88,15 +88,15 @@ struct MilestoneLedgerTests {
         #expect(ids.contains("event:water:2026-05-01"))
         #expect(events.count == 4)
         // Re-deriving is idempotent input: same ids every time.
-        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, at: now).map(\.id) == events.map(\.id))
+        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, ledgerEntries: [], at: now).map(\.id) == events.map(\.id))
     }
 
     @Test func derivedEventsSkipWaterBelowTargetAndZeroTarget() {
         var day = FernletDay(date: "2026-05-01")
         day.bottleCount = 3
-        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, at: now).isEmpty)
+        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 4, ledgerEntries: [], at: now).isEmpty)
         day.bottleCount = 10
-        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 0, at: now).isEmpty)
+        #expect(MilestoneEconomy.derivedEvents(from: ["2026-05-01": day], hydrationTarget: 0, ledgerEntries: [], at: now).isEmpty)
     }
 
     // MARK: - Threshold awards (exactly once, deterministic, reset-aware)
@@ -147,11 +147,36 @@ struct MilestoneLedgerTests {
         // Milestone EVENTS survive a reset, so pre-reset progress counts toward LATER thresholds:
         // 4 events before the boundary, the 5th after — threshold 5's crossing day is post-reset
         // and mints, while threshold 1 (crossed pre-reset) stays voided.
+        //
+        // Scope note (2026-08-21): "survive" describes a row set carrying a COIN reset and NO
+        // milestone `resetBoundary` marker — the case this coin-side guard exists for (an old build
+        // that dropped the marker at decode, or a marker append still queued). Add the milestone
+        // marker and the rows are voided outright; that is
+        // `aMilestoneBoundaryVoidsSurvivingProgressThisCoinGuardWouldStillCredit` below. Both rules
+        // hold at once, which is the point: either one alone must prevent a re-award.
         var events = (1...4).map { event(.journal, ref: "j\($0)", dayKey: "2026-05-0\($0)") }
         events.append(event(.journal, ref: "j5", dayKey: "2026-06-02"))
         let reset = CoinLedgerEntry.reset(dayKey: "2026-06-01", at: now)
         let awards = MilestoneEconomy.missingAwards(events: events, coinEntries: [reset], at: now)
         #expect(awards.map(\.id) == ["milestone:journal:5"])
+        #expect(awards.first?.dayKey == "2026-06-02")
+    }
+
+    /// The milestone-side half of the rule the test above pins from the coin side (2026-08-21).
+    ///
+    /// Same rows, plus the ledger's own `resetBoundary` marker: the 4 pre-boundary events are voided
+    /// outright, so the 5th (post-boundary) event is the FIRST counted one and only threshold 1
+    /// mints — where the coin guard alone would have credited the surviving progress toward
+    /// threshold 5. This is what stops a device that was offline at the wipe from carrying a user
+    /// most of the way to a milestone with rows describing deleted content.
+    @Test func aMilestoneBoundaryVoidsSurvivingProgressThisCoinGuardWouldStillCredit() {
+        var events = (1...4).map { event(.journal, ref: "j\($0)", dayKey: "2026-05-0\($0)") }
+        events.append(.event(kind: .journal, ref: "j5", dayKey: "2026-06-02", at: now.addingTimeInterval(60)))
+        events.append(.resetBoundary(dayKey: "2026-06-01", at: now.addingTimeInterval(30)))
+
+        #expect(MilestoneEconomy.count(of: .journal, in: events) == 1)
+        let awards = MilestoneEconomy.missingAwards(events: events, coinEntries: [], at: now.addingTimeInterval(120))
+        #expect(awards.map(\.id) == ["milestone:journal:1"])
         #expect(awards.first?.dayKey == "2026-06-02")
     }
 
@@ -204,12 +229,12 @@ struct MilestoneLedgerTests {
         )
         day.meals = [placeholder]
         let withPlaceholder = MilestoneEconomy.derivedEvents(
-            from: ["2026-05-01": day], hydrationTarget: 8, excludingMealIDs: [placeholder.id], at: now
+            from: ["2026-05-01": day], hydrationTarget: 8, ledgerEntries: [], excludingMealIDs: [placeholder.id], at: now
         )
         #expect(!withPlaceholder.contains { $0.kind == .meal })
         // Once resolved (no longer in the queue), the meal is counted.
         let counted = MilestoneEconomy.derivedEvents(
-            from: ["2026-05-01": day], hydrationTarget: 8, excludingMealIDs: [], at: now
+            from: ["2026-05-01": day], hydrationTarget: 8, ledgerEntries: [], excludingMealIDs: [], at: now
         )
         #expect(counted.filter { $0.kind == .meal }.count == 1)
     }
@@ -304,6 +329,9 @@ struct MilestoneLedgerTests {
         // 2026-08-20; this inverted the earlier survive-by-design rule).
         let incomplete = store.resetAll()
         #expect(store.milestoneCounts[.journal] == 0)
+        // And the ledger holds exactly the reset-boundary marker afterwards (2026-08-21): the rows
+        // are deleted, the boundary is written, and the boundary is not a count.
+        #expect(store.milestoneLedgerService.entries.map(\.kind) == [.resetBoundary])
         // makeTestStore backs the ledger with the real row store, so the row delete succeeds and
         // the milestone trail must NOT be named incomplete. (The fail-loud inverse — a deleter the
         // funnel cannot reach reports "your milestone history" — is pinned in

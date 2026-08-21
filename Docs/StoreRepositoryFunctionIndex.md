@@ -528,7 +528,7 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 | --- | --- |
 | `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only milestone ledger. |
 | `record(_:)` | Appends milestone rows, idempotently by deterministic id. |
-| `reset(deletingRowsWith:)` | Wipe path (added 2026-08-20, reversing the earlier survive-a-reset rule): drops the pending queue, empties memory, then runs the injected row delete (`MilestoneLedgerRepository.deleteAll()`, narrowed by the deletion funnel). `CloudKitDataService.allRecordTypes` sweeps the milestone record types too. |
+| `reset(deletingRowsWith:)` | Wipe path (added 2026-08-20, reversing the earlier survive-a-reset rule): drops the pending queue, runs the injected row delete (`MilestoneLedgerRepository.deleteAll()`, narrowed by the deletion funnel), then — since 2026-08-21 — appends a `resetBoundary` marker (with the coin service's failed-append retry), so re-synced pre-wipe rows are voided by aggregation; in-memory state afterwards is `[marker]`. `CloudKitDataService.allRecordTypes` sweeps the milestone record types too. |
 | `flushPendingSave()` | Debounce flush. |
 
 ### `CustomItemService.swift`

@@ -162,11 +162,13 @@ struct HomeView: View {
     }
 
     /// The kinds the user has actually kept (count > 0) from the pre-read ledger inputs, one token each,
-    /// in enum-declaration order. Iterating `allCases` rather than the style table guarantees coverage of
-    /// a future kind instead of dropping it. Takes the counts + worry total as arguments so the card can
-    /// scan each ledger exactly once and share the result with the summary.
+    /// in enum-declaration order. Iterating the ledger's own `countedKinds` rather than the style table
+    /// guarantees coverage of a future kind instead of dropping it — and rather than `allCases`, which
+    /// since 2026-08-21 also carries `.resetBoundary`, the wipe's bookkeeping row: never a keepsake, so
+    /// it must not reach the shelf even if a count for it ever appeared. Takes the counts + worry total
+    /// as arguments so the card can scan each ledger exactly once and share the result with the summary.
     private func keptKeepsakes(counts: [MilestoneEventKind: Int], worries: Int) -> [Keepsake] {
-        MilestoneEventKind.allCases.compactMap { kind in
+        MilestoneEconomy.countedKinds.compactMap { kind in
             let kept = kind == .worry ? worries > 0 : (counts[kind] ?? 0) > 0
             guard kept else { return nil }
             let style = keepsakeStyle(for: kind)

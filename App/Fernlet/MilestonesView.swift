@@ -398,6 +398,13 @@ struct MilestoneRowModel {
         case .water: ("drop", .waterMedal)
         case .breathing: ("wind", .breathingMedal)
         case .worry: ("archivebox", .worryMedal)
+        // NOT a keepsake: `.resetBoundary` is the wipe's own bookkeeping row (see
+        // `MilestoneEventKind.resetBoundary`), and it reaches no display path — `rows(counts:
+        // worriesLetGo:)` builds from the fixed `order` list below, and Home's shelf iterates
+        // `MilestoneEconomy.countedKinds`, both of which exclude it. This arm exists only to keep
+        // the switch exhaustive (so a real new kind stays a compile error here); it can never render,
+        // and it deliberately does not invent a medallion for "you deleted everything".
+        case .resetBoundary: ("circle.dotted", .bark)
         }
     }
 
@@ -449,6 +456,11 @@ struct MilestoneRowModel {
         case .worry:
             count == 0 ? "Worries you let go will gather here."
                 : (count == 1 ? "You've let one worry go." : "You've let \(count) worries go.")
+        // Unreachable by construction, like the `style(for:)` arm above: `rows(counts:worriesLetGo:)`
+        // is this function's only caller and it never passes the marker kind. Empty rather than a
+        // warm sentence, so a future caller that did reach it would render nothing at all rather
+        // than a milestone celebrating a wipe.
+        case .resetBoundary: ""
         }
     }
 }
