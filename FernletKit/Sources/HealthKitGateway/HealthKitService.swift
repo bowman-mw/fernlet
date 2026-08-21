@@ -443,7 +443,11 @@ struct NoopHealthKitCacheClearer: HealthKitCacheClearing {
 /// rather than resuming from a stale position.
 public struct HealthKitAnchorKeychain {
     /// Keychain service string shared by every anchor item.
-    public static let service = "com.fernlet.healthkit-anchors"
+    ///
+    /// `nonisolated`: an immutable constant, and it is used as a DEFAULT ARGUMENT (the capability
+    /// ledger's test seams) — under the module's MainActor default the strict standalone package
+    /// build rejects an isolated static in default-argument position.
+    public nonisolated static let service = "com.fernlet.healthkit-anchors"
     /// Account-name prefix for per-sample-type anchors.
     public static let accountPrefix = "healthKitAnchors."
     /// Dedicated account name for the workout observation anchor.
