@@ -7,8 +7,9 @@
 // `RowPayloadCoders`) keyed by a stable `idString` and sorted by `createdAt`; the load and
 // upsert bodies were byte-for-byte clones, parameterized here by entity name, timing labels,
 // and Debug assert text. The engine deliberately exposes NO delete path — deletion policy is
-// per-repository (the milestone ledger has none at all, by design), so each wrapper keeps its
-// own delete methods (or none) next to its contract.
+// per-repository, so each wrapper keeps its own delete methods next to its contract (all three
+// carry a `deleteAll()` wipe path; the milestone ledger's joined on 2026-08-20, when the wipe
+// stopped keeping the milestone trail).
 
 import Foundation
 import CoreData
@@ -23,7 +24,7 @@ import FernletFoundation
 /// (the load sort key). `append` upserts only the rows it is handed and never deletes
 /// others, so a stale in-memory set on one device cannot wipe rows synced in from
 /// another; the engine intentionally has **no delete method** — deletion policy stays
-/// per-repository (`MilestoneLedgerRepository` has none at all, structurally). Failed
+/// per-repository (each wrapper keeps its own `deleteAll()` beside its contract). Failed
 /// saves assert in Debug builds, roll the context back, and return `false`; undecodable
 /// rows are dropped per row on read. MainActor-isolated by the module default, working
 /// on ``PersistenceController``'s view context.

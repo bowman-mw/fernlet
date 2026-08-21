@@ -5,8 +5,10 @@
 //  A modest lifetime-milestones surface: warm cumulative counts of care ("You've written 40
 //  journal moments") plus the little coin gifts each milestone added. Cumulative ONLY — no rates,
 //  no per-week stats, no completion percentages, and never anything "in a row". Counts come from
-//  the append-only milestone ledger, so they can only grow — deleting entries, disabling
-//  HealthKit, or even a full data reset never takes a milestone away.
+//  the append-only milestone ledger, so between wipes they can only grow — deleting entries or
+//  disabling HealthKit never takes a milestone away. "Delete everything" is the one exception:
+//  since 2026-08-20 the wipe clears the ledger too (a dated trail of when you journaled is not
+//  a wipe survivor).
 //
 //  Two ways to look at the same numbers, per the approved design:
 //    • warm rows — the everyday screen: a count folded into a warm sentence, so it reads as a

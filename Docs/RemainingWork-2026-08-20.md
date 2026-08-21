@@ -163,22 +163,35 @@ A four-track audit on 2026-08-20 enumerated every persisted surface and checked 
 wipe funnel. **~20 surfaces are not cleared**, five seriously. The full, verified list with fixes is
 Part 4 of [`Next-Round-Prompt-2026-08-20.md`](Next-Round-Prompt-2026-08-20.md); the headline items:
 
-1. `fernlet.healthkit.requested-capabilities` survives as a **plaintext** record that the user
-   enabled **intimate logging** and cycle tracking. Content gone, the fact of use not — and it
-   survives turning Health off, too.
-2. The pre-database `LegacyKeys` corpus holds **unsealed journal text**, and the wipe does not merely
-   leave it: the next launch treats the emptied store as a first launch and **re-imports** it. Only
-   affects installs carrying those keys, but this repo has fixed resurrection-after-wipe once before.
-3. The "delete from Apple Health" option is offered only when the Health master toggle is **on**, so
-   the most privacy-conscious user cannot remove the sexual-activity and cycle samples Fernlet wrote.
+1. ✅ 2026-08-20 — `fernlet.healthkit.requested-capabilities` is now `HealthCapabilityRequestLedger`,
+   a device-only keychain row (never rides a backup, not `defaults read`-able), with a one-shot drain
+   of the legacy plaintext key; cleared by the wipe funnel **and** by `disableIntegration()`.
+2. ✅ 2026-08-20 — `purgeAllPersistedData()` now clears the whole `LegacyKeys` corpus (all six fixed
+   families plus every `fernlet-day-*` row), so the wipe removes the unsealed JSON and the next
+   launch has nothing to re-import. `LegacyKeysPurgeTests` pins the no-resurrection property.
+3. ✅ 2026-08-20 — the Health-deletion offer now keys off "has Fernlet ever been prompted for a
+   write-capable Health capability" (the persisted ledger from item 1), not the master toggle, and
+   `deleteAllAuthoredSamples()` was verified ungated. Toggle-off users get the offer and honest copy.
 4. Sealed photos are torn down by enumerating `SealedPhotoRecord` — the type still unpromoted in the
-   Production CloudKit schema (§1). Skipping that owner action does not just break restore; it makes
-   the wipe incomplete.
-5. `SavedRecipes.json`, a plaintext pre-migration recipe file, is never cleared.
+   Production CloudKit schema (§1). **Still open, owner action** (console-only; preflight in
+   `Release-Process.md` §2 and `CloudKit-Schema-Deploy.md` both verified in place 2026-08-20).
+5. ✅ 2026-08-20 — `SavedRecipes.json` gained a delete with a real failure signal, called from
+   `resetAll`.
+
+Also landed 2026-08-20 from the same audit's §4.2/§4.3 list: workout tombstone ring cleared (the
+over-reach question was resolved: no funnel over-reach, but a surviving unconfirmed tombstone could
+delete a kept Health sample on re-enable — the ring is now cleared), Recent-activity chips,
+moderation **peer** bans (self-ban kept per the 2026-07-17 decision), the milestone ledger
+(local + CloudKit, reversing the survive-by-design rule), the sealed friend photo-wall **index**
+(now GCM-sealed under the wall key, with plaintext migration), `FernletPeerID.archive` (cleared with
+identity rotation), companion petting state (the clear is no longer DEBUG-only), an unconditional
+legacy direct-CloudKit sweep (previously gated on sync-off + kept-copy), and a main-store
+checkpoint+vacuum residue pass (destroy is deliberately banned for the CloudKit-backed store; the
+weaker guarantee is documented in `PrivacyWipeCoverage.md`).
 
 The reason these accumulated is structural: `PrivacyWipeCoverageTests` only checks correspondence
 between three human-written artifacts and has no discovery, so a surface nobody wrote down is
-invisible to it. Part 4.4 specifies the wall that closes it.
+invisible to it. Part 4.4 specifies the wall that closes it — **still open**, queued this round.
 
 ---
 
@@ -197,10 +210,11 @@ four independent mechanical walls, and near-zero dead code. Weak in two places t
 2. **CI never runs the test suite** — only the seven boundary suites gate a push, by a decision
    (`Release-Process.md` §1) that made sense when CI was fragile and stopped making sense at eight
    commits a day. The pre-push hook builds but runs no tests. ~5-line workflow diff.
-3. **CODEOWNERS is stale after the repo restructure** — 11 of 26 paths match nothing, including
-   *all seven* wall/crypto test files, which now live under `Tests/`. `Release-Process.md` and
-   `KeyCustodyBoundaryTests.swift:197` both assert a protection that is currently false. Fifteen
-   minutes, plus a check that every CODEOWNERS path resolves so the next restructure fails loudly.
+3. ✅ 2026-08-20 — **CODEOWNERS repaired**: the 11 stale pre-restructure paths fixed, the three
+   never-added wall tests plus the Power-of-10 scanner/allowlist added, and
+   `CodeOwnersResolutionTests` now fails loudly if any pattern stops resolving (anchored/trailing-slash
+   semantics modeled; globs rejected; required-pattern floor set). `Release-Process.md` §1 and the
+   `KeyCustodyBoundaryTests` tripwire comment are true again.
 4. Two-device sync has no integration test. Don't build an automated two-device suite — run a
    scripted manual smoke on TestFlight instead (log on A → confirm on B → conflicting same-day
    edits → delete-all on A → confirm B).

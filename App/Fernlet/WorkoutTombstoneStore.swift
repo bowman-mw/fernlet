@@ -62,4 +62,18 @@ final class WorkoutTombstoneStore {
         current.removeAll { $0 == token }
         ids = current
     }
+
+    /// Empties the whole ring — the "Delete everything" / "Reset everything" path.
+    ///
+    /// After a full wipe there are no local workout rows left for a tombstone to guard, and a
+    /// survivor is worse than dead weight: an entry whose Health delete never confirmed tells the
+    /// workout observer to delete a still-existing app-authored Apple Health sample on the next
+    /// re-enable — even when the user explicitly chose to KEEP their Health samples at the wipe.
+    /// Clearing is correct for both wipe answers: the delete-Health path already removed the
+    /// samples (nothing left to guard), and the keep-Health path wants those samples re-imported,
+    /// not deleted. Removes the key outright rather than writing an empty array, so the wiped
+    /// device carries no trace of the ring at all.
+    func clearAll() {
+        defaults.removeObject(forKey: key)
+    }
 }

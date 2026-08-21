@@ -50,8 +50,10 @@ import AIContext
 /// - "Delete everything" (`deleteAllData`) is a single ordered funnel: writers stopped first,
 ///   sealed rows dropped WITHOUT decrypting, then the sealed store FILE destroyed and re-created
 ///   (`sealedStoreRebuildHook`, keyless) so the row-delete's `-wal`/freelist residue goes too;
-///   every leg reported through ``DeleteAllOutcome`` — an unwired row hook counts as failure,
-///   never success.
+///   the synced store gets the same residue pass by checkpoint + vacuum instead
+///   (`mainStoreRebuildHook`), because destroying ITS file would discard the CloudKit mirror's
+///   pending export queue; every leg reported through ``DeleteAllOutcome`` — an unwired row hook
+///   counts as failure, never success.
 /// - AI call sites route through `aiGate` (rebuilt per read); the concrete provider type is
 ///   named only in ``FernletAIComposition`` so this file stays off the S3 grep-wall's AI list.
 ///
@@ -4526,6 +4528,21 @@ final class FernletStore {
     /// reach the server by propagating over a session. Returns whether it cleared. Wired in `ContentView`
     /// (the store does not own a CloudKit service). Invoked only when `cloudCopyKept` is set.
     @ObservationIgnored var cloudCopyDeleteHook: (() async -> Bool)?
+    /// Deletes the LEGACY direct-CloudKit records — the record types written by builds that talked to
+    /// CloudKit themselves rather than through `NSPersistentCloudKitContainer`.
+    ///
+    /// Its own hook, and unconditional, because neither existing cloud leg reaches them.
+    /// `cloudCopyDeleteHook` above is gated on "stop syncing, keep the copy", and a LIVE sync deletes
+    /// the server copy only by PROPAGATING the local row deletes — which the mirror can do only for
+    /// the `CD_`-prefixed types it wrote. A legacy record has no local row behind it, so on the
+    /// commonest configuration of all (sync on) meal, journal, workout, hygiene, hydration and sleep
+    /// records from an old install survived "delete everything" with nothing left able to name them.
+    ///
+    /// Reported with `== false` like `sealedStoreRebuildHook`, not the row hooks' `!= true`: a nil
+    /// hook is an unwired TEST store, and every test that drives the real funnel would otherwise
+    /// report an incomplete wipe. Production wiring is pinned by the `ContentView` seam scan in
+    /// `PrivacyWipeCoverageTests`.
+    @ObservationIgnored var legacyCloudRecordDeleteHook: (() async -> Bool)?
     /// Purges the pending-narrative buffer — cycle notes written while the app was LOCKED, sealed under a
     /// device key and parked in a file until the next unlock can file them.
     ///
@@ -4558,6 +4575,22 @@ final class FernletStore {
     /// already gone, this is the residue layer on top. Production wiring is enforced separately, by
     /// the `ContentView` seam scan in `PrivacyWipeCoverageTests`.
     @ObservationIgnored var sealedStoreRebuildHook: (() -> Bool)?
+    /// The MAIN (synced) store's counterpart to `sealedStoreRebuildHook`: removes the deleted-row
+    /// residue from the Core Data file after `repository.purgeAllPersistedData()` has emptied it.
+    ///
+    /// Deliberately NOT the same mechanism, and the difference is a correctness argument rather than
+    /// a preference. The sealed store is local-only, so destroying its file loses nothing. This store
+    /// is mirrored by `NSPersistentCloudKitContainer`, whose export queue is persistent history
+    /// INSIDE that file — at the moment the wipe finishes, the deletes it just made may not have
+    /// reached the server yet. Destroying the file would discard that queue, strand the server copy
+    /// with nothing left able to address it, and let the fresh empty store import it all back. So the
+    /// wired implementation checkpoints and vacuums instead (`PersistenceController
+    /// .compactStoreAfterWipe()`), which preserves the queue and the mirror metadata.
+    ///
+    /// `== false` like the sealed hook, and for the same reason: a nil hook is an unwired test store,
+    /// and the rows are already gone — this is the residue layer on top. Honest limits are the sealed
+    /// hook's: logical residue only, never a claim about physical flash blocks.
+    @ObservationIgnored var mainStoreRebuildHook: (() async -> Bool)?
     /// Returns storage preferences to first-launch defaults. A hook because the preferences store is
     /// app-scoped, not owned by `FernletStore`.
     ///
@@ -4632,8 +4665,8 @@ final class FernletStore {
     /// Deliberately NOT deleted (and disclosed in the confirm dialog, because a delete that quietly
     /// keeps things is worse than one that says so):
     /// - the moderation self-ban — a safety mechanism; letting a wipe undo a block would make "delete
-    ///   my data" an abuse vector.
-    /// - the milestone ledger — lifetime care counts, product call that they outlive a reset.
+    ///   my data" an abuse vector. Its co-located PEER bans are cleared (leg 11): a ban on someone
+    ///   else is data about another person, addressed to the identity this funnel rotates away.
     /// - the shared-photo wall (`PrivateMediaStore` via `meshNetworkManager`) — BOTH the photos friends
     ///   sent you and the ones you shared with them (a photo you shared is cached under your own
     ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
@@ -4698,6 +4731,27 @@ final class FernletStore {
         // 11. Proximity identity, the away-hearts dead drop, and the orphaned at-rest keys
         // (see `rotateProximityIdentityAndPurgeDeadDrop`).
         await rotateProximityIdentityAndPurgeDeadDrop(into: &outcome)
+
+        // 12. The MAIN store's file residue. Step 8 deleted the rows; SQLite only marks their pages
+        // free, and in WAL mode the database file still holds the PRE-delete page images until a
+        // checkpoint. The main-store counterpart of `sealedStoreRebuildHook` — see its doc for why
+        // it checkpoints and vacuums rather than destroying the file the CloudKit mirror's export
+        // queue lives in.
+        //
+        // BEFORE the preference reset, and that ordering is load-bearing: the reset returns
+        // `localBackupExcludedFromiOSBackup` to its default, which the app observes and answers with
+        // a container reload of its own. Reloading the same controller twice at once would swap the
+        // container out from under itself, so the funnel does its reload while no preference has
+        // changed yet and lets the app's reload follow. (The compaction also refuses outright if a
+        // reload is somehow already in flight, rather than racing it.)
+        if await mainStoreRebuildHook?() == false {
+            outcome.incompleteStores.append("leftover traces in your local records")
+        }
+        // A third cancel: the leg above is the only step after the purge that SUSPENDS, and the
+        // container swap it performs publishes a remote-change notification that reloads the store
+        // — which can schedule a debounced save. Anything that slipped through writes the emptied
+        // snapshot (an empty day row, no user content), and this stops the next one.
+        snapshotSaveCoordinator.cancelPending()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")
@@ -4806,6 +4860,18 @@ final class FernletStore {
                 cloudCopyDeleteFailed = true
                 outcome.incompleteStores.append("your iCloud copy")
             }
+        }
+        // 2c. The LEGACY direct-CloudKit records, UNCONDITIONALLY — the one cloud leg that must not
+        // be gated on a preference. The branch above covers "sync off, copy kept"; a LIVE sync
+        // covers itself by propagating the local row deletes. Neither reaches a record type the
+        // mirror never wrote: `NSPersistentCloudKitContainer` only knows its `CD_`-prefixed types,
+        // so the bare-named meal / journal / workout / hygiene / hydration / sleep records left by
+        // builds that talked to CloudKit directly have no local row to propagate a delete from, and
+        // survived on the commonest configuration of all. Named under the same label as the branch
+        // above so a double failure reads as one line after the dedupe. A missing iCloud account is
+        // reported as a clean sweep by the service, not as a failure the user cannot act on.
+        if await legacyCloudRecordDeleteHook?() == false {
+            outcome.incompleteStores.append("your iCloud copy")
         }
         return (sealedBackupDeleteFailed, cloudCopyDeleteFailed)
     }
@@ -4926,6 +4992,22 @@ final class FernletStore {
         // has no failure signal (a plain UserDefaults removal), so it reports no incomplete store.
         aiCallQuotaStore.reset()
 
+        // The record of which Apple Health prompts have ever been shown — including `cycleTracking`
+        // and `intimateLogging`. A plaintext `UserDefaults` array until 2026-08-20, cleared by
+        // nothing, so a wiped phone still held a claim about the user's body; it is a device-only
+        // keychain row now. Unlike the plain quota reset above this HAS a failure signal (a keychain
+        // delete that did not take), and a surviving row is exactly the case the "everything
+        // deleted" dialog must not paper over.
+        if !HealthCapabilityRequestLedger.clear() {
+            outcome.incompleteStores.append("your Apple Health permission history")
+        }
+        // Companion petting state (`fernlet.companionPets.*`): how many times the companion was
+        // petted in the current window, when that window opened, when the settled period ends —
+        // device-local timestamps of when the user was last here. `clearPersistentState` existed and
+        // its only caller was a `#if DEBUG` UI-test seam, so in RELEASE nothing cleared it. Plain
+        // `UserDefaults` removals, so no failure signal and no incomplete store.
+        PetInteractionGovernor.clearPersistentState()
+
         // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
         // synced/snapshot/exported. Clear the persisted file directly (guaranteed even if the actor sink
         // was never wired) AND the in-memory session entries. Unlike the plain UserDefaults quota reset
@@ -4964,6 +5046,15 @@ final class FernletStore {
         // destroy every local unlock key for a ceremony that can only fail. Fired whether or not the
         // wipe above threw: a partial identity wipe rotates the key just as thoroughly.
         identityRotatedHook?()
+        // Local moderation peer-ban records (keychain `com.fernlet.moderation`, `peerBan:`
+        // accounts): 30-day bans keyed to OTHER designers' identity fingerprints. The rotation
+        // above just promised a brand-new identity, and these rows are data about other people
+        // addressed to the dead one — the ledger evidence that could re-mint them was already
+        // cleared in `resetAll()`. The SELF-ban row in the same service deliberately survives
+        // (2026-07-17: a wipe must not be a ban-evasion tool); the clear removes ONLY peer rows.
+        if !moderationBanStore.clearPeerBansForDeleteAll() {
+            outcome.incompleteStores.append("nearby designer bans")
+        }
         // Away-hearts dead-drop (Increment 3). The REMOTE purge has to run BEFORE the local wipe:
         // the sealed records this device uploaded to the CloudKit public database are addressable
         // only by the record names held in the outbox, and recipients cannot delete a sender's
@@ -5049,6 +5140,13 @@ final class FernletStore {
         // prevent. Registration replaces, so this empties it.
         syncCustomExerciseCatalog()
         if !savedRecipeService.reset() { incompleteStores.append("your saved recipes") }
+        // The pre-Core-Data `SavedRecipes.json` file (Application Support/Fernlet): plaintext recipe
+        // names, ingredients, notes, macros and source URLs on any install predating the Core Data
+        // migration. The migration latch deliberately survives the wipe (deliberate-exceptions
+        // table), so nothing ever re-reads this file — but until now nothing deleted it either. A
+        // missing file counts as success; a failed removal names the surviving copy under the same
+        // label as the per-row reset above, and the funnel's dedupe collapses the pair to one line.
+        if !LegacySavedRecipeJSONRepository().deleteFile() { incompleteStores.append("your saved recipes") }
         if !customItemService.reset() { incompleteStores.append("your custom items") }
         // Clears all earn/spend rows and appends a reset-boundary marker. The next `reconcileCoinLedger()`
         // re-mints `earn` rows ONLY for active days at or after the reset boundary day — days before the
@@ -5056,13 +5154,22 @@ final class FernletStore {
         // deterministically re-minting pre-reset earns. Activity logged on or after the reset day still
         // earns normally (the reset zeroes the past, it doesn't disable earning going forward).
         if !coinLedgerService.reset() { incompleteStores.append("your coins") }
-        // The MILESTONE ledger is deliberately NOT reset: lifetime care counts ("you've written 40
-        // journal moments") are memories of showing up, not spendable state, and the product call
-        // is that they survive a data reset. The rows carry no content — only kind + day of a
-        // counted event (accepted metadata retention; see `MilestoneLedgerRepositoring`, which has
-        // no delete API at all). Milestone COIN awards, by contrast, live in the coin ledger and
-        // were just voided with everything else; `MilestoneEconomy.missingAwards` honors the reset
-        // boundary, so pre-reset awards are never re-minted from the surviving events.
+        // The milestone ledger is a DATED METADATA TRAIL of the content this funnel destroys: one
+        // row per counted event — a journal entry happened on this day, a worry was let go on that
+        // one — in Core Data and, mirrored, in the user's CloudKit private database. The rows carry
+        // no content, but "we deleted your journal and kept the dates you journaled" is not a wipe,
+        // so the trail goes with the data it describes (reversing the pre-2026-08-20 product call
+        // that it outlives a reset). The row delete lives on the concrete CloudKit conformer
+        // (`MilestoneLedgerRepositoring` carries none, and StoreCore has no CloudKitSync edge), so
+        // the funnel narrows the service's store here — the same `as?` narrowing the async loader
+        // uses for `CoreDataFernletRepository`. A narrowing that fails reports the store rather than
+        // emptying memory and calling the wipe complete. Milestone COIN awards live in the coin
+        // ledger and were voided just above; `MilestoneEconomy.missingAwards` honors that reset
+        // boundary, so nothing re-mints them.
+        let milestoneRows = milestoneLedgerService.persistedStore as? MilestoneLedgerRepository
+        if !milestoneLedgerService.reset(deletingRowsWith: { milestoneRows?.deleteAll() ?? false }) {
+            incompleteStores.append("your milestone history")
+        }
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
         // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
@@ -5091,10 +5198,22 @@ final class FernletStore {
         // outlive a wipe. `deleteAllData` reaches this via its `resetAll()` call, so both wipe paths cover
         // it. A plain `UserDefaults` removal has no failure signal, so it reports no incomplete store.
         BarcodeServingMemory.clearAll()
+        // The Log-activity "Recent" chips (`fernlet.recentActivityTypes`): the last five workout
+        // types picked, rendered to whoever holds the phone next. Same class of device-local
+        // `UserDefaults` sidecar as the serving memory above; a plain removal has no failure signal.
+        RecentActivityTypeMemory.clearAll()
         // Which recipes this device already spent its one automatic web-image download on — the
         // same class of device-local `UserDefaults` sidecar; clear it with the others so the
         // bookkeeping doesn't outlive the recipes it described.
         RecipeWebImageAttemptMemory.clearAll(defaults: webImageAttemptDefaults)
+        // The workout tombstone ring (`fernlet.workout.tombstones`): up to 200 ids of removed
+        // workouts whose app-authored Health delete may never have confirmed. After this funnel
+        // there are no local rows left for a tombstone to guard, and a survivor would make the
+        // workout observer DELETE a still-existing app-authored Health sample on the next
+        // re-enable — even against an explicit "keep my Health samples" answer. Correct for both
+        // wipe choices: the delete path already removed the samples, the keep path wants re-import,
+        // not deletion. No failure signal.
+        workoutTombstones.clearAll()
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()

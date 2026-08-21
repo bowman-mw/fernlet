@@ -38,8 +38,10 @@ milestone per event) plus dedup-by-id on
 every load form the union-merge that makes earning idempotent and double-spends structurally
 impossible, because `NSPersistentCloudKitContainer` does not enforce id uniqueness itself. The
 ledgers differ deliberately at the edges: the coin ledger's `reset()` appends a reset-boundary
-marker that voids pre-reset rows sync-safely, while the milestone ledger has *no* reset at all —
-lifetime care counts survive "delete everything" by protocol design.
+marker that voids pre-reset rows sync-safely, while the milestone ledger's
+`reset(deletingRowsWith:)` empties the ledger outright on "delete everything" (since 2026-08-20,
+reversing the earlier rule that lifetime counts survive a wipe) — its row vocabulary has no
+boundary marker, so rows still held by another signed-in device can sync back afterwards.
 
 ``DerivedSignalsService`` and the pure ``DerivedSignalsRebuilder`` cover Tier-2 derived data:
 signals recomputed deterministically from raw day history (via LocalPersistence's

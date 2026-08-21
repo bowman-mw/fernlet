@@ -131,8 +131,9 @@ public nonisolated enum CoinEconomy {
                         // are voided by the reset INSTANT like spends (createdAt-based), NOT by dayKey:
                         // an award minted post-reset carries a post-reset createdAt and survives, while a
                         // stale pre-reset award re-synced from an offline device carries a pre-reset
-                        // createdAt and is voided — so a full reset zeroes milestone coins too, even
-                        // though the milestone EVENTS themselves deliberately survive.
+                        // createdAt and is voided — so a full reset zeroes milestone coins too. (Since
+                        // 2026-08-20 the wipe also deletes the milestone EVENT rows, but they can sync
+                        // back from another signed-in device, so this voiding stays load-bearing.)
                         if entry.createdAt <= reset.createdAt { return }
                     } else if let boundary = reset.dayKey, let day = entry.dayKey, day < boundary {
                         // Active-day earns: void days STRICTLY BEFORE the reset day (the reset day stays earnable).

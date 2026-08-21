@@ -232,8 +232,10 @@ public final class DebouncedAppendBuffer<Entry> {
         if saved { pending = [] }
     }
 
-    /// Drops every queued row and any scheduled flush — for `CoinLedgerService.reset()`, which
-    /// replaces the queue wholesale around its reset-boundary marker write.
+    /// Drops every queued row and any scheduled flush — for the ledger resets:
+    /// `CoinLedgerService.reset()` replaces the queue wholesale around its reset-boundary marker
+    /// write, and `MilestoneLedgerService.reset(deletingRowsWith:)` drops the queue BEFORE deleting
+    /// the stored rows so a queued row can never flush back onto a just-emptied store.
     public func clear() {
         pending = []
         saveScheduled = false

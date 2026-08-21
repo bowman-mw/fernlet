@@ -12,10 +12,13 @@ must appear in the test's manifest (`everyDocumentedWipeRowIsEnforcedByTheManife
 documented-but-unenforced row fails too. **Adding a store = add its wipe call, a row here, and its
 token in the test — in the same commit.**
 
-The scan is bounded to the BODIES of `deleteAllData` and `resetAll` (the wipe's one delegated leg),
-with comments stripped. A whole-file scan used to satisfy a row from an unrelated function — the
-same call spelled somewhere else in the 4,000-line store — so a deleted wipe call could keep the
-suite green while the wipe was broken.
+The scan is bounded to the BODIES of the funnel and its numbered legs, with comments stripped. A
+whole-file scan used to satisfy a row from an unrelated function — the same call spelled somewhere
+else in the 4,000-line store — so a deleted wipe call could keep the suite green while the wipe was
+broken. Since 2026-08-20 the scan also covers `ContentView.attachDeleteAllHooks` /
+`attachCloudDeleteAllHooks`, because several real clears live inside those hook closures, and
+`everyPrivateWipeHelperIsRegistered` requires every private helper the wipe path calls to be
+registered — the bounding's own escape hatch was moving a banned call into an unscanned leg.
 
 Every keychain service the app uses is named in one of the tables, so a `grep -r 'com\.fernlet\.'`
 over the sources and the two tables below return the same set. **That sentence is true of keychain
@@ -45,10 +48,12 @@ Increment 1, Docs/Plan-Bitchat-Adoptions-2026-07-25.md).
 >
 > Consequence: a new `UserDefaults`-backed store can ship, never be wiped, and never be documented,
 > with the whole suite green. That is not hypothetical — the 2026-08-20 sweep found **eight such
-> keys in neither table**, and four of them are surfaces the wipe genuinely does not reach. Those
-> four are recorded below in **"Open gaps"**, not quietly folded into the exceptions table: they are
-> code defects awaiting a fix or an owner decision, and this doc will not launder them into
-> "by design" by writing them down.
+> keys in neither table**, and four of them were surfaces the wipe genuinely did not reach. Those
+> four were recorded below in **"Open gaps"**, not quietly folded into the exceptions table: they
+> are code defects awaiting a fix or an owner decision, and this doc will not launder them into
+> "by design" by writing them down. **Three have since been fixed** and moved to the cleared-by
+> table; one remains open. The enforcement hole itself is unchanged — it is why the sweep was a
+> human walk of the sources, and why it will have to be repeated.
 >
 > **Until a discovery floor for defaults keys exists, the completeness half of this contract is a
 > human promise, kept by review.** If you add a `UserDefaults`-backed store: wire its clear, add its
@@ -96,7 +101,9 @@ physical residue survives. Hence two tiers of promise, and the wording each one 
 ## Cleared by Delete everything
 
 Ordering matters — pending saves are cancelled first and re-cancelled after `resetAll()`, the
-repository purge runs late, widget files last. See the numbered commentary inside `deleteAllData`.
+repository purge runs late, widget files after that, then the proximity identity, and the main
+store's compaction last of all (before the preference reset, so the app's own preference-driven
+container reload cannot race it). See the numbered commentary inside `deleteAllData`.
 
 | Surface | Where it lives | Wiped by (token) |
 | --- | --- | --- |
@@ -105,10 +112,12 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Sealed-backup rollback high-water mark (chunked payloads **and** the own-photo corpora) | `SealedBackupGenerationStore` (UserDefaults, device-local) | `generationStore.reset` (the call site is two lines — construct, then `.reset()` — so the token is the variable's spelling; the type name never appears on the calling line. `reset()` walks BOTH `SealedBackupPayloadType.allCases` and `SealedPhotoCorpus.allCases`) |
 | Own-photo escrow backup — every sealed photo body **and** its corpus manifest, for meal / recipe / progress; the same call also clears three device-local UserDefaults records, none of which holds bytes or captions: the upload ledger (`OwnPhotoUploadLedger`, `fernlet.sealedPhoto.uploadedIDs.*` — photo IDs only), so a torn-down backup leaves no claim of ownership behind; the restore-repair ledger (`OwnPhotoRestoreRepairLedger`, `fernlet.sealedPhoto.restoreRepairIDs.*` — photo IDs a partial restore still owed), because ids owed by a backup that no longer exists can never be fetched; and the route's commit proof (`OwnPhotoEscrowCommitLedger`, `fernlet.sealedPhoto.routeCommitted` — one bit), which no longer evidences anything once the records are gone. Clearing the proof does **not** un-bind an already-bound own-photos key (that is one-way by design, and the row itself deliberately survives the wipe — see below); it only stops a torn-down route from satisfying the binding gate for a device that has not bound yet | CloudKit private DB (`SealedPhotoRecord`) + UserDefaults | `deleteOwnPhotoEscrowBackups` (runs BEFORE the preference reset that would gate it off, and needs no escrow key — deletion is by record name, so it works while locked) |
 | Kept cloud copy | CloudKit | `cloudCopyDeleteHook` |
+| Legacy direct-CloudKit records — the bare-named `FernletDatabaseRecord`, `MealLogRecord`, `JournalLogRecord`, `WorkoutLogRecord`, `HygieneLogRecord`, `HydrationLogRecord`, `SleepRecord`, `SavedRecipeRecord`, `CustomItemRecord`, `CoinLedgerRecord`, `MilestoneLedgerRecord`, `DayRecord` and `MenstrualNarrative` written by builds that talked to CloudKit directly. Content, not metadata | CloudKit private DB | `legacyCloudRecordDeleteHook` → `CloudKitDataService.deleteLegacyDirectCloudKitRecords`. UNCONDITIONAL, unlike every other cloud leg, and that is the point: the row above runs only on "stop syncing, keep the copy", and a LIVE sync deletes the server copy by *propagating* the local row deletes — which `NSPersistentCloudKitContainer` can only do for the `CD_`-prefixed types it wrote itself. A bare-named record has no local row to propagate from, so on the commonest configuration of all these survived the wipe with nothing left able to name them. Never touches a `CD_` type (the mirror owns those) or either sealed-backup namespace (their own legs, gated on the user's enable flags). A missing iCloud account is reported as a clean sweep — there is no database to reach and nothing the user could act on |
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
 | Intimacy logs (sealed rows) | Private stores | `intimacyDataDeleteHook` |
 | Journal narratives (sealed rows) | Private stores | `journalDataDeleteHook` |
 | Sealed store FILE (sqlite + `-wal`/`-shm` + the `_SUPPORT` external-blob dir) — the residue the row deletes above leave behind | `FernletPrivate` store on disk | `sealedStoreRebuildHook` (runs LAST in `resetAll`, after every sealed-row delete; keyless, so it works while locked) |
+| Main (synced) store FILE residue — the page images of the day / recipe / custom-item / coin / milestone rows deleted above. SQLite only marks their pages free, and in WAL mode the database file still holds the PRE-delete images until a checkpoint | `Fernlet` Core Data store on disk (sqlite + `-wal`/`-shm`) | `mainStoreRebuildHook` → `PersistenceController.compactStoreAfterWipe`. Deliberately NOT the sealed store's destroy-and-re-add: this file carries the CloudKit mirror's pending export queue in its persistent history, so destroying it would discard the deletes that have not shipped yet, strand the server copy with nothing left able to address it, and let the fresh empty store import it all back. It checkpoints (`journal_mode=DELETE`) and vacuums (`NSSQLiteManualVacuumOption`) through the ordinary reload instead, which preserves the queue and the mirror metadata. **Honest limits, read the residuals section:** this is the *logical* residue only, and it is weaker than the sealed rebuild |
 | Locked-note pending buffer | PendingNarrativeBuffer | `pendingNarrativeBufferPurgeHook` |
 | HealthKit samples (opt-in) | HealthKit | `healthKitSampleDeleteHook` (the leg is opt-in behind the `includingHealthKitSamples` parameter — but the parameter name appears on the funnel's own signature line, so it never worked as a token; the hook's spelling appears only at the real call site) |
 | Meal photos | PrivateMediaStore | `mealPhotoStore.deleteAll` |
@@ -123,8 +132,10 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Diary + connection session logs | Snapshot | `resetDiary` |
 | Custom exercise catalog (imported from a coach plan) — the persisted rows AND the process-global registry the picker / safety filter / planning engine read. Two surfaces, one row: `resetDiary` clears `settings.customExercises`, but `WorkoutExerciseCatalog`'s registry is process-global, so without the re-publish a deleted exercise stays live and searchable until the app is relaunched | Snapshot (`settings.customExercises`) + `WorkoutExerciseCatalog` (in-process) | `syncCustomExerciseCatalog` |
 | Saved recipes (per-row) | Core Data/CloudKit | `savedRecipeService.reset` |
+| Legacy saved-recipes JSON file — the pre-Core-Data `SavedRecipes.json`: plaintext recipe names, ingredients, notes, macros and source URLs on any install predating the migration | Application Support/Fernlet (disk) | `LegacySavedRecipeJSONRepository().deleteFile` (a missing file counts as success; the migration latch that survives the wipe — see the deliberate-exceptions table — means nothing re-reads the file, but until this call nothing deleted it either) |
 | Custom items + clothing designs (per-row) | Core Data/CloudKit | `customItemService.reset` |
 | Coin ledger (per-row) | Core Data/CloudKit | `coinLedgerService.reset` |
+| Milestone ledger — the dated rows recording THAT a journal entry, meal, workout, breathing session, worry release or hydration day happened (kind + dayKey + timestamp; never any content), i.e. metadata about the very entries this funnel destroys | Core Data `MilestoneLedgerRecord` + its CloudKit private-database mirror | `milestoneLedgerService.reset` (the funnel narrows the service's `persistedStore` to `MilestoneLedgerRepository` for the row delete the protocol does not carry; the delete is object-by-object through the view context, which is what propagates it to iCloud — a batch delete would leave the cloud copies. In-memory counts and the pending-append queue are dropped in the same call). Reverses the pre-2026-08-20 product decision that milestone counts outlive a reset: "we deleted your journal and kept the dates you journaled" is not a wipe |
 | AI retry queue | Disk | `aiRetryQueueService.reset` |
 | Proximity trust vault (friends/blocks) | Snapshot + memory | `proximityTrustVault.apply` |
 | Stress scoring local state | Disk | `scrubStressLocalState` |
@@ -134,19 +145,25 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Friend fuzzy-state cache | Sidecar | `friendStateCache.clearAll` |
 | Closeness ledger | Sidecar | `closenessLedger.clearAll` |
 | Barcode serving memory | UserDefaults | `BarcodeServingMemory.clearAll` |
+| Log-activity "Recent" chips — the last five workout types picked | UserDefaults `fernlet.recentActivityTypes` (`RecentActivityTypeMemory`, device-local, never synced) | `RecentActivityTypeMemory.clearAll` (plain UserDefaults removal — no failure signal) |
 | Recipe web-image one-attempt memory | UserDefaults | `RecipeWebImageAttemptMemory.clearAll` |
+| Workout tombstone ring — up to 200 UUIDs of removed workouts whose app-authored Health delete never confirmed | UserDefaults `fernlet.workout.tombstones` (`WorkoutTombstoneStore`) | `workoutTombstones.clearAll` (correct for both Health answers: the delete path already removed the samples, the keep path wants re-import — a surviving tombstone would delete a kept sample on the next re-enable) |
 | Group-activity rosters (persisted) | Sidecar | `activities.clearAll` |
 | Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
-| Sensitive-visibility resolution | Memory | `clearSensitiveVisibilityResolution` |
+| Sensitive-visibility resolution | UserDefaults (`SensitiveVisibilityKeys`, device-local, non-synced): `sensitiveVisibilityResolved`, `sensitiveVisibilityResolvedPeriodVisible`, `sensitiveVisibilityResolvedIntimacyVisible` — the store's injectable `sensitiveVisibilityDefaults`, `.standard` in production. This column said "Memory" until 2026-08-20; it was wrong, and the difference matters — a memory-only resolution could not survive a wipe, and these keys can | `clearSensitiveVisibilityResolution` |
 | Age determination (intimacy 16+, mesh chat 13+) | UserDefaults | `ageAssurance.clear` |
-| Day rows + blob + legacy JSON (+ tier-two memories inside the blob) | Core Data/CloudKit/disk | `repository.purgeAllPersistedData` |
+| Day rows + blob + tier-two memories inside the blob, the local JSON day-blob FILE, **and the pre-database `LegacyKeys` UserDefaults corpus** — `fernlet-settings`, `fernlet-recent-meals`, `fernlet-previous-journals`, `fernlet-memories`, `fernlet-goals`, `fernlet-workshop`, and every interpolated `fernlet-day-<yyyy-MM-dd>` row, which holds journal + memory JSON UNSEALED in the preferences plist | Core Data/CloudKit/disk + UserDefaults (`.standard`) | `repository.purgeAllPersistedData` → `LocalFernletRepository.clearLegacyUserDefaultsIfPresent()`, run BEFORE the file-existence guard so the shipping Core Data configuration (which reaches the local repository with no JSON file at all) still clears it. Left behind, those keys both survive the wipe as plaintext AND re-hydrate the store on the next launch, because an absent database file is indistinguishable from a first launch and routes straight through the legacy migration |
 | Widget snapshot files | App group | `widgetSnapshotMirror` |
 | Pending widget actions | App group | `pendingWidgetActionQueue.clear` |
 | AI daily-call quota | UserDefaults | `aiCallQuotaStore.reset` |
 | AI audit log (file + in-memory) | Disk | `aiAuditLogStore.clear` |
+| Health capabilities ever requested — the record of which `HealthCapability` prompts Fernlet has ever shown, including **`cycleTracking` and `intimateLogging`** | Keychain `com.fernlet.healthkit-anchors`, account `fernlet.healthkit.requested-capabilities` (after-first-unlock, this-device-only, so it never rides a device backup and is not readable with `defaults read`). Installs predating 2026-08-20 also carry a plaintext `UserDefaults` array under the same key; reading the ledger drains it into the keychain and removes it | `HealthCapabilityRequestLedger.clear` (also called by `HealthKitService.disableIntegration`, so "turn Health off" clears it too). Deletes the ACCOUNT, never the service — the anchor rows in the same slot survive by design, see the deliberate-exceptions table |
+| Companion petting state — pets counted in the current rolling window, when that window opened, when the settled period ends, and which settle already showed its soft line | UserDefaults `fernlet.companionPets.count` / `.windowStart` / `.cooldownUntil` / `.settledLineShownFor` (`PetInteractionGovernor`, device-local, never synced) | `PetInteractionGovernor.clearPersistentState` (the method already existed; until 2026-08-20 its only caller was a `#if DEBUG` UI-test seam, so RELEASE never cleared it). Plain UserDefaults removals — no failure signal |
 | **Proximity identity keypairs + backup-escrow keychain rows** | Keychain `com.fernlet.identity` (survives reinstall) | `wipeIdentityForDeleteAll` ×3 (mesh, presence, recipe share — each also drops its in-memory key cache) |
+| **MC peer-identity archive** — the device name (in practice the user's own first name) plus the stable `MCPeerID` the mesh and recipe-share radios advertise | `Application Support/FernletPeerID.archive` | `wipeIdentityForDeleteAll` (mesh leg, via `FileMCPeerIDStore.clearForDeleteAll()`; the next radio start mints a fresh peer id, and a refusing file system now throws instead of leaving the identifier behind) |
 | **A duress recovery-custodian enrollment the identity wipe just invalidated** | Keychain `com.fernlet.lock` — `.recoveryBlob`, both custodian public keys, the recorded owner key | `identityRotatedHook` → `DuressRecoveryCoordinator.reconcileEnrollmentWithLocalIdentity()`, fired immediately after the row above. The blob is sealed with THIS device's key-agreement key mixed into the derivation and the custodian opens it with the live one, so rotating the identity makes it unopenable by anybody — while the app lock, the content key and the enrollment rows all survive this funnel by design. Retiring it is what stops `DuressMode.recoveryLock` staying armed over a dead blob (firing it would destroy every local unlock key for a ceremony that can only fail); an armed `.recoveryLock` is rewritten to the non-destructive `.decoy` at the same moment. Also run at launch, as the backstop for a wipe whose process died first |
+| Moderation peer-ban records (30-day bans of OTHER designers, keyed to their identity fingerprints; the record's subject field embeds the fingerprint too) | Keychain — service `com.fernlet.moderation`, `peerBan:` accounts (survives reinstall) | `moderationBanStore.clearPeerBansForDeleteAll` — removes ONLY `peerBan:` rows; the self-ban row in the same service is a deliberate survivor (see the exceptions table, 2026-07-17 decision) |
 | Journal device key | Keychain `com.fernlet.journal` | `deviceJournalKey` delete |
 | Worry device key | Keychain `com.fernlet.journal` | `deviceWorryKey` delete |
 | Private-media in-memory key caches (the emptied meal/progress/recipe stores) | Memory | `invalidateEncryptionKeyCache` per store |
@@ -162,12 +179,13 @@ repository purge takes it.)
 | Surface | Why it survives | Its own exit |
 | --- | --- | --- |
 | App-lock keychain (`com.fernlet.lock`) | Losing data must not silently un-lock the app | Settings → "Reset app lock" (`FernletLockService.reset`), **or the unlock overlay itself** — its reset-required card, and (hard-bound installs whose enclave key is gone) its "sealed data can't be opened on this device" card, both call the same `reset()`. The second route is load-bearing: that state is not a failed attempt, so the reset-required card never appears in it, and the Settings button sits behind an `.appLockSettings` gate. **One further exit, added by Phase 7: the duress responses.** `DuressMode.silentWipe` destroys these rows plus the SE key, inverting this survivor rule — but only on that seam; `DuressMode.recoveryLock` destroys the same rows EXCEPT `.recoveryBlob` and the two custodian public keys, which are what make it recoverable rather than an erase. It is unreachable from `deleteAllData`: the call runs one way (the lock fires `duressPurgeHook` INTO the funnel; the funnel never calls back into the lock), so no non-duress path can trigger it, and `PrivacyWipeCoverageTests` still pins that the ordinary funnel keeps `com.fernlet.lock` |
-| MilestoneLedger | Documented product decision at the `resetAll` comment — celebrations aren't "data about you" in the deletable sense; repository has no delete API | — |
 | Friend photo wall (`deleteAllSessionPhotos` NOT called) | Product decision documented above `deleteAllData`: friends' shared photos are the friends' social gift, not the user's records | Manual per-photo delete |
+| **Friend photo-wall index** — `MeshPhotoCache.sealed` (sender names, fingerprints, times for the kept wall) | Kept with the wall it indexes. As of 2026-08-20 it is AES-256-GCM sealed under the friend-wall media key (`…private-media.contentKey`) instead of the plaintext `MeshPhotoCache.json` it replaces — read once, rewritten sealed, then deleted. Sealing changes only what a container copy discloses, never what survives the wipe | Dies with the wall: the last per-photo delete leaves an empty index |
+| **Friend photo-wall preferences** — `MeshPhotoWallPreferences.json` (aggregated-session ids, cover + favorite photo ids) | UUID-only bookkeeping ABOUT photos this funnel deliberately keeps — no names, no bytes, no timestamps. Clearing it would degrade the kept wall (covers and hearts lost) for no privacy gain, exactly like the photowall rotation-history row below | Pruned to the live wall on every load and mutation (`prunePhotoWallPreferences`); dies with the wall and the app container |
 | **Private-media content key, friend wall (at-rest)** — keychain `com.fernlet.private-media` / account `…contentKey` | The row the photo wall above is encrypted with. Deleting it does not orphan a key — it shreds the wall: the next `mediaKey()` finds no row, mints a fresh random one, and every retained photo decrypts to garbage, permanently and silently. A key whose other stores were just emptied protects nothing extra, so keeping it discloses nothing. **Do not re-add a `deleteKeychainRowForWipe()` call to the funnel** — `PrivacyWipeCoverageTests` fails if you do | Dies with the wall: the last per-photo delete leaves it protecting nothing. **The duress WIPE is the one exception** (Phase 7 review fix): it sweeps the whole `com.fernlet.private-media` service, because its promise is that no sealed byte on the device stays openable |
 | **Private-media content key, own photos (at-rest)** — keychain `com.fernlet.private-media` / account `…ownContentKey` | Security-hardening Phase 5 split the one shared media key in two: this second row seals the user's OWN meal / recipe / progress photos and the sealed progress index. Its STORES are wiped by this funnel (the three `…PhotoStore.deleteAll` rows in the cleared table above), so the surviving key protects nothing. It is kept for the same reason as the friend row: deleting it re-opens the stale-cache hazard — a photo captured between the wipe and the next relaunch would seal under an in-memory key whose row no longer exists, and read back as garbage after relaunch. Owner decision, 2026-08-11 | Dies with its stores: after the wipe it opens nothing. **Destroyed outright by the duress WIPE**, which cannot afford the same latency: the photo files are still on disk when the decoy appears, so the key has to be gone before it, not after |
 | **Own-photo device-binding consent** — `UserDefaults` `com.fernlet.private-media.ownPhotoDeviceBindingConsent` (device-local, non-synced) | One bit: "the user accepted that their own photos are locked to this device" (step 5c). Kept for the same reason the row above is: the wipe empties the photo stores but leaves the key, so clearing the consent would silently *widen* custody for everything captured after the wipe — the next launch would find the gate unsatisfied and photos would go back to being backup-restorable without anyone deciding that. It records a custody preference, never content: no timestamps, no counts, nothing about any photo. (It is also one-way by design — nothing in the app withdraws it, because un-binding is a security regression the user could trigger by accident.) The migration latch beside it (`…ownPhotoKeyMigrationComplete`) is kept for the mirror-image reason: the files it describes were re-sealed under the own key, and clearing it would only force a pointless re-scan | Dies with the app container on uninstall / device reset |
-| ModerationBanStore self-ban — keychain `com.fernlet.moderation` | 2026-07-17 decision: a device ban must survive a wipe or a wipe is a ban-evasion tool | — |
+| ModerationBanStore self-ban — keychain `com.fernlet.moderation`, account `selfBan.device` | 2026-07-17 decision: a device ban must survive a wipe or a wipe is a ban-evasion tool. The PEER bans co-located in the same service are cleared (cleared-by table above) — the clear is account-prefix-scoped for exactly this reason, so never "simplify" it into a service-wide `deleteAll` | — |
 | Install-binding ID — keychain `com.fernlet.device-binding` | 16 cryptographically random bytes minted per install and used only as AEAD associated data on sealed-column writes (`ColumnCrypto` v2 / `DeviceBindingID`). It identifies the INSTALL, never the person, and every ciphertext bound with it was just purged — so the surviving row discloses nothing and protects nothing extra. Deleting it mid-wipe would recreate the exact hazard the durably-stored-before-trusted mint guards against: the in-memory cache could seal post-wipe rows under an AAD no longer in the keychain, making them unopenable after relaunch. Data logged after the wipe simply re-binds under the same install ID | — (ThisDeviceOnly, never synchronized; a device reset or keychain wipe replaces it and the next seal mints a fresh one) |
 | HealthKit anchor cursors — keychain `com.fernlet.healthkit-anchors` | Opaque `HKQueryAnchor` sync cursors, not health data: they record how far Fernlet has read, never what it read. Keeping them is what makes the wipe STICK — a reset cursor makes the next anchored query replay Fernlet's entire Health history back into the just-emptied day store | Turning HealthKit off (`HealthKitService.disableIntegration` → `HealthKitAnchorKeychain.deleteAll`) |
 | Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing live; it is re-used for the next note written while locked. **Asymmetry, flagged owner call (Opus track §12):** the journal and Worry Box device keys ARE deleted in the same funnel, and under the crypto-erasure baseline the difference now matters — the sealed store gets its file rebuilt, but the buffer is a plain file whose deleted bytes get no equivalent treatment, so the surviving key is what would keep any file-system residue of it openable. Deleting it in the funnel is the symmetric fix; it is deliberately NOT done here pending the owner's call | — |
@@ -190,21 +208,33 @@ they are open; each one should either gain a wipe call plus a cleared-by row, or
 plus an exceptions row. **Nothing here is enforced by the suite** — that is exactly the enforcement
 hole described at the top of this document.
 
+**Three of the original four were closed on 2026-08-20** and have moved to the cleared-by table with
+their tokens: the Health capability ledger (which also left plaintext `UserDefaults` for a
+device-only keychain row), the workout tombstone ring, and the companion petting state. One remains.
+
 | Surface | What actually survives | Why it matters | Severity |
 | --- | --- | --- | --- |
-| **Health capabilities ever requested** — `fernlet.healthkit.requested-capabilities` (`HealthKitAuthorizationViewModel`) | The `HealthCapability` raw values the user has ever been prompted for — including **`cycleTracking` and `intimateLogging`** | The worst of the four, and the reason this section exists. HealthKit gives apps no way to ask "did I already show this prompt?", so the view model remembers it in plain `UserDefaults` to distinguish "never asked" from "asked and denied". Nothing clears it — not the wipe, not `HealthKitService.disableIntegration()` (which clears the anchors but not this). After a user deletes everything *and* turns Health off, the phone still holds a plaintext record that this person once enabled intimate logging and cycle tracking. That is a disclosure about the user's body and sexuality surviving the one action the app promises removes their data, and unlike the sealed corpus it is not even ciphertext. It also rides into unencrypted device backups | **High** |
-| **Workout tombstones** — `fernlet.workout.tombstones` (`WorkoutTombstoneStore`, FIFO cap 200) | Up to 200 UUIDs of workouts removed locally whose app-authored Health delete never confirmed | Two problems, one row. (a) Privacy: a post-wipe device still carries 200 identifiers of things the user logged and deleted — no content, but a count and a shape. (b) Correctness, and it cuts against the user's own choice: a surviving tombstone tells the workout observer to **delete the matching Health sample and skip its import** (`WorkoutHealthKitSync`, the `isWorkoutTombstoned` branch). "Delete everything" asks separately whether to delete Apple Health entries; a user who answered *keep* can still have Fernlet-authored samples deleted afterwards by tombstones the wipe left behind. Narrow window — only ids whose delete never confirmed — but it is Fernlet deleting Health data the user explicitly asked it to keep | **Medium** |
-| **Companion petting state** — `fernlet.companionPets.count` / `.windowStart` / `.cooldownUntil` / `.settledLineShownFor` (`PetInteractionGovernor`) | How many times the companion was petted in the current rolling window, when that window opened, and when the settled period ends — timestamps, on the device | Interaction telemetry with clocks on it. The type has a `clearPersistentState(in:)` that does exactly the right thing, and its **only** caller is a `#if DEBUG` UI-test seam in `ContentView` — the wipe never calls it. Deliberately never synced (the doc comment says so), which makes the omission from the wipe look like an oversight rather than a decision. Low sensitivity on its own; it is a trace of when the user was last using the app, surviving a wipe | **Low** |
 | **Day-summary backfill day key** — `fernlet.daySummary.lastRunKey` (`LaunchPreparationService`) | One `yyyy-MM-dd` key: the last day the once-per-day summary backfill ran | A date the app was used, surviving the deletion of every day it describes. No content, and its functional effect post-wipe is benign (the backfill simply skips today). Listed for completeness, and because "one harmless date" is how every one of these starts | **Low** |
 
 Two notes on scope, so this section is not read as bigger or smaller than it is. **The sealed
-corpus is not implicated:** none of these four holds journal, cycle, intimacy, Worry Box or photo
-content — the sealed stores are covered by the cleared-by table and its rebuild leg. And **all four
-die with the app container** on uninstall or device reset, so a genuine fresh start clears them; it
-is the in-place "delete everything" — the path the dialog makes promises about — that misses them.
+corpus is not implicated:** the one remaining key holds no journal, cycle, intimacy, Worry Box or
+photo content — the sealed stores are covered by the cleared-by table and its rebuild leg. And it
+**dies with the app container** on uninstall or device reset, so a genuine fresh start clears it; it
+is the in-place "delete everything" — the path the dialog makes promises about — that misses it.
 
 ## Known residuals
 
+- **The MAIN store's residue pass is weaker than the sealed store's, deliberately.** The sealed
+  store is destroyed and re-created; the synced store is only checkpointed and vacuumed
+  (`compactStoreAfterWipe`). The difference is not thoroughness, it is that this file carries the
+  CloudKit mirror's pending export queue in its persistent history — destroying it would strand the
+  server copy of deletes that have not shipped yet and let the fresh, empty store import them back,
+  which is a resurrection, not a wipe. What that costs, stated plainly: the vacuum rebuilds the
+  database file so freed pages are not carried forward, and `journal_mode=DELETE` checkpoints and
+  removes the `-wal`, but neither is a guarantee about the physical flash blocks (APFS
+  copy-on-write and wear-levelling — the same limit the sealed rebuild carries), and rows still
+  queued for export are preserved on purpose. A failed compaction is reported as "leftover traces
+  in your local records"; the ROWS are gone either way, because the purge runs first.
 - **A failed wipe-time dead-drop purge is unrepairable, by design.** `purgeDeadDrop` runs before
   `wipeForDeleteAll`, but if the remote delete fails (offline, iCloud unavailable), the wipe still
   clears the outbox — so the record names needed to delete those public-DB records are gone and no
@@ -224,6 +254,38 @@ is the in-place "delete everything" — the path the dialog makes promises about
 
 ## Audit trail
 
+- **2026-08-20 — coverage round (the fixes for the sweep below, plus four surfaces it did not
+  reach).** Eleven new cleared-by rows and their tokens, in one commit with the calls:
+  - **Three of the four open gaps closed.** The Health capability ledger (moved out of plaintext
+    `UserDefaults` into a device-only keychain row and cleared by both the wipe and "turn Health
+    off"), the workout tombstone ring, and the companion petting state.
+  - **Four surfaces that were in neither table and that the wipe never reached.** The legacy
+    `SavedRecipes.json` file (plaintext recipe text), the Log-activity Recent chips, the
+    pre-database `LegacyKeys` `UserDefaults` corpus — which held unsealed journal and memory JSON
+    in the preferences plist *and* re-hydrated the store on the next launch, so it survived the
+    wipe twice over — and the moderation PEER bans (data about other people, keyed to fingerprints
+    the wipe's identity rotation disowns; the self-ban beside them still survives by the 2026-07-17
+    decision).
+  - **Two product decisions reversed, both because the surviving data described the destroyed
+    data.** The milestone ledger is now cleared: a dated trail of when you journaled is not a
+    celebration once the journal is gone, and it mirrored to iCloud. And the legacy direct-CloudKit
+    record types are now torn down UNCONDITIONALLY — the previous gating meant a user on live sync
+    kept meal / journal / workout / hygiene / hydration / sleep records on the server forever,
+    because `NSPersistentCloudKitContainer` can only propagate deletes for the `CD_`-prefixed types
+    it wrote itself.
+  - **The main store gained a residue pass** (`mainStoreRebuildHook` → `compactStoreAfterWipe`),
+    the counterpart of the sealed store's rebuild, by checkpoint + vacuum rather than destroy — see
+    "Known residuals" for why, and for exactly what it does and does not claim.
+  - **Two enforcement gaps closed.** The token scan now also covers
+    `ContentView.attachDeleteAllHooks` / `attachCloudDeleteAllHooks`, where several real clears
+    live inside hook closures a `FernletStore`-bounded scan could never see; and
+    `everyPrivateWipeHelperIsRegistered` requires every private helper the wipe path calls to be
+    registered, which was the bounding's own escape hatch (move a banned call into an unregistered
+    leg and `wipePathMakesNoBannedCall` never looks at it).
+  - **One correction, not a change.** The "Sensitive-visibility resolution" row said its data lived
+    in "Memory". It lives in three `UserDefaults` keys. The call was always right; the column was
+    wrong, and wrong in the direction that understates what survives a wipe.
+
 - **2026-08-20 — doc-accuracy sweep (documentation only; no code changed).** A full walk of every
   `UserDefaults`-backed surface in `App/` and `FernletKit/Sources/` against these tables found
   **eight keys/key-families in neither table**, which means the completeness contract as previously
@@ -240,7 +302,10 @@ is the in-place "delete everything" — the path the dialog makes promises about
   enforces is doc↔manifest correspondence over the cleared table, plus a discovery floor for
   keychain services only. There is no discovery floor for defaults keys, so this class of gap is
   invisible to CI — which is why it went unnoticed and why the correction is written at the top
-  rather than buried here.
+  rather than buried here. *(Superseded the same day by the entry above: three of those four gaps —
+  including `fernlet.healthkit.requested-capabilities` — are now closed and sit in the cleared-by
+  table. This entry is left as written because it is the record of what was found, not a live
+  description of the app.)*
 
 - **2026-08-11 — security-hardening P6 (backup-exclusion launch gate).** One new device-local
   `UserDefaults` bit is added — `com.fernlet.launch.priorUseRecorded` (`FernletPriorUseMarker`) —
@@ -311,7 +376,10 @@ is the in-place "delete everything" — the path the dialog makes promises about
   (`com.fernlet.lock`, `com.fernlet.private-media`, `com.fernlet.moderation`,
   `com.fernlet.device-binding`, `com.fernlet.healthkit-anchors`, `com.fernlet.narrative-buffer`,
   MilestoneLedger, the friend photo wall) is present, justified, and genuinely untouched by the
-  funnel bodies. Three gaps found and closed (the first two in the audit commit, the third — the
+  funnel bodies. *(2026-08-20 update: two of those survivors have since changed deliberately — the
+  MilestoneLedger exception was reversed and the ledger is now cleared, and `com.fernlet.moderation`
+  is now split: peer-ban rows are cleared, only the shop self-ban survives. The live cleared-by and
+  exceptions tables above are authoritative; this paragraph records the P1a audit as it stood.)* Three gaps found and closed (the first two in the audit commit, the third — the
   same defect class, caught by a same-day review pass over the sign-off — in the review-fix commit):
   (1) the `SealedBackupGenerationStore` row's token had no manifest entry and could never have
   matched the two-line call site — re-tokened `generationStore.reset` and enforced; (2) the doc-sync

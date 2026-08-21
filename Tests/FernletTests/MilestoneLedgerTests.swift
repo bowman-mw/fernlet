@@ -10,8 +10,9 @@ import StoreCore
 /// union-merged store of counted care events (mirroring the coin ledger), whose distinct-row counts
 /// are lifetime totals and whose thresholds pay idempotent coin awards (`milestone:<kind>:<n>`).
 /// These tests pin the pure aggregation, the exactly-once award math (including its interaction
-/// with the coin ledger's reset boundary), the day-history backfill, and the deliberate
-/// reset-survival of milestone rows through a real store.
+/// with the coin ledger's reset boundary), the day-history backfill, and — since the 2026-08-20
+/// reversal of the old survive-a-reset rule — that `resetAll` clears milestone counts through a
+/// real store without falsely reporting the ledger incomplete.
 struct MilestoneLedgerTests {
 
     private let now = Date(timeIntervalSince1970: 1_780_000_000)
@@ -289,7 +290,7 @@ struct MilestoneLedgerTests {
         #expect(store.coinLedgerService.entries.contains { $0.id == "milestone:worry:1" })
     }
 
-    @MainActor @Test func resetAllPreservesMilestoneCountsButZeroesMilestoneCoins() {
+    @MainActor @Test func resetAllClearsMilestoneCountsAndZeroesMilestoneCoins() {
         let testDate = Date(timeIntervalSince1970: 1_780_000_000)  // todayKey ≈ 2026-06
         let store = makeTestStore(date: testDate)
         // Care logged on a PAST day (so its milestone crossings predate a reset boundary).
@@ -298,11 +299,18 @@ struct MilestoneLedgerTests {
         #expect(store.milestoneCounts[.journal] == 1)
         #expect(store.coinBalance > 0)  // active-day earn + milestone award
 
-        _ = store.resetAll()
-        // Milestone EVENTS survive the reset (deliberate: lifetime memories of care)…
-        #expect(store.milestoneCounts[.journal] == 1)
-        // …but milestone COINS follow coin reset semantics: the wiped ledger + boundary stay zero,
-        // and a post-reset reconcile must NOT resurrect the pre-reset award from surviving events.
+        // The ledger is a dated record that journal entries happened — the wipe destroys the
+        // journal itself, so the metadata trail goes with it (delete-everything coverage,
+        // 2026-08-20; this inverted the earlier survive-by-design rule).
+        let incomplete = store.resetAll()
+        #expect(store.milestoneCounts[.journal] == 0)
+        // makeTestStore backs the ledger with the real row store, so the row delete succeeds and
+        // the milestone trail must NOT be named incomplete. (The fail-loud inverse — a deleter the
+        // funnel cannot reach reports "your milestone history" — is pinned in
+        // MilestoneLedgerWipeTests.resetReportsAFailedRowDeleteAndStillEmptiesMemory.)
+        #expect(!incomplete.contains("your milestone history"))
+        // Milestone COINS follow coin reset semantics: the wiped ledger + boundary stay zero,
+        // and a post-reset reconcile must NOT resurrect the pre-reset award.
         store.reconcileCoinLedger()
         #expect(store.coinBalance == 0)
         #expect(!store.coinLedgerService.entries.contains { $0.id == "milestone:journal:1" })

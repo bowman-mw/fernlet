@@ -7,11 +7,19 @@
 // a new store without wiring + documenting it, fails here. To add a store: add its wipe call in
 // `FernletStore.deleteAllData`, a row in the doc, and its token here — same commit.
 //
-// The scan is bounded to the BODIES of `deleteAllData` and `resetAll` (its one delegated leg), with
-// comments stripped. It used to scan the whole 4,000-line `FernletStore.swift`, which meant a row
-// could be satisfied by the same call spelled in an unrelated function — deleting
-// `clothingShop.clearAll()` from the wipe kept the suite green because
-// `setAllowNearbyClothingShares` also calls it. Bounded, that deletion fails.
+// The scan is bounded to the BODIES of the funnel and its numbered legs, with comments stripped. It
+// used to scan the whole 4,000-line `FernletStore.swift`, which meant a row could be satisfied by
+// the same call spelled in an unrelated function — deleting `clothingShop.clearAll()` from the wipe
+// kept the suite green because `setAllowNearbyClothingShares` also calls it. Bounded, that deletion
+// fails.
+//
+// 2026-08-20 — the scan gained two properties it was missing:
+//   • It also covers `ContentView.attachDeleteAllHooks` / `attachCloudDeleteAllHooks`. Several real
+//     clears live inside those hook closures, and a `FernletStore`-only scan could not see a hook
+//     that stopped being wired.
+//   • `everyPrivateWipeHelperIsRegistered` closes the evasion the bounding itself created: only
+//     REGISTERED bodies are scanned, so a banned call moved into a new, unregistered private leg
+//     was invisible. Every private helper the wipe path calls must now be registered.
 //
 // VERIFY-BATCH NOTE: this file declares THREE top-level suites — `PrivacyWipeCoverageTests`
 // (the source scan above), `PrivacyWipeMediaKeySurvivalTests`, and
@@ -48,6 +56,16 @@ struct PrivacyWipeCoverageTests {
         // manifest does not name is a backup "delete everything" would leave in iCloud.
         "deleteOwnPhotoEscrowBackups",
         "cloudCopyDeleteHook",
+        // The LEGACY direct-CloudKit records (2026-08-20). Its own token, and unconditional in the
+        // funnel, because neither cloud leg above reaches it: `cloudCopyDeleteHook` runs only on
+        // "stop syncing, keep the copy", and a live sync deletes the server copy by PROPAGATING the
+        // local row deletes — which `NSPersistentCloudKitContainer` can do only for the `CD_`-prefixed
+        // types it wrote. A bare-named record has no local row to propagate from.
+        "legacyCloudRecordDeleteHook",
+        // …and the service call the hook is wired to, pinned through the ContentView half of the
+        // scan (see `wipePathSource`): the hook alone would stay green if `attachCloudDeleteAllHooks`
+        // stopped wiring it.
+        "deleteLegacyDirectCloudKitRecords",
         // Sealed narratives + buffers
         "periodDataDeleteHook",
         "intimacyDataDeleteHook",
@@ -56,6 +74,13 @@ struct PrivacyWipeCoverageTests {
         // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
         // destroys and re-creates the FILE they lived in.
         "sealedStoreRebuildHook",
+        // The same residue pass for the MAIN (synced) store, added 2026-08-20 — until then the day
+        // rows were row-deleted only, so their page images stayed in the database file. Separate
+        // mechanism, not just a separate hook: this file carries the CloudKit mirror's pending
+        // export queue in its persistent history, so it is checkpointed and vacuumed, never
+        // destroyed. The second token pins the wiring through the ContentView half of the scan.
+        "mainStoreRebuildHook",
+        "compactStoreAfterWipe",
         // The opt-in HealthKit leg. The token is the HOOK's spelling, not the
         // `includingHealthKitSamples` parameter name — the parameter appears on the funnel's own
         // signature line (which the bounded scan includes by construction), so a parameter-named
@@ -77,16 +102,33 @@ struct PrivacyWipeCoverageTests {
         "friendStateCache.clearAll",
         "closenessLedger.clearAll",
         "activities.clearAll",
+        // The peer half of the moderation ban store: 30-day bans keyed to OTHER designers'
+        // fingerprints. The SELF-ban row in the same keychain service is a deliberate survivor
+        // (2026-07-17), which is why the token names the peer-scoped call and not a service sweep.
+        "moderationBanStore.clearPeerBansForDeleteAll",
         // Per-row + local stores
         "resetDiary",
         "savedRecipeService.reset",
+        // The pre-Core-Data `SavedRecipes.json` file. Its own token beside the per-row reset above:
+        // the migration latch survives the wipe by design, so nothing re-reads the file — but until
+        // 2026-08-20 nothing deleted it either, and it holds plaintext recipe text.
+        "LegacySavedRecipeJSONRepository().deleteFile",
         "customItemService.reset",
         "coinLedgerService.reset",
+        // The milestone ledger stopped being a deliberate survivor on 2026-08-20: it is a dated
+        // trail of WHEN the destroyed content happened, and it mirrors to the user's CloudKit
+        // private database. The token is the service call; the row delete rides its closure.
+        "milestoneLedgerService.reset",
         "aiRetryQueueService.reset",
         "scrubStressLocalState",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
+        "RecentActivityTypeMemory.clearAll",
         "RecipeWebImageAttemptMemory.clearAll",
+        // The workout tombstone ring. Not only privacy: a surviving tombstone tells the workout
+        // observer to DELETE a still-existing app-authored Health sample on the next re-enable,
+        // which would override an explicit "keep my Health samples" answer at the wipe.
+        "workoutTombstones.clearAll",
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
@@ -103,6 +145,13 @@ struct PrivacyWipeCoverageTests {
         "pendingWidgetActionQueue.clear",
         "aiCallQuotaStore.reset",
         "aiAuditLogStore.clear",
+        // The record of which Apple Health prompts have ever been shown — `cycleTracking` and
+        // `intimateLogging` among them. A plaintext `UserDefaults` array cleared by nothing until
+        // 2026-08-20; now a device-only keychain row with a real failure signal.
+        "HealthCapabilityRequestLedger.clear",
+        // Companion petting counts + window/settle timestamps. `clearPersistentState` existed and
+        // its only caller was a `#if DEBUG` UI-test seam, so RELEASE never cleared it.
+        "PetInteractionGovernor.clearPersistentState",
         // Keychain identity + at-rest keys (the Increment 1 gap fixes)
         "wipeIdentityForDeleteAll",
         // The consequence of the row above, and the reason it is a separate token: rotating the
@@ -166,16 +215,55 @@ struct PrivacyWipeCoverageTests {
         "func resetAll() -> [String]"
     ]
 
+    /// The `ContentView` half of the wipe path: five real clears live inside the hook closures
+    /// wired here (the sealed row deletes, the locked-note buffer purge, the two store rebuilds,
+    /// the HealthKit sweep and both direct-CloudKit sweeps), and a scan bounded to `FernletStore`
+    /// cannot see any of them — a hook could stop being wired with every token still green.
+    /// Scanning them makes hook-side spellings usable as manifest tokens.
+    private static let hookWiringFunctionSignatures = [
+        "func attachDeleteAllHooks()",
+        "func attachCloudDeleteAllHooks()"
+    ]
+
+    /// Private `FernletStore` helpers the wipe path calls that are deliberately NOT registered
+    /// above, with the reason. Everything else must be registered — see
+    /// `everyPrivateWipeHelperIsRegistered`, which is what stops a banned call being smuggled into
+    /// an unscanned leg.
+    private static let unregisteredWipeHelpers: [(name: String, why: String)] = [
+        (
+            "hasSealedBackup",
+            "a pure predicate over StoragePreferences — it reads four Bools and touches no store, so there is nothing in it for a banned call to be hidden behind"
+        ),
+        (
+            "clearSensitiveVisibilityResolution",
+            "registering it would let its own manifest token be satisfied by its declaration line (the extractor includes it), making the token unfalsifiable — the P1b defect class. It removes three UserDefaults keys and calls nothing"
+        )
+    ]
 
     private static func fernletStoreSource() throws -> String {
         try String(contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/FernletStore.swift"), encoding: .utf8)
     }
 
-    /// The comment-stripped bodies of the wipe functions, concatenated. Throws if either function
+    private static func contentViewSource() throws -> String {
+        try String(contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/ContentView.swift"), encoding: .utf8)
+    }
+
+    /// The comment-stripped bodies of the wipe functions, concatenated. Throws if any function
     /// cannot be located, so a rename fails loudly instead of scanning an empty string.
     private static func wipePathSource() throws -> String {
+        try storeWipePathSource() + "\n" + hookWiringSource()
+    }
+
+    /// The `FernletStore` half only — the funnel and its numbered legs. Kept separate because the
+    /// private-helper wall below is a property of the store's own methods.
+    private static func storeWipePathSource() throws -> String {
         let source = try fernletStoreSource()
         return try wipeFunctionSignatures.map { try functionBody(matching: $0, in: source) }.joined(separator: "\n")
+    }
+
+    private static func hookWiringSource() throws -> String {
+        let source = try contentViewSource()
+        return try hookWiringFunctionSignatures.map { try functionBody(matching: $0, in: source) }.joined(separator: "\n")
     }
 
     /// Extracts one method body from `source`: from the declaration line down to the first line that
@@ -273,6 +361,91 @@ struct PrivacyWipeCoverageTests {
         #expect(body.contains("inside()"))
         #expect(!body.contains("outside()"))
         #expect(throws: (any Error).self) { try Self.functionBody(matching: "func missing()", in: source) }
+    }
+
+    /// The ContentView half of the scan is really in there, and really bounded — otherwise the two
+    /// hook-side tokens (`compactStoreAfterWipe`, `deleteLegacyDirectCloudKitRecords`) are
+    /// satisfied by nothing and the extension is decorative.
+    @Test func theScanReachesTheHookWiringInContentView() throws {
+        let wipePath = try Self.wipePathSource()
+        let contentView = try Self.contentViewSource()
+
+        #expect(wipePath.contains("store.periodDataDeleteHook ="), "the hook-wiring half of the scan is missing — the clears living in ContentView closures are invisible again.")
+        #expect(wipePath.contains("store.legacyCloudRecordDeleteHook ="))
+        // Bounded to the two wiring functions, not the whole 1,500-line view: `refreshPeriodContext`
+        // is elsewhere in the file and must not be reachable, or a hook-side token could be
+        // satisfied by an unrelated closure.
+        #expect(contentView.contains("func refreshPeriodContext()"))
+        #expect(!wipePath.contains("func refreshPeriodContext()"), "the ContentView extraction is not bounded to the wiring functions")
+    }
+
+    /// The registration wall (round 2026-08-20, Part 4.4). `wipePathMakesNoBannedCall` scans only
+    /// the REGISTERED bodies, so the cheapest way to defeat it is to move a banned call into a new
+    /// private leg and not register it — the suite stays green and the scan silently shrinks.
+    ///
+    /// So: every private `FernletStore` helper the wipe path calls must be registered in
+    /// `wipeFunctionSignatures`, or named in `unregisteredWipeHelpers` with the reason it is safe
+    /// to leave unscanned. Dot-qualified calls are ignored (`proximityTrustVault.apply(…)` is not a
+    /// call to the store's own `apply`), `Self.`-qualified ones are not.
+    @Test func everyPrivateWipeHelperIsRegistered() throws {
+        let source = try Self.fernletStoreSource()
+        let path = try Self.storeWipePathSource()
+        let exempt = Set(Self.unregisteredWipeHelpers.map(\.name))
+        let unregistered = Self.privateFunctionNames(in: source)
+            .filter { !exempt.contains($0) }
+            .filter { name in !Self.wipeFunctionSignatures.contains { $0.contains("func \(name)(") } }
+            .filter { Self.wipePathCalls($0, in: path) }
+            .sorted()
+        #expect(
+            unregistered.isEmpty,
+            "the wipe path calls private helper(s) \(unregistered) that no signature in wipeFunctionSignatures covers — their bodies are never scanned, so a banned call inside one is invisible. Register each (or add it to unregisteredWipeHelpers with the reason it cannot hide one)."
+        )
+        // And the exemptions are real declarations, so a stale entry can't silently widen the hole.
+        let declared = Set(Self.privateFunctionNames(in: source))
+        let stale = exempt.subtracting(declared).sorted()
+        #expect(stale.isEmpty, "unregisteredWipeHelpers names \(stale), which no longer exist — drop the entries rather than leaving a blanket exemption behind.")
+    }
+
+    /// Every registered signature still resolves in its own file. `wipePathSource()` throws when one
+    /// does not, but it throws from inside other tests — this names the rename directly.
+    @Test func everyRegisteredWipeFunctionStillResolves() throws {
+        let store = try Self.fernletStoreSource()
+        for signature in Self.wipeFunctionSignatures {
+            #expect(throws: Never.self, "FernletStore.swift no longer declares '\(signature)'") {
+                _ = try Self.functionBody(matching: signature, in: store)
+            }
+        }
+        let contentView = try Self.contentViewSource()
+        for signature in Self.hookWiringFunctionSignatures {
+            #expect(throws: Never.self, "ContentView.swift no longer declares '\(signature)'") {
+                _ = try Self.functionBody(matching: signature, in: contentView)
+            }
+        }
+    }
+
+    /// Names of every `private func` / `private static func` declared in `source`.
+    static func privateFunctionNames(in source: String) -> [String] {
+        matches(of: #"private\s+(?:static\s+)?func\s+([A-Za-z_][A-Za-z0-9_]*)"#, in: source)
+    }
+
+    /// Whether `path` contains an unqualified — or `Self.`-qualified — call to `name`. The
+    /// lookbehind is what keeps a same-named method on a collaborator (`…vault.apply(…)`) from
+    /// counting as a call to the store's own private helper.
+    static func wipePathCalls(_ name: String, in path: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: name)
+        let unqualified = "(?<![A-Za-z0-9_.])\(escaped)\\("
+        let selfQualified = "Self\\.\(escaped)\\("
+        return !matches(of: unqualified, in: path).isEmpty || !matches(of: selfQualified, in: path).isEmpty
+    }
+
+    /// Capture group 1 of every match, or the whole match when the pattern has no group.
+    private static func matches(of pattern: String, in source: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        return regex.matches(in: source, range: range).compactMap { match in
+            let group = match.numberOfRanges > 1 ? 1 : 0
+            return Range(match.range(at: group), in: source).map { String(source[$0]) }
+        }
     }
 
     /// The banned-call check: a wipe call that DESTROYS a deliberately-kept surface must not come

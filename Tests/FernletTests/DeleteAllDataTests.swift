@@ -684,6 +684,110 @@ struct DeleteAllDataTests {
         func scrubStressLocalState() -> Bool { true }
     }
 
+    // MARK: - Device-local surfaces the funnel gained on 2026-08-20
+    //
+    // The owning types' clear APIs have their own unit tests (`DeviceLocalStoreClearTests`,
+    // `HealthKitRequestedCapabilitiesClearTests`); these are the end-to-end half — the real funnel,
+    // driven once, actually reaching each surface. All four live in process-global storage
+    // (`UserDefaults.standard`, the production keychain, Application Support), because that is
+    // where the shipping app keeps them and the funnel has no injection seam for them; each test
+    // therefore asserts on ITS OWN seeded marker rather than on the key being absent, so a
+    // concurrently-running suite writing the same key cannot turn a pass into a flake.
+
+    /// The record of which Apple Health prompts have ever been shown — `cycleTracking` and
+    /// `intimateLogging` among them. Nothing cleared it before this round, so a wiped phone still
+    /// held a claim about the user's body and sexuality.
+    @Test func deleteAllClearsTheHealthCapabilityRequestLedger() async {
+        let store = makeStore("delete-all-health-capability-ledger")
+        HealthCapabilityRequestLedger.record(.cycleTracking)
+        HealthCapabilityRequestLedger.record(.intimateLogging)
+        #expect(
+            HealthCapabilityRequestLedger.requestedCapabilities().contains(.intimateLogging),
+            "precondition: the ledger did not record the prompt"
+        )
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(
+            HealthCapabilityRequestLedger.requestedCapabilities().isEmpty,
+            "the wipe left a record that this person once enabled cycle tracking and intimate logging"
+        )
+    }
+
+    /// The workout tombstone ring. Privacy is only half of it: a surviving tombstone tells the
+    /// workout observer to DELETE the matching app-authored Health sample on the next re-enable,
+    /// which would override a user who answered "keep my Health samples" at this very dialog.
+    @Test func deleteAllEmptiesTheWorkoutTombstoneRing() async {
+        let store = makeStore("delete-all-workout-tombstones")
+        let unconfirmed = UUID()
+        WorkoutTombstoneStore().insert(unconfirmed)
+        #expect(store.isWorkoutTombstoned(fernletWorkoutID: unconfirmed), "precondition: the tombstone was not seeded")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(
+            !store.isWorkoutTombstoned(fernletWorkoutID: unconfirmed),
+            "a tombstone survived the wipe — the next Health re-enable would delete a sample the user may have chosen to keep"
+        )
+    }
+
+    /// The Log-activity "Recent" chips: the last five workout types picked, rendered to whoever
+    /// holds the phone next.
+    @Test func deleteAllClearsTheRecentActivityChips() async {
+        let store = makeStore("delete-all-recent-activity")
+        let seeded = "traditionalStrengthTraining,yoga"
+        UserDefaults.standard.set(seeded, forKey: RecentActivityTypeMemory.defaultsKey)
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        let survivor = UserDefaults.standard.string(forKey: RecentActivityTypeMemory.defaultsKey) ?? ""
+        #expect(!survivor.contains("yoga"), "the wiped phone still offers the previous owner's recent activity picks")
+    }
+
+    /// Companion petting state: counts and timestamps of when the user was last here.
+    /// `clearPersistentState` existed all along — its only caller was a `#if DEBUG` UI-test seam,
+    /// so RELEASE never cleared it.
+    @Test func deleteAllClearsTheCompanionPettingState() async {
+        let store = makeStore("delete-all-pet-state")
+        let governor = PetInteractionGovernor()
+        for _ in 0..<5 { _ = governor.registerPet() }
+        #expect(governor.isSettled, "precondition: the governor did not reach its settled period")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!governor.isSettled, "the companion's settle survived the wipe")
+        #expect(
+            UserDefaults.standard.object(forKey: "fernlet.companionPets.count") == nil,
+            "the petting counter survived the wipe — a trace of when the user was last using the app"
+        )
+    }
+
+    /// The pre-Core-Data `SavedRecipes.json`: plaintext recipe names, ingredients, notes and source
+    /// URLs. The migration latch survives the wipe by design, so nothing re-reads the file — but
+    /// until this round nothing deleted it either.
+    @Test func deleteAllDeletesTheLegacySavedRecipesFile() async {
+        let store = makeStore("delete-all-legacy-saved-recipes")
+        let legacy = LegacySavedRecipeJSONRepository()
+        #expect(legacy.save([RecipeDefinition(
+            name: "Wipe Bowl",
+            servings: 2,
+            ingredients: [],
+            notes: "Cook and combine.",
+            source: MealLogSource.webImport,
+            createdAt: Date(),
+            updatedAt: Date(),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/wipe-bowl",
+                ingredientLines: ["1 cup rice", "200g chicken"]
+            )
+        )]), "precondition: the legacy file was not written")
+        #expect(!legacy.load().isEmpty, "precondition: the legacy file did not read back")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(legacy.load().isEmpty, "the plaintext legacy recipe file survived the wipe")
+    }
+
     private func wireSucceedingSealedHooks(_ store: FernletStore) {
         store.attachStressScoringContext(ScrubbingStressContext())
         store.periodDataDeleteHook = { true }

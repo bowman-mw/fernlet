@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletFoundation
 import FernletUI
+import HealthKitGateway
 
 /// Per-screen state and closure glue for the "delete everything" wipe, shared by both Settings entry
 /// points (``SettingsSheet`` and ``PrivacyDataSettingsView``).
@@ -39,13 +40,20 @@ final class DeleteEverythingFlow {
     /// surfaced — ``PrivacyDataSettingsView`` uses it to drop its reference to the exported plaintext
     /// URL, which the wipe has just swept off disk. The timing is load-bearing: nilling it before the
     /// wipe would let a re-presented share sheet hand out a URL mid-deletion.
+    ///
+    /// `everRequestedWritableHealthCapability` is a TEST SEAM: production passes nil and the answer
+    /// comes from the persisted ledger, which the shipping app must consult rather than a fixture.
     func makeConfirmation(
         preferences: StoragePreferences,
         store: FernletStore,
+        everRequestedWritableHealthCapability: Bool? = nil,
         onWipeFinished: (() -> Void)? = nil
     ) -> DestructiveConfirmation {
         DeleteAllDataConfirmation.make(
-            canDeleteHealthSamples: preferences.healthKitMasterEnabled,
+            healthSamples: healthSampleOffer(
+                masterEnabled: preferences.healthKitMasterEnabled,
+                everRequestedWritableCapability: everRequestedWritableHealthCapability
+            ),
             hasICloudDayCopy: preferences.hasICloudDayCopy,
             hasSealedBackup: preferences.hasSealedBackup,
             delete: { includeHealth in
@@ -67,6 +75,27 @@ final class DeleteEverythingFlow {
                 }
             }
         )
+    }
+
+    /// Which Apple Health outcome the dialog offers, from the two signals that outlive each other.
+    ///
+    /// The master toggle answers "is Fernlet integrated with Health right now"; the persisted
+    /// ``HealthCapabilityRequestLedger`` answers "was Fernlet ever prompted for a capability that
+    /// WRITES samples", which is the question that decides whether Fernlet-authored samples can exist.
+    /// Only the first was consulted before, so the user who turned Health off — the one most likely to
+    /// want the samples gone — was the one never offered their deletion. The ledger is read from the
+    /// keychain with no service instance and no live authorization, so the toggle-off path works.
+    ///
+    /// The ledger is only consulted when the toggle is off: with it on the offer is already made, and
+    /// a keychain read the answer cannot change is wasted work on a dialog build.
+    private func healthSampleOffer(
+        masterEnabled: Bool,
+        everRequestedWritableCapability: Bool?
+    ) -> DeleteAllDataConfirmation.HealthSampleOffer {
+        if masterEnabled { return .integrationOn }
+        let everRequested = everRequestedWritableCapability
+            ?? HealthCapabilityRequestLedger.hasEverRequestedWritableCapability()
+        return everRequested ? .integrationOff : .nothingAuthored
     }
 }
 

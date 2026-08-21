@@ -15,9 +15,48 @@ import FernletUI
 /// what makes the sentence true.
 enum DeleteAllDataConfirmation {
 
-    /// Builds the dialog. `canDeleteHealthSamples` decides whether the user is offered the SECOND
-    /// destructive button — pass the live `healthKitMasterEnabled` preference. When Health was never
-    /// turned on there is nothing Fernlet could have written, so the question would be noise.
+    /// What the dialog offers — and says — about the samples Fernlet wrote into Apple Health.
+    ///
+    /// Three states rather than a `Bool` because the offer and the explanation stopped agreeing.
+    /// Gating the second destructive button on `healthKitMasterEnabled` gave the most
+    /// privacy-conscious user the LEAST deletion: turning Health off does not retract the
+    /// sexual-activity, menstrual-flow, workout, mindful-session and body-measurement samples Fernlet
+    /// already wrote, and that user was never offered their removal. The offer therefore keys off
+    /// "has Fernlet ever been prompted for a capability that writes samples"
+    /// (`HealthCapabilityRequestLedger`), which survives the toggle, while the wording still has to
+    /// tell the toggle-off user why Health is being mentioned at all.
+    ///
+    /// Offering too widely is the deliberate direction: `HealthKitService.deleteAllAuthoredSamples()`
+    /// is gated on neither the toggle nor device availability, an unauthorized type is an expected
+    /// skip, and a delete Fernlet cannot reach comes back `.accessRevoked` and is named in the failure
+    /// alert — so an offer that finds nothing costs one no-op pass and never lies.
+    enum HealthSampleOffer {
+        /// Fernlet has no record of ever being prompted for a capability that writes samples, so it
+        /// has nothing of its own to delete: one "Delete" button and no keep-vs-delete question.
+        case nothingAuthored
+        /// The Health integration is on — the pre-existing case, described in the present tense.
+        case integrationOn
+        /// The integration is OFF, but Fernlet was prompted for at least one write-capable capability,
+        /// so entries it wrote earlier may still sit in Apple Health. Same two outcomes as
+        /// ``integrationOn``; only the wording changes, because "turn Health back on to let Fernlet
+        /// remove it" is no longer what this user has to do.
+        case integrationOff
+
+        /// Whether the dialog offers the second destructive button (delete from Health too).
+        ///
+        /// Switched rather than `!= .nothingAuthored` so a fourth state cannot inherit "offers" — the
+        /// defect being fixed here was exactly a Health state nobody re-decided the offer for.
+        var offersHealthDelete: Bool {
+            switch self {
+            case .nothingAuthored: return false
+            case .integrationOn, .integrationOff: return true
+            }
+        }
+    }
+
+    /// Builds the dialog. `healthSamples` decides whether the user is offered the SECOND destructive
+    /// button and how the closing Apple Health paragraph reads — see ``HealthSampleOffer``. It is
+    /// deliberately NOT the live `healthKitMasterEnabled` preference on its own.
     ///
     /// `onFinished` receives the outcome so the caller can surface a partial failure. Every layer of the
     /// delete is best-effort; the caller must not assume success just because the dialog was confirmed.
@@ -26,7 +65,7 @@ enum DeleteAllDataConfirmation {
     /// the old single sentence claiming both — "as this device syncs" — was false for the keep-cloud-copy
     /// user (sync off) and overclaimed for anyone with only one of the two.
     static func make(
-        canDeleteHealthSamples: Bool,
+        healthSamples: HealthSampleOffer,
         hasICloudDayCopy: Bool,
         hasSealedBackup: Bool,
         delete: @escaping (Bool) async -> FernletStore.DeleteAllOutcome,
@@ -35,13 +74,13 @@ enum DeleteAllDataConfirmation {
         DestructiveConfirmation(
             title: "Delete everything?",
             message: message(
-                canDeleteHealthSamples: canDeleteHealthSamples,
+                healthSamples: healthSamples,
                 hasICloudDayCopy: hasICloudDayCopy,
                 hasSealedBackup: hasSealedBackup
             ),
-            confirmLabel: canDeleteHealthSamples ? "Delete, keep Health" : "Delete",
+            confirmLabel: healthSamples.offersHealthDelete ? "Delete, keep Health" : "Delete",
             auditEvent: "settings.deleteAll.confirmed",
-            secondaryConfirm: canDeleteHealthSamples
+            secondaryConfirm: healthSamples.offersHealthDelete
                 ? DestructiveConfirmation.SecondaryConfirm(
                     label: "Delete, and from Health",
                     auditEvent: "settings.deleteAll.withHealthSamplesConfirmed",
@@ -56,7 +95,7 @@ enum DeleteAllDataConfirmation {
     /// on their behalf. The iCloud and Health sentences are CONDITIONAL — a claim about deleting an
     /// iCloud backup that the code will skip (because there isn't one) is exactly the kind of
     /// nearly-harmless overpromise that made the old "Reset everything" label untrue.
-    private static func message(canDeleteHealthSamples: Bool, hasICloudDayCopy: Bool, hasSealedBackup: Bool) -> String {
+    private static func message(healthSamples: HealthSampleOffer, hasICloudDayCopy: Bool, hasSealedBackup: Bool) -> String {
         // "meals and their photos" + "gym progress photos" + "saved recipes and their photos" — never a
         // bare "photos". The photos this funnel deletes are the user's OWN logged pictures: the ones
         // attached to meals (`mealPhotoStore`), the gym progress-photo timeline (`progressPhotoStore`,
@@ -113,32 +152,60 @@ enum DeleteAllDataConfirmation {
         // friend's trust vault. Saying it survives would be the same says-more-than-it-does gap this
         // dialog exists to close, in reverse — so the consequence is stated where the user needs it,
         // next to the re-add sentence that the vault clear already required.
+        //
+        // Milestone counts left the kept list on 2026-08-20 for the same reason, in the other
+        // direction: the wipe now deletes the milestone ledger (delete-everything coverage round),
+        // so naming it as a survivor would disclose a survival that no longer happens.
         paragraphs.append("""
-            Kept on purpose: your milestone counts, your lifetime care history, your shared photos — \
-            both the ones friends sent you and the ones you shared with them — and any restriction on \
-            sharing your own designs. You remove those one at a time from the photo itself; there's no \
-            bulk delete. Your app lock stays set up. This phone gets a brand-new Fernlet identity, so \
-            friends' phones won't recognize it: you'll need to add each other again in person, and \
-            anyone you blocked will no longer be blocked — block them again if you meet.
+            Kept on purpose: your shared photos — both the ones friends sent you and the ones you \
+            shared with them — and any restriction on sharing your own designs. You remove photos \
+            one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. \
+            This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: \
+            you'll need to add each other again in person, and anyone you blocked will no longer be \
+            blocked — block them again if you meet.
             """)
-        if canDeleteHealthSamples {
-            paragraphs.append(
-                """
+        paragraphs.append(healthParagraph(for: healthSamples))
+        return paragraphs.joined(separator: "\n\n")
+    }
+
+    /// The closing Apple Health paragraph, one per ``HealthSampleOffer`` state.
+    ///
+    /// The toggle-off wording is the point of the split. The master switch being off does NOT retract
+    /// what Fernlet already wrote, and the old copy — "turn Health back on to let Fernlet remove it" —
+    /// sent that user to a switch they had deliberately turned off, for a deletion the app can perform
+    /// without it. It now says that anything written before is still there and that Fernlet can still
+    /// delete it, while naming the one case where it can't: share access revoked in the Health app,
+    /// which the wipe reports as an incomplete store rather than swallowing.
+    ///
+    /// "Anything Fernlet wrote", never "the entries Fernlet wrote": the ledger behind this state records
+    /// that a PROMPT was shown, not that a sample was written, so a user who was prompted and denied
+    /// gets the offer with nothing behind it. The hedge is what keeps that dialog true.
+    ///
+    /// The no-record wording stays a hedge ("no record of writing"), never "Fernlet has never written
+    /// anything": the ledger errs toward forgetting — an unreadable row reads as never-requested — so a
+    /// flat denial would be the one sentence here that the code cannot back up.
+    private static func healthParagraph(for offer: HealthSampleOffer) -> String {
+        switch offer {
+        case .integrationOn:
+            return """
                 Fernlet can also delete the entries it wrote to Apple Health. It can only ever delete its \
                 own — everything else in Apple Health is yours to delete in the Health app.
                 """
-            )
-        } else {
-            // The master switch being off does NOT retract what Fernlet already wrote. Saying nothing
-            // would leave those samples in Apple Health with the user believing everything was deleted.
-            paragraphs.append(
+        case .integrationOff:
+            return """
+                Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is \
+                still in Apple Health, and Fernlet can still delete it — you don't have to turn Health \
+                back on. It can only ever delete its own; everything else in Apple Health is yours to \
+                delete in the Health app. If you've taken Fernlet's Health access away since, it will say \
+                so instead of claiming it's gone.
                 """
-                Anything Fernlet previously wrote to Apple Health stays there. Turn Health back on to let \
-                Fernlet remove it, or delete it yourself in the Health app.
+        case .nothingAuthored:
+            return """
+                Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete \
+                from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet \
+                remove them, or delete them yourself in the Health app.
                 """
-            )
         }
-        return paragraphs.joined(separator: "\n\n")
     }
 
     /// Shown when a wipe came back incomplete. Naming the store that failed is the point: "something went
