@@ -131,8 +131,6 @@ final class ScreenAppearanceUITests: XCTestCase {
     @MainActor
     func testJournalSheetAppearance()           { probeSheet("journal", "Sheet · Journal") }
     @MainActor
-    func testQuickExerciseSheetAppearance()     { probeSheet("quickExercise", "Sheet · Quick exercise") }
-    @MainActor
     func testWorkoutSheetAppearance()           { probeSheet("workout", "Sheet · Workout") }
     @MainActor
     func testWorkoutSuggestionSheetAppearance() { probeSheet("workoutSuggestion", "Sheet · Workout suggestion") }
@@ -142,6 +140,8 @@ final class ScreenAppearanceUITests: XCTestCase {
     func testHygieneSheetAppearance()           { probeSheet("hygiene", "Sheet · Hygiene") }
     @MainActor
     func testTrendsSheetAppearance()            { probeSheet("trends", "Sheet · Trends") }
+    @MainActor
+    func testMilestonesSheetAppearance()        { probeSheet("milestones", "Sheet · Milestones") }
     @MainActor
     func testFirstAidSheetAppearance()          { probeSheet("firstAid", "Sheet · First aid") }
     @MainActor

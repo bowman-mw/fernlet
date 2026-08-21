@@ -142,7 +142,6 @@ extension FernletSheet {
         case "water":             self = .water
         case "sleep":             self = .sleep
         case "journal":           self = .journal
-        case "quickExercise":     self = .quickExercise
         case "workout":           self = .workout
         case "workoutSuggestion": self = .workoutSuggestion
         case "goals":             self = .goals
@@ -150,6 +149,7 @@ extension FernletSheet {
         case "settings":          self = .settings
         case "recipeBook":        self = .recipeBook
         case "trends":            self = .trends
+        case "milestones":        self = .milestones
         case "stressExplainer":   self = .stressExplainer
         case "firstAid":          self = .firstAid(nil)
         case "logPeriod":         self = .logPeriod(targetDate: nil, editingEntry: nil)
