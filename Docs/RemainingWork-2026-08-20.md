@@ -157,6 +157,31 @@ screen exists. All three were understated or missing in the old tracker.
 
 ---
 
+## 3b. Delete-everything coverage — the promise has holes
+
+A four-track audit on 2026-08-20 enumerated every persisted surface and checked each against the
+wipe funnel. **~20 surfaces are not cleared**, five seriously. The full, verified list with fixes is
+Part 4 of [`Next-Round-Prompt-2026-08-20.md`](Next-Round-Prompt-2026-08-20.md); the headline items:
+
+1. `fernlet.healthkit.requested-capabilities` survives as a **plaintext** record that the user
+   enabled **intimate logging** and cycle tracking. Content gone, the fact of use not — and it
+   survives turning Health off, too.
+2. The pre-database `LegacyKeys` corpus holds **unsealed journal text**, and the wipe does not merely
+   leave it: the next launch treats the emptied store as a first launch and **re-imports** it. Only
+   affects installs carrying those keys, but this repo has fixed resurrection-after-wipe once before.
+3. The "delete from Apple Health" option is offered only when the Health master toggle is **on**, so
+   the most privacy-conscious user cannot remove the sexual-activity and cycle samples Fernlet wrote.
+4. Sealed photos are torn down by enumerating `SealedPhotoRecord` — the type still unpromoted in the
+   Production CloudKit schema (§1). Skipping that owner action does not just break restore; it makes
+   the wipe incomplete.
+5. `SavedRecipes.json`, a plaintext pre-migration recipe file, is never cleared.
+
+The reason these accumulated is structural: `PrivacyWipeCoverageTests` only checks correspondence
+between three human-written artifacts and has no discovery, so a surface nobody wrote down is
+invisible to it. Part 4.4 specifies the wall that closes it.
+
+---
+
 ## 4. Engineering health
 
 Strong where most projects are weak: 2,519 tests across 226 suites with three skips repo-wide,

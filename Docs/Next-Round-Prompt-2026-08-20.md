@@ -4,9 +4,12 @@ Everything below the line is a self-contained prompt. Paste it into a fresh sess
 nothing from the conversation that produced it; every claim carries a `path:line` anchor that was
 true on 2026-08-20 and should be re-grepped rather than trusted.
 
-Scope: **four cheap defect fixes, two features whose infrastructure is already finished, and the
-CODEOWNERS repair.** Backlog context is in
+Scope: **four cheap defect fixes, two features whose infrastructure is already finished, the
+CODEOWNERS repair, and delete-everything coverage.** Backlog context is in
 [`RemainingWork-2026-08-20.md`](RemainingWork-2026-08-20.md).
+
+Part 4 was added after a dedicated audit and is the one part that touches a *published* promise —
+read its opening before deciding what order to work in.
 
 ---
 
@@ -198,6 +201,163 @@ to an existing file**, so the next restructure fails loudly instead of silently 
 walls. A test in the boundary-suite style is the natural home; make it fail with the offending
 paths named. Be careful to model CODEOWNERS' own path semantics (a leading `/` anchors to the repo
 root; a trailing `/` means a directory) rather than treating each entry as a literal file path.
+
+---
+
+## Part 4 — Delete-everything coverage
+
+**Read this part before deciding the order of the rest.** "Delete your data" is the app's central
+privacy promise and it is published at <https://fernlet.com/privacy/>. A four-track audit on
+2026-08-20 enumerated every persisted surface in the tree and checked each against the wipe funnel
+(`FernletStore.deleteAllData` :4648 + its nine legs, `resetAll` :5039, and the hook closures in
+`ContentView.attachDeleteAllHooks` :957). It found **~20 surfaces the wipe does not clear**, five of
+them serious. Every claim below was proven by reading the funnel and showing the token is absent —
+but line numbers drift, so re-verify before you change anything.
+
+The reason these accumulated is structural and is item 4.4: the existing wall can only check
+correspondence between three human-written artifacts. It has no discovery, so a surface nobody
+wrote down is invisible to it by construction.
+
+### 4.1 Fix first — the five that matter
+
+**a. A wiped phone still says the user enabled intimate logging.**
+`fernlet.healthkit.requested-capabilities` (written `HealthKitService.swift:2000`, key at `:2003`)
+is a plaintext string array of every `HealthCapability` ever prompted for — including
+`intimateLogging` and `cycleTracking`. It is not ciphertext, it rides an unencrypted device backup,
+and it is readable with `defaults read`. All four auditors found it independently. It also survives
+`disableIntegration()` (`:1332`), so "delete everything **and** turn Health off" still leaves it.
+There are only three references in the whole tree, so there is no clear function being missed —
+one was never written. Add a clear, call it from `clearDeviceLocalLedgers` (`:4908`) *and* from
+`disableIntegration()`, and consider moving the key to the keychain (ThisDeviceOnly) so it never
+rides a backup at all.
+
+**b. The wipe leaves plaintext journal text — and the next launch puts it back.**
+The pre-database `LegacyKeys` corpus (`LocalFernletRepository.swift:489`) —
+`fernlet-previous-journals`, `fernlet-memories`, `fernlet-settings`, `fernlet-recent-meals`,
+`fernlet-goals`, `fernlet-workshop`, `fernlet-day-<yyyy-MM-dd>` — holds `[JournalEntry]` and
+`[MemoryNote]` as unsealed JSON in the preferences plist. Every other journal surface in the app is
+sealed; this one is not.
+
+Worse than residue, it is a **resurrection source**. `purgeAllPersistedData()` removes only the file
+(`:363`); `loadDatabase` treats a missing file as first launch and calls `migratedDatabase(todayKey:)`
+(`:325`), which re-reads all seven key families and re-hydrates the store (`:432`) — and with sync on,
+re-uploads them. I verified each link. The wipe funnel mentions `LegacyKeys` zero times.
+
+Scope honestly: only installs that still carry these keys are affected — a fresh install never
+writes them ("New code must never write these keys"). But this repo has fixed resurrection-after-wipe
+once before, for four other writers, so treat it as a known class rather than a surprise.
+Clear the keys in the wipe, and make `purgeAllPersistedData()` clear them too so no path can
+resurrect.
+
+**c. The most privacy-conscious user gets the least deletion.**
+`DeleteEverythingFlow.swift:48` passes `canDeleteHealthSamples: preferences.healthKitMasterEnabled`,
+and `DeleteAllDataConfirmation.swift:44` offers the "Delete, and from Health" button only when that
+is true. So a user who turned the Health toggle **off** is never offered the option, the wipe runs
+with `includingHealthKitSamples: false`, and the sexual-activity and menstrual-flow samples Fernlet
+wrote stay in Apple Health with no in-app route to remove them. The privacy policy is honest about
+this ("remove those in the Health app if you wish"), so it is the flow that is wrong, not the copy.
+Offer the choice whenever Fernlet has ever written samples — which `requested-capabilities` from
+(a) already knows.
+
+**d. Sealed photos in CloudKit are deleted by enumerating a record type that may not exist.**
+`CloudKitDataService.swift:652` tears down sealed photos by enumerating `SealedPhotoRecord`. That
+type has never been promoted to the **Production** CloudKit schema (see
+[`CloudKit-Schema-Deploy.md`](CloudKit-Schema-Deploy.md) and `RemainingWork-2026-08-20.md` §1). A
+type absent from Production is never enumerated and therefore never deleted — silently. This is the
+same owner action already on the release checklist; what is new is that skipping it does not merely
+break restore, it makes the wipe incomplete. Verify in the console, then keep the preflight.
+
+**e. A plaintext recipe file nobody clears.** `Application Support/Fernlet/SavedRecipes.json`
+(`SavedRecipe.swift:510`) is a pretty-printed copy of saved recipes — names, ingredients, notes,
+macros, source URLs — for any install that predates the Core Data migration.
+
+### 4.2 Then these
+
+- `fernlet.recentActivityTypes` (`ActivityPickerSection.swift:199`) — the last five workout types,
+  and **visible in the UI**: open Log activity on a wiped phone and the previous owner's "Recent"
+  chips are there. The only finding a user would notice without a debugger.
+- `fernlet.workout.tombstones` (`WorkoutTombstoneStore.swift:30`) — up to 200 UUIDs of deleted
+  workouts. Also the one possible **over-reach**: a surviving tombstone can make
+  `WorkoutHealthKitSync` delete Apple Health samples after a wipe in which the user chose *keep*.
+  Auditors disagreed on how reachable that second-order path is — one called it real but narrower
+  than first described, another found no over-reach in the funnel at all. **Resolve it before
+  fixing**; do not take my summary or theirs on faith.
+- Moderation **peer bans** in the keychain (`ModerationBanStore.swift:107`) — 30-day records naming
+  another person's identity fingerprint, surviving a wipe whose own dialog promises "a brand-new
+  Fernlet identity".
+- The **milestone ledger** (`MilestoneLedgerRepository.swift:33`) — a dated record that journal
+  entries and Worry Box releases happened, in Core Data *and* the user's CloudKit database. The two
+  sealed features whose content the wipe just destroyed.
+- `MeshPhotoCache.json` (`PrivateMediaStore.swift:143`) — the friend photo-wall index is plaintext
+  beside GCM-sealed bytes, carrying `senderName`, `senderFingerprint` and `addedAt`. Its subject is
+  kept by design; the metadata being unsealed is the defect.
+- `FernletPeerID.archive` (`MultipeerPeer.swift:89`) — the device name (in practice the user's own
+  first name) plus the stable `MCPeerID` the mesh advertises. Same "brand-new identity" problem.
+- The main Core Data store is **row-deleted, not rebuilt** — no WAL checkpoint, no vacuum, no file
+  destroy. The *sealed* store does get a genuine rebuild (`sealedStoreRebuildHook`), so the two
+  stores are inconsistent about what a wipe means.
+- Legacy direct-CloudKit record types (incl. `JournalLogRecord`) are cleared only on a gated path
+  (`FernletStore.swift:4804`, reached only when sync is off).
+
+### 4.3 Low, but they belong in the table
+
+Companion petting state (`PetInteractionGovernor.swift:72` — a correct `clearPersistentState(in:)`
+exists whose **only** caller is inside `#if DEBUG`), `fernlet.daySummary.lastRunKey`,
+`hasCompletedOnboarding` / `lockSetupDeferred`, `pastDayJournalScrubVersion` / `…Attempts`,
+`MeshPhotoWallPreferences.json`, `tmp/*.fernlet-sealed-{backup,photo}` staging files whose cleanup
+is best-effort, and the share-extension queue which is blanked (`save([])`) rather than removed.
+
+One doc fix while you are here: `PrivacyWipeCoverage.md`'s cleared-by row "Sensitive-visibility
+resolution | Memory" is wrong — it is three UserDefaults keys (`FernletStore.swift:630`), not
+memory. It *is* cleared, so the promise holds; only the "Where it lives" column is false.
+
+### 4.4 Close the discovery gap — `PersistedSurfaceWipeBoundaryTests`
+
+`PrivacyWipeCoverageTests` checks correspondence between the funnel body, a hand-written manifest,
+and the doc. It has exactly one discovery mechanism (keychain *services*), so any surface in neither
+the funnel nor the manifest is invisible. That is why all of the above accumulated while the suite
+stayed green.
+
+Build a wall that **discovers surfaces from source** and requires each to be declared:
+
+```swift
+enum Disposition {
+    case cleared(token: String)              // must appear in the wipe path AND in wipeManifest
+    case kept(reason: String)                // >= 40 chars, and documented under "Deliberate exceptions"
+    case unreachableByDesign(reason: String)
+}
+```
+
+Design notes that matter, from the audit:
+
+- **Anchor discovery on the binding, not a prefix.** A naive `fernlet.*` grep is useless — ~120 such
+  literals are mesh wire types or `Notification.Name`s. Anchor on the accessor
+  (`UserDefaults…set/removeObject/object/…forKey:`) and on `@AppStorage`. That is what excludes the
+  ~45 Core Data `setValue(_:forKey:)` hits. It is the same lesson the keychain check already encodes.
+- **Resolve symbolic keys** (the common form here: `Key.petCount`, `Self.defaultsKey`) by looking up
+  the literal in the same file. Record interpolated keys as a family (`fernlet-day-*`).
+- **Never drop an unresolvable key** — emit `unresolved:<symbol>@<file>:<line>` and require a table
+  row anyway. A runtime-computed key becomes a *declared* surface instead of an invisible one. This
+  is the single most important anti-fail-soft rule.
+- **Strip `#if DEBUG` on both sides.** A DEBUG-only writer is not a shipping surface, and a
+  DEBUG-only clear must not count as a clear — which is exactly the petting-state trap.
+- **Four floors against a vacuous pass**: files scanned ≥ 300 and every root non-empty; discovered
+  count ≥ 45; a `knownSurfaces` floor set that must always be rediscovered; and planted-fixture
+  matcher tests (a new key IS found, `setValue(forKey: "payloadData")` is NOT, a DEBUG-only clear
+  does NOT satisfy a `.cleared` row).
+- **Reuse** `PrivacyWipeCoverageTests.functionBody` / `strippingComments` / `wipeManifest` rather
+  than reimplementing, so the two walls cannot disagree about what the wipe path is — and extend the
+  extracted path to include `ContentView.attachDeleteAllHooks`, which delivers five real clears the
+  current scan cannot see.
+
+Cheap fix worth landing in the same commit: assert that every private funnel helper is registered in
+`wipeFunctionSignatures`, or `wipePathMakesNoBannedCall` is evadable by moving a banned call into an
+unregistered leg.
+
+Be honest in the doc about the ceiling: this proves a *call is present*, not that it *works*, and it
+cannot see a key assembled across files. Keychain accounts, Core Data entities, HealthKit and
+CloudKit namespaces stay outside its class coverage. `DeleteAllDataTests` remains the complement —
+any `.cleared` row whose failure would be silent deserves a behavioural test too.
 
 ---
 
