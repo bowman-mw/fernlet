@@ -87,6 +87,32 @@ final class GroceryListComposerTests: XCTestCase {
         XCTAssertEqual(selections.map(\.recipe.id), [idA, idB])
     }
 
+    // MARK: - Re-planning updates the meal slot (FOOD-35 picker re-pick)
+
+    /// Planning an already-planned recipe again must UPDATE the typed entry's meal slot in place —
+    /// never a silent no-op (the picker lists planned recipes and forces a slot choice, so a
+    /// re-pick IS a slot change) and never a duplicated legacy id. Also pins the legacy upgrade:
+    /// a slotless entry acquires the picked slot.
+    func testReplanUpdatesMealSlotWithoutDuplicatingLegacyID() {
+        let store = makeTestStore()
+        let id = UUID()
+
+        // A slotless (legacy-facade) plan, then a re-pick with a slot: the entry acquires it.
+        store.planRecipe(id, date: store.todayKey)
+        store.planRecipe(id, mealType: .dinner, date: store.todayKey)
+        var day = store.loadDay(for: store.todayKey)
+        XCTAssertEqual(day.plannedRecipeIDs, [id], "the legacy id must never duplicate")
+        XCTAssertEqual(day.plannedMeals?.map(\.mealType), [.dinner],
+                       "a slotless entry must acquire the picked slot")
+
+        // A second re-pick changes the slot in place — still one typed entry, one legacy id.
+        store.planRecipe(id, mealType: .lunch, date: store.todayKey)
+        day = store.loadDay(for: store.todayKey)
+        XCTAssertEqual(day.plannedRecipeIDs, [id], "a slot change must not re-append the legacy id")
+        XCTAssertEqual(day.plannedMeals?.map(\.mealType), [.lunch],
+                       "a re-pick must update the slot, not silently no-op")
+    }
+
     // MARK: - Export coverage of the plan field
 
     func testExportCoversPlannedMeals() {

@@ -24,8 +24,8 @@ import FernletUI
 /// Structure: `launchRoot` shows `LaunchScreen` until ``LaunchPreparationService`` finishes, then
 /// the paged `TabView` (Home/Food/Move/Friends/Private) with the custom floating tab bar. All
 /// modal surfaces flow through one `activeSheet: FernletSheet?` slot (plus dedicated slots for the
-/// connection inspector and incoming proximity recipe shares), with dismiss-then-represent
-/// chaining for editor and First Aid handoffs.
+/// connection inspector, incoming proximity recipe shares, and the meal-logged toast's Adjust
+/// correction sheet), with dismiss-then-represent chaining for editor and First Aid handoffs.
 ///
 /// Wiring owned here (mostly in the launch `.task`): the sensitive-surface visibility gates
 /// injected into `PeriodTrackerStore`/`IntimacyLogStore` BEFORE any load, the
@@ -61,9 +61,16 @@ struct ContentView: View {
     @State private var selectedTab: FernletTab = .home
     @State private var privateHubSection: PrivateHubSection = .journal
     @State private var isHomeTabBarCompact = false
+    /// The floating tab bar's live measured height (the whole `safeAreaInset` block), fed to the
+    /// pages as `\.fernletTabBarClearance` so their scroll content ends clear of the bar.
+    @State private var tabBarMeasuredHeight: CGFloat = 0
     @State private var tabResetTokens: [FernletTab: Int] = Dictionary(uniqueKeysWithValues: FernletTab.allCases.map { ($0, 0) })
     @State private var activeSheet: FernletSheet?
     @State private var mealLogNotification: MealLogNotification?
+    /// The just-logged meal the toast's "Adjust" action opens the correction sheet for — a local
+    /// `.sheet(item:)` slot beside the `activeSheet` router (the toast fires only after the logging
+    /// sheet has dismissed, so the two slots never race).
+    @State private var adjustingLoggedMeal: Meal?
     @State private var editingRecipeFromHome: RecipeDefinition?
     @State private var editingSavedRecipeFromHome: RecipeDefinition?
     /// Set by the stress explainer's First Aid link; consumed by `handleActiveSheetDismiss`
@@ -82,8 +89,10 @@ struct ContentView: View {
     /// flight (rather than a cancel, which must never interrupt a restore mid-write).
     @State private var isSettlingSealedBackups = false
     @Environment(\.scenePhase) private var scenePhase
-    /// Read by ``customTabBar`` only: at accessibility text sizes the five labels break mid-word
-    /// ("Hom/e", "Frien/ds") and the bar swallows a fifth of the screen, so they stop being drawn.
+    /// Read by ``customTabBar`` (at accessibility text sizes the five labels break mid-word —
+    /// "Hom/e", "Frien/ds" — and the bar swallows a fifth of the screen, so they stop being drawn)
+    /// and by the `.workout` route (3b·AX3: the sheet opens `.large` when the kind chips can no
+    /// longer fit the medium detent).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         rootSheetHost
@@ -93,15 +102,6 @@ struct ContentView: View {
             .onChange(of: lockService.state) { _, newState in
                 handleLockStateChange(newState)
             }
-            .overlay(alignment: .top) {
-                if let mealLogNotification {
-                    MealLogNotificationView(notification: mealLogNotification)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 14)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
             .animation(.easeOut(duration: 0.45), value: launcher.isDone)
             // Scrub on the gate VALUE, not on the toggle that usually changes it. Visibility is derived
             // (`periodTrackingVisible ?? sex == .female`, and intimacy ANDs the 18+ age check), so the
@@ -160,11 +160,13 @@ struct ContentView: View {
             }
     }
 
-    /// `launchRoot` plus the three root-presented sheet slots — the single `activeSheet` router, the
-    /// connection inspector, and an incoming proximity recipe share — in their original order.
+    /// `launchRoot` plus the four root-presented sheet slots — the single `activeSheet` router, the
+    /// connection inspector, an incoming proximity recipe share, and the meal-logged toast's
+    /// "Adjust" correction slot — in their original order.
     ///
-    /// Split out of `body` for length only; the modifier chain is byte-for-byte the one `body` used
-    /// to carry, so presentation identity and ordering are unchanged.
+    /// Split out of `body` for length only; the modifier chain is the one `body` used to carry
+    /// (plus the FLOW-15 correction slot appended last), so presentation identity and ordering are
+    /// unchanged for the pre-existing slots.
     private var rootSheetHost: some View {
         launchRoot
             .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
@@ -186,6 +188,12 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+            }
+            // FLOW-15: the toast's "Adjust" action — the same correction sheet the meal row's
+            // Adjust opens, presented from the root because the toast outlives the logging sheet.
+            .sheet(item: $adjustingLoggedMeal) { meal in
+                MealCorrectionSheet(store: store, meal: meal)
+                    .fernletSheetChrome(anchor: "sheet.mealCorrection", detents: [.large])
             }
     }
 
@@ -490,6 +498,13 @@ struct ContentView: View {
 
     private var mainInterface: some View {
         mainTabContent
+            // The bar's measured height + 8pt breathing room, zeroed while the camera session
+            // hides the bar. Consumed by fernletTabBarBottomClearance() on each page's scroll
+            // content — the fix for the last card resting behind the floating bar at max scroll.
+            .environment(
+                \.fernletTabBarClearance,
+                isDisposableCameraSessionActive ? 0 : tabBarMeasuredHeight + 8
+            )
             .overlay(alignment: .bottom) {
                 if !isDisposableCameraSessionActive {
                     LinearGradient(
@@ -501,6 +516,11 @@ struct ContentView: View {
                     .allowsHitTesting(false)
                 }
             }
+            // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, inside the tab-bar
+            // `safeAreaInset` boundary below, so the bar's inset pushes it up — the toast and the
+            // bar never cover each other. Attached after the scrim overlay so the toast draws over it.
+            .overlay(alignment: .bottom) { mealLogToastOverlay }
+            .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !isDisposableCameraSessionActive {
                     customTabBar
@@ -511,6 +531,15 @@ struct ContentView: View {
                         // main tab content still receives the keyboard region in its safe area, so
                         // scroll views and focused fields inside the pages keep avoiding the keyboard.
                         .ignoresSafeArea(.keyboard, edges: .bottom)
+                        // Measure the bar's live block height for the pages' bottom clearance:
+                        // this safeAreaInset positions the bar but does NOT reach the pages'
+                        // scroll views through the UIKit-backed TabView, so each page ends its
+                        // own scroll content clear of the bar via fernletTabBarBottomClearance().
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            tabBarMeasuredHeight = height
+                        }
                 }
             }
             .tint(Color.moss)
@@ -542,16 +571,18 @@ struct ContentView: View {
     }
 
     /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
-    /// (Settings, Trends, First Aid, the logging sheets, …), the connection inspector, or an
-    /// incoming recipe-share review. Composed into the Private hub's capture-friction
-    /// `isFrontmost` — the hub stays alive beneath a root sheet, so a screenshot taken while an
-    /// unprotected sheet covers the Personal tab must not spend the once-per-session nudge on a
-    /// banner nobody can see. The recipe-share slot presents only while `activeSheet` is nil, so
-    /// checking the pending queue directly covers it in both states.
+    /// (Settings, Trends, First Aid, the logging sheets, …), the connection inspector, an
+    /// incoming recipe-share review, or the toast's meal-correction slot. Composed into the
+    /// Private hub's capture-friction `isFrontmost` — the hub stays alive beneath a root sheet,
+    /// so a screenshot taken while an unprotected sheet covers the Personal tab must not spend
+    /// the once-per-session nudge on a banner nobody can see. The recipe-share slot presents
+    /// only while `activeSheet` is nil, so checking the pending queue directly covers it in
+    /// both states.
     private var rootSheetIsCoveringTabs: Bool {
         activeSheet != nil
             || store.showConnectionInspector
             || store.recipeShareManager.pendingRecipeShares.first != nil
+            || adjustingLoggedMeal != nil
     }
 
     private var tabPages: some View {
@@ -567,7 +598,7 @@ struct ContentView: View {
                 stressService: stressService
             )
             .tabPage(.home)
-            FoodView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
+            FoodView(store: store, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
                 .tabPage(.food)
             MoveView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .move))
                 .tabPage(.move)
@@ -693,10 +724,10 @@ struct ContentView: View {
     @ViewBuilder
     private func sheetContent(for sheet: FernletSheet) -> some View {
         switch sheet {
-        case .meal, .recipe, .water, .sleep, .journal, .quickExercise,
+        case .meal, .recipe, .water, .sleep, .journal,
              .workout, .workoutSuggestion, .goals, .hygiene:
             loggingSheet(for: sheet)
-        case .settings, .recipeBook, .trends, .stressExplainer, .firstAid:
+        case .settings, .recipeBook, .trends, .milestones, .stressExplainer, .firstAid:
             librarySheet(for: sheet)
         case .logPeriod, .logIntimacy:
             privateSheet(for: sheet)
@@ -705,19 +736,28 @@ struct ContentView: View {
         }
     }
 
-    /// The quick-log family: meal, recipe, water, sleep, journal, exercise, workout(s), goals, hygiene.
+    /// The quick-log family: meal, recipe, water, sleep, journal, workout(s), goals, hygiene.
+    /// (`.quickExercise` is retired — the Home Move tile now presents the Move tab's own
+    /// `WorkoutSheet`, artboard 3b.)
     @ViewBuilder
     private func loggingSheet(for sheet: FernletSheet) -> some View {
         switch sheet {
         case .meal:
+            // At accessibility sizes the six 80pt meal-type chips overflow the medium detent, so
+            // the sheet opens .large instead of hiding a control (artboard 4a·AX3).
             MealSheet(store: store, onLogged: showMealLogNotification)
-                .fernletSheetChrome(anchor: "sheet.meal", detents: [.medium, .large])
+                .fernletSheetChrome(
+                    anchor: "sheet.meal",
+                    detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
+                )
         case .recipe:
             RecipeSheet(store: store)
                 .fernletSheetChrome(anchor: "sheet.recipe", detents: [.large])
         case .water:
+            // [.medium, .large] per the 2026-08-21 template (artboard 2c): the whole task fits
+            // above the medium line; the drag is for context, never for reaching a control.
             WaterSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.water", detents: [.medium])
+                .fernletSheetChrome(anchor: "sheet.water", detents: [.medium, .large])
         case .sleep:
             // `[.medium, .large]` like Care: locked at medium the fourth quality option, the Hours
             // field and the Note field all sat below the fold behind the floating Save pill.
@@ -729,15 +769,25 @@ struct ContentView: View {
             JournalSheet(store: store)
                 .fernletSheetChrome(anchor: "sheet.journal", detents: [.large])
                 .environment(captureProtection)
-        case .quickExercise:
-            QuickExerciseSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.quickExercise", detents: [.medium, .large])
         case .workout:
+            // [.medium, .large] per artboards 1f/3b (2026-08-21): Kind, Recent and the search sit
+            // above the medium line, so the quick path from the Home Move tile is never a sheet
+            // the user has to drag open first. At accessibility sizes the 80pt kind chips plus the
+            // primary no longer fit the 437pt medium detent, so the sheet opens .large instead of
+            // hiding a control (artboard 3b·AX3).
             WorkoutSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.workout", detents: [.large])
+                .fernletSheetChrome(
+                    anchor: "sheet.workout",
+                    detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
+                )
         case .workoutSuggestion:
+            // 1b·AX3: chips at 80pt plus the primary no longer fit the medium detent — grow the
+            // sheet, never hide the control (both MoveView-side presenters do the same).
             WorkoutSuggestionSheet(store: store)
-                .fernletSheetChrome(anchor: "sheet.workoutSuggestion", detents: [.medium, .large])
+                .fernletSheetChrome(
+                    anchor: "sheet.workoutSuggestion",
+                    detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
+                )
         case .goals:
             GoalsSheet(store: store)
                 .fernletSheetChrome(anchor: "sheet.goals", detents: [.large])
@@ -761,11 +811,24 @@ struct ContentView: View {
                 .environment(lockService)
                 .environment(storagePreferencesStore)
         case .recipeBook:
-            RecipeBookSheet(store: store, editingRecipe: $editingRecipeFromHome, editingSavedRecipe: $editingSavedRecipeFromHome)
-                .fernletSheetChrome(anchor: "sheet.recipeBook", detents: [.large])
+            // onMealsLogged threads the FLOW-15 toast into the Home-presented book's Log pills —
+            // without it those logs would land silently.
+            RecipeBookSheet(
+                store: store,
+                editingRecipe: $editingRecipeFromHome,
+                editingSavedRecipe: $editingSavedRecipeFromHome,
+                onMealsLogged: showMealLogNotification
+            )
+            .fernletSheetChrome(anchor: "sheet.recipeBook", detents: [.large])
         case .trends:
             TrendsModal(signals: store.derivedSignals)
                 .fernletSheetChrome(anchor: "sheet.trends", detents: [.large])
+        case .milestones:
+            // Artboard 3f: one rule for read-only destinations from Home — they present as large
+            // sheets, matching Trends, First aid and the gear. MilestonesView carries its own
+            // NavigationStack so the keepsake shelf pushes inside the sheet's own stack.
+            MilestonesView(store: store)
+                .fernletSheetChrome(anchor: "sheet.milestones", detents: [.large])
         case .stressExplainer:
             StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
                 // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).
@@ -1203,14 +1266,16 @@ struct ContentView: View {
     private func showMealLogNotification(_ meals: [Meal]) {
         guard meals.isEmpty == false else { return }
         let notification = MealLogNotification(meals: meals)
-        // Deliberately does NOT switch to Home. The toast is an overlay on the ROOT, so it shows
+        // Deliberately does NOT switch to Home. The toast overlays the tab pages, so it shows
         // over whichever tab the log started from; jumping to Home meant a meal logged from Food
         // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
 
         Task { @MainActor in
             do {
-                try await Task.sleep(for: .seconds(3))
+                // 5 seconds (FLOW-15): the toast is now the fastest correction path — Undo and
+                // Adjust need a window long enough to actually read and tap.
+                try await Task.sleep(for: .seconds(5))
             } catch {
                 // Cancelled: leave the toast to whatever superseded this one (the id check below is
                 // the same supersede rule).
@@ -1220,6 +1285,45 @@ struct ContentView: View {
                 mealLogNotification = nil
             }
         }
+    }
+
+    /// The bottom toast slot (artboard 4b). Lives INSIDE the tab-bar `safeAreaInset` boundary in
+    /// ``mainInterface``, so the bar's inset pushes it up and neither covers the other. The card
+    /// occupies only its own frame, so VoiceOver (and touch) still reach the tab bar beneath it.
+    @ViewBuilder
+    private var mealLogToastOverlay: some View {
+        if let notification = mealLogNotification {
+            MealLogNotificationView(
+                notification: notification,
+                onUndo: { undoLoggedMeals(notification) },
+                onAdjust: { adjustLoggedMeal(notification) }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// The toast's "Undo": removes the just-logged meal(s) exactly as the meal row's X does —
+    /// `store.deleteMeal` per meal (sealed photo cleanup and AI-retry clearing included).
+    private func undoLoggedMeals(_ notification: MealLogNotification) {
+        for meal in notification.meals {
+            store.deleteMeal(meal)
+        }
+        if mealLogNotification?.id == notification.id {
+            mealLogNotification = nil
+        }
+    }
+
+    /// The toast's "Adjust": opens the meal-correction sheet for the single just-logged meal.
+    /// A multi-meal log has no single target, so the view only offers Adjust when
+    /// `notification.singleMeal` exists — this guard is the belt to that suspender.
+    private func adjustLoggedMeal(_ notification: MealLogNotification) {
+        guard let meal = notification.singleMeal else { return }
+        if mealLogNotification?.id == notification.id {
+            mealLogNotification = nil
+        }
+        adjustingLoggedMeal = meal
     }
 
     private func handleActiveSheetDismiss() {
@@ -1384,18 +1488,32 @@ extension View {
     }
 }
 
-/// The payload behind the transient "meal logged" toast: a title plus the summed macros.
+/// The payload behind the transient "meal logged" toast: the meals a sheet just logged, plus
+/// their summed macros.
 ///
-/// Built by `ContentView.showMealLogNotification` from the meals a sheet just logged; the fresh
-/// `id` per instance is what lets a newer toast supersede an older one's auto-dismiss timer.
+/// Built by `ContentView.showMealLogNotification`; the fresh `id` per instance is what lets a
+/// newer toast supersede an older one's auto-dismiss timer. Carries the full `[Meal]` (FLOW-15)
+/// so the toast's Undo can remove exactly what was logged and Adjust can open the correction
+/// sheet for a single-meal log.
 struct MealLogNotification: Identifiable, Equatable {
     let id = UUID()
-    let title: String
-    let macros: MacroTotals
+    /// The just-logged meals, in the order the sheet reported them. Never empty (the presenter
+    /// guards), and the Undo action deletes each one exactly as the meal row's X does.
+    let meals: [Meal]
 
     init(meals: [Meal]) {
-        title = meals.count == 1 ? "\(meals[0].name) logged" : "\(meals.count) meals logged"
-        macros = meals.reduce(into: MacroTotals()) { totals, meal in
+        self.meals = meals
+    }
+
+    /// The one logged meal when exactly one was logged — the only case with an Adjust target
+    /// (a multi-meal log has no single meal to correct).
+    var singleMeal: Meal? {
+        meals.count == 1 ? meals.first : nil
+    }
+
+    /// The summed macros across every logged meal, for the toast's detail line.
+    var macros: MacroTotals {
+        meals.reduce(into: MacroTotals()) { totals, meal in
             totals.protein += meal.macros.protein
             totals.carbs += meal.macros.carbs
             totals.fat += meal.macros.fat
@@ -1403,43 +1521,124 @@ struct MealLogNotification: Identifiable, Equatable {
     }
 }
 
-/// The top-overlay toast card for a just-logged meal: checkmark, title, and a P/C/F macro line.
+/// The bottom toast card for a just-logged meal (artboard 4b): message block plus Undo and — for
+/// a single-meal log — Adjust, each a 44pt pill.
 ///
-/// Presented by ``ContentView`` for ~3 seconds after a meal sheet reports a log; purely
-/// presentational (the timing and dismissal live with the presenting view).
+/// Presented by ``ContentView`` for ~5 seconds above the floating tab bar after a meal sheet
+/// reports a log; purely presentational (the timing, deletion, and correction-sheet routing live
+/// with the presenting view). At accessibility text sizes the two actions stack under the message
+/// full-width (artboard 4b·AX3). The card is a plain accessibility container — message and
+/// buttons are individually reachable, and the card claims only its own frame so VoiceOver still
+/// reaches the tab bar beneath it.
 struct MealLogNotificationView: View {
     var notification: MealLogNotification
+    /// Removes the just-logged meal(s); the presenter owns the store call.
+    var onUndo: () -> Void
+    /// Opens the correction sheet for ``MealLogNotification/singleMeal``; only invoked when the
+    /// Adjust pill renders (single-meal logs).
+    var onAdjust: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: 30, height: 30)
-                .background(Color.moss.opacity(0.12), in: Circle())
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(notification.title)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                Text("P \(notification.macros.protein)g · C \(notification.macros.carbs)g · F \(notification.macros.fat)g")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-                    .lineLimit(1)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    messageBlock
+                    actionButtons
+                }
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    messageBlock
+                    Spacer(minLength: 8)
+                    actionButtons
+                }
             }
-
-            Spacer(minLength: 8)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.bark.opacity(0.10), lineWidth: 1)
-        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: shape)
+        .overlay(shape.stroke(Color.bark.opacity(0.10), lineWidth: 1))
         .shadow(color: Color.bark.opacity(0.12), radius: 14, x: 0, y: 7)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Title ("<name> logged" / "<n> meals logged") over the slot + macros detail line.
+    private var messageBlock: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            titleText
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+            detailText
+                .font(.fernlet(.labelSmall).monospacedDigit())
+                .foregroundStyle(Color.slate)
+                .lineLimit(1)
+        }
         .accessibilityElement(children: .combine)
+    }
+
+    private var titleText: Text {
+        if let meal = notification.singleMeal {
+            Text("\(meal.name) logged")
+        } else {
+            Text("\(notification.meals.count) meals logged")
+        }
+    }
+
+    /// "Lunch · P 42g · C 58g · F 14g" for a single meal; macros alone for a multi-meal log
+    /// (the meals may span slots). `displayName` is already localized, so it interpolates as data.
+    private var detailText: Text {
+        let macros = notification.macros
+        if let meal = notification.singleMeal {
+            return Text("\(meal.mealType.displayName) · P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
+        }
+        return Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
+    }
+
+    /// Undo (always) and Adjust (single-meal logs only), side by side — or stacked full-width,
+    /// one per row, at accessibility sizes (artboard 4b·AX3).
+    @ViewBuilder
+    private var actionButtons: some View {
+        let expands = dynamicTypeSize.isAccessibilitySize
+        let layout = expands ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
+            Button("Undo", action: onUndo)
+                .buttonStyle(MealToastPillStyle(prominent: false, expands: expands))
+                .accessibilityIdentifier("mealToast.undo")
+            if notification.singleMeal != nil {
+                Button("Adjust", action: onAdjust)
+                    .buttonStyle(MealToastPillStyle(prominent: true, expands: expands))
+                    .accessibilityIdentifier("mealToast.adjust")
+            }
+        }
+    }
+}
+
+/// The toast's two action pills (artboard 4b): a 44pt capsule — parchment with bark ink for the
+/// neutral Undo, a moss tint with moss ink for the prominent Adjust.
+///
+/// Local to the toast rather than an `ActionPillButtonStyle` role: the shared secondary pill is
+/// cream, which would vanish on the toast's cream card, and the canvas gives these pills no
+/// hairline. `expands` stretches the pill full-width for the stacked accessibility layout.
+private struct MealToastPillStyle: ButtonStyle {
+    var prominent: Bool
+    var expands: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = Capsule(style: .continuous)
+        return configuration.label
+            .font(.fernlet(.label))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(prominent ? Color.moss : Color.bark)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: expands ? .infinity : nil, minHeight: 44)
+            .background(prominent ? Color.moss.opacity(0.14) : Color.parchment, in: shape)
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.75 : 1.0)
     }
 }
 

@@ -38,6 +38,7 @@ struct JournalView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 pageContent
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
@@ -195,6 +196,8 @@ struct JournalView: View {
 /// The inspiration chip pulls the deterministic prompt of the day from ``JournalPromptLibrary``,
 /// and ``JournalContinuationDetector`` watches the text to surface a one-time-per-reason
 /// ``JournalPromptNotificationView`` banner suggesting the Moments app for long reflections.
+/// Chrome is the 2026-08-21 template: the draft-guard header carries Cancel and the title;
+/// Save commits bottom-right.
 struct JournalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -236,10 +239,6 @@ struct JournalSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Journal")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     SheetField("Feeling") {
                         FlowLayout(spacing: 8) {
                             ForEach(FeelingTag.allCases) { option in
@@ -285,8 +284,9 @@ struct JournalSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
-        // A swipe-down used to throw away a typed entry with no warning.
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        // A swipe-down used to throw away a typed entry with no warning. The guard also renders
+        // the pinned template header (Cancel + title).
+        .fernletDraftGuard(isDirty: isDirty, title: "Journal") { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE so every
         // presenter — the hub, Home's quick-log tile, the notification tap, the App Intent — is
         // covered by this one edit. A presented sheet is frontmost by construction.
@@ -537,7 +537,8 @@ struct JournalEntryEditTarget: Identifiable {
 /// list, the previous list, or ``DayDetailView``. Saves through ``FernletStore/updateJournal(_:text:tag:date:)``
 /// (which re-seals the narrative when the entry is sealed) and deletes through
 /// ``FernletStore/deleteJournal(_:date:)``; shares the ``JournalContinuationDetector`` long-entry banner
-/// with the compose sheet.
+/// with the compose sheet. Chrome is the 2026-08-21 template: the draft-guard header carries
+/// Cancel and the title; Save commits bottom-right.
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -573,14 +574,10 @@ struct JournalEntryEditorSheet: View {
         text != entry.text || tag != entry.tag
     }
 
-    /// Title, feeling chips, the editor, its counter, and the delete affordance — the scrolling half
-    /// of the editor sheet.
+    /// Feeling chips, the editor, its counter, and the delete affordance — the scrolling half
+    /// of the editor sheet (the title lives in the pinned draft-guard header).
     private var editorScrollContent: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text("Edit journal")
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-
             SheetField("Feeling") {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
@@ -605,7 +602,8 @@ struct JournalEntryEditorSheet: View {
         .padding(.bottom, 10)
     }
 
-    /// Destructive delete, gated behind the shared confirmation sheet.
+    /// Destructive delete, gated behind the shared confirmation sheet. Rendered as the one
+    /// full-width destructive token, ``DestructiveCardButtonStyle`` (2026-08-21 template, 2b).
     private var deleteEntryButton: some View {
         Button(role: .destructive) {
             pendingDelete = DestructiveConfirmation(
@@ -620,14 +618,8 @@ struct JournalEntryEditorSheet: View {
             )
         } label: {
             Label("Delete journal entry", systemImage: "trash")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.terracottaInk)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.22), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DestructiveCardButtonStyle())
     }
 
     var body: some View {
@@ -653,8 +645,9 @@ struct JournalEntryEditorSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
-        // A swipe-down used to throw away the edit with no warning.
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        // A swipe-down used to throw away the edit with no warning. The guard also renders the
+        // pinned template header (Cancel + title).
+        .fernletDraftGuard(isDirty: isDirty, title: "Edit journal") { dismiss() }
         .destructiveConfirmation($pendingDelete)
         // Capture FRICTION (never a security control), attached at the sheet TYPE so both
         // presenters (JournalView's entry rows and DayDetailView's) are covered by one edit.
@@ -1472,7 +1465,9 @@ struct DayMicronutrientRow: View {
 /// sleep only when it existed or the user actually entered something; journal/meal/workout only
 /// when non-empty — all through the corresponding ``FernletStore`` dated mutation methods, so a
 /// past day's journal text still flows through the sealing path. Backfilled workouts are pinned to noon
-/// of the target day. Shares the ``JournalContinuationDetector`` long-entry banner.
+/// of the target day. Shares the ``JournalContinuationDetector`` long-entry banner. Chrome is the
+/// 2026-08-21 template: the draft-guard header carries Cancel and the dated title; Save commits
+/// bottom-right.
 struct DayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -1560,10 +1555,6 @@ struct DayEditSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Edit \(formattedDate)")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     journalField
                     mealField
                     workoutField
@@ -1592,8 +1583,10 @@ struct DayEditSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
-        // A swipe-down used to throw away a whole day's catch-up with no warning.
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        // A swipe-down used to throw away a whole day's catch-up with no warning. The guard also
+        // renders the pinned template header (Cancel + title; "Edit %@" localizes around the
+        // runtime date).
+        .fernletDraftGuard(isDirty: isDirty, title: "Edit \(formattedDate)") { dismiss() }
         // Capture FRICTION (never a security control): a past day's edit sheet can hold that
         // day's journal text, so it is one of the six in-scope surfaces.
         .captureProtected(surface: "dayEdit")

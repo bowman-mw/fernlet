@@ -85,10 +85,11 @@ final class ItemCreationFlowUITests: XCTestCase {
         saveFromTheEditor(in: app)
 
         // Back in the closet — the sheet is still up (the Wardrobe only exists inside it) and the
-        // studio is gone.
+        // studio is gone. (The coin balance moved to the customize sheet's header in the
+        // 2026-08-21 redesign, so the Wardrobe's own chrome is its navigation bar now.)
         let designNew = waitForButton(in: app, labelContaining: "Design a new item", timeout: 10)
         XCTAssertNotNil(designNew, "saving should pop back to the Wardrobe, not dismiss the sheet")
-        XCTAssertTrue(app.descendants(matching: .any)["wardrobe.coinBalance"].exists,
+        XCTAssertTrue(app.navigationBars["Wardrobe"].exists,
                       "the Wardrobe's own chrome should be on screen after saving")
         XCTAssertFalse(app.descendants(matching: .any)["studio.canvas"].exists,
                        "the studio should have been popped off the stack")
@@ -124,7 +125,8 @@ final class ItemCreationFlowUITests: XCTestCase {
         save.tap()
     }
 
-    /// Drives customization sheet → Clothing slot → Wardrobe → "Design a new item".
+    /// Drives customization sheet → Wardrobe row (at the sheet root since the 2026-08-21
+    /// redesign, HOME-30) → "Design a new item".
     @MainActor
     private func launchToStudioEditor(seedCanvas: Bool) -> XCUIApplication {
         let app = XCUIApplication()
@@ -135,17 +137,11 @@ final class ItemCreationFlowUITests: XCTestCase {
         app.launch()
         expandSheetToFullHeight(in: app)
 
-        // Open the Clothing slot picker (a custom slot → carries the Wardrobe route).
-        guard let clothing = waitForButton(in: app, labelContaining: "Clothing", timeout: 30) else {
-            XCTFail("customization sheet did not open")
-            return app
-        }
-        for _ in 0..<6 where !clothing.isHittable { app.swipeUp() }
-        clothing.tap()
-
+        // The Wardrobe is a named row at the sheet root now (it used to be reachable only from
+        // inside a slot picker's custom-items section).
         let wardrobe = app.buttons["companion.wardrobe"]
-        for _ in 0..<8 where !wardrobe.isHittable { app.swipeUp() }
-        XCTAssertTrue(wardrobe.waitForExistence(timeout: 6), "Wardrobe route not found")
+        XCTAssertTrue(wardrobe.waitForExistence(timeout: 30), "customization sheet did not open with a Wardrobe row")
+        for _ in 0..<6 where !wardrobe.isHittable { app.swipeUp() }
         wardrobe.tap()
 
         guard let design = waitForButton(in: app, labelContaining: "Design a new item", timeout: 10) else {

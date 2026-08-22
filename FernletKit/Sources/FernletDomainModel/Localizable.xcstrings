@@ -1057,6 +1057,42 @@
         }
       }
     },
+    "workoutIntensity.hard" : {
+      "comment" : "Workout intensity, mid-sentence: a demanding day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "hard"
+          }
+        }
+      }
+    },
+    "workoutIntensity.light" : {
+      "comment" : "Workout intensity, mid-sentence: an easy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "light"
+          }
+        }
+      }
+    },
+    "workoutIntensity.moderate" : {
+      "comment" : "Workout intensity, mid-sentence: an average day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "moderate"
+          }
+        }
+      }
+    },
     "workoutType.armsBack" : {
       "comment" : "Legacy workout category, history rows only",
       "extractionState" : "extracted_with_value",

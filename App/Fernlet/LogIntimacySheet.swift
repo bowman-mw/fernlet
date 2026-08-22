@@ -14,7 +14,8 @@ import FernletUI
 /// intimate-logging capability are on in `StoragePreferencesStore`. Saving while the derived
 /// intimacy-tracking gate has flipped to hidden throws `IntimacyTrackingHiddenError`, which the
 /// sheet surfaces as a gentle explanation instead of a raw error string. A HealthKit write failure
-/// after a successful seal is reported but never blocks the local save.
+/// after a successful seal is reported but never blocks the local save. Chrome is the 2026-08-21
+/// template: the draft-guard header carries Cancel and the title; Save commits bottom-right.
 struct LogIntimacySheet: View {
     /// The gated funnel for the sealed-note write. Reaches the same fail-closed decrypt/seam gate the
     /// calendar reads through, so a save while intimacy is hidden throws instead of sealing a new row.
@@ -43,10 +44,6 @@ struct LogIntimacySheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Log intimacy")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     dateField
                     noteField
 
@@ -66,8 +63,9 @@ struct LogIntimacySheet: View {
             }
         }
         .background(Color.parchment)
-        // A swipe-down used to throw away a typed private note with no warning.
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        // A swipe-down used to throw away a typed private note with no warning. The guard also
+        // renders the pinned template header (Cancel + title).
+        .fernletDraftGuard(isDirty: isDirty, title: "Log intimacy") { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE — presented
         // from the root router, so protection engages regardless of the tab beneath it.
         .captureProtected(surface: "logIntimacy")

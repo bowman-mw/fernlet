@@ -44,7 +44,14 @@ struct GuidedWorkoutEditorSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            // The 2026-08-21 template header: Cancel top-left (wired to the discard prompt via
+            // `attemptCancel`), Fraunces title, and the session name as the runtime subtitle —
+            // `Text(verbatim:)` because a session name is user/planner data, never a catalog key.
+            SheetHeader(
+                title: Text("Edit workout"),
+                subtitle: Text(verbatim: session.suggestion.name),
+                onCancel: { attemptCancel() }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -76,37 +83,6 @@ struct GuidedWorkoutEditorSheet: View {
         } message: {
             Text("That workout has already started or changed. Close this and open it again to edit.")
         }
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Edit workout")
-                    .font(.fernlet(.displayMedium))
-                    .foregroundStyle(Color.bark)
-                Text(session.suggestion.name)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Spacer()
-            Button {
-                attemptCancel()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close editor")
-            .accessibilityIdentifier("workout.editor.close")
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 8)
     }
 
     // MARK: Exercise card
@@ -406,8 +382,11 @@ private struct GuidedEditorRowControls: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(canRemove ? Color.terracotta : Color.terracotta.opacity(0.3))
+                    // The destructive token's row form: terracotta ink, with disabled as an
+                    // opacity drop on the whole glyph — opacity, never a colour change (2b).
+                    .foregroundStyle(Color.terracottaInk)
                     .frame(width: 30, height: 30)
+                    .opacity(canRemove ? 1 : 0.35)
             }
             .buttonStyle(.plain)
             .disabled(!canRemove)

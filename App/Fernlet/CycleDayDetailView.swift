@@ -66,25 +66,24 @@ struct CycleDayDetailView: View {
                 }
 
                 if showsPeriodHalf {
-                    HStack {
-                        Button(hasCycleLog ? "Edit" : "Log this day", action: onEdit)
-                            .foregroundStyle(Color.moss)
-                        Spacer()
-                        if hasCycleLog {
-                            Button("Delete", role: .destructive) {
-                                pendingDelete = DestructiveConfirmation(
-                                    title: "Delete this day's cycle log?",
-                                    message: "This removes the health samples Fernlet wrote for \(entry.date.formatted(.dateTime.month(.wide).day())) and the sealed note kept with them. It can't be undone.",
-                                    confirmLabel: "Delete",
-                                    auditEvent: "cycle.dayDeleteConfirmed",
-                                    perform: { onDelete() }
-                                )
-                            }
-                            .foregroundStyle(Color.terracottaInk)
+                    Button(hasCycleLog ? "Edit" : "Log this day", action: onEdit)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .padding(.horizontal, 4)
+                    if hasCycleLog {
+                        Button(role: .destructive) {
+                            pendingDelete = DestructiveConfirmation(
+                                title: "Delete this day's cycle log?",
+                                message: "This removes the health samples Fernlet wrote for \(entry.date.formatted(.dateTime.month(.wide).day())) and the sealed note kept with them. It can't be undone.",
+                                confirmLabel: "Delete",
+                                auditEvent: "cycle.dayDeleteConfirmed",
+                                perform: { onDelete() }
+                            )
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
+                        .buttonStyle(DestructiveCardButtonStyle())
                     }
-                    .font(.fernlet(.label))
-                    .padding(.horizontal, 4)
                 }
             }
             .padding(20)

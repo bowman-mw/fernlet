@@ -20,7 +20,6 @@ struct WorkoutSetupSheet: View {
     @State private var avoidedAreas: Set<String>
     @State private var selectedSplitID: String?
     @State private var showingLocations = false
-    @State private var showDiscardConfirm = false
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -91,19 +90,10 @@ struct WorkoutSetupSheet: View {
             || selectedSplitID != originalSelectedSplitID
     }
 
-    private func attemptCancel() {
-        if isDirty { showDiscardConfirm = true } else { dismiss() }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Workout setup")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     splitSection
                     locationsEntry
                     frequencySection
@@ -121,8 +111,9 @@ struct WorkoutSetupSheet: View {
         // Stepper's +/- render iOS blue against the parchment palette.
         .tint(Color.moss)
         .keyboardDoneToolbar()
-        .interactiveDismissDisabled(isDirty)
-        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        // The 2026-08-21 template chrome in one line: the pinned SheetHeader (Cancel + title),
+        // blocked swipe-dismiss while dirty, and the discard prompt on Cancel.
+        .fernletDraftGuard(isDirty: isDirty, title: "Workout setup") { dismiss() }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
                 .presentationDetents([.large])

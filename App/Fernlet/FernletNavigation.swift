@@ -128,7 +128,6 @@ enum FernletSheet: Identifiable {
     case water
     case sleep
     case journal
-    case quickExercise
     case workout
     case workoutSuggestion
     case goals
@@ -136,6 +135,9 @@ enum FernletSheet: Identifiable {
     case settings
     case recipeBook
     case trends
+    /// Lifetime milestones as a large sheet (2026-08-21 artboard 3f): one rule for read-only
+    /// destinations from Home — they present as sheets, matching Trends, First aid and the gear.
+    case milestones
     case stressExplainer
     /// Calm first-aid tools (breathing / grounding / worry box); the optional tool deep-links
     /// straight into one of them (gentle-offer cards use it).
@@ -155,7 +157,6 @@ enum FernletSheet: Identifiable {
         case .water: "water"
         case .sleep: "sleep"
         case .journal: "journal"
-        case .quickExercise: "quickExercise"
         case .workout: "workout"
         case .workoutSuggestion: "workoutSuggestion"
         case .goals: "goals"
@@ -163,6 +164,7 @@ enum FernletSheet: Identifiable {
         case .settings: "settings"
         case .recipeBook: "recipeBook"
         case .trends: "trends"
+        case .milestones: "milestones"
         case .stressExplainer: "stressExplainer"
         case .firstAid: "firstAid"
         case .logPeriod: "logPeriod"

@@ -898,6 +898,24 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
 public nonisolated enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
     case light, moderate, hard
     public var id: String { rawValue }
+
+    /// The localized intensity word for screens, lowercase so it sits mid-sentence
+    /// ("built for a hard day", "Today's readiness suggests light.").
+    ///
+    /// `rawValue` is the token: it persists on ``Workout`` (Codable raw value) and is the
+    /// vocabulary AI prompts and exports carry, so it stays English forever — only screens read
+    /// this property. Resolved against `.module`, because inside an SPM module a bare
+    /// `String(localized:)` looks up `Bundle.main` and renders English forever with a clean build.
+    public var displayWord: String {
+        switch self {
+        case .light: String(localized: "workoutIntensity.light", defaultValue: "light",
+                            bundle: .module, comment: "Workout intensity, mid-sentence: an easy day")
+        case .moderate: String(localized: "workoutIntensity.moderate", defaultValue: "moderate",
+                               bundle: .module, comment: "Workout intensity, mid-sentence: an average day")
+        case .hard: String(localized: "workoutIntensity.hard", defaultValue: "hard",
+                           bundle: .module, comment: "Workout intensity, mid-sentence: a demanding day")
+        }
+    }
 }
 
 /// What logging inputs an exercise expects (strength sets, treadmill fields, or none).

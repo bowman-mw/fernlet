@@ -192,7 +192,7 @@ see your numeric score, your goals, your cycle information, or any raw health da
 device-to-device.
 
 There is one **optional exception**, and it is off unless you turn it on. If you switch on
-**Deliver hearts when apart**, a heart you send to a friend you already added in person is sealed end to end
+**Deliver hearts later**, a heart you send to a friend you already added in person is sealed end to end
 and left in a shared iCloud drop-off area under a rotating, meaningless tag, so their phone can pick
 it up later. Only sealed hearts go there — never your own data, and nothing that names either of you.
 We cannot read them. Turning the setting off deletes the ones still waiting.

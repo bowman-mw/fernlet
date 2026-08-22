@@ -18,7 +18,8 @@ import FernletUI
 /// The clinical fields become HealthKit samples; the note and symptoms
 /// become a sealed narrative, so the sheet warns up front when no app lock is configured and maps
 /// the store's `PeriodLogResult` (saved / narrative buffered until unlock / narrative dropped) to
-/// an honest status message before dismissing.
+/// an honest status message before dismissing. Chrome is the 2026-08-21 template: the draft-guard
+/// header carries Cancel and the Log/Edit title; Save commits bottom-right.
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
     private let editingEntry: CycleDayEntry?
@@ -143,10 +144,6 @@ struct LogPeriodSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(editingEntry != nil ? "Edit period" : "Log period")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     lockWarning
                     dateField
                     flowLevelField
@@ -174,7 +171,12 @@ struct LogPeriodSheet: View {
             }
         }
         // A swipe-down used to throw away a period log with symptoms and a note, with no warning.
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        // The guard also renders the pinned template header (Cancel + title); both title branches
+        // are authored `LocalizedStringKey` literals.
+        .fernletDraftGuard(
+            isDirty: isDirty,
+            title: editingEntry != nil ? "Edit period" : "Log period"
+        ) { dismiss() }
         // Capture FRICTION (never a security control), attached at the sheet TYPE so both
         // presenters (the Cycle page and Home's quick-log tile) are covered by one edit.
         .captureProtected(surface: "logPeriod")

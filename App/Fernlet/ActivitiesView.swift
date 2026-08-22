@@ -221,7 +221,7 @@ struct ActivitiesView: View {
                                removable: false,
                                activityID: joined.descriptor.activityID)
                     Button("Leave") { manager.leaveJoined(activityID: joined.descriptor.activityID) }
-                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .buttonStyle(ActionPillButtonStyle(.destructive))
                         .accessibilityIdentifier("activities.leave")
                 }
                 .padding(14)

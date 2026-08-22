@@ -2161,6 +2161,12 @@ final class FernletStore {
     // use the app-target `MealBuilder`. (Classification had MealBuilder as portable/FoodCatalog; it is
     // not — its carve is future work.) The protein threshold itself is `Macros.goodProteinThreshold`.
 
+    /// Applies the Adjust-meal sheet's edits to the logged meal (today's diary row and its
+    /// `recentMeals` twin), recomputing totals from the corrected snapshots.
+    ///
+    /// `componentSnapshots` distinguishes nil from empty: nil means the caller edited raw macros
+    /// with no component information (existing snapshots are kept untouched); an EMPTY array is
+    /// an explicit clear — the user removed every matched item (FOOD-05) — and must stick.
     func updateMealCorrection(
         mealID: UUID,
         name: String,
@@ -2205,8 +2211,12 @@ final class FernletStore {
         macros: Macros,
         componentSnapshots: [MealComponentSnapshot]?
     ) -> (macros: Macros, micronutrients: Micronutrients, componentSnapshots: [MealComponentSnapshot]?) {
-        guard let componentSnapshots, componentSnapshots.isEmpty == false else {
-            return (macros, Micronutrients(), nil)
+        // nil = no component information (keep whatever the meal already has); an EMPTY array is
+        // an explicit remove-all clear and flows through so `applyMealCorrection` empties the
+        // meal's snapshots. Collapsing empty into nil here silently resurrected removed items.
+        guard let componentSnapshots else { return (macros, Micronutrients(), nil) }
+        guard componentSnapshots.isEmpty == false else {
+            return (macros, Micronutrients(), componentSnapshots)
         }
         let totals = MealBuilder.totals(for: componentSnapshots)
         return (
@@ -2834,6 +2844,14 @@ final class FernletStore {
 
     func removeBottle() {
         diary.removeBottle()
+    }
+
+    /// Commits the transactional Water sheet's drafted count for today in one write (2026-08-21
+    /// redesign, artboard 2c). Clamped 0…30 at the diary boundary; rides the same
+    /// `mutateDay`/save-coordinator path as `addBottle`, so the widget mirror and milestone
+    /// catch-up follow from the flush exactly as per-tap writes did.
+    func setTodayBottleCount(_ count: Int) {
+        diary.setBottleCount(count, date: todayKey)
     }
 
     func toggleHygiene(_ item: HygieneItem) {

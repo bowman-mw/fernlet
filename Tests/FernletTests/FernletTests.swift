@@ -466,31 +466,6 @@ struct FernletTests {
         }
     }
 
-    @Test func quickExerciseSheetCreatesStrengthMode() {
-        let exercise = ExerciseTarget(
-            name: "Bench press",
-            primaryMuscles: [.chest],
-            secondaryMuscles: [.triceps, .frontDelts],
-            equipment: .barbell,
-            movementPattern: .push
-        )
-        let entry = WorkoutExerciseEntry(
-            exercise: exercise,
-            sets: "3",
-            reps: "8",
-            weight: "95 lb",
-            speed: "",
-            incline: "",
-            details: ""
-        )
-
-        let workout = QuickExerciseWorkoutFactory.workout(from: entry, rpe: 7, intensity: .moderate)
-
-        #expect(workout.mode == .strengthTraining)
-        #expect(!workout.muscleGroups.isEmpty)
-        #expect(workout.muscleGroups == [.chest, .triceps, .frontDelts])
-    }
-
     @Test func journalMonthModelUsesActualMonthLengthAndToday() throws {
         let calendar = Calendar(identifier: .gregorian)
         let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 17)))

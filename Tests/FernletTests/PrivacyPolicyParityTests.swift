@@ -58,7 +58,7 @@ struct PrivacyPolicyParityTests {
         "Docs/Verifiability.md",
         "Manual plan exchange",
         "signed record of that report",
-        "Deliver hearts when apart",
+        "Deliver hearts later",
         "cervical mucus quality",
         "includes your journal entries"
     ]

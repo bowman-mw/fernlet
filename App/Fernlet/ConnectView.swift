@@ -245,6 +245,7 @@ struct FriendsView: View {
                     }
                 }
                 .padding(20)
+                .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)

@@ -280,11 +280,16 @@ struct FernletApp: App {
     }
 
     private var privacyDataTestContent: some View {
+        // The environments wrap the NavigationStack, not its root view: pushed destinations and
+        // presented sheets are hosted by the stack's own chrome, which on iOS 26 evaluates outside
+        // the root view's injections — with them inside, pushing Health access fatals with
+        // "No Observable object of type StoragePreferencesStore found". Production is unaffected
+        // (ContentView injects above the Settings stack); only this standalone harness needed it.
         NavigationStack {
             PrivacyDataSettingsView()
-                .environment(lockService)
-                .environment(storagePreferencesStore)
         }
+        .environment(lockService)
+        .environment(storagePreferencesStore)
     }
 
     /// The post-load surface: onboarding until it completes, then ``ContentView``. Also watches

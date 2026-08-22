@@ -68,9 +68,16 @@ private struct SealedBackupAttention: Identifiable {
     var id: SealedBackupPayloadType { payload }
 }
 
-/// The Privacy & Data screen: iCloud sync and deletion, sealed encrypted backups, Health
-/// integration, iOS-backup inclusion, data export, trainer sharing, and the "delete everything"
-/// funnel.
+/// The Privacy & Data screen (regrouped 2026-08-21, artboard 5f — SETT-11, XCUT-21): photo
+/// protection first (a protective, moss-outlined card — the shape for "this is careful", not
+/// "this destroys"), then the Health-access row into ``HealthAccessSettingsView``, the backups
+/// (iCloud sync + sealed encrypted backups + iOS-backup inclusion), data export, and — at the
+/// bottom, under their own label — the only two terracotta things on the page: Delete iCloud data
+/// and Delete everything.
+///
+/// The duplicate Health master + seven capability toggles this page used to carry moved onto the
+/// one Health surface (SETT-27); this page keeps a single counted row. Delete everything presents
+/// the typed-gate ``DeleteEverythingSheet`` (artboard 5e) instead of the old system alert.
 ///
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.privacyData`. Access is layered: with no app
 /// lock configured the screen shows a setup interstitial (plus — deliberately — the delete card,
@@ -97,6 +104,9 @@ private struct SealedBackupAttention: Identifiable {
 struct PrivacyDataSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
+    /// Drives the 5f·AX3 degradation: the lock-photos button's label shortens at accessibility
+    /// Dynamic Type sizes while keeping its moss outline and lock glyph.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var hasFreshVerification = false
     @State private var isVerifying = false
@@ -150,6 +160,8 @@ struct PrivacyDataSettingsView: View {
     @State private var cloudCountsUnavailable = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
+    /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
+    @State private var showDeleteEverything = false
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
     private let store: FernletStore?
@@ -173,6 +185,26 @@ struct PrivacyDataSettingsView: View {
             }
             .sheet(item: $exportPayload) { payload in
                 ActivityShareView(items: [payload.url]) { purgeExportsAfterShare() }
+            }
+            // The typed-gate confirm (artboard 5e), shared with the hub's Danger-zone entry point.
+            // Nothing mutates until the sheet's armed confirm calls `runWipe`.
+            .sheet(isPresented: $showDeleteEverything) {
+                DeleteEverythingSheet(
+                    offer: deleteFlow.healthSampleOffer(
+                        masterEnabled: storagePreferencesStore.preferences.healthKitMasterEnabled,
+                        everRequestedWritableCapability: nil
+                    ),
+                    hasICloudDayCopy: storagePreferencesStore.preferences.hasICloudDayCopy,
+                    hasSealedBackup: storagePreferencesStore.preferences.hasSealedBackup
+                ) { includeHealth in
+                    guard let store else { return }
+                    deleteFlow.runWipe(store: store, includingHealthSamples: includeHealth) {
+                        // The wipe has just swept the exported file off disk; drop the view's
+                        // reference too, so re-presenting the share sheet can't hand out a
+                        // now-deleted plaintext URL.
+                        exportPayload = nil
+                    }
+                }
             }
             .task { await onFirstAppear() }
     }
@@ -397,20 +429,78 @@ struct PrivacyDataSettingsView: View {
         .accessibilityIdentifier("privacy.lock.noLockDeleteCard")
     }
 
+    /// 5f order: protection first, deletion last. The two terracotta controls live only in the
+    /// Delete group at the bottom, so the two reds on this page are the two deletes.
     private var privacyControls: some View {
         VStack(alignment: .leading, spacing: 16) {
+            photoProtectionCard
+            healthAccessRow
             iCloudCard
             multiDeviceWarningBanner
             sealedBackupStatusBanner
-            healthKitCard
             localBackupCard
             if store != nil { exportDataCard }
-            lockDataCard
+            deleteSection
 
             // Anything not claimed by a card still gets said.
             operationErrorLine(.general)
         }
+        // `.contain` makes the stack its own addressable container element: the gate tests keep
+        // their "privacy.controls" marker AND the leaf controls keep their own identifiers.
+        // A bare identifier on the stack stamps every contained element instead (the documented
+        // container-id-overrides-children gotcha), which silently renamed privacy.health.access
+        // and friends to "privacy.controls".
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("privacy.controls")
+    }
+
+    /// The single Health row this page keeps (SETT-27): the master switch and the per-capability
+    /// cards live on ``HealthAccessSettingsView``, and the count here is derived from the same
+    /// helper that page uses, so the two can never disagree.
+    ///
+    /// A view-destination link, not a value link: this screen is also mounted standalone by the
+    /// UI-test harness (no `SettingsRoute` destination in that stack), where a value link would be
+    /// silently dead.
+    private var healthAccessRow: some View {
+        NavigationLink {
+            HealthAccessSettingsView(store: store)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "heart.text.square")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .frame(width: 28)
+                Text("Health access")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Spacer()
+                Text(verbatim: healthAccessCountLabel)
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate.opacity(0.5))
+            }
+            .frame(minHeight: 44)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("privacy.health.access")
+    }
+
+    /// "N of M" over the offered capability cards, or the off state.
+    private var healthAccessCountLabel: String {
+        let preferences = storagePreferencesStore.preferences
+        guard preferences.healthKitMasterEnabled else {
+            return String(localized: "Off", comment: "Health-access count when the master switch is off")
+        }
+        let counts = HealthAccessSettingsView.sharedKindCounts(
+            preferences: preferences,
+            visible: store?.visibleHealthCapabilities ?? HealthCapability.allCases
+        )
+        return String(localized: "\(counts.shared) of \(counts.total)", comment: "How many Health kinds are shared")
     }
 
     /// Which control an ``operationError`` came from, so it renders next to that control.
@@ -491,9 +581,41 @@ struct PrivacyDataSettingsView: View {
         let url: URL
     }
 
+    /// The photo-protection card (SETT-11): a protective one-way action with its own card, a lock
+    /// glyph and a MOSS OUTLINE — the shape Fernlet uses for "this is careful", never terracotta
+    /// (this card destroys nothing). Its explanation and one-way footnote sit inside the card, so
+    /// the paragraph is no longer a stray target below an unrelated button. The lock ceremony —
+    /// ``DestructiveConfirmation`` plus consent recording, including the deferred-keychain path —
+    /// is unchanged.
+    @ViewBuilder
+    private var photoProtectionCard: some View {
+        if store != nil {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.shield")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                    SectionLabel("Photo protection")
+                }
+                Text("Photos are sealed on this device. Locking them means a future iCloud backup can never carry them off it.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                ownPhotoDeviceBindingRow
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.moss.opacity(0.45), lineWidth: 1.5)
+            )
+        }
+    }
+
     private var iCloudCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("iCloud")
+            SectionLabel("Backups")
             Toggle(isOn: iCloudBinding) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Sync to iCloud")
@@ -507,8 +629,6 @@ struct PrivacyDataSettingsView: View {
             }
             .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.icloud.toggle")
-
-            deleteCloudDataControl
 
             Toggle("Sealed backup for sensitive notes", isOn: sealedSensitiveNotesBinding)
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
@@ -557,8 +677,6 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            ownPhotoDeviceBindingRow
-
             // Beneath the switches themselves, not at the far bottom of the page.
             operationErrorLine(.iCloud)
         }
@@ -569,9 +687,10 @@ struct PrivacyDataSettingsView: View {
 
     /// The delete-the-iCloud-copy control, sized to what is actually up there.
     ///
-    /// Full-width terracotta while iCloud holds (or may hold) Fernlet records; a quiet terracotta
-    /// text link once the account is known to be empty — the loudest control on the card used to be
-    /// an offer to delete nothing, directly under "No Fernlet iCloud records were found".
+    /// A full-width destructive card (``DestructiveCardButtonStyle``) while iCloud holds (or may
+    /// hold) Fernlet records; a quiet terracotta text link once the account is known to be empty —
+    /// the loudest control on the card used to be an offer to delete nothing, directly under
+    /// "No Fernlet iCloud records were found".
     @ViewBuilder
     private var deleteCloudDataControl: some View {
         if showsProminentCloudDelete {
@@ -579,13 +698,8 @@ struct PrivacyDataSettingsView: View {
                 prepareDisableICloudFlow(deleteOnly: true)
             } label: {
                 Label("Delete iCloud data", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onTerracotta)
-            .padding(.vertical, 11)
-            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .buttonStyle(DestructiveCardButtonStyle())
             .accessibilityIdentifier("privacy.icloud.delete")
         } else {
             Button(role: .destructive) {
@@ -629,8 +743,8 @@ struct PrivacyDataSettingsView: View {
                 Text("These photos are locked to this device: their key never leaves it, so a copy of "
                     + "your device backup can't open them. They won't restore onto a new phone "
                     + (storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
-                        ? "from a device backup — the encrypted photo backup above is how they come back."
-                        : "at all. Turn on the encrypted photo backup above if you want them to survive a phone swap."))
+                        ? "from a device backup — the encrypted photo backup under Backups is how they come back."
+                        : "at all. Turn on the encrypted photo backup under Backups if you want them to survive a phone swap."))
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -643,17 +757,25 @@ struct PrivacyDataSettingsView: View {
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.ownPhotos.deviceBindingPreparing")
             } else {
-                Button(role: .destructive) {
+                // A protective moss-outline button, deliberately off terracotta (SETT-11): the
+                // action is careful and one-way, but it destroys nothing — terracotta on this
+                // page now means exactly the two deletes at the bottom. The confirm alert's solid
+                // terracotta confirm stays, as the destructive token allows inside alerts.
+                Button {
                     presentOwnPhotoDeviceBindingConfirmation()
                 } label: {
-                    Label("Lock photos to this device", systemImage: "lock.iphone")
+                    ownPhotoLockButtonLabel
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.onTerracotta)
+                .foregroundStyle(Color.moss)
                 .padding(.vertical, 11)
-                .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.moss, lineWidth: 1.5)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
 
                 Text(ownPhotoDeviceBindingExplanation)
@@ -673,6 +795,18 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The lock button's label: the full sentence normally, shortened to "Lock photos" at
+    /// accessibility Dynamic Type sizes (5f·AX3) — the lock glyph stays at every size, and the
+    /// moss outline lives on the button itself, so both survive the shortening.
+    @ViewBuilder
+    private var ownPhotoLockButtonLabel: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Label("Lock photos", systemImage: "lock.iphone")
+        } else {
+            Label("Lock photos to this device", systemImage: "lock.iphone")
+        }
+    }
+
     /// The trade, stated before the tap — and it differs by exactly one fact: whether the encrypted
     /// photo backup is already covering the phone-swap case.
     private var ownPhotoDeviceBindingExplanation: String {
@@ -682,8 +816,8 @@ struct PrivacyDataSettingsView: View {
                 + "restores them onto a new phone."
         }
         return "Locks your meal, recipe and progress photos to a key that never leaves this device, so a "
-            + "copy of your device backup can't open them. Because the encrypted photo backup above is "
-            + "off, these photos then won't come back on a new or erased phone. This can't be undone."
+            + "copy of your device backup can't open them. Because the encrypted photo backup (under "
+            + "Backups) is off, these photos then won't come back on a new or erased phone. This can't be undone."
     }
 
     private func presentOwnPhotoDeviceBindingConfirmation() {
@@ -1062,52 +1196,6 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    private var healthKitCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("HealthKit")
-            Toggle(isOn: healthKitMasterBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Health integration")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("Turns Fernlet's Health access on or off. Disabling clears locally cached Health data.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-            }
-            .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-            .accessibilityIdentifier("privacy.health.master")
-
-            VStack(spacing: 8) {
-                ForEach(HealthCapability.allCases) { capability in
-                    Toggle(capability.title, isOn: capabilityBinding(capability))
-                        .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-                        .disabled(!storagePreferencesStore.preferences.healthKitMasterEnabled)
-                        .accessibilityIdentifier("privacy.health.capability.\(capability.rawValue)")
-                }
-            }
-
-            Button {
-                Task { await makeHealthKitService().openHealthPrivacySettings() }
-            } label: {
-                Label("Open Health Privacy Settings", systemImage: "arrow.up.forward.app")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onMoss)
-            .padding(.vertical, 11)
-            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
-            .accessibilityIdentifier("privacy.health.openSettings")
-
-            operationErrorLine(.health)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
     private var localBackupCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Local backup")
@@ -1129,17 +1217,19 @@ struct PrivacyDataSettingsView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    /// The delete-everything card. Headed for what the button does — it used to sit under an "App
-    /// lock data" header whose paragraph about the Fernlet passcode described neither the button nor
-    /// its scope (that paragraph now lives on the App lock page, where it is about something).
-    private var lockDataCard: some View {
+    /// The Delete group at the BOTTOM of the page (5f): the only two terracotta things on the
+    /// page, under their own label — Delete iCloud data (sized to what is actually up there) and
+    /// Delete everything. Nothing else on the screen is red-adjacent, so the two reds are the two
+    /// deletes.
+    private var deleteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Delete your data")
-            Text("Erase everything Fernlet stores on this phone and in your iCloud.")
+            SectionLabel("Delete")
+            Text("Erase Fernlet's iCloud records, or everything Fernlet stores on this phone and in your iCloud.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
+            deleteCloudDataControl
             deleteEverythingButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1158,31 +1248,13 @@ struct PrivacyDataSettingsView: View {
     /// button that silently does nothing would be worse than an absent one.
     @ViewBuilder
     private var deleteEverythingButton: some View {
-        if let store {
+        if store != nil {
             Button(role: .destructive) {
-                pendingDestructiveAction = deleteFlow.makeConfirmation(
-                    preferences: storagePreferencesStore.preferences,
-                    store: store,
-                    onWipeFinished: {
-                        // The wipe has just swept the exported file off disk; drop the view's reference to
-                        // it too, so re-presenting the share sheet can't hand a now-deleted plaintext URL
-                        // to UIActivityViewController. `.sheet(item:)` already nils this on dismiss, so in
-                        // practice it is nil here — this is belt-and-braces against a retained stale URL.
-                        exportPayload = nil
-                    }
-                )
+                showDeleteEverything = true
             } label: {
                 Label("Delete everything", systemImage: "trash.fill")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(deleteFlow.isDeleting ? Color.bark : Color.onTerracotta)
-            .padding(.vertical, 11)
-            .background(
-                Color.terracotta.opacity(deleteFlow.isDeleting ? 0.55 : 1),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
+            .buttonStyle(DestructiveCardButtonStyle())
             .disabled(deleteFlow.isDeleting)
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
         }
@@ -1272,8 +1344,11 @@ struct PrivacyDataSettingsView: View {
                     .padding(14)
                     .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
 
-                SheetField("Type DELETE to confirm") {
-                    TextField("DELETE", text: $deleteConfirmationText)
+                // The confirm word is a MATCHING INPUT under the localization wall: the prompt
+                // inserts the same localized word `DeleteConfirmationWord.matches` compares
+                // against, so the two can never disagree across languages.
+                SheetField("Type \(DeleteConfirmationWord.localizedWord) to confirm") {
+                    TextField(DeleteConfirmationWord.localizedWord, text: $deleteConfirmationText)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.characters)
                         .sheetTextInput()
@@ -1286,7 +1361,9 @@ struct PrivacyDataSettingsView: View {
 
     /// The two ways out: keep the iCloud copy, or delete it (armed only by the typed DELETE).
     private var disableSheetActions: some View {
-        let isArmed = deleteConfirmationText.uppercased() == "DELETE"
+        // Localized, fold-compared arm check — never a hardcoded English literal (the wall's
+        // matching-input rule; the service still receives its frozen token below).
+        let isArmed = DeleteConfirmationWord.matches(deleteConfirmationText)
         return VStack(spacing: 12) {
             // "Stop syncing, keep iCloud data" is an answer to "do you want to turn sync off?".
             // Entered from the Delete button — with sync already off — it answers nothing.
@@ -1633,45 +1710,6 @@ struct PrivacyDataSettingsView: View {
         )
     }
 
-    private var healthKitMasterBinding: Binding<Bool> {
-        Binding(
-            get: { storagePreferencesStore.preferences.healthKitMasterEnabled },
-            set: { newValue in
-                if newValue {
-                    // Enabling is constructive — proceed directly.
-                    Task { await setHealthKitMasterEnabled(true) }
-                } else {
-                    // Disabling fail-closed PURGES the cached HealthKit-derived clinical values from this
-                    // device (the data itself stays in Apple Health). Warn before committing (WS-5).
-                    pendingDestructiveAction = DestructiveConfirmation(
-                        title: "Turn off Health integration?",
-                        message: "Turning this off removes the activity, cycle, and other Health data "
-                            + "Fernlet has cached on this device. Your data stays in Apple Health. Turn off?",
-                        confirmLabel: "Turn off",
-                        auditEvent: "privacy.healthKit.masterDisableConfirmed"
-                    ) {
-                        Task { await setHealthKitMasterEnabled(false) }
-                    }
-                }
-            }
-        )
-    }
-
-    private func capabilityBinding(_ capability: HealthCapability) -> Binding<Bool> {
-        Binding(
-            get: { storagePreferencesStore.preferences.healthKitCapabilityEnabled[capability.rawValue] ?? false },
-            set: { newValue in
-                FernletAuditLog.log(
-                    newValue ? "privacy.healthKit.capabilityEnabled" : "privacy.healthKit.capabilityDisabled",
-                    context: ["capability": capability.rawValue]
-                )
-                storagePreferencesStore.update { preferences in
-                    preferences.healthKitCapabilityEnabled[capability.rawValue] = newValue
-                }
-            }
-        )
-    }
-
     private func seedUITestPreferencesIfNeeded() {
         #if DEBUG
         guard !didSeedUITestPreferences,
@@ -1751,7 +1789,8 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func disableICloudSyncAndDeleteCloudData() {
-        guard deleteConfirmationText.uppercased() == "DELETE" else { return }
+        // Same localized comparison as the arm check (defense in depth on the same gate).
+        guard DeleteConfirmationWord.matches(deleteConfirmationText) else { return }
         FernletAuditLog.log("privacy.icloud.deletionInitiated")
         isUpdatingStorage = true
         setOperationError(nil, scope: .iCloud)
@@ -1770,8 +1809,11 @@ struct PrivacyDataSettingsView: View {
                 storagePreferencesStore.update { $0 = updated }
                 FernletAuditLog.log("privacy.icloud.syncDisabled")
 
+                // The service validates the FROZEN English token (a wire/service contract, mirrored
+                // by ContentView's programmatic pass) — never the user's localized typed text. The
+                // localized gate above is what authorizes handing it over.
                 _ = try await cloudDataService.deleteAllCloudKitData(
-                    confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
+                    confirmation: DeletionConfirmation(userTypedConfirmation: DeleteConfirmationWord.serviceToken)
                 )
                 // The cloud copy is now gone, so clear the "kept a copy" marker — leaving it set would make
                 // the delete dialog keep promising to remove an iCloud copy that no longer exists.
@@ -1840,34 +1882,6 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    private func setHealthKitMasterEnabled(_ enabled: Bool) async {
-        setOperationError(nil, scope: .health)
-        FernletAuditLog.log(enabled ? "privacy.healthKit.masterEnabled" : "privacy.healthKit.masterDisabled")
-        do {
-            let service = makeHealthKitService()
-            if enabled {
-                try await service.enableIntegration()
-                storagePreferencesStore.update { $0.healthKitMasterEnabled = true }
-            } else {
-                try await service.disableIntegration()
-                storagePreferencesStore.update { preferences in
-                    preferences.healthKitMasterEnabled = false
-                    preferences.healthKitCapabilityEnabled = StoragePreferences.defaultHealthKitCapabilityEnabled
-                }
-            }
-        } catch {
-            setOperationError(error.localizedDescription, scope: .health)
-        }
-    }
-
-    private func makeHealthKitService() -> any PrivacyHealthKitServicing {
-        #if DEBUG
-        if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
-            return MockPrivacyHealthKitService(preferencesStore: storagePreferencesStore)
-        }
-        #endif
-        return HealthKitService(preferencesStore: storagePreferencesStore)
-    }
 }
 
 /// Chooses the cloud-data and persistence-reload implementations for this launch.
@@ -1954,8 +1968,10 @@ private struct MockPrivacyPersistenceReloader: PrivacyPersistenceReloading {
 ///
 /// Used under the UI-test privacy-services environment so the master toggle's on/off flows (and the
 /// capability reset on disable) can be exercised on simulators without Health authorization.
+/// Internal (not private) because ``HealthAccessSettingsView`` — where the master switch lives
+/// since SETT-27 — selects it through the same environment seam.
 @MainActor
-private struct MockPrivacyHealthKitService: PrivacyHealthKitServicing {
+struct MockPrivacyHealthKitService: PrivacyHealthKitServicing {
     let preferencesStore: StoragePreferencesStore
 
     func disableIntegration() async throws {

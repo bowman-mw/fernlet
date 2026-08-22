@@ -30,6 +30,24 @@ final class MoveHeaderActionsUITests: XCTestCase {
                        "Suggest moved into the plan sheet; it must not still be in the header")
     }
 
+    /// FLOW-03: the Move root's always-rendered "Today's workout" card offers Suggest in its empty
+    /// state, and tapping it opens the suggestion flow directly — one sheet, straight from the
+    /// root. Asserted (never skipped) like everything else here: a fresh launch has no approved
+    /// plan, so the empty state MUST be showing.
+    @MainActor
+    func testMoveRootCardOffersSuggestWhenNothingPlanned() {
+        let app = openMove()
+
+        let suggest = element("workout.suggestToday", in: app)
+        XCTAssertTrue(suggest.waitForExistence(timeout: 8),
+                      "the Today's-workout card must render its empty-state Suggest primary on a fresh launch")
+        XCTAssertTrue(suggest.isHittable, "the root Suggest entry is not tappable")
+
+        suggest.tap()
+        XCTAssertTrue(app.staticTexts["Suggest workout"].waitForExistence(timeout: 10),
+                      "tapping the root Suggest entry did not present the suggestion flow")
+    }
+
     /// Suggest is reachable from the plan sheet for TODAY — the other half of the move.
     @MainActor
     func testPlanSheetForTodayOffersSuggest() {

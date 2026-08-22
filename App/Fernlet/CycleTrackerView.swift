@@ -71,6 +71,7 @@ struct CycleTrackerView: View {
         NavigationStack {
             ScrollView {
                 pageContent
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)

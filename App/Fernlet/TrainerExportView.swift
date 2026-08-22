@@ -9,8 +9,9 @@ import UniformTypeIdentifiers
 
 /// The Trainer / Nutritionist export screen (Phase 7), and — when the manual coach exchange is switched
 /// on — the two-way coach handoff. The user prepares a curated summary to hand to a trainer or
-/// nutritionist; optional categories are configured in Settings > Move. Nothing leaves the device until
-/// the user shares it.
+/// nutritionist; the optional categories and the coach-exchange gate are configured right here, in
+/// the Sharing settings card (relocated from Settings › Goal & nutrition in the 2026-08-21
+/// restructure, SETT-14). Nothing leaves the device until the user shares it.
 ///
 /// A coach is NOT a friend, so this deliberately does NOT ride the friend mesh. In-person sharing
 /// over the dedicated `fernlet-coach` trainer channel (to a coach running the separate coaching app)
@@ -110,7 +111,9 @@ struct TrainerExportView: View {
         )
     }
 
-    /// The scrolling body of the screen: intro, prepare/share, and the coach-exchange cards.
+    /// The scrolling body of the screen: intro, prepare/share, the coach-exchange cards, and the
+    /// sharing settings that used to hide under Settings › Goal & nutrition (SETT-14: the toggles
+    /// now live on the surface they govern).
     private var sections: some View {
         VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
             intro
@@ -119,6 +122,7 @@ struct TrainerExportView: View {
                 aiCoachCard
                 importCard
             }
+            sharingSettingsCard
             comingSoonNote
         }
         .padding(20)
@@ -359,7 +363,9 @@ struct TrainerExportView: View {
                     ForEach(includedLines, id: \.self) { line in
                         bullet(line)
                     }
-                    Text("Change what's included in Settings → Move.")
+                    // The include toggles moved onto THIS screen (Sharing settings, below) in the
+                    // 2026-08-21 restructure — no more pointing at a Settings page.
+                    Text("Change what's included under Sharing settings, below.")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
@@ -448,6 +454,67 @@ struct TrainerExportView: View {
         }
     }
 
+    /// The relocated Coach settings (2026-08-21, SETT-14): the manual-plan-exchange gate, its two
+    /// honesty disclosures, and the five optional trainer-summary categories — hosted on the
+    /// surface they govern instead of under a nutrition heading in Settings. Every toggle writes
+    /// through ``settingsBinding(_:)`` so the change is durable the moment it is made.
+    private var sharingSettingsCard: some View {
+        card {
+            cardTitle("Sharing settings")
+            Toggle("Manual plan exchange", isOn: settingsBinding(\.coachExchangeEnabled))
+                .font(.fernlet(.label))
+                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+                .accessibilityIdentifier("trainer.coachExchangeToggle")
+            Text("Adds two things above: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fixedSize(horizontal: false, vertical: true)
+            // Said plainly and unprompted. A pasted plan carries no signature, so the review
+            // screen is the only thing standing between it and the user's week — and the copy
+            // step puts plaintext health data into another app's hands by design.
+            Text("Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider().overlay(Color.bark.opacity(0.08))
+            Text("Also include in trainer summaries")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+            includeToggles
+            Text("These choices apply to every summary this screen prepares.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The five optional summary categories.
+    @ViewBuilder
+    private var includeToggles: some View {
+        Group {
+            Toggle("Your goal", isOn: settingsBinding(\.trainerExportIncludesGoal))
+            Toggle("Hydration", isOn: settingsBinding(\.trainerExportIncludesHydration))
+            Toggle("Sleep summaries", isOn: settingsBinding(\.trainerExportIncludesSleep))
+            Toggle("Days you were unwell", isOn: settingsBinding(\.trainerExportIncludesSickness))
+            Toggle("Wellbeing score", isOn: settingsBinding(\.trainerExportIncludesWellbeing))
+        }
+        .font(.fernlet(.label))
+        .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+    }
+
+    /// A binding onto one settings field that also **schedules the save** — `FernletSettings` has
+    /// no `didSet`, so a bare keypath binding would mutate the blob and wait for some other change
+    /// to persist it (the SettingsSheet precedent).
+    private func settingsBinding<Value>(_ keyPath: WritableKeyPath<FernletSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { store.settings[keyPath: keyPath] },
+            set: { newValue in
+                store.settings[keyPath: keyPath] = newValue
+                store.scheduleSnapshotSave()
+            }
+        )
+    }
+
     private var comingSoonNote: some View {
         Text("Sharing in person with a coach who uses Fernlet Coach is coming soon.")
             .font(.fernlet(.labelSmall))
@@ -466,7 +533,10 @@ struct TrainerExportView: View {
             .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 
-    private func cardTitle(_ text: String) -> some View {
+    /// A card's heading line. Takes `LocalizedStringKey` so every literal title localizes and
+    /// harvests into the string catalog automatically — a `String` parameter would silently render
+    /// verbatim English forever (the localization wall's call-site opt-out trap).
+    private func cardTitle(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
     }
 

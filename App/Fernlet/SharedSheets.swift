@@ -3,62 +3,201 @@ import FernletDomainModel
 import FernletScoring
 import FernletUI
 
-/// Quick-log sheet for hydration: today's bottle count with add/remove buttons and a bottle-row
-/// visual against the target.
+/// Quick-log sheet for hydration: a transactional bottle-count editor (2026-08-21 redesign,
+/// artboards 2c/2d/2c·AX5).
 ///
-/// Presented from the main view's quick-log flow. Every tap mutates ``FernletStore`` immediately
-/// (`addBottle`/`removeBottle`) — the Done bar only dismisses, so there is no unsaved draft to lose.
-/// Bottle size and daily target come from settings and are edited in ``SettingsSheet``, not here.
+/// The sheet edits a **draft**: the stepper changes only local state, Done (top-right) commits,
+/// and Cancel reverts — an accidental +3 followed by Cancel now costs nothing, where the old
+/// live-writing sheet made it unrecoverable. Done commits the draft's **delta** against the seeded
+/// baseline onto the LIVE committed count via ``FernletStore/setTodayBottleCount(_:)`` (floored at
+/// 0 here, clamped 0…30 at the store boundary), so a bottle that arrived while the sheet was open —
+/// the widget's `+1` drained on foreground, another device's sync, or Home's live-writing `+1`
+/// overlay — is preserved rather than overwritten by a stale absolute, and a sheet held across
+/// midnight applies only the delta to the new day. Swipe-dismiss is blocked while the draft differs
+/// from that seeded baseline (never the live count, so an external bump cannot re-block the swipe),
+/// leaving the two explicit exits as the only ones for a real edit. Bottle size and daily target
+/// come from settings and are edited in ``SettingsSheet``, not here.
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var store: FernletStore
+    /// Nil until seeded on appear so a re-render before `onAppear` shows the committed count.
+    @State private var draftCount: Int?
+    /// The committed count captured when the draft was seeded — the baseline the commit delta and
+    /// the dirty check are both measured against, so an external write while the sheet is open is
+    /// neither erased by Done nor treated as the user's own edit.
+    @State private var seededCount: Int?
+
+    private var committed: Int { store.day.bottleCount }
+    private var draft: Int { draftCount ?? committed }
+    /// The seeded baseline; equal to `draft` until `onAppear` seeds, so the sheet opens clean.
+    private var seeded: Int { seededCount ?? draft }
+    private var target: Int { store.settings.hydrationTarget }
+    private var totalOz: Int { draft * store.settings.bottleOz }
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetHeader(
+                title: "Water",
+                subtitle: "\(store.settings.bottleOz) oz each · target \(target) bottles",
+                onCancel: { dismiss() },
+                onDone: {
+                    // The DELTA against the seeded baseline, applied to the live count — never
+                    // the drafted absolute, which goes stale the moment an external write lands.
+                    store.setTodayBottleCount(max(0, committed + (draft - seeded)))
+                    dismiss()
+                }
+            )
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text("Water")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
-                    VStack(spacing: 4) {
-                        Text("\(store.day.bottleCount)")
-                            .font(.fernlet(.display))
-                            .foregroundStyle(Color.bark)
-                        Text("\(store.day.bottleCount == 1 ? "bottle" : "bottles") - \(store.day.bottleCount * store.settings.bottleOz) oz total")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                        Text("\(store.settings.bottleOz) oz each · target \(store.settings.hydrationTarget)")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    HStack(spacing: 8) {
-                        ForEach(0..<max(4, min(max(store.settings.hydrationTarget, store.day.bottleCount), 12)), id: \.self) { index in
-                            Image(systemName: "waterbottle")
-                                .font(.title2)
-                                .foregroundStyle(index < store.day.bottleCount ? Color.slate : Color.slate.opacity(0.25))
+                VStack(spacing: 18) {
+                    heroCount
+                    // 2c·AX5: at AX5 everything between the hero and the stepper gives way — no
+                    // glyphs, no oz total, no target line; the count states itself once. The
+                    // .isAccessibilitySize branch below is the milder AX3 tier (2d).
+                    if dynamicTypeSize < .accessibility5 {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            accessibilityCountLines
+                        } else {
+                            bottleRow
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                    HStack(spacing: 10) {
-                        Button("Remove") { store.removeBottle() }
-                            .buttonStyle(ChipButtonStyle(selected: false))
-                            .disabled(store.day.bottleCount == 0)
-                        Button("Add a bottle") { store.addBottle() }
-                            .buttonStyle(ChipButtonStyle(selected: true))
+                    stepper
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        totalLine
                     }
-
                 }
+                .frame(maxWidth: .infinity)
                 .padding(20)
                 .padding(.bottom, 10)
             }
-
-            SheetSaveBar(label: "Done") { dismiss() }
         }
         .background(Color.parchment)
+        // Keyed to the seeded baseline, not the live count: an external +1 must not re-block the
+        // swipe (the draft it would "discard" is not an edit of the user's).
+        .interactiveDismissDisabled(draft != seeded)
+        .onAppear {
+            if draftCount == nil {
+                draftCount = committed
+                seededCount = committed
+            }
+        }
+    }
+
+    /// The hero numeral IS the stepper's value, so the count is stated exactly once (2c).
+    private var heroCount: some View {
+        VStack(spacing: 2) {
+            Text("\(draft)")
+                .font(.fernletTimer(size: 56))
+                .foregroundStyle(Color.bark)
+                .contentTransition(.numericText())
+            Text(draft == 1 ? "bottle" : "bottles")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        }
+        .accessibilityElement(children: .ignore)
+        // Explicit `Text` so both branches localize — a bare ternary of string literals can land
+        // on the non-localizing StringProtocol overload.
+        .accessibilityLabel(draft == 1 ? Text("1 bottle") : Text("\(draft) bottles"))
+    }
+
+    /// Bottles as a row of glyphs with a goldenrod tick after the target position — the target is
+    /// a marker, never a second number masquerading as intake (2c).
+    private var bottleRow: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<glyphCount, id: \.self) { index in
+                Image(systemName: "waterbottle")
+                    .font(.title2)
+                    .foregroundStyle(index < draft ? Color.slate : Color.slate.opacity(0.25))
+                if index == target - 1 && target < glyphCount {
+                    Capsule()
+                        .fill(Color.goldenrod)
+                        .frame(width: 3, height: 24)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    /// At accessibility sizes up to AX4 the glyph row gives way to words: the count states itself
+    /// once and the size/target caption merges into one line (2d). At AX5 these lines give way
+    /// too (2c·AX5) — the body never renders this view there.
+    private var accessibilityCountLines: some View {
+        VStack(spacing: 4) {
+            Text(draft == 1 ? "1 bottle · \(totalOz) oz" : "\(draft) bottles · \(totalOz) oz")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            Text(draft >= target
+                 ? "\(store.settings.bottleOz) oz each. Target \(target), met."
+                 : "\(store.settings.bottleOz) oz each. Target \(target).")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    /// Centred stepper directly under the bottle row: plus carries the moss fill because adding is
+    /// what people come here to do; minus is the cream sibling, not a destructive control (2c).
+    private var stepper: some View {
+        HStack(spacing: 22) {
+            stepButton(
+                systemImage: "minus", accessibilityLabel: "Remove a bottle",
+                fill: Color.cream, ink: Color.bark, stroke: 0.12, disabled: draft <= 0
+            ) { draftCount = max(draft - 1, 0) }
+            stepButton(
+                systemImage: "plus", accessibilityLabel: "Add a bottle",
+                fill: Color.mossFill, ink: Color.onMoss, stroke: 0, disabled: draft >= 30
+            ) { draftCount = min(draft + 1, 30) }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// One circular stepper target: 56pt, 64pt at accessibility sizes (2d), 96pt at AX5 — where
+    /// the stepper is nearly the whole sheet, the targets grow rather than shrink (2c·AX5).
+    private func stepButton(
+        systemImage: String,
+        accessibilityLabel: LocalizedStringKey,
+        fill: Color,
+        ink: Color,
+        stroke: Double,
+        disabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        let side: CGFloat
+        if dynamicTypeSize >= .accessibility5 {
+            side = 96
+        } else if dynamicTypeSize.isAccessibilitySize {
+            side = 64
+        } else {
+            side = 56
+        }
+        return Button {
+            withAnimation(FernletMotion.fast) { action() }
+        } label: {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(ink)
+                .frame(width: side, height: side)
+                .background(fill.opacity(disabled ? 0.45 : 1), in: Circle())
+                .overlay(Circle().stroke(Color.bark.opacity(stroke), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .fernletIconButton(accessibilityLabel)
+    }
+
+    /// The one italic total line — "Plenty." only once the target is met (2c).
+    private var totalLine: some View {
+        Text(draft >= target ? "\(totalOz) oz today. Plenty." : "\(totalOz) oz today.")
+            .font(.fernlet(.bubble))
+            .foregroundStyle(Color.slate)
+    }
+
+    /// Enough glyphs to show the target and the count, floored at 4 and capped at 12 (2c keeps the
+    /// row decorative — beyond 12 the words carry the number).
+    private var glyphCount: Int {
+        max(4, min(max(target, draft), 12))
     }
 }
 
@@ -67,7 +206,8 @@ struct WaterSheet: View {
 /// Presented from the main view's quick-log flow. Pre-fills from today's existing sleep entry on
 /// appear (so reopening edits rather than resets) and commits everything in one
 /// `FernletStore.setSleep` call on Save — a swipe-down with unsaved edits raises the shared discard
-/// confirmation rather than throwing the draft away.
+/// confirmation rather than throwing the draft away. Chrome is the 2026-08-21 template: the
+/// draft-guard header carries Cancel and the title; Save commits bottom-right.
 struct SleepSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -91,10 +231,6 @@ struct SleepSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Sleep")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     qualityPicker
 
                     HStack(alignment: .top, spacing: 12) {
@@ -121,7 +257,7 @@ struct SleepSheet: View {
             SheetSaveBar { save() }
         }
         .background(Color.parchment)
-        .fernletDraftGuard(isDirty: draft != original) { dismiss() }
+        .fernletDraftGuard(isDirty: draft != original, title: "Sleep") { dismiss() }
     }
 
     /// The four quality options as one wrapping row of chips, with the chosen option's description
@@ -182,7 +318,7 @@ struct SleepSheet: View {
 /// Presented from the main view's quick-log flow. "Craft" runs `WorkoutPlanner.defaultGoals`
 /// on-device (the copy says so explicitly — health details never leave the phone); only "Accept"
 /// commits, replacing the store's goals wholesale via `FernletStore.replaceGoals`. Dismissing at
-/// either phase changes nothing.
+/// either phase changes nothing. The draft-guard header carries Cancel and the phase title.
 struct GoalsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -196,10 +332,6 @@ struct GoalsSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(proposed.isEmpty ? "Plan goals" : "Review goals")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     if proposed.isEmpty {
                         SheetField("Current level") {
                             FlowLayout(spacing: 8) {
@@ -248,7 +380,10 @@ struct GoalsSheet: View {
             }
         }
         .background(Color.parchment)
-        .fernletDraftGuard(isDirty: isDirty) { dismiss() }
+        .fernletDraftGuard(
+            isDirty: isDirty,
+            title: proposed.isEmpty ? "Plan goals" : "Review goals"
+        ) { dismiss() }
     }
 
     /// Anything typed, picked, or crafted but not yet accepted. A crafted-but-unaccepted set counts:
@@ -265,20 +400,18 @@ struct GoalsSheet: View {
 /// completion row.
 ///
 /// Presented from the main view's quick-log flow. Toggles commit to ``FernletStore`` immediately
-/// (`togglePersonalCareTask`), so Done only dismisses. The task list itself is authored in
-/// ``SettingsSheet``'s personal-care section; this sheet only checks things off.
+/// (`togglePersonalCareTask`), so this is a live-editing sheet under the 2026-08-21 template: Done
+/// sits top-right in the header and is the whole exit — no bottom bar. The task list itself is
+/// authored in ``SettingsSheet``'s personal-care section; this sheet only checks things off.
 struct HygieneSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetHeader(title: "Personal care", onDone: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Personal care")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     // Typed `CareGroup` rather than the raw `groups` strings: the heading now
                     // renders the localized label while the filter still matches the FROZEN
                     // persisted token, which is the whole point of the fork.
@@ -288,30 +421,7 @@ struct HygieneSheet: View {
                             SheetField(verbatim: group.label) {
                                 VStack(spacing: 6) {
                                     ForEach(tasks) { task in
-                                        let isDone = store.isPersonalCareTaskCompleted(task)
-                                        Button { store.togglePersonalCareTask(task) } label: {
-                                            HStack {
-                                                Label(task.displayLabel, systemImage: task.systemImage)
-                                                    .foregroundStyle(Color.bark)
-                                                Spacer()
-                                                if isDone {
-                                                    Image(systemName: "checkmark.circle.fill")
-                                                        .foregroundStyle(Color.moss)
-                                                }
-                                            }
-                                            .padding(14)
-                                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(isDone ? Color.moss.opacity(0.3) : Color.bark.opacity(0.08), lineWidth: 1)
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        // The checkmark glyph was the only "done" cue and it carries
-                                        // no label, so VoiceOver read a finished task identically to
-                                        // an unfinished one.
-                                        .accessibilityValue(isDone ? "completed" : "not done yet")
-                                        .accessibilityAddTraits(isDone ? [.isSelected] : [])
+                                        careTaskRow(task)
                                     }
                                 }
                             }
@@ -321,10 +431,34 @@ struct HygieneSheet: View {
                 .padding(20)
                 .padding(.bottom, 10)
             }
-
-            SheetSaveBar(label: "Done") { dismiss() }
         }
         .background(Color.parchment)
     }
-}
 
+    /// One tap-to-toggle completion row with the checkmark state exposed to VoiceOver.
+    private func careTaskRow(_ task: PersonalCareTask) -> some View {
+        let isDone = store.isPersonalCareTaskCompleted(task)
+        return Button { store.togglePersonalCareTask(task) } label: {
+            HStack {
+                Label(task.displayLabel, systemImage: task.systemImage)
+                    .foregroundStyle(Color.bark)
+                Spacer()
+                if isDone {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.moss)
+                }
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isDone ? Color.moss.opacity(0.3) : Color.bark.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        // The checkmark glyph was the only "done" cue and it carries no label, so VoiceOver read a
+        // finished task identically to an unfinished one.
+        .accessibilityValue(isDone ? "completed" : "not done yet")
+        .accessibilityAddTraits(isDone ? [.isSelected] : [])
+    }
+}

@@ -171,6 +171,54 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// A natural finish that should be logged (as opposed to an abandon).
     var isFinishedNaturally: Bool { phase == .done && completedNaturally }
 
+    /// Sets of the current exercise already done — what the runner's segmented set strip fills.
+    ///
+    /// `currentSet` is 1-based and advances the moment a rest BEGINS, so "completed" is
+    /// `currentSet - 1` in both the working and the resting phase: while working, the current set
+    /// is in progress (not done); while resting, the counter already points at the next set.
+    var setsCompletedForCurrent: Int {
+        max(0, min(currentSet - 1, totalSetsForCurrent))
+    }
+
+    /// Whether the run can jump past the rest of the current exercise to the next one — the
+    /// runner's quiet "Skip to next exercise" secondary. False on the last exercise (there is
+    /// nothing next; finishing early is the End affordance's job) and once the run is done.
+    var canSkipToNextExercise: Bool {
+        (isWorking || isResting) && exerciseIndex < exercises.count - 1
+    }
+
+    /// A rough time-left estimate for the header ("Exercise 1 of 5 · 38 min left"), in seconds.
+    ///
+    /// Heuristic, documented so it can be tuned in one place:
+    /// - every remaining set of a catalog exercise costs `workSecondsPerSet` (default 45s — a
+    ///   typical 8–12-rep working set), plus that exercise's baked `restSeconds` between its own
+    ///   sets (`sets - 1` rests per exercise; an in-flight rest counts as one whole rest);
+    /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs
+    ///   `descriptorSeconds` (default 5 min);
+    /// - the working phase counts the current set as still ahead; the resting phase counts the
+    ///   upcoming set (the counter already advanced when the rest began).
+    ///
+    /// Pure over the value's own fields — no clock — so it stays deterministic and testable.
+    /// Bounded: one pass over `exercises` (capped by the plan-session exercise limit).
+    func estimatedSecondsRemaining(workSecondsPerSet: Int = 45, descriptorSeconds: Int = 300) -> Int {
+        guard !isDone else { return 0 }
+        var total = 0
+        for (index, exercise) in exercises.enumerated() where index >= exerciseIndex {
+            if exercise.sets < 1 {
+                total += descriptorSeconds
+                continue
+            }
+            let setsAhead = index == exerciseIndex
+                ? max(0, exercise.sets - currentSet + 1)
+                : exercise.sets
+            let restsAhead = index == exerciseIndex && isResting
+                ? max(0, setsAhead)             // the in-flight rest, plus one between each pair ahead
+                : max(0, setsAhead - 1)
+            total += setsAhead * workSecondsPerSet + restsAhead * max(0, exercise.restSeconds)
+        }
+        return total
+    }
+
     // MARK: Transitions (pure — mirror the old WorkoutSessionRunner state machine)
 
     /// Mark the current set done. More sets of this exercise → rest; last set of this exercise →

@@ -21,10 +21,12 @@ final class HomeCardsRedesignUITests: XCTestCase {
         let milestones = app.descendants(matching: .any)["home.milestones"].firstMatch
         XCTAssertTrue(scrollUntilHittable(milestones, in: app), "Milestones card not reachable")
         milestones.tap()
-        // MilestonesView pushes; assert its stable screen anchor (a bare navigationBars.firstMatch
-        // check matched ANY nav bar, so it passed without navigating at all).
+        // MilestonesView presents as a large sheet (HOME-13, 2026-08-21 redesign); assert its
+        // stable screen anchor, which survived the push → sheet conversion (a bare
+        // navigationBars.firstMatch check matched ANY nav bar, so it passed without opening
+        // anything at all).
         XCTAssertTrue(app.descendants(matching: .any)["screen.milestones"].firstMatch.waitForExistence(timeout: 5),
-                      "Milestones card did not navigate")
+                      "Milestones card did not present the Milestones sheet")
     }
 
     /// Scrolls the home feed until the element is hittable — both cards sit near the bottom, behind the
