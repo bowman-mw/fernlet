@@ -164,6 +164,13 @@ extension FernletStore {
                 ManualRecipeIngredientInput(name: "Rolled oats", quantity: 1, unit: "cup", protein: 10, carbs: 54, fat: 6),
                 ManualRecipeIngredientInput(name: "Greek yogurt", quantity: 1, unit: "cup", protein: 20, carbs: 8, fat: 4),
                 ManualRecipeIngredientInput(name: "Blueberries", quantity: 0.5, unit: "cup", protein: 1, carbs: 11, fat: 0),
+            ],
+            // Structured steps (with one timed step) so the appearance suites and design-round
+            // screenshots exercise the read-only Steps card and its timer capsule (FOOD-22).
+            steps: [
+                RecipeStep(text: "Stir the oats and yogurt together in a jar."),
+                RecipeStep(text: "Chill overnight.", durationSeconds: 8 * 60 * 60),
+                RecipeStep(text: "Top with blueberries before eating."),
             ]
         )
         addRecipe(

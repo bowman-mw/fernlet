@@ -819,6 +819,14 @@ struct WorkoutSheet: View {
 
     /// The "Log it again" entry card at the top of the sheet (MOVE-08), when a workout of the
     /// current Kind has ever been logged.
+    /// The optional workout-name field — below the fold per artboard 3b, beside the Log-again card.
+    private var workoutNameField: some View {
+        SheetField("Workout") {
+            TextField(namePlaceholder, text: $name)
+                .sheetTextInput()
+        }
+    }
+
     @ViewBuilder private var logAgainCard: some View {
         if let lastLogged {
             LogAgainCard(recent: lastLogged) { prefill(from: lastLogged) }
@@ -994,21 +1002,18 @@ struct WorkoutSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Ordered so the Log-again card, Kind chips, Recent chips and the search all
-                    // sit above the fold at a medium detent (MOVE-08); the category preview reads
-                    // beside the metrics it summarizes, further down.
-                    logAgainCard
-
-                    SheetField("Workout") {
-                        TextField(namePlaceholder, text: $name)
-                            .sheetTextInput()
-                    }
-
+                    // Ordered per artboard 3b, which overrides 1f's drawn stacking where the two
+                    // disagree: Kind, Recent and the search fit inside the medium detent so the
+                    // quick path from the Home tile is never a sheet the user has to drag open
+                    // first; the optional name and the Log-again card live below the fold, where
+                    // they belong. The category preview reads beside the metrics it summarizes.
                     kindField
 
                     if logMode == .strengthTraining {
                         recentExerciseChips
                         strengthSection
+                        logAgainCard
+                        workoutNameField
                     } else {
                         ActivityPickerSection(
                             selectedActivityType: $selectedActivityType,
@@ -1018,6 +1023,8 @@ struct WorkoutSheet: View {
                             effort: $effort,
                             showsEnergyField: store.settings.showCalories
                         )
+                        logAgainCard
+                        workoutNameField
                     }
 
                     if hasCategoryInput {
