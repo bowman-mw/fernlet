@@ -104,6 +104,9 @@ private struct SealedBackupAttention: Identifiable {
 struct PrivacyDataSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
+    /// Drives the 5f·AX3 degradation: the lock-photos button's label shortens at accessibility
+    /// Dynamic Type sizes while keeping its moss outline and lock glyph.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var hasFreshVerification = false
     @State private var isVerifying = false
@@ -442,6 +445,12 @@ struct PrivacyDataSettingsView: View {
             // Anything not claimed by a card still gets said.
             operationErrorLine(.general)
         }
+        // `.contain` makes the stack its own addressable container element: the gate tests keep
+        // their "privacy.controls" marker AND the leaf controls keep their own identifiers.
+        // A bare identifier on the stack stamps every contained element instead (the documented
+        // container-id-overrides-children gotcha), which silently renamed privacy.health.access
+        // and friends to "privacy.controls".
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("privacy.controls")
     }
 
@@ -755,7 +764,7 @@ struct PrivacyDataSettingsView: View {
                 Button {
                     presentOwnPhotoDeviceBindingConfirmation()
                 } label: {
-                    Label("Lock photos to this device", systemImage: "lock.iphone")
+                    ownPhotoLockButtonLabel
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
@@ -783,6 +792,18 @@ struct PrivacyDataSettingsView: View {
                         .accessibilityIdentifier("privacy.ownPhotos.deviceBindingDeferred")
                 }
             }
+        }
+    }
+
+    /// The lock button's label: the full sentence normally, shortened to "Lock photos" at
+    /// accessibility Dynamic Type sizes (5f·AX3) — the lock glyph stays at every size, and the
+    /// moss outline lives on the button itself, so both survive the shortening.
+    @ViewBuilder
+    private var ownPhotoLockButtonLabel: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Label("Lock photos", systemImage: "lock.iphone")
+        } else {
+            Label("Lock photos to this device", systemImage: "lock.iphone")
         }
     }
 

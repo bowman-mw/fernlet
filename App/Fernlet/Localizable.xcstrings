@@ -7,6 +7,16 @@
     " " : {
 
     },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%@ %@ · P%lldg C%lldg F%lldg" : {
       "localizations" : {
         "en" : {
@@ -75,6 +85,9 @@
     "%@ on this device, behind your app lock." : {
 
     },
+    "%@ presets are behind Add." : {
+
+    },
     "%@ sent you some warmth — a friend is thinking of you." : {
 
     },
@@ -104,6 +117,36 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@ %3$@ reference"
+          }
+        }
+      }
+    },
+    "%@ · %lld items" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld items"
+          }
+        }
+      }
+    },
+    "%@ · %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld min"
+          }
+        }
+      }
+    },
+    "%@ · %lld more" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld more"
           }
         }
       }
@@ -336,6 +379,16 @@
     "%lld items" : {
 
     },
+    "%lld items · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld items · %2$@"
+          }
+        }
+      }
+    },
     "%lld logged" : {
 
     },
@@ -479,6 +532,9 @@
 
     },
     "%lld shots left" : {
+
+    },
+    "%lld spaces saved." : {
 
     },
     "%lld tracked" : {
@@ -842,6 +898,9 @@
     "Anthropic, with your own key" : {
 
     },
+    "Any restriction on sharing your designs" : {
+
+    },
     "Any restriction on sharing your own designs." : {
 
     },
@@ -882,6 +941,9 @@
 
     },
     "Areas to work around" : {
+
+    },
+    "Ask an AI for a plan" : {
 
     },
     "Ask for a corrected plan and paste it again." : {
@@ -996,6 +1058,9 @@
 
     },
     "Breathe and ground sessions, written back to Health." : {
+
+    },
+    "Bring a plan back" : {
 
     },
     "Bring your recovery device" : {
@@ -1144,6 +1209,9 @@
     },
     "Clothing shops" : {
 
+    },
+    "Clothing shops with friends" : {
+      "extractionState" : "manual"
     },
     "Cloud records" : {
 
@@ -1479,8 +1547,19 @@
     "Deliver hearts later" : {
 
     },
-    "Deliver hearts when you're apart?" : {
+    "Deliver hearts later?" : {
 
+    },
+    "Deliver hearts when apart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deliver hearts later"
+          }
+        }
+      }
     },
     "Derived signals (test-only view)" : {
 
@@ -2340,6 +2419,9 @@
     "Locations & equipment" : {
 
     },
+    "Lock photos" : {
+
+    },
     "Lock photos to this device" : {
 
     },
@@ -2606,11 +2688,17 @@
     "Nearby friends" : {
 
     },
+    "Nearby hearts" : {
+      "extractionState" : "manual"
+    },
     "Nearby invites" : {
 
     },
     "Nearby now" : {
 
+    },
+    "Nearby recipe shares" : {
+      "extractionState" : "manual"
     },
     "New item" : {
 
@@ -2919,6 +3007,9 @@
 
     },
     "One small care note is still a real note." : {
+
+    },
+    "One space saved." : {
 
     },
     "One tap notes how today feels. No writing needed." : {
@@ -3871,6 +3962,9 @@
     "Shared by %@" : {
 
     },
+    "Shared photo wall, sharing restriction, app lock" : {
+
+    },
     "Shared recipe text" : {
 
     },
@@ -3881,6 +3975,9 @@
 
     },
     "Sharing in person with a coach who uses Fernlet Coach is coming soon." : {
+
+    },
+    "Sharing settings" : {
 
     },
     "Shop" : {
@@ -4184,6 +4281,9 @@
     "That's the most personal care tasks Fernlet keeps (%lld). Remove one to add another." : {
 
     },
+    "The %@ preset is behind Add." : {
+
+    },
     "The box holds about 300 characters." : {
 
     },
@@ -4206,6 +4306,9 @@
 
     },
     "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete." : {
+
+    },
+    "The shared photo wall, on both sides" : {
 
     },
     "The shelf is filling in" : {
@@ -4706,6 +4809,9 @@
 
     },
     "You: %@" : {
+
+    },
+    "Your app lock" : {
 
     },
     "Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet." : {

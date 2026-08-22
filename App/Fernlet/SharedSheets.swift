@@ -4,25 +4,34 @@ import FernletScoring
 import FernletUI
 
 /// Quick-log sheet for hydration: a transactional bottle-count editor (2026-08-21 redesign,
-/// artboards 2c/2d).
+/// artboards 2c/2d/2c·AX5).
 ///
-/// The sheet edits a **draft**: the stepper changes only local state, Done (top-right) commits the
-/// count via ``FernletStore/setTodayBottleCount(_:)``, and Cancel reverts — an accidental +3
-/// followed by Cancel now costs nothing, where the old live-writing sheet made it unrecoverable.
-/// Swipe-dismiss is blocked while the draft differs from the committed count, so the only exits are
-/// the two explicit ones. Home's one-tap `+1` overlay still writes live; the draft is seeded from
-/// the committed count at open, and Done overwrites with the drafted absolute count (clamped 0…30
-/// at the store boundary). Bottle size and daily target come from settings and are edited in
-/// ``SettingsSheet``, not here.
+/// The sheet edits a **draft**: the stepper changes only local state, Done (top-right) commits,
+/// and Cancel reverts — an accidental +3 followed by Cancel now costs nothing, where the old
+/// live-writing sheet made it unrecoverable. Done commits the draft's **delta** against the seeded
+/// baseline onto the LIVE committed count via ``FernletStore/setTodayBottleCount(_:)`` (floored at
+/// 0 here, clamped 0…30 at the store boundary), so a bottle that arrived while the sheet was open —
+/// the widget's `+1` drained on foreground, another device's sync, or Home's live-writing `+1`
+/// overlay — is preserved rather than overwritten by a stale absolute, and a sheet held across
+/// midnight applies only the delta to the new day. Swipe-dismiss is blocked while the draft differs
+/// from that seeded baseline (never the live count, so an external bump cannot re-block the swipe),
+/// leaving the two explicit exits as the only ones for a real edit. Bottle size and daily target
+/// come from settings and are edited in ``SettingsSheet``, not here.
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var store: FernletStore
     /// Nil until seeded on appear so a re-render before `onAppear` shows the committed count.
     @State private var draftCount: Int?
+    /// The committed count captured when the draft was seeded — the baseline the commit delta and
+    /// the dirty check are both measured against, so an external write while the sheet is open is
+    /// neither erased by Done nor treated as the user's own edit.
+    @State private var seededCount: Int?
 
     private var committed: Int { store.day.bottleCount }
     private var draft: Int { draftCount ?? committed }
+    /// The seeded baseline; equal to `draft` until `onAppear` seeds, so the sheet opens clean.
+    private var seeded: Int { seededCount ?? draft }
     private var target: Int { store.settings.hydrationTarget }
     private var totalOz: Int { draft * store.settings.bottleOz }
 
@@ -33,17 +42,24 @@ struct WaterSheet: View {
                 subtitle: "\(store.settings.bottleOz) oz each · target \(target) bottles",
                 onCancel: { dismiss() },
                 onDone: {
-                    store.setTodayBottleCount(draft)
+                    // The DELTA against the seeded baseline, applied to the live count — never
+                    // the drafted absolute, which goes stale the moment an external write lands.
+                    store.setTodayBottleCount(max(0, committed + (draft - seeded)))
                     dismiss()
                 }
             )
             ScrollView {
                 VStack(spacing: 18) {
                     heroCount
-                    if dynamicTypeSize.isAccessibilitySize {
-                        accessibilityCountLines
-                    } else {
-                        bottleRow
+                    // 2c·AX5: at AX5 everything between the hero and the stepper gives way — no
+                    // glyphs, no oz total, no target line; the count states itself once. The
+                    // .isAccessibilitySize branch below is the milder AX3 tier (2d).
+                    if dynamicTypeSize < .accessibility5 {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            accessibilityCountLines
+                        } else {
+                            bottleRow
+                        }
                     }
                     stepper
                     if !dynamicTypeSize.isAccessibilitySize {
@@ -56,8 +72,15 @@ struct WaterSheet: View {
             }
         }
         .background(Color.parchment)
-        .interactiveDismissDisabled(draft != committed)
-        .onAppear { if draftCount == nil { draftCount = committed } }
+        // Keyed to the seeded baseline, not the live count: an external +1 must not re-block the
+        // swipe (the draft it would "discard" is not an edit of the user's).
+        .interactiveDismissDisabled(draft != seeded)
+        .onAppear {
+            if draftCount == nil {
+                draftCount = committed
+                seededCount = committed
+            }
+        }
     }
 
     /// The hero numeral IS the stepper's value, so the count is stated exactly once (2c).
@@ -96,8 +119,9 @@ struct WaterSheet: View {
         .accessibilityHidden(true)
     }
 
-    /// At accessibility sizes the glyph row gives way to words: the count states itself once and
-    /// the size/target caption merges into one line (2d).
+    /// At accessibility sizes up to AX4 the glyph row gives way to words: the count states itself
+    /// once and the size/target caption merges into one line (2d). At AX5 these lines give way
+    /// too (2c·AX5) — the body never renders this view there.
     private var accessibilityCountLines: some View {
         VStack(spacing: 4) {
             Text(draft == 1 ? "1 bottle · \(totalOz) oz" : "\(draft) bottles · \(totalOz) oz")
@@ -129,7 +153,8 @@ struct WaterSheet: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// One 56pt (64pt at accessibility sizes) circular stepper target.
+    /// One circular stepper target: 56pt, 64pt at accessibility sizes (2d), 96pt at AX5 — where
+    /// the stepper is nearly the whole sheet, the targets grow rather than shrink (2c·AX5).
     private func stepButton(
         systemImage: String,
         accessibilityLabel: LocalizedStringKey,
@@ -139,7 +164,14 @@ struct WaterSheet: View {
         disabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        let side: CGFloat = dynamicTypeSize.isAccessibilitySize ? 64 : 56
+        let side: CGFloat
+        if dynamicTypeSize >= .accessibility5 {
+            side = 96
+        } else if dynamicTypeSize.isAccessibilitySize {
+            side = 64
+        } else {
+            side = 56
+        }
         return Button {
             withAnimation(FernletMotion.fast) { action() }
         } label: {

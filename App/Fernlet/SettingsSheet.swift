@@ -323,10 +323,13 @@ struct SettingsSheet: View {
                 }
             }
         }
-        // The spoken/queryable label stays the row NAME alone: the sub-label is a visual
-        // breadcrumb, and folding it into the accessibility label made every row a sentence (and
-        // broke every `buttons["Goal & nutrition"]`-style lookup other suites rely on).
+        // The spoken/queryable label stays the row NAME alone: folding the sub-label into it made
+        // every row a sentence (and broke every `buttons["Goal & nutrition"]`-style lookup other
+        // suites rely on). But the sub-label is still information — Reminders' check-in time, the
+        // care-task count, Health's share counts are LIVE state — so it rides `accessibilityValue`:
+        // VoiceOver speaks it after the name, and label-based lookups stay intact.
         .accessibilityLabel(Text(title))
+        .accessibilityValue(subtitle)
     }
 
     // MARK: - Hub groups (artboard 5a)

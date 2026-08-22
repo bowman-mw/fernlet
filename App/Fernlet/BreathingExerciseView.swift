@@ -214,9 +214,12 @@ struct BreathingExerciseView: View {
             breathingCircle
                 .frame(maxHeight: .infinity)
 
+            // Slate, not softTaupe: this is the session's only exit, and softTaupe measures
+            // 2.03:1 on parchment — every other muted label in this file already uses slate
+            // (PRIV-24 completion, caught by the 2026-08-22 accessibility audit).
             Button("End early") { stopSession() }
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.softTaupe)
+                .foregroundStyle(Color.slate)
                 .padding(.bottom, 20)
         }
         .padding(.horizontal, 20)

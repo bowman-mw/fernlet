@@ -87,16 +87,8 @@ final class StoragePrivacyUITests: XCTestCase {
         let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, iCloudEnabled: true)
         openVerifiedPrivacyData(app)
 
-        // Tap the iCloud sync toggle
-        let syncToggle = labeledElement(containing: "Sync to iCloud", in: app)
-        XCTAssertTrue(syncToggle.waitForExistence(timeout: 5))
-        syncToggle.tap()
-
-        // Confirmation sheet appears
-        XCTAssertTrue(
-            app.staticTexts["Delete iCloud data?"].waitForExistence(timeout: 4),
-            "Confirmation sheet should appear after toggling off iCloud"
-        )
+        // Toggle off → the two-outcome confirmation sheet appears
+        openICloudDisableSheet(app)
 
         // Confirm button disabled before typing
         let confirmButton = element("privacy.icloud.confirmDelete", in: app)
@@ -104,8 +96,7 @@ final class StoragePrivacyUITests: XCTestCase {
 
         // Partial text: still disabled
         let textField = app.textFields["privacy.icloud.confirmText"]
-        textField.tap()
-        textField.typeText("DEL")
+        textField.tapAndType("DEL")
         XCTAssertFalse(confirmButton.isEnabled, "Confirm button should be disabled with partial text")
 
         // Clear and type correct confirmation
@@ -132,12 +123,10 @@ final class StoragePrivacyUITests: XCTestCase {
         )
         openVerifiedPrivacyData(app)
 
-        labeledElement(containing: "Sync to iCloud", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Delete iCloud data?"].waitForExistence(timeout: 4))
+        openICloudDisableSheet(app)
 
         let textField = app.textFields["privacy.icloud.confirmText"]
-        textField.tap()
-        textField.typeText("DELETE")
+        textField.tapAndType("DELETE")
         element("privacy.icloud.confirmDelete", in: app).tap()
 
         XCTAssertTrue(
@@ -152,8 +141,7 @@ final class StoragePrivacyUITests: XCTestCase {
         let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, iCloudEnabled: true)
         openVerifiedPrivacyData(app)
 
-        labeledElement(containing: "Sync to iCloud", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Delete iCloud data?"].waitForExistence(timeout: 4))
+        openICloudDisableSheet(app)
 
         // Dismiss by tapping outside / cancel — look for a Cancel button first
         let cancelButton = app.buttons["Cancel"]
@@ -273,6 +261,31 @@ final class StoragePrivacyUITests: XCTestCase {
         )
     }
 
+    /// Taps the Sync-to-iCloud toggle until the disable sheet presents. Under the seeded-auth
+    /// harness the page's async verification can still be settling when a cold first tap lands,
+    /// and a pre-verification toggle change is snapped back silently (fail-closed) — so one tap
+    /// is not always enough. Bounded retries, then a hard assert.
+    @MainActor
+    private func openICloudDisableSheet(_ app: XCUIApplication) {
+        let title = app.staticTexts["Turn off iCloud sync?"]
+        // The row activates only on its switch CONTROL: the labeled element spans the whole row
+        // and a tap at its center lands on inert text (verified against the live sheet), so tap
+        // the inner bare Switch when one exists.
+        let row = labeledElement(containing: "Sync to iCloud", in: app)
+        let control = row.switches.firstMatch
+        for _ in 0..<3 {
+            (control.exists ? control : row).tap()
+            if title.waitForExistence(timeout: 2.5) {
+                // The sheet can present at its shorter detent with the typed-DELETE field at the
+                // fold; swiping up raises the detent / scrolls the field fully on-screen so the
+                // follow-on field tap lands (verified from the failure recording).
+                app.swipeUp()
+                return
+            }
+        }
+        XCTFail("the iCloud disable sheet never presented after 3 toggle taps")
+    }
+
     /// Tap through welcome and lock-setup screens to reach the storage choice step.
     @MainActor
     private func skipToStorageChoiceStep(_ app: XCUIApplication) {
@@ -302,8 +315,13 @@ final class StoragePrivacyUITests: XCTestCase {
 
     @MainActor
     private func labeledElement(containing text: String, in app: XCUIApplication) -> XCUIElement {
+        // Excludes the page's "privacy.controls" marker container: it is a real accessibility
+        // container (.contain) whose aggregated label CONTAINS every child's label, so without
+        // the exclusion firstMatch returns the whole stack and a tap lands mid-page.
         app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .matching(NSPredicate(
+                format: "label CONTAINS %@ AND identifier != 'privacy.controls'", text
+            ))
             .firstMatch
     }
 }
@@ -311,6 +329,27 @@ final class StoragePrivacyUITests: XCTestCase {
 // MARK: - XCUIElement helper
 
 extension XCUIElement {
+    /// Taps a text field and types only once keyboard focus has actually landed: on the iOS 26
+    /// simulator the sheet's field takes focus a beat after the tap, and a bare
+    /// `tap(); typeText(...)` fails with "Neither element nor any descendant has keyboard focus"
+    /// even though the field is fine for a real user. One re-tap covers a swallowed first tap.
+    func tapAndType(_ text: String) {
+        tap()
+        if !waitForKeyboardFocus(timeout: 2) { tap() }
+        XCTAssertTrue(waitForKeyboardFocus(timeout: 2), "text field never took keyboard focus")
+        typeText(text)
+    }
+
+    /// Polls the element's `hasKeyboardFocus` attribute under a wall-clock deadline instead of
+    /// asserting focus that the tap only just requested.
+    func waitForKeyboardFocus(timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hasKeyboardFocus == true"),
+            object: self
+        )
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
     /// Clear the text in a text field by selecting all and deleting.
     func clearText() {
         guard let text = value as? String, !text.isEmpty else { return }

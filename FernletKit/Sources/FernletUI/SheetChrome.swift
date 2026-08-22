@@ -41,6 +41,9 @@ public struct SheetHeader<Accessory: View>: View {
     /// Resolved at init so the body never branches on which initializer built it.
     var title: Text
     var subtitle: Text?
+    /// One-line context label rendered *above* the title (artboard 1d's "Daily movement · day 1").
+    /// Small moss label face; nil for the common eyebrow-less sheet.
+    var eyebrow: Text?
     /// Reverts/dismisses without committing. Nil hides the leading Cancel slot.
     var onCancel: (() -> Void)?
     /// Dismisses a read-only sheet, or commits an in-place edit. Nil hides the trailing slot.
@@ -56,6 +59,7 @@ public struct SheetHeader<Accessory: View>: View {
     public init(
         title: Text,
         subtitle: Text? = nil,
+        eyebrow: Text? = nil,
         onCancel: (() -> Void)? = nil,
         onDone: (() -> Void)? = nil,
         doneDisabled: Bool = false,
@@ -63,6 +67,7 @@ public struct SheetHeader<Accessory: View>: View {
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.eyebrow = eyebrow
         self.onCancel = onCancel
         self.onDone = onDone
         self.doneDisabled = doneDisabled
@@ -72,6 +77,12 @@ public struct SheetHeader<Accessory: View>: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if hasControlRow { controlRow }
+            if let eyebrow {
+                eyebrow
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+                    .lineLimit(1)
+            }
             title
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
@@ -150,6 +161,7 @@ public extension SheetHeader where Accessory == EmptyView {
     init(
         title: Text,
         subtitle: Text? = nil,
+        eyebrow: Text? = nil,
         onCancel: (() -> Void)? = nil,
         onDone: (() -> Void)? = nil,
         doneDisabled: Bool = false
@@ -157,6 +169,7 @@ public extension SheetHeader where Accessory == EmptyView {
         self.init(
             title: title,
             subtitle: subtitle,
+            eyebrow: eyebrow,
             onCancel: onCancel,
             onDone: onDone,
             doneDisabled: doneDisabled

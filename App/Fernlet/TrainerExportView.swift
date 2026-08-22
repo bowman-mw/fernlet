@@ -533,7 +533,10 @@ struct TrainerExportView: View {
             .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 
-    private func cardTitle(_ text: String) -> some View {
+    /// A card's heading line. Takes `LocalizedStringKey` so every literal title localizes and
+    /// harvests into the string catalog automatically — a `String` parameter would silently render
+    /// verbatim English forever (the localization wall's call-site opt-out trap).
+    private func cardTitle(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
     }
 

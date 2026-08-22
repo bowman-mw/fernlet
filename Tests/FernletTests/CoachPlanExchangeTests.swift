@@ -452,6 +452,12 @@ final class CoachPlanExchangeTests: XCTestCase {
 
     private func makeStoreWithPlan(_ json: String) throws -> (FernletStore, CoachPlan) {
         let store = makeTestStore()
+        // A PREVIOUS test's store can still have a MainActor load task queued whose
+        // `syncCustomExerciseCatalog` republish lands AFTER `setUp`'s clear (seen as the
+        // full-suite-only "Zercher squat already registered" precondition failure). The test
+        // bodies are synchronous, so nothing can interleave once we return — clearing here,
+        // after this store's own init, makes the registry state the test's own again.
+        WorkoutExerciseCatalog.registerCustomExercises([])
         return (store, try decoded(json))
     }
 
@@ -985,6 +991,9 @@ final class CoachPlanExchangeTests: XCTestCase {
     func testWipingSettingsClearsTheLiveCustomExerciseRegistry() throws {
         let (store, plan) = try makeStoreWithPlan(planJSON(days: 1))
         let review = store.reviewCoachPlan(plan, startingOn: store.todayKey)
+        // Pinned so a registry contaminated before review (making Zercher look bundled/known)
+        // fails HERE with a diagnosis instead of at the post-apply precondition below.
+        XCTAssertEqual(review.newExercises.count, 1, "precondition: the plan's exercise must review as new")
         _ = store.applyCoachPlan(review, startingOn: store.todayKey,
                                  struckExerciseKeys: [], collisionPolicy: .keepBoth)
         XCTAssertNotNil(WorkoutExerciseCatalog.exercise(named: "Zercher squat"), "precondition")

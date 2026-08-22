@@ -621,7 +621,7 @@ struct FriendListView: View {
         .disabled(onCooldown || sending)
         .accessibilityIdentifier("friends.sendHeart")
         .alert(
-            "Deliver hearts when you're apart?",
+            "Deliver hearts later?",
             isPresented: $awayConsentPeer.isPresent()
         ) {
             Button("Turn on") {

@@ -15,7 +15,10 @@ import FernletUI
 /// not-yet-committed active switch. Deletes still persist at their confirm — a swipe-dismiss after
 /// a delete must not silently resurrect the location — and the equipment step keeps committing on
 /// every exit (save bar, back chevron, and the swipe-dismiss `onDisappear` backstop, guarded so a
-/// brand-new not-yet-saved location isn't committed by a cancel-swipe).
+/// brand-new not-yet-saved location isn't committed by a cancel-swipe). Those mid-draft persists
+/// write `persistableActiveID` — the store's committed active id (or a pending equipment-step
+/// "Train here") — never the list rows' staged `activeID`, so deleting or editing an unrelated
+/// location can't smuggle a staged switch past Cancel.
 ///
 /// Adding a location never changes which one is ACTIVE: tapping a preset used to append it *and*
 /// make it active, so merely peeking at "Home setup" and backing out re-pointed every future
@@ -24,6 +27,7 @@ import FernletUI
 /// of a location that was never saved discards it.
 struct WorkoutLocationSetupView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var store: FernletStore
 
     /// Which of the sheet's three steps is showing: the saved-spaces list, the add-a-location
@@ -41,6 +45,12 @@ struct WorkoutLocationSetupView: View {
     /// against it so backing out of an untouched peek discards the location, while a location the
     /// user actually edited (equipment ticked, name changed) is committed rather than thrown away.
     @State private var newLocationSeed: WorkoutLocation?
+    /// The equipment step's pending "Train here" switch. Set only by that button; committed by the
+    /// equipment step's own exits (`commitEdits`), because "Save location" dismisses the whole
+    /// sheet and a later Done may never come. The list rows' staged switch lives in `activeID`
+    /// instead and belongs to Done/Cancel alone — mid-draft persists never write it
+    /// (`persistableActiveID`).
+    @State private var trainHereID: UUID?
     @State private var customName = ""
     @State private var pendingDestructiveAction: DestructiveConfirmation?
 
@@ -99,6 +109,11 @@ struct WorkoutLocationSetupView: View {
                             .fernletWrappingText()
                     } else {
                         addLocationTile
+                        // 1c·AX3: "the explanatory caption is the first thing to go" — the state
+                        // caption renders only below accessibility sizes.
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            savedStateCaption
+                        }
                     }
                 }
                 .padding(20)
@@ -168,6 +183,36 @@ struct WorkoutLocationSetupView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.location.add")
+    }
+
+    /// The 1c state caption under the Add tile: how many spaces are saved and which presets are
+    /// still behind Add ("2 spaces saved. Hotel gym and Home setup presets are behind Add.").
+    ///
+    /// Each half forks on its count in code — the `sessionMetaLine` / `deleteMessage` house
+    /// pattern for singular copy — and the preset names interpolate as data: a template's `name`
+    /// is the saved-vs-preset identity, so the sentence localizes around it, never through it.
+    /// The caller hides this at accessibility sizes (1c·AX3).
+    private var savedStateCaption: some View {
+        (presetsBehindAddLine.map { Text("\(savedCountLine) \($0)") } ?? savedCountLine)
+            .font(.fernlet(.bubble))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
+    /// "2 spaces saved." — the caption's first sentence, forked so one space never reads plural.
+    private var savedCountLine: Text {
+        locations.count == 1
+            ? Text("One space saved.")
+            : Text("\(locations.count) spaces saved.")
+    }
+
+    /// "Hotel gym and Home setup presets are behind Add." — nil once every preset is saved.
+    private var presetsBehindAddLine: Text? {
+        let names = availableTemplates.map(\.name)
+        guard let first = names.first else { return nil }
+        if names.count == 1 { return Text("The \(first) preset is behind Add.") }
+        let list = names.formatted(.list(type: .and))
+        return Text("\(list) presets are behind Add.")
     }
 
     // MARK: - Add step (presets + custom)
@@ -372,12 +417,18 @@ struct WorkoutLocationSetupView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("workout.location.isActive")
             } else {
-                Button("Train here") { activeID = editing.id }
-                    .buttonStyle(ChipButtonStyle(selected: false))
-                    // Chip drawing, 44pt target.
-                    .fernletTapTarget()
-                    .accessibilityHint("Plans your workouts around this space")
-                    .accessibilityIdentifier("workout.location.makeActive")
+                Button("Train here") {
+                    activeID = editing.id
+                    // Unlike a list-row tap, this switch commits with THIS step's exit
+                    // (`commitEdits`): "Save location" dismisses the whole sheet, so there is
+                    // no later Done to carry it.
+                    trainHereID = editing.id
+                }
+                .buttonStyle(ChipButtonStyle(selected: false))
+                // Chip drawing, 44pt target.
+                .fernletTapTarget()
+                .accessibilityHint("Plans your workouts around this space")
+                .accessibilityIdentifier("workout.location.makeActive")
             }
         }
     }
@@ -476,14 +527,33 @@ struct WorkoutLocationSetupView: View {
         }
     }
 
+    /// The active id a MID-DRAFT persist may write (a delete's confirm, an equipment edit's
+    /// commit): a pending equipment-step "Train here" if one exists, else the store's COMMITTED
+    /// active id — never the list rows' staged `activeID`, which only Done commits and Cancel
+    /// reverts. Falls back to a surviving row only when the committed space itself is gone from
+    /// the draft (it was just deleted).
+    private var persistableActiveID: UUID {
+        if let trainHereID, locations.contains(where: { $0.id == trainHereID }) {
+            return trainHereID
+        }
+        let committed = store.settings.activeWorkoutLocation.id
+        if locations.contains(where: { $0.id == committed }) { return committed }
+        return locations.first?.id ?? activeID
+    }
+
     /// Repairs a blank name and persists, so leaving the equipment step commits the edit regardless of
     /// HOW the user leaves it. Both exits (Save location, back chevron) go through here, so a rename
     /// can't be lost to a swipe-dismiss the same way a delete could — the bug this whole change is about.
+    /// Persists `persistableActiveID`, not the staged `activeID`: an equipment edit's commit must not
+    /// carry a list-row active switch into the store (the same silent-switch leak the `onEdit` comment
+    /// records for deletes), while an explicit "Train here" on THIS step does commit here.
     private func commitEdits() {
         repairBlankName()
-        store.setWorkoutLocations(locations, activeID: activeID)
+        store.setWorkoutLocations(locations, activeID: persistableActiveID)
         // Persisted, so it is no longer a brand-new draft the back chevron may discard.
         newLocationSeed = nil
+        // A committed "Train here" is the store's active id now; the pending marker is spent.
+        trainHereID = nil
     }
 
     /// Whether the location being edited already exists in the store. A brand-new one lives only in
@@ -504,7 +574,9 @@ struct WorkoutLocationSetupView: View {
         } else if let index = editingIndex, locations.indices.contains(index) {
             if locations[index] == newLocationSeed {
                 let discarded = locations.remove(at: index)
-                // Never leave `activeID` pointing at a location that no longer exists.
+                // Never leave `activeID` (or a pending "Train here") pointing at a location
+                // that no longer exists.
+                if trainHereID == discarded.id { trainHereID = nil }
                 if activeID == discarded.id { activeID = store.settings.activeWorkoutLocation.id }
             } else {
                 commitEdits()
@@ -589,14 +661,19 @@ struct WorkoutLocationSetupView: View {
     private func removeLocation(index: Int) {
         guard locations.count > 1, locations.indices.contains(index) else { return }
         let removed = locations.remove(at: index)
-        if activeID == removed.id { activeID = locations.first?.id ?? activeID }
+        if trainHereID == removed.id { trainHereID = nil }
+        if activeID == removed.id { activeID = persistableActiveID }
         // Persist NOW, not at "Done". `locations` is @State seeded from the store at init, so every
         // mutation here is local until Done or a save bar is tapped — and every step of this sheet can
         // be swipe-dismissed. A delete that only edited @State looked like it worked and then silently
         // came back on the next open, which is the worst shape for a destructive action: the user
         // believes it's gone. Add/edit still commit at their save bars, where the user has an explicit
         // "I'm finished" moment; a delete's moment is the confirm they just tapped.
-        store.setWorkoutLocations(locations, activeID: activeID)
+        //
+        // The persisted active id is `persistableActiveID` — the store's committed one — never the
+        // staged `activeID`: this confirm committed the DELETE, while the badge a row tap moved still
+        // waits for Done and reverts on Cancel (the onEdit comment's silent-switch bug, delete edition).
+        store.setWorkoutLocations(locations, activeID: persistableActiveID)
     }
 }
 
@@ -639,7 +716,7 @@ private struct SavedSpaceRow: View {
                             if isActive { inUseBadge }
                         }
                     }
-                    Text(verbatim: metaLine)
+                    metaLine
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
@@ -673,10 +750,13 @@ private struct SavedSpaceRow: View {
     }
 
     /// "22 items · Free weights, Machines, Cardio"; count only at accessibility sizes (1c·AX3).
-    private var metaLine: String {
-        let count = "\(location.ownedEquipment.count) items"
-        guard !dynamicTypeSize.isAccessibilitySize, !summary.isEmpty else { return count }
-        return "\(count) · \(summary)"
+    /// A `Text` so "items" localizes — the equipment summary interpolates as data.
+    private var metaLine: Text {
+        let count = location.ownedEquipment.count
+        guard !dynamicTypeSize.isAccessibilitySize, !summary.isEmpty else {
+            return Text("\(count) items")
+        }
+        return Text("\(count) items · \(summary)")
     }
 
     private var inUseBadge: some View {

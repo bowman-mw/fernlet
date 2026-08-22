@@ -2214,8 +2214,9 @@ struct MealSheet: View {
     /// accessibility sizes; the Auto chip drops its inferred value and the section label goes at
     /// the AX5 floor.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// True once a meal has been committed but the sheet stayed open (photo-save failure notice). The
-    /// save bar then becomes a Done/dismiss — a second "Save" tap must never log the same meal twice.
+    /// True once a meal has been committed but the sheet stayed open (photo-save failure notice).
+    /// The save bar then hides and the pinned header's trailing Done becomes the exit
+    /// (`photoFailureDoneAction`) — a second "Save" must never log the same meal twice.
     @State private var didLogMeal = false
     /// Set when the user discards this sheet while a resolve is still running, so the in-flight
     /// resolve drops its result instead of committing a meal they just cancelled.
@@ -2553,11 +2554,16 @@ struct MealSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(
-                label: didLogMeal ? "Done" : (isResolvingMeal ? "Matching" : "Save"),
-                disabled: !didLogMeal && !canSaveTypedMeal
-            ) {
-                saveTapped()
+            // Hidden once the meal has logged (photo-save failure notice): the sheet is then
+            // dismiss-only, and a dismiss-only exit belongs in the header's trailing Done — the
+            // bottom-right moss pill is retired for it (2a annotation 4 / correction #4).
+            if !didLogMeal {
+                SheetSaveBar(
+                    label: isResolvingMeal ? "Matching" : "Save",
+                    disabled: !canSaveTypedMeal
+                ) {
+                    saveTapped()
+                }
             }
         }
         .background(Color.parchment)
@@ -2570,7 +2576,13 @@ struct MealSheet: View {
         // the composer rather than the whole stack so a pushed page (Scan, Import) keeps its own
         // back chevron instead of growing a second bar above it. The title-bearing form is the
         // 2026-08-21 template chrome: the pinned header carries Cancel and the sheet's serif title.
-        .fernletDraftGuard(isDirty: isResolvingMeal || hasUnsavedDraft, title: "Log meal") {
+        // Once `didLogMeal` is set the header's trailing Done is the exit and Cancel is a plain
+        // dismiss — `hasUnsavedDraft` is false then, so no discard prompt for a committed meal.
+        .fernletDraftGuard(
+            isDirty: isResolvingMeal || hasUnsavedDraft,
+            title: "Log meal",
+            onDone: photoFailureDoneAction
+        ) {
             abandonedResolve = isResolvingMeal
             dismiss()
         }
@@ -2580,6 +2592,14 @@ struct MealSheet: View {
     /// disabled state uses, so Return can never save a form the pill would refuse.
     private var canSaveTypedMeal: Bool {
         !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResolvingMeal
+    }
+
+    /// The pinned header's trailing Done for the photo-failed state (meal logged, sheet
+    /// dismiss-only): non-nil once `didLogMeal` is set, when the save bar has hidden and the
+    /// template rule puts the dismiss-only exit top-right instead of in a bottom moss pill.
+    private var photoFailureDoneAction: (() -> Void)? {
+        guard didLogMeal else { return nil }
+        return { dismiss() }
     }
 
     /// The captured/picked meal photo plus the gated "Identify from photo" action.
@@ -2740,8 +2760,9 @@ struct MealSheet: View {
         #endif
     }
 
-    /// The Save bar's action: a no-op re-tap after a photo-only failure, then the cached-product /
-    /// web-search / typed-resolve cascade.
+    /// The Save bar's action, then the cached-product / web-search / typed-resolve cascade. Also
+    /// reached by a Return press in the description field, which is why the photo-failure guard
+    /// stays here even though the save bar itself hides once `didLogMeal` is set.
     private func saveTapped() {
         if didLogMeal {
             // The meal already logged (only its photo failed) — never log it a second time.
@@ -3925,7 +3946,11 @@ struct MealCorrectionSheet: View {
                     name: name,
                     mealType: mealType,
                     macros: components.isEmpty ? Macros(protein: protein, carbs: carbs, fat: fat) : componentMacros,
-                    componentSnapshots: components.isEmpty ? nil : components.map(\.snapshot)
+                    // nil ONLY for a meal that never had matched items (a raw-macros edit). A
+                    // component-backed meal always hands its current list through — including an
+                    // EMPTY one, which means "the user removed every item": mapping empty to nil
+                    // here made the store keep the old snapshots and resurrect the removals.
+                    componentSnapshots: meal.componentSnapshots.isEmpty ? nil : components.map(\.snapshot)
                 )
                 dismiss()
             }
@@ -3948,6 +3973,9 @@ struct MealCorrectionSheet: View {
     private var isDirty: Bool {
         if name != meal.name || mealType != meal.mealType { return true }
         if components.isEmpty {
+            // Remove-all (FOOD-05): every matched item was removed — an unsaved edit in itself,
+            // even though the macro fields still hold the values they were seeded with at init.
+            if !meal.componentSnapshots.isEmpty { return true }
             return Macros(protein: protein, carbs: carbs, fat: fat) != meal.macros
         }
         return components.map(\.snapshot) != meal.componentSnapshots
@@ -5735,7 +5763,8 @@ private struct RecipeShareButton: View {
 /// A recipe row's trailing controls line plus its inline log flow (2026-08-21, FOOD-19/FOOD-14):
 /// a labelled "Log" pill — replacing the bare fork-icon menu — that opens the meal-slot chip row
 /// INLINE beneath the controls; a chip tap logs and collapses it. `trailing` carries the row's
-/// other controls (the share button, or nothing).
+/// other controls (the share button, or nothing). At accessibility sizes the trailing line holds
+/// only Log, and the other controls drop to their own line beneath it (4e·AX3).
 ///
 /// Shared by the Food-root recipe preview, the recipe book's rows, and the imported-products list
 /// so logging behaves identically everywhere a recipe row appears.
@@ -5744,30 +5773,52 @@ private struct RecipeRowLogControl<Trailing: View>: View {
     var onLog: (MealType) -> Void
     @ViewBuilder var trailing: () -> Trailing
     @State private var showingMealTypes = false
+    /// Drives the 4e·AX3 degradation: at accessibility sizes the grown Log and Share pills no
+    /// longer share one trailing line — Share moves below.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Spacer(minLength: 0)
-                Button("Log") {
-                    withAnimation(FernletMotion.ui) { showingMealTypes.toggle() }
-                }
-                .buttonStyle(ActionPillButtonStyle(.secondary))
-                .accessibilityLabel("Log recipe as meal")
+            if dynamicTypeSize.isAccessibilitySize {
+                // 4e·AX3: only Log on the trailing line; the row's other controls move below.
+                // (`trailing()` may be an EmptyView, which contributes no row even when modified.)
+                logButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 trailing()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                HStack(spacing: 12) {
+                    Spacer(minLength: 0)
+                    logButton
+                    trailing()
+                }
             }
             if showingMealTypes {
-                FlowLayout(spacing: 8) {
-                    ForEach(MealType.allCases) { mealType in
-                        Button {
-                            showingMealTypes = false
-                            onLog(mealType)
-                        } label: {
-                            Text(verbatim: mealType.displayName)
-                        }
-                        .buttonStyle(ChipButtonStyle(selected: false))
-                    }
+                mealTypeChipRow
+            }
+        }
+    }
+
+    /// The labelled Log pill (FOOD-14): reveals or hides the inline meal-slot chip row.
+    private var logButton: some View {
+        Button("Log") {
+            withAnimation(FernletMotion.ui) { showingMealTypes.toggle() }
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .accessibilityLabel("Log recipe as meal")
+    }
+
+    /// The inline meal-slot chip row a Log tap reveals; a chip tap logs and collapses it.
+    private var mealTypeChipRow: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(MealType.allCases) { mealType in
+                Button {
+                    showingMealTypes = false
+                    onLog(mealType)
+                } label: {
+                    Text(verbatim: mealType.displayName)
                 }
+                .buttonStyle(ChipButtonStyle(selected: false))
             }
         }
     }

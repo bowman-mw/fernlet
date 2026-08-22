@@ -204,10 +204,16 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``SettingsSheet``
 - ``SettingsRoute``
 - ``SettingsSearchIndex``
+- ``NearbyFriendsSettingsView``
+- ``PeriodSensitiveSettingsView``
+- ``QuickLogShortcutsEditor``
+- ``HealthAccessSettingsView``
 - ``PrivacyDataSettingsView``
 - ``AppLockSettingsView``
 - ``DestructiveConfirmation``
 - ``DeleteAllDataConfirmation``
+- ``DeleteEverythingSheet``
+- ``DeleteConfirmationWord``
 - ``DeleteEverythingFlow``
 - ``DeletingEverythingOverlay``
 - ``FernletDataExport``

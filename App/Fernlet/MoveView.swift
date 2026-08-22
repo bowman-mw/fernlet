@@ -794,15 +794,29 @@ struct WorkoutSheet: View {
         dateKey ?? store.todayKey
     }
 
-    /// The strength / activity mode chips.
-    private var kindField: some View {
-        SheetField("Kind") {
-            FlowLayout(spacing: 8) {
-                ForEach(WorkoutMode.allCases) { mode in
-                    Button { logMode = mode } label: { kindChipLabel(mode) }
-                        .buttonStyle(ChipButtonStyle(selected: logMode == mode))
-                        .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
-                }
+    /// The pinned draft-guard title: at AX5 it truncates to one word — "the title truncates to
+    /// 'Log'" (3b·AX5).
+    private var logSheetTitle: Text {
+        dynamicTypeSize >= .accessibility5 ? Text("Log") : Text("Log workout")
+    }
+
+    /// The strength / activity mode chips. At AX5 the "Kind" caption goes and the two chips
+    /// render unlabelled — they are self-describing at that size (3b·AX5).
+    @ViewBuilder private var kindField: some View {
+        if dynamicTypeSize >= .accessibility5 {
+            kindChips
+        } else {
+            SheetField("Kind") { kindChips }
+        }
+    }
+
+    /// The chip row itself, shared by both Kind presentations.
+    private var kindChips: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(WorkoutMode.allCases) { mode in
+                Button { logMode = mode } label: { kindChipLabel(mode) }
+                    .buttonStyle(ChipButtonStyle(selected: logMode == mode))
+                    .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
             }
         }
     }
@@ -849,7 +863,8 @@ struct WorkoutSheet: View {
         }
     }
 
-    /// One 44pt Recent chip: name over the factual last-time values.
+    /// One 44pt Recent chip: name over the factual last-time values. At accessibility sizes the
+    /// chip drops its sets×reps line and keeps the name alone (3b·AX3).
     private func recentChip(_ entry: TrainerExportBundle.ExerciseHistoryEntry) -> some View {
         Button {
             prefillDraft(from: entry)
@@ -858,7 +873,7 @@ struct WorkoutSheet: View {
                 Text(verbatim: entry.name)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
-                if let recall = entry.lastTimeRecallValues {
+                if let recall = entry.lastTimeRecallValues, !dynamicTypeSize.isAccessibilitySize {
                     Text(verbatim: recall)
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
@@ -1050,7 +1065,7 @@ struct WorkoutSheet: View {
         // two "Done" buttons in one accessory bar.
         // The 2026-08-21 template chrome in one line: the pinned SheetHeader (Cancel + title),
         // blocked swipe-dismiss while dirty, and the discard prompt on Cancel.
-        .fernletDraftGuard(isDirty: isDirty, title: "Log workout") { dismiss() }
+        .fernletDraftGuard(isDirty: isDirty, title: logSheetTitle) { dismiss() }
         .onAppear { refreshRecall() }
         .onChange(of: logMode) { _, _ in
             draft.clear()
@@ -1270,8 +1285,8 @@ struct LogAgainCard: View {
                     logAgainButton
                 }
             }
-            if !summary.isEmpty {
-                Text(verbatim: summary)
+            if let summary {
+                summary
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .lineLimit(2)
@@ -1303,20 +1318,24 @@ struct LogAgainCard: View {
     }
 
     /// "Bench press, Lat pulldown, Dip · 3 more" for strength; type + minutes for an activity.
-    private var summary: String {
+    /// A `Text`, not a `String`, so the "min"/"more" sentence shapes localize — the exercise and
+    /// type names interpolate as data. Nil when the workout carries nothing to summarize.
+    private var summary: Text? {
         let workout = recent.workout
         if workout.mode == .activity {
-            var parts: [String] = []
-            if let type = workout.activityType { parts.append(type.displayName) }
-            if let minutes = workout.duration { parts.append("\(minutes) min") }
-            return parts.joined(separator: " · ")
+            let type = workout.activityType?.displayName
+            let minutes = workout.duration
+            if let type, let minutes { return Text("\(type) · \(minutes) min") }
+            if let type { return Text(verbatim: type) }
+            if let minutes { return Text("\(minutes) min") }
+            return nil
         }
         let names = workout.exerciseLines.compactMap { ExerciseLineParser.parse($0)?.name }
         let shown = names.isEmpty ? workout.exerciseLines : names
-        guard !shown.isEmpty else { return "" }
+        guard !shown.isEmpty else { return nil }
         let leading = shown.prefix(3).joined(separator: ", ")
         let more = shown.count - min(3, shown.count)
-        return more > 0 ? "\(leading) · \(more) more" : leading
+        return more > 0 ? Text("\(leading) · \(more) more") : Text(verbatim: leading)
     }
 }
 
@@ -1400,7 +1419,9 @@ struct WorkoutSuggestionSheet: View {
                 Image(systemName: "mappin.and.ellipse")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.moss)
-                Text(verbatim: "\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
+                // Localizing interpolation, never a verbatim String build: "items" is display
+                // copy; the location name interpolates as data.
+                Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
@@ -1501,7 +1522,7 @@ struct WorkoutSuggestionSheet: View {
     /// retroactive "Already did this — log it" keeps its moss-tint capsule between them.
     ///
     /// 1d·AX3: Edit and Save for later unstack to full width (``AdaptiveStack``), and the
-    /// "Already did this" tertiary moves below the primary.
+    /// "Already did this" tertiary and the one-line caption move below the primary.
     @ViewBuilder private func committedPlanActionBar(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
         let editTarget = guidableSession(in: dayPlan) ?? dayPlan.sessions.first
         // Sessions not yet logged (guided runner, card, a prior log, or — after a relaunch — a matching
@@ -1545,6 +1566,10 @@ struct WorkoutSuggestionSheet: View {
             }
             if dynamicTypeSize.isAccessibilitySize, !remainingSessions.isEmpty {
                 logAlreadyDoneButton(remainingSessions)
+            }
+            if dynamicTypeSize.isAccessibilitySize {
+                // 1d·AX3: the caption follows the tertiary below the primary bar.
+                startOrSaveCaption
             }
         }
         .padding(.horizontal, 20)
@@ -1780,24 +1805,21 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
-    /// The committed-plan reading pane (1d): split label, session cards, the context and
-    /// explanation lines, then adjust / equipment / rework. No controls compete with the bottom
-    /// bar's single green (MOVE-17) — Start now lives there.
+    /// The committed-plan reading pane (1d): session cards, the context and explanation lines,
+    /// then adjust / equipment / rework. The split eyebrow lives in the pinned header, not here,
+    /// and no controls compete with the bottom bar's single green (MOVE-17) — Start now lives there.
     private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(dayPlan.splitName) · \(dayPlan.dayTitle)")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.moss)
             ForEach(dayPlan.sessions) { session in
                 sessionCard(session)
             }
 
             committedContextLine
-            Text("Start it now, or save it and it'll be waiting on the Move root.")
-                .font(.fernlet(.bubble))
-                .italic()
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            // 1d·AX3: at accessibility sizes the caption moves below the primary bar
+            // (with the "Already did this" tertiary) instead of sitting in the scroll content.
+            if !dynamicTypeSize.isAccessibilitySize {
+                startOrSaveCaption
+            }
 
             if aiAdjustAvailable {
                 aiAdjustField
@@ -1808,10 +1830,22 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
+    /// The one italic "what happens next" line of the committed plan (1d); rendered in the scroll
+    /// content at default sizes and below the primary bar at accessibility sizes (1d·AX3).
+    private var startOrSaveCaption: some View {
+        Text("Start it now, or save it and it'll be waiting on the Move root.")
+            .font(.fernlet(.bubble))
+            .italic()
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
     /// "Full gym · built for a hard day" — where and at what intensity the plan was built.
+    /// `displayWord` is the localized half of the intensity's token/display fork — never
+    /// interpolate the frozen `rawValue` into display copy.
     private var committedContextLine: some View {
         let locationName = store.settings.activeWorkoutLocation.name
-        let intensity = (store.committedGuidedIntensity ?? energy).rawValue.lowercased()
+        let intensity = (store.committedGuidedIntensity ?? energy).displayWord
         return Text("\(locationName) · built for a \(intensity) day")
             .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
@@ -1839,7 +1873,7 @@ struct WorkoutSuggestionSheet: View {
             SheetField("How are you feeling?") {
                 VStack(alignment: .leading, spacing: 8) {
                     if let rec = recommendedIntensity {
-                        Text("Today's readiness suggests \(rec.rawValue.lowercased()).")
+                        Text("Today's readiness suggests \(rec.displayWord).")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                     }
@@ -1937,8 +1971,14 @@ struct WorkoutSuggestionSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             // The 2026-08-21 template chrome: grabber (presenter), Cancel, then title — the sheet
-            // was swipe-only to dismiss before (XCUT-15).
-            SheetHeader(title: sheetTitle, onCancel: attemptCancel)
+            // was swipe-only to dismiss before (XCUT-15). A committed plan carries its split
+            // eyebrow ABOVE the title in the pinned header (1d: "Daily movement · day 1"), never
+            // as the first line of the scroll content.
+            SheetHeader(
+                title: sheetTitle,
+                eyebrow: dayPlan.map { Text("\($0.splitName) · \($0.dayTitle)") },
+                onCancel: attemptCancel
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if let dayPlan {
@@ -2079,7 +2119,9 @@ struct WorkoutRow: View {
             Text(category.rawValue)
                 .foregroundStyle(category.color)
             if let duration = workout.duration { Text("\(duration) min") }
-            Text(workout.intensity.rawValue)
+            // The localized half of the intensity fork; the category rawValue beside it stays a
+            // deferred fork (WorkoutType).
+            Text(verbatim: workout.intensity.displayWord)
         }
         .font(.fernlet(.labelSmall))
         .foregroundStyle(Color.slate)

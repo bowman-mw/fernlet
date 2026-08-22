@@ -549,12 +549,14 @@ public extension View {
         isDirty: Bool,
         title: LocalizedStringKey,
         subtitle: LocalizedStringKey? = nil,
+        onDone: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) -> some View {
         modifier(FernletDraftGuardModifier(
             isDirty: isDirty,
             title: Text(title),
             subtitle: subtitle.map { Text($0) },
+            onDone: onDone,
             onDismiss: onDismiss
         ))
     }
@@ -566,12 +568,14 @@ public extension View {
         isDirty: Bool,
         title: Text,
         subtitle: Text? = nil,
+        onDone: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) -> some View {
         modifier(FernletDraftGuardModifier(
             isDirty: isDirty,
             title: title,
             subtitle: subtitle,
+            onDone: onDone,
             onDismiss: onDismiss
         ))
     }
@@ -590,6 +594,8 @@ public struct FernletDraftGuardModifier: ViewModifier {
     /// of the bare ``SheetCancelBar`` — the 2026-08-21 template's pinned header (artboard 2a).
     let title: Text?
     let subtitle: Text?
+    /// Optional trailing Done for a draft sheet's dismiss-only state; nil hides the slot.
+    var onDone: (() -> Void)?
     @State private var askingToDiscard = false
 
     public init(isDirty: Bool, showsCancelBar: Bool = true, onDismiss: @escaping () -> Void) {
@@ -598,16 +604,27 @@ public struct FernletDraftGuardModifier: ViewModifier {
         self.onDismiss = onDismiss
         self.title = nil
         self.subtitle = nil
+        self.onDone = nil
     }
 
     /// The header-bearing form: the guard owns the sheet's pinned ``SheetHeader`` so Cancel and
-    /// the discard prompt stay wired together and `sheet.cancel` renders exactly once.
-    public init(isDirty: Bool, title: Text, subtitle: Text? = nil, onDismiss: @escaping () -> Void) {
+    /// the discard prompt stay wired together and `sheet.cancel` renders exactly once. `onDone`
+    /// fills the trailing slot for the state where a draft sheet becomes dismiss-only (a logged
+    /// meal whose photo failed): the covering rule says that exit belongs top-right, never in a
+    /// bottom moss pill.
+    public init(
+        isDirty: Bool,
+        title: Text,
+        subtitle: Text? = nil,
+        onDone: (() -> Void)? = nil,
+        onDismiss: @escaping () -> Void
+    ) {
         self.isDirty = isDirty
         self.showsCancelBar = true
         self.onDismiss = onDismiss
         self.title = title
         self.subtitle = subtitle
+        self.onDone = onDone
     }
 
     public func body(content: Content) -> some View {
@@ -621,7 +638,7 @@ public struct FernletDraftGuardModifier: ViewModifier {
     @ViewBuilder
     private var topInset: some View {
         if let title {
-            SheetHeader(title: title, subtitle: subtitle, onCancel: cancelTapped)
+            SheetHeader(title: title, subtitle: subtitle, onCancel: cancelTapped, onDone: onDone)
         } else if showsCancelBar {
             SheetCancelBar(action: cancelTapped)
                 .background(Color.parchment)
@@ -1225,6 +1242,7 @@ public struct SheetSaveBar: View {
     var label: Text
     var disabled: Bool
     var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The localizing initializer. A literal at the call site is harvested into the calling target's
     /// string catalog and looked up in `Bundle.main` — the app bundle, where all ~41 call sites are.
@@ -1256,15 +1274,19 @@ public struct SheetSaveBar: View {
     }
 
     public var body: some View {
-        HStack {
-            Spacer()
+        // 2a·AX3: the commit stays bottom-right until its label would wrap, then goes full
+        // width — at accessibility sizes the grown label wins the whole strip.
+        let fullWidth = dynamicTypeSize.isAccessibilitySize
+        return HStack {
+            if !fullWidth { Spacer() }
             Button(action: action) { label }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
+                .multilineTextAlignment(.center)
                 .foregroundStyle(disabled ? Color.bark : Color.onMoss)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
-                .frame(minHeight: 52)
+                .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 52)
                 .background(
                     Color.mossFill.opacity(disabled ? 0.55 : 1),
                     in: RoundedRectangle(cornerRadius: 16)

@@ -126,6 +126,28 @@ struct DeleteEverythingSheet: View {
         }
     }
 
+    /// The "kept on purpose" bullets, shortened at accessibility sizes (5e·AX3) and collapsed to
+    /// one line at AX5 (5e·AX5) — the same tiering as ``deleteBullets``. The short forms only ever
+    /// drop words, never claims: the wall stays on both sides, the design-sharing restriction
+    /// stays, the app lock stays.
+    private var keptBullets: [(glyph: String, text: LocalizedStringKey)] {
+        if dynamicTypeSize >= .accessibility5 {
+            return [("photo.on.rectangle.angled", "Shared photo wall, sharing restriction, app lock")]
+        }
+        if dynamicTypeSize.isAccessibilitySize {
+            return [
+                ("photo.on.rectangle.angled", "The shared photo wall, on both sides"),
+                ("hand.raised", "Any restriction on sharing your designs"),
+                ("lock", "Your app lock"),
+            ]
+        }
+        return [
+            ("photo.on.rectangle.angled", "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete."),
+            ("hand.raised", "Any restriction on sharing your own designs."),
+            ("lock", "Your app lock stays set up."),
+        ]
+    }
+
     /// The survivors, ported from the dialog's reconciled kept list: the shared photo wall (BOTH
     /// directions — no bulk delete exists by product decision), the moderation self-ban (phrased as
     /// the dialog phrases it), and the app lock. Blocks are NOT kept — that consequence lives in
@@ -134,9 +156,9 @@ struct DeleteEverythingSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Kept on purpose")
                 .accessibilityIdentifier("deleteAll.keptList")
-            bulletRow(glyph: "photo.on.rectangle.angled", text: "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete.")
-            bulletRow(glyph: "hand.raised", text: "Any restriction on sharing your own designs.")
-            bulletRow(glyph: "lock", text: "Your app lock stays set up.")
+            ForEach(Array(keptBullets.enumerated()), id: \.offset) { _, bullet in
+                bulletRow(glyph: bullet.glyph, text: bullet.text)
+            }
         }
     }
 

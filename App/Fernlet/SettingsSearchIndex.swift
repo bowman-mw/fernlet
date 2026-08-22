@@ -577,6 +577,9 @@ nonisolated enum SettingsSearchIndex {
             route: .nearbyFriends
         ),
         SettingsSearchEntry(
+            // Frozen token, deliberately NOT the setting's current name: the toggle was renamed
+            // "Deliver hearts later" (artboard 5b, 2026-08-21) and the row displays that via the
+            // string catalog's en value for this key — the token itself never rewords.
             title: "Deliver hearts when apart",
             keywords: ["hearts", "away", "apart", "deliver", "drop off", "later"],
             breadcrumb: "Nearby friends",
