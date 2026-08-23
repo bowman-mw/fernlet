@@ -32,10 +32,24 @@ struct LogIntimacySheet: View {
     @State private var protectionUsed: Bool?
     @State private var isSaving = false
     @State private var statusMessage: String?
+    /// Set when the sealed note WAS written but Apple Health refused the companion sample.
+    ///
+    /// That sentence used to show for 1.8 s and then dismiss itself, which is a window a VoiceOver
+    /// user cannot win: focus is elsewhere, nothing is spoken, and the sheet is gone. The sheet now
+    /// stays open and says it out loud.
+    ///
+    /// Staying open FREEZES the sheet: the fields go `disabled`, so there are no post-write edits
+    /// for a swipe-down to discard (which is why `isDirty` may honestly report false), and the
+    /// commit bar becomes a plain Done. Re-arming Save would be worse than the bug it fixes —
+    /// `IntimacyLogStore.insert` appends, so a second commit seals a duplicate event rather than
+    /// amending the one already written.
+    @State private var savedWithCaveat = false
 
-    /// Whether the sheet holds anything a swipe-down would throw away.
+    /// Whether the sheet holds anything a swipe-down would throw away. Nothing, once the note has
+    /// been sealed — see ``savedWithCaveat``.
     private var isDirty: Bool {
-        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !savedWithCaveat else { return false }
+        return !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || protectionUsed != nil
             || dateAdjusted
     }
@@ -44,22 +58,30 @@ struct LogIntimacySheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    dateField
-                    noteField
+                    // Frozen once the note is sealed — see ``savedWithCaveat``. `statusText` stays
+                    // outside the disabled group: the caveat sentence is why the sheet stayed open.
+                    Group {
+                        dateField
+                        noteField
 
-                    Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
 
-                    appleHealthField
+                        appleHealthField
+                    }
+                    .disabled(savedWithCaveat)
+
                     statusText
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: isSaving ? "Saving" : "Save", disabled: isSaving) {
-                Task { await save() }
+            SheetSaveBar(label: saveLabel, disabled: isSaving) {
+                // The note is already sealed on the caveat path, so the bar closes the sheet rather
+                // than offering a second write of the same event.
+                if savedWithCaveat { dismiss() } else { Task { await save() } }
             }
         }
         .background(Color.parchment)
@@ -137,6 +159,12 @@ struct LogIntimacySheet: View {
         }
     }
 
+    /// What the commit bar says: Done once the note is sealed and only the Health half fell short.
+    private var saveLabel: LocalizedStringKey {
+        if savedWithCaveat { return "Done" }
+        return isSaving ? "Saving" : "Save"
+    }
+
     /// The save outcome, when there is something to say.
     @ViewBuilder
     private var statusText: some View {
@@ -186,18 +214,35 @@ struct LogIntimacySheet: View {
                 )
                 try intimacyStore.markSavedToHealthKit(id: log.id, externalUUID: externalUUID)
             } catch {
-                statusMessage = "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"
-                // Cancelled: the sheet is already gone; the note is saved either way.
-                do { try await Task.sleep(for: .seconds(1.8)) } catch { return }
+                // The note IS sealed; only the Health sample failed. Say so and STAY — the sentence
+                // is the whole point of the branch, and a 1.8 s window with the cursor elsewhere is
+                // not a way of telling anyone anything.
+                savedWithCaveat = true
+                report(String(localized: "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"))
+                return
             }
             dismiss()
         } catch is IntimacyTrackingHiddenError {
             // The derived gate flipped to hidden while this sheet was open (a Settings toggle or a
             // profile edit mid-session) and the funnel refused the seal. A raw Foundation error string
             // would be alarming here — say what happened gently instead.
-            statusMessage = "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."
+            //
+            // NOTHING was written on this path, so the sheet deliberately does NOT dismiss and
+            // `savedWithCaveat` stays false: the typed note is still only in this sheet, Save is
+            // still the honest verb for the bar, and the draft guard still stands between the note
+            // and a swipe-down. What was missing is that none of it was ever spoken.
+            report(String(localized: "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."))
         } catch {
-            statusMessage = error.localizedDescription
+            report(error.localizedDescription)
         }
+    }
+
+    /// Publishes a save outcome: renders the sentence and speaks it once.
+    ///
+    /// **Privacy:** the outcome only. The note itself is sealed, device-only, and behind the app
+    /// lock; an announcement is spoken aloud to whoever is within earshot.
+    private func report(_ message: String) {
+        statusMessage = message
+        AccessibilityNotification.Announcement(message).post()
     }
 }

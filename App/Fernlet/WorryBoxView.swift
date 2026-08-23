@@ -9,6 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 import PrivateMemoryStore
 import FernletUI
 
@@ -426,9 +429,36 @@ struct WorryBoxView: View {
     @State private var emberTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var isComposeFocused: Bool
+    /// Puts VoiceOver on "Keep it" the moment the undo strip appears, so the undo is one activation
+    /// away instead of an unknown number of swipes away inside a countdown.
+    @AccessibilityFocusState private var isKeepItFocused: Bool
 
-    /// How long a released worry can still be kept.
+    /// How long a released worry can still be kept, for a user who can see the strip arrive and
+    /// reach it with one tap.
     private static let keepItWindow: Duration = .seconds(6)
+
+    /// The same window for someone driving the phone through an assistive technology.
+    ///
+    /// Six seconds is a *sighted-tap* budget. A VoiceOver user has to notice a new bottom overlay
+    /// exists, swipe to it and double-tap; a Switch Control scan cannot finish a single pass of the
+    /// page in six seconds at the default scan rate. This gates the PERMANENT deletion of a sealed
+    /// row that is deliberately absent from `SealedBackup` — there is no second chance anywhere — so
+    /// the window stretches toward Mail's Undo Send (10–30 s), which this screen's own doc comment
+    /// names as its model.
+    private static let assistiveKeepItWindow: Duration = .seconds(20)
+
+    /// The window in force right now.
+    ///
+    /// Read at the moment a release starts rather than cached, because VoiceOver and Switch Control
+    /// can both be turned on mid-session (Siri, the accessibility shortcut, a Shortcuts automation).
+    private var activeKeepItWindow: Duration {
+        #if canImport(UIKit)
+        if UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning {
+            return Self.assistiveKeepItWindow
+        }
+        #endif
+        return Self.keepItWindow
+    }
 
     /// The kept worries, minus one waiting out its "Keep it" window.
     private var visibleWorries: [WorryNarrative] {
@@ -475,6 +505,13 @@ struct WorryBoxView: View {
         // user just completed ("releasing one lets it go for good") must not quietly un-happen and
         // put the worry back with nothing said.
         .onDisappear { commitPendingRelease() }
+        // Driven from the STRIP APPEARING, not from the release task that sets `pendingRelease`:
+        // at that point the toast — and the "Keep it" button this focuses — has not been built yet,
+        // so the focus request would land on nothing and the announcement would be the only channel.
+        .onChange(of: pendingRelease?.id) { _, id in
+            guard id != nil else { return }
+            announceKeepItWindow()
+        }
         .onChange(of: scenePhase) { _, phase in
             // Backgrounding takes the strip away just as thoroughly as leaving does, and the pending
             // timer can be suspended — or the app killed — long before its deadline. Commit here too,
@@ -499,6 +536,7 @@ struct WorryBoxView: View {
                     .foregroundStyle(Color.moss)
                     .buttonStyle(.plain)
                     .fernletTapTarget(minWidth: 60)
+                    .accessibilityFocused($isKeepItFocused)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
@@ -685,12 +723,28 @@ struct WorryBoxView: View {
         }
     }
 
+    /// Says the undo strip has arrived and hands VoiceOver the undo itself.
+    ///
+    /// The strip is a new bottom overlay that appears with no sound and no focus change: a blind
+    /// user's first hint that the countdown to a permanent delete has started would otherwise be the
+    /// worry's absence from the list afterwards.
+    ///
+    /// **Privacy:** the event only, never the worry. The text is sealed, and an announcement is
+    /// spoken out loud to whoever is in the room.
+    private func announceKeepItWindow() {
+        isKeepItFocused = true
+        AccessibilityNotification.Announcement(
+            String(localized: "Released. Keep it, if you'd rather it stayed.")
+        ).post()
+    }
+
     /// Starts the undo window. When it elapses undisturbed, the sealed row is really deleted.
     private func startKeepItWindow(for worry: WorryNarrative) {
         pendingReleaseTask?.cancel()
+        let window = activeKeepItWindow
         pendingReleaseTask = Task { @MainActor in
             do {
-                try await Task.sleep(for: Self.keepItWindow)
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled by "Keep it" (the worry stays) or by a commit path that has already
                 // claimed it (the worry is already gone). Nothing to do either way.

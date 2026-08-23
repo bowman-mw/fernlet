@@ -18,7 +18,16 @@ import FernletUI
 /// The building block of a ``BreathingPreset``; ``BreathingExerciseView``'s session loop shows
 /// `label`, animates the circle toward `targetScale` over `seconds`, then sleeps out the phase.
 struct BreathPhase: Equatable {
-    let label: String
+    /// The phase's words — the running screen's only text, and the value VoiceOver speaks each time
+    /// the pacer turns.
+    ///
+    /// A `LocalizedStringResource` rather than a `String`: `Text(_:)` renders it and
+    /// `.accessibilityValue(Text(_:))` speaks it, and both of those resolve the catalog. A plain
+    /// `String` would reach `Text`'s NON-localizing initializer instead, which is why this line used
+    /// to be English forever with a clean build. It is display copy, never a token: nothing persists
+    /// it (``BreathingPreset/id`` is the stored key) and nothing matches on it, so translating it is
+    /// safe.
+    let label: LocalizedStringResource
     let seconds: Double
     /// Target circle scale at the END of the phase (holds keep the previous target).
     let targetScale: CGFloat
@@ -42,10 +51,10 @@ struct BreathingPreset: Identifiable, Equatable {
         name: "Box",
         caption: "In 4 · hold 4 · out 4 · hold 4",
         phases: [
-            BreathPhase(label: "Breathe in", seconds: 4, targetScale: 1.0),
-            BreathPhase(label: "Hold", seconds: 4, targetScale: 1.0),
-            BreathPhase(label: "Breathe out", seconds: 4, targetScale: 0.55),
-            BreathPhase(label: "Hold", seconds: 4, targetScale: 0.55)
+            BreathPhase(label: BreathingCopy.breatheIn, seconds: 4, targetScale: 1.0),
+            BreathPhase(label: BreathingCopy.hold, seconds: 4, targetScale: 1.0),
+            BreathPhase(label: BreathingCopy.breatheOut, seconds: 4, targetScale: 0.55),
+            BreathPhase(label: BreathingCopy.hold, seconds: 4, targetScale: 0.55)
         ]
     )
 
@@ -55,13 +64,52 @@ struct BreathingPreset: Identifiable, Equatable {
         name: "Relax",
         caption: "In 4 · hold 7 · out 8",
         phases: [
-            BreathPhase(label: "Breathe in", seconds: 4, targetScale: 1.0),
-            BreathPhase(label: "Hold", seconds: 7, targetScale: 1.0),
-            BreathPhase(label: "Breathe out", seconds: 8, targetScale: 0.55)
+            BreathPhase(label: BreathingCopy.breatheIn, seconds: 4, targetScale: 1.0),
+            BreathPhase(label: BreathingCopy.hold, seconds: 7, targetScale: 1.0),
+            BreathPhase(label: BreathingCopy.breatheOut, seconds: 8, targetScale: 0.55)
         ]
     )
 
     static let all: [BreathingPreset] = [.box, .relax]
+}
+
+/// The pacer's spoken and rendered words.
+///
+/// Four one- or two-word lines, gathered here because each is used at two or three call sites (the
+/// presets, the idle state, the finish) and each has to be one catalog key rather than several
+/// copies that could drift apart in translation. They carry translator comments the bare literals
+/// could not: "Hold" is an instruction to hold a breath, not a verb for keeping something.
+enum BreathingCopy {
+    /// The inhale phase.
+    static let breatheIn = LocalizedStringResource(
+        "Breathe in",
+        comment: "Shown and spoken while the breathing pacer's circle expands. An instruction to inhale, given to someone with their eyes closed — keep it short and calm.")
+
+    /// A held breath, between the inhale and the exhale (and, in box breathing, after the exhale).
+    static let hold = LocalizedStringResource(
+        "Hold",
+        comment: "Shown and spoken while the breathing pacer rests between breaths. It means 'hold your breath', not 'keep' or 'wait'.")
+
+    /// The exhale phase.
+    static let breatheOut = LocalizedStringResource(
+        "Breathe out",
+        comment: "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale.")
+
+    /// The resting state, before a session starts and after one is ended early.
+    static let ready = LocalizedStringResource(
+        "Ready when you are",
+        comment: "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt.")
+
+    /// The last thing the pacer says, as a completed session fades into the finish screen.
+    static let allDone = LocalizedStringResource(
+        "All done",
+        comment: "Shown and spoken by the breathing pacer the moment a session reaches its full length.")
+
+    /// The pacer's stable accessibility NAME. Stable is the point: VoiceOver re-speaks a focused
+    /// element's changed value, and a changed label would instead be read as a new element.
+    static let pacerLabel = LocalizedStringResource(
+        "Breathing pacer",
+        comment: "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'.")
 }
 
 /// The slow-breathing exercise: a softly swelling circle guided through a chosen
@@ -91,7 +139,13 @@ struct BreathingExerciseView: View {
 
     @State private var isRunning = false
     @State private var isFinished = false
-    @State private var phaseLabel = "Ready when you are"
+    @State private var phaseLabel = BreathingCopy.ready
+    /// Puts VoiceOver on the pacer when a session begins.
+    ///
+    /// Load-bearing, not a nicety: VoiceOver re-speaks a changed `accessibilityValue` only on the
+    /// element that currently holds focus. Without this the cursor stays on Begin, every phase change
+    /// is silent, and the exercise conveys nothing at all for up to three minutes.
+    @AccessibilityFocusState private var isPacerFocused: Bool
     @State private var circleScale: CGFloat = 0.6
     @State private var idleBreathing = false
     @State private var sessionTask: Task<Void, Never>?
@@ -134,6 +188,15 @@ struct BreathingExerciseView: View {
             if !(1...3).contains(minutes) { minutes = 1 }
         }
         .onDisappear { sessionTask?.cancel() }
+        // Driven from the STATE FLIP, not from `startSession()`: at the moment Begin's action runs,
+        // `runningScreen` — and therefore the pacer element this targets — has not been built yet,
+        // so a focus request there lands on nothing. T0-4 has no second channel (a changed
+        // accessibilityValue is re-spoken only on the FOCUSED element, and there is no
+        // announcement), so a focus request that misses makes the whole fix inert.
+        .onChange(of: isRunning) { _, running in
+            guard running else { return }
+            isPacerFocused = true
+        }
         .onChange(of: scenePhase) { _, newPhase in
             // Breathing is a present-moment activity. If the app is actually backgrounded mid-session
             // (locked, home-swiped) the wall-clock timer would otherwise "complete" whenever the
@@ -205,14 +268,7 @@ struct BreathingExerciseView: View {
         // The phase word sits high (fixed top padding), the circle floats in the space below it,
         // and "End early" rests at the bottom — matching the mockup's running frame.
         VStack(spacing: 0) {
-            Text(phaseLabel)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.moss)
-                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
-                .padding(.top, 90)
-
-            breathingCircle
-                .frame(maxHeight: .infinity)
+            pacer
 
             // Slate, not softTaupe: this is the session's only exit, and softTaupe measures
             // 2.03:1 on parchment — every other muted label in this file already uses slate
@@ -223,6 +279,37 @@ struct BreathingExerciseView: View {
                 .padding(.bottom, 20)
         }
         .padding(.horizontal, 20)
+    }
+
+    /// The pacer itself — the phase word and the swelling circle — as ONE accessibility element
+    /// whose spoken *value* is the current phase.
+    ///
+    /// Why a value and not a label: VoiceOver re-speaks the focused element's value when it changes,
+    /// and does not re-read a `Text` that merely swapped its contents. So a session that was
+    /// entirely visual (both circles are `accessibilityHidden`, the word never announced, and the
+    /// one `.soft` haptic is identical for inhale, hold and exhale — and switchable off) now paces
+    /// out loud, in step with the animation, for as long as the pacer holds focus.
+    ///
+    /// Deliberately NOT the whole running screen, which is what the 2026-08-22 audit's prose
+    /// proposed: `accessibilityElement(children: .ignore)` around the full `VStack` would swallow
+    /// "End early" — the session's only exit — and leave a blind user inside a three-minute exercise
+    /// with no way out. The grouping stops above the button.
+    private var pacer: some View {
+        VStack(spacing: 0) {
+            Text(phaseLabel)
+                .font(.fernlet(.displayMedium))
+                .foregroundStyle(Color.moss)
+                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
+                .padding(.top, 90)
+
+            breathingCircle
+                .frame(maxHeight: .infinity)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(BreathingCopy.pacerLabel))
+        .accessibilityValue(Text(phaseLabel))
+        .accessibilityAddTraits(.updatesFrequently)
+        .accessibilityFocused($isPacerFocused)
     }
 
     // MARK: - Finished
@@ -400,7 +487,11 @@ struct BreathingExerciseView: View {
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
-                Toggle("", isOn: $hapticsEnabled)
+                // The switch draws with its label hidden — the "Haptics" heading to its left is the
+                // visible one — but it still needs a NAME. As `Toggle("", isOn:)` VoiceOver read it
+                // as an anonymous "switch button, on" and Voice Control had nothing to say to press
+                // it. `labelsHidden()` keeps the layout identical and gives it the word back.
+                Toggle("Haptics", isOn: $hapticsEnabled)
                     .labelsHidden()
                     .tint(Color.moss)
             }
@@ -470,7 +561,7 @@ struct BreathingExerciseView: View {
     private func finishToSetup() {
         isFinished = false
         isRunning = false
-        phaseLabel = "Ready when you are"
+        phaseLabel = BreathingCopy.ready
         circleScale = restingScale
     }
 
@@ -519,7 +610,7 @@ struct BreathingExerciseView: View {
     }
 
     private func completeSession(start: Date) {
-        phaseLabel = "All done"
+        phaseLabel = BreathingCopy.allDone
         withAnimation(.easeInOut(duration: 1.2)) { circleScale = restingScale }
         // Cross-fade into the finished screen (matching the mockup's fade-and-rise) rather than snapping.
         withAnimation(.easeOut(duration: 0.6)) {
@@ -535,7 +626,7 @@ struct BreathingExerciseView: View {
         sessionTask?.cancel()
         sessionTask = nil
         isRunning = false
-        phaseLabel = "Ready when you are"
+        phaseLabel = BreathingCopy.ready
         withAnimation(.easeInOut(duration: 0.8)) { circleScale = restingScale }
     }
 

@@ -849,7 +849,7 @@
 
     },
     "All done" : {
-
+      "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length."
     },
     "All done." : {
 
@@ -1059,6 +1059,15 @@
     },
     "Breathe and ground sessions, written back to Health." : {
 
+    },
+    "Breathe in" : {
+      "comment" : "Shown and spoken while the breathing pacer's circle expands. An instruction to inhale, given to someone with their eyes closed — keep it short and calm."
+    },
+    "Breathe out" : {
+      "comment" : "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale."
+    },
+    "Breathing pacer" : {
+      "comment" : "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'."
     },
     "Bring a plan back" : {
 
@@ -2112,6 +2121,9 @@
     "Health data is not available on this device." : {
 
     },
+    "Health event saved. Set up app lock to keep notes with future cycles." : {
+
+    },
     "Health is off" : {
 
     },
@@ -2144,6 +2156,9 @@
     },
     "Hide predictions" : {
 
+    },
+    "Hold" : {
+      "comment" : "Shown and spoken while the breathing pacer rests between breaths. It means 'hold your breath', not 'keep' or 'wait'."
     },
     "Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again." : {
 
@@ -2284,6 +2299,9 @@
 
     },
     "Intimacy tracking" : {
+
+    },
+    "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging." : {
 
     },
     "Intimate logging" : {
@@ -2919,6 +2937,9 @@
     "Note (optional)" : {
 
     },
+    "Note saved. Unlock to view it on your calendar." : {
+
+    },
     "Notes" : {
 
     },
@@ -3310,6 +3331,9 @@
     "Private note" : {
 
     },
+    "Private note saved, but Apple Health was not updated: %@" : {
+
+    },
     "Probably not what you meant" : {
 
     },
@@ -3392,7 +3416,7 @@
 
     },
     "Ready when you are" : {
-
+      "comment" : "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt."
     },
     "Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure." : {
 
@@ -3446,6 +3470,9 @@
 
     },
     "Released." : {
+
+    },
+    "Released. Keep it, if you'd rather it stayed." : {
 
     },
     "Remember it anyway" : {
@@ -4135,6 +4162,16 @@
     },
     "Step %lld" : {
 
+    },
+    "Step %lld of %lld. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Step %1$lld of %2$lld. %3$@"
+          }
+        }
+      }
     },
     "Step %lld. %@" : {
       "localizations" : {

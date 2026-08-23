@@ -40,6 +40,23 @@ struct LogPeriodSheet: View {
     @State private var customScales: [PeriodSymptom: Int]
     @State private var statusMessage: String?
     @State private var isSaving = false
+    /// Set when a write LANDED but not cleanly — the sealed note was buffered until unlock, or
+    /// dropped for want of an app lock.
+    ///
+    /// The sheet used to show that sentence for 1.2–1.8 s and dismiss itself. It is the one message
+    /// telling the user their note was not kept, VoiceOver's focus is somewhere else for the whole
+    /// window, and a blind user was structurally guaranteed never to hear it. Stretching the timer
+    /// only makes the race less unfair; the sheet now simply stays.
+    ///
+    /// Staying open raises two hazards, and this flag closes both by FREEZING the sheet: the fields
+    /// go `disabled`, so there are no post-write edits for a swipe-down to discard (which is why
+    /// `isDirty` may honestly report false and retire the draft guard), and the commit bar becomes a
+    /// plain Done, so a second tap cannot write the day again. Re-arming Save instead would be
+    /// worse than the bug it fixes: `PeriodTrackerStore.logEvent` mints a fresh `externalUUID` and
+    /// inserts a new sealed narrative every time, so a second commit duplicates the day rather than
+    /// amending it. Changing a logged day is what the calendar's Edit is for, and it routes through
+    /// `editEvent(replacingEntry:)`.
+    @State private var savedWithCaveat = false
     /// The field values the sheet opened with, so the dirty check compares against exactly what was
     /// seeded (a fresh log and an edit of an existing day seed very different things).
     private let initialValues: SheetValues
@@ -76,8 +93,9 @@ struct LogPeriodSheet: View {
         )
     }
 
-    /// Whether the sheet holds anything a swipe-down would throw away.
-    private var isDirty: Bool { currentValues != initialValues }
+    /// Whether the sheet holds anything a swipe-down would throw away. Nothing once the entry has
+    /// been written, because the fields are frozen at the same moment — see ``savedWithCaveat``.
+    private var isDirty: Bool { !savedWithCaveat && currentValues != initialValues }
 
     /// Whether Save is available.
     ///
@@ -144,23 +162,33 @@ struct LogPeriodSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    lockWarning
-                    dateField
-                    flowLevelField
-                    cycleDetailsField
-                    symptomsField
-                    observationsField
-                    temperatureField
-                    noteField
-                    noteCounter
+                    // Frozen once the entry is written — see ``savedWithCaveat``. `statusText` is
+                    // deliberately OUTSIDE the disabled group: the caveat sentence is the reason
+                    // the sheet stayed open, so nothing may dim or mute it.
+                    Group {
+                        lockWarning
+                        dateField
+                        flowLevelField
+                        cycleDetailsField
+                        symptomsField
+                        observationsField
+                        temperatureField
+                        noteField
+                        noteCounter
+                    }
+                    .disabled(savedWithCaveat)
+
                     statusText
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: saveLabel, disabled: isSaving || !canSave) {
-                Task { await save() }
+            SheetSaveBar(label: saveLabel, disabled: isSaving || !(canSave || savedWithCaveat)) {
+                // Once the entry is written the bar is a Done, not a second Save: leaving the sheet
+                // open is what lets the caveat be read (and heard), and re-arming the write would
+                // let the same tap log the day twice.
+                if savedWithCaveat { dismiss() } else { Task { await save() } }
             }
         }
         .background(Color.parchment)
@@ -370,6 +398,7 @@ struct LogPeriodSheet: View {
     /// `LocalizedStringKey`, not `String`: all three words are authored copy, and only this type
     /// extracts them into the string catalog.
     private var saveLabel: LocalizedStringKey {
+        if savedWithCaveat { return "Done" }
         if isSaving { return "Saving" }
         return isEmptiedEdit ? "Remove entry" : "Save"
     }
@@ -459,7 +488,7 @@ struct LogPeriodSheet: View {
         case .value(let value):
             basalBodyTemperature = value
         case .invalid(let message):
-            statusMessage = message
+            report(message)
             return
         }
         do {
@@ -486,20 +515,32 @@ struct LogPeriodSheet: View {
             }
             switch result {
             case .saved:
+                // The only clean outcome: everything the user typed is where they expect it, so
+                // there is nothing to read and the sheet gets out of the way.
                 dismiss()
             case .savedWithBufferedNarrative:
-                statusMessage = "Note saved. Unlock to view it on your calendar."
-                // Cancelled: the sheet is already going away — the save has landed, so there is
-                // nothing left to do but stop.
-                do { try await Task.sleep(for: .seconds(1.2)) } catch { return }
-                dismiss()
+                savedWithCaveat = true
+                report(String(localized: "Note saved. Unlock to view it on your calendar."))
             case .savedWithDroppedNarrative:
-                statusMessage = "Health event saved. Set up app lock to keep notes with future cycles."
-                do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
-                dismiss()
+                savedWithCaveat = true
+                report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."))
             }
         } catch {
-            statusMessage = error.localizedDescription
+            report(error.localizedDescription)
         }
+    }
+
+    /// Publishes a save outcome: renders the sentence and speaks it once.
+    ///
+    /// Every one of these sentences reports something the user did NOT get — a note buffered, a note
+    /// dropped, a temperature refused, a write that threw. Rendered as a plain `Text` it reached
+    /// only people looking at the sheet, which contradicts the project's nothing-silent invariant
+    /// for exactly the users least able to check.
+    ///
+    /// **Privacy:** the outcome sentence and nothing else. An announcement is audible across the
+    /// room, and the note this sheet seals is the reason the whole surface is behind an app lock.
+    private func report(_ message: String) {
+        statusMessage = message
+        AccessibilityNotification.Announcement(message).post()
     }
 }

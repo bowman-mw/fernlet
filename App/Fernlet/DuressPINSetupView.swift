@@ -780,11 +780,25 @@ private struct DuressPINEntrySheet: View {
         }
     }
 
+    /// How large the pinned pad is allowed to grow.
+    ///
+    /// This is the ONE pad host that cannot use `fernletLockPadPage()`. The pad here is a
+    /// `safeAreaInset`, not scrolling content: an inset that grows takes its height off the top of
+    /// the page it is inset into, so letting the tiles reach their accessibility-size height would
+    /// squeeze the explanation above it — the copy that says what the armed duress response
+    /// actually does — down to nothing, and no amount of scrolling would give it back.
+    ///
+    /// Capping the pad and letting the prose above it keep scaling is the right trade for a fixed
+    /// bottom control: the digits still land at roughly 1.5× their base 24pt, well over double the
+    /// 14pt they were before this round, and every key stays on screen at every text size.
+    private static let padTypeSizeCap: DynamicTypeSize = .accessibility1
+
     /// The keypad, pinned to the bottom of the sheet. Empty for the alphanumeric kind, which types
     /// into a `SecureField` with the system keyboard instead.
     @ViewBuilder private var numericPadInset: some View {
         if (lockService.credentialKind ?? .pin6) != .alphanumeric {
             FernletNumericPad(value: step == .enter ? $entry : $confirmation, maxLength: pinLength)
+                .dynamicTypeSize(...Self.padTypeSizeCap)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 .background(Color.parchment)

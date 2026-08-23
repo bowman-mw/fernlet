@@ -2192,6 +2192,9 @@ struct AppLockSettingsView: View {
                     }
                 }
                 .padding(24)
+                // Hosts the shared PIN pad, whose tiles grow with Dynamic Type; without this the
+                // bottom key row falls off the sheet at the accessibility sizes and in landscape.
+                .fernletLockPadPage()
             }
             .navigationTitle("Verify passcode")
             .navigationBarTitleDisplayMode(.inline)
@@ -2338,7 +2341,12 @@ private struct FernletLockChangePasscodeView: View {
         NavigationStack {
             ZStack {
                 Color.parchment.ignoresSafeArea()
-                stepContent.padding(24)
+                // All three steps host the shared PIN pad, whose tiles grow with Dynamic Type;
+                // without this the bottom key row falls off the sheet at the accessibility sizes
+                // and in landscape, on a flow whose only other exit is Cancel.
+                stepContent
+                    .padding(24)
+                    .fernletLockPadPage()
             }
             .navigationTitle("Change passcode")
             .navigationBarTitleDisplayMode(.inline)

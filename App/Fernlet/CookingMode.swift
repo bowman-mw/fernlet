@@ -162,6 +162,13 @@ struct CookingModeView: View {
     /// Drives the "stop cooking?" confirmation in front of Close during an active walk — closing used
     /// to end the run and clear the Live Activity on a single tap.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
+    /// Follows the walk: VoiceOver lands on the new step's text every time the cursor moves.
+    ///
+    /// `.id(stepIndex)` gives the step text a fresh identity on every advance, which tears down the
+    /// element the user was focused on. Without this the cursor falls back to the top of the screen
+    /// and a wet-handed cook has to swipe past the footer, the progress row and the timer card after
+    /// every single Next — on the screen the app designates as the hands-busy one.
+    @AccessibilityFocusState private var isStepFocused: Bool
 
     init(store: FernletStore, recipe: RecipeDefinition, resuming: Bool = false, initialYield: Int? = nil, onLogToDay: @escaping (MealType, String) -> Void) {
         self.store = store
@@ -409,6 +416,12 @@ struct CookingModeView: View {
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            // The step is this screen's heading, so it lands in the Headings rotor,
+                            // and it carries its own position: the "Step 3 of 8" in the header is a
+                            // separate element the cook would have to go looking for.
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityLabel(Text("Step \(stepIndex + 1) of \(steps.count). \(step.text)"))
+                            .accessibilityFocused($isStepFocused)
                             .transition(.opacity)
                             .id(stepIndex)
 
@@ -434,6 +447,11 @@ struct CookingModeView: View {
             }
             walkerFooter
         }
+        // Driven from the CURSOR, never from `goNext()`: at the moment the button's action runs, the
+        // step view for the new index does not exist yet, so a focus request there lands on nothing.
+        // `onChange` also covers the advances this screen does not originate — the Live Activity's
+        // Next and Siri's "next step" both move the shared run in the background.
+        .onChange(of: stepIndex) { _, _ in isStepFocused = true }
     }
 
     private var currentStep: RecipeStep? {
@@ -736,7 +754,7 @@ struct CookingModeView: View {
             await MainActor.run {
                 guard !Task.isCancelled else { return }
                 timerFired = true
-                fireHaptic()
+                signalTimerExpiry()
             }
         }
     }
@@ -746,8 +764,19 @@ struct CookingModeView: View {
     /// state so an absurd `timerEndsAt` can't schedule an unbounded sleep.
     private static let maxTimerWindowSeconds: TimeInterval = 240 * 60
 
-    private func fireHaptic() {
+    /// The timer's expiry, in the two channels a cook with their hands in a bowl can receive: one
+    /// haptic tap, and one spoken sentence.
+    ///
+    /// The haptic alone was the whole signal, and it is indistinguishable from every other
+    /// notification the phone makes. The words are the SAME catalog key the card above already
+    /// renders — one sentence, one key, translated once: a near-duplicate written for the
+    /// announcement could drift from the one on screen and leave a translator guessing which is
+    /// authoritative.
+    private func signalTimerExpiry() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        AccessibilityNotification.Announcement(
+            String(localized: "Timer's up — tap Next when you're ready. Nothing advances on its own.")
+        ).post()
     }
 
     private func formattedDuration(_ seconds: Int) -> String {
