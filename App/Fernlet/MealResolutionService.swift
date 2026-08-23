@@ -132,7 +132,7 @@ final class MealResolutionService {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type),
                     gate: gate
-                ), let resolution = highConfidenceResolution(from: plan, candidates: candidates) {
+                ), let resolution = builtResolution(from: plan, candidates: candidates, confidence: .high) {
                     return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }
             } catch {
@@ -163,10 +163,15 @@ final class MealResolutionService {
             return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
-        // Deterministic tier 2: candidate-constrained plan.
+        // Deterministic tier 2: candidate-constrained plan. Its confidence is DERIVED from the binds
+        // (research §26 fix 1.8's ledger), not asserted: this rung is where everything the template
+        // tier declines lands, so hardcoding `.high` here simply relocated the defect fixes 1.1/1.2
+        // closed one rung down — "burger and fries" answered with a Burger King burger plus chili
+        // fries at `.high` and `unmatchedItems == []`, more confident and less disclosed than the
+        // partial the template tier would have produced.
         let candidates = host.foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
-           let resolution = highConfidenceResolution(from: plan, candidates: candidates) {
+           let resolution = builtResolution(from: plan, candidates: candidates, confidence: Self.bindConfidence(for: plan, candidates: candidates)) {
             return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
@@ -176,12 +181,19 @@ final class MealResolutionService {
         return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
     }
 
-    /// Builds a high-confidence resolution from a candidate-constrained selection plan, or `nil`
-    /// when the plan yields no meals. Shared by the AI-secondary and deterministic tier-2 paths,
-    /// which differ only in how they obtain `plan`.
-    private func highConfidenceResolution(
+    /// Builds a resolution from a candidate-constrained selection plan, or `nil` when the plan yields
+    /// no meals. Shared by the AI-secondary and deterministic tier-2 paths, which differ in how they
+    /// obtain `plan` AND in what `confidence` they can honestly claim.
+    ///
+    /// **`confidence` is a parameter, and that is the fix.** It was hardcoded `.high` here — for both
+    /// callers — which is the same defect research §26 fix 1.1 closed one rung up in the template
+    /// tier. The AI-selection caller still passes `.high` (a model that picked from a constrained
+    /// candidate list is claiming the pick, and re-judging that claim is not this fix's business); the
+    /// deterministic caller passes ``bindConfidence(for:candidates:)``.
+    private func builtResolution(
         from plan: FoodSelectionPlan,
-        candidates: [FoodSelectionCandidate]
+        candidates: [FoodSelectionCandidate],
+        confidence: MealResolutionConfidence
     ) -> MealResolution? {
         guard let result = MealBuilder.meals(
             from: plan,
@@ -195,10 +207,55 @@ final class MealResolutionService {
         return MealResolution(
             meals: result.meals,
             createdRecipes: result.createdRecipes,
-            confidence: .high,
+            confidence: confidence,
             isFallback: false,
             unmatchedItems: plan.unmatchedItems
         )
+    }
+
+    /// The confidence a deterministic tier-2 plan's binds actually justify: `.high` only when every
+    /// item bound at least one food AND every bound food cleared `FoodItemSearch.confidentBindScore`
+    /// against the item it was bound for; `.low` otherwise.
+    ///
+    /// The same discipline `DishTemplateBindQuality` gives the template tier: `.high` only when every
+    /// component bound, and every bind cleared the confident floor. `.medium` is deliberately never
+    /// produced, for the reason `DishTemplateBindQuality.confidence` states — `needsReview` is
+    /// `== .low`, so a `.medium` would still auto-commit and close nothing.
+    ///
+    /// **Scored against the WHOLE item name, not its sub-phrases.** `deterministicIngredients`
+    /// admits a candidate on its best score over any sub-phrase of the item, which is right for
+    /// admission (a composite item legitimately reaches its food through a shorter phrase) and far
+    /// too generous for confidence: any row merely CONTAINING one typed word earns the +250 substring
+    /// bonus for that one-word phrase, so every bind would look confident. Scoring the full item name
+    /// asks the question confidence actually turns on — how well does this row match what was typed?
+    ///
+    /// **What this does NOT catch, measured:** `burger and fries` still resolves `.high`, because
+    /// *Hamburger (Burger King)* and *Potato, french fries, with chili* each clear 250 on the whole
+    /// item name via that same substring bonus. The remaining defect there is a bind that is
+    /// confident and still the wrong VARIETY — the category `DishTemplateBindAuditTests`' header
+    /// already names and `verdict` has no word for — not an unhonest confidence stamp.
+    /// `planTierStillCommitsBurgerAndFriesAtHighConfidence` pins it.
+    ///
+    /// Static/pure so `DishTemplateBindAuditTests` can exercise it without a host.
+    static func bindConfidence(for plan: FoodSelectionPlan, candidates: [FoodSelectionCandidate]) -> MealResolutionConfidence {
+        guard plan.items.isEmpty == false, plan.unmatchedItems.isEmpty else { return .low }
+        let foodItems = candidates.map(\.foodItem)
+        let index = FoodItemSearch.Index(foodItems: foodItems)
+        // R2: bounded by the split items, each bound to at most one food by `deterministicIngredients`.
+        for item in plan.items {
+            guard item.ingredients.isEmpty == false else { return .low }
+            let scores = Dictionary(
+                FoodItemSearch.scoredResults(for: item.name, in: index, limit: foodItems.count)
+                    .map { ($0.item.id, $0.score) },
+                uniquingKeysWith: max
+            )
+            for ingredient in item.ingredients {
+                guard let bound = candidates.first(where: { $0.id == ingredient.candidateId }),
+                      let score = scores[bound.foodItem.id],
+                      score >= FoodItemSearch.confidentBindScore else { return .low }
+            }
+        }
+        return .high
     }
 
     /// A single quick-log is ONE meal. The AI-selection, lexicon, and deterministic tiers each split a

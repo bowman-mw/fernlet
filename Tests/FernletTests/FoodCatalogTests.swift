@@ -106,12 +106,25 @@ struct FoodCatalogTests {
         }
     }
 
-    /// FTS indexes name + category + tags, so a query that only hits a tag still surfaces the item —
-    /// matching the scorer's searchable text.
-    @Test func searchMatchesViaTagOnly() throws {
-        let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
-        let results = catalog.results(for: "breakfast", limit: 6)
-        #expect(results.contains { $0.name == "Rolled oats" })
+    /// A tag-only hit is RETRIEVED and then not PRESENTED — research §26 fix 1.8's floor.
+    ///
+    /// This test used to assert the opposite ("a query that only hits a tag still surfaces the
+    /// item"), and the flip is the fix, not a casualty of it. FTS still indexes name + category +
+    /// tags, which is right for retrieval, but in the shipped catalog `tags` is derived from the
+    /// CATEGORY — `["cheese"]`, `["chips","pretzels","snacks"]`, `["branded"]` on 50,000 rows — so a
+    /// row that reached the gate without a name hit is a category match wearing a food's name, and
+    /// §9(b)/§9(c) measure what that looks like on screen: `chilis` returning five rows scoring 0
+    /// (Beans & Franks, Beans & Wieners, Beef Goulash) with no distinction from a real hit. The
+    /// retrieval half is unchanged and still asserted below.
+    @Test func tagOnlyMatchesAreRetrievedButNotPresented() throws {
+        let source = try buildSQLiteSource(sampleItems)
+        let catalog = FoodCatalog(source: source)
+        #expect(source.candidates(forQuery: "breakfast").contains { $0.name == "Rolled oats" },
+                "the FTS gate still indexes tags — retrieval is unchanged")
+        #expect(catalog.results(for: "breakfast", limit: 6).isEmpty,
+                "…but a row whose NAME does not carry the query is no longer presented")
+        #expect(!FoodItemSearch.nameCarriesQuery("Rolled oats", query: "breakfast"))
+        #expect(FoodItemSearch.nameCarriesQuery("Rolled oats", query: "oats"))
     }
 
     @Test func formSpecificityBiasSurvivesSQLitePath() throws {

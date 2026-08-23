@@ -180,7 +180,8 @@ public enum FoundationFoodSelectionModel {
         let index = FoodItemSearch.Index(foodItems: foodItems)
         var bestScore: [UUID: Int] = [:]
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: itemName) {
-            for scored in FoodItemSearch.scoredResults(for: phrase, in: index, limit: foodItems.count) {
+            // `stripsStopwords: false` — sub-phrases from `searchPhrases`, not a typed query.
+            for scored in FoodItemSearch.scoredResults(for: phrase, in: index, limit: foodItems.count, stripsStopwords: false) {
                 bestScore[scored.item.id] = max(bestScore[scored.item.id] ?? Int.min, scored.score)
             }
         }

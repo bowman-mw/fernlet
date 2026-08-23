@@ -342,7 +342,7 @@
       "defaultCount": 1,
       "components": [
         { "search": "chicken breast meat only cooked stewed", "gramsPerUnit": 60, "displayName": "Chicken" },
-        { "search": "pasta noodle cooked", "gramsPerUnit": 80, "displayName": "Noodles" },
+        { "search": "egg noodles cooked", "gramsPerUnit": 80, "displayName": "Noodles" },
         { "search": "broth chicken ready to serve", "gramsPerUnit": 200, "displayName": "Chicken broth" }
       ]
     },

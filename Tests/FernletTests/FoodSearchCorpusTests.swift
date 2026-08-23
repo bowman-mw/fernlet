@@ -49,10 +49,25 @@
 //     when they were written down; the rest were selected for shape coverage with known failures
 //     deliberately RETAINED rather than filtered out.
 //
-// THE MEASURED BASELINE — 2026-08-22, tree at b259f3d — is `measuredBaseline` below:
-// **13 zero-result, 27 wrong-top-1, 17 defensible of 57.** 40 of 57 fail outright (70%); of the 44
-// queries that return anything, 27 (61%) return the wrong food. That is materially worse than §8's
-// ~46%, and the difference is selection, not disagreement: §8's 46% describes §8's corpus.
+// THE ORIGINAL BASELINE — 2026-08-22, tree at b259f3d — was
+// **13 zero-result, 27 wrong-top-1, 17 defensible of 57**: 40 of 57 failing outright (70%), and of
+// the 44 queries that returned anything, 27 (61%) returning the wrong food. That was materially
+// worse than §8's ~46%, and the difference is selection, not disagreement: §8's 46% describes §8's
+// corpus.
+//
+// THE CURRENT BASELINE — measured on the tree AFTER §26 fixes 1.6 + 1.7a + 1.8 landed as §29's one
+// coupled unit, and after the adversarial review of that increment — is `measuredBaseline` below.
+// Re-measure with the live dump before trusting any number here; the dump is the only thing that can
+// re-baseline a behaviour change, and a GREEN run of this suite is not evidence the pins were
+// re-measured, only that nothing moved since they were written.
+//
+// The fixes are recorded where they bite: `FoodItemSearch.searchTokens` (1.6, with the
+// leading/trailing POSITION rules that keep §29's hazard from firing, and `stripsStopwords` which
+// confines them to the typed-query surface), `PreparedDishHeuristic.demotingDishes(scored:forQuery:)`
+// (1.7a, with the score guard that stopped it regressing `grilled cheese`), and the two-part floor —
+// `FoodItemSearch.nameCarriesQuery` (name-substring carriage — NOT category, which was tried and
+// measured wrong) beside `minimumBindScore` (§26's score
+// floor). See `bothHalvesOfTheFloorAreLoadBearing` for why neither half alone is correct.
 //
 // This corpus is NOT a random sample of user input and its rate is NOT an unbiased population
 // estimate. It is a fixed, shape-balanced panel whose only job is to move when the pipeline moves.
@@ -288,23 +303,31 @@ struct FoodSearchCorpusTests {
     static let corpus: [FoodSearchCorpusCase] =
         reportNamedZeroResultQueries + reportNamedWrongTopOneQueries + preRegisteredQueries
 
-    /// **The measured baseline, 2026-08-22, tree at b259f3d.** Derived counts are asserted against
-    /// this, and this is the only place the headline numbers appear. Flipping a verdict means
-    /// updating exactly one tuple here plus that row.
-    static let measuredBaseline = (zeroResults: 13, wrongTopOne: 27, defensible: 17)
+    /// **The measured baseline** for the current tree (see the file header). Derived counts are
+    /// asserted against this, and this is the only place the headline numbers appear. Flipping a
+    /// verdict means updating exactly one tuple here plus that row.
+    static let measuredBaseline = (zeroResults: 6, wrongTopOne: 24, defensible: 27)
 
     /// §34's 11 named zero-result queries, verbatim. Seven are natural-phrasing failures (there is no
     /// stopword list on the search path, so `of` is a hard AND term), three are brand-index failures
     /// (`brand_source` is in neither the FTS table nor `Index.searchable`), one is a typo (no
     /// edit-distance fallback anywhere in the pipeline).
+    /// **Seven of the eleven no longer return zero** as of fixes 1.6/1.7a/1.8 — all seven of §26's
+    /// predicted stopword recoveries. Four remain, and the split is exactly the causal one §8 drew:
+    /// every recovered query was a natural-phrasing failure, and every survivor is a brand-index
+    /// failure (`costco`/`kirkland`/`whole foods` live in the unindexed `brand_source`, → fix 2.3) or
+    /// the typo (`chiken`, → an edit-distance fallback, §30 row 16). Nothing in this increment could
+    /// have moved those four, and nothing in it did.
     static let reportNamedZeroResultQueries: [FoodSearchCorpusCase] = [
-        FoodSearchCorpusCase("bowl of oatmeal", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("two scrambled eggs", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("glass of milk", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("handful of almonds", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("piece of chicken", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("bowl of cereal", .reportNamedZeroResult, .zeroResults),
-        FoodSearchCorpusCase("plate of pasta", .reportNamedZeroResult, .zeroResults),
+        FoodSearchCorpusCase("bowl of oatmeal", .reportNamedZeroResult, .defensible, "Oatmeal, NFS", 810),
+        FoodSearchCorpusCase("two scrambled eggs", .reportNamedZeroResult, .defensible,
+                             "Egg omelet or scrambled egg, NS as to fat", 58),
+        FoodSearchCorpusCase("glass of milk", .reportNamedZeroResult, .wrongTopOne, "Milk and cereal bar", 809),
+        FoodSearchCorpusCase("handful of almonds", .reportNamedZeroResult, .defensible, "Nuts, almonds", 310),
+        FoodSearchCorpusCase("piece of chicken", .reportNamedZeroResult, .wrongTopOne, "Chicken curry with rice", 808),
+        FoodSearchCorpusCase("bowl of cereal", .reportNamedZeroResult, .wrongTopOne,
+                             "Cereals ready-to-eat, UNCLE SAM CEREAL", 807),
+        FoodSearchCorpusCase("plate of pasta", .reportNamedZeroResult, .defensible, "Pasta, cooked", 810),
         FoodSearchCorpusCase("costco cheese pizza slice", .reportNamedZeroResult, .zeroResults),
         FoodSearchCorpusCase("kirkland protein bar", .reportNamedZeroResult, .zeroResults),
         FoodSearchCorpusCase("whole foods rotisserie chicken", .reportNamedZeroResult, .zeroResults),
@@ -315,25 +338,35 @@ struct FoodSearchCorpusTests {
     /// today — several names are longer than §8's prose renderings, which abbreviate; the strings here
     /// are the catalog's, character for character (the Texas Toast row really is stored truncated at
     /// 120 characters).
+    ///
+    /// **Two of the fifteen are now right**, both from the name floor (fix 1.8) rather than from any
+    /// reordering: *Ramen bowl with chicken* carries neither "noodle" nor "soup" in its name and
+    /// *Banquet Breakfast Chicken Sandwich* carries no "fil", so both were reaching the top on a
+    /// category/tag hit, and removing them exposed the row that was there all along —
+    /// `CAMPBELL'S, Chicken Noodle Soup, condensed` and `CHICK-FIL-A, chicken sandwich`.
+    /// Four more moved without becoming right, and are judged at their rows below.
     static let reportNamedWrongTopOneQueries: [FoodSearchCorpusCase] = [
-        FoodSearchCorpusCase("apple", .reportNamedWrongTopOne, .wrongTopOne, "Apple salad with dressing", 808),
+        FoodSearchCorpusCase("apple", .reportNamedWrongTopOne, .wrongTopOne, "Apple & Cheese Tray", 809),
         FoodSearchCorpusCase("brown rice", .reportNamedWrongTopOne, .wrongTopOne, "Snacks, brown rice chips", 369),
         FoodSearchCorpusCase("cheddar cheese", .reportNamedWrongTopOne, .wrongTopOne,
                              "Sausage, pork and beef, with cheddar cheese, smoked", 366),
-        FoodSearchCorpusCase("cheese pizza", .reportNamedWrongTopOne, .wrongTopOne, "Calzone, with cheese, meatless", 58),
-        FoodSearchCorpusCase("beef tacos", .reportNamedWrongTopOne, .wrongTopOne, "Burrito, beef, cheese", 59),
+        // The calzone is gone (its name carries no "pizza"), and what it was hiding is a genuine
+        // cheese pizza — but a WHITE one, which is a different dish from what "cheese pizza" means,
+        // and it wins on a score of −12 that is itself a `formSpecificityBias` false positive: "white"
+        // is in `formQualifierTokens` for egg whites, and costs this row 130 points. Still wrong.
+        FoodSearchCorpusCase("cheese pizza", .reportNamedWrongTopOne, .wrongTopOne, "Annie's Three Cheese Pizza Poppers", 368),
+        FoodSearchCorpusCase("beef tacos", .reportNamedWrongTopOne, .wrongTopOne, "TACO BELL, BURRITO SUPREME with beef", 57),
         FoodSearchCorpusCase("pho", .reportNamedWrongTopOne, .wrongTopOne,
                              "Gelatin desserts, dry mix, reduced calorie, with aspartame, added phosphorus, potassium, sodium, vitamin C", 238),
-        FoodSearchCorpusCase("mac and cheese", .reportNamedWrongTopOne, .wrongTopOne, "Macaroni or pasta salad with cheese", 58),
-        FoodSearchCorpusCase("chicken noodle soup", .reportNamedWrongTopOne, .wrongTopOne, "Ramen bowl with chicken", 60),
+        FoodSearchCorpusCase("mac and cheese", .reportNamedWrongTopOne, .wrongTopOne, "Babyfood, macaroni and cheese, toddler", 58),
+        FoodSearchCorpusCase("chicken noodle soup", .reportNamedWrongTopOne, .defensible,
+                             "CAMPBELL'S, Chicken Noodle Soup, condensed", 428),
         FoodSearchCorpusCase("low fat greek yogurt", .reportNamedWrongTopOne, .wrongTopOne, "Low-Fat Greek Yogurt, Guacamole", 989),
-        FoodSearchCorpusCase("chick fil a sandwich", .reportNamedWrongTopOne, .wrongTopOne,
-                             "Banquet Breakfast Chicken Sandwich, 3.36 Oz", 58),
+        FoodSearchCorpusCase("chick fil a sandwich", .reportNamedWrongTopOne, .defensible,
+                             "CHICK-FIL-A, chicken sandwich", 179),
         FoodSearchCorpusCase("chipotle chicken bowl", .reportNamedWrongTopOne, .wrongTopOne, "Lean Chipotle Chicken Bowl, Spicy", 429),
-        FoodSearchCorpusCase("slice of toast", .reportNamedWrongTopOne, .wrongTopOne,
-                             "5 Cheese Authentic Hearth Baked Texas Toast Thick Sliced Bread With Garlic Spread Topped With A Blend Of Mozzarella, Rom", 107),
-        FoodSearchCorpusCase("cup of coffee", .reportNamedWrongTopOne, .wrongTopOne,
-                             "My Grandma'S Of New England, Cape Cod Cranberry Coffee Cake", 115),
+        FoodSearchCorpusCase("slice of toast", .reportNamedWrongTopOne, .wrongTopOne, "French toast sticks", 309),
+        FoodSearchCorpusCase("cup of coffee", .reportNamedWrongTopOne, .wrongTopOne, "SILK Coffee, soymilk", 309),
         FoodSearchCorpusCase("tomatoes", .reportNamedWrongTopOne, .wrongTopOne, "Pork with chili and tomatoes", 308),
         FoodSearchCorpusCase("potatoes", .reportNamedWrongTopOne, .wrongTopOne, "Beef stew with potatoes, Puerto Rican style", 306)
     ]
@@ -347,13 +380,19 @@ struct FoodSearchCorpusTests {
     /// **dry** row (21/60/6 → 378 kcal/100 g) rather than *…mature seeds, cooked, boiled, without
     /// salt* (9/27/3 → 171 kcal/100 g): logging 100 g of chickpeas overstates by **2.2×**, which is a
     /// worse outcome than a visibly absurd hit because the name looks right.
+    ///
+    /// **Both survive fixes 1.6/1.7a/1.8 untouched, and both are the same defect: data type sorts
+    /// above score.** Neither row is a prepared dish, so 1.7a's demotion does not see them; both carry
+    /// the query in their name, so 1.8's floor does not either. They move only under fix 1.7 option
+    /// (b) — score-first — which is not authorized here. Read them as the standing measurement of what
+    /// option (a) cannot reach.
     static let preRegisteredQueries: [FoodSearchCorpusCase] = [
         // Shape A — single-token whole food (10). `oatmeal` and `almonds` are the bare forms of two
         // §26-1.6 predictions (`bowl of oatmeal`, `handful of almonds`), included for that mechanism.
         FoodSearchCorpusCase("banana", .singleTokenWholeFood, .defensible, "Bananas, raw", 750),
-        FoodSearchCorpusCase("salmon", .singleTokenWholeFood, .wrongTopOne, "Salmon nuggets, breaded, frozen, heated", 807),
-        FoodSearchCorpusCase("broccoli", .singleTokenWholeFood, .wrongTopOne, "Broccoli slaw salad", 809),
-        FoodSearchCorpusCase("avocado", .singleTokenWholeFood, .wrongTopOne, "Sushi roll, avocado", 309),
+        FoodSearchCorpusCase("salmon", .singleTokenWholeFood, .wrongTopOne, "Salmon, sockeye, canned, total can contents", 806),
+        FoodSearchCorpusCase("broccoli", .singleTokenWholeFood, .defensible, "Broccoli, raw", 810),
+        FoodSearchCorpusCase("avocado", .singleTokenWholeFood, .defensible, "Avocado, Hass, peeled, raw", 808),
         FoodSearchCorpusCase("spinach", .singleTokenWholeFood, .defensible, "Spinach, baby", 810),
         FoodSearchCorpusCase("spaghetti", .singleTokenWholeFood, .wrongTopOne, "Spaghetti squash, cooked", 809),
         FoodSearchCorpusCase("quinoa", .singleTokenWholeFood, .defensible, "Quinoa, cooked", 810),
@@ -365,7 +404,7 @@ struct FoodSearchCorpusTests {
         FoodSearchCorpusCase("white rice", .modifierPlusFood, .wrongTopOne,
                              "Crackers, gluten-free, multigrain and vegetable, made with corn starch and white rice flour", 231),
         FoodSearchCorpusCase("whole milk", .modifierPlusFood, .wrongTopOne, "Cheese, ricotta, whole milk", 369),
-        FoodSearchCorpusCase("peanut butter", .modifierPlusFood, .wrongTopOne, "Peanut butter and jelly sandwich, NFS", 868),
+        FoodSearchCorpusCase("peanut butter", .modifierPlusFood, .defensible, "Peanut butter, creamy", 870),
         FoodSearchCorpusCase("sweet potato", .modifierPlusFood, .wrongTopOne, "Sweet potato leaves, raw", 869),
         FoodSearchCorpusCase("olive oil", .modifierPlusFood, .wrongTopOne, "Mayonnaise, reduced fat, with olive oil", 367),
         FoodSearchCorpusCase("greek yogurt", .modifierPlusFood, .defensible, "Yogurt, Greek, plain, lowfat", 119),
@@ -385,8 +424,8 @@ struct FoodSearchCorpusTests {
         // Shape D — preparation-qualified (3).
         FoodSearchCorpusCase("hard boiled egg", .preparationQualified, .defensible, "Egg, whole, cooked, hard-boiled", 179),
         FoodSearchCorpusCase("scrambled eggs", .preparationQualified, .defensible, "Egg omelet or scrambled egg, made with butter", 57),
-        FoodSearchCorpusCase("grilled chicken", .preparationQualified, .wrongTopOne,
-                             "McDONALD'S, Bacon Ranch Salad with Grilled Chicken", 516),
+        FoodSearchCorpusCase("grilled chicken", .preparationQualified, .defensible,
+                             "Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, grilled", 263),
 
         // Shape E — branded / product name (3). `chobani greek yogurt` returns an APRICOT row while
         // plain Chobani rows exist at 3 g carbs — a silent flavour substitution, so: wrong.
@@ -436,11 +475,19 @@ struct FoodSearchCorpusTests {
         #expect(counts.defensible == Self.measuredBaseline.defensible)
         #expect(counts.zeroResults + counts.wrongTopOne + counts.defensible == Self.corpus.count)
 
-        // The research's own named lists stay intact at the sizes §8 reports.
+        // The research's own named lists stay intact at the sizes §8 reports. Membership is by SHAPE
+        // — the criterion that put each query in the corpus — not by verdict: the verdicts are what a
+        // fix is allowed to move, and fixes 1.6/1.7a/1.8 moved seven of the eleven and two of the
+        // fifteen. Asserting `allSatisfy { verdict == .zeroResults }` here would have made a list
+        // named after a 2026-08-22 finding permanently unfixable.
         #expect(Self.reportNamedZeroResultQueries.count == 11)
         #expect(Self.reportNamedWrongTopOneQueries.count == 15)
-        #expect(Self.reportNamedZeroResultQueries.allSatisfy { $0.verdict == .zeroResults })
-        #expect(Self.reportNamedWrongTopOneQueries.allSatisfy { $0.verdict == .wrongTopOne })
+        #expect(Self.reportNamedZeroResultQueries.allSatisfy { $0.shape == .reportNamedZeroResult })
+        #expect(Self.reportNamedWrongTopOneQueries.allSatisfy { $0.shape == .reportNamedWrongTopOne })
+        #expect(Self.reportNamedZeroResultQueries.filter { $0.verdict == .zeroResults }.count == 4,
+                "4 of §34's 11 still return nothing — the three brand-index failures plus the typo")
+        #expect(Self.reportNamedWrongTopOneQueries.filter { $0.verdict == .defensible }.count == 2,
+                "2 of §8's 15 are now right: chicken noodle soup and chick fil a sandwich")
         #expect(Self.preRegisteredQueries.count == Self.corpus.count - 26)
 
         // Uniqueness on BOTH the raw text and the folded form the pipeline actually keys on: two rows
@@ -485,45 +532,36 @@ struct FoodSearchCorpusTests {
             FoodSearchRankedRow("Cheerios Cereal Bowlpak", 809, "branded"),
             FoodSearchRankedRow("Cheerios Breakfast Cereal Cup", 808, "branded")
         ]),
-        FoodSearchRankedPin("chili", "§9(b) baseline: all survey. Ranks 2-3 tie at 809 and are ordered by name", [
+        FoodSearchRankedPin("chili", "§9(b) baseline, post-1.7a AND post-negation: `Chili hot dog, no bun` is back at rank 2 — the carrier token `bun` appears in its name only to be DENIED, and `isPreparedDish` now reads the negation. The two chili-dog SANDWICH rows (real carriers) stay demoted, as does `Cheese dip with chili pepper`", [
             FoodSearchRankedRow("Chili, NFS", 810, "survey"),
             FoodSearchRankedRow("Chili hot dog, no bun", 809, "survey"),
             FoodSearchRankedRow("Chili with chicken", 809, "survey"),
-            FoodSearchRankedRow("Chili hot dog sandwich, on wheat bun", 807, "survey"),
             FoodSearchRankedRow("Chili with meat, from restaurant", 807, "survey"),
-            FoodSearchRankedRow("Chili hot dog sandwich, on wheat bread", 806, "survey")
+            FoodSearchRankedRow("Pork with chili and tomatoes", 308, "survey"),
+            FoodSearchRankedRow("Potato, french fries, with chili", 307, "survey")
         ]),
-        FoodSearchRankedPin("chilis", "§9(b) flipped: one trailing `s` makes it a brand query. Ranks 2-6 all tie at 0", [
-            FoodSearchRankedRow("5 Chilis Salsa", 309, "branded"),
-            FoodSearchRankedRow("Beans & Franks", 0, "branded"),
-            FoodSearchRankedRow("Beans & Franks", 0, "branded"),
-            FoodSearchRankedRow("Beans & Wieners", 0, "branded"),
-            FoodSearchRankedRow("Beef Chili", 0, "branded"),
-            FoodSearchRankedRow("Beef Goulash", 0, "branded")
+        FoodSearchRankedPin("chilis", "§9(b) flipped: one trailing `s` still makes it a brand query, and ONE row survives both floors. The five that used to fill ranks 2-6 (Beans & Franks, Beans & Wieners, Beef Goulash) are gone on carriage; the rows actually NAMED Chili carry the query but score 0 — the +60 coverage bonus needs `chilis` to EQUAL a name token and the token is `chili` — so the SCORE floor takes them too. A one-row page is the honest answer to a query the brand lexicon misread", [
+            FoodSearchRankedRow("5 Chilis Salsa", 309, "branded")
         ]),
-        FoodSearchRankedPin("cheese pizza", "§9(c) three negative rows outrank an srLegacy row scoring 368", [
-            FoodSearchRankedRow("Calzone, with cheese, meatless", 58, "survey"),
-            FoodSearchRankedRow("Calzone, with meat and cheese", 58, "survey"),
-            FoodSearchRankedRow("White pizza, cheese, thick crust", -12, "survey"),
-            FoodSearchRankedRow("White pizza, cheese, thin crust", -12, "survey"),
-            FoodSearchRankedRow("White pizza, cheese, with meat, thick crust", -13, "survey"),
-            FoodSearchRankedRow("Annie's Three Cheese Pizza Poppers", 368, "srLegacy")
+        FoodSearchRankedPin("cheese pizza", "§9(c) CLOSED, and it took both floors. Carriage removed both calzones (neither name carries `pizza`); the score floor then removed the three White pizza rows, whose −12/−13 was `formSpecificityBias` reading `white` as an egg-white qualifier. What was hidden behind five wrong rows is a page of real chain cheese pizzas. Rank 1 is still not right — a pizza-flavoured SNACK wins a name tie-break against PIZZA HUT at the same 368 — but nothing negative-scoring is presented any more", [
+            FoodSearchRankedRow("Annie's Three Cheese Pizza Poppers", 368, "srLegacy"),
+            FoodSearchRankedRow("PIZZA HUT 12\" Cheese Pizza, Pan Crust", 368, "srLegacy"),
+            FoodSearchRankedRow("PIZZA HUT 14\" Cheese Pizza, Pan Crust", 368, "srLegacy"),
+            FoodSearchRankedRow("DOMINO'S 14\" Cheese Pizza, Crunchy Thin Crust", 367, "srLegacy"),
+            FoodSearchRankedRow("LITTLE CAESARS 14\" Cheese Pizza, Thin Crust", 367, "srLegacy"),
+            FoodSearchRankedRow("PAPA JOHN'S 14\" Cheese Pizza, Original Crust", 367, "srLegacy")
         ]),
-        FoodSearchRankedPin("cheese pizza slice", "§29's baseline — the row naive stopwording (1.6) would destroy", [
+        FoodSearchRankedPin("cheese pizza slice", "§29's ACCEPTANCE CASE. The defensible branded row is still rank 1 — leading-position stopwording never strips a trailing `slice`, so the survey tier never re-enters and the calzone never appears. Fix 1.8 then removed four of the six rows, including both at −82: none of their names carries `pizza`", [
             FoodSearchRankedRow("Sliced Pizza, Cheese", 120, "branded"),
-            FoodSearchRankedRow("Pizza, Sliced Tomato & 5 Cheese", 119, "branded"),
-            FoodSearchRankedRow("Bellissimo Margherita Mozzarella Cheese, Sauce, Tomatoes, Sliced Mozzarella Cheese, Fontina Cheese, Roasted Garlic And B", 48, "branded"),
-            FoodSearchRankedRow("Bold & Spicy Quarter Cut And Thin Sliced Uncured Pepperoni, Diced Pepperoni, Gooey Mozzarella Cheese, And Savory Tomato ", 48, "branded"),
-            FoodSearchRankedRow("7 Cheese Blend Of Seven Cheeses Including Provolone, Shredded Mozzarella, Fresh Sliced Mozzarella, Fontina, White Chedda", -82, "branded"),
-            FoodSearchRankedRow("Bessie's Revenge Wisconsin Whole Milk Fresh Mozzarella Slices, Shredded Mozzarella Cheese, Parmesan, Romano & White Ched", -82, "branded")
+            FoodSearchRankedRow("Pizza, Sliced Tomato & 5 Cheese", 119, "branded")
         ]),
-        FoodSearchRankedPin("mozzarella cheese", "§26 fix 1.2's headline: the bind that produced the wrong meal BEFORE fix 1.3 repaired the pizza template's search string to \"low moisture part skim mozzarella cheese\" (now a confident, correct bind — see DishTemplateBindAuditTests); this raw query is pinned as a scorer-invariance floor, not as today's active template component", [
-            FoodSearchRankedRow("Mozzarella sticks, breaded, baked, or fried", 58, "survey"),
+        FoodSearchRankedPin("mozzarella cheese", "§31's promise for this query is NOT delivered by option (a) — see `mozzarellaIsStillNotTheCheeseRow`. The survey `Mozzarella sticks` row is gone (its name carries no `cheese`), but what surfaces is another fried-stick row, and the branded `Mozzarella Cheese` row that scores 1870 is still unreachable behind two whole data-type tiers", [
             FoodSearchRankedRow("DENNY'S, mozzarella cheese sticks", 369, "srLegacy"),
             FoodSearchRankedRow("Cheese, mozzarella, nonfat", 120, "srLegacy"),
             FoodSearchRankedRow("Cheese, mozzarella, low sodium", 119, "srLegacy"),
             FoodSearchRankedRow("Cheese, mozzarella, part skim milk", 119, "srLegacy"),
-            FoodSearchRankedRow("Cheese, mozzarella, whole milk", 119, "srLegacy")
+            FoodSearchRankedRow("Cheese, mozzarella, whole milk", 119, "srLegacy"),
+            FoodSearchRankedRow("Cheese, mozzarella, low moisture, part-skim", 118, "srLegacy")
         ]),
         FoodSearchRankedPin("pizza dough crust", "§26 fix 1.3: the DishTemplates.json:291 search string, unchanged by any ranking variant", [
             FoodSearchRankedRow("Pillsbury Pizza Dough Thin Crust", 179, "branded"),
@@ -589,30 +627,168 @@ struct FoodSearchCorpusTests {
         let chiliTop = try #require(chili.first?.score)
         let chilisTop = try #require(chilis.first?.score)
         #expect(chilisTop < chiliTop, "the brand flip also collapses the top score")
-        #expect(chilis.dropFirst().contains { $0.score == 0 }, "rows scoring 0 are presented with no distinction")
+        // §9(b)'s "rows scoring 0 are presented with no distinction" is CLOSED by fix 1.8's score
+        // floor: the brand flip still collapses the scores, but a collapsed score no longer buys a
+        // place on the page.
+        #expect(chilis.allSatisfy { $0.score >= FoodItemSearch.minimumBindScore })
+        #expect(chilis.count == 1, "one row clears both floors")
     }
 
-    /// §9(c) as a mechanism: there is no score floor on the search path, so negatively-scoring rows
-    /// are presented in the top-6 and a strictly better row can rank below them. `minimumBindScore = 1`
-    /// is a no-op (any single name-token hit scores +60) and guards only the bind paths, never search.
-    /// This is fix 1.8's instrument.
-    @Test func negativeScoringRowsAreShownInTheTopSix() throws {
+    /// §9(c) as a mechanism, AFTER fix 1.8 — and the reason the fix is a name floor, not a score floor.
+    ///
+    /// The rule now enforced is ``FoodItemSearch/nameCarriesQuery(_:query:)``: a row that reached the
+    /// gate through its category/tags alone is not presented. Both of §9(c)'s named victims go — the
+    /// two `cheese pizza slice` rows at **−82** and, at `chilis`, the five rows scoring **0**.
+    ///
+    /// **What a literal score floor would have cost, asserted here so the substitution is not taken on
+    /// trust.** The +60 coverage bonus requires a query token to EQUAL a name token (§8), so a match
+    /// reached through the singular/plural stem earns nothing and the length penalty carries it
+    /// negative — rows literally NAMED "Chili" score 0 for `chilis`, and *Egg, whole, raw, fresh*
+    /// scores −1 for `eggs`. A floor at `minimumBindScore` deletes all of them. The name test keeps
+    /// every one and still removes everything §9(c) complains about.
+    @Test func bothHalvesOfTheFloorAreLoadBearing() throws {
         #expect(FoodItemSearch.minimumBindScore == 1)
         #expect(FoodItemSearch.confidentBindScore == 250)
         #expect(FoodItemSearch.minimumQueryLength == 3)
 
-        let pizza = try Self.rankedRows(for: "cheese pizza")
-        let negatives = pizza.filter { $0.score < 0 }
-        #expect(!negatives.isEmpty, "`cheese pizza` should still present negative-scoring rows")
-        let lastNegativeRank = try #require(pizza.lastIndex(where: { $0.score < 0 }))
-        #expect(pizza.dropFirst(lastNegativeRank + 1).contains { $0.score > 0 },
-                "a positively-scoring row should still rank below the negative ones")
+        // The floor stated as an invariant over the whole corpus rather than as a row list: every
+        // presented row carries the query in its NAME **and** scores at or above the floor.
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount)
+        for corpusCase in Self.corpus {
+            for row in catalog.scoredResults(for: corpusCase.query, limit: 6) {
+                #expect(FoodItemSearch.nameCarriesQuery(row.item.name, query: corpusCase.query),
+                        "\"\(corpusCase.query)\" presented \"\(row.item.name)\", whose name does not carry it")
+                #expect(row.score >= FoodItemSearch.minimumBindScore,
+                        "\"\(corpusCase.query)\" presented \"\(row.item.name)\" at \(row.score)")
+            }
+        }
 
-        // §29's baseline: with "slice" present only one tier survives the AND gate, so the top-1 is
-        // defensible today. Stopwords (1.6) landing ALONE is what turns this into the calzone.
+        // HALF ONE, the score floor, is what kills §9(b)'s junk: rows NAMED Chili carry the query
+        // perfectly well and are refused purely on score.
+        #expect(FoodItemSearch.nameCarriesQuery("Beef Chili", query: "chilis"),
+                "carriage alone would keep a 0-scoring row §9(b) complains about")
+        #expect(try Self.rankedRows(for: "chilis").allSatisfy { $0.score >= FoodItemSearch.minimumBindScore })
+
+        // HALF TWO, name carriage, is what kills the rows a score floor cannot see: these reached the
+        // top-6 through category/tags and score well enough to clear any floor.
+        #expect(!FoodItemSearch.nameCarriesQuery("Ramen bowl with chicken", query: "chicken noodle soup"),
+                "a row scoring 60 that carries neither `noodle` nor `soup` — no score floor removes it")
+        #expect(!FoodItemSearch.nameCarriesQuery("Banquet Breakfast Chicken Sandwich, 3.36 Oz", query: "chick fil a sandwich"))
+        #expect(!FoodItemSearch.nameCarriesQuery("Rolled oats", query: "breakfast"))
+
+        // Carriage accepts a SUBSTRING, not only a token prefix — the alignment with the scorer's own
+        // +250 bonus, and what keeps the canonical FNDDS burger rows that a token-only rule deleted.
+        #expect(FoodItemSearch.nameCarriesQuery("Hamburger, NFS", query: "burger"))
+        #expect(FoodItemSearch.nameCarriesQuery("Cheeseburger, NFS", query: "burger"))
+        let burgers = try Self.rankedRows(for: "burger").map(\.name)
+        #expect(burgers.contains("Hamburger, NFS") && burgers.contains("Cheeseburger, NFS"),
+                "the canonical generic burgers are in the top-6: \(burgers)")
+
+        // §29's acceptance case: `cheese pizza slice` must not become the calzone, its two −82 rows
+        // must be gone, and it must still sit in ONE data-type tier (the property §29 turns on — with
+        // "slice" present only branded rows survive the AND gate, so the survey tier cannot re-enter).
         let slice = try Self.rankedRows(for: "cheese pizza slice")
-        #expect(Set(slice.map(\.dataType)).count == 1)
-        #expect(slice.contains { $0.score < 0 }, "`cheese pizza slice` still shows negative rows in its top-6")
+        #expect(slice.first?.name == "Sliced Pizza, Cheese")
+        #expect(slice.allSatisfy { !$0.name.contains("Calzone") })
+        #expect(Set(slice.map(\.dataType)).count == 1, "§29's mechanism: one tier survives the gate")
+    }
+
+    /// The adversarial review's battery, pinned as top-1 answers.
+    ///
+    /// These are the queries the review used to refute three of this increment's claims, and each one
+    /// is here because it moved something a 57-query corpus could not see. They are asserted as
+    /// top-1 name only — the full top-6 for the two that carry a ranking argument lives in
+    /// ``namedRankingPins`` — so this table stays readable as a list of ANSWERS.
+    static let reviewBattery: [(query: String, top: String)] = [
+        // F3: canonical FNDDS rows a token-prefix-only carriage floor deleted. `Hamburger, NFS` does
+        // not START with "burger"; carriage accepts the substring, which is what the scorer's own
+        // +250 bonus has always done.
+        ("burger", "Hamburger (Burger King)"),
+        // F1: the row the score floor was supposed to cost and instead reveals. A synthetic 4-row
+        // fixture said a score floor would delete the canonical egg; against 118,317 real rows it
+        // surfaces it.
+        ("eggs", "Eggs, Grade A, Large, egg whole"),
+        // F4(a): `bun` inside "no bun" is a denial, not an assembly. This row is the LEAST assembled
+        // hot dog in the catalog and the plain substring test ranked it as the most.
+        ("hot dog", "Chili hot dog, no bun"),
+        // F4(b): the widened carrier list. `broccoli`, `salmon` and `grilled chicken` led with a
+        // slaw-salad / nuggets / McDonald's-salad row and now lead with the food.
+        ("broccoli", "Broccoli, raw"),
+        ("salmon", "Salmon, sockeye, canned, total can contents"),
+        ("grilled chicken", "Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, grilled"),
+        // NOT FIXED, and pinned as not fixed. The carrier list now recognises both rows, but the
+        // demotion guard refuses to sink a dish beneath a WORSE-scoring ingredient and these two
+        // dishes lead by 1 point (810 vs 809) and 55 (805 vs 750). A tolerance margin closes both and
+        // costs `grilled cheese` — measured, and written up at `PreparedDishHeuristic`'s guard.
+        ("beef", "Beef salad"),
+        ("onion", "Onion rings, breaded, par fried, frozen, unprepared"),
+        // F4(b)'s counterweight: the margin must not demote a dish the query NAMED. `nuggets` is a
+        // carrier now, and this row still wins because it beats every ingredient by far more than the
+        // margin; `caesar salad` and `chicken noodle soup` never demote at all (head noun is a dish word).
+        ("chicken nuggets", "Chicken nuggets, NFS"),
+        ("caesar salad", "Caesar salad, with romaine, no dressing"),
+        ("chicken noodle soup", "CAMPBELL'S, Chicken Noodle Soup, condensed"),
+        // UNMOVED, and pinned so it is not mistaken for something this increment fixed: two survey
+        // HAMBURGER rows outrank every real ham despite scoring 60 points lower, because data type
+        // sorts above score. "hamburger" is not a carrier and never was. Option (b) territory.
+        ("ham", "Hamburger, NFS")
+    ]
+
+    /// Replays the review battery.
+    @Test func reviewBatteryTopAnswersAreUnchanged() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount)
+        for entry in Self.reviewBattery {
+            let top = catalog.results(for: entry.query, limit: 1).first?.name
+            #expect(top == entry.top, "top-1 moved for \"\(entry.query)\"")
+        }
+    }
+
+    /// **An owner calibration question, measured and pinned rather than shipped quietly.**
+    ///
+    /// `confidentBindScore = 250` was calibrated against a search path with NO floor, where the top-1
+    /// was routinely a low-scoring row. Fix 1.8 removes exactly those rows, so top-1 scores rise by
+    /// construction and more binds present as CONFIDENT — the inversion this suite already pins for
+    /// one orphaned string at ``mozzarellaIsStillNotTheCheeseRow``, here counted as a population.
+    ///
+    /// Across the 57-query corpus, top-1 scores at or above `confidentBindScore` went from **28 to
+    /// 38**. Ten queries crossed: four that already returned rows (`cheese pizza` 58→368,
+    /// `chicken noodle soup` 60→428, `slice of toast` 107→309, `cup of coffee` 115→309) and six that
+    /// returned nothing at all before, so they had no bind to be confident about.
+    ///
+    /// **Six of the ten now present a WRONG top-1 at confident scores** — `cheese pizza`,
+    /// `slice of toast`, `cup of coffee`, `glass of milk`, `piece of chicken`, `bowl of cereal`.
+    /// That is the calibration question: a floor that removes bad rows also removes the low score
+    /// that used to FLAG the survivor as weak. It is a threshold decision, not a bug, so it is
+    /// reported rather than silently retuned.
+    @Test func confidentBindPopulationIsPinnedForCalibration() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount)
+        let confident = Self.corpus.filter { corpusCase in
+            (catalog.scoredResults(for: corpusCase.query, limit: 1).first?.score ?? 0) >= FoodItemSearch.confidentBindScore
+        }
+        #expect(confident.count == 38, "confident top-1s: \(confident.count) of 57")
+        let confidentlyWrong = confident.filter { $0.verdict == .wrongTopOne }
+        #expect(confidentlyWrong.count == 19, "confident AND wrong: \(confidentlyWrong.map(\.query))")
+    }
+
+    /// The three stopword sets are **frozen English matching inputs** and this is their freeze pin.
+    ///
+    /// The localization wall's own machinery cannot see them: it parses enum `rawValue`s, and these
+    /// are bare `Set<String>` literals. They are compared against `normalized()` output, which folds
+    /// an index baked in English at build time, so translating or reordering one silently changes
+    /// which rows every query can reach. Pinned as sorted contents, so an addition is a deliberate
+    /// edit here rather than a quiet retrieval change.
+    @Test func stopwordSetsAreFrozen() {
+        #expect(FoodItemSearch.functionStopWordsForTesting.sorted() ==
+                ["an", "and", "for", "my", "of", "plus", "the", "then", "with"])
+        #expect(FoodItemSearch.quantityStopWordsForTesting.sorted() ==
+                ["bowl", "bowls", "cup", "cups", "dozen", "five", "four", "glass", "glasses", "half",
+                 "handful", "handfuls", "piece", "pieces", "plate", "plates", "serving", "servings",
+                 "six", "slice", "slices", "three", "two"])
+        #expect(FoodItemSearch.occasionStopWordsForTesting.sorted() ==
+                ["breakfast", "dinner", "lunch", "meal", "post", "pre", "snack", "workout"])
     }
 
     /// §26 fix 1.2's headline number: the RAW `mozzarella cheese` query — the pizza template's search
@@ -621,19 +797,108 @@ struct FoodSearchCorpusTests {
     /// cheese component now searches `low moisture part skim mozzarella cheese` and binds confidently,
     /// per `DishTemplateBindAuditTests`); this test is kept as a scorer-invariance pin on the ORPHANED
     /// string, not a claim about today's template.
-    @Test func mozzarellaBindScoresFarBelowTheConfidenceFloor() throws {
+    @Test func mozzarellaIsStillNotTheCheeseRow() throws {
         let ranked = try Self.rankedRows(for: "mozzarella cheese")
-        let topScore = try #require(ranked.first?.score)
-        #expect(topScore < FoodItemSearch.confidentBindScore, "the bind that produced the wrong meal before fix 1.3 is still not 'confident' as a raw query")
-        #expect(topScore >= FoodItemSearch.minimumBindScore, "…yet it clears the floor that is supposed to reject it")
-        #expect(ranked.dropFirst().contains { $0.score > FoodItemSearch.confidentBindScore },
-                "a confident-scoring row exists — it just ranks below")
+        let top = try #require(ranked.first)
+        #expect(top.name.contains("sticks"), "§31's promise is not delivered: the top-1 is still a fried-stick row")
+        #expect(ranked.dropFirst().allSatisfy { $0.name.hasPrefix("Cheese, mozzarella") },
+                "every row BELOW it is a real mozzarella cheese — the ordering is the whole defect")
 
-        // The right answer is present and reachable by exact name — §9's counterfactual target.
+        // The right answer is present and reachable by exact name — §9's counterfactual target — and
+        // is still two whole data-type tiers below anything that survives the gate here. It scores
+        // 1870; nothing on this page scores over 400. Only option (b) moves it.
         let source = try #require(SQLiteBundledFoodSource(), "shipped catalog must open")
         try #require(source.count == Self.shippedRowCount)
         #expect(source.exactMatch(normalizedName: "mozzarella cheese")?.name == "Mozzarella Cheese")
         #expect(source.exactMatch(normalizedName: "cheese pizza")?.name == "Cheese Pizza")
+        #expect(ranked.allSatisfy { $0.dataType != "branded" }, "the branded exact-name row cannot reach the page")
+
+        // AND THE COST OF THE FLOOR, NAMED. Removing the sub-floor survey row that used to hold rank 1
+        // (score 58) promoted a HIGHER-scoring but equally wrong row, so this query now clears
+        // `confidentBindScore` — a bind on it would present as confident and be wrong, where before it
+        // would have been flagged weak. The string is orphaned (fix 1.3 moved the pizza template off
+        // it), so nothing ships through this path today; it is pinned because the mechanism is general.
+        #expect(top.score > FoodItemSearch.confidentBindScore,
+                "the floor raises top-1 scores, and confidence rides on the top-1 score")
+    }
+
+    // MARK: - The three coupled fixes, as mechanisms
+
+    /// Fix 1.6's POSITION rules, which are what stop §29's hazard from ever firing.
+    ///
+    /// §29's demonstration is that stripping "slice" out of `cheese pizza slice` lets the survey tier
+    /// back through a comparator that sorts data type above score, and the top-1 becomes a 1,655 kcal
+    /// calzone. The rule here is that a quantity word is only ever stripped from the LEADING run,
+    /// because that is the only position where it quantifies rather than names: "slice of toast" is a
+    /// slice OF something, "cheese pizza slice" is the name of a thing. The mirror rule protects
+    /// "breakfast burrito" and "dinner rolls" from an occasion strip.
+    ///
+    /// `searchTokens` is asserted rather than a result list because BOTH the FTS MATCH expression and
+    /// the scorer's gate are built from it — the invariant is that they cannot drift apart.
+    @Test func stopwordsAreStrippedByPositionNotByMembership() {
+        #expect(FoodItemSearch.searchTokens(in: "bowl of oatmeal") == ["oatmeal"])
+        #expect(FoodItemSearch.searchTokens(in: "two scrambled eggs") == ["scrambled", "eggs"])
+        #expect(FoodItemSearch.searchTokens(in: "slice of toast") == ["toast"])
+        #expect(FoodItemSearch.searchTokens(in: "mac and cheese") == ["mac", "cheese"])
+
+        // Trailing quantity words are part of the dish's name and are KEPT — §29's whole point.
+        #expect(FoodItemSearch.searchTokens(in: "cheese pizza slice") == ["cheese", "pizza", "slice"])
+        #expect(FoodItemSearch.searchTokens(in: "chicken burrito bowl") == ["chicken", "burrito", "bowl"])
+
+        // Leading occasion words are part of the food's name and are KEPT; trailing ones qualify it.
+        #expect(FoodItemSearch.searchTokens(in: "breakfast burrito") == ["breakfast", "burrito"])
+        #expect(FoodItemSearch.searchTokens(in: "dinner rolls") == ["dinner", "rolls"])
+        #expect(FoodItemSearch.searchTokens(in: "pizza for dinner") == ["pizza"])
+
+        // Never strip to nothing: a query made only of stopwords searches for what was typed.
+        #expect(FoodItemSearch.searchTokens(in: "a bowl") == ["bowl"])
+        #expect(FoodItemSearch.searchTokens(in: "pre workout") == ["pre", "workout"])
+    }
+
+    /// Fix 1.7a's score guard, which is the difference between the fix and two regressions.
+    ///
+    /// `PreparedDishHeuristic` decides intent from the query's HEAD NOUN, which cannot tell an idiom
+    /// from an ingredient: `grilled cheese` reads as "cheese" and `chicken burrito bowl` reads as
+    /// "bowl", so an unguarded demotion sinks *Grilled cheese sandwich, NFS* (carrier "sandwich") and
+    /// *Burrito bowl, chicken* (carrier "burrito") — both correct, both pinned `.defensible`. The
+    /// guard is that a dish may only sink beneath ingredients that match AT LEAST AS WELL, which the
+    /// two rescued rows clear by a wide margin and the two demoted rows do not.
+    @Test func dishDemotionNeverSinksABetterMatch() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount)
+
+        // Rescued: the query reads as an ingredient, the top row IS a dish, and it stays anyway.
+        for (query, name) in [("grilled cheese", "Grilled cheese sandwich, NFS"),
+                              ("chicken burrito bowl", "Burrito bowl, chicken")] {
+            #expect(!PreparedDishHeuristic.queryWantsDish(query), "\"\(query)\" reads as an ingredient query")
+            let top = try #require(catalog.results(for: query, limit: 1).first)
+            #expect(top.name == name)
+            #expect(PreparedDishHeuristic.isPreparedDish(top), "…and it is a prepared dish, kept only by the score guard")
+        }
+
+        // Demoted: the dish scored no better than the ingredients under it, so it sank.
+        for (query, sunk) in [("peanut butter", "Peanut butter and jelly sandwich"), ("avocado", "Sushi roll")] {
+            let top6 = catalog.results(for: query, limit: 6)
+            #expect(!(top6.first.map(PreparedDishHeuristic.isPreparedDish) ?? true), "\"\(query)\" now leads with an ingredient")
+            #expect(top6.first?.name.contains(sunk) == false)
+        }
+
+        // The guard as a unit, with no catalog: a dish scoring above every ingredient stays at rank 1.
+        let dish = Self.stubFood(name: "Grilled cheese sandwich")
+        let ingredient = Self.stubFood(name: "Cheese, cheddar")
+        let strong = [(foodItem: dish, score: 1_000), (foodItem: ingredient, score: 100)]
+        let weak = [(foodItem: dish, score: 100), (foodItem: ingredient, score: 1_000)]
+        #expect(PreparedDishHeuristic.demotingDishes(scored: strong, forQuery: "grilled cheese").first?.foodItem.name == dish.name)
+        #expect(PreparedDishHeuristic.demotingDishes(scored: weak, forQuery: "grilled cheese").first?.foodItem.name == ingredient.name)
+    }
+
+    /// A minimal `FoodItem` for the unit-level demotion assertions above; only the name is read.
+    private static func stubFood(name: String) -> FoodItem {
+        FoodItem(
+            name: name, servingSize: 100, servingUnit: "g",
+            macros: Macros(protein: 10, carbs: 10, fat: 10), micronutrients: Micronutrients(),
+            category: "Test", source: .usda, dataType: .srLegacy, tags: []
+        )
     }
 
     // MARK: - The resolver surface
@@ -645,49 +910,65 @@ struct FoodSearchCorpusTests {
     /// `PreparedDishHeuristic.demotingDishes` then REORDERS the pool, which `results(for:)` never does.
     ///
     /// The disagreements this pins are substantial, and every one is a place a "green corpus" would
-    /// have hidden a resolver regression:
-    /// * five queries return NOTHING from search but a full pool here — `bowl of oatmeal`,
-    ///   `two scrambled eggs`, `chiken breast`, `costco cheese pizza slice`, `quest protein bar` —
-    ///   and for `two scrambled eggs` and `grilled salmon fillet` the resolver's answer is the RIGHT
-    ///   food while search shows an empty list;
-    /// * `peanut butter` resolves to *Egg omelet or scrambled egg, made with butter*, because the
-    ///   phrase splitter searches `butter` on its own and the dish demotion then promotes it;
-    /// * `chicken burrito bowl` resolves to *Ramen bowl, NFS* though search finds *Burrito bowl,
-    ///   chicken*;
-    /// * `bowl of oatmeal` resolves to a branded sugary breakfast bowl.
+    /// have hidden a resolver regression. Fixes 1.6/1.7a/1.8 moved nine of the thirty entries, all
+    /// through `results(for:)`, which `candidates` calls per phrase:
+    /// * `bowl of oatmeal` resolved to a branded sugary breakfast bowl and now resolves to
+    ///   *Oatmeal, NFS* — the pool shrank from 9 to 8 and got the right answer;
+    /// * `peanut butter` resolved to *Egg omelet or scrambled egg, made with butter* (the phrase
+    ///   splitter searches `butter` alone and the dish demotion then promoted it) and now resolves to
+    ///   *Peanut butter, creamy*;
+    /// * `chicken noodle soup` and `beef tacos` moved onto rows that carry the query in their names;
+    /// * `chilis`' pool fell from 4 to 1 as the tag-only rows left;
+    /// * `chicken burrito bowl` still resolves to *Ramen bowl, NFS* though search finds *Burrito
+    ///   bowl, chicken* — one of the two ranking divergences that remain;
+    /// * four queries still return NOTHING from search but a full pool here — `chiken breast`,
+    ///   `costco cheese pizza slice`, `quest protein bar`, `grilled salmon fillet` — and for
+    ///   `grilled salmon fillet` the resolver's answer is the RIGHT food while search shows an empty
+    ///   list. That gap is retrieval, and nothing in this increment could close it.
     static let resolverBank: [FoodResolverCase] = [
         FoodResolverCase("protein bar", 12, "Formulated Bar, SOUTH BEACH protein bar"),
         FoodResolverCase("cheerios", 4, "Cereals ready-to-eat, GENERAL MILLS, CHEERIOS"),
         FoodResolverCase("chili", 4, "Chili, NFS"),
-        FoodResolverCase("chilis", 4, "5 Chilis Salsa"),
-        FoodResolverCase("cheese pizza", 12, "Calzone, with cheese, meatless"),
+        FoodResolverCase("chilis", 1, "5 Chilis Salsa"),
+        FoodResolverCase("cheese pizza", 12, "Annie's Three Cheese Pizza Poppers"),
         FoodResolverCase("cheese pizza slice", 18, "Sliced Pizza, Cheese"),
-        FoodResolverCase("mozzarella cheese", 9, "Mozzarella sticks, breaded, baked, or fried"),
+        FoodResolverCase("mozzarella cheese", 10, "DENNY'S, mozzarella cheese sticks"),
         FoodResolverCase("pizza dough crust", 18, "Pillsbury Pizza Dough Thin Crust"),
         FoodResolverCase("black coffee", 12, "Califia, Cold Brew All Black Coffee"),
         FoodResolverCase("costco cheese pizza slice", 18, "Sliced Pizza, Cheese"),
+        // Back to the branded breakfast bowl, and deliberately: fix 1.6's position strip no longer
+        // applies to `searchPhrases`' SUB-phrases (see F2 above), so this pool is exactly what it was
+        // before the increment. The SEARCH surface still answers `Oatmeal, NFS`.
         FoodResolverCase("bowl of oatmeal", 9,
                          "Organic Apples & Blueberries Oatmeal + Sprouted Quinoa Super Morning Bowl, Organic Apples & Blueberries"),
-        FoodResolverCase("two scrambled eggs", 13, "Egg omelet or scrambled egg, made with butter"),
+        FoodResolverCase("two scrambled eggs", 12, "Egg omelet or scrambled egg, made with butter"),
         FoodResolverCase("chiken breast", 6, "Chicken breast, stewed, skin eaten"),
-        FoodResolverCase("apple", 4, "Apple salad with dressing"),
+        FoodResolverCase("apple", 4, "Apple & Cheese Tray"),
         FoodResolverCase("brown rice", 11, "Snacks, brown rice chips"),
-        FoodResolverCase("mac and cheese", 10, "Macaroni or pasta salad with cheese"),
-        FoodResolverCase("chicken noodle soup", 18, "Ramen bowl with chicken"),
-        FoodResolverCase("beef tacos", 11, "Burrito, beef, cheese"),
+        FoodResolverCase("mac and cheese", 10, "CRACKER BARREL, macaroni n' cheese"),
+        FoodResolverCase("chicken noodle soup", 18, "CAMPBELL'S, Chicken Noodle Soup, condensed"),
+        FoodResolverCase("beef tacos", 12, "TACO BELL, BURRITO SUPREME with beef"),
         FoodResolverCase("low fat greek yogurt", 18, "Yogurt, Greek, 2% fat, apricot, CHOBANI"),
         FoodResolverCase("chipotle chicken bowl", 18, "Lean Chipotle Chicken Bowl, Spicy"),
         FoodResolverCase("slice of toast", 12, "Thick Slice Swirl French Toast Bread, French Toast"),
         FoodResolverCase("tomatoes", 4, "Pork with chili and tomatoes"),
         FoodResolverCase("white rice", 12,
                          "Crackers, gluten-free, multigrain and vegetable, made with corn starch and white rice flour"),
-        FoodResolverCase("peanut butter", 5, "Egg omelet or scrambled egg, made with butter"),
-        FoodResolverCase("grilled chicken", 12, "McDONALD'S, Bacon Ranch Salad with Grilled Chicken"),
-        FoodResolverCase("chicken burrito bowl", 16, "Ramen bowl, NFS"),
+        FoodResolverCase("peanut butter", 9, "Peanut butter, creamy"),
+        FoodResolverCase("grilled chicken", 12, "Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, grilled"),
+        FoodResolverCase("chicken burrito bowl", 18, "Ramen bowl, NFS"),
         FoodResolverCase("grilled salmon fillet", 18, "Grilled Salmon"),
         FoodResolverCase("whole wheat toast", 18, "Bread, whole-wheat, commercially prepared, toasted"),
         FoodResolverCase("quest protein bar", 14, "Formulated Bar, SOUTH BEACH protein bar"),
-        FoodResolverCase("chickpeas", 4, "Chickpeas, (garbanzo beans, bengal gram), dry")
+        FoodResolverCase("chickpeas", 4, "Chickpeas, (garbanzo beans, bengal gram), dry"),
+        // Added 2026-08-23 by the adversarial review of fix 1.6: `searchPhrases` sub-slices BEFORE
+        // the scorer sees a phrase, so a position-based stopword strip applied to a SUB-PHRASE
+        // deletes the discriminating token rather than leading noise ("slices pizza" → "pizza").
+        // These two pools lost every sliced-pizza row and collapsed to bare `chicken` respectively.
+        // The corpus proper cannot see this surface — it never calls `candidates` — so the guard
+        // lives here.
+        FoodResolverCase("two slices of pizza", 17, "Amnon's Pizza, Large Pizza Slices"),
+        FoodResolverCase("piece of chicken", 12, "Tyson Pride Uncooked 8 Piece Chicken Cuts")
     ]
 
     /// Pins the resolver pool's size and top candidate for every bank entry.
@@ -703,24 +984,56 @@ struct FoodSearchCorpusTests {
         }
     }
 
-    /// The two surfaces genuinely disagree today, and that disagreement is itself pinned: if a fix
-    /// silently unified them this test goes red and someone has to decide whether that was intended.
+    /// The two surfaces still disagree, on a MEASURED and shrinking list.
+    ///
+    /// The two surfaces are RANKED alike now (both apply the floor and the demotion) and RETRIEVE
+    /// differently on purpose, so what is pinned here is the shape of the remaining disagreement, not
+    /// a shrinking number. `stillDiverging` is computed over all 57 corpus queries — the earlier
+    /// count of 10 was over the resolver bank only, so the two are not comparable and this one is
+    /// stated as what it is.
+    ///
+    /// Four queries return NOTHING from search while the resolver's phrase splitter reaches rows
+    /// anyway (→ fix 2.3 for the brand ones, an edit-distance fallback for `chiken`, §30 row 16's
+    /// partial-match fallback for `grilled salmon fillet`). The rest pick different foods because
+    /// `searchPhrases` searches sub-phrases a single AND gate never forms — which is the resolver's
+    /// entire purpose, and why fix 1.6 is confined to the typed-query surface.
     @Test func searchAndResolverSurfacesStillDisagree() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
-        let searchIsEmptyButResolverIsNot = ["bowl of oatmeal", "two scrambled eggs", "chiken breast",
-                                            "costco cheese pizza slice", "quest protein bar", "grilled salmon fillet"]
+        let searchIsEmptyButResolverIsNot = ["chiken breast", "costco cheese pizza slice",
+                                            "quest protein bar", "grilled salmon fillet"]
         for query in searchIsEmptyButResolverIsNot {
             let searchCount = catalog.results(for: query, limit: 6).count
             let resolverCount = catalog.candidates(for: query, limit: 18).count
             #expect(searchCount == 0, "\"\(query)\" should still return nothing from search")
             #expect(resolverCount > 0, "\"\(query)\" should still return a resolver pool")
         }
-        for query in ["peanut butter", "chicken burrito bowl", "slice of toast", "low fat greek yogurt"] {
+        for query in ["chicken burrito bowl", "low fat greek yogurt"] {
             let searchTop = catalog.results(for: query, limit: 1).first?.name
             let resolverTop = catalog.candidates(for: query, limit: 18).first?.foodItem.name
             #expect(searchTop != resolverTop, "\"\(query)\": the two surfaces should still pick different foods")
         }
+        // The one that CLOSED, asserted as closed so a regression cannot quietly reopen it. Three
+        // others closed and then deliberately REOPENED: `bowl of oatmeal`, `two scrambled eggs` and
+        // `slice of toast` agreed only while fix 1.6's position strip was (wrongly) also applied to
+        // `searchPhrases`' sub-phrases. Confining it to the typed-query surface put the resolver's
+        // sub-phrase behaviour back exactly where it was, and these three back to disagreeing — the
+        // right trade, since the alternative cost `two slices of pizza` every sliced-pizza row in its
+        // pool. The SEARCH surface still answers all three correctly.
+        for query in ["peanut butter"] {
+            let searchTop = catalog.results(for: query, limit: 1).first?.name
+            let resolverTop = catalog.candidates(for: query, limit: 18).first?.foodItem.name
+            #expect(searchTop != nil, "\"\(query)\" no longer returns nothing from search")
+            #expect(searchTop == resolverTop, "\"\(query)\": the two surfaces now agree")
+        }
+        // Not a count of the literal above (that would assert nothing): the corpus queries whose two
+        // surfaces still disagree, computed live.
+        let stillDiverging = Self.corpus.filter { corpusCase in
+            let searchTop = catalog.results(for: corpusCase.query, limit: 1).first?.name
+            let resolverTop = catalog.candidates(for: corpusCase.query, limit: 18).first?.foodItem.name
+            return searchTop != resolverTop
+        }
+        #expect(stillDiverging.count == 18, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)
@@ -838,7 +1151,7 @@ struct FoodSearchCorpusTests {
         ("cheese pizza", 533),
         ("cheese pizza slice", 6),
         ("costco cheese pizza slice", 0),
-        ("bowl of oatmeal", 0),
+        ("bowl of oatmeal", 690),
         ("oatmeal", 690),
         ("chiken breast", 0),
         ("chicken breast", 931),
@@ -849,6 +1162,58 @@ struct FoodSearchCorpusTests {
         ("protein bar", 336),
         ("string cheese", 49)
     ]
+
+    /// **Retrieval and scoring must gate on the SAME token set** — the invariant `searchTokens`
+    /// claims, asserted rather than assumed.
+    ///
+    /// `stripsStopwords` existed on the scorer before it existed on the source, so every
+    /// `stripsStopwords: false` caller (the whole resolver path, via `searchPhrases`' sub-phrases)
+    /// retrieved with quantity words STRIPPED and then scored with them KEPT. The delta is not
+    /// marginal: `piece chicken` fetched the **5,270** rows matching `chicken*` where the scorer
+    /// wanted the **12** matching `piece* AND chicken*`, and `slice cheese` fetched **8,982** against
+    /// a wanted **182**.
+    ///
+    /// **Why over-fetching is not harmless: the cap.** `FoodCatalog.candidateFetchLimit` is 10,000 on
+    /// the base catalog, so there the excess is merely wasted hydration. The branded On-Demand
+    /// Resource is the real exposure — `BrandedCatalogResourceLoader` attaches ~364,457 rows with
+    /// `candidateCap = 600` AND `skipPriorityOrder: true`, which omits the `ORDER BY` entirely and
+    /// truncates in rowid order. An 8,982-row fetch capped at 600 keeps whichever rows happen to
+    /// carry a low `food_id`; the rows matching BOTH typed words survive only by accident, while the
+    /// 182-row AND set fits inside 600 with room to spare. Fix 2.3 (indexing `brand_source`) pushes
+    /// thousands more branded rows through the same gate and widens the gap.
+    ///
+    /// The ODR file is absent from test runs, so this pins the base catalog as the proxy and records
+    /// the ODR arithmetic above; the mechanism — which token set builds the MATCH expression — is
+    /// identical on both sources.
+    @Test func retrievalAndScoringGateOnTheSameTokens() throws {
+        let source = try #require(SQLiteBundledFoodSource(), "shipped catalog must open")
+        try #require(source.count == Self.shippedRowCount)
+
+        // The token sets themselves, at the seam both sides read.
+        #expect(FoodItemSearch.searchTokens(in: "piece chicken") == ["chicken"])
+        #expect(FoodItemSearch.searchTokens(in: "piece chicken", stripsStopwords: false) == ["piece", "chicken"])
+
+        // And the row sets they produce. The stripped fetch is 439× the unstripped one.
+        let stripped = source.candidates(forQuery: "piece chicken", stripsStopwords: true).count
+        let unstripped = source.candidates(forQuery: "piece chicken", stripsStopwords: false).count
+        #expect(stripped == 5_270, "chicken* alone")
+        #expect(unstripped == 12, "piece* AND chicken* — what a `stripsStopwords: false` scorer gates on")
+
+        // The ODR-shaped case, on the base catalog: 8,982 overflows a 600-row cap 15× over, 182 does not.
+        #expect(source.candidates(forQuery: "slice cheese", stripsStopwords: true).count == 8_982)
+        #expect(source.candidates(forQuery: "slice cheese", stripsStopwords: false).count == 182)
+
+        // The resolver path really does take the unstripped branch end to end: every row it returns
+        // for a quantity-led sub-phrase carries BOTH words, which the stripped gate could not promise.
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount)
+        let phrases = FoodSelectionCandidateBuilder.searchPhrases(from: "two slices of pizza")
+        #expect(phrases.contains("slices pizza"), "the quantity word survives into the sub-phrases")
+        for candidate in catalog.candidates(for: "two slices of pizza", limit: 18) {
+            #expect(phrases.contains { FoodItemSearch.nameCarriesQuery(candidate.foodItem.name, query: $0, stripsStopwords: false) },
+                    "\(candidate.foodItem.name) reached the pool through no sub-phrase at all")
+        }
+    }
 
     /// Pins the shipped source's candidate-set sizes.
     @Test func sourceCandidateSetSizesAreUnchanged() throws {
@@ -888,6 +1253,7 @@ struct FoodSearchCorpusTests {
         #expect(Self.corpus.allSatisfy { !$0.query.contains("\"") && !($0.expectedTopName ?? "").contains("\"") },
                 "a quote in a pinned string would corrupt the paste-back format")
         Self.printDumpIfRequested(lines)
+        Self.printLiveMeasurementIfRequested()
     }
 
     // MARK: - Helpers
@@ -931,8 +1297,7 @@ struct FoodSearchCorpusTests {
 
     /// Prints the paste-ready re-baselining block when the environment asks for it.
     private static func printDumpIfRequested(_ lines: [String]) {
-        let env = ProcessInfo.processInfo.environment
-        guard env["FOOD_CORPUS_DUMP"] != nil || env["TEST_RUNNER_FOOD_CORPUS_DUMP"] != nil else { return }
+        guard dumpRequested else { return }
         let counts = verdictCounts(in: corpus)
         print("// measuredBaseline = (zeroResults: \(counts.zeroResults), wrongTopOne: \(counts.wrongTopOne), defensible: \(counts.defensible))")
         for verdict in [FoodSearchCorpusVerdict.zeroResults, .wrongTopOne, .defensible] {
@@ -951,6 +1316,154 @@ struct FoodSearchCorpusTests {
         for entry in resolverBank {
             let name = entry.expectedTopName.map { "\"\($0)\"" } ?? "nil"
             print("FoodResolverCase(\"\(entry.query)\", \(entry.expectedCount), \(name)),")
+        }
+    }
+
+    // MARK: - Live re-measurement
+
+    /// Prints what the pipeline does NOW for every pinned surface, flagging each row that moved.
+    ///
+    /// ``printDumpIfRequested(_:)`` reprints what is PINNED, which is all a reader needs while the
+    /// pins are still true — but it cannot re-baseline a deliberate behaviour change, because the
+    /// values it prints are precisely the ones the change just invalidated. This block re-runs all 57
+    /// corpus queries, all ``namedRankingPins`` and the whole ``resolverBank`` against the shipped
+    /// catalog and prints them in the same paste-ready literal form, preceded by an explicit
+    /// WAS → NOW flip list.
+    ///
+    /// **It prints; it never asserts.** Verdicts are human judgements ("is this the food a person
+    /// typing this meant?") and cannot be measured, so a row whose emptiness class changed is emitted
+    /// with a `JUDGE` marker and the conservative `.wrongTopOne` placeholder rather than a guess that
+    /// would quietly launder a regression into a green baseline. Added by the 1.6/1.7a/1.8 round —
+    /// §29's coupled unit, the first change that actually moves these numbers.
+    private static func printLiveMeasurementIfRequested() {
+        guard dumpRequested else { return }
+        let catalog = FoodCatalog.bundled()
+        guard catalog.bundledCount == shippedRowCount else {
+            print("// LIVE DUMP SKIPPED — the shipped catalog is not loaded, so nothing measured here is real")
+            return
+        }
+        print("// ══ LIVE MEASUREMENT ═══════════════════════════════════════════")
+        printLiveCorpus(catalog)
+        printLiveRankingPins(catalog)
+        printLiveResolverBank(catalog)
+        printLiveCandidateSetSizes()
+    }
+
+    /// Swift-literal escaping for a measured catalog name.
+    ///
+    /// Pinned names are asserted quote-free by ``dumpEmitsOneParseableRowPerCorpusQuery()``, but a
+    /// MEASURED one need not be: the catalog really does contain rows like `PIZZA HUT 14" Cheese
+    /// Pizza, Pan Crust`, and printing one raw emits a literal that does not compile.
+    private static func escaped(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    /// Whether the environment asked for a dump. Xcode forwards the `TEST_RUNNER_` prefix.
+    private static var dumpRequested: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["FOOD_CORPUS_DUMP"] != nil || env["TEST_RUNNER_FOOD_CORPUS_DUMP"] != nil
+    }
+
+    /// Re-measures all 57 corpus queries: the flip list, then the corpus arrays as they should now read.
+    private static func printLiveCorpus(_ catalog: FoodCatalog) {
+        let measured = corpus.map { pinned -> (pinned: FoodSearchCorpusCase, live: FoodSearchCorpusCase, judge: Bool) in
+            let ranked = catalog.scoredResults(for: pinned.query, limit: 1)
+            let judge = ranked.isEmpty != (pinned.expectedTopName == nil)
+            let verdict: FoodSearchCorpusVerdict = ranked.isEmpty ? .zeroResults : (judge ? .wrongTopOne : pinned.verdict)
+            let live = FoodSearchCorpusCase(pinned.query, pinned.shape, verdict,
+                                            ranked.first?.item.name, ranked.first.map(\.score))
+            return (pinned, live, judge)
+        }
+        print("// ── FLIPS (measured ≠ pinned) ──────────────────────────────────")
+        for row in measured where row.live.expectedTopName != row.pinned.expectedTopName
+            || row.live.expectedTopScore != row.pinned.expectedTopScore {
+            print("// \"\(row.pinned.query)\": WAS \(describe(row.pinned)) → NOW \(describe(row.live))\(row.judge ? "   ← JUDGE" : "")")
+        }
+        // A row whose emptiness class changed cannot be verdicted from its top-1 alone — the question
+        // is whether the food a person meant is anywhere in what they would actually see.
+        print("// ── JUDGE rows, top-6 ─────────────────────────────────────────")
+        for row in measured where row.judge {
+            print("// \"\(row.pinned.query)\":")
+            for ranked in catalog.scoredResults(for: row.pinned.query, limit: 6) {
+                print("//     \(escaped(ranked.item.name)) — \(ranked.score) \(ranked.item.dataType.rawValue)")
+            }
+        }
+        let counts = verdictCounts(in: measured.map(\.live))
+        print("// measuredBaseline = (zeroResults: \(counts.zeroResults), wrongTopOne: \(counts.wrongTopOne), defensible: \(counts.defensible))")
+        print("//   — wrongTopOne/defensible carry the PINNED verdict forward; every JUDGE row above needs a human verdict")
+        for verdict in [FoodSearchCorpusVerdict.zeroResults, .wrongTopOne, .defensible] {
+            print("// ── \(verdict.rawValue) ───────────────────────────────────────────────")
+            for row in measured where row.live.verdict == verdict {
+                print(liveLiteral(for: row.live) + (row.judge ? "   // ← JUDGE" : ""))
+            }
+        }
+    }
+
+    /// "name (score)" or "∅" for a measured/pinned top-1.
+    private static func describe(_ corpusCase: FoodSearchCorpusCase) -> String {
+        guard let name = corpusCase.expectedTopName else { return "∅" }
+        return "\"\(escaped(name))\" (\(corpusCase.expectedTopScore ?? 0))"
+    }
+
+    /// Re-measures every named ranking pin's top-6.
+    private static func printLiveRankingPins(_ catalog: FoodCatalog) {
+        print("// ── namedRankingPins ─────────────────────────────────────────────")
+        for pin in namedRankingPins {
+            let live = catalog.scoredResults(for: pin.query, limit: 6)
+                .map { FoodSearchRankedRow($0.item.name, $0.score, $0.item.dataType.rawValue) }
+            print("FoodSearchRankedPin(\"\(pin.query)\", \"\(escaped(pin.note))\", [\(live == pin.rows ? "" : "   // ← MOVED")")
+            for row in live { print("    FoodSearchRankedRow(\"\(escaped(row.name))\", \(row.score), \"\(row.dataType)\"),") }
+            print("]),")
+        }
+    }
+
+    /// The literal for a MEASURED corpus row — ``literal(for:)`` with the catalog name escaped.
+    private static func liveLiteral(for corpusCase: FoodSearchCorpusCase) -> String {
+        let head = "FoodSearchCorpusCase(\"\(corpusCase.query)\", .\(corpusCase.shape.rawValue), .\(corpusCase.verdict.rawValue)"
+        guard let name = corpusCase.expectedTopName, let score = corpusCase.expectedTopScore else {
+            return head + "),"
+        }
+        return head + ", \"\(escaped(name))\", \(score)),"
+    }
+
+    /// Re-measures the shipped source's candidate-set sizes — the retrieval half, which fix 1.6 moves
+    /// (a stripped stopword is a term the FTS MATCH expression never emits).
+    private static func printLiveCandidateSetSizes() {
+        // The adversarial review's battery, measured live so its cases can be judged and pinned.
+        print("// ── review battery, top-6 ─────────────────────────────────────")
+        let catalog = FoodCatalog.bundled()
+        for query in ["burger", "ham", "hot dog", "eggs", "cheese pizza", "cheese", "beef", "onion",
+                      "bacon", "turkey", "chicken nuggets", "caesar salad", "chicken noodle soup", "apple"] {
+            print("// \"\(query)\":")
+            for ranked in catalog.scoredResults(for: query, limit: 6) {
+                print("//     \(escaped(ranked.item.name)) — \(ranked.score) \(ranked.item.dataType.rawValue)")
+            }
+        }
+        print("// ── review battery, resolver pools ────────────────────────────")
+        for query in ["two slices of pizza", "piece of chicken", "cheese pizza slice"] {
+            let pool = catalog.candidates(for: query, limit: 18)
+            print("// \"\(query)\": \(pool.count) — \(pool.prefix(4).map { escaped($0.foodItem.name) }.joined(separator: " | "))")
+        }
+        print("// ── sourceCandidateSetSizes ──────────────────────────────────────")
+        guard let source = SQLiteBundledFoodSource(), source.count == shippedRowCount else {
+            print("// SKIPPED — shipped catalog did not open")
+            return
+        }
+        for expectation in sourceCandidateSetSizes {
+            let live = source.candidates(forQuery: expectation.query).count
+            print("(\"\(expectation.query)\", \(live)),\(live == expectation.expected ? "" : "   // ← MOVED")")
+        }
+    }
+
+    /// Re-measures every resolver-bank entry's pool size and top candidate.
+    private static func printLiveResolverBank(_ catalog: FoodCatalog) {
+        print("// ── resolverBank ─────────────────────────────────────────────────")
+        for entry in resolverBank {
+            let pool = catalog.candidates(for: entry.query, limit: 18)
+            let top = pool.first?.foodItem.name
+            let moved = pool.count != entry.expectedCount || top != entry.expectedTopName
+            let name = top.map { "\"\(escaped($0))\"" } ?? "nil"
+            print("FoodResolverCase(\"\(entry.query)\", \(pool.count), \(name)),\(moved ? "   // ← MOVED" : "")")
         }
     }
 

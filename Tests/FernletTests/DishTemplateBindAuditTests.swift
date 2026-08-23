@@ -111,9 +111,13 @@
 // single-component resolution FROM THIS TIER as of fix 1.3 — it no longer falls through to the plan
 // tier at all, so its half of the old defect is closed, not merely relocated.)
 //
-// The remaining repair is the score floor (research §26 fix 1.8), which lands with 1.6 and 1.7a as one
-// measured unit at order-5/6/7. Recorded here so §31's promise is not read as delivered for
-// multi-item descriptions the lexicon does not recognise at all.
+// **CLOSED 2026-08-23** by the 1.6/1.7a/1.8 increment, which the note above was waiting on.
+// `MealResolutionService` no longer hardcodes `.high` on the plan tier: `bindConfidence(for:candidates:)`
+// derives it by scoring each split item's bound food against the WHOLE item name and requiring
+// every one to clear `confidentBindScore` with nothing left unmatched. What that does and does not
+// close is pinned at `planTierConfidenceNowFollowsItsBinds` and — for the case this note originally
+// named — `planTierStillCommitsBurgerAndFriesAtHighConfidence`, which records that `burger and fries`
+// still resolves `.high` because both of its binds clear 250 on the +250 substring bonus alone.
 //
 // COSTCO CHEESE PIZZA SLICE, POST-1.5: fix 1.3 alone reopened auto-commit for this query (`.high`, no
 // review) — a genuine improvement over 1.1/1.2's ACCIDENTAL safety net (a bad score standing in for
@@ -136,6 +140,7 @@
 
 import Foundation
 import Testing
+import AIProviders
 import FernletDomainModel
 import FoodCatalog
 @testable import Fernlet
@@ -296,9 +301,18 @@ struct DishTemplateBindAuditTests {
         DishTemplateBindPin("curry", "chicken breast cooked roasted", "Chicken, broilers or fryers, breast, meat only, cooked, roasted", 387, .defensible),
         DishTemplateBindPin("curry", "coconut milk canned", "Nuts, coconut milk, canned (liquid expressed from grated meat and water)", 574, .defensible),
         DishTemplateBindPin("curry", "rice white long grain regular enriched cooked", "Rice, white, long-grain, regular, enriched, cooked", 2170, .defensible),
-        DishTemplateBindPin("tomato soup", "soup tomato canned prepared with equal volume water", "Soup, tomato, canned, prepared with equal volume water, commercial", 1379, .defensible),
+        // 1379 → 1319: fix 1.6 strips the function word "with", which costs this bind one +60 token
+        // hit. The +500/+250 phrase bonuses are INTACT because `phraseScore` scores the typed phrase
+        // as well as the stripped one and keeps the better — without that, this component lost 750
+        // points and was handed to a *bisque* row on a name tie-break.
+        DishTemplateBindPin("tomato soup", "soup tomato canned prepared with equal volume water", "Soup, tomato, canned, prepared with equal volume water, commercial", 1319, .defensible),
         DishTemplateBindPin("chicken noodle soup", "chicken breast meat only cooked stewed", "Chicken, broilers or fryers, breast, meat only, cooked, stewed", 358, .defensible),
-        DishTemplateBindPin("chicken noodle soup", "pasta noodle cooked", "Pasta, cooked", 120, .defensible),
+        // REPAIRED IN THE DATA. `pasta noodle cooked` named a food the catalog does not have under
+        // that name, and §26 fix 1.8's floor turned that latent defect into a visible one: the string
+        // had been reaching *Pasta, cooked* through the category/tags, with no "noodle" in the name
+        // at all. The fix is the one `ramen` already uses for the same ingredient, so the two dishes
+        // now bind their noodles identically instead of one of them guessing.
+        DishTemplateBindPin("chicken noodle soup", "egg noodles cooked", "Noodles, egg, enriched, cooked", 179, .defensible),
         DishTemplateBindPin("chicken noodle soup", "broth chicken ready to serve", "Soup, chicken broth, ready-to-serve", 300, .defensible),
         DishTemplateBindPin("oatmeal", "oatmeal", "Oatmeal, NFS", 810, .defensible),
         DishTemplateBindPin("smoothie", "banana", "Bananas, raw", 750, .defensible),
@@ -402,12 +416,13 @@ struct DishTemplateBindAuditTests {
     /// tortilla, bread, beef patty, fried rice collapsed to USDA's own single-ingredient decomposition;
     /// round two: `vegetable fried rice` given its own per-alias override onto *Rice, fried, meatless* —
     /// see the file header), over the 95 component binds of the 31 audited descriptions (94 after round
-    /// one; 96 before round one dropped fried rice from 3 components to 1): **zero match no catalog
-    /// row, zero bind below `minimumBindScore`, 14 bind weakly (1–249, but to the RIGHT food), and 81
-    /// bind confidently (≥ 250).** Every one of the 49 wrongFood binds and 9 noCatalogRow binds from
-    /// before fix 1.3 has been repaired to a defensible row — this suite's whole `verdict` column
-    /// collapses to `.defensible`. The floor itself is unmoved; what changed is which food each search
-    /// string reaches.
+    /// one; 96 before round one dropped fried rice from 3 components to 1), and RE-measured after
+    /// §26 fixes 1.6/1.7a/1.8 and their adversarial review: **zero match no catalog row, zero bind
+    /// below `minimumBindScore`, 14 bind weakly (1–249, but to the RIGHT food), and 81 bind
+    /// confidently (≥ 250)** — the same populations as before the increment. Fix 1.8's floor exposed
+    /// one latent data defect on the way (`chicken noodle soup`'s noodle component had been reaching
+    /// its row through the category, with no "noodle" in the name); that string was repaired in
+    /// `DishTemplates.json` rather than the floor being weakened.
     @Test func bindFloorPopulationsAreMeasuredNotInherited() throws {
         let noRow = Self.pins.filter(\.bindsToNothing)
         let dropped = Self.pins.filter { !$0.bindsToNothing && $0.score < FoodItemSearch.minimumBindScore }
@@ -677,6 +692,92 @@ struct DishTemplateBindAuditTests {
         #expect(resolved.meals.count == 2)
         #expect(resolved.unmatchedItems == ["Lettuce"])
         #expect(Set(resolved.unmatchedItems).count == resolved.unmatchedItems.count, "no duplicate ForEach id")
+    }
+
+    /// The rung BELOW this tier no longer stamps `.high` on whatever it happens to bind — the defect
+    /// the file header parked here after fixes 1.1/1.2, closed by the 1.6/1.7a/1.8 increment.
+    ///
+    /// `burger and fries` is the case the header names: the template tier knows "burger" and not
+    /// "fries", returns nil by design rather than answering half a description, and the
+    /// candidate-constrained plan tier then answers the whole thing. It used to answer at `.high`
+    /// with `unmatchedItems == []` — MORE confident and LESS disclosed than the partial the tier
+    /// above would have produced, because `deterministicPlan` only reports an unmatched item when
+    /// NOTHING was produced for it. `MealResolutionService.bindConfidence` now reads the per-item
+    /// bind scores and refuses `.high` unless every split item cleared `confidentBindScore`.
+    ///
+    /// Driven end to end through `FernletStore.resolveMeals` with `aiStatus == .off`, on a catalog
+    /// small enough to control the bind score: the shipped catalog only reaches tier 2 for
+    /// descriptions the template tier declines, and pinning one of those would re-pin every time
+    /// `DishTemplates.json` grows an alias. `needsReview` is the bit `FoodView` branches on to open
+    /// the "Check this meal" sheet.
+    @MainActor
+    @Test func planTierConfidenceNowFollowsItsBinds() async throws {
+        // A weakly-bound single item: both query tokens are in the name (so it binds) but there is no
+        // phrase hit, which is the same 118-point shape as the mozzarella case one tier up.
+        let weak = FoodCatalog(source: InMemoryBundledFoodSource([Self.food(name: "Shredded blend of cheddar and cheese", tags: [])]))
+        try #require(DishTemplateLexicon.resolve(description: "cheese cheddar", mealType: nil, catalog: weak) == nil,
+                     "the template tier must decline this description — that is what makes it a plan-tier test")
+        let weakStore = makeTestStore(foodCatalog: weak)
+        try #require(weakStore.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs under test")
+        let weaklyBound = await weakStore.resolveMeals(from: "cheese cheddar")
+        #expect(weaklyBound.meals.isEmpty == false, "the plan tier still answers — this is about confidence, not coverage")
+        #expect(weaklyBound.meals.first?.componentSnapshots.isEmpty == false, "and it really did bind a food")
+        #expect(weaklyBound.confidence == .low, "a bind that only cleared ADMISSION is no longer stamped high")
+        #expect(weaklyBound.needsReview, "so the meal pauses at the review sheet before it counts toward the day")
+
+        // The same path with an exact-name bind still resolves `.high`: tier 2 did not stop trusting
+        // itself, it stopped trusting binds it cannot vouch for.
+        let clean = FoodCatalog(source: InMemoryBundledFoodSource([Self.food(name: "Cheese cheddar", tags: [])]))
+        let cleanStore = makeTestStore(foodCatalog: clean)
+        let cleanlyBound = await cleanStore.resolveMeals(from: "cheese cheddar")
+        #expect(cleanlyBound.confidence == .high)
+        #expect(cleanlyBound.needsReview == false)
+    }
+
+    /// `bindConfidence`'s two other refusals, at the unit: an item that bound nothing, and a plan
+    /// carrying an unmatched item, each independently forbid `.high`.
+    @MainActor
+    @Test func planTierRefusesHighForEmptyOrPartialPlans() {
+        let exact = Self.food(name: "Cheese cheddar", tags: [])
+        let candidates = [FoodSelectionCandidate(id: 1, foodItem: exact)]
+        let items = [FoodSelectionMealItem(name: "cheese cheddar",
+                                           ingredients: [FoodSelectionIngredient(candidateId: 1, foodName: exact.name,
+                                                                                 quantity: 1, unit: "serving")])]
+        #expect(MealResolutionService.bindConfidence(
+            for: FoodSelectionPlan(mealName: "x", mealType: .lunch, items: items, unmatchedItems: []),
+            candidates: candidates) == .high)
+        #expect(MealResolutionService.bindConfidence(
+            for: FoodSelectionPlan(mealName: "x", mealType: .lunch,
+                                   items: [FoodSelectionMealItem(name: "cheese cheddar", ingredients: [])],
+                                   unmatchedItems: []),
+            candidates: candidates) == .low)
+        #expect(MealResolutionService.bindConfidence(
+            for: FoodSelectionPlan(mealName: "x", mealType: .lunch, items: items, unmatchedItems: ["Fries"]),
+            candidates: candidates) == .low)
+    }
+
+    /// **What deriving tier-2 confidence does NOT close, measured rather than assumed.**
+    ///
+    /// The file header parked `burger and fries` here as the case a score-gated confidence would
+    /// catch. It does not, and the pin records why: the plan tier binds *Hamburger (Burger King)* and
+    /// *Potato, french fries, with chili*, and each clears `confidentBindScore` on the +250 substring
+    /// bonus alone — a row merely CONTAINING the typed word. The stamp is now honest about bind
+    /// QUALITY and the binds really are, by this codebase's definition, good; what is wrong is that
+    /// one of them is chili fries. That is the confident-but-wrong-VARIETY category this suite's
+    /// header already names, and it needs a relevance fix (§26 fix 1.7 option (b), or a
+    /// `formSpecificityBias` that knows "with chili" is an extraneous qualifier), not a confidence one.
+    @MainActor
+    @Test func planTierStillCommitsBurgerAndFriesAtHighConfidence() async throws {
+        let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
+        try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs under test")
+        try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        try #require(DishTemplateLexicon.resolve(description: "burger and fries", mealType: nil, catalog: store.foodCatalog) == nil,
+                     "the template tier still declines this description by design")
+
+        let resolved = await store.resolveMeals(from: "burger and fries")
+        #expect(resolved.confidence == .high, "still high — and the note above is why")
+        #expect(resolved.unmatchedItems.isEmpty, "still undisclosed: both items produced something, so neither is 'unmatched'")
+        #expect(resolved.meals.first?.name.contains("chili") == true, "the fries bind is chili fries")
     }
 
     /// An item the lexicon does not know at all still hands the WHOLE description to the next tier,
@@ -1184,10 +1285,17 @@ struct DishTemplateBindAuditTests {
 
     /// One weakly-bound component (name tokens hit, no substring hit, under the 250 floor) is enough
     /// to downgrade the whole resolution. This is the mozzarella case, isolated.
+    ///
+    /// The substitute row is named *Shredded blend of cheddar and cheese* rather than the
+    /// *Shredded cheddar blend* + `tags: ["cheese", "cheddar"]` it used to be, because research §26
+    /// fix 1.8's floor is exactly the rule that a tag is not a name: with "cheese" reachable only
+    /// through the tags, the row is no longer bound AT ALL, which tests the DROP path this test's
+    /// sibling already covers rather than the weak-bind path this one is for. Both query tokens are
+    /// now in the name, and the bind is still weak (two +60 token hits, no phrase hit, 118 < 250).
     @Test func oneWeakComponentDowngradesTheWholeResolution() throws {
         var items = Self.tacoComponents()
         items.removeAll { $0.name == "Cheese cheddar" }
-        items.append(Self.food(name: "Shredded cheddar blend", tags: ["cheese", "cheddar"]))
+        items.append(Self.food(name: "Shredded blend of cheddar and cheese", tags: ["cheese", "cheddar"]))
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource(items))
         let resolved = try #require(DishTemplateLexicon.resolve(description: "taco", mealType: nil, catalog: catalog))
         let weak = try #require(catalog.scoredResults(for: "cheese cheddar", limit: 1).first)
@@ -1200,13 +1308,20 @@ struct DishTemplateBindAuditTests {
 
     /// A component whose best hit matches on tags alone is DROPPED — it contributes no macros — and
     /// the drop forces `.low`, so a meal that is quietly missing an ingredient can never auto-commit.
+    ///
+    /// As of research §26 fix 1.8 the tag-only row does not merely score below `minimumBindScore`, it
+    /// is not returned at all: the search floor now asks whether the NAME carries the query, and
+    /// *Wrap* carries none of "lettuce iceberg raw". The drop path being tested is unchanged — the
+    /// component still contributes nothing and still forces review — but the reason it is empty moved
+    /// one layer earlier, so the fixture is asserted as empty rather than as sub-floor.
     @Test func unbindableComponentIsDroppedAndForcesReview() throws {
         var items = Self.tacoComponents()
         items.removeAll { $0.name == "Lettuce iceberg raw" }
         items.append(Self.food(name: "Wrap", tags: ["lettuce", "iceberg", "raw"]))
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource(items))
-        let dropped = catalog.scoredResults(for: "lettuce iceberg raw", limit: 1).first
-        try #require((dropped?.score ?? Int.max) < FoodItemSearch.minimumBindScore, "fixture must sit below the drop floor")
+        try #require(catalog.scoredResults(for: "lettuce iceberg raw", limit: 1).isEmpty,
+                     "fixture must not bind: its only candidate reaches the gate on tags alone")
+        #expect(!FoodItemSearch.nameCarriesQuery("Wrap", query: "lettuce iceberg raw"))
         let resolved = try #require(DishTemplateLexicon.resolve(description: "taco", mealType: nil, catalog: catalog))
         #expect(resolved.confidence == .low)
         #expect(resolved.meals.first?.componentSnapshots.count == 3, "the tag-only match contributes nothing")

@@ -2102,6 +2102,21 @@ final class FernletStore {
     /// Convenience: resolve and immediately commit. Used by non-interactive callers (recipe retry
     /// queue, programmatic logging). The interactive quick-log flow calls `resolveMeals` then either
     /// `commitResolution` or routes low-confidence results through a pre-log review first.
+    ///
+    /// **KNOWN GAP, examined 2026-08-23 and deliberately not closed here — it is architectural.**
+    /// This path commits WITHOUT consulting `MealResolution.needsReview`, so a background retry can
+    /// replace a logged meal with a resolution the interactive flow would have paused for review.
+    /// The only live caller is ``retryOldestMeal()``, which re-resolves a fabricated
+    /// keyword-fallback meal, and neither available behaviour is right without a new surface:
+    ///
+    /// * committing anyway (today) changes a logged meal with nothing on screen saying so;
+    /// * declining to commit is WORSE, not better — the thing it would preserve is
+    ///   `MealParser.parse`'s invented macros, which have no catalog grounding at all, in favour of a
+    ///   catalog-grounded resolution that is merely not confident.
+    ///
+    /// The real fix is a review surface for background re-estimation ("these logs were re-estimated,
+    /// check them"), which is a product decision, not a refactor. Recorded rather than guessed at.
+    /// Note also that `addResolvedMeal` (singular) above currently has no callers.
     @discardableResult func addResolvedMeals(from description: String, type: MealType? = nil, date: String? = nil) async -> [Meal] {
         let targetDate = date ?? todayKey
         let resolution = await resolveMeals(from: description, type: type, date: targetDate)

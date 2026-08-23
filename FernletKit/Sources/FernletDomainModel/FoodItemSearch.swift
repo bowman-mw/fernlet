@@ -107,10 +107,29 @@ public nonisolated enum FoodBrandLexicon {
 ///
 /// The in-memory half of food search — the SQLite-backed `FoodCatalog` sits above it and reuses
 /// the same normalization/token/variant helpers (`searchTokens`, `matchVariants`) so its FTS5
-/// candidate query stays in lockstep with this scorer's hard match gate. Ranking sorts source
-/// priority (manual > USDA > AI) and brand-aware data-type priority ABOVE the relevance score, then
-/// applies preparation and form-specificity biases. `minimumBindScore`/`confidentBindScore` are the
-/// confidence floors quick-log binding applies to `scoredResults`.
+/// candidate query stays in lockstep with this scorer's hard match gate.
+///
+/// **Ranking, in the order the keys are applied.** Research §26's coupled increment (fixes
+/// 1.6/1.7a/1.8) changed steps 1 and 4 and added step 5; steps 2 and 3 are byte-unchanged, which is
+/// what keeps this option (a) — data type still outranks the score everywhere.
+/// 1. the hard match gate — every *search token* must equal-or-prefix some indexed token, where the
+///    search tokens are stopword-filtered by position (fix 1.6, see ``searchTokens(in:)``);
+/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score;
+/// 3. the relevance score (exact/prefix/substring name hits, per-token coverage, length penalty,
+///    preparation and form-specificity biases), then the name as a final tie-break;
+/// 4. **the search floor** — a row whose NAME does not carry every search token is dropped rather
+///    than presented undifferentiated beside real hits, AND it must clear ``minimumBindScore``
+///    (fix 1.8's two halves — see ``nameCarriesQuery(_:query:)``). Applied during scoring, so a
+///    floored row never enters the ranking at all;
+/// 5. **prepared-dish demotion** — for a query whose head noun is not a dish word, assembled dishes
+///    sink below the raw ingredients, but only below ingredients that match at least as well
+///    (fix 1.7a, see ``PreparedDishHeuristic/demotingDishes(scored:forQuery:)``). Applied to a
+///    bounded window (``demotionWindow``) BEFORE the caller's `limit`, so it can surface a row the
+///    top-6 truncation would otherwise have hidden, without paying a per-keystroke cost over the
+///    whole result set.
+///
+/// `minimumBindScore`/`confidentBindScore` are the confidence floors quick-log binding applies to
+/// `scoredResults`.
 public nonisolated enum FoodItemSearch {
     nonisolated public static let minimumQueryLength = 3
 
@@ -120,6 +139,16 @@ public nonisolated enum FoodItemSearch {
     /// At or above this score a single-item bind is considered confident (exact/prefix/substring
     /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
     nonisolated public static let confidentBindScore = 250
+
+    /// How many ranked rows the prepared-dish demotion considers before the caller's
+    /// `limit` is applied.
+    ///
+    /// Bounded on purpose (Power-of-10 rule 2): a broad prefix hydrates up to `candidateFetchLimit`
+    /// (10,000) rows, and `PreparedDishHeuristic.isPreparedDish` normalizes a name per row, so an
+    /// unbounded pass would add a five-figure string fold to every typeahead keystroke. Ten times the
+    /// default result limit is far more than any surface shows and leaves ample room for demotion to
+    /// pull a raw ingredient up from below the fold.
+    nonisolated static let demotionWindow = 60
 
     /// A prebuilt search index over a food list: normalized names and token sets per item.
     ///
@@ -147,30 +176,32 @@ public nonisolated enum FoodItemSearch {
         /// is assigned once in `init`, so the constant is concurrency-safe by construction.
         public static let empty = Index(foodItems: [])
 
-        fileprivate func matches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [FoodItem] {
-            scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit).map(\.foodItem)
+        fileprivate func matches(_ query: SearchQuery, limit: Int) -> [FoodItem] {
+            scoredMatches(query, limit: limit).map(\.foodItem)
         }
 
-        fileprivate func scoredMatches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [(foodItem: FoodItem, score: Int)] {
-            let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(normalizedQuery)
-            return Array(
-                entries
-                    .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
-                        guard let score = FoodItemSearch.score(entry, queryTokens: queryTokens, normalizedQuery: normalizedQuery) else { return nil }
-                        return (entry.foodItem, score)
-                    }
-                    .sorted { first, second in
-                        if first.foodItem.source != second.foodItem.source {
-                            return FoodItemSearch.sourcePriority(first.foodItem.source) > FoodItemSearch.sourcePriority(second.foodItem.source)
-                        }
-                        let firstType = FoodItemSearch.dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
-                        let secondType = FoodItemSearch.dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
-                        if firstType != secondType { return firstType > secondType }
-                        if first.score != second.score { return first.score > second.score }
-                        return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
-                    }
-                    .prefix(limit)
-            )
+        /// Scores, ranks, floors and demotes — steps 1–5 of the ordering documented on
+        /// ``FoodItemSearch``. `query` carries both the stopword-stripped tokens the gate and the
+        /// scorer use and the full normalized text the brand lexicon and the dish heuristic read.
+        fileprivate func scoredMatches(_ query: SearchQuery, limit: Int) -> [(foodItem: FoodItem, score: Int)] {
+            let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(query.normalized)
+            // Fix 1.8's BOTH floors, applied as part of scoring so a floored row never enters the
+            // ranking: name-substring carriage (`carries`) and the score floor at `minimumBindScore`. Fix
+            // 1.7a then reorders a bounded window of what survives (see `demotionWindow`), before
+            // `limit`, so demotion can surface a row from below the fold.
+            let ranked = entries
+                .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
+                    guard FoodItemSearch.carries(query.tokens, nameTokens: entry.nameTokens, name: entry.normalizedName),
+                          let score = FoodItemSearch.score(entry, query: query),
+                          score >= FoodItemSearch.minimumBindScore else { return nil }
+                    return (entry.foodItem, score)
+                }
+                .sorted { first, second in
+                    FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
+                }
+            let window = ranked.prefix(max(limit, FoodItemSearch.demotionWindow))
+            let ordered = PreparedDishHeuristic.demotingDishes(scored: Array(window), forQuery: query.normalized)
+            return Array(ordered.prefix(limit))
         }
 
         public func exactNameMatch(for normalizedName: String) -> FoodItem? {
@@ -197,30 +228,77 @@ public nonisolated enum FoodItemSearch {
         }
     }
 
-    public static func results(for query: String, in foodItems: [FoodItem], limit: Int = 6) -> [FoodItem] {
-        results(for: query, in: Index(foodItems: foodItems), limit: limit)
+    /// One prepared query: the tokens the gate and scorer work in, the text the score bonuses are
+    /// measured against, and the full normalized text the brand lexicon and dish heuristic read.
+    ///
+    /// The three are NOT the same string once stopwords are stripped (research §26 fix 1.6), and
+    /// which one each consumer gets is load-bearing:
+    ///
+    /// * `tokens` — stopword-stripped, so `bowl of oatmeal` reaches the 690 `oatmeal` rows instead of
+    ///   AND-ing an `of*` term nothing satisfies. `BundledFoodStore` builds its FTS5 MATCH expression
+    ///   from the same ``searchTokens(in:)``, so the retrieval gate and this scorer's gate stay the
+    ///   identical set (the "FTS gate == scorer gate" invariant).
+    /// * `effective` — the tokens rejoined, so the exact / prefix / substring name bonuses and the
+    ///   length penalty are measured against what was actually searched for. Without it every row for
+    ///   `bowl of oatmeal` would score a bare +60 and the tier would be resolved alphabetically.
+    ///   Byte-identical to `normalized` whenever no stopword was dropped, so a query without one
+    ///   scores exactly as it did before the fix.
+    /// * `normalized` — the untouched fold of the typed text. Brand detection reads it so its
+    ///   substring test is unchanged, and ``PreparedDishHeuristic`` reads it because a stripped word
+    ///   is often the very word that reveals the intent: the head noun of `cheese pizza slice` is
+    ///   "slice", which says a PIECE of something, not the assembled dish.
+    fileprivate struct SearchQuery {
+        let tokens: [String]
+        let effective: String
+        let normalized: String
     }
 
-    public static func results(for query: String, in index: Index, limit: Int = 6) -> [FoodItem] {
+    /// Prepares `query`, or nil when it cannot search (too short, or no usable token).
+    ///
+    /// `stripsStopwords` is what confines fix 1.6 to the surface it was designed for — see
+    /// ``results(for:in:limit:stripsStopwords:)``.
+    private static func searchQuery(_ query: String, stripsStopwords: Bool) -> SearchQuery? {
+        let normalizedQuery = normalized(query)
+        guard normalizedQuery.count >= minimumQueryLength else { return nil }
+        let rawTokens = tokens(in: query)
+        let searchTokens = stripsStopwords ? stopWordFiltered(rawTokens) : rawTokens
+        guard !searchTokens.isEmpty else { return nil }
+        return SearchQuery(
+            tokens: searchTokens,
+            effective: searchTokens.count == rawTokens.count ? normalizedQuery : searchTokens.joined(separator: " "),
+            normalized: normalizedQuery
+        )
+    }
+
+    public static func results(for query: String, in foodItems: [FoodItem], limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
+        results(for: query, in: Index(foodItems: foodItems), limit: limit, stripsStopwords: stripsStopwords)
+    }
+
+    /// - Parameter stripsStopwords: Whether fix 1.6's position-based stopword filter applies.
+    ///   **True only for a query a PERSON TYPED.** `FoodSelectionCandidateBuilder.searchPhrases`
+    ///   already decomposes a description into overlapping 3/2/1-word sub-phrases, which is its own
+    ///   way of un-sticking "bowl of oatmeal", and it keeps quantity words on purpose because in a
+    ///   sub-phrase they are the DISCRIMINATOR, not leading noise. Stripping them again there was
+    ///   measured to reintroduce §29's hazard on the resolver surface: the sub-phrase "slices pizza"
+    ///   became "pizza", and `two slices of pizza` lost every sliced-pizza row from its candidate
+    ///   pool. Callers that pass a sub-phrase pass `false`.
+    public static func results(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
         // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
         // is answered with no results.
-        guard limit > 0 else { return [] }
-        let normalizedQuery = normalized(query)
-        guard normalizedQuery.count >= minimumQueryLength else { return [] }
-        let queryTokens = tokens(in: query)
-        guard !queryTokens.isEmpty else { return [] }
-        return index.matches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
+        guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
+        return index.matches(prepared, limit: limit)
     }
 
     /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item
     /// so callers can apply a confidence floor (e.g. drop weak binds, flag low-confidence matches).
-    public static func scoredResults(for query: String, in index: Index, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
-        guard limit > 0 else { return [] }
-        let normalizedQuery = normalized(query)
-        guard normalizedQuery.count >= minimumQueryLength else { return [] }
-        let queryTokens = tokens(in: query)
-        guard !queryTokens.isEmpty else { return [] }
-        return index.scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
+    ///
+    /// Every returned row already carries every search token in its NAME (fix 1.8's floor,
+    /// ``nameCarriesQuery(_:query:)``), so a caller's own `minimumBindScore` check now sits on top of
+    /// a name-signal guarantee rather than being the only thing standing between a tag-only match and
+    /// a logged meal.
+    public static func scoredResults(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
+        guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
+        return index.scoredMatches(prepared, limit: limit)
             .map { (item: $0.foodItem, score: $0.score) }
     }
 
@@ -254,8 +332,88 @@ public nonisolated enum FoodItemSearch {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func score(_ entry: Index.Entry, queryTokens: [String], normalizedQuery: String) -> Int? {
-        guard queryTokens.allSatisfy({ queryToken in
+    /// The comparator: source priority, then brand-aware data-type priority, then score, then name.
+    ///
+    /// Extracted from `scoredMatches` unchanged — data type still outranks the score, which is
+    /// research §26 fix 1.7 **option (b)**, NOT taken here. Fix 1.7a leaves this ordering alone and
+    /// reorders afterwards, so no search surface silently changes its provenance preference.
+    private static func ranksAhead(
+        _ first: (foodItem: FoodItem, score: Int),
+        _ second: (foodItem: FoodItem, score: Int),
+        isBrandQuery: Bool
+    ) -> Bool {
+        if first.foodItem.source != second.foodItem.source {
+            return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
+        }
+        let firstType = dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
+        let secondType = dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
+        if firstType != secondType { return firstType > secondType }
+        if first.score != second.score { return first.score > second.score }
+        return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
+    }
+
+    /// Half of the search path's presentation floor — research §26 fix 1.8: **does this row's own
+    /// NAME carry everything that was typed?** The other half is the score floor at
+    /// ``minimumBindScore``, applied beside it in `scoredMatches`.
+    ///
+    /// **The two are complementary, not alternatives, and each one alone was measured wrong.**
+    ///
+    /// * Carriage alone keeps junk. Rows literally NAMED *Chili* and *Beef Chili* carry `chilis`
+    ///   perfectly well and score **0**, because the +60 coverage bonus needs token EQUALITY and the
+    ///   name token is the singular. Only the SCORE floor refuses them (§9(b)).
+    /// * The score floor alone deletes correct answers, because the +60 coverage bonus requires a
+    ///   query token to EQUAL a name token (§8's own defect list), so a stem-reached match earns
+    ///   nothing and the length penalty carries it negative.
+    /// * Carriage by whole-token prefix ALONE deletes canonical rows. `burger` loses *Hamburger, NFS*
+    ///   and *Cheeseburger, NFS*, because "hamburger" does not START with "burger" — while keeping
+    ///   *BURGER KING, Chicken Strips*, where the brand put the word at a token boundary. So carriage
+    ///   also accepts a SUBSTRING hit anywhere in the name, which is not a loosening but an
+    ///   alignment: it is the same notion of "the name says this" that the scorer's own +250
+    ///   substring bonus uses, and it is what makes that bonus and this floor agree about `burger`.
+    ///
+    /// **Category and tags both stay OUT, and the category half was tried and measured wrong.**
+    /// Admitting the category — an obvious reading of "the row's own taxonomy" — resurrected exactly
+    /// the rows this fix exists to remove: *Calzone, with cheese, meatless* is categorised
+    /// `Survey (FNDDS) - Pizza`, so `cheese pizza` handed its top-1 straight back to §29's calzone,
+    /// and *Banquet Breakfast Chicken Sandwich* is categorised `Sandwiches/Filled Rolls/Wraps`, whose
+    /// "Filled" satisfies the brand fragment "fil" and cost `chick fil a sandwich` its correct
+    /// CHICK-FIL-A row. A category says what a food is FILED UNDER, not what it IS. The substring
+    /// rule above recovers every canonical row the category was wanted for, without either.
+    ///
+    /// Token matching is the gate's own equality-or-prefix over ``matchVariants(for:)``, so the floor
+    /// can never reject a row the gate accepted for a reason the gate would not recognise.
+    nonisolated private static func carries(_ queryTokens: [String], nameTokens: Set<String>, name: String) -> Bool {
+        queryTokens.allSatisfy { queryToken in
+            let variants = matchVariants(for: queryToken)
+            return variants.contains { variant in
+                name.contains(variant) || nameTokens.contains { $0 == variant || $0.hasPrefix(variant) }
+            }
+        }
+    }
+
+    /// ``carries(_:nameTokens:name:)`` over a raw name, for callers that hold a food rather than an
+    /// index entry (the corpus instrument asserts the RULE with this, not a pinned row list).
+    ///
+    /// - Parameter stripsStopwords: Must match the call that produced the row. It defaults to `true`
+    ///   (the typed-query surface) and the default is a TRAP for anyone checking a row that came back
+    ///   from a `stripsStopwords: false` search: tested with stripping on, "cheese pizza slice" asks
+    ///   only whether the name carries "cheese pizza", which is a weaker question than the one the
+    ///   floor actually asked. Parameterized rather than documented-around.
+    nonisolated public static func nameCarriesQuery(_ name: String, query: String, stripsStopwords: Bool = true) -> Bool {
+        let folded = normalized(name)
+        return carries(searchTokens(in: query, stripsStopwords: stripsStopwords),
+                       nameTokens: Set(folded.split(separator: " ").map(String.init)),
+                       name: folded)
+    }
+
+    /// Scores one gate-passing entry, or nil when it does not pass the gate.
+    ///
+    /// The gate below is kept even though `scoredMatches` now applies the strictly narrower name
+    /// floor first (a name token is a searchable token, so passing the floor implies passing this):
+    /// `score` is the definition of "does this row match at all", and a function that answers that
+    /// question by assuming its caller already did is a trap for the next caller.
+    private static func score(_ entry: Index.Entry, query: SearchQuery) -> Int? {
+        guard query.tokens.allSatisfy({ queryToken in
             let variants = matchVariants(for: queryToken)
             return entry.searchableTokens.contains { foodToken in
                 variants.contains { variant in
@@ -268,16 +426,39 @@ public nonisolated enum FoodItemSearch {
 
         var score = 0
         let name = entry.normalizedName
-        if name == normalizedQuery { score += 1_000 }
-        if name.hasPrefix(normalizedQuery) { score += 500 }
-        if name.contains(normalizedQuery) { score += 250 }
-        score += queryTokens.reduce(0) { partial, queryToken in
+        score += max(phraseScore(name: name, phrase: query.normalized),
+                     phraseScore(name: name, phrase: query.effective))
+        score += query.tokens.reduce(0) { partial, queryToken in
             partial + (entry.nameTokens.contains(queryToken) ? 60 : 0)
         }
-        score -= max(name.count - normalizedQuery.count, 0) / 8
-        score += preparationBias(queryTokens: queryTokens, normalizedQuery: normalizedQuery, candidateName: entry.foodItem.name)
-        score += formSpecificityBias(queryTokens: queryTokens, candidateName: entry.foodItem.name)
+        score += preparationBias(queryTokens: query.tokens, normalizedQuery: query.effective, candidateName: entry.foodItem.name)
+        score += formSpecificityBias(queryTokens: query.tokens, candidateName: entry.foodItem.name)
         return score
+    }
+
+    /// The whole-phrase half of the score — exact / prefix / substring name hits, less the length
+    /// penalty — measured against one candidate phrasing of the query.
+    ///
+    /// Evaluated against BOTH the typed phrase and the stopword-stripped phrase, best wins, because
+    /// each is right for a different caller and neither is right for both:
+    ///
+    /// * The typed phrase is what a long ENGINEERED search string needs. `DishTemplates.json` binds
+    ///   its components with strings copied from catalog names — "soup tomato canned prepared with
+    ///   equal volume water" — and the name it must reach contains "with". Scoring only the stripped
+    ///   phrase costs that bind its +500 prefix AND +250 substring bonuses at once, which measurably
+    ///   handed the tomato-soup component to a *bisque* row on a tie-break.
+    /// * The stripped phrase is what a TYPED query needs. `bowl of oatmeal` is a substring of no
+    ///   name, so scoring only the typed phrase leaves every candidate on a bare +60 and resolves the
+    ///   whole tier alphabetically; against "oatmeal" the same bonuses fire and *Oatmeal, NFS* wins.
+    ///
+    /// When no stopword was dropped the two phrases are identical, so a query without one scores
+    /// exactly as it did before fix 1.6 — bit for bit, including the length penalty.
+    nonisolated private static func phraseScore(name: String, phrase: String) -> Int {
+        var score = 0
+        if name == phrase { score += 1_000 }
+        if name.hasPrefix(phrase) { score += 500 }
+        if name.contains(phrase) { score += 250 }
+        return score - max(name.count - phrase.count, 0) / 8
     }
 
     // Penalises candidates that are a derivative/sub-part *form* of a food the user named plainly.
@@ -398,11 +579,89 @@ public nonisolated enum FoodItemSearch {
             .filter { $0.count >= 2 }
     }
 
-    /// The query tokens used by the scorer's hard match gate (normalized, length ≥ 2). Exposed so the
-    /// SQLite candidate source can build an FTS5 prefix-AND query that mirrors the gate exactly: a
-    /// row passes FTS iff every token matches some indexed token by equality or prefix.
-    nonisolated public static func searchTokens(in text: String) -> [String] {
-        tokens(in: text)
+    /// The query tokens used by the scorer's hard match gate (normalized, length ≥ 2, stopwords
+    /// dropped unless `stripsStopwords` is false). Exposed so the SQLite candidate source can build
+    /// an FTS5 prefix-AND query that mirrors the gate exactly: a row passes FTS iff every token
+    /// matches some indexed token by equality or prefix.
+    ///
+    /// **Both sides call this function AND must pass the same `stripsStopwords`.** Sharing the
+    /// function is necessary and not sufficient: while the flag existed only on the scorer side,
+    /// retrieval stripped quantity words on the resolver path while scoring kept them, and the two
+    /// gates silently described different row sets — see
+    /// `SQLiteBundledFoodSource.candidates(forQuery:stripsStopwords:)` for the measured consequence.
+    nonisolated public static func searchTokens(in text: String, stripsStopwords: Bool = true) -> [String] {
+        stripsStopwords ? stopWordFiltered(tokens(in: text)) : tokens(in: text)
+    }
+
+    // MARK: - Stopwords (research §26 fix 1.6)
+
+    /// Words that are never part of a food's name and only ever narrow the AND gate. Dropped wherever
+    /// they appear.
+    ///
+    /// This is the function-word half of the 18-word set at `FoodSelectionCandidateBuilder`'s
+    /// `searchPhrases` — which has stripped them for the RESOLVER since long before search did, which
+    /// is exactly why the two surfaces disagree on `bowl of oatmeal` (nothing vs a full pool). "a" is
+    /// absent because the length-2 filter already removes it.
+    ///
+    /// **Frozen English matching input** (localization wall): these are compared against
+    /// `normalized()` output, which folds an index baked in English at build time. They must never be
+    /// localized, and no display string is derived from them.
+    nonisolated private static let functionStopWords: Set<String> = [
+        "and", "with", "plus", "then", "for", "the", "an", "of", "my"
+    ]
+
+    /// Household-measure and count words — dropped only from the LEADING run of the query.
+    ///
+    /// The position rule is the whole safety margin, and §29 is why it exists. A measure word
+    /// quantifies what FOLLOWS it: "bowl of oatmeal", "two scrambled eggs", "slice of toast" all name
+    /// the food after the measure, so dropping the leading word recovers the food. A TRAILING one is
+    /// part of the dish's name — "chicken burrito bowl", "chipotle chicken bowl", "cheese pizza
+    /// slice" — and §29 demonstrates the cost of stripping it anyway: with "slice" gone, `cheese pizza
+    /// slice` stops being a branded sliced-pizza query and the survey tier hands back a 1,655 kcal
+    /// calzone. Leading-only strips nothing from those three queries at all.
+    ///
+    /// Frozen English matching input, as above.
+    nonisolated private static let quantityStopWords: Set<String> = [
+        "bowl", "bowls", "glass", "glasses", "plate", "plates", "cup", "cups",
+        "handful", "handfuls", "piece", "pieces", "slice", "slices",
+        "serving", "servings", "half", "two", "three", "four", "five", "six", "dozen"
+    ]
+
+    /// Meal-occasion words — dropped only from the TRAILING run, the mirror of the rule above.
+    ///
+    /// An occasion qualifies the food it follows ("pizza for dinner", "yogurt post workout"), while a
+    /// LEADING occasion word is part of the food's name — "breakfast burrito", "breakfast sandwich",
+    /// "dinner rolls", "snack mix" are all real catalog rows that a positionless strip would silently
+    /// dissolve.
+    ///
+    /// Frozen English matching input, as above.
+    nonisolated private static let occasionStopWords: Set<String> = [
+        "meal", "breakfast", "lunch", "dinner", "snack", "pre", "post", "workout"
+    ]
+
+    /// The three sets, exposed read-only for the freeze pin in `FoodSearchCorpusTests`. They are
+    /// frozen English matching inputs and the localization wall's own machinery cannot see them (it
+    /// parses enum rawValues, and these are bare `Set<String>` literals), so a test asserts their
+    /// contents instead.
+    nonisolated public static var functionStopWordsForTesting: Set<String> { functionStopWords }
+    /// See ``functionStopWordsForTesting``.
+    nonisolated public static var quantityStopWordsForTesting: Set<String> { quantityStopWords }
+    /// See ``functionStopWordsForTesting``.
+    nonisolated public static var occasionStopWordsForTesting: Set<String> { occasionStopWords }
+
+    /// Applies the three stopword rules, in order, and never returns empty.
+    ///
+    /// The never-empty guarantee is the second half of §29's rule ("never widen the pool without the
+    /// floor and the demotion catching what floods in"): a query made only of stopwords — "a bowl",
+    /// "pre workout" — must search for what was typed rather than for nothing at all, which would
+    /// present an empty list for a query that has perfectly good matches.
+    nonisolated private static func stopWordFiltered(_ tokens: [String]) -> [String] {
+        let withoutFunctionWords = tokens.filter { !functionStopWords.contains($0) }
+        let withoutLeadingMeasures = withoutFunctionWords.drop { quantityStopWords.contains($0) }
+        var kept = Array(withoutLeadingMeasures)
+        // R2: bounded — one pass, at most `kept.count` removals.
+        while let last = kept.last, occasionStopWords.contains(last) { kept.removeLast() }
+        return kept.isEmpty ? tokens : kept
     }
 
     /// Minimum token length before we attempt singular/plural normalization. Keeps short tokens

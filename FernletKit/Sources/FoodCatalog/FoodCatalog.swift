@@ -84,14 +84,26 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// The top `limit` foods for a free-text query, ranked by the `FoodItemSearch` scorer over
     /// bundled + branded candidates plus the user items.
-    public func results(for query: String, limit: Int = 6) -> [FoodItem] {
-        FoodItemSearch.results(for: query, in: index(for: query), limit: limit)
+    ///
+    /// As of research §26 fixes 1.6/1.7a/1.8 the two floors and the prepared-dish demotion apply
+    /// here AND on the resolver's ``candidates(for:limit:)``, so the two surfaces no longer disagree
+    /// about whether a dish outranks an ingredient or whether a tag-only row is presentable.
+    ///
+    /// They still differ in two ways, both deliberate. `candidates` splits the description into
+    /// sub-phrases first, reaching rows a single AND gate cannot — and for exactly that reason it
+    /// passes `stripsStopwords: false`, because in a sub-phrase a quantity word is the discriminator
+    /// rather than leading noise. Fix 1.6 applies to the query a PERSON TYPED, which is this one.
+    /// - Parameter stripsStopwords: See `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
+    ///   `false` only for a SUB-PHRASE; every typed-query caller leaves it alone.
+    public func results(for query: String, limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
+        FoodItemSearch.results(for: query, in: index(for: query, stripsStopwords: stripsStopwords), limit: limit, stripsStopwords: stripsStopwords)
     }
 
     /// Like ``results(for:limit:)`` but pairs each item with its match score, for callers that gate
-    /// on match quality (e.g. the meal-resolution review floor).
-    public func scoredResults(for query: String, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
-        FoodItemSearch.scoredResults(for: query, in: index(for: query), limit: limit)
+    /// on match quality (e.g. the meal-resolution review floor). Every row returned already carries
+    /// every search token in its NAME.
+    public func scoredResults(for query: String, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
+        FoodItemSearch.scoredResults(for: query, in: index(for: query, stripsStopwords: stripsStopwords), limit: limit, stripsStopwords: stripsStopwords)
     }
 
     /// The single food whose normalized name equals `normalizedName`, or nil. Priority: the user's
@@ -114,7 +126,9 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     public func candidates(for description: String, limit: Int = 18) -> [FoodSelectionCandidate] {
         var selected: [FoodItem] = []
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: description) {
-            for match in results(for: phrase, limit: 4) where !selected.contains(where: { $0.id == match.id }) {
+            // `stripsStopwords: false`: these are SUB-PHRASES, not typed queries — see
+            // `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
+            for match in results(for: phrase, limit: 4, stripsStopwords: false) where !selected.contains(where: { $0.id == match.id }) {
                 selected.append(match)
                 if selected.count >= limit { break }
             }
@@ -127,9 +141,12 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return ordered.enumerated().map { FoodSelectionCandidate(id: $0.offset + 1, foodItem: $0.element) }
     }
 
-    private func index(for query: String) -> FoodItemSearch.Index {
+    /// `stripsStopwords` reaches the SOURCE, not just the scorer: retrieval and scoring must gate on
+    /// the same token set or the fetch cap truncates a set the scorer never asked for.
+    private func index(for query: String, stripsStopwords: Bool) -> FoodItemSearch.Index {
         let branded = brandedSource
-        let candidates = source.candidates(forQuery: query) + (branded?.candidates(forQuery: query) ?? [])
+        let candidates = source.candidates(forQuery: query, stripsStopwords: stripsStopwords)
+            + (branded?.candidates(forQuery: query, stripsStopwords: stripsStopwords) ?? [])
         return FoodItemSearch.Index(foodItems: candidates + userItems)
     }
 

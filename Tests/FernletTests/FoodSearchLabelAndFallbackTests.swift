@@ -62,17 +62,47 @@ struct FoodSearchLabelAndFallbackTests {
     // The scorer's token gate was one-directional prefix-only ("egg*" matches, "eggs*" doesn't), so a
     // plural query could never reach the singular canonical Foundation/legacy food. These exercise the
     // stem-normalized gate directly (pure `FoodItemSearch`, no DB needed).
+    /// The stem invariant, asserted at the layer where it actually lives — the GATE.
+    ///
+    /// This test used to assert the whole thing end-to-end through `results`, on four synthetic rows
+    /// whose scores nothing in the shipped catalog resembles: a singular name reached only through
+    /// the stem earns no phrase bonus and no +60 (the coverage bonus requires token EQUALITY, §8's
+    /// own defect list), so each fixture row scored −1 to −3, and the test was passing only because
+    /// nothing yet refused a negative row. Read as a claim about search, it was measuring the absence
+    /// of a floor rather than the presence of stemming.
+    ///
+    /// Research §26 fix 1.8 added that floor, so the two halves are now asserted separately and
+    /// honestly: **retrieval** still reaches the singular canonical food for all four plurals (that
+    /// is what `matchVariants` is for, and `ftsCandidatesReachSingularForPluralQuery` /
+    /// `shippedCatalogReachesCanonicalEggForPluralQuery` prove it against real FTS), while
+    /// **presentation** additionally requires a real name signal. On the shipped catalog the
+    /// distinction costs nothing, because USDA names countable foods in the plural: `eggs` returns
+    /// *Eggs, Grade A, Large, egg whole* at **807** — pinned in `FoodSearchCorpusTests.reviewBattery`
+    /// — which the old fixture's −1 row could never have outranked anyway.
     @Test func pluralQueryReachesSingularCanonicalFood() {
-        let egg   = makeFood(name: "Egg, whole, raw, fresh", source: .usda, dataType: .foundation)
-        let oat   = makeFood(name: "Oat, rolled, dry",       source: .usda, dataType: .srLegacy)
-        let grape = makeFood(name: "Grape, red, raw",        source: .usda, dataType: .srLegacy)
-        let berry = makeFood(name: "Berry medley, raw",      source: .usda, dataType: .srLegacy)
-        let items = [egg, oat, grape, berry]
+        for (plural, singular) in [("eggs", "egg"), ("oats", "oat"), ("grapes", "grape"), ("berries", "berry")] {
+            #expect(FoodItemSearch.matchVariants(for: plural).contains(singular),
+                    "\(plural) must offer \(singular) as a match variant")
+        }
 
+        // End to end with CATALOG-REALISTIC names — how USDA actually spells these rows — so the
+        // scores are plausible and the plural query reaches the canonical food through the scorer,
+        // not merely through the gate.
+        let egg   = makeFood(name: "Eggs, Grade A, Large, egg whole", source: .usda, dataType: .foundation)
+        let oat   = makeFood(name: "Oats, rolled, dry",               source: .usda, dataType: .srLegacy)
+        let grape = makeFood(name: "Grapes, red or green, raw",       source: .usda, dataType: .srLegacy)
+        let berry = makeFood(name: "Berries, mixed, raw",             source: .usda, dataType: .srLegacy)
+        let items = [egg, oat, grape, berry]
         #expect(FoodItemSearch.results(for: "eggs", in: items).contains { $0.name == egg.name })
         #expect(FoodItemSearch.results(for: "oats", in: items).contains { $0.name == oat.name })
         #expect(FoodItemSearch.results(for: "grapes", in: items).contains { $0.name == grape.name })
         #expect(FoodItemSearch.results(for: "berries", in: items).contains { $0.name == berry.name })
+
+        // And the singular-named row a stem alone reaches: retrieved by the gate, not presented,
+        // because it carries no name signal beyond the stem. This is the floor's cost, stated.
+        let singularEgg = makeFood(name: "Egg, whole, raw, fresh", source: .usda, dataType: .foundation)
+        let scored = FoodItemSearch.scoredResults(for: "eggs", in: FoodItemSearch.Index(foodItems: [singularEgg]), limit: 1)
+        #expect(scored.isEmpty, "a stem-only match scores below the floor and is not presented")
     }
 
     // Singular queries must keep working unchanged (the gate already handled "egg" -> "eggs").

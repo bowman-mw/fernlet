@@ -1384,13 +1384,40 @@ public nonisolated enum MealItemSplitter {
 /// is intent-based (not a food-name blocklist): a query "wants a dish" only when its HEAD noun (last
 /// significant word) is itself a dish/carrier word — "cheeseburger", "chicken sandwich", "burger" — so
 /// "burger patties" / "grilled chicken" (head = patties / chicken) prefer the raw food.
+///
+/// **Two consumers, two entry points.** `FoodSelectionCandidateBuilder` / `FoodCatalog.candidates`
+/// reorder a resolver POOL and call ``demotingDishes(_:forQuery:)``; `FoodItemSearch` reorders a
+/// ranked SEARCH result and calls ``demotingDishes(scored:forQuery:)``, which adds a score guard so
+/// the demotion can never promote a worse match (research §26 fix 1.7a). Keeping them as separate
+/// entry points is deliberate: the resolver's pool has no scores to guard with, and changing its
+/// ordering is not this fix's business.
 public nonisolated enum PreparedDishHeuristic {
     /// Carrier / assembly tokens that mark a food as a composed dish rather than a single ingredient.
+    /// The second block was added 2026-08-23 from a measured single-ingredient battery: `cheese`
+    /// returned a *dip*, `beef` and `turkey` a *salad*, `onion` *rings*, `bacon` *bits*, and
+    /// `piece of chicken` *nuggets* — every one an assembled/derived preparation standing in for the
+    /// bare ingredient, and every one invisible to a carrier list built only from bread words.
+    ///
+    /// Adding a word here also adds it to ``dishHeadNouns``, which is the safety half: a query whose
+    /// head noun IS the word ("caesar salad", "chicken noodle soup") stops demoting altogether, so
+    /// widening the list cannot cost a query that asked for the dish by name.
     nonisolated static let carrierTokens: Set<String> = [
         "bun", "buns", "sandwich", "sandwiches", "roll", "rolls", "biscuit", "biscuits", "bagel",
         "croissant", "wrap", "wraps", "tortilla", "taco", "tacos", "burrito", "burritos", "sub",
-        "hoagie", "pita", "melt", "toast", "panini", "quesadilla", "calzone", "nachos"
+        "hoagie", "pita", "melt", "toast", "panini", "quesadilla", "calzone", "nachos",
+        "salad", "salads", "dip", "dips", "rings", "bits", "nuggets",
+        // `tortillas` closes a plural gap every other carrier already had (bun/buns, roll/rolls,
+        // taco/tacos …). Without it *Tortillas, ready-to-bake or -fry, corn* counted as an ingredient
+        // while *Tortilla, blue corn …* counted as a dish, and the two were reordered against each
+        // other for no reason a reader could defend.
+        "tortillas"
     ]
+
+    // NOT carriers, and each exclusion is measured. `soup`/`soups` were tried: USDA spells its
+    // canonical broths *Soup, beef broth or bouillon canned, ready-to-serve* and *Soup, chicken
+    // broth, ready-to-serve*, so making `soup` a carrier demoted the RIGHT answer for three shipped
+    // dish-template components in favour of branded look-alikes. A soup is not an assembly around an
+    // ingredient the way a bun or a wrap is.
     /// Substrings that mark an FNDDS prepared / fast-food composite entry.
     nonisolated static let preparedMarkers: [String] = [
         "fast food", "on wheat", "on white", "with condiments", "double decker", "on bun", "on a bun"
@@ -1403,11 +1430,23 @@ public nonisolated enum PreparedDishHeuristic {
     ])
 
     /// Whether a food is an assembled/prepared dish (carries an assembly token or a prepared marker).
+    ///
+    /// A carrier the name explicitly NEGATES does not count. FNDDS spells the un-assembled form of a
+    /// dish by naming the carrier and denying it — *Chili hot dog, no bun*, *Hamburger, no bun* — so a
+    /// plain substring test read the row that is LEAST assembled as the most. Measured: `hot dog`
+    /// demoted every no-bun row and surfaced *Pickle relish, hot dog* as its top-1.
     public nonisolated static func isPreparedDish(_ foodItem: FoodItem) -> Bool {
         let name = FoodItemSearch.normalized(foodItem.name)
         if preparedMarkers.contains(where: name.contains) { return true }
         let tokens = Set(name.split(separator: " ").map(String.init))
-        return !tokens.isDisjoint(with: carrierTokens)
+        return tokens.intersection(carrierTokens).contains { !isNegated($0, in: name) }
+    }
+
+    /// Whether `carrier` appears in `normalizedName` only to be denied ("no bun", "without bun").
+    /// `normalizedName` must already be `FoodItemSearch.normalized`, which collapses punctuation to
+    /// single spaces, so the two spellings below are the only ones that can occur.
+    private nonisolated static func isNegated(_ carrier: String, in normalizedName: String) -> Bool {
+        normalizedName.contains("no \(carrier)") || normalizedName.contains("without \(carrier)")
     }
 
     /// Cut / component / portion nouns. When the query's head noun is one of these it names a raw
@@ -1454,6 +1493,60 @@ public nonisolated enum PreparedDishHeuristic {
         return ingredients + foods.filter { isPreparedDish($0) }
     }
 
+    /// The score-aware demotion the SEARCH path uses — research §26 fix 1.7 **option (a)**, applied
+    /// inside `FoodItemSearch`'s ranking rather than only inside the resolver's candidate builder.
+    ///
+    /// Same partition as ``demotingDishes(_:forQuery:)`` with ONE added guard, and the guard is the
+    /// deliverable: **a dish is only sunk beneath ingredients that match at least as well.** Without
+    /// it, applying the resolver's heuristic to free-text search measurably breaks correct answers,
+    /// because the head-noun test cannot know an idiom from an ingredient:
+    ///
+    /// * `grilled cheese` — head noun "cheese", so the query reads as an ingredient, and the correct
+    ///   top-1 *Grilled cheese sandwich, NFS* carries the carrier token "sandwich". It scores **1019**
+    ///   against a best ingredient row in the low hundreds, so the guard leaves it exactly where it is.
+    /// * `chicken burrito bowl` is NOT a rescue by this guard, and the difference matters for anyone
+    ///   reading the mechanism: every row that passes the AND gate for that query carries "burrito",
+    ///   so there are no ingredient rows at all and the function returns at its `bestIngredientScore`
+    ///   guard, unreordered. Verified live rather than assumed.
+    /// * `peanut butter` — head noun "butter", and *Peanut butter and jelly sandwich, NFS* really is
+    ///   the wrong answer: plain peanut-butter rows score at least as well, so the sandwich sinks.
+    /// * `avocado` — *Sushi roll, avocado* carries "roll" and is beaten on score by the raw avocado
+    ///   rows, so it sinks.
+    ///
+    /// Score is used only to decide WHETHER to reorder; it never reorders rows itself, so the
+    /// comparator's data-type-above-score ordering (option (b), not authorized) is untouched.
+    public nonisolated static func demotingDishes(
+        scored: [(foodItem: FoodItem, score: Int)],
+        forQuery query: String
+    ) -> [(foodItem: FoodItem, score: Int)] {
+        guard !queryWantsDish(query), !scored.isEmpty else { return scored }
+        let dishFlags = scored.map { isPreparedDish($0.foodItem) }
+        guard let bestIngredientScore = zip(scored, dishFlags).filter({ !$0.1 }).map({ $0.0.score }).max() else {
+            return scored
+        }
+        var kept: [(foodItem: FoodItem, score: Int)] = []
+        var sunk: [(foodItem: FoodItem, score: Int)] = []
+        // R2: one bounded pass over `scored`.
+        for (row, isDish) in zip(scored, dishFlags) {
+            if isDish, row.score <= bestIngredientScore { sunk.append(row) } else { kept.append(row) }
+        }
+        guard !sunk.isEmpty else { return scored }
+        return kept + sunk
+    }
+
+    // A TOLERANCE MARGIN WAS TRIED HERE AND REVERTED, and the measurement is worth keeping.
+    // Strict `<=` leaves two bare-ingredient queries unfixed by a hair: *Beef salad* outscores
+    // *Beef, stew meat* by ONE point (810 vs 809) and *Onion rings…* outscores *Onions, raw* by 55,
+    // so both dishes survive. Allowing a dish to sink when it leads by less than the scorer's own
+    // +60 token bonus fixed both — and cost `grilled cheese`, where the best non-dish row is a
+    // BRANDED product called *Grilled Cheese Style Tomato Soup* scoring 1016 against the canonical
+    // survey *Grilled cheese sandwich, NFS* at 1019. Demotion is the one step that can lift a row
+    // across data-type tiers, so a 3-point margin there put a tomato soup above the sandwich.
+    // Tier-aware variants were considered and each cost a different measured case (a same-or-higher
+    // tier rule loses `broccoli` and `avocado`, whose correct answers sit a tier BELOW the dish).
+    // Strict it is: a demotion may never promote a worse-scoring row, full stop. `beef` and `onion`
+    // stay unfixed and are pinned that way in `FoodSearchCorpusTests.reviewBattery`.
+
     private nonisolated static func singular(_ token: String) -> String {
         if token.hasSuffix("ies"), token.count >= 5 { return String(token.dropLast(3)) + "y" }
         if token.hasSuffix("s"), !token.hasSuffix("ss"), token.count >= 4 { return String(token.dropLast()) }
@@ -1474,7 +1567,9 @@ public nonisolated enum FoodSelectionCandidateBuilder {
         var selected: [FoodItem] = []
 
         for phrase in phrases {
-            let matches = FoodItemSearch.results(for: phrase, in: index, limit: 4)
+            // `stripsStopwords: false` — a sub-phrase, not a typed query. `searchPhrases` keeps
+            // quantity words on purpose: in "slices pizza" the quantity word is the discriminator.
+            let matches = FoodItemSearch.results(for: phrase, in: index, limit: 4, stripsStopwords: false)
             for match in matches where selected.contains(where: { $0.id == match.id }) == false {
                 selected.append(match)
                 if selected.count >= limit { break }
