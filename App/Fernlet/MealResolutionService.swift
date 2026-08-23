@@ -132,7 +132,11 @@ final class MealResolutionService {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type),
                     gate: gate
-                ), let resolution = builtResolution(from: plan, candidates: candidates, confidence: .high) {
+                ), let resolution = builtResolution(
+                    from: plan,
+                    candidates: candidates,
+                    confidence: Self.retrievalGatedConfidence(.high, for: plan, candidates: candidates)
+                ) {
                     return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }
             } catch {
@@ -187,9 +191,12 @@ final class MealResolutionService {
     ///
     /// **`confidence` is a parameter, and that is the fix.** It was hardcoded `.high` here — for both
     /// callers — which is the same defect research §26 fix 1.1 closed one rung up in the template
-    /// tier. The AI-selection caller still passes `.high` (a model that picked from a constrained
-    /// candidate list is claiming the pick, and re-judging that claim is not this fix's business); the
-    /// deterministic caller passes ``bindConfidence(for:candidates:)``.
+    /// tier. The AI-selection caller still claims `.high` (a model that picked from a constrained
+    /// candidate list is claiming the pick, and re-judging that claim is not this fix's business) —
+    /// but since research §26 fix 1.10 that claim passes through
+    /// ``retrievalGatedConfidence(_:for:candidates:)``, which caps it at `.low` when the pick is a row
+    /// a CORRECTION promoted into the pool rather than one retrieval found. The deterministic caller
+    /// passes ``bindConfidence(for:candidates:)``.
     private func builtResolution(
         from plan: FoodSelectionPlan,
         candidates: [FoodSelectionCandidate],
@@ -236,6 +243,51 @@ final class MealResolutionService {
     /// already names and `verdict` has no word for — not an unhonest confidence stamp.
     /// `planTierStillCommitsBurgerAndFriesAtHighConfidence` pins it.
     ///
+    /// Caps a tier's claimed confidence at `.low` when the plan bound a food that never earned its
+    /// place in the candidate pool by RETRIEVAL — the correction-memory gate on the AI-selection tier
+    /// (research §26 fix 1.10, review finding M5).
+    ///
+    /// **Why the AI tier needs one and the deterministic tiers do not.** Both draw from
+    /// `FoodCatalog.candidates(for:)`, and since fix 1.10 that pool can contain one row the user's own
+    /// correction PROMOTED — placed at rank 1 by id, deliberately bypassing the FTS gate and the
+    /// scorer's floors. The deterministic tier re-derives every bind from an alias-free index
+    /// (`FoundationFoodSelectionModel.deterministicIngredients`) and re-scores it in
+    /// ``bindConfidence(for:candidates:)``, so a promoted row that matches nothing typed can never
+    /// bind, let alone bind confidently. The model tier had no such re-derivation: it saw the promoted
+    /// row as candidate #1 of its prompt and `.high` was stamped unconditionally, so a stale or
+    /// mistaken correction could auto-commit a meal with no review sheet — precisely the class of
+    /// silent wrong answer fixes 1.1/1.2 closed one rung down.
+    ///
+    /// **Deliberately narrow.** It does not re-judge the model's pick (the doc on
+    /// ``builtResolution(from:candidates:confidence:)`` explains why that is not this fix's business);
+    /// it asks only whether the picked row could have been retrieved for that item at all — so it is
+    /// **a no-op for any ingredient that clears the retrieval floor against the item it is bound to**.
+    ///
+    /// That is deliberately NOT the same as "a no-op on uncorrected devices", and the 2026-08-23
+    /// review measured the difference: pool admission scores sub-phrases of the whole DESCRIPTION,
+    /// while this scores sub-phrases of the SPLIT ITEM NAME the row was bound to, so a cross-item bind
+    /// — a row admitted for "fries" and then bound to the "burger" item — demotes even with no
+    /// correction in play. Measured at roughly 1 in 15 ordinary multi-item plans, and every demotion
+    /// the review produced deserved a review sheet, so the asymmetry errs in the safe direction: the
+    /// cost is a pause, never a silent commit.
+    static func retrievalGatedConfidence(
+        _ claimed: MealResolutionConfidence,
+        for plan: FoodSelectionPlan,
+        candidates: [FoodSelectionCandidate]
+    ) -> MealResolutionConfidence {
+        let foodItems = candidates.map(\.foodItem)
+        guard foodItems.isEmpty == false else { return claimed }
+        // R2: bounded by the plan's split items, each carrying a bounded ingredient list.
+        for item in plan.items {
+            let scores = FoundationFoodSelectionModel.bestSubPhraseScores(for: item.name, foodItems: foodItems)
+            for ingredient in item.ingredients {
+                guard let bound = candidates.first(where: { $0.id == ingredient.candidateId }) else { continue }
+                guard (scores[bound.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore else { return .low }
+            }
+        }
+        return claimed
+    }
+
     /// Static/pure so `DishTemplateBindAuditTests` can exercise it without a host.
     static func bindConfidence(for plan: FoodSelectionPlan, candidates: [FoodSelectionCandidate]) -> MealResolutionConfidence {
         guard plan.items.isEmpty == false, plan.unmatchedItems.isEmpty else { return .low }

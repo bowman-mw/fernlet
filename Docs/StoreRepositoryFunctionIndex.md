@@ -264,6 +264,7 @@ split is by concern, not alphabetical.
 | `addRecipe(...)`, `updateRecipe(...)`, `deleteRecipe(_:)` | Create, edit, and remove local recipes while resolving custom ingredients. |
 | `saveCustomIngredient(_:)` | Upserts one manual ingredient into the custom food catalog. |
 | `cachedWebImportedFoodProduct(for:)` / `saveWebImportedFoodProduct(_:)` | Reuse or upsert imported branded food products by normalized query/name. |
+| `rememberFoodSearchCorrections(_:)` / `publishFoodSearchCorrectionAliases()` | Research §26 fix 1.10's local correction memory: record the search-text → chosen-food pairs a SAVED "Adjust meal" replace produced (`FoodSearchCorrectionMemory`, a device-local `UserDefaults` sidecar, never synced between devices, capped at 200), and republish the alias map into `FoodCatalog.setSearchAliases` — at launch, after every write, and (as an empty map) on the wipe path. `forgetAllFoodSearchCorrections()` is the user-facing clear behind Privacy & data's "Forget corrected searches" row (returns the count it forgot); `foodSearchCorrectionCount` drives that row's text. |
 | `macroTotals(for:)` / `micronutrientTotals(for:)` | Compute local recipe nutrition from current food catalog data. |
 | `recipeShareText(for:)`, `proximityRecipeSharePayload(for:)` | Build share text or proximity payloads through `RecipeShareCodec`. |
 | `importProximityRecipeShare(_:)` / `importRecipe(from:)` | Import local or saved recipes from proximity/share payloads, creating ingredients and saved recipes as needed. |

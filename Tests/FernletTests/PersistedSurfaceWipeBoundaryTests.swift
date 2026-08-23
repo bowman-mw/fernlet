@@ -201,6 +201,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         // The plaintext half of the Health capability ledger. The live record is a keychain row now;
         // this defaults key is the legacy copy the ledger drains, and `clear` removes it directly.
         "fernlet.healthkit.requested-capabilities": .cleared(token: "HealthCapabilityRequestLedger.clear"),
+        // Research §26 fix 1.10's local correction memory: normalized query → the food id the user
+        // picked when they replaced a wrong match. Device-local, never synced, capped at 200 entries.
+        "fernlet.foodSearchCorrections.v1": .cleared(token: "FoodSearchCorrectionMemory.clearAll"),
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),

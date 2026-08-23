@@ -159,6 +159,19 @@ func uniqueSensitiveVisibilityDefaults() -> UserDefaults {
     UserDefaults(suiteName: "fernlet.tests.sensitiveVisibility.\(UUID().uuidString)") ?? .standard
 }
 
+/// A fresh throwaway defaults suite for ONE test store's food-search correction memory (research §26
+/// fix 1.10).
+///
+/// Same axis as `uniqueAIQuotaDefaults()`, and needed for the same reason: the sidecar's identity is a
+/// SUITE, and `FernletStore` READS it during init (`finishCommonWiring` publishes the alias map into
+/// the food catalog). On `.standard` a correction planted by any test — or left in the simulator
+/// container by a previous RUN — changes what an uninjected store's search returns, silently and
+/// across runs. Pass the SAME suite to two stores when a test deliberately simulates a relaunch on the
+/// same device.
+func uniqueFoodSearchCorrectionDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.foodCorrections.\(UUID().uuidString)") ?? .standard
+}
+
 /// A fresh, never-shared queue file for ONE test store's share-extension recipe inbox.
 ///
 /// A FILE, not a directory: the queue owns exactly one, and it lives in a different app-group
@@ -204,6 +217,7 @@ func makeTestStore(
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
@@ -216,6 +230,7 @@ func makeTestStore(
         heartDropKeychainService: heartDropKeychainService,
         aiQuotaDefaults: aiQuotaDefaults,
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
+        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
         sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL
     ).store
 }
@@ -238,6 +253,7 @@ func makeTestStoreWithRepositories(
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
@@ -300,7 +316,10 @@ func makeTestStoreWithRepositories(
         // service — see `uniqueHeartDropKeychainService()`.
         heartDropKeychainService: heartDropKeychainService,
         // The AI-call counter's identity is a defaults SUITE — see `uniqueAIQuotaDefaults()`.
-        aiQuotaDefaults: aiQuotaDefaults
+        aiQuotaDefaults: aiQuotaDefaults,
+        // The food-search correction memory, READ AT INIT — see
+        // `uniqueFoodSearchCorrectionDefaults()`.
+        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults
     )
     return (store, repository, journalNarrativeRepository)
 }

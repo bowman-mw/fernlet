@@ -509,6 +509,19 @@ final class FernletStore {
     /// `RecipeWebImport.webImageSuppressed`). Injectable so tests can isolate it from the shared
     /// `.standard` suite, mirroring `pastDayJournalScrubDefaults`.
     @ObservationIgnored var webImageAttemptDefaults: UserDefaults = .standard
+    /// Backing store for ``FoodSearchCorrectionMemory`` — the device-local record of searches the
+    /// user has corrected once (research §26 fix 1.10), republished into `foodCatalog` as a ranking
+    /// input.
+    ///
+    /// An INIT PARAMETER and a `let`, not a settable `var` like `webImageAttemptDefaults`, and that
+    /// difference is load-bearing: this suite is READ DURING INIT (`finishCommonWiring` publishes the
+    /// alias map into the catalog), so a post-hoc assignment lands after the read and the store spends
+    /// its first moments answering searches out of the process-global `.standard` suite. That is the
+    /// repo's shared-disk-root hazard class — a correction planted by one test changes what an
+    /// uninjected store returns, and persists in the simulator container across runs. Tests pass
+    /// `uniqueFoodSearchCorrectionDefaults()`; the launch path passes `.standard`, which is the real
+    /// device memory.
+    @ObservationIgnored let foodSearchCorrectionDefaults: UserDefaults
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -642,7 +655,7 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
@@ -653,6 +666,7 @@ final class FernletStore {
         // to the real `SharedRecipeImports/PendingRecipeURLs.json` — see `sharedRecipeImportQueue`.
         self.sharedRecipeImportQueue = SharedRecipeImportQueue(fileURL: sharedRecipeImportQueueFileURL)
         self.aiQuotaDefaults = aiQuotaDefaults
+        self.foodSearchCorrectionDefaults = foodSearchCorrectionDefaults
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
@@ -763,6 +777,10 @@ final class FernletStore {
             await self?.reloadFromRepository()
         }
         configureAIAuditLog()
+        // Fix 1.10: hand the catalog this device's remembered corrections. Cheap (one small defaults
+        // read) and done here rather than lazily, so the first typeahead keystroke of the session
+        // already answers with the user's own choices.
+        publishFoodSearchCorrectionAliases()
     }
 
     /// The async-load twin of the designated initializer: takes the snapshot and the
@@ -795,6 +813,10 @@ final class FernletStore {
         self.appGroupDirectory = nil
         self.sharedRecipeImportQueue = SharedRecipeImportQueue()
         self.aiQuotaDefaults = .standard
+        // `.standard` on the launch path for the same reason as the sidecars above: this is the
+        // device's own memory of the searches its owner corrected, and a fresh suite per launch would
+        // forget every one of them.
+        self.foodSearchCorrectionDefaults = .standard
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService
@@ -4033,6 +4055,51 @@ final class FernletStore {
         diary.cachedWebImportedFoodProduct(for: query)
     }
 
+    // MARK: - Local correction memory (research §26 fix 1.10)
+
+    /// Remembers the corrections a SAVED "Adjust meal" made — one per component the user replaced,
+    /// pairing the text they searched with the food they chose — and republishes the alias snapshot so
+    /// the next search for that text answers with their own choice first.
+    ///
+    /// Called from the sheet's Save, never from the pick itself: a correction the user cancels out of
+    /// must not teach the app anything. Device-local and never synced (see
+    /// ``FoodSearchCorrectionMemory``).
+    func rememberFoodSearchCorrections(_ corrections: [FoodSearchCorrection]) {
+        guard !corrections.isEmpty else { return }
+        FoodSearchCorrectionMemory.remember(corrections, defaults: foodSearchCorrectionDefaults)
+        publishFoodSearchCorrectionAliases()
+    }
+
+    /// Pushes the persisted correction memory into `foodCatalog` — at launch, after every write, and
+    /// after a wipe (where it publishes an EMPTY map, so corrections stop answering searches in the
+    /// live process instead of surviving until relaunch).
+    func publishFoodSearchCorrectionAliases() {
+        foodCatalog.setSearchAliases(FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults))
+    }
+
+    /// Forgets every remembered search correction — and NOTHING else.
+    ///
+    /// The user-facing escape hatch for a surface that is otherwise invisible and permanent: a
+    /// correction is learned from one tap, is never listed anywhere, and has no per-entry undo, so
+    /// "delete everything" was the only way to unlearn a mistake. Settings routes here through
+    /// `DestructiveConfirmation` like every other data-destroying control.
+    ///
+    /// - Returns: how many corrections were forgotten, so the caller can say so rather than claiming
+    ///   an outcome it did not check.
+    @discardableResult func forgetAllFoodSearchCorrections() -> Int {
+        let forgotten = FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults).count
+        FoodSearchCorrectionMemory.clearAll(defaults: foodSearchCorrectionDefaults)
+        publishFoodSearchCorrectionAliases()
+        FernletAuditLog.log("food.searchCorrections.forgotten", context: ["count": "\(forgotten)"])
+        return forgotten
+    }
+
+    /// How many searches this device currently remembers a correction for — drives the Settings row's
+    /// count and lets it hide itself when there is nothing to forget.
+    var foodSearchCorrectionCount: Int {
+        FoodSearchCorrectionMemory.aliases(defaults: foodSearchCorrectionDefaults).count
+    }
+
     @discardableResult func saveWebImportedFoodProduct(_ product: ImportedFoodProduct) -> FoodItem {
         batchSnapshotPersistence {
             let normalizedQuery = product.lookupQuery.map(FoodItemSearch.normalized)
@@ -5246,6 +5313,16 @@ final class FernletStore {
         // same class of device-local `UserDefaults` sidecar; clear it with the others so the
         // bookkeeping doesn't outlive the recipes it described.
         RecipeWebImageAttemptMemory.clearAll(defaults: webImageAttemptDefaults)
+        // The local correction memory (research §26 fix 1.10): the searches this person typed and the
+        // foods they chose for them — food-name/consumption data, and a legible record of what someone
+        // holding the phone next would see promoted to rank 1. Same class of device-local `UserDefaults`
+        // sidecar as the three above, and cleared with them. The second line is not housekeeping: the
+        // live `FoodCatalog` holds its own in-memory copy of this map (`setSearchAliases`), so without
+        // republishing the emptied snapshot the wipe would leave every corrected query still answering
+        // with the user's remembered pick until the app is relaunched — the "deleted but still there"
+        // state this funnel exists to prevent. No failure signal on a plain defaults removal.
+        FoodSearchCorrectionMemory.clearAll(defaults: foodSearchCorrectionDefaults)
+        foodCatalog.setSearchAliases([:])
         // The workout tombstone ring (`fernlet.workout.tombstones`): up to 200 ids of removed
         // workouts whose app-authored Health delete may never have confirmed. After this funnel
         // there are no local rows left for a tombstone to guard, and a survivor would make the

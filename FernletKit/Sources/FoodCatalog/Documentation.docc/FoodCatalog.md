@@ -18,6 +18,20 @@ normalized GTIN barcode, by recipe ingredient set) resolve straight from SQLite,
 ``FoodCatalog/candidates(for:limit:)`` builds the capped candidate pool the deterministic
 and AI meal resolvers draw from.
 
+Search carries one piece of per-user state, added for research §26 fix 1.10: the **local
+correction memory**. `FoodCatalog.setSearchAliases(_:)` publishes a normalized query →
+food-id map — the searches this person corrected once in "Adjust meal" — and
+``FoodCatalog/results(for:limit:stripsStopwords:)`` puts that food first, ahead of the FTS
+gate rather than through it, so a query the gate answers wrongly (or not at all) can be
+taught. The map holds no nutrition data, is empty on any catalog the app has not hydrated
+(which is what keeps the measured cold pipeline deterministic), and deliberately does NOT
+reach ``FoodCatalog/scoredResults(for:limit:stripsStopwords:)``: that surface's score is a
+bind-CONFIDENCE gate, and a correction must not promote a future quick-log past its review
+sheet. The durable copy lives in the app target (`FoodSearchCorrectionMemory`, a
+device-local `UserDefaults` sidecar that never enters the synced snapshot or CloudKit, though
+it does ride an encrypted device backup, and is cleared by "Delete everything"), so this
+module stores only the snapshot it is handed.
+
 A second, much larger branded catalog (~364k products) is delivered as a purgeable
 On-Demand Resource and attached at runtime as an additional ``BundledFoodSource``
 (`FoodCatalog.attachBrandedSource(_:)` / `detachBrandedSource()`, driven by the app's

@@ -3888,6 +3888,10 @@ struct MealCorrectionSheet: View {
     @State private var carbs: Int
     @State private var fat: Int
     @State private var components: [MealComponentCorrectionInput]
+    /// Research §26 fix 1.10: the search-text → chosen-food pairs this sheet's Replace picks have
+    /// produced, held until Save. Held rather than written at the pick because a correction the user
+    /// CANCELS out of must teach the app nothing — see ``FoodSearchCorrectionDraft``.
+    @State private var correctionDraft = FoodSearchCorrectionDraft()
     /// Ids outlined as "Probably not what you meant", decided ONCE at open over the ORIGINAL
     /// matched items — never over items the user adds or swaps in here.
     private let lowConfidenceComponentIDs: Set<UUID>
@@ -3930,6 +3934,7 @@ struct MealCorrectionSheet: View {
                         SheetField("Matched items") {
                             MealCorrectionItemsEditor(
                                 components: $components,
+                                correctionDraft: $correctionDraft,
                                 lowConfidenceComponentIDs: lowConfidenceComponentIDs,
                                 catalog: store.foodCatalog
                             )
@@ -3952,6 +3957,10 @@ struct MealCorrectionSheet: View {
                     // here made the store keep the old snapshots and resurrect the removals.
                     componentSnapshots: meal.componentSnapshots.isEmpty ? nil : components.map(\.snapshot)
                 )
+                // Fix 1.10, after the correction is committed: the searches this save corrected are
+                // remembered on THIS device only, so the same search answers with the user's own pick
+                // first next time. A no-op when nothing was replaced.
+                store.rememberFoodSearchCorrections(correctionDraft.corrections)
                 dismiss()
             }
         }
@@ -4026,6 +4035,9 @@ struct MealCorrectionSheet: View {
 /// the user's to edit.
 private struct MealCorrectionItemsEditor: View {
     @Binding var components: [MealComponentCorrectionInput]
+    /// Research §26 fix 1.10: the corrections this sheet has made, recorded here at each Replace pick
+    /// and written by the owning sheet's Save (never here — see ``MealCorrectionSheet``).
+    @Binding var correctionDraft: FoodSearchCorrectionDraft
     /// Ids outlined in sun with the Replace affordance (decided at open by the owning sheet).
     let lowConfidenceComponentIDs: Set<UUID>
     var catalog: FoodCatalog
@@ -4134,12 +4146,14 @@ private struct MealCorrectionItemsEditor: View {
     }
 
     /// The Replace typeahead, prefilled with the suspect match's name. A pick swaps the item for
-    /// a FRESH catalog resolution (`MealComponentCorrectionInput.fresh`).
+    /// a FRESH catalog resolution (`MealComponentCorrectionInput.fresh`) and records the correction
+    /// (fix 1.10) for the owning sheet to save.
     private func replaceField(for component: MealComponentCorrectionInput) -> some View {
-        MealItemSearchField(catalog: catalog, prompt: "Search the catalog", initialText: component.name) { foodItem in
+        MealItemSearchField(catalog: catalog, prompt: "Search the catalog", initialText: component.name) { foodItem, searchText in
             if let index = components.firstIndex(where: { $0.id == component.id }) {
                 components[index] = .fresh(from: foodItem)
             }
+            correctionDraft.record(searchText: searchText, prefilledWith: component.name, foodItemID: foodItem.id)
             replacingComponentID = nil
         }
     }
@@ -4175,7 +4189,9 @@ private struct MealCorrectionItemsEditor: View {
         }
         .buttonStyle(.plain)
         if isAddingItem {
-            MealItemSearchField(catalog: catalog, prompt: "sourdough toast", initialText: "") { foodItem in
+            // Deliberately NOT a fix-1.10 write site: adding an item is not correcting a wrong match,
+            // and §26 scopes the correction memory to the Replace path. The pick's query is ignored here.
+            MealItemSearchField(catalog: catalog, prompt: "sourdough toast", initialText: "") { foodItem, _ in
                 components.append(.fresh(from: foodItem))
                 isAddingItem = false
             }
@@ -4203,19 +4219,23 @@ private struct MealCorrectionItemsEditor: View {
 /// the recipe editor's search mechanics (``CatalogTypeahead``) and suggestion rows
 /// (``CatalogSuggestionRow``), reusable outside the ingredient editor's binding model.
 ///
-/// Picks hand back the raw `FoodItem`; the owner decides what to build from it. The query never
-/// runs in `body` — the `.task(id:)` keystroke cancellation is what keeps stale results out.
+/// Picks hand back the raw `FoodItem` AND the text that was in the field when it was picked; the
+/// owner decides what to build from either. (The query rides along for research §26 fix 1.10's
+/// correction memory, whose key is what the user searched — a caller that does not learn from picks
+/// ignores it.) The query never runs in `body` — the `.task(id:)` keystroke cancellation is what
+/// keeps stale results out.
 private struct MealItemSearchField: View {
     var catalog: FoodCatalog
     /// The field's placeholder (authored copy).
     var prompt: LocalizedStringKey
     /// Seed text — the suspect match's name on the Replace path, empty for Add.
     var initialText: String
-    var onPick: (FoodItem) -> Void
+    /// Fires with the picked food and the field's text at the moment of the pick.
+    var onPick: (FoodItem, String) -> Void
     @State private var searchText: String
     @State private var matches: [FoodItem] = []
 
-    init(catalog: FoodCatalog, prompt: LocalizedStringKey, initialText: String, onPick: @escaping (FoodItem) -> Void) {
+    init(catalog: FoodCatalog, prompt: LocalizedStringKey, initialText: String, onPick: @escaping (FoodItem, String) -> Void) {
         self.catalog = catalog
         self.prompt = prompt
         self.initialText = initialText
@@ -4235,7 +4255,7 @@ private struct MealItemSearchField: View {
                     .textContentType(.none)
             }
             ForEach(matches) { foodItem in
-                CatalogSuggestionRow(foodItem: foodItem) { onPick(foodItem) }
+                CatalogSuggestionRow(foodItem: foodItem) { onPick(foodItem, searchText) }
             }
         }
         // One settled-keystroke query at a time, off the main actor — the same contract as the
