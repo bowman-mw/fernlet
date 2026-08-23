@@ -10,21 +10,36 @@ import FoodCatalog
 /// term, the edible grams contributed per natural unit of the dish, and an optional preparation.
 ///
 /// `search` (prefixed by `preparation` when present) becomes the ``DishTemplateLexicon`` catalog
-/// query; `gramsPerUnit × count` gives the resolved quantity.
+/// query; `gramsPerUnit × count` gives the resolved quantity. `displayName` is a SEPARATE, human-
+/// readable food name for the review sheet's "Couldn't find" card (research §26 fix 1.3) — the
+/// matching `search`/`preparation` strings are optimized for the catalog's FTS gate ("ground beef
+/// patty cooked broiled") and read badly sentence-cased as-is; `displayName` is what a person
+/// recognizes ("Ground beef patty"). Both are food-name DATA in the same class as a catalog
+/// `FoodItem.name`, not localized UI copy, and stay frozen English (`DishTemplateBindQuality`'s doc
+/// comment explains why rendering one is not a localization-wall breach). Optional so a template
+/// that omits it — none do today, but a future JSON edit could — degrades to the query-derived
+/// sentence-cased fallback rather than failing to decode.
 struct DishTemplateComponent: Decodable {
     let search: String
     let gramsPerUnit: Double
     let preparation: String?
+    let displayName: String?
 }
 
 /// A per-alias component substitution inside a dish template (e.g. "salmon nigiri" swapping the
 /// generic fish for salmon).
 ///
-/// When the alias matches, its `componentOverrides` are appended to the template's base components
-/// during assembly.
+/// When the alias matches, its `componentOverrides` are ADDED to the template's base components
+/// during assembly by default (`cheeseburger` = `burger`'s four base components + one cheese
+/// component). `replacesBaseComponents` opts an alias OUT of that additive default when the override
+/// names a food that already fully substitutes for the base — e.g. `vegetable fried rice` binds its
+/// own catalog row (*Rice, fried, meatless*) INSTEAD OF the generic `fried rice` row, not alongside
+/// it; additive semantics there would double-log the dish. Optional and defaulting to `false`/additive
+/// so `cheeseburger`, written before this field existed, decodes and behaves unchanged.
 struct DishTemplateAliasOverride: Decodable {
     let alias: String
     let componentOverrides: [DishTemplateComponent]
+    let replacesBaseComponents: Bool?
 }
 
 /// One dish entry decoded from `DishTemplates.json`: canonical name, lookup aliases, natural unit
@@ -49,6 +64,16 @@ struct DishTemplate: Decodable {
 struct DishTemplateMatch {
     let template: DishTemplate
     let componentOverrides: [DishTemplateComponent]
+    /// Whether `componentOverrides` REPLACES `template.components` for this match instead of
+    /// following them — see `DishTemplateAliasOverride.replacesBaseComponents`. `false` for every
+    /// match through the template's own name/plain aliases (there is no override to replace with).
+    let replacesBaseComponents: Bool
+
+    /// The components this match actually resolves to — the single source both assembly and the
+    /// gram-bounds path read, so they can never disagree about what an alias binds.
+    var resolvedComponents: [DishTemplateComponent] {
+        replacesBaseComponents ? componentOverrides : template.components + componentOverrides
+    }
 }
 
 /// How strongly a dish template's components bound to catalog rows — the only honest signal this
@@ -80,11 +105,13 @@ struct DishTemplateBindQuality {
     }
 
     /// Records one component whose best catalog hit was below the bind floor, so it was dropped from
-    /// the meal. `query` is the component's own catalog query — preparation included, because what
-    /// went missing from fried rice is FRIED rice, not rice.
-    mutating func recordDropped(component query: String) {
+    /// the meal. `displayName` is the component's JSON-declared human-readable name (research §26
+    /// fix 1.3); `query` is its catalog query (preparation included, because what went missing from
+    /// fried rice is FRIED rice, not rice) and is the fallback ONLY when a component predates
+    /// `displayName` and the field decoded to nil.
+    mutating func recordDropped(component query: String, displayName: String?) {
         dropped += 1
-        appendUnmatched(Self.displayName(for: query))
+        appendUnmatched(displayName ?? Self.displayName(for: query))
     }
 
     /// Records one item of the description that matched a template but produced no bindable component
@@ -116,16 +143,18 @@ struct DishTemplateBindQuality {
         unmatched.append(name)
     }
 
-    /// A template component's catalog query as it should read on the review sheet: sentence case,
-    /// preparation included ("fried rice white cooked" → "Fried rice white cooked").
+    /// The FALLBACK review-sheet name for a component whose JSON declared no `displayName`: the raw
+    /// catalog query, sentence-cased ("fried rice white cooked" → "Fried rice white cooked"). Every
+    /// shipped component carries a real `displayName` as of research §26 fix 1.3, so this only fires
+    /// for a template edited without one — it keeps the review sheet showing SOMETHING recognizable
+    /// rather than failing to decode.
     ///
     /// **These strings are food-name DATA, not UI copy.** They are the same class as a catalog
     /// `FoodItem.name` ("Mozzarella Cheese", "Beans, black, mature seeds, cooked, boiled, with
     /// salt"), which this app already renders untranslated on every food surface — so rendering one
     /// here does not breach the localization wall, and they stay frozen English in the JSON because
-    /// they are also matching inputs. The obligation that remains is data, not translation: the
-    /// templates carry no separate display name, and research §26 fix 1.3 — which rewrites these
-    /// search strings anyway — should give them one that reads like a food.
+    /// the un-fallback-to'd `search`/`preparation` strings they are derived from are also matching
+    /// inputs.
     private static func displayName(for query: String) -> String {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard let first = trimmed.first else { return trimmed }
@@ -208,13 +237,15 @@ enum DishTemplateLexicon {
             for rawName in [template.name] + template.aliases {
                 index[FoodItemSearch.normalized(rawName)] = DishTemplateMatch(
                     template: template,
-                    componentOverrides: []
+                    componentOverrides: [],
+                    replacesBaseComponents: false
                 )
             }
             for override in template.aliasOverrides ?? [] {
                 index[FoodItemSearch.normalized(override.alias)] = DishTemplateMatch(
                     template: template,
-                    componentOverrides: override.componentOverrides
+                    componentOverrides: override.componentOverrides,
+                    replacesBaseComponents: override.replacesBaseComponents ?? false
                 )
             }
         }
@@ -240,20 +271,53 @@ enum DishTemplateLexicon {
 
         // Exact key match
         if let match = catalog.index[norm] {
-            return (match, count ?? match.template.defaultCount)
+            return (match, count ?? fallbackCount(norm: norm, template: match.template))
         }
         // Longest-substring match (avoids "roll" matching "roll" in "spring roll blend")
         let best = catalog.index
             .filter { norm.contains($0.key) }
             .max { $0.key.count < $1.key.count }
         if let best {
-            return (best.value, count ?? best.value.template.defaultCount)
+            return (best.value, count ?? fallbackCount(norm: norm, template: best.value.template))
         }
         return (nil, 1)
     }
 
+    /// The count to use when the typed text carries no leading number (research §26 fix 1.4).
+    ///
+    /// Previously every uncounted mention fell back to `template.defaultCount` — a "typical order"
+    /// guess (2 pizza slices, 2 tacos) baked in for the common case of a bare dish name. That guess is
+    /// wrong the moment the person names the template's own UNIT WORD without a number: "pizza slice"
+    /// or "a slice of pizza" is naming ONE slice, not asserting the typical-order default, and
+    /// `defaultCount: 2` silently doubled it. When the typed text contains that unit word (singular
+    /// form only — see ``namesOwnUnit(_:unit:)``), the count is 1; otherwise the prior default-count
+    /// behavior is unchanged.
+    private static func fallbackCount(norm: String, template: DishTemplate) -> Double {
+        namesOwnUnit(norm, unit: template.unit) ? 1 : template.defaultCount
+    }
+
+    /// Whether `norm` (already `FoodItemSearch.normalized`) contains the template's `unit` word as a
+    /// whole token — a frozen-English matching check, not display text (localization wall: `unit` is
+    /// internal vocabulary the JSON declares, never shown to the user as-is).
+    ///
+    /// Deliberately SINGULAR-only: a plural mention ("2 slices", "tacos") either already carried a
+    /// leading count (handled before this ever runs) or plausibly implies more than one, so it keeps
+    /// falling back to `defaultCount` rather than being flattened to 1.
+    private static func namesOwnUnit(_ norm: String, unit: String) -> Bool {
+        let unitToken = FoodItemSearch.normalized(unit)
+        guard !unitToken.isEmpty else { return false }
+        return norm.split(separator: " ").map(String.init).contains(unitToken)
+    }
+
     /// Whether the item name matches a template flagged as a composite dish (one made of several
     /// distinct components, like nigiri or a burrito).
+    ///
+    /// **Consumer-less as of 2026-08-22** — no call site in the app target reads this function or
+    /// `DishTemplate.isComposite` (confirmed by grep during an adversarial review). It is outside
+    /// current behavior: flipping a template's `isComposite` (as fix 1.3's fried-rice collapse did,
+    /// true → false, matching its new single-component shape) changes no runtime path today. Kept
+    /// because the field is still honest data about the template's shape and a future caller (a
+    /// "decompose this dish" UI affordance, per the field's original intent) would read it correctly.
     static func isComposite(_ itemName: String) -> Bool {
         matchWithCount(itemName).0?.isComposite == true
     }
@@ -268,7 +332,7 @@ enum DishTemplateLexicon {
         for itemName in MealItemSplitter.items(from: description) {
             let (match, count) = matchDetailsWithCount(itemName)
             guard let match else { continue }
-            for component in match.template.components + match.componentOverrides {
+            for component in match.resolvedComponents {
                 let grams = max(component.gramsPerUnit * count, 1)
                 let lower = max(1, grams * 0.5)
                 let upper = max(lower, grams * 1.75)
@@ -338,8 +402,7 @@ enum DishTemplateLexicon {
         catalog: FoodCatalog
     ) -> (meal: Meal, quality: DishTemplateBindQuality)? {
         let template = match.template
-        let components = template.components + match.componentOverrides
-        let bound = bindComponents(components, count: count, catalog: catalog)
+        let bound = bindComponents(match.resolvedComponents, count: count, catalog: catalog)
         guard !bound.ingredients.isEmpty else { return nil }
 
         let resolvedType = mealType ?? MealParser.classifyMealType(description)
@@ -377,7 +440,7 @@ enum DishTemplateLexicon {
             let query = catalogQuery(for: component)
             guard let match = catalog.scoredResults(for: query, limit: 1).first,
                   match.score >= FoodItemSearch.minimumBindScore else {
-                quality.recordDropped(component: query)
+                quality.recordDropped(component: query, displayName: component.displayName)
                 continue
             }
             quality.record(score: match.score)

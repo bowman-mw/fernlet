@@ -406,8 +406,11 @@ struct FernletTests {
         let componentItems = [
             surveyComponentFood(name: "Cooked beef ground cooked", tags: ["cooked", "beef", "ground"]),
             surveyComponentFood(name: "Tortilla corn", tags: ["tortilla", "corn"]),
-            surveyComponentFood(name: "Cheese shredded", tags: ["cheese", "shredded"]),
-            surveyComponentFood(name: "Lettuce", tags: ["lettuce"])
+            // Research §26 fix 1.3 repaired taco's cheese/lettuce search strings ("cheese shredded" →
+            // "cheese cheddar" bound the wrong food, "lettuce" → "lettuce iceberg raw"); these fixture
+            // names are the exact matches for the NEW queries.
+            surveyComponentFood(name: "Cheese cheddar", tags: ["cheese", "cheddar"]),
+            surveyComponentFood(name: "Lettuce iceberg raw", tags: ["lettuce", "iceberg", "raw"])
         ]
 
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([surveyTaco] + componentItems))

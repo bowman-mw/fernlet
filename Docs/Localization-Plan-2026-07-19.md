@@ -256,6 +256,19 @@ Display strings that currently feed logic or AI prompts — fork each into a sta
 Also: `MuscleGroup.fromLegacyString` (`WorkoutModels.swift:527-545`) and `DishTemplates.json` keys
 stay English forever — they parse historical/persisted data, not UI.
 
+**Addendum (2026-08-22, research §26 fix 1.3):** `DishTemplates.json` components gained a new
+`displayName` field, threaded through `DishTemplateBindQuality`'s unmatched-item naming so a review
+sheet's "Couldn't find" card shows a real food name ("Ground beef patty") instead of the raw
+`search`/`preparation` matching string sentence-cased as-is ("Ground beef patty cooked broiled"). This
+is NOT the same class as the other `DishTemplates.json` fields above — `search`/`preparation`/`unit`
+never reach the screen (they are matching inputs against the catalog's FTS index), but `displayName`
+**is shown to the user**. It still stays frozen English, for the same reason the app already renders
+catalog `FoodItem.name` untranslated on every food surface: it is food-name DATA (the same class as
+"Mozzarella Cheese" or "Beans, black, mature seeds, cooked, boiled, with salt"), not UI copy, and
+localizing it would require a translated food-name database this app does not have. If `DishTemplates.json`
+review-sheet names are ever prioritized for localization, `displayName` is the fork point — same
+token/display-split shape as §3.4's four, just not undertaken yet.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

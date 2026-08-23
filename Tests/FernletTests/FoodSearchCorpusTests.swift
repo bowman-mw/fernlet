@@ -461,8 +461,11 @@ struct FoodSearchCorpusTests {
     /// The row-level pins for the queries the research names outside the corpus — one table, covered
     /// by the dump, so the interpretive tests below never restate a name or a score.
     ///
-    /// `pizza dough crust` is the literal search string at `DishTemplates.json:291` that fix 1.3 will
-    /// change; pinning today's answer is what proves 1.3 moved the template and not the scorer.
+    /// `pizza dough crust` WAS the literal search string `DishTemplates.json`'s pizza template used
+    /// before fix 1.3 repaired it (now `pizza dough`, per the template's `components`); this string no
+    /// longer appears anywhere in the JSON. Pinning its unchanged score here proves fix 1.3 lives
+    /// entirely in the JSON data, not in the scorer or the catalog — the orphaned string still ranks
+    /// exactly as it always did, because nothing about ranking moved.
     /// `black coffee` is §10's single measured top-1 change out of 30 queries when the 364,457-row
     /// branded ODR catalog is attached, so this pins the base-only answer.
     static let namedRankingPins: [FoodSearchRankedPin] = [
@@ -514,7 +517,7 @@ struct FoodSearchCorpusTests {
             FoodSearchRankedRow("7 Cheese Blend Of Seven Cheeses Including Provolone, Shredded Mozzarella, Fresh Sliced Mozzarella, Fontina, White Chedda", -82, "branded"),
             FoodSearchRankedRow("Bessie's Revenge Wisconsin Whole Milk Fresh Mozzarella Slices, Shredded Mozzarella Cheese, Parmesan, Romano & White Ched", -82, "branded")
         ]),
-        FoodSearchRankedPin("mozzarella cheese", "§26 fix 1.2's headline: the bind that produced the wrong meal, at 58", [
+        FoodSearchRankedPin("mozzarella cheese", "§26 fix 1.2's headline: the bind that produced the wrong meal BEFORE fix 1.3 repaired the pizza template's search string to \"low moisture part skim mozzarella cheese\" (now a confident, correct bind — see DishTemplateBindAuditTests); this raw query is pinned as a scorer-invariance floor, not as today's active template component", [
             FoodSearchRankedRow("Mozzarella sticks, breaded, baked, or fried", 58, "survey"),
             FoodSearchRankedRow("DENNY'S, mozzarella cheese sticks", 369, "srLegacy"),
             FoodSearchRankedRow("Cheese, mozzarella, nonfat", 120, "srLegacy"),
@@ -612,12 +615,16 @@ struct FoodSearchCorpusTests {
         #expect(slice.contains { $0.score < 0 }, "`cheese pizza slice` still shows negative rows in its top-6")
     }
 
-    /// §26 fix 1.2's headline number: the pizza template's `mozzarella cheese` component binds far
-    /// below `confidentBindScore` while an exact-name `Mozzarella Cheese` row sits in the same file.
+    /// §26 fix 1.2's headline number: the RAW `mozzarella cheese` query — the pizza template's search
+    /// string BEFORE fix 1.3 repaired it — binds far below `confidentBindScore` while an exact-name
+    /// `Mozzarella Cheese` row sits in the same file. Fix 1.3 moved the template off this string (its
+    /// cheese component now searches `low moisture part skim mozzarella cheese` and binds confidently,
+    /// per `DishTemplateBindAuditTests`); this test is kept as a scorer-invariance pin on the ORPHANED
+    /// string, not a claim about today's template.
     @Test func mozzarellaBindScoresFarBelowTheConfidenceFloor() throws {
         let ranked = try Self.rankedRows(for: "mozzarella cheese")
         let topScore = try #require(ranked.first?.score)
-        #expect(topScore < FoodItemSearch.confidentBindScore, "the bind that produced the wrong meal is not 'confident'")
+        #expect(topScore < FoodItemSearch.confidentBindScore, "the bind that produced the wrong meal before fix 1.3 is still not 'confident' as a raw query")
         #expect(topScore >= FoodItemSearch.minimumBindScore, "…yet it clears the floor that is supposed to reject it")
         #expect(ranked.dropFirst().contains { $0.score > FoodItemSearch.confidentBindScore },
                 "a confident-scoring row exists — it just ranks below")
