@@ -61,7 +61,22 @@ struct WorkoutLocationSetupView: View {
     }
 
     private let twoColumns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 2)
-    private let threeColumns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+
+    /// T2-11: the equipment checklist's fixed three-up grid truncated its labels at Larger Text
+    /// sizes — three columns leave roughly 100pt per tile, and a two-word piece of equipment set in
+    /// `.labelSmall` needs far more than that once the user is in the accessibility sizes. Collapse
+    /// to a single column there (the same `isAccessibilitySize` branch this file already uses for
+    /// the step header and `SavedSpaceRow`'s summary); the default sizes are untouched.
+    private var equipmentColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
+
+    /// The equipment tile's glyph and the tile's own minimum height are one measurement: the tile is
+    /// a glyph stacked over up to two lines of label. Both scale against `.body` — a fixed 28pt mark
+    /// beside AX-size text reads as a speck, and the fixed 56pt floor cropped the second label line.
+    @ScaledMetric(relativeTo: .body) private var equipmentGlyphSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var equipmentCardMinHeight: CGFloat = 56
 
     var body: some View {
         Group {
@@ -448,7 +463,7 @@ struct WorkoutLocationSetupView: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
-            LazyVGrid(columns: threeColumns, spacing: 10) {
+            LazyVGrid(columns: equipmentColumns, spacing: 10) {
                 ForEach(items) { item in
                     equipmentCard(item)
                 }
@@ -460,9 +475,9 @@ struct WorkoutLocationSetupView: View {
         let isSelected = editingLocation?.ownedEquipment.contains(item) ?? false
         return Button { toggle(item) } label: {
             VStack(spacing: 9) {
-                EquipmentGlyph(item: item, size: 28)
+                EquipmentGlyph(item: item, size: equipmentGlyphSize)
                     .foregroundStyle(Color.bark)
-                    .frame(height: 28)
+                    .frame(height: equipmentGlyphSize)
                 Text(item.displayName)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.bark)
@@ -471,7 +486,7 @@ struct WorkoutLocationSetupView: View {
                     .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 56)
+            .frame(minHeight: equipmentCardMinHeight)
             .padding(.vertical, 14)
             .padding(.horizontal, 6)
             .background(

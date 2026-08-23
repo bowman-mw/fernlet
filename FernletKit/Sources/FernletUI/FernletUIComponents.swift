@@ -15,21 +15,34 @@ public extension Color {
     // The `@Sendable` on each dynamic provider is load-bearing, not decoration: without it the closure
     // inherits this module's `defaultIsolation(MainActor.self)`, and UIKit resolving the color on
     // SwiftUI's off-main render thread trips the Swift 6 executor check and traps. See FernletTheme.swift.
+    // Each provider now forwards `trait.accessibilityContrast` as well as the interface style — the
+    // review's §4.2 observation was that the traits already carried it and the palette threw it
+    // away. `.unspecified`/`.normal` resolve exactly as before; only `.high` branches.
     static let parchment = Color(UIColor { @Sendable trait in
-        FernletThemePalette.current(for: trait.userInterfaceStyle).background
+        FernletThemePalette.current(for: trait.userInterfaceStyle, contrast: trait.accessibilityContrast).background
     })
     static let cream = Color(UIColor { @Sendable trait in
-        FernletThemePalette.current(for: trait.userInterfaceStyle).box
+        FernletThemePalette.current(for: trait.userInterfaceStyle, contrast: trait.accessibilityContrast).box
     })
     static let bark = Color(UIColor { @Sendable trait in
-        FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
+        FernletThemePalette.current(for: trait.userInterfaceStyle, contrast: trait.accessibilityContrast).primaryText
     })
     static let slate = Color(UIColor { @Sendable trait in
-        FernletThemePalette.current(for: trait.userInterfaceStyle).secondaryText
+        FernletThemePalette.current(for: trait.userInterfaceStyle, contrast: trait.accessibilityContrast).secondaryText
     })
+    /// The moss tint/accent. Under Increase Contrast the light value deepens to the
+    /// already-approved ``mossInk`` hex `#46683A` — **5.54:1 on parchment / 5.95:1 on cream**,
+    /// against plain `moss`'s 3.74:1 / 4.02:1 — which lifts the app's most-used accent (179
+    /// foreground sites) from "large text and UI only" to AA small text for the users who asked
+    /// for more contrast. The ~10 sites that use `moss` as a solid *fill* improve too rather than
+    /// regressing: white ink on `#46683A` measures 6.36:1 (it was 4.29:1 on plain `moss`) and
+    /// ``parchmentInk`` measures 5.54:1. Dark mode is unchanged — dark `moss` is already 6.65:1 on
+    /// the dark background and 5.74:1 on the dark box.
     static let moss = Color(
         light: Color(red: 0.369, green: 0.518, blue: 0.302),
-        dark:  Color(red: 0.498, green: 0.690, blue: 0.412)
+        dark:  Color(red: 0.498, green: 0.690, blue: 0.412),
+        lightHC: Color(red: 0.275, green: 0.408, blue: 0.227),
+        darkHC:  Color(red: 0.498, green: 0.690, blue: 0.412)
     )
     static let fern = Color(
         light: Color(red: 0.447, green: 0.639, blue: 0.392),
@@ -74,9 +87,18 @@ public extension Color {
     /// The filled-button moss. Light mode deepens to #4F7444 so white ink clears 5.4:1 (plain `moss`
     /// gives only 4.29:1); dark mode keeps `moss` itself, paired with ``onMoss``'s midnight ink.
     /// `moss` stays the tint/accent color — this token is for *filled* button backgrounds.
+    ///
+    /// Increase Contrast uses the owner-approved `#38562C` (*"AX twins run Increase Contrast:
+    /// slate → #45535E, card edges 30%, filled moss → #38562C"*, the 2026-08-21 design spec).
+    /// Recomputed here: white ink on it measures **8.28:1**, and the fill itself measures 7.22:1
+    /// against parchment / 7.75:1 against cream, so the button's *edge* clears the 3:1 non-text
+    /// floor with room to spare as well. ``onMoss`` needs no twin — white only gets better as the
+    /// fill deepens. Dark mode is unchanged (dark moss with midnight ink is already 6.5:1).
     static let mossFill = Color(
         light: Color(red: 0.310, green: 0.455, blue: 0.267),
-        dark:  Color(red: 0.498, green: 0.690, blue: 0.412)
+        dark:  Color(red: 0.498, green: 0.690, blue: 0.412),
+        lightHC: Color(red: 0.220, green: 0.337, blue: 0.173),
+        darkHC:  Color(red: 0.498, green: 0.690, blue: 0.412)
     )
 
     /// Ink for text/icons on a filled `terracotta` (destructive) button: white in light mode (4.8:1),
@@ -118,6 +140,34 @@ public extension Color {
         light: Color(red: 0.549, green: 0.365, blue: 0.094),
         dark:  Color(red: 0.878, green: 0.663, blue: 0.329)
     )
+
+    // MARK: Increase Contrast — the tokens that deliberately have NO high-contrast twin
+    //
+    // Recording the refusals, because "goldenrod has no HC branch" reads like an oversight and is
+    // not one. Only `slate`, `moss` and `mossFill` branch on `colorSchemeContrast`; every other
+    // token resolves identically at `.increased`. Three reasons, in descending order of force:
+    //
+    // 1. `goldenrod` CANNOT be deepened — it would break its own ink pair. `onGoldenrod` is a fixed
+    //    `midnight`, because goldenrod is a light warm amber in BOTH appearances; midnight on the
+    //    current fill measures 6.43:1, and midnight on `goldenrodInk`'s #8C5D18 measures **2.89:1**.
+    //    Deepening the fill under Increase Contrast would hand the users who asked for MORE contrast
+    //    a button whose label they can no longer read. The correct fix for goldenrod was the one
+    //    already shipped: `goldenrodInk` at the ~25 sites where goldenrod inked TEXT. The fill stays.
+    //
+    // 2. `terracotta`, `fern`, `sun`, `dustyRose`, `softTaupe` have no owner-approved twin. The
+    //    2026-08-21 design spec names exactly two AX-twin hexes (slate and filled moss) and this
+    //    change ships exactly those two plus a reuse of the already-approved `mossInk`. Inventing a
+    //    hex here is a design decision wearing an accessibility costume; every value in this file
+    //    carries a measured ratio and a sign-off, and that is the property worth keeping.
+    //
+    // 3. A MUTED ink that also clears AA is arithmetically impossible in this palette, at any
+    //    contrast setting. The ~30 `.foregroundStyle(Color.slate.opacity(0.4…0.7))` sites cannot be
+    //    rescued by a token: light `slate` at FULL strength is 4.78:1 on parchment, so any alpha
+    //    below 1 is under the 4.5:1 floor by construction (0.7 → 2.74:1, 0.5 → 1.98:1). Increase
+    //    Contrast improves them — slate resolves to #45535E, so 0.7 alpha rises to 3.42:1 and clears
+    //    the 3:1 non-text floor — but 0.8 alpha still only reaches 4.28:1. **De-emphasize by SIZE and
+    //    WEIGHT, not by alpha.** A `.labelSmall` at full-strength slate reads as secondary and is
+    //    legible; the same text at 60% is neither.
 }
 
 public extension Color {
@@ -127,11 +177,99 @@ public extension Color {
     /// whatever thread resolves the trait collection, and the SwiftUI `UIColor(Color)` bridge is not safe to
     /// call there. Callers pass fixed literal colors, so resolving once is equivalent — and cheaper.
     init(light: Color, dark: Color) {
+        self.init(light: light, dark: dark, lightHC: light, darkHC: dark)
+    }
+
+    /// Resolves on **two** axes: interface style *and* Increase Contrast.
+    ///
+    /// The seam behind the review's §4.2. The four dynamic providers already receive
+    /// `trait.accessibilityContrast` and were throwing it away, so widening the existing
+    /// ``init(light:dark:)`` — which every accent token already routes through — turns Increase
+    /// Contrast on across the whole palette with **zero call-site churn**: a token gains a
+    /// high-contrast twin by naming one, and every one of its call sites inherits it.
+    ///
+    /// `trait.accessibilityContrast == .high` is UIKit's spelling of SwiftUI's
+    /// `colorSchemeContrast == .increased`. Only that value branches: `.normal` and `.unspecified`
+    /// both resolve to the default pair, so **nothing changes at default settings** — which is the
+    /// property that makes this safe to land across 179 `moss` sites at once.
+    ///
+    /// All four sides are bridged to `UIColor` up front, for the reason ``init(light:dark:)``
+    /// gives: the provider runs on whatever thread resolves the trait collection, including
+    /// SwiftUI's off-main render thread, where the `UIColor(Color)` bridge is not safe to call.
+    ///
+    /// - Parameters:
+    ///   - light: Light mode at normal contrast.
+    ///   - dark: Dark mode at normal contrast.
+    ///   - lightHC: Light mode under Increase Contrast. Pass `light` when the token has no
+    ///     approved twin — every hex here needs a measured ratio and a design sign-off.
+    ///   - darkHC: Dark mode under Increase Contrast. Dark mode is the palette's strong side (all
+    ///     nine accents already clear 4.5:1 on both dark surfaces), so this is usually `dark`.
+    init(light: Color, dark: Color, lightHC: Color, darkHC: Color) {
         let lightUI = UIColor(light)
         let darkUI = UIColor(dark)
+        let lightHCUI = UIColor(lightHC)
+        let darkHCUI = UIColor(darkHC)
         self.init(UIColor { @Sendable trait in
-            trait.userInterfaceStyle == .dark ? darkUI : lightUI
+            let isDark = trait.userInterfaceStyle == .dark
+            guard trait.accessibilityContrast == .high else { return isDark ? darkUI : lightUI }
+            return isDark ? darkHCUI : lightHCUI
         })
+    }
+}
+
+public extension Color {
+    /// The alpha a `bark` hairline needs to clear the **3:1 WCAG non-text floor** as a component
+    /// boundary — the floor that applies to the edge of a card, chip, pill or bar.
+    ///
+    /// Measured, not guessed, and the review flagged the guess: `bark.opacity(0.35)` had been
+    /// asserted at 3.1:1 and actually measures **1.97:1 on parchment / 1.99:1 on cream**. Walking
+    /// the alpha: 0.40 → 2.23:1, 0.45 → 2.52:1, 0.50 → 2.85:1, **0.55 → 3.24:1 on cream and 3.16:1
+    /// on parchment**. So 0.55 is the first step that clears the floor against *both* adjacent
+    /// surfaces, which is the requirement for an edge (it separates the card from the page as much
+    /// as from its own fill). Dark mode at the same alpha measures 4.84:1 against the dark box.
+    ///
+    /// A soft edge of this family sits at 1.15–1.25:1 and is effectively invisible to a low-vision
+    /// user. Such edges are *deliberately* soft at default settings; this is what one becomes when
+    /// the user asks for more contrast.
+    ///
+    /// **What actually adopts this, stated because the number is small and an earlier draft of this
+    /// comment implied otherwise.** ``barkEdge(_:normal:)`` and ``terracottaEdge(_:normal:)`` have
+    /// **five call sites in two files** — `FernletPrimitives.swift`'s ``FernletCard`` border, and
+    /// `ChipButtonStyle` / `PillButtonStyle` in this file (unselected chip at 0.12, secondary pill
+    /// at 0.14, destructive chip and pill at terracotta 0.35). Against that, the tree contains
+    /// **187** code-only `bark.opacity(…)` occurrences, the bulk of them at 0.08 and 0.10, and none
+    /// of those respond to Increase Contrast. So this helper covers the shared *components* an edge
+    /// is drawn by, not "the app's edges": a hand-rolled overlay in a feature view still ships its
+    /// literal alpha.
+    ///
+    /// That is a deliberate stopping point rather than an oversight — a blanket sweep of 187 sites
+    /// is a visual change to every screen and belongs in a design pass, not in a helper's doc
+    /// comment. It is recorded here so the next reader does not mistake five adoptions for
+    /// coverage, and it is the same caveat `Docs/Accessibility-Nutrition-Labels.md` carries for the
+    /// Sufficient Contrast row.
+    static let fernletHighContrastEdgeAlpha: Double = 0.55
+
+    /// A `bark` component hairline that thickens to ``fernletHighContrastEdgeAlpha`` under
+    /// Increase Contrast and is otherwise exactly the `normal` alpha the design already ships.
+    ///
+    /// One helper rather than a `colorSchemeContrast` ternary at each boundary, so the measurement
+    /// above lives in one place and a new component inherits it by construction.
+    ///
+    /// - Parameters:
+    ///   - contrast: The view's `\.colorSchemeContrast`. A `ButtonStyle` has no environment of its
+    ///     own — read it in the style's nested content view (see ``ChipButtonStyle``'s `Chip`).
+    ///   - normal: The alpha at default contrast. Unchanged behaviour is the whole point.
+    static func barkEdge(_ contrast: ColorSchemeContrast, normal: Double) -> Color {
+        Color.bark.opacity(contrast == .increased ? fernletHighContrastEdgeAlpha : normal)
+    }
+
+    /// The destructive sibling of ``barkEdge(_:normal:)``, for the tinted-terracotta boundary.
+    ///
+    /// `terracottaInk` is a much lighter ink than `bark`, so it needs more alpha for the same
+    /// floor: 0.35 → 1.73:1, 0.55 → 2.48:1, **0.70 → 3.33:1 on cream**. 0.70 is therefore the
+    /// Increase Contrast value; the shipping 0.35 is unchanged at default settings.
+    static func terracottaEdge(_ contrast: ColorSchemeContrast, normal: Double) -> Color {
+        Color.terracottaInk.opacity(contrast == .increased ? 0.70 : normal)
     }
 }
 
@@ -421,6 +559,12 @@ public struct PolaroidTile: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
+                            // T2-10. Smart Invert inverts every pixel it is not told to leave
+                            // alone, which turns a photograph into a negative — the single case
+                            // where the accommodation destroys the content it is meant to help
+                            // read. The cream frame and caption around it still invert, which is
+                            // the point: the chrome adapts, the photo does not.
+                            .accessibilityIgnoresInvertColors()
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
@@ -947,6 +1091,11 @@ public struct ChipButtonStyle: ButtonStyle {
         let destructive: Bool
         let configuration: ButtonStyleConfiguration
         @Environment(\.isEnabled) private var isEnabled
+        /// §4.2: a `ButtonStyle` cannot read the environment, which is exactly why this nested view
+        /// exists — so the Increase Contrast branch lands here rather than needing a new type. An
+        /// unselected chip's 0.12 bark edge measures 1.19:1, so a low-vision user sees a floating
+        /// word with no button boundary at all until this raises it.
+        @Environment(\.colorSchemeContrast) private var contrast
 
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -955,8 +1104,8 @@ public struct ChipButtonStyle: ButtonStyle {
                 ? Color.terracotta.opacity(0.10)
                 : (selected ? Color.bark : Color.cream)
             let stroke: Color = destructive
-                ? Color.terracottaInk.opacity(0.35)
-                : Color.bark.opacity(selected ? 0 : 0.12)
+                ? Color.terracottaEdge(contrast, normal: 0.35)
+                : (selected ? Color.clear : Color.barkEdge(contrast, normal: 0.12))
             return configuration.label
                 .font(.fernlet(.label))
                 .padding(.horizontal, 14)
@@ -1017,6 +1166,9 @@ public struct ActionPillButtonStyle: ButtonStyle {
         let kind: FernletActionPillKind
         let configuration: ButtonStyleConfiguration
         @Environment(\.isEnabled) private var isEnabled
+        /// §4.2, same reason as ``ChipButtonStyle``'s `Chip`: the style itself has no environment.
+        /// A `.secondary` pill's only boundary is a 0.14 bark hairline at 1.23:1.
+        @Environment(\.colorSchemeContrast) private var contrast
 
         private var fill: Color {
             switch kind {
@@ -1038,9 +1190,11 @@ public struct ActionPillButtonStyle: ButtonStyle {
 
         private var stroke: Color {
             switch kind {
+            // The primary pill needs no edge: `mossFill` is 4.67:1 against parchment already, and
+            // 7.22:1 under Increase Contrast — the fill IS the boundary.
             case .primary:     return .clear
-            case .secondary:   return Color.bark.opacity(0.14)
-            case .destructive: return Color.terracottaInk.opacity(isEnabled ? 0.35 : 0.18)
+            case .secondary:   return Color.barkEdge(contrast, normal: 0.14)
+            case .destructive: return Color.terracottaEdge(contrast, normal: isEnabled ? 0.35 : 0.18)
             }
         }
 

@@ -131,56 +131,87 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
 
     var body: some View {
         let model = MonthGridModel(date: displayedMonth, todayKey: todayKey)
-        let slots = (0..<model.leadingBlanks).map { _ in Slot(day: nil) }
-            + model.days.map { Slot(day: $0) }
         let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
         FernletCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center) {
-                    Button {
-                        displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    // 44pt target + a spoken name: VoiceOver read "chevron.left" before.
-                    .fernletIconButton("Previous month")
-
-                    monthTitleView(model.monthTitle, isCurrentMonth: isCurrentMonth)
-
-                    Button {
-                        if !isCurrentMonth {
-                            displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCurrentMonth)
-                    .fernletIconButton("Next month")
-                }
-
-                LazyVGrid(columns: columns, spacing: 4) {
-                    // F6 revert: T1-8 originally hid these as decorative, but hiding the removal
-                    // half of T2-17 without its naming half (predicted/labelled days) leaves a
-                    // VoiceOver user with NO weekday info on this grid at all between now and
-                    // whenever T2-17 lands — strictly worse than the pre-batch baseline. T2-17
-                    // ships hide-initials + name-predicted-days + hide-pads together, in one pass.
-                    ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
-                    }
-                    ForEach(slots) { slot in
-                        cell(slot.day)
-                    }
-                }
-
+                pagingHeader(model.monthTitle, isCurrentMonth: isCurrentMonth)
+                grid(model)
                 footer()
+            }
+        }
+    }
+
+    /// The month title flanked by the two paging chevrons.
+    ///
+    /// Extracted from `body` so both it and ``grid(_:)`` stay well under the Power-of-10 60-line
+    /// ceiling as accessibility modifiers accumulate on the grid.
+    @ViewBuilder
+    private func pagingHeader(_ title: String, isCurrentMonth: Bool) -> some View {
+        HStack(alignment: .center) {
+            Button {
+                displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.slate)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            // 44pt target + a spoken name: VoiceOver read "chevron.left" before.
+            .fernletIconButton("Previous month")
+
+            monthTitleView(title, isCurrentMonth: isCurrentMonth)
+
+            Button {
+                if !isCurrentMonth {
+                    displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
+                }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .disabled(isCurrentMonth)
+            .fernletIconButton("Next month")
+        }
+    }
+
+    /// The 7-column grid: the weekday-initial row, then the leading pads and one caller-rendered
+    /// cell per day of the month.
+    ///
+    /// Two things are deliberately taken OUT of the accessibility tree here (review T2-17):
+    /// - **The weekday initials.** Seven single letters ("M", "T", "T", …) spoken before every
+    ///   grid are noise, and two of them are literally the same letter.
+    /// - **The leading pad cells.** A month starting on a Saturday put SIX nameless blanks between
+    ///   the header and day 1. They exist to align column 1 with the right weekday — a purely
+    ///   visual job — so they are hidden rather than labelled.
+    ///
+    /// Hiding the initials puts a CONTRACT on the caller's cell: **each cell must name its own
+    /// weekday.** VoiceOver reads a date, not a column, so once the header is gone a cell that says
+    /// only "Day 12" leaves a blind user with no way to tell which weekday — or which column — any
+    /// of thirty otherwise identical cells is, and paging by week becomes impossible. The header
+    /// was hidden here before any cell held up its end, which made that a defect rather than a
+    /// redundancy; `CycleMonthCell.accessibilityLabel` now opens every sentence with the
+    /// abbreviated weekday ("Wed, day 12, …") via its `longWeekdayText`.
+    ///
+    /// T2-17's remaining part — naming *predicted* days, which are visually distinguished but
+    /// spoke identically to logged ones — lives on the cycle cell's own label, since only that
+    /// calendar has forecasts: see `CycleMonthCell.accessibilityLabel`.
+    private func grid(_ model: MonthGridModel) -> some View {
+        let slots = (0..<model.leadingBlanks).map { _ in Slot(day: nil) }
+            + model.days.map { Slot(day: $0) }
+        return LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
+                Text(day)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .accessibilityHidden(true)
+            }
+            ForEach(slots) { slot in
+                cell(slot.day)
+                    .accessibilityHidden(slot.day == nil)
             }
         }
     }

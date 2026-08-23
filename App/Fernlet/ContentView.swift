@@ -55,7 +55,6 @@ struct ContentView: View {
     /// environment convention used for `lockService` — a missing environment object in a sheet is
     /// a runtime crash, not a compile error.
     @Environment(CaptureProtectionState.self) private var captureProtection
-    @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     @State private var selectedTab: FernletTab = .home
@@ -167,9 +166,17 @@ struct ContentView: View {
     /// Split out of `body` for length only; the modifier chain is the one `body` used to carry
     /// (plus the FLOW-15 correction slot appended last), so presentation identity and ordering are
     /// unchanged for the pre-existing slots.
+    ///
+    /// Deliberately carries NO `preferredColorScheme`. Appearance is the app root's
+    /// (`FernletApp`'s `WindowGroup` body, from ``FernletAppearanceMode``), because only the root
+    /// covers the launch screen and onboarding too, and only the enum can pass `nil` for "System".
+    /// This view used to pin `.dark`/`.light` off the pre-three-way `fernletDarkModeEnabled` Bool —
+    /// a key nothing writes any more, so the modifier could only ever resolve `.light` and, if it
+    /// won over the root's, would force every tab light while the App Store "Dark Interface" row
+    /// says it does not. Do not re-add one here: a second `preferredColorScheme` on the same window
+    /// makes the app's appearance depend on which preference write SwiftUI resolves last.
     private var rootSheetHost: some View {
         launchRoot
-            .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
             }
@@ -724,7 +731,15 @@ struct ContentView: View {
             // its own `onMoss` ink measures 5.36:1 on it (clears 4.5:1 text too, for the non-compact
             // label). Both tokens are already adaptive, so dark mode (mossFill 6.65:1 on midnight)
             // needs no separate branch.
-            .foregroundStyle(isSelected ? (reduceTransparency ? Color.onMoss : Color.moss) : Color.slate)
+            // A5 carried finding (A2's review, §4.2). The `reduceTransparency` half above was fixed
+            // and measured; the DEFAULT half was not. The selected pill fills with opaque
+            // `Color.parchment` and the label under it is `.fernlet(.labelSmall)` — small text, so
+            // the 4.5:1 floor applies — and `moss` on parchment measures **3.74:1**. Swapped to
+            // `mossInk`, the already-approved deepened text variant of the same hue: **5.54:1 on
+            // parchment**, unchanged in dark mode (dark `mossInk` and dark `moss` are the same
+            // value), and it costs the pill nothing visually because the fill and the `.isSelected`
+            // trait carry the selection, not the exact green.
+            .foregroundStyle(isSelected ? (reduceTransparency ? Color.onMoss : Color.mossInk) : Color.slate)
             .frame(maxWidth: .infinity)
             .padding(.vertical, isCompact ? 8 : 9)
             .background(

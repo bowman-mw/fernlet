@@ -220,6 +220,16 @@
         }
       }
     },
+    "%@, %@, intimacy logged" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, intimacy logged"
+          }
+        }
+      }
+    },
     "%@, %lld grams protein, %lld grams carbs, %lld grams fat" : {
       "localizations" : {
         "en" : {
@@ -230,12 +240,52 @@
         }
       }
     },
+    "%@, day %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld"
+          }
+        }
+      }
+    },
     "%@, day %lld, %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, day %2$lld, %3$@"
+          }
+        }
+      }
+    },
+    "%@, day %lld, %@, planned %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, %3$@, planned %4$@"
+          }
+        }
+      }
+    },
+    "%@, day %lld, feeling %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, feeling %3$@"
+          }
+        }
+      }
+    },
+    "%@, day %lld, has data" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, has data"
           }
         }
       }
@@ -259,6 +309,21 @@
           }
         }
       }
+    },
+    "%@, intimacy logged" : {
+
+    },
+    "%@, predicted period day" : {
+
+    },
+    "%@, predicted period day, intimacy logged" : {
+
+    },
+    "%@, predicted, no period expected" : {
+
+    },
+    "%@, predicted, no period expected, intimacy logged" : {
+
     },
     "%@. Back to this month" : {
 
@@ -425,6 +490,16 @@
     "%lld logged" : {
 
     },
+    "%lld logged, %lld planned" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld logged, %2$lld planned"
+          }
+        }
+      }
+    },
     "%lld meal logs, %lld journal entries, %lld workouts" : {
       "localizations" : {
         "en" : {
@@ -489,6 +564,9 @@
       }
     },
     "%lld of 10" : {
+
+    },
+    "%lld oz" : {
 
     },
     "%lld oz each · target %lld bottles" : {
@@ -677,7 +755,13 @@
     "1 item" : {
 
     },
+    "1 logged" : {
+
+    },
     "1 person connected" : {
+
+    },
+    "1 planned" : {
 
     },
     "1 shot left" : {
@@ -854,7 +938,7 @@
     "Add who was involved and any details you want to remember. This note stays encrypted on this device." : {
 
     },
-    "Adds one bottle of water to today's Fernlet diary." : {
+    "Adds bottles of water to today's Fernlet diary." : {
 
     },
     "Adds two things above: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in." : {
@@ -1042,6 +1126,12 @@
     "Basal body temperature" : {
 
     },
+    "Basal body temperature: %@ °C" : {
+
+    },
+    "Basal body temperature: %@ °F" : {
+
+    },
     "Begin" : {
 
     },
@@ -1096,6 +1186,9 @@
     "Bottle: %lld oz" : {
 
     },
+    "Bottles" : {
+
+    },
     "Bottles: %lld" : {
 
     },
@@ -1147,6 +1240,15 @@
     "Camera unavailable" : {
 
     },
+    "Camera viewfinder. Point the camera at the code on the other phone's screen." : {
+
+    },
+    "Camera viewfinder. Point the camera at the code on your friend's screen." : {
+
+    },
+    "Camera viewfinder. Point the camera at the code on your other phone's screen." : {
+
+    },
     "Can't look for nearby friends" : {
 
     },
@@ -1177,7 +1279,19 @@
     "Care score %lld percent, with a little warmth from a friend" : {
 
     },
+    "Care tasks" : {
+
+    },
+    "Carousel" : {
+
+    },
     "Category" : {
+
+    },
+    "Cervical mucus" : {
+
+    },
+    "Cervical mucus: %@" : {
 
     },
     "Change" : {
@@ -1276,6 +1390,9 @@
     "Cloud records" : {
 
     },
+    "Code captured" : {
+
+    },
     "Color" : {
 
     },
@@ -1285,10 +1402,16 @@
     "Comfortable — could hold a conversation." : {
 
     },
+    "Companion" : {
+
+    },
     "Companion thought" : {
 
     },
     "Companion, wardrobe, coins" : {
+
+    },
+    "Complete" : {
 
     },
     "Completed" : {
@@ -1346,6 +1469,12 @@
 
     },
     "Continue" : {
+
+    },
+    "Contrast %@:1" : {
+
+    },
+    "Contrast %@:1 · accents may be hard to see" : {
 
     },
     "Cook" : {
@@ -1427,6 +1556,9 @@
 
     },
     "Couldn't save those changes" : {
+
+    },
+    "Couldn't update your workout just now — please try again in a moment." : {
 
     },
     "Craft" : {
@@ -1532,26 +1664,6 @@
         }
       }
     },
-    "Day %lld, %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Day %1$lld, %2$@"
-          }
-        }
-      }
-    },
-    "Day %lld, %@, intimacy logged" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Day %1$lld, %2$@, intimacy logged"
-          }
-        }
-      }
-    },
     "Day %lld, feeling %@" : {
       "localizations" : {
         "en" : {
@@ -1563,9 +1675,6 @@
       }
     },
     "Day %lld, has data" : {
-
-    },
-    "Day %lld, intimacy logged" : {
 
     },
     "Day 1 lands here; the rest follow day by day." : {
@@ -1697,6 +1806,9 @@
 
     },
     "Design one in the Wardrobe to fold it in here." : {
+
+    },
+    "Design sharing" : {
 
     },
     "Design your first item" : {
@@ -1832,6 +1944,9 @@
 
     },
     "Encrypted backup status" : {
+
+    },
+    "Encrypted backups" : {
 
     },
     "End" : {
@@ -1977,6 +2092,9 @@
     "Exercise history" : {
 
     },
+    "Exercise results" : {
+
+    },
     "Experience" : {
 
     },
@@ -2014,6 +2132,9 @@
 
     },
     "Fernlet" : {
+
+    },
+    "Fernlet QR code for the other phone to scan" : {
 
     },
     "Fernlet asks at first use where practical, so you can start without granting everything now." : {
@@ -2122,6 +2243,9 @@
     "Flow level" : {
 
     },
+    "Flow: %@" : {
+
+    },
     "Food" : {
 
     },
@@ -2221,6 +2345,9 @@
 
     },
     "Goal, body, targets, hydration, calories" : {
+
+    },
+    "Goals" : {
 
     },
     "Goals are crafted entirely on your device — your health details never leave your phone." : {
@@ -2337,6 +2464,9 @@
     "How friends will see you" : {
 
     },
+    "How many bottles of water to log." : {
+
+    },
     "How many servings?" : {
 
     },
@@ -2353,6 +2483,9 @@
 
     },
     "Hydration" : {
+
+    },
+    "I need at least one bottle to log." : {
 
     },
     "I understand — continue" : {
@@ -2445,6 +2578,9 @@
     "Interests" : {
 
     },
+    "Intermenstrual bleeding" : {
+
+    },
     "Intimacy" : {
 
     },
@@ -2515,6 +2651,9 @@
 
     },
     "Keepsake shelf" : {
+
+    },
+    "Keepsakes" : {
 
     },
     "Kept on purpose" : {
@@ -2623,9 +2762,6 @@
     "Log & save" : {
 
     },
-    "Log a bottle of water" : {
-
-    },
     "Log a meal" : {
 
     },
@@ -2674,9 +2810,6 @@
           }
         }
       }
-    },
-    "Logged a bottle of water." : {
-
     },
     "Logged once" : {
 
@@ -2739,6 +2872,9 @@
     "Mark %@ complete" : {
 
     },
+    "Mark complete" : {
+
+    },
     "Marks the current set done and starts your rest timer." : {
 
     },
@@ -2770,6 +2906,9 @@
 
     },
     "Meals" : {
+
+    },
+    "Meals and activity" : {
 
     },
     "Meals, workouts, journal, friends" : {
@@ -2854,6 +2993,9 @@
 
     },
     "Movement" : {
+
+    },
+    "Movement goal" : {
 
     },
     "Moves to the next step of the recipe you're cooking." : {
@@ -3057,6 +3199,12 @@
     "No usable answer — Fernlet used its own logic" : {
 
     },
+    "No workout is running, so there's no rest to skip." : {
+
+    },
+    "No workout is running, so there's no set to finish." : {
+
+    },
     "No workouts logged" : {
 
     },
@@ -3067,9 +3215,6 @@
 
     },
     "No worries — you can add a photo of the barcode, or just enter it by hand." : {
-
-    },
-    "None" : {
 
     },
     "None logged" : {
@@ -3085,6 +3230,9 @@
 
     },
     "Not logged" : {
+
+    },
+    "Not logged yet" : {
 
     },
     "Not nearby" : {
@@ -3121,6 +3269,9 @@
 
     },
     "Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle." : {
+
+    },
+    "Nothing after this one" : {
 
     },
     "Nothing for sale right now." : {
@@ -3270,6 +3421,15 @@
     "Options for %@" : {
 
     },
+    "Other cycle sample" : {
+
+    },
+    "Ovulation test" : {
+
+    },
+    "Ovulation test: %@" : {
+
+    },
     "Owned" : {
 
     },
@@ -3385,7 +3545,23 @@
     "Personal care tasks" : {
 
     },
+    "Personal care. %lld of %lld done." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care. %1$lld of %2$lld done."
+          }
+        }
+      }
+    },
+    "Photo" : {
+
+    },
     "Photo couldn't be opened" : {
+
+    },
+    "Photo from %@" : {
 
     },
     "Photo from %@, %@" : {
@@ -3421,6 +3597,9 @@
 
     },
     "Photo protection" : {
+
+    },
+    "Photo wall" : {
 
     },
     "Photos are sealed on this device. Locking them means a future iCloud backup can never carry them off it." : {
@@ -3684,6 +3863,9 @@
     "Recipes" : {
 
     },
+    "Recipes and photos" : {
+
+    },
     "Recipes and saved products, A–Z." : {
 
     },
@@ -3891,10 +4073,19 @@
     "Rest as long as you need — the timer's only a nudge." : {
 
     },
+    "Rest day" : {
+
+    },
     "Rest defaults come from your %@ goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
 
     },
     "Rest next" : {
+
+    },
+    "Rest skipped — your workout is finished." : {
+
+    },
+    "Rest skipped. Your next set is up." : {
 
     },
     "Restarts the timer on the current cooking step." : {
@@ -4180,6 +4371,12 @@
         }
       }
     },
+    "Set done. Resting now." : {
+
+    },
+    "Set done. Your next exercise is up." : {
+
+    },
     "Set duress code" : {
 
     },
@@ -4354,6 +4551,9 @@
     "Source date" : {
 
     },
+    "Space" : {
+
+    },
     "Space & equipment" : {
 
     },
@@ -4497,6 +4697,9 @@
     "Suggestions will use this space" : {
 
     },
+    "Summary" : {
+
+    },
     "Swap" : {
 
     },
@@ -4548,6 +4751,9 @@
     "Tap to log it again with today's time." : {
 
     },
+    "Target" : {
+
+    },
     "Targets: %@" : {
 
     },
@@ -4561,6 +4767,9 @@
 
     },
     "That was a whole minute of care. Nicely done." : {
+
+    },
+    "That was the last set — your workout is finished." : {
 
     },
     "That workout has already started or changed. Close this and open it again to edit." : {
@@ -4731,6 +4940,9 @@
     "This workout is full at %lld exercises — remove one to add another." : {
 
     },
+    "Thought" : {
+
+    },
     "Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only." : {
 
     },
@@ -4770,26 +4982,6 @@
     "Today, day %lld" : {
 
     },
-    "Today, day %lld, %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Today, day %1$lld, %2$@"
-          }
-        }
-      }
-    },
-    "Today, day %lld, %@, intimacy logged" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Today, day %1$lld, %2$@, intimacy logged"
-          }
-        }
-      }
-    },
     "Today, day %lld, feeling %@" : {
       "localizations" : {
         "en" : {
@@ -4803,13 +4995,10 @@
     "Today, day %lld, has data" : {
 
     },
-    "Today, day %lld, intimacy logged" : {
-
-    },
-    "Today, day %lld, no workouts" : {
-
-    },
     "Together, in person." : {
+
+    },
+    "Total today" : {
 
     },
     "Train here" : {
@@ -4915,6 +5104,9 @@
 
     },
     "Unusable answer — discarded" : {
+
+    },
+    "Unwell" : {
 
     },
     "Up next" : {
@@ -5050,6 +5242,9 @@
 
     },
     "When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only." : {
+
+    },
+    "Where you train" : {
 
     },
     "Where? (optional, e.g. \"the park\")" : {
@@ -5210,6 +5405,12 @@
         }
       }
     },
+    "You're not resting right now, so there's nothing to skip." : {
+
+    },
+    "You're resting right now, so there's no set to finish yet." : {
+
+    },
     "You've joined" : {
 
     },
@@ -5345,6 +5546,9 @@
     "Your split" : {
 
     },
+    "Your verification code, as a QR code for %@ to scan" : {
+
+    },
     "^[%lld tasks](inflect: true)" : {
 
     },
@@ -5443,6 +5647,126 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unspecified"
+          }
+        }
+      }
+    },
+    "cycle.mucus.creamy" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: creamy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Creamy"
+          }
+        }
+      }
+    },
+    "cycle.mucus.dry" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: dry",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dry"
+          }
+        }
+      }
+    },
+    "cycle.mucus.eggWhite" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: egg white (stretchy and clear)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Egg white"
+          }
+        }
+      }
+    },
+    "cycle.mucus.sticky" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: sticky",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sticky"
+          }
+        }
+      }
+    },
+    "cycle.mucus.watery" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: watery",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Watery"
+          }
+        }
+      }
+    },
+    "cycle.observation.none" : {
+      "comment" : "Value shown for a cervical-mucus or ovulation-test row when nothing was observed that day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.indeterminate" : {
+      "comment" : "Result of an at-home ovulation test: indeterminate — the test ran but says nothing either way",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indeterminate"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.negative" : {
+      "comment" : "Result of an at-home ovulation test: negative",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Negative"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.positive" : {
+      "comment" : "Result of an at-home ovulation test: positive (an LH surge was detected)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Positive"
+          }
+        }
+      }
+    },
+    "cycle.sample.unknownValue" : {
+      "comment" : "Shown in place of a cycle sample's value when the recorded value is one Fernlet has no wording for.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown"
           }
         }
       }
@@ -5588,6 +5912,29 @@
     "e.g. swap the squat, 30 minutes, no barbell" : {
 
     },
+    "exercise.search.resultCount" : {
+      "comment" : "Spoken count of exercise search results, e.g. '8 exercises'. Needs a plural variation per language; English also needs the one-exercise form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld exercise"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld exercises"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "gap" : {
 
     },
@@ -5596,6 +5943,32 @@
     },
     "host" : {
 
+    },
+    "iCloud copy" : {
+
+    },
+    "intent.water.logged" : {
+      "comment" : "Siri confirmation after logging water. The number is how many bottles were logged; needs a plural variation per language, and English also needs the one-bottle form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Logged a bottle of water."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Logged %lld bottles of water."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "intervals, distance, notes" : {
 
@@ -5964,6 +6337,29 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "private notes"
+          }
+        }
+      }
+    },
+    "settings.search.resultCount" : {
+      "comment" : "Spoken count of settings search results, e.g. '6 settings'. Needs a plural variation per language; English also needs the one-setting form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld setting"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld settings"
+                }
+              }
+            }
           }
         }
       }

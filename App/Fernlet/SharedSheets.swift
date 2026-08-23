@@ -84,6 +84,17 @@ struct WaterSheet: View {
     }
 
     /// The hero numeral IS the stepper's value, so the count is stated exactly once (2c).
+    ///
+    /// **T2-2 (accessibility-size degradation) convention.** The oz total (``totalLine``) is
+    /// dropped at accessibility sizes and the whole size/target caption disappears at AX5 — and a
+    /// view that is never *drawn* never enters the accessibility tree, so a user running Larger
+    /// Text **and** VoiceOver lost both facts from speech too. They are re-attached here as
+    /// `.accessibilityCustomContent`, which puts them on VoiceOver's More Content rotor.
+    ///
+    /// Attached at EVERY size rather than only the accessibility ones, deliberately: custom
+    /// content at default importance is never spoken as part of the utterance, so it cannot
+    /// double up with the drawn line, and an unbranched modifier cannot drift out of step with
+    /// the layout branch it mirrors.
     private var heroCount: some View {
         VStack(spacing: 2) {
             Text("\(draft)")
@@ -95,6 +106,8 @@ struct WaterSheet: View {
                 .foregroundStyle(Color.slate)
         }
         .accessibilityElement(children: .ignore)
+        .accessibilityCustomContent("Total today", Text("\(totalOz) oz"))
+        .accessibilityCustomContent("Target", target == 1 ? Text("1 bottle") : Text("\(target) bottles"))
         // Explicit `Text` so both branches localize — a bare ternary of string literals can land
         // on the non-localizing StringProtocol overload.
         .accessibilityLabel(draft == 1 ? Text("1 bottle") : Text("\(draft) bottles"))

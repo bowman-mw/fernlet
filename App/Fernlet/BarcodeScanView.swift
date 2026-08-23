@@ -292,6 +292,9 @@ struct BarcodeScanView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
+                // T2-10: this is the camera-off fallback's only feedback on whether the barcode
+                // was actually in frame. An inverted barcode is a barcode nobody can check.
+                .accessibilityIgnoresInvertColors()
         }
 
         if isDetecting {
@@ -504,6 +507,9 @@ private extension View {
 /// (camera permission revoked mid-session) through `onUnavailable` so the parent can drop to the
 /// still-photo fallback. The symbology list is injectable — the QR verify ceremony reuses this exact
 /// viewfinder with `[.qr]`.
+///
+/// The hosted view opts out of Smart Invert (`accessibilityIgnoresInvertColors`, T2-10) — an
+/// inverted live preview does not decode — so every call site inherits that without repeating it.
 struct BarcodeDataScannerView: UIViewControllerRepresentable {
     /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
     /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
@@ -523,6 +529,11 @@ struct BarcodeDataScannerView: UIViewControllerRepresentable {
             isHighlightingEnabled: true
         )
         scanner.delegate = context.coordinator
+        // T2-10: Smart Invert inverts the LIVE VIDEO too, and a barcode or QR read off an inverted
+        // preview does not decode. Set on the UIKit view rather than as a SwiftUI modifier at each
+        // call site so every user of this representable — the food scanner and both QR ceremonies —
+        // inherits it and none can forget.
+        scanner.view.accessibilityIgnoresInvertColors = true
         return scanner
     }
 

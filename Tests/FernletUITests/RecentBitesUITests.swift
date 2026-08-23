@@ -5,7 +5,7 @@ import XCTest
 /// asserts it actually rendered (the migration put it on Home and the sealed photos loaded).
 final class RecentBitesUITests: XCTestCase {
     @MainActor
-    func testRecentBitesStripAppearsOnHomeWithPolaroids() {
+    func testRecentBitesStripAppearsOnHomeWithPolaroids() throws {
         let app = UXTestApp.launch()  // Home, demo-seeded
 
         // The widget is appended last in the default layout, so it sits at the bottom of the feed.
@@ -17,6 +17,6 @@ final class RecentBitesUITests: XCTestCase {
         let caption = app.staticTexts["Greek yogurt with berries"]
         XCTAssertTrue(caption.waitForExistence(timeout: 5), "no meal polaroid rendered in the strip")
 
-        UXScreenProbe(app, "Home · Recent bites", in: self).capture()
+        try UXScreenProbe(app, "Home · Recent bites", in: self).capture()
     }
 }

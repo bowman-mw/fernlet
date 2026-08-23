@@ -139,6 +139,10 @@ struct NutritionLabelCameraSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     .frame(maxWidth: .infinity)
+                    // T2-10: this is the photo the user checks their framing against before
+                    // re-shooting a weak read. Inverted, black-on-white label text becomes
+                    // white-on-black and the glare/blur cues the tips talk about disappear.
+                    .accessibilityIgnoresInvertColors()
 
                 if isScanning {
                     HStack(spacing: 8) {

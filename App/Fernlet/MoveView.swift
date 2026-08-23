@@ -127,6 +127,9 @@ struct MoveView: View {
                 HeaderActionButton(title: "Share") { showingTrainerShare = true }
                     .accessibilityIdentifier("move.trainerShare")
                     .accessibilityLabel("Share with a trainer")
+                    // T2-12: the label is longer than the drawn word, so Voice Control's spoken
+                    // name and the visible one had diverged; "Share" is what a user reads and says.
+                    .accessibilityInputLabels([Text("Share")])
                 // Settings used to be reachable only from Home (tab switch + gear). The same compact
                 // gear the Home header draws, so every tab opens Settings in one tap.
                 settingsButton
@@ -865,6 +868,15 @@ struct WorkoutSheet: View {
 
     /// One 44pt Recent chip: name over the factual last-time values. At accessibility sizes the
     /// chip drops its sets×reps line and keeps the name alone (3b·AX3).
+    ///
+    /// **T2-2 convention.** The dropped recall line is real content — it is the whole reason to
+    /// tap the chip rather than search — and a view that is never *drawn* never enters the
+    /// accessibility tree, so at accessibility sizes VoiceOver lost it too. It is re-attached with
+    /// `.accessibilityCustomContent`, which puts it on the More Content rotor, at EVERY size:
+    /// default-importance custom content is never part of the spoken utterance, so it cannot
+    /// double up with the drawn line, and an unbranched modifier cannot drift out of step with the
+    /// layout branch it mirrors. The `Text?` overload takes the nil case (no recall recorded)
+    /// without an empty rotor row, which is why the key is spelled out.
     private func recentChip(_ entry: TrainerExportBundle.ExerciseHistoryEntry) -> some View {
         Button {
             prefillDraft(from: entry)
@@ -887,6 +899,8 @@ struct WorkoutSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.recentExercise.\(entry.name)")
+        .accessibilityCustomContent(AccessibilityCustomContentKey("Last time"),
+                                    entry.lastTimeRecallValues.map { Text(verbatim: $0) })
     }
 
     /// Loads both recall sources once per presentation (MOVE-08): one history rollup for the
@@ -2535,6 +2549,11 @@ struct MoveContextStrip: View {
             // it opens anything).
             .accessibilityLabel("Goal, \(goalValue ?? MoveContextStrip.goalNotSet)")
             .accessibilityHint("Opens your movement goals")
+            // T2-12: the label above is a whole SENTENCE that ends in the user's own goal, so a
+            // Voice Control user had to say "tap Goal, build strength, three goals" to reach it.
+            // Input labels are ADDITIVE — the spoken label is unchanged — and are listed
+            // shortest-first because the first one is what the numbered overlay shows.
+            .accessibilityInputLabels([Text("Goal"), Text("Goals"), Text("Movement goal")])
 
             Rectangle()
                 .fill(Color.bark.opacity(0.10))
@@ -2550,6 +2569,9 @@ struct MoveContextStrip: View {
             )
             .accessibilityLabel("Space, \(spaceAccessibilityValue)")
             .accessibilityHint("Opens where you train")
+            // T2-12, as for the Goal segment: the label carries the location NAME and an item
+            // count, neither of which anyone wants to speak to tap a button.
+            .accessibilityInputLabels([Text("Space"), Text("Where you train")])
             // Stable id: the label is the location's NAME, which the user can now rename, so a test that
             // matched on it would break the moment it exercised the rename it's there to check.
             .accessibilityIdentifier("move.space")
@@ -2939,9 +2961,64 @@ struct ExerciseSearchPicker: View {
     /// sheet asks for it — a sheet with fields above the picker shouldn't yank focus past them.
     var autofocus = false
     @FocusState private var searchFocused: Bool
+    /// One in-flight result-count announcement at a time (T2-14) — the debounce itself. Held as
+    /// state so a newer keystroke can cancel the pending one; see ``announceResultCount(_:)``.
+    @State private var resultAnnouncementTask: Task<Void, Never>?
 
     private var results: [ExerciseTarget] {
         Array(WorkoutExerciseCatalog.search(query).prefix(8))
+    }
+
+    /// The count worth SPEAKING, or `nil` when there is nothing to say.
+    ///
+    /// Not the same thing as `results.count`, which is what the list draws. A blank query returns
+    /// the whole catalog (`WorkoutExerciseCatalog.search` trims and returns everything for `""`),
+    /// so the picker opens with eight rows the user never asked for — announcing that on appear
+    /// would speak a number nobody searched for. And once an exercise is picked the list is gone,
+    /// but selecting also writes the exercise's name into `query`, so a plain count would fire
+    /// again for a list that is no longer on screen.
+    private var speakableResultCount: Int? {
+        guard selectedExercise == nil else { return nil }
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return results.count
+    }
+
+    /// The plural-correct "8 exercises" sentence, used both as the results list's spoken value and
+    /// as the announcement — one key, so there is one plural rule to translate rather than two.
+    ///
+    /// A catalog key with the number as an ARGUMENT, never an English `"s"` glued on in Swift: a
+    /// `count == 1 ? "exercise" : "exercises"` ternary welds the app to a two-form plural rule most
+    /// languages do not have, and produces a string no translator ever sees. ``MoveGoalSummary``
+    /// earlier in this file carries the full record of that fix.
+    private static func resultCountText(_ count: Int) -> String {
+        String(localized: "exercise.search.resultCount", defaultValue: "\(count) exercises",
+               comment: "Spoken count of exercise search results, e.g. '8 exercises'. Needs a plural variation per language; English also needs the one-exercise form.")
+    }
+
+    /// Speaks how many exercises the search now matches — debounced twice over, because a search
+    /// field fires on every keystroke and one announcement per keystroke is worse than none.
+    ///
+    /// The first gate is the `.onChange` this is called from: it watches the COUNT, not the query,
+    /// so the four keystrokes of "squa" that all leave eight results standing say nothing at all.
+    /// The second is the sleep below: a burst that walks the count 8 → 5 → 3 speaks only "3
+    /// exercises", because each new count cancels the announcement the previous one scheduled. A
+    /// cancelled sleep simply ends the superseded task — the same shape `SettingsSheet` uses for
+    /// its reminder reschedule.
+    ///
+    /// A count, never a result: an announcement is spoken aloud into the room, and the announcer's
+    /// standing rule is to announce the event and not the payload.
+    private func announceResultCount(_ count: Int?) {
+        resultAnnouncementTask?.cancel()
+        guard let count else { return }
+        resultAnnouncementTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(450))
+            } catch {
+                return  // superseded by a newer keystroke (or the picker went away)
+            }
+            guard !Task.isCancelled else { return }
+            FernletAnnouncer.system.announce(.status, resolved: Self.resultCountText(count))
+        }
     }
 
     /// Return picks the top result instead of doing nothing — typing "squat" then Return used to
@@ -2986,11 +3063,24 @@ struct ExerciseSearchPicker: View {
                             }
                         }
                     }
+                    // T2-14's persistent half: the count as a value on the list itself, so a user
+                    // who missed (or turned off) the announcement can still swipe to it and hear
+                    // how many rows follow. `.contain`, NOT `.combine` — the rows stay individually
+                    // navigable — and the `.accessibilityElement` is load-bearing: without it the
+                    // value propagates DOWN and stamps "8 exercises" onto every single row.
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(Text("Exercise results"))
+                    .accessibilityValue(Text(verbatim: Self.resultCountText(results.count)))
                 }
             }
         }
         .onChange(of: resetToken) { _, _ in
             query = ""
+        }
+        // Watches the COUNT, not the query: keystrokes that leave the same number of matches
+        // standing are silent. See ``announceResultCount(_:)`` for the second gate.
+        .onChange(of: speakableResultCount) { _, count in
+            announceResultCount(count)
         }
         .onAppear {
             if autofocus && selectedExercise == nil { searchFocused = true }
@@ -3067,6 +3157,10 @@ struct LoggedExerciseRow: View {
             }
             .buttonStyle(.plain)
             .fernletIconButton("Remove \(entry.exercise.name)")
+            // T2-12: the spoken name interpolates the exercise, so a Voice Control user had to
+            // say "tap remove barbell back squat". Duplicate short names across rows are fine —
+            // Voice Control numbers ambiguous matches.
+            .accessibilityInputLabels([Text("Remove")])
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -3102,6 +3196,8 @@ struct EditablePlannedExerciseRow: View {
                 }
                 .buttonStyle(.plain)
                 .fernletIconButton("Remove \(entry.exercise.name)")
+                // T2-12, as on ``LoggedExerciseRow``.
+                .accessibilityInputLabels([Text("Remove")])
             }
 
             switch entry.exercise.inputKind {
@@ -3166,6 +3262,9 @@ struct WorkoutCalendarCard: View {
     // 1a·AX3: at accessibility sizes the strip shows ~3 days behind a horizontal scroll and drops
     // its legend; the cells drop their per-day captions themselves.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    // Read ONCE for the whole card and handed to the legend swatches; ``WorkoutCalendarCell`` reads
+    // it once for itself. See ``WorkoutCategoryMark`` for what the flag changes.
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     private var legendSplits: [WorkoutSplit] {
         let today = FernletDate.date(fromDayKey: todayKey) ?? .now
@@ -3251,11 +3350,22 @@ struct WorkoutCalendarCard: View {
 
     /// The split legend, wrapped rather than shrunk: as a fixed row with `minimumScaleFactor(0.7)` the
     /// entries scaled down to "Work…"/"Full B…" instead of taking a second line.
+    ///
+    /// Under **Differentiate Without Color** the swatch becomes the same filled shape the day cells
+    /// draw for that split's category, so the legend stays a working key: without it the cells
+    /// would show shapes the legend explained only in hue. The default swatch is untouched.
     private var workoutLegend: some View {
         FlowLayout(spacing: 10) {
             ForEach(legendSplits) { split in
                 HStack(spacing: 4) {
-                    Circle().fill(split.color).frame(width: 8, height: 8)
+                    if differentiateWithoutColor {
+                        Image(systemName: split.workoutType.differentiatingShapeFilled)
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(split.color)
+                            .frame(width: 10, height: 10)
+                    } else {
+                        Circle().fill(split.color).frame(width: 8, height: 8)
+                    }
                     Text(split.title).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
                 .fixedSize()
@@ -3264,16 +3374,87 @@ struct WorkoutCalendarCard: View {
     }
 }
 
+/// The shape vocabulary that stands in for hue when **Differentiate Without Color** is on.
+///
+/// `WorkoutType.color` maps eight categories onto four tints — `.upper`/`.armsBack`/`.mixed` are
+/// all moss and `.cardio`/`.run`/`.hike` are all terracotta — so hue cannot separate them even in
+/// principle, before colour blindness is considered at all. These symbols can.
+///
+/// The four *current* categories (see `WorkoutType.allCases`, which deliberately omits the legacy
+/// four) take the four shapes that stay legible at 8pt: triangle, square, diamond, circle. The
+/// legacy categories, which surface only on history rows old enough to still carry them, take the
+/// remaining shapes — mutually confusable at that size, but never confusable with the four that
+/// matter. Every symbol here has both an outline and a `.fill` variant, which is what carries the
+/// planned-vs-logged distinction.
+private extension WorkoutType {
+    /// The outline symbol for this category — drawn for a PLANNED workout.
+    var differentiatingShape: String {
+        switch self {
+        case .upper: "triangle"
+        case .lower: "square"
+        case .fullBody: "diamond"
+        case .cardio: "circle"
+        case .armsBack: "star"
+        case .mixed: "seal"
+        case .run: "capsule"
+        case .hike: "hexagon"
+        }
+    }
+
+    /// The filled variant of ``differentiatingShape`` — drawn for a LOGGED workout.
+    var differentiatingShapeFilled: String { "\(differentiatingShape).fill" }
+}
+
+/// One category mark inside a ``WorkoutCalendarCell``'s day tile, and in the card's legend.
+///
+/// Two renderings of the same fact, chosen by the environment and nothing else. By default it is
+/// the 5pt hue-filled dot the artboards specify — solid for a logged workout, `.opacity(0.38)` for
+/// a planned one. That default branch is untouched by this type's existence and must stay so.
+///
+/// Under **Differentiate Without Color** it becomes a per-category SF Symbol (see
+/// ``WorkoutType/differentiatingShape``), filled for logged and hollow for planned, so neither the
+/// category nor the logged/planned distinction rests on hue. The opacity channel it replaces was
+/// never a real second channel anyway: a 38%-alpha 5pt dot is below the discrimination threshold
+/// for most low-vision users regardless of how they see colour.
+private struct WorkoutCategoryMark: View {
+    /// The category this mark stands for.
+    var category: WorkoutType
+    /// `true` for a workout that is only planned, `false` for one already logged.
+    var planned: Bool
+    /// Passed in rather than read here, so the environment is read once per cell instead of once
+    /// per dot.
+    var differentiateWithoutColor: Bool
+
+    var body: some View {
+        if differentiateWithoutColor {
+            Image(systemName: planned ? category.differentiatingShape : category.differentiatingShapeFilled)
+                .font(.system(size: 7, weight: .black))
+                .foregroundStyle(category.color)
+                .frame(width: 8, height: 8)
+        } else {
+            Circle()
+                .fill(planned ? category.color.opacity(0.38) : category.color)
+                .frame(width: 5, height: 5)
+        }
+    }
+}
+
 /// One tappable day cell in the calendar week strip.
 ///
 /// Pure rendering of a ``WorkoutWeekCell`` — fill, today ring, logged (solid) and planned (faded)
-/// category dots, and the log/plan/rest summary line.
+/// category marks, and the log/plan/rest summary line.
+///
+/// The body was already at the Power-of-10 length ceiling, so the tile, its contents, the marks
+/// and the caption were extracted into computed properties before the Differentiate-Without-Color
+/// branch and the accessibility attachments were added.
 struct WorkoutCalendarCell: View {
     var cell: WorkoutWeekCell
     var onTap: () -> Void
     // 1a·AX3: the per-day caption ("Rest" / "1 log" / "1 plan") is dropped at accessibility sizes
     // so the day tile itself stays legible; VoiceOver still gets the full label.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    // Read ONCE per cell and handed down to every mark — see ``WorkoutCategoryMark``.
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     var body: some View {
         Button(action: onTap) {
@@ -3281,50 +3462,80 @@ struct WorkoutCalendarCell: View {
                 Text(cell.weekdayText)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(cell.fill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
-                    )
-                    .overlay {
-                        VStack(spacing: 4) {
-                            Text("\(cell.day)")
-                                .font(.fernlet(.stat))
-                                .foregroundStyle(
-                                    cell.isFuture ? Color.bark.opacity(0.28)
-                                        : cell.isToday ? Color.moss
-                                        : Color.bark.opacity(0.68)
-                                )
-                            if !cell.categories.isEmpty || !cell.plannedCategories.isEmpty {
-                                HStack(spacing: 2) {
-                                    ForEach(Array(cell.categories.prefix(3).enumerated()), id: \.offset) { _, category in
-                                        Circle()
-                                            .fill(category.color)
-                                            .frame(width: 5, height: 5)
-                                    }
-                                    ForEach(Array(cell.plannedCategories.prefix(max(0, 3 - cell.categories.count)).enumerated()), id: \.offset) { _, category in
-                                        Circle()
-                                            .fill(category.color.opacity(0.38))
-                                            .frame(width: 5, height: 5)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: 46)
+                dayTile
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Text(cell.summaryText)
-                        .font(.fernlet(.labelSmall))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .foregroundStyle(cell.categories.isEmpty && cell.plannedCategories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
+                    summaryLine
                 }
             }
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .accessibilityLabel(cell.accessibilityLabel)
+        // T2-2: ``summaryLine`` is deleted from the layout at accessibility sizes, and an undrawn
+        // view is an absent accessibility element — so the counts vanished from speech too. (They
+        // were never in the utterance at any size, in fact: the explicit label above replaces the
+        // derived one.) Re-attached on the More Content rotor, localized rather than reusing the
+        // drawn `summaryText`, which is a frozen-English `String`.
+        .accessibilityCustomContent("Summary", cell.accessibilitySummary)
+        // T2-12: the label is a sentence ending in the day's categories.
+        .accessibilityInputLabels([Text("Day \(cell.day)")])
+    }
+
+    /// The rounded day tile: fill, today ring, the day numeral and the category marks.
+    private var dayTile: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(cell.fill)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+            )
+            .overlay { tileContents }
+            .frame(height: 46)
+    }
+
+    /// What sits inside the tile: the day numeral over the category marks.
+    private var tileContents: some View {
+        VStack(spacing: 4) {
+            Text("\(cell.day)")
+                .font(.fernlet(.stat))
+                .foregroundStyle(dayNumeralInk)
+            categoryMarks
+        }
+    }
+
+    /// Faded ahead of today, moss on today, ordinary bark behind it.
+    private var dayNumeralInk: Color {
+        cell.isFuture ? Color.bark.opacity(0.28)
+            : cell.isToday ? Color.moss
+            : Color.bark.opacity(0.68)
+    }
+
+    /// Up to three marks: logged categories first, then planned ones into whatever room is left.
+    ///
+    /// The two ``WorkoutCategoryMark``s differ only in `planned`, which is drawn as an opacity
+    /// step by default and as filled-vs-hollow under Differentiate Without Color.
+    @ViewBuilder private var categoryMarks: some View {
+        if !cell.categories.isEmpty || !cell.plannedCategories.isEmpty {
+            HStack(spacing: 2) {
+                ForEach(Array(cell.categories.prefix(3).enumerated()), id: \.offset) { _, category in
+                    WorkoutCategoryMark(category: category, planned: false,
+                                        differentiateWithoutColor: differentiateWithoutColor)
+                }
+                ForEach(Array(cell.plannedCategories.prefix(max(0, 3 - cell.categories.count)).enumerated()), id: \.offset) { _, category in
+                    WorkoutCategoryMark(category: category, planned: true,
+                                        differentiateWithoutColor: differentiateWithoutColor)
+                }
+            }
+        }
+    }
+
+    /// The per-day caption under the tile, dropped at accessibility sizes (1a·AX3).
+    private var summaryLine: some View {
+        Text(cell.summaryText)
+            .font(.fernlet(.labelSmall))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .foregroundStyle(cell.categories.isEmpty && cell.plannedCategories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
     }
 }
 
@@ -3368,20 +3579,46 @@ struct WorkoutWeekCell: Identifiable {
     /// persisted category token, so VoiceOver was reading storage vocabulary aloud and would keep
     /// reading English out of a fully translated screen. `displayName` is the reader-facing half
     /// that already exists for exactly this.
+    ///
+    /// Two further corrections, both from the Differentiate-Without-Color work: the day that also
+    /// has a plan on it now says so — the previous branching spoke the plan ONLY on a day with
+    /// nothing logged, so on a mixed day the plan was silent — and the weekday comes from
+    /// `longWeekdayText` ("Wed"), not the drawn `weekdayText`, which is the NARROW symbol ("W")
+    /// and is read out as a single letter. The word "planned" is the channel a blind user has for
+    /// the logged/planned distinction that sighted users get from the mark's fill, so it is stated
+    /// whether or not anything is also logged.
     var accessibilityLabel: Text {
+        let dayName = isToday ? Text("Today") : Text(verbatim: longWeekdayText)
         let categoryText = categories.map(\.displayName).joined(separator: ", ")
         let planText = plannedSplits.map(\.title).joined(separator: ", ")
-        if categoryText.isEmpty && !planText.isEmpty {
-            return Text("\(weekdayText), day \(day), planned \(planText)")
+        if !categoryText.isEmpty && !planText.isEmpty {
+            return Text("\(dayName), day \(day), \(categoryText), planned \(planText)")
         }
-        if categoryText.isEmpty {
-            return isToday
-                ? Text("Today, day \(day), no workouts")
-                : Text("\(weekdayText), day \(day), no workouts")
+        if !categoryText.isEmpty {
+            return Text("\(dayName), day \(day), \(categoryText)")
         }
-        return isToday
-            ? Text("Today, day \(day), \(categoryText)")
-            : Text("\(weekdayText), day \(day), \(categoryText)")
+        if !planText.isEmpty {
+            return Text("\(dayName), day \(day), planned \(planText)")
+        }
+        return Text("\(dayName), day \(day), no workouts")
+    }
+
+    /// The count line the tile drops at accessibility sizes (1a·AX3), re-exposed as accessibility
+    /// custom content (T2-2).
+    ///
+    /// A separate, LOCALIZED `Text` rather than a reuse of ``summaryText``: that one is a plain
+    /// `String` of English literals rendered through the non-localizing `Text(_: S)` overload, so
+    /// speaking it would put frozen English on the rotor of an otherwise translated screen. It
+    /// also states both halves on a mixed day, where the drawn caption only has room for the logs.
+    var accessibilitySummary: Text {
+        if workoutCount == 0 && plannedCount == 0 { return Text("Rest day") }
+        if workoutCount == 0 {
+            return plannedCount == 1 ? Text("1 planned") : Text("\(plannedCount) planned")
+        }
+        if plannedCount == 0 {
+            return workoutCount == 1 ? Text("1 logged") : Text("\(workoutCount) logged")
+        }
+        return Text("\(workoutCount) logged, \(plannedCount) planned")
     }
 }
 
@@ -3661,6 +3898,8 @@ struct PlannedWorkoutRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Mark \(plannedWorkout.name) complete")
+            // T2-12: "Mark upper body strength complete" is a sentence to speak at a checkbox.
+            .accessibilityInputLabels([Text("Done"), Text("Complete"), Text("Mark complete")])
         } else {
             Circle()
                 .fill(plannedWorkout.workoutType.color.opacity(0.42))

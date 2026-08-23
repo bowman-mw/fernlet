@@ -5,7 +5,7 @@ import XCTest
 /// `settings.selectedGoal`, replacing the old Picker).
 final class GoalPresetCardsUITests: XCTestCase {
     @MainActor
-    func testGoalPresetCardsRenderAndSelect() {
+    func testGoalPresetCardsRenderAndSelect() throws {
         let app = UXTestApp.launch(openSheet: "settings")
 
         // Open Goal & nutrition.
@@ -22,7 +22,7 @@ final class GoalPresetCardsUITests: XCTestCase {
         let strengthCard = app.buttons["goalPreset.strength"]
         XCTAssertTrue(strengthCard.waitForExistence(timeout: 5), "goal preset cards did not render")
 
-        UXScreenProbe(app, "Settings · Goal preset cards", in: self).capture()
+        try UXScreenProbe(app, "Settings · Goal preset cards", in: self).capture()
 
         // Wellness is the seeded default; pick Strength and confirm the selection moves.
         XCTAssertFalse(strengthCard.isSelected, "Strength should not start selected (Wellness is default)")
@@ -30,6 +30,6 @@ final class GoalPresetCardsUITests: XCTestCase {
         strengthCard.tap()
         XCTAssertTrue(strengthCard.isSelected, "tapping the Strength card did not select it")
 
-        UXScreenProbe(app, "Settings · Goal preset selected", in: self).capture()
+        try UXScreenProbe(app, "Settings · Goal preset selected", in: self).capture()
     }
 }

@@ -15,11 +15,19 @@ import os
 /// session reference in `dismantleUIView`. ``DisposableCameraView`` keeps exactly one instance
 /// structurally stable across rotation so the running capture session is never torn down and
 /// reattached (the old freeze / black flash).
+///
+/// The preview view opts out of Smart Invert (`accessibilityIgnoresInvertColors`, T2-10): an
+/// inverted viewfinder frames a shot the camera will not take.
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
+        // T2-10: Smart Invert inverts the live preview, so the user frames a shot against a colour
+        // negative and the photo that comes out is nothing like what they aimed at. Set here rather
+        // than at the call site because exactly one instance exists and it is repositioned, never
+        // rebuilt, across rotation — a call-site modifier would be easy to lose in that dance.
+        v.accessibilityIgnoresInvertColors = true
         guard let previewLayer = v.previewLayer else {
             // Unreachable: `layerClass` guarantees the layer's type. Degrade to a blank preview
             // rather than trapping if UIKit ever hands back a different layer.

@@ -41,6 +41,59 @@ extension PeriodFlowLevel {
     }
 }
 
+/// App-target display fork over ``CervicalMucusQuality``.
+///
+/// Same reasoning as ``PeriodFlowLevel/displayName`` above — and the same fork had already been
+/// written a SECOND time, badly: `CycleDayDetailView` carried its own
+/// `HKCategoryValueCervicalMucusQuality` switch, so the calendar detail said "Egg white" while the
+/// log sheet's picker, reading the sealed module's `title` (`rawValue.capitalized`), said
+/// "Egg White". One vocabulary, keyed on the CASE, now serves the picker that sets the value and
+/// the detail row that reads it back, so the two cannot disagree again and neither speaks a storage
+/// token aloud. Which case a raw HealthKit value is remains the sealed module's call, via
+/// ``CervicalMucusQuality/hkValue`` — the same table `CycleDayEntry.cervicalMucusQuality` matches on.
+extension CervicalMucusQuality {
+    /// The localized mucus word shown in the log sheet's picker and on the calendar day detail.
+    var displayName: String {
+        switch self {
+        case .dry:
+            String(localized: "cycle.mucus.dry", defaultValue: "Dry",
+                   comment: "Cervical mucus quality recorded for a cycle day: dry")
+        case .sticky:
+            String(localized: "cycle.mucus.sticky", defaultValue: "Sticky",
+                   comment: "Cervical mucus quality recorded for a cycle day: sticky")
+        case .creamy:
+            String(localized: "cycle.mucus.creamy", defaultValue: "Creamy",
+                   comment: "Cervical mucus quality recorded for a cycle day: creamy")
+        case .watery:
+            String(localized: "cycle.mucus.watery", defaultValue: "Watery",
+                   comment: "Cervical mucus quality recorded for a cycle day: watery")
+        case .eggWhite:
+            String(localized: "cycle.mucus.eggWhite", defaultValue: "Egg white",
+                   comment: "Cervical mucus quality recorded for a cycle day: egg white (stretchy and clear)")
+        }
+    }
+}
+
+/// App-target display fork over ``OvulationTestResult``. Token/display split exactly as in
+/// ``CervicalMucusQuality/displayName``; the sealed module's `title` is `rawValue.capitalized`, so
+/// the picker was setting the value in frozen English.
+extension OvulationTestResult {
+    /// The localized at-home-ovulation-test word for the picker and the calendar day detail.
+    var displayName: String {
+        switch self {
+        case .negative:
+            String(localized: "cycle.ovulationTest.negative", defaultValue: "Negative",
+                   comment: "Result of an at-home ovulation test: negative")
+        case .positive:
+            String(localized: "cycle.ovulationTest.positive", defaultValue: "Positive",
+                   comment: "Result of an at-home ovulation test: positive (an LH surge was detected)")
+        case .indeterminate:
+            String(localized: "cycle.ovulationTest.indeterminate", defaultValue: "Indeterminate",
+                   comment: "Result of an at-home ovulation test: indeterminate — the test ran but says nothing either way")
+        }
+    }
+}
+
 extension CycleDayEntry {
     /// The localized replacement for the sealed store's English ``flowLabel``.
     ///
@@ -696,6 +749,14 @@ private struct CycleCalendarCard: View {
 private struct CycleCalendarCell: View {
     var cell: CycleMonthCell
     var onTap: () -> Void
+    /// The intimacy heart's point size, scaled with Dynamic Type (review T2-11).
+    ///
+    /// `.font(.system(size: 6))` is a fixed size that never grew: the day numeral beside it scales
+    /// with Larger Text while the marker stayed a 6pt speck, so the one mark that distinguishes an
+    /// intimacy day from a plain one got *relatively smaller* exactly for the users who enlarged
+    /// the text. `relativeTo: .subheadline` is the text style `.fernlet(.stat)` — the numeral in
+    /// this very cell — resolves against, so glyph and numeral now move together.
+    @ScaledMetric(relativeTo: .subheadline) private var intimacyMarkerSize: CGFloat = 6
 
     var body: some View {
         Button(action: onTap) {
@@ -725,7 +786,7 @@ private struct CycleCalendarCell: View {
             .overlay(alignment: .bottom) {
                 if cell.hasIntimacyEvent {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 6))
+                        .font(.system(size: intimacyMarkerSize))
                         .foregroundStyle(Color.terracotta)
                         .padding(.bottom, 1.5)
                 }
@@ -752,6 +813,13 @@ struct CycleMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
     var date: Date?
+    /// This day's weekday name, ABBREVIATED ("Wed") — spoken only, never drawn.
+    ///
+    /// The same value and the same production rule as `WorkoutWeekCell.longWeekdayText`
+    /// (`date.formatted(.dateTime.weekday(.abbreviated))`), and deliberately NOT the narrow symbol
+    /// the grid's header draws: VoiceOver reads "W" as the letter W. `nil` only for a pad cell, or
+    /// for a day the layout calendar could not resolve to a `Date` at all.
+    var longWeekdayText: String? = nil
     var dateKey: String?
     var entry: CycleDayEntry?
     var projectedLevel: PredictedFlowLevel?
@@ -789,22 +857,74 @@ struct CycleMonthCell: Identifiable {
 
     /// `Text` rather than `String` (review T2-1) — see ``JournalMonthCell/accessibilityLabel`` for
     /// why appending clauses cannot localize, and why whole sentences are chosen instead.
+    ///
+    /// Every sentence opens with ``dayPrefix(day:)``, which carries the WEEKDAY. Forecast days
+    /// branch out first (review T2-17): see ``predictedLabel(prefix:)``.
     var accessibilityLabel: Text {
         guard let day else { return Text("Empty calendar cell") }
+        let prefix = dayPrefix(day: day)
+        if let predicted = predictedLabel(prefix: prefix) { return predicted }
         let flow = (!isFuture && entry?.hasObservedEvent == true) ? entry?.flowDisplayName : nil
         switch (flow, hasIntimacyEvent) {
         case let (flow?, true):
-            return isToday
-                ? Text("Today, day \(day), \(flow), intimacy logged")
-                : Text("Day \(day), \(flow), intimacy logged")
+            return Text("\(prefix), \(flow), intimacy logged")
         case let (flow?, false):
-            return isToday ? Text("Today, day \(day), \(flow)") : Text("Day \(day), \(flow)")
+            return Text("\(prefix), \(flow)")
         case (nil, true):
-            return isToday
-                ? Text("Today, day \(day), intimacy logged")
-                : Text("Day \(day), intimacy logged")
+            return Text("\(prefix), intimacy logged")
         case (nil, false):
-            return isToday ? Text("Today, day \(day)") : Text("Day \(day)")
+            return prefix
+        }
+    }
+
+    /// The opening clause of every sentence above: which day this cell is.
+    ///
+    /// The grid's weekday-initial header is deliberately hidden from VoiceOver (see the grid in
+    /// `MonthCalendarCard`), on the contract that each cell names its own weekday —
+    /// otherwise a swipe through the month is 30 cells of "Day 1", "Day 2" with no way to tell
+    /// which column, i.e. which weekday, any of them is. The weekday comes from
+    /// ``longWeekdayText`` ("Wed"), never the narrow symbol the header draws, which is read out as
+    /// a single letter; today keeps saying "Today", which is the more useful anchor and is how
+    /// `WorkoutWeekCell.accessibilityLabel` states the same thing.
+    private func dayPrefix(day: Int) -> Text {
+        if isToday { return Text("Today, day \(day)") }
+        // A day the layout calendar could not resolve to a `Date` has no weekday to state; the
+        // ordinal is still true, so the cell degrades to what it always said rather than to "".
+        guard let longWeekdayText else { return Text("Day \(day)") }
+        return Text("\(Text(verbatim: longWeekdayText)), day \(day)")
+    }
+
+    /// The spoken label for a *forecast* day — one the grid tints from ``projectedLevel`` rather
+    /// than from anything the user logged (review T2-17). `nil` for every other day, so the
+    /// caller's remaining cases stay exactly the logged/empty ones they were written for.
+    ///
+    /// Naming the forecast is the whole point. A predicted bleed day is drawn in a flat, paler
+    /// dusty rose than a logged one and a predicted dry day in a bark wash, so a sighted user can
+    /// tell a guess from a record at a glance — while VoiceOver said "Day 14" for both, i.e. read
+    /// a projection as history on the one screen where that distinction is the product.
+    ///
+    /// The predicted *intensity* is deliberately not spoken: ``projectedFill(for:)`` maps every
+    /// bleed level to the same 0.35 tint, so the grid does not distinguish light from heavy
+    /// either, and announcing a level the screen never draws would overstate the forecast. A
+    /// `.none` projection is a different claim — no bleed expected, drawn as a bark wash instead
+    /// of rose — and does get its own sentence, spelled `PredictedFlowLevel.none` so the enum case
+    /// can never be read as `Optional.none`.
+    ///
+    /// ``hasIntimacyEvent`` is stated on BOTH forecast arms. The `.none` arm used to drop it while
+    /// the cell went on drawing the heart, so a future day with an intimacy event on it was marked
+    /// on screen and silent to VoiceOver — the drawn heart is not conditioned on the projection, so
+    /// no spoken branch may be either.
+    private func predictedLabel(prefix: Text) -> Text? {
+        guard isFuture, let projectedLevel else { return nil }
+        switch projectedLevel {
+        case PredictedFlowLevel.none:
+            return hasIntimacyEvent
+                ? Text("\(prefix), predicted, no period expected, intimacy logged")
+                : Text("\(prefix), predicted, no period expected")
+        default:
+            return hasIntimacyEvent
+                ? Text("\(prefix), predicted period day, intimacy logged")
+                : Text("\(prefix), predicted period day")
         }
     }
 }
@@ -847,6 +967,9 @@ struct CycleMonthModel {
             return CycleMonthCell(
                 day: gridDay.day,
                 date: gridDay.date,
+                // Resolved once per cell here rather than inside the label, so the spoken weekday
+                // is produced by the same rule for every day of the month.
+                longWeekdayText: gridDay.date?.formatted(.dateTime.weekday(.abbreviated)),
                 dateKey: gridDay.dateKey,
                 entry: entry,
                 projectedLevel: entry == nil ? projectedLevelsByDay[gridDay.dateKey] : nil,

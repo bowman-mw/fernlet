@@ -726,6 +726,12 @@ struct JournalCalendarCard: View {
     var todayKey: String
     var onDayTapped: (String) -> Void
 
+    /// Read ONCE for the whole card and used only by ``tagLegend``; ``JournalCalendarCell`` reads
+    /// it once for itself. The same deliberate arrangement as ``WorkoutCalendarCard`` — the flag is
+    /// threaded down as a plain `Bool` rather than read again per swatch. See
+    /// ``FeelingTag/differentiatingSymbol`` for what it changes.
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+
     var body: some View {
         let model = JournalMonthModel(date: displayedMonth, allDays: allDays, todayKey: todayKey)
         MonthCalendarCard(displayedMonth: $displayedMonth, todayKey: todayKey) { gridDay in
@@ -742,15 +748,58 @@ struct JournalCalendarCard: View {
 
     /// The feeling key under the grid. Wraps onto new rows rather than shrinking: at accessibility
     /// sizes the old `lineLimit(1)` + `minimumScaleFactor(0.7)` row read "Work…"/"Ten…".
+    ///
+    /// Under **Differentiate Without Color** the swatch becomes the same mark the day cells draw
+    /// for that feeling, in the same ink, so the legend stays a working key: otherwise the cells
+    /// would show shapes the legend explained only in hue. The default swatch is untouched.
     private var tagLegend: some View {
         FlowLayout(spacing: 10) {
             ForEach(FeelingTag.allCases) { tag in
                 HStack(spacing: 4) {
-                    Circle().fill(tag.color).frame(width: 8, height: 8)
+                    if differentiateWithoutColor {
+                        Image(systemName: tag.differentiatingSymbol)
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(Color.bark)
+                            .frame(width: 10, height: 10)
+                    } else {
+                        Circle().fill(tag.color).frame(width: 8, height: 8)
+                    }
                     Text(tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
+        }
+    }
+}
+
+/// The shape vocabulary that stands in for hue when **Differentiate Without Color** is on.
+///
+/// The journal month grid encodes all six feelings as a wash of ``FeelingTag/color`` over the card
+/// surface and nothing else, so in greyscale the six categories are not merely *hard* to tell
+/// apart — they are, pairwise, the same value. Measured on the light palette (`#FBF7EE` box, the
+/// 28% non-today wash): `quiet` vs `hard` separate by **1.0028:1**, `neutral` vs `tired` by
+/// 1.031:1 on the dark palette, and the WORST pair anywhere — across both appearances and both wash
+/// strengths — reaches only **1.4205:1** (dark, the 38% today-wash; the dark 28% wash tops out at
+/// 1.3046:1). Three is the WCAG 1.4.11 floor for a graphic that carries meaning; nothing here
+/// reaches half of it. These symbols do.
+///
+/// The six are chosen for SILHOUETTE at 9pt, which is the only channel that survives that size:
+/// spiky, round, square, elongated, rotated-square, three-sided. `star`/`circle`/`square`/
+/// `capsule`/`diamond`/`triangle` are the same family ``WorkoutType`` already draws from in the
+/// workout calendar, so the two calendars speak one visual language. The mapping is a `switch`
+/// with no `default:` — a seventh feeling is a compile error, not a silent grey blob.
+private extension FeelingTag {
+    /// The filled SF Symbol drawn on a day cell (and in the card legend) under Differentiate
+    /// Without Color. Always filled: there is no planned/logged second axis here as there is in the
+    /// workout calendar, so the mark spends its whole budget on being a legible shape.
+    var differentiatingSymbol: String {
+        switch self {
+        case .bright: "star.fill"
+        case .good: "circle.fill"
+        case .neutral: "square.fill"
+        case .quiet: "capsule.fill"
+        case .tired: "diamond.fill"
+        case .hard: "triangle.fill"
         }
     }
 }
@@ -764,6 +813,9 @@ struct JournalCalendarCard: View {
 struct JournalCalendarCell: View {
     var cell: JournalMonthCell
     var onTap: () -> Void
+    /// Read ONCE per cell and consumed only by ``feelingMark`` — never re-read per mark. See
+    /// ``FeelingTag/differentiatingSymbol``.
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     var body: some View {
         Button(action: onTap) {
@@ -798,12 +850,42 @@ struct JournalCalendarCell: View {
                     }
                     .padding(.bottom, 2)
                 }
+                feelingMark
             }
         }
         .buttonStyle(.plain)
         .aspectRatio(1, contentMode: .fit)
         .disabled(cell.day == nil || cell.isFuture)
         .accessibilityLabel(cell.accessibilityLabel)
+    }
+
+    /// The feeling's shape mark, drawn ONLY under **Differentiate Without Color**.
+    ///
+    /// With the setting off this is an `EmptyView` and the cell renders exactly as it always has —
+    /// same fill, same numeral, same has-data dot — so the default appearance carries no visual
+    /// risk at all. With it on the tint is *kept* and the shape is added on top: colour is never
+    /// removed, it simply stops being the only channel.
+    ///
+    /// Ink is ``Color/bark``, not the feeling's own tint. Drawing the mark in `tag.color` (the
+    /// workout calendar's choice, where the mark sits on a plain card rather than on a wash of its
+    /// own hue) measures as low as **1.497:1** against the cell it sits in — a `sun` glyph on a
+    /// 28% `sun` wash is very nearly invisible. `bark` measures **≥4.93:1** against all six washes
+    /// in both appearances and at both wash strengths, clearing the 3:1 non-text floor everywhere.
+    ///
+    /// Overlaid inside the `ZStack` on an infinite frame rather than added to the numeral's
+    /// `VStack`: an extra 9pt row inside that stack would grow the cell's ideal height and could
+    /// push the square out of the grid at accessibility text sizes. This way the geometry and the
+    /// tap target are byte-identical to the default. `isFuture` is checked first, exactly as
+    /// ``JournalMonthCell/fill`` does, so a mark can never appear on a day drawn with the
+    /// future wash.
+    @ViewBuilder private var feelingMark: some View {
+        if differentiateWithoutColor, !cell.isFuture, let tag = cell.tag {
+            Image(systemName: tag.differentiatingSymbol)
+                .font(.system(size: 9, weight: .black))
+                .foregroundStyle(Color.bark)
+                .padding(3)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
     }
 }
 
@@ -823,6 +905,11 @@ struct JournalMonthCell: Identifiable {
     var isToday: Bool
     var isFuture: Bool = false
     var hasData: Bool = false
+    /// The already-localized ABBREVIATED weekday NAME for this day ("Wed"), spoken but never drawn
+    /// — see ``accessibilityLabel``. Empty for a blank pad cell, and for the (unreachable in
+    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel`` is
+    /// the honest fallback for that case rather than a sentence with a hole in it.
+    var weekdayName: String = ""
 
     var fill: Color {
         if isFuture { return Color.softTaupe.opacity(0.05) }
@@ -840,7 +927,31 @@ struct JournalMonthCell: Identifiable {
     /// overload, and a clause appended with `+=` can never be a catalog key at all. The feeling
     /// name is no longer lower-cased on the way in — `tag.label` is already localized, and
     /// case-folding a translated word is wrong in every language that capitalizes nouns.
+    ///
+    /// Every sentence now opens with the WEEKDAY (review T2-17). The drawn weekday initials came
+    /// off the cells in that same review, which left "Day 14" as the entire utterance: a month
+    /// grid whose cells name only an ordinal cannot be navigated by anyone who cannot see the
+    /// column the cell sits in. The name comes from ``weekdayName`` — the ABBREVIATED weekday NAME
+    /// ("Wed"), deliberately NOT the narrow symbol the header row draws, which VoiceOver reads out
+    /// as the single letter "W". Same idiom, and the same reason, as ``WorkoutWeekCell``'s
+    /// `longWeekdayText`. Today keeps saying "Today" in that slot, which is the more useful fact.
     var accessibilityLabel: Text {
+        guard let day, !weekdayName.isEmpty else { return weekdaylessLabel }
+        let dayName = isToday ? Text("Today") : Text(verbatim: weekdayName)
+        if isFuture { return Text("\(dayName), day \(day)") }
+        if let tag { return Text("\(dayName), day \(day), feeling \(tag.label)") }
+        if hasData { return Text("\(dayName), day \(day), has data") }
+        return Text("\(dayName), day \(day)")
+    }
+
+    /// The sentence family for a cell with no weekday to open with: a blank pad cell, or the day
+    /// whose `Date` the layout calendar could not resolve.
+    ///
+    /// Kept as whole sentences rather than degrading to `Text("\(Text(verbatim: "")), day 5")`,
+    /// which would put a leading comma into a translated string and into speech. A computed
+    /// property rather than a `func` taking the day, so the `guard` that unwraps it lives here
+    /// once.
+    private var weekdaylessLabel: Text {
         guard let day else { return Text("Empty calendar cell") }
         if isFuture { return Text("Day \(day)") }
         if let tag {
@@ -893,7 +1004,12 @@ struct JournalMonthModel {
                 tag: tag,
                 isToday: gridDay.isToday,
                 isFuture: gridDay.isFuture,
-                hasData: hasData
+                hasData: hasData,
+                // Spoken, never drawn (T2-17). The ABBREVIATED NAME, not the narrow initial the
+                // header row uses: VoiceOver reads a narrow symbol out as one letter. `.formatted`
+                // follows the user's locale, which is what a spoken weekday should do — the
+                // canonical `dateKey` above is the thing that must stay locale-independent.
+                weekdayName: gridDay.date?.formatted(.dateTime.weekday(.abbreviated)) ?? ""
             )
         }
         self.cells = blanks + days
@@ -1367,7 +1483,7 @@ struct DayDetailView: View {
                             .frame(height: 6)
                     }
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 6)], spacing: 6) {
+                PersonalCareTaskGrid {
                     ForEach(store.personalCareTasks) { task in
                         Label(task.label, systemImage: task.systemImage)
                             .font(.fernlet(.labelSmall))
@@ -1384,6 +1500,37 @@ struct DayDetailView: View {
                 }
             }
         }
+    }
+}
+
+/// The personal-care task grid's shared layout: one adaptive column whose minimum width grows
+/// with Dynamic Type.
+///
+/// The same chip grid is drawn twice — read-only on ``DayDetailView``'s care card and tappable in
+/// the journal sheet's personal-care field — and both stated the adaptive column's minimum as a
+/// bare `108`. A bare number cannot scale, so at accessibility text sizes the cell held its 108pt
+/// while the label inside it grew, and `.lineLimit(1)` turned "Brush teeth" into "Brush…"
+/// (accessibility review T2-11 / wall rule A5-GRID-SCALES).
+///
+/// The wrapper exists so ONE ``cellMinimum`` serves both call sites: `@ScaledMetric` reads the
+/// environment, so it has to live on a view — it cannot be a shared constant without becoming a
+/// mutable global, which the Power-of-10 wall forbids. Callers supply only the cells.
+private struct PersonalCareTaskGrid<Content: View>: View {
+    /// The grid's cells, supplied by the call site.
+    private let content: () -> Content
+    /// The adaptive column's minimum width. `108` is the value at the default text size, so
+    /// nothing moves for a user who never changed it; `relativeTo: .caption` is the style
+    /// `.fernlet(.labelSmall)` — the chips' own font — resolves against, so cell and label grow
+    /// together.
+    @ScaledMetric(relativeTo: .caption) private var cellMinimum: CGFloat = 108
+
+    /// Creates the grid around caller-supplied cells.
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: cellMinimum), spacing: 6)], spacing: 6, content: content)
     }
 }
 
@@ -1734,7 +1881,7 @@ struct DayEditSheet: View {
     /// The personal-care task grid for the edited day.
     private var personalCareField: some View {
         SheetField("Personal care") {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 6)], spacing: 6) {
+            PersonalCareTaskGrid {
                 ForEach(store.personalCareTasks) { task in
                     Button { togglePersonalCareTask(task) } label: {
                         Label(task.label, systemImage: task.systemImage)

@@ -202,6 +202,14 @@ struct NearbyFriendsSettingsView: View {
     /// One consent toggle with its one-line footnote. At accessibility sizes the footnote drops
     /// unless it carries a dependency the user must know about (5b·AX3: only Presence keeps its
     /// footnote).
+    ///
+    /// **T2-2.** `keepFootnoteAtAccessibilitySizes` is a *layout* escape hatch, so it does not
+    /// cover the accessibility tree: for the five rows that do not set it, the footnote is not
+    /// drawn at accessibility sizes and therefore is not spoken either — exactly the Larger Text
+    /// × VoiceOver hole. The footnote is re-attached to the toggle as custom content at every
+    /// size (harmless when it is also drawn: default-importance custom content is never part of
+    /// the spoken utterance, only of the More Content rotor). The toggle's own on/off value is
+    /// left alone.
     private func consentRow(
         _ title: LocalizedStringKey,
         footnote: LocalizedStringKey,
@@ -214,6 +222,7 @@ struct NearbyFriendsSettingsView: View {
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
             }
+            .accessibilityCustomContent("Details", footnote)
             if keepFootnoteAtAccessibilitySizes || !dynamicTypeSize.isAccessibilitySize {
                 Text(footnote)
                     .font(.fernlet(.bodySmall))

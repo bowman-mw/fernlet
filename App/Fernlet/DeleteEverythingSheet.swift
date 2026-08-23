@@ -1,4 +1,9 @@
 import SwiftUI
+// For `AXCustomContent.Importance` — the `importance:` argument of `.accessibilityCustomContent`.
+// SwiftUI declares the modifier but not the enum, and this target builds with
+// SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY, under which `.high` needs the defining module in
+// scope.
+import Accessibility
 import FernletFoundation
 import FernletUI
 
@@ -29,6 +34,14 @@ import FernletUI
 /// accessibility sizes, collapsing to one line at AX5; the buttons unstack with Cancel underneath;
 /// the typed gate may scroll below the fold, but the sheet still cannot be confirmed without
 /// reaching it — the buttons stay inert until the word is typed.
+///
+/// **Consent may not shrink with the text (#3).** Those two degradations are layout decisions and
+/// they stay, but a view that is never *drawn* is never an accessibility element — so at AX5 five
+/// delete claims and three kept claims became one line each and the rest were unreachable by any
+/// means, on the one screen in the app where what the user was told is the whole point. Every
+/// claim is now single-sourced through ``WipeClaim`` and re-attached to VoiceOver:
+/// ``CollapsedClaimContent`` speaks the full list on the AX5 summary row, and ``bulletRow`` puts
+/// each claim's full wording on the More Content rotor wherever a short form is drawn in its place.
 struct DeleteEverythingSheet: View {
     /// Which Apple Health outcome(s) to offer — see ``DeleteAllDataConfirmation/HealthSampleOffer``.
     let offer: DeleteAllDataConfirmation.HealthSampleOffer
@@ -69,36 +82,92 @@ struct DeleteEverythingSheet: View {
         .presentationDragIndicator(.visible)
     }
 
+    // MARK: - Claims
+
+    /// One reconciled claim on either list: the glyph its drawn row leads with, the full-size
+    /// wording, the accessibility-size short form, and the short label that names it on VoiceOver's
+    /// More Content rotor.
+    ///
+    /// All four live in ONE value on purpose (#3). The layout tiers these claims by text size and
+    /// at AX5 collapses each list to a single drawn line, so the accessibility re-exposure has to
+    /// promise exactly what the drawn list promises at default size. Two hand-kept copies of
+    /// consent text drift the first time one of them is edited — and on this sheet the enumeration
+    /// IS the disclosure.
+    private struct WipeClaim {
+        /// Short rotor label, e.g. "Friends". Display text — localized, never a token.
+        let rotorLabel: LocalizedStringKey
+        /// SF Symbol for the drawn row. Decorative: ``bulletRow(glyph:text:dropped:)`` hides it
+        /// from VoiceOver (T1-8) and drops it entirely at accessibility sizes.
+        let glyph: String
+        /// The reconciled full-size wording — the truth the sheet asks the user to consent to.
+        let full: LocalizedStringKey
+        /// The accessibility-size short form, or `nil` when the claim is already short enough to
+        /// draw unchanged at every size (both iCloud claims are single phrases).
+        let short: LocalizedStringKey?
+    }
+
+    /// Whether the lists have collapsed to one drawn line each (5e·AX5) — the size at which the
+    /// claims exist only on the accessibility side, via ``CollapsedClaimContent``.
+    private var isCollapsed: Bool { dynamicTypeSize >= .accessibility5 }
+
+    /// Every "this deletes" claim, in drawn order, including the two conditional iCloud claims.
+    ///
+    /// Claimed only when true, as before: a promise to delete a backup the code will skip is the
+    /// old overpromise. The AX5 branch drops both from the drawn line; the rotor keeps them, so a
+    /// user who HAS an iCloud copy is never told less than a user who does not.
+    private var deleteClaims: [WipeClaim] {
+        var claims: [WipeClaim] = [
+            WipeClaim(rotorLabel: "Meals and activity", glyph: "fork.knife",
+                      full: "Meals, workouts, water and sleep", short: "Meals, workouts, water, sleep"),
+            WipeClaim(rotorLabel: "Journal", glyph: "book.closed",
+                      full: "Journal entries, cycle days, the worry box", short: "Journal, cycle, worry box"),
+            WipeClaim(rotorLabel: "Recipes and photos", glyph: "photo",
+                      full: "Recipes, plans, your photos and polaroids", short: "Recipes, plans, your photos"),
+            WipeClaim(rotorLabel: "Companion", glyph: "pawprint",
+                      full: "Your companion, wardrobe and coins", short: "Companion, wardrobe, coins"),
+            WipeClaim(rotorLabel: "Friends", glyph: "person.2",
+                      full: "Your friends list — this phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: you'll add each other again in person, and anyone you blocked is no longer blocked",
+                      short: "Your friends list"),
+        ]
+        if hasICloudDayCopy {
+            claims.append(WipeClaim(rotorLabel: "iCloud copy", glyph: "icloud",
+                                    full: "Your iCloud copy", short: nil))
+        }
+        if hasSealedBackup {
+            claims.append(WipeClaim(rotorLabel: "Encrypted backups", glyph: "icloud",
+                                    full: "Your encrypted iCloud backups", short: nil))
+        }
+        return claims
+    }
+
+    /// One drawn claim row: the glyph, the wording at the current text size, and the full wording
+    /// that was shortened away to produce it (`nil` when the row is drawn in full).
+    private typealias ClaimRow = (glyph: String, text: LocalizedStringKey, dropped: LocalizedStringKey?)
+
+    /// The rows to draw for one claim list at the current text size, each carrying the wording it
+    /// was shortened FROM so ``bulletRow(glyph:text:dropped:)`` can put that on the rotor.
+    ///
+    /// `dropped` is `nil` at default sizes because the drawn row already IS the full claim —
+    /// re-stating it would only pad the rotor.
+    private func drawnRows(_ claims: [WipeClaim]) -> [ClaimRow] {
+        guard !claims.isEmpty else { return [] }
+        guard dynamicTypeSize.isAccessibilitySize else {
+            return claims.map { (claim: WipeClaim) -> ClaimRow in (claim.glyph, claim.full, nil) }
+        }
+        return claims.map { (claim: WipeClaim) -> ClaimRow in
+            guard let short = claim.short else { return (claim.glyph, claim.full, nil) }
+            return (claim.glyph, short, claim.full)
+        }
+    }
+
     // MARK: - Lists
 
     /// The "this deletes" bullets, shortened at accessibility sizes (5e·AX3) and collapsed to one
     /// line at AX5 (5e·AX5). The full-size wording is the reconciled truth; the short forms only
-    /// ever drop words, never add claims.
-    private var deleteBullets: [(glyph: String, text: LocalizedStringKey)] {
-        if dynamicTypeSize >= .accessibility5 {
-            return [("trash", "Meals, workouts, journal, friends")]
-        }
-        var bullets: [(String, LocalizedStringKey)]
-        if dynamicTypeSize.isAccessibilitySize {
-            bullets = [
-                ("fork.knife", "Meals, workouts, water, sleep"),
-                ("book.closed", "Journal, cycle, worry box"),
-                ("photo", "Recipes, plans, your photos"),
-                ("pawprint", "Companion, wardrobe, coins"),
-                ("person.2", "Your friends list"),
-            ]
-        } else {
-            bullets = [
-                ("fork.knife", "Meals, workouts, water and sleep"),
-                ("book.closed", "Journal entries, cycle days, the worry box"),
-                ("photo", "Recipes, plans, your photos and polaroids"),
-                ("pawprint", "Your companion, wardrobe and coins"),
-                ("person.2", "Your friends list — this phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: you'll add each other again in person, and anyone you blocked is no longer blocked"),
-            ]
-        }
-        if hasICloudDayCopy { bullets.append(("icloud", "Your iCloud copy")) }
-        if hasSealedBackup { bullets.append(("icloud", "Your encrypted iCloud backups")) }
-        return bullets
+    /// ever drop words, never add claims — and what they drop stays reachable on the rotor.
+    private var deleteBullets: [ClaimRow] {
+        guard !isCollapsed else { return [("trash", "Meals, workouts, journal, friends", nil)] }
+        return drawnRows(deleteClaims)
     }
 
     private var deletesSection: some View {
@@ -106,7 +175,8 @@ struct DeleteEverythingSheet: View {
             SectionLabel("This deletes")
                 .accessibilityIdentifier("deleteAll.deletesList")
             ForEach(Array(deleteBullets.enumerated()), id: \.offset) { _, bullet in
-                bulletRow(glyph: bullet.glyph, text: bullet.text)
+                bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
+                    .modifier(CollapsedClaimContent(claims: deleteClaims, active: isCollapsed))
             }
             // NOT "none of it can be recovered": local data rides iOS device backups by default,
             // so an older encrypted backup can still restore it — Fernlet can't reach into that.
@@ -126,26 +196,34 @@ struct DeleteEverythingSheet: View {
         }
     }
 
+    /// Every "kept on purpose" claim, in drawn order — the survivors, ported from the dialog's
+    /// reconciled kept list.
+    ///
+    /// The photo-wall claim is the one that most needs to survive the AX5 collapse: it says data
+    /// this wipe does NOT reach, in both directions, and that there is no bulk delete. A user who
+    /// only hears "shared photo wall" can reasonably read it the other way round.
+    private var keptClaims: [WipeClaim] {
+        [
+            WipeClaim(rotorLabel: "Photo wall", glyph: "photo.on.rectangle.angled",
+                      full: "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete.",
+                      short: "The shared photo wall, on both sides"),
+            WipeClaim(rotorLabel: "Design sharing", glyph: "hand.raised",
+                      full: "Any restriction on sharing your own designs.",
+                      short: "Any restriction on sharing your designs"),
+            WipeClaim(rotorLabel: "App lock", glyph: "lock",
+                      full: "Your app lock stays set up.", short: "Your app lock"),
+        ]
+    }
+
     /// The "kept on purpose" bullets, shortened at accessibility sizes (5e·AX3) and collapsed to
     /// one line at AX5 (5e·AX5) — the same tiering as ``deleteBullets``. The short forms only ever
     /// drop words, never claims: the wall stays on both sides, the design-sharing restriction
     /// stays, the app lock stays.
-    private var keptBullets: [(glyph: String, text: LocalizedStringKey)] {
-        if dynamicTypeSize >= .accessibility5 {
-            return [("photo.on.rectangle.angled", "Shared photo wall, sharing restriction, app lock")]
+    private var keptBullets: [ClaimRow] {
+        guard !isCollapsed else {
+            return [("photo.on.rectangle.angled", "Shared photo wall, sharing restriction, app lock", nil)]
         }
-        if dynamicTypeSize.isAccessibilitySize {
-            return [
-                ("photo.on.rectangle.angled", "The shared photo wall, on both sides"),
-                ("hand.raised", "Any restriction on sharing your designs"),
-                ("lock", "Your app lock"),
-            ]
-        }
-        return [
-            ("photo.on.rectangle.angled", "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete."),
-            ("hand.raised", "Any restriction on sharing your own designs."),
-            ("lock", "Your app lock stays set up."),
-        ]
+        return drawnRows(keptClaims)
     }
 
     /// The survivors, ported from the dialog's reconciled kept list: the shared photo wall (BOTH
@@ -157,7 +235,8 @@ struct DeleteEverythingSheet: View {
             SectionLabel("Kept on purpose")
                 .accessibilityIdentifier("deleteAll.keptList")
             ForEach(Array(keptBullets.enumerated()), id: \.offset) { _, bullet in
-                bulletRow(glyph: bullet.glyph, text: bullet.text)
+                bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
+                    .modifier(CollapsedClaimContent(claims: keptClaims, active: isCollapsed))
             }
         }
     }
@@ -188,7 +267,19 @@ struct DeleteEverythingSheet: View {
 
     /// One glyph-led claim line; the glyph bullet drops at accessibility sizes (5e·AX3) so the
     /// words keep the room.
-    private func bulletRow(glyph: String, text: LocalizedStringKey) -> some View {
+    ///
+    /// `dropped` is the wording this row was shortened FROM, or `nil` when it is drawn in full
+    /// (#3). The short forms are not all cosmetic: the friends claim loses its entire second half —
+    /// the new-identity reset and the fact that blocks are lifted with it — so the full wording
+    /// rides the More Content rotor at DEFAULT importance, where it elaborates the drawn line for
+    /// anyone who asks rather than repeating it at everyone who does not. It is attached uniformly
+    /// rather than only on the claims that lose something material: a per-claim judgement call is
+    /// exactly the kind of thing that goes stale when the copy is next edited.
+    private func bulletRow(
+        glyph: String,
+        text: LocalizedStringKey,
+        dropped: LocalizedStringKey?
+    ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if !dynamicTypeSize.isAccessibilitySize {
                 // T1-8: not `.combine`d with the text beside it, so without this the SF Symbol's
@@ -205,6 +296,64 @@ struct DeleteEverythingSheet: View {
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
             Spacer(minLength: 0)
+        }
+        .accessibilityCustomContent(AccessibilityCustomContentKey("Details"), dropped.map { Text($0) })
+    }
+
+    // MARK: - Accessibility re-exposure (#3)
+
+    /// Re-attaches a collapsed claim list to VoiceOver, for the AX5 row that stands in for it.
+    ///
+    /// At AX5 each list is ONE summarising line — "Meals, workouts, journal, friends" for five
+    /// claims, "Shared photo wall, sharing restriction, app lock" for three — and an undrawn view
+    /// is an absent accessibility element, so the photo, companion, cycle, friends-identity and
+    /// iCloud consequences could not be reached by any means at that size. Each claim gets its own
+    /// entry here, carrying the FULL-size wording rather than the AX3 short form.
+    ///
+    /// **Importance is `.high`, deliberately** — the one place in this codebase that departs from
+    /// the T2-2 default-importance convention (``MoveView``'s Recent chips, ``SharedSheets``'
+    /// water hero). Default importance reaches only a user who already knows the More Content rotor
+    /// exists; on an irreversible-wipe consent screen an undiscoverable claim is a dropped claim,
+    /// and the whole finding is that AX5 consents to less than default size does. `.high` speaks
+    /// each claim with the row, so the two sizes hear the same disclosure. It cannot double up with
+    /// the drawn text — every value is `nil` unless `active`, i.e. unless the layout has already
+    /// collapsed the words away.
+    ///
+    /// The slot count is FIXED at seven (Power of 10 rule 2 — a modifier chain cannot be a loop):
+    /// five delete claims plus the two conditional iCloud ones, which is the longest list either
+    /// section can produce. Unused slots resolve to a `nil` value, and the `Text?` overload takes
+    /// that without leaving an empty rotor row.
+    private struct CollapsedClaimContent: ViewModifier {
+        /// The full claim list this one drawn row stands in for, in drawn order.
+        let claims: [WipeClaim]
+        /// Whether the layout has collapsed the list (AX5). `false` attaches nothing at all.
+        let active: Bool
+
+        func body(content: Content) -> some View {
+            content
+                .accessibilityCustomContent(key(0), value(0), importance: .high)
+                .accessibilityCustomContent(key(1), value(1), importance: .high)
+                .accessibilityCustomContent(key(2), value(2), importance: .high)
+                .accessibilityCustomContent(key(3), value(3), importance: .high)
+                .accessibilityCustomContent(key(4), value(4), importance: .high)
+                .accessibilityCustomContent(key(5), value(5), importance: .high)
+                .accessibilityCustomContent(key(6), value(6), importance: .high)
+        }
+
+        /// The rotor label for slot `index`; a placeholder past the end of a shorter list, where
+        /// the matching ``value(_:)`` is `nil` and no entry is created at all.
+        private func key(_ index: Int) -> AccessibilityCustomContentKey {
+            guard index >= 0 else { return AccessibilityCustomContentKey("Details") }
+            guard index < claims.count else { return AccessibilityCustomContentKey("Details") }
+            return AccessibilityCustomContentKey(claims[index].rotorLabel)
+        }
+
+        /// The full-size wording for slot `index`, or `nil` when the drawn list still carries the
+        /// claims itself or the slot is past the end of this list.
+        private func value(_ index: Int) -> Text? {
+            guard active, index >= 0 else { return nil }
+            guard index < claims.count else { return nil }
+            return Text(claims[index].full)
         }
     }
 

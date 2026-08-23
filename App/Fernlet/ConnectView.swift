@@ -491,9 +491,35 @@ struct FriendsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(albumCellLabel(post))
+                .accessibilityInputLabels(albumCellInputLabels(post))
             }
         }
         .padding(.top, 2)
+    }
+
+    /// Short spoken alternatives for one album cell — the Voice Control half of T2-12.
+    ///
+    /// ``albumCellLabel(_:)`` is a whole SENTENCE ending in a date and a photo count, so a Voice
+    /// Control user had to say "tap Photo from Alex, 12 Aug 2026, carousel, 4 photos" to open one
+    /// cell. Input labels are ADDITIVE — the spoken VoiceOver label is unchanged, and it stays a
+    /// sentence deliberately: a photo cell has no other text, so the sender and date are the only
+    /// thing distinguishing one grey square from the next.
+    ///
+    /// The friend's name leads because it is the only short candidate that DIFFERS between cells,
+    /// and the first input label is what Voice Control's numbered overlay shows (the same reason
+    /// ``MoveView``'s calendar leads with "Day 4" rather than "Day"). It is `verbatim` — a person's
+    /// name is never localized — and an empty name is dropped rather than offered as a blank
+    /// command. "Photo" is kept as the generic fallback: duplicates across the grid are what the
+    /// numbered overlay is for.
+    private func albumCellInputLabels(_ post: FriendPhotoWallPost) -> [Text] {
+        let sender = post.coverPhoto.senderName
+        guard !sender.isEmpty else {
+            return post.isCarousel ? [Text("Photo"), Text("Carousel")] : [Text("Photo")]
+        }
+        guard post.isCarousel else {
+            return [Text(verbatim: sender), Text("Photo"), Text("Photo from \(sender)")]
+        }
+        return [Text(verbatim: sender), Text("Photo"), Text("Carousel"), Text("Photo from \(sender)")]
     }
 
     /// What VoiceOver says for one album cell: who shared it, when, and whether it opens a carousel.
@@ -964,6 +990,9 @@ private struct LazyFriendPhotoImage: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+                    // T2-10: a friend photo inverted is a colour negative of a person's face. The
+                    // `photo` placeholder below is a tinted glyph and is left to invert normally.
+                    .accessibilityIgnoresInvertColors()
             } else {
                 Image(systemName: "photo")
                     .font(.largeTitle)

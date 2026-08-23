@@ -12,7 +12,7 @@ final class OnboardingAppearanceUITests: XCTestCase {
     }
 
     @MainActor
-    func testOnboardingScreensAppearance() {
+    func testOnboardingScreensAppearance() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-resetOnboarding"]
         // Keep the storage step deterministic (no live iCloud detection during the gallery run).
@@ -20,47 +20,47 @@ final class OnboardingAppearanceUITests: XCTestCase {
         app.launch()
 
         // 1 · Welcome
-        probe("Onboarding · Welcome", title: "Welcome to Fernlet", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Welcome", title: "Welcome to Fernlet", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 2 · Lock setup
-        probe("Onboarding · Lock setup", title: "Protect private spaces",
+        try probe("Onboarding · Lock setup", title: "Protect private spaces",
               action: app.buttons["onboarding.lock.biometrics"], app: app)
         tap("onboarding.lock.biometrics", app: app)
 
         // 3 · Storage choice (Continue is disabled until a card is selected)
-        probe("Onboarding · Storage choice", title: "Choose where logs live",
+        try probe("Onboarding · Storage choice", title: "Choose where logs live",
               action: app.buttons["onboarding.storage.local"], app: app)
         tap("onboarding.storage.local", app: app)
         advance(app)
 
         // 4 · Goal & plan
-        probe("Onboarding · Goal", title: "Plan your goals", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Goal", title: "Plan your goals", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 5 · Starter customization
-        probe("Onboarding · Starter", title: "Make Fernlet yours", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Starter", title: "Make Fernlet yours", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 6 · Personal details
-        probe("Onboarding · Personal details", title: "Add personal details", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Personal details", title: "Add personal details", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 7 · Dietary pattern
-        probe("Onboarding · Dietary pattern", title: "Pick an eating pattern", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Dietary pattern", title: "Pick an eating pattern", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 8 · Permissions
-        probe("Onboarding · Permissions", title: "Permissions when needed",
+        try probe("Onboarding · Permissions", title: "Permissions when needed",
               action: app.buttons["Start Fernlet"], app: app)
     }
 
     // MARK: - Helpers
 
     @MainActor
-    private func probe(_ name: String, title: String, action: XCUIElement, app: XCUIApplication) {
+    private func probe(_ name: String, title: String, action: XCUIElement, app: XCUIApplication) throws {
         let p = UXScreenProbe(app, name, in: self)
-        p.assertElementOnScreen(app.staticTexts[title], "title \"\(title)\"")
+        try p.assertElementOnScreen(app.staticTexts[title], "title \"\(title)\"")
             .assertElementOnScreen(action, "primary action button")
             .assertBelowStatusBarElement(app.staticTexts[title])
             .capture()

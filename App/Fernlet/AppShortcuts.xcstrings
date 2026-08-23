@@ -143,6 +143,72 @@
           }
         }
       }
+    },
+    "Done set in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done set in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Mark my ${applicationName} set done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark my ${applicationName} set done"
+          }
+        }
+      }
+    },
+    "Finish my set in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish my set in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Skip rest in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip rest in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Skip my ${applicationName} rest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip my ${applicationName} rest"
+          }
+        }
+      }
+    },
+    "${applicationName} skip rest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} skip rest"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

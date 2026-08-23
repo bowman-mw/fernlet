@@ -20,9 +20,9 @@ final class ScreenAppearanceUITests: XCTestCase {
     // MARK: - Tabs
 
     @MainActor
-    func testHomeTabAppearance() {
+    func testHomeTabAppearance() throws {
         let app = UXTestApp.launch()
-        UXScreenProbe(app, "Home tab", in: self)
+        try UXScreenProbe(app, "Home tab", in: self)
             .assertOnScreen("screen.home")
             .assertBelowStatusBar("screen.home")
             .assertAboveTabBar("screen.home")
@@ -30,10 +30,10 @@ final class ScreenAppearanceUITests: XCTestCase {
     }
 
     @MainActor
-    func testFoodTabAppearance() {
+    func testFoodTabAppearance() throws {
         let app = UXTestApp.launch()
         app.buttons["Food"].firstMatch.tap()
-        UXScreenProbe(app, "Food tab", in: self)
+        try UXScreenProbe(app, "Food tab", in: self)
             .assertOnScreen("screen.food")
             .assertBelowStatusBar("screen.food")
             .assertNotEmpty(containing: "Greek yogurt")
@@ -41,10 +41,10 @@ final class ScreenAppearanceUITests: XCTestCase {
     }
 
     @MainActor
-    func testMoveTabAppearance() {
+    func testMoveTabAppearance() throws {
         let app = UXTestApp.launch()
         app.buttons["Move"].firstMatch.tap()
-        UXScreenProbe(app, "Move tab", in: self)
+        try UXScreenProbe(app, "Move tab", in: self)
             .assertOnScreen("screen.move")
             .assertBelowStatusBar("screen.move")
             .assertNotEmpty(containing: "Upper body")
@@ -52,10 +52,10 @@ final class ScreenAppearanceUITests: XCTestCase {
     }
 
     @MainActor
-    func testFriendsTabAppearance() {
+    func testFriendsTabAppearance() throws {
         let app = UXTestApp.launch()
         app.buttons["Friends"].firstMatch.tap()
-        UXScreenProbe(app, "Friends tab", in: self)
+        try UXScreenProbe(app, "Friends tab", in: self)
             .assertOnScreen("screen.friends")
             .assertBelowStatusBar("screen.friends")
             .capture()
@@ -64,10 +64,10 @@ final class ScreenAppearanceUITests: XCTestCase {
     // MARK: - Private hub (lock gate bypassed for appearance review)
 
     @MainActor
-    func testPrivateHubJournalAppearance() {
+    func testPrivateHubJournalAppearance() throws {
         let app = UXTestApp.launch(bypassPrivateLock: true)
         app.buttons["Private"].firstMatch.tap()
-        UXScreenProbe(app, "Private · Journal", in: self)
+        try UXScreenProbe(app, "Private · Journal", in: self)
             .assertOnScreen("screen.journal")
             .assertBelowStatusBar("screen.journal")
             .capture()
@@ -79,19 +79,19 @@ final class ScreenAppearanceUITests: XCTestCase {
     // no page to review. The hide flags are consumed by the demo seed on every launch.
 
     @MainActor
-    func testPrivateHubCycleAppearance() {
+    func testPrivateHubCycleAppearance() throws {
         let app = UXTestApp.launch(bypassPrivateLock: true)
         app.buttons["Private"].firstMatch.tap()
         let cycle = app.buttons["Cycle"].firstMatch
         XCTAssertTrue(cycle.waitForExistence(timeout: 6))
         cycle.tap()
-        UXScreenProbe(app, "Private · Cycle (both halves)", in: self)
+        try UXScreenProbe(app, "Private · Cycle (both halves)", in: self)
             .assertOnScreen("screen.cycle")
             .capture()
     }
 
     @MainActor
-    func testPrivateHubCyclePeriodOnlyAppearance() {
+    func testPrivateHubCyclePeriodOnlyAppearance() throws {
         let app = UXTestApp.launch(
             bypassPrivateLock: true,
             extraEnvironment: ["FERNLET_UI_TEST_HIDE_INTIMACY": "1"]
@@ -100,13 +100,13 @@ final class ScreenAppearanceUITests: XCTestCase {
         let cycle = app.buttons["Cycle"].firstMatch
         XCTAssertTrue(cycle.waitForExistence(timeout: 6))
         cycle.tap()
-        UXScreenProbe(app, "Private · Cycle (period only)", in: self)
+        try UXScreenProbe(app, "Private · Cycle (period only)", in: self)
             .assertOnScreen("screen.cycle")
             .capture()
     }
 
     @MainActor
-    func testPrivateHubCycleIntimacyOnlyAppearance() {
+    func testPrivateHubCycleIntimacyOnlyAppearance() throws {
         let app = UXTestApp.launch(
             bypassPrivateLock: true,
             extraEnvironment: ["FERNLET_UI_TEST_HIDE_PERIOD": "1"]
@@ -115,7 +115,7 @@ final class ScreenAppearanceUITests: XCTestCase {
         let cycle = app.buttons["Cycle"].firstMatch
         XCTAssertTrue(cycle.waitForExistence(timeout: 6))
         cycle.tap()
-        UXScreenProbe(app, "Private · Cycle (intimacy only)", in: self)
+        try UXScreenProbe(app, "Private · Cycle (intimacy only)", in: self)
             .assertOnScreen("screen.cycle")
             .capture()
     }
@@ -123,46 +123,46 @@ final class ScreenAppearanceUITests: XCTestCase {
     // MARK: - Logging / editor sheets (opened directly via the launch hook)
 
     @MainActor
-    func testMealSheetAppearance()              { probeSheet("meal", "Sheet · Meal") }
+    func testMealSheetAppearance() throws              { try probeSheet("meal", "Sheet · Meal") }
     @MainActor
-    func testWaterSheetAppearance()             { probeSheet("water", "Sheet · Water") }
+    func testWaterSheetAppearance() throws             { try probeSheet("water", "Sheet · Water") }
     @MainActor
-    func testSleepSheetAppearance()             { probeSheet("sleep", "Sheet · Sleep") }
+    func testSleepSheetAppearance() throws             { try probeSheet("sleep", "Sheet · Sleep") }
     @MainActor
-    func testJournalSheetAppearance()           { probeSheet("journal", "Sheet · Journal") }
+    func testJournalSheetAppearance() throws           { try probeSheet("journal", "Sheet · Journal") }
     @MainActor
-    func testWorkoutSheetAppearance()           { probeSheet("workout", "Sheet · Workout") }
+    func testWorkoutSheetAppearance() throws           { try probeSheet("workout", "Sheet · Workout") }
     @MainActor
-    func testWorkoutSuggestionSheetAppearance() { probeSheet("workoutSuggestion", "Sheet · Workout suggestion") }
+    func testWorkoutSuggestionSheetAppearance() throws { try probeSheet("workoutSuggestion", "Sheet · Workout suggestion") }
     @MainActor
-    func testGoalsSheetAppearance()             { probeSheet("goals", "Sheet · Goals") }
+    func testGoalsSheetAppearance() throws             { try probeSheet("goals", "Sheet · Goals") }
     @MainActor
-    func testHygieneSheetAppearance()           { probeSheet("hygiene", "Sheet · Hygiene") }
+    func testHygieneSheetAppearance() throws           { try probeSheet("hygiene", "Sheet · Hygiene") }
     @MainActor
-    func testTrendsSheetAppearance()            { probeSheet("trends", "Sheet · Trends") }
+    func testTrendsSheetAppearance() throws            { try probeSheet("trends", "Sheet · Trends") }
     @MainActor
-    func testMilestonesSheetAppearance()        { probeSheet("milestones", "Sheet · Milestones") }
+    func testMilestonesSheetAppearance() throws        { try probeSheet("milestones", "Sheet · Milestones") }
     @MainActor
-    func testFirstAidSheetAppearance()          { probeSheet("firstAid", "Sheet · First aid") }
+    func testFirstAidSheetAppearance() throws          { try probeSheet("firstAid", "Sheet · First aid") }
     @MainActor
-    func testRecipeSheetAppearance()            { probeSheet("recipe", "Sheet · Recipe") }
+    func testRecipeSheetAppearance() throws            { try probeSheet("recipe", "Sheet · Recipe") }
     @MainActor
-    func testRecipeBookSheetAppearance()        { probeSheet("recipeBook", "Sheet · Recipe book") }
+    func testRecipeBookSheetAppearance() throws        { try probeSheet("recipeBook", "Sheet · Recipe book") }
     @MainActor
-    func testLogPeriodSheetAppearance()         { probeSheet("logPeriod", "Sheet · Log period") }
+    func testLogPeriodSheetAppearance() throws         { try probeSheet("logPeriod", "Sheet · Log period") }
     @MainActor
-    func testLogIntimacySheetAppearance()       { probeSheet("logIntimacy", "Sheet · Log intimacy") }
+    func testLogIntimacySheetAppearance() throws       { try probeSheet("logIntimacy", "Sheet · Log intimacy") }
     @MainActor
-    func testEditRecipeSheetAppearance()        { probeSheet("editRecipe", "Sheet · Edit recipe") }
+    func testEditRecipeSheetAppearance() throws        { try probeSheet("editRecipe", "Sheet · Edit recipe") }
     @MainActor
-    func testEditSavedRecipeSheetAppearance()   { probeSheet("editSavedRecipe", "Sheet · Saved recipe notes") }
+    func testEditSavedRecipeSheetAppearance() throws   { try probeSheet("editSavedRecipe", "Sheet · Saved recipe notes") }
 
     // MARK: - Helpers
 
     @MainActor
-    private func probeSheet(_ id: String, _ name: String) {
+    private func probeSheet(_ id: String, _ name: String) throws {
         let app = UXTestApp.launch(openSheet: id)
-        UXScreenProbe(app, name, in: self)
+        try UXScreenProbe(app, name, in: self)
             .assertOnScreen("sheet.\(id)")
             .capture()
     }

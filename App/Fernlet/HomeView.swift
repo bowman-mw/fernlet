@@ -258,12 +258,21 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("home.milestones")
-        // Fold the summary into the LABEL, not the hint: `children: .ignore` drops the visible summary
-        // and coin pill from the tree, and a hint is silenced by the system "Speak Hints" setting — so a
-        // hint-only summary would leave a VoiceOver user hearing just "Milestones, button".
+        // Fold the summary into the LABEL, not the hint: an explicit label REPLACES everything the
+        // Button gathered from its own content (the visible summary and coin pill included), and a
+        // hint is silenced by the system "Speak Hints" setting — so a hint-only summary would leave
+        // a VoiceOver user hearing just "Milestones, button".
+        //
+        // Deliberately NO `.accessibilityElement(children: .ignore)`: on a `Button` that mints a
+        // SECOND, traitless element beside the real one, so the card stops announcing as a button
+        // and picks up a phantom swipe stop. The Button's own element already collapses its
+        // children, which is all `.ignore` was ever wanted for here.
         .accessibilityLabel("Milestones. \(summary)")
+        // T2-12: the label above is a whole sentence, and a Voice Control user has to *say* a
+        // control's name to tap it. Shortest first — that is the order Voice Control shows them in
+        // its numbered overlay — and additive: the spoken label is unchanged.
+        .accessibilityInputLabels([Text("Milestones"), Text("Keepsakes")])
     }
 
     private func keepsakeTile(_ keepsake: Keepsake) -> some View {
@@ -337,7 +346,8 @@ struct HomeView: View {
     }
 
     private var homeHeader: some View {
-        HStack(alignment: .top) {
+        let today = FernletDate.niceDate()
+        return HStack(alignment: .top) {
             // Both halves are `Text(verbatim:)` on purpose: "Fernlet" is the product's proper
             // noun and must never be translated, and the subtitle is an already-localized
             // formatted date, which must not be run through a catalog lookup that can't match it.
@@ -351,10 +361,16 @@ struct HomeView: View {
                 // key, but it returns a `View`, and `ScreenHeader.subtitle` is typed `Text` so the
                 // two halves of the header can be decided independently (T2-1).
                 subtitle: Text(verbatim: dynamicTypeSize.isAccessibilitySize
-                               ? "" : FernletDate.niceDate().uppercased(with: .current)),
+                               ? "" : today.uppercased(with: .current)),
                 subtitleFirst: true,
                 identifier: "screen.home"
             )
+            // T2-2: emptying the eyebrow at accessibility sizes takes today's date out of the
+            // accessibility tree along with the pixels. Same convention as ``companionThought``, and
+            // unconditional because `ScreenHeader` is one combined element either way: at ordinary
+            // sizes this is the unabbreviated form of a string the label already carries, and on the
+            // rotor a repeat costs nothing, while a branch here would fork the whole header.
+            .accessibilityCustomContent("Date", Text(verbatim: today))
             Spacer()
             // The shared header control every other tab uses (58pt cream, stroked). The hand-rolled
             // 44pt 6%-bark circle this replaces was visibly smaller and lighter than its siblings.
@@ -363,6 +379,21 @@ struct HomeView: View {
             }
             .accessibilityIdentifier("home.settings")
         }
+    }
+
+    /// The companion's current line: the thought a tap produced, otherwise the ambient one.
+    ///
+    /// **The custom-content convention (T2-2).** A view that is never *drawn* never enters the
+    /// accessibility tree, so a layout that removes real content at accessibility text sizes removes
+    /// it from speech too — for a user running Larger Text *and* VoiceOver, which is a common
+    /// pairing. The visual decision stands; the content comes back through
+    /// `.accessibilityCustomContent(_:_:)` on the nearest element that owns it — here the companion,
+    /// whose line this is. Custom content rather than a longer `.accessibilityLabel`: it is there on
+    /// demand and never lengthens the sentence spoken on every landing. The value is runtime text, so
+    /// it is passed as `Text(verbatim:)`; a custom-content *label* is authored copy and stays a
+    /// `LocalizedStringKey` literal.
+    private var companionThought: String {
+        companionTapThought ?? ambientThought
     }
 
     private var photowallStrip: some View {
@@ -469,6 +500,12 @@ struct HomeView: View {
             // `rawValue`, which is a frozen cross-process token.
             .accessibilityLabel("Fernlet companion")
             .accessibilityValue(store.companionState.displayName)
+            // T2-2: the companion's line is only ever *drawn* inside the photowall strip, which the
+            // body drops entirely at accessibility text sizes — and which fades to `opacity(0)` after
+            // six seconds even at ordinary ones. Both leave it out of the accessibility tree, so the
+            // one piece of the companion that speaks in its own voice was unreachable to a screen
+            // reader for most of a session. See ``companionThought`` for the convention.
+            .accessibilityCustomContent("Thought", Text(verbatim: companionThought))
             // It is a control, and it was never announced as one; the explicit default action makes
             // the VoiceOver activate gesture pet the companion rather than depend on how SwiftUI
             // maps `onTapGesture`.
@@ -607,8 +644,10 @@ struct HomeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("home.firstAid")
+            // No `children: .ignore` — it would mint a second, traitless element beside the real
+            // Button and the header would stop announcing as one. The explicit label already
+            // replaces the title/subtitle/chevron the Button collapsed on its own.
             .accessibilityLabel("First aid")
             .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
 
@@ -1026,6 +1065,10 @@ struct HomeView: View {
         .foregroundStyle(Color.slate)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
+        // T2-2: dropping the prefix is a layout decision, but spoken alone the goal name is the very
+        // status word this line was rewritten to stop sounding like ("Wellness"). The label keeps the
+        // qualifier at every text size; the drawn line is untouched.
+        .accessibilityLabel("Goal · \(goal)")
     }
 
     /// The per-day "I'm unwell today" row under the health bar (SETT-15): a day flag belongs on
@@ -1073,8 +1116,12 @@ struct HomeView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
+        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
+        // real one, and the label and traits below then describe that phantom rather than the
+        // control — so the row read as selected/unselected text with no "button" anywhere in it.
         .accessibilityLabel("I'm unwell today. Scoring goes gentle until tomorrow.")
+        // T2-12: two sentences is not something anyone should have to say out loud to tap a row.
+        .accessibilityInputLabels([Text("Unwell"), Text("I'm unwell today")])
         .accessibilityAddTraits(isUnwell ? [.isSelected] : [])
         .accessibilityIdentifier("home.unwellToday")
     }
@@ -2570,7 +2617,9 @@ struct QuickLogButton: View {
             .background(active ? Color.moss.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
+        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
+        // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
+        // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
         .accessibilityLabel(accessibilityLabelText)
     }
 
@@ -2748,51 +2797,121 @@ struct MacroRing: View {
 /// The hygiene / personal-care card: completion count, a segment bar, and an inline toggle grid
 /// of today's care tasks.
 ///
-/// Task toggles mutate the store directly; tapping the card body opens the full hygiene sheet.
+/// Task toggles mutate the store directly; the header — title, count and segment bar — is the
+/// card's own button and opens the full personal-care sheet.
+///
+/// **Why the grid is the open-button's sibling and not its child (A5·Q2).** The whole card used to
+/// be one `Button` with the eight toggles nested inside it. An AX walk of that build (see
+/// `HomeCardsRedesignUITests.testPersonalCareTogglesAreIndividuallyReachableAndOperable`) showed the
+/// eight buttons surviving as their own elements, so they were reachable — but they sat inside
+/// another button's element and hit region, which is the shape SwiftUI is free to flatten into one
+/// element with promoted custom actions, and a `LazyVGrid` has no children to promote at the moment
+/// that tree is built. Making the open control its own labelled button removes the question: eight
+/// real, individually focusable, individually operable elements, none of them nested in a control
+/// that wants the same tap. The same walk showed the toggles carrying no selected state at all —
+/// "Floss, button" whether or not it was done — which is what ``taskToggle(_:)`` now fixes.
 struct HygieneCard: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
 
+    /// The care-tile column floor, scaled against the tile's own type role (`.label` resolves
+    /// `relativeTo: .subheadline`) so a task name gets a wider tile at accessibility text sizes
+    /// instead of an ellipsis (T2-11). `@ScaledMetric` returns the base value at the default size,
+    /// so nothing moves for a user who has not changed their text size.
+    @ScaledMetric(relativeTo: .subheadline) private var taskTileMinimum: CGFloat = 120
+
+    /// Clamped for the same reason ``MacroRing`` clamps its ring: past roughly this width the
+    /// adaptive grid is already single-column on every screen the app ships to, so letting the
+    /// minimum keep growing only pushes the layout around without changing what is drawn.
+    private var clampedTaskTileMinimum: CGFloat { min(taskTileMinimum, 240) }
+
     var body: some View {
-        Button { activeSheet = .hygiene } label: {
-            FernletCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    let progress = store.personalCareProgress()
-                    HStack {
-                        // "Personal care", matching the sheet this card opens. The same feature used
-                        // to be called Care (tile), Personal care (sheet) and Hygiene (here).
-                        SectionLabel("Personal care")
-                        Spacer()
-                        Text("\(progress.completed)/\(progress.total)")
-                            .font(.fernlet(.stat))
-                            .foregroundStyle(progress.completed == progress.total ? Color.moss : Color.slate)
-                    }
-                    HStack(spacing: 3) {
-                        ForEach(store.personalCareTasks) { task in
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(store.isPersonalCareTaskCompleted(task) ? Color.moss : Color.bark.opacity(0.1))
-                                .frame(height: 6)
-                        }
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
-                        ForEach(store.personalCareTasks) { task in
-                            Button { store.togglePersonalCareTask(task) } label: {
-                                Label(task.displayLabel, systemImage: task.systemImage)
-                                    .font(.fernlet(.label))
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .foregroundStyle(store.isPersonalCareTaskCompleted(task) ? Color.moss : Color.slate)
-                                    .background(store.isPersonalCareTaskCompleted(task) ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                openSheetButton
+                taskGrid
             }
         }
+        // A container, not an element: the header button and the eight toggles stay individually
+        // focusable inside it, and Switch Control / VoiceOver get one group to move by.
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Title, count and segment bar — the card's own control, which opens the personal-care sheet.
+    private var openSheetButton: some View {
+        let progress = store.personalCareProgress()
+        return Button { activeSheet = .hygiene } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    // "Personal care", matching the sheet this card opens. The same feature used
+                    // to be called Care (tile), Personal care (sheet) and Hygiene (here).
+                    SectionLabel("Personal care")
+                    Spacer()
+                    Text("\(progress.completed)/\(progress.total)")
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(progress.completed == progress.total ? Color.moss : Color.slate)
+                }
+                segmentBar
+            }
+            .contentShape(Rectangle())
+        }
         .buttonStyle(.plain)
+        // Spoken rather than combined: the derived label would have been "Personal care, 3/8",
+        // and a screen reader reads "3/8" as "three slash eight".
+        //
+        // `.accessibilityLabel` alone, deliberately — NOT `.accessibilityElement(children: .ignore)`
+        // first. A `Button` is already exactly one element, so the label has something to replace;
+        // adding `children: .ignore` on top mints a *second*, traitless element beside the button,
+        // which the AX walk caught: the card exposed both "Personal care. 2 of 8 done." (Other) and
+        // "Personal care, 2/8" (Button) for one control.
+        .accessibilityLabel("Personal care. \(progress.completed) of \(progress.total) done.")
+        // T2-12: the label is a sentence, so Voice Control gets short things to say instead.
+        .accessibilityInputLabels([Text("Personal care"), Text("Care tasks")])
+        .accessibilityIdentifier("home.hygiene")
+    }
+
+    /// One segment per task, filled when it is done. Decorative: the count beside the title and the
+    /// per-task selected state below already carry this, and eight unlabelled slivers would only add
+    /// eight stops to a screen reader's path through the card.
+    private var segmentBar: some View {
+        HStack(spacing: 3) {
+            ForEach(store.personalCareTasks) { task in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(store.isPersonalCareTaskCompleted(task) ? Color.moss : Color.bark.opacity(0.1))
+                    .frame(height: 6)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var taskGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: clampedTaskTileMinimum), spacing: 6)], spacing: 6) {
+            ForEach(store.personalCareTasks) { task in
+                taskToggle(task)
+            }
+        }
+    }
+
+    /// One care task, as its own control. The completed state rides on `.isSelected` — the house
+    /// convention `ChipButtonStyle` already uses — so the toggle announces "selected" when the task
+    /// is done rather than reading identically in both states.
+    private func taskToggle(_ task: PersonalCareTask) -> some View {
+        let isDone = store.isPersonalCareTaskCompleted(task)
+        return Button { store.togglePersonalCareTask(task) } label: {
+            Label(task.displayLabel, systemImage: task.systemImage)
+                .font(.fernlet(.label))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundStyle(isDone ? Color.moss : Color.slate)
+                .background(isDone ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isDone ? [.isSelected] : [])
+        // `task.id` is the frozen persisted token (a `HygieneItem.rawValue` for a built-in), which is
+        // exactly what an accessibility identifier is allowed to be: English, stable, never display.
+        .accessibilityIdentifier("home.hygiene.task.\(task.id)")
     }
 }
 

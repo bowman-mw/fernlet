@@ -1,0 +1,68 @@
+[
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
+  "line_contains": "FernletUICopy.coinBalance(balance)",
+  "reason": "The coin pill's fragments are a leaf glyph and a bare formatted numeral — `.combine` would speak \"42\" with no noun anywhere in the utterance, because the word \"coins\" is never drawn on screen. `FernletUICopy.coinBalance(_:)` supplies it, resolved with `bundle: .module` so the package's own catalog is consulted. The label therefore adds the unit the visual never had, which is the strictly-more test."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/FoodCaptureRouter.swift",
+  "line_contains": "\"Analyzing your photo\"",
+  "reason": "The one entry here that is a DELIBERATE reduction rather than an addition, and it is allowlisted on a different invariant. This is the full-screen analysis veil: it carries `.isModal` and an indeterminate `ProgressView`, and VoiceOver re-reads a modal's element every time focus returns to it. Its fragments are a header plus 'Reading what you caught…' — two sentences that say the same thing twice and re-speak on every focus event during a multi-second wait. One short sentence naming the blocking operation is the correct utterance for a modal veil. The `.accessibilityIdentifier(\"captureAnalyzing\")` on the next line is what the UI suites query, so shortening the label broke nothing."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "\"Saved recipe \\(recipe.name)\"",
+  "reason": "Adds the row's KIND, which the layout encodes only by position in a list. The fragments are the recipe name, a macro triple ('P 30g', 'C 40g', 'F 12g') and a servings count — nothing in them says the row is a saved recipe, and the identical fragment shape is used by the saved-product row two thousand lines away. NOTE: FoodView.swift is fenced by a peer workstream this round, so this entry pins today's shape rather than a line this batch wrote; re-verify it at reconciliation."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "\"Step \\(number). \\(step.text)\"",
+  "reason": "Adds the step's ORDINAL POSITION, which the drawn cell shows as a separate numeral chip that `.combine` would speak before the instruction as a naked number ('3. Fold the batter' vs '3 Fold the batter'). Position-bearing labels are the pattern T0-6 established for Cooking Mode; this is the recipe-detail sibling. The AX-size-dropped timer capsule on the line above is re-exposed separately (T2-2). NOTE: FoodView.swift is fenced this round — re-verify at reconciliation."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "\"Saved product \\(foodItem.name)\"",
+  "reason": "Same invariant as the saved-recipe row: adds the row KIND to fragments that are a name plus a macro triple and are otherwise indistinguishable from a saved recipe. NOTE: FoodView.swift is fenced this round — re-verify at reconciliation."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": ".accessibilityLabel(\"\\(Text(slot)): \\(value)\")",
+  "reason": "Adds the CAPTION-TO-VALUE relation. The fragments are a slot caption and a value drawn one above the other; `.combine` speaks them as two unlinked items in one breath, and the widget slot rows stack several of them, so a user hears four captions and four values with no way to pair them. The colon is what carries the pairing in speech. `Text(slot)` rather than `slot` is deliberate and commented at the site: a `LocalizedStringKey` cannot be interpolated into another `LocalizedStringKey`, but a `Text` carries its own lookup."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": ".accessibilityLabel(\"\\(label) \\(current) of \\(goal) grams\")",
+  "reason": "Adds the UNIT and the of-relation, neither of which is ever drawn. The macro rows render a name, a filled bar and two numerals; the word 'grams' appears nowhere on screen and 'of' is expressed purely by the bar's geometry, so `.combine` yields 'Protein 40 120'. Covers both macro rows (the compact and the AX-size variant of the same helper) — they are the same code shape, deliberately, so one entry covering two hits is the honest pin rather than two copies of one reason."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/SessionChatPanel.swift",
+  "line_contains": ".accessibilityLabel(",
+  "reason": "Adds the AUTHOR. `.combine` gathers a chat bubble's fragments, which are a sender-name caption plus the message text for an INCOMING message and the message text ALONE for an outgoing one — the name caption is drawn only under `if !message.isOutgoing` (:103). So an outgoing bubble combines to the bare sentence with nothing saying who sent it; authorship is carried purely by right-alignment and the terracotta tint, and neither of those is speech. The label restores it ('You: …') and supplies the speaker-to-utterance colon on the incoming branch. This site was invisible to the wall until the 2026-08-23 A1 hardening: `.accessibilityIdentifier(\"session.chat.message\")` sits BETWEEN `.combine` and the label, and the old rule inspected only the immediately-next code line — this is the review's planted evasion #3 (one interleaved modifier) occurring naturally in shipping code, and surfacing it is the hardening working. NOTE: SessionChatPanel.swift is NOT part of this round's diff. The entry pins a PRE-EXISTING shape the tightened rule newly reaches, not a line this batch wrote. The reported text is the bare `.accessibilityLabel(` because the argument wraps to the following lines; this file contains exactly one `.combine` chain, so the entry cannot drift onto a second site."
+ },
+ {
+  "rule": "A6-INVERT-COLORS",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "Image(uiImage: image)",
+  "reason": "NOT SAFE — a temporary, defect-bearing exemption, recorded rather than hidden. These are two genuine unfixed T2-10 defects: the meal-photo preview in `mealPhotoPreview(_:)` (~:3103) and the 54pt meal thumbnail (~:4665) are both user PHOTOGRAPHS rendered from `UIImage`, and with Smart Invert on iOS inverts them into colour negatives — a plate of food becomes an unrecognisable blue-green smear for exactly the low-vision users the setting exists for. Every sibling bitmap in the tree (MealPhotoPolaroid, ProgressPhotoTimeline, BarcodeScanView, VerifyQRViews, FriendPhotoReviewSheet, ConnectView, NutritionLabelCameraSheet, DuressRecoveryCeremonyViews, FernletUIComponents) already carries `.accessibilityIgnoresInvertColors()`. The ONLY reason these are exempt is that App/Fernlet/FoodView.swift is fenced by a parallel food workstream in the 2026-08-22/23 round and this batch is forbidden to edit it. The fix is one modifier per site. DELETE THIS ENTRY at reconciliation — if it is still here after the food branch merges, the wall is lying about the tree."
+ },
+ {
+  "rule": "A6-INVERT-COLORS",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "Image(uiImage: photo)",
+  "reason": "NOT SAFE — the third of the same temporary, defect-bearing exemption; see the `Image(uiImage: image)` entry above. This is the recipe-detail hero photo in `photoSection` (~:5093), a 210pt user photograph that Smart Invert renders as a colour negative (T2-10). It is a real, open defect, exempted ONLY because App/Fernlet/FoodView.swift is fenced by a parallel food workstream this round and this batch may not edit it; the fix is a single `.accessibilityIgnoresInvertColors()` in the modifier chain. Split from the entry above solely because `line_contains` matches on the raw line text and this site binds `photo` rather than `image` — one entry cannot cover both spellings. DELETE THIS ENTRY at reconciliation."
+ },
+ {
+  "rule": "A1-COMBINE-LABEL",
+  "path": "App/Fernlet/MilestonesView.swift",
+  "line_contains": ".accessibilityLabel(row.headline)",
+  "reason": "Adds the SENTENCE. The tile's fragments are a bare count numeral and a shelf label ('12', 'journal shelf'); `row.headline` is the warm sentence the milestone card is actually about ('You've written 12 journal moments.'). SEPARATE OPEN DEFECT, recorded here rather than hidden: `MilestoneRow.headline` is a plain `String` built from unlocalized English literals in `MilestonesView.headline(kind:count:)`, and it is ALSO rendered visually as `Text(row.headline)` at :199 — so this is display copy frozen in English, not merely an accessibility label. The A1 invariant above holds regardless of that; the localization fix (a plural-aware catalog fork of ~10 switch arms) is named as a residual in the batch report and does not belong in this file's entry."
+ }
+]

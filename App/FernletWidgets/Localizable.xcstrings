@@ -46,6 +46,9 @@
     "Cooking" : {
 
     },
+    "Couldn't update your workout just now — please try again in a moment." : {
+
+    },
     "Done set" : {
 
     },
@@ -108,6 +111,12 @@
     "No mood yet today" : {
 
     },
+    "No workout is running, so there's no rest to skip." : {
+
+    },
+    "No workout is running, so there's no set to finish." : {
+
+    },
     "Open Fernlet" : {
 
     },
@@ -124,6 +133,12 @@
 
     },
     "Rest" : {
+
+    },
+    "Rest skipped — your workout is finished." : {
+
+    },
+    "Rest skipped. Your next set is up." : {
 
     },
     "Restarts the timer on the current cooking step." : {
@@ -149,6 +164,12 @@
         }
       }
     },
+    "Set done. Resting now." : {
+
+    },
+    "Set done. Your next exercise is up." : {
+
+    },
     "Skip rest" : {
 
     },
@@ -165,10 +186,19 @@
     "Take it at your own pace" : {
 
     },
+    "That was the last set — your workout is finished." : {
+
+    },
     "Water" : {
 
     },
     "Workout" : {
+
+    },
+    "You're not resting right now, so there's nothing to skip." : {
+
+    },
+    "You're resting right now, so there's no set to finish yet." : {
 
     },
     "Your companion's mood and today's water, at a glance." : {

@@ -806,6 +806,12 @@ struct PrivacyDataSettingsView: View {
                         .stroke(Color.moss, lineWidth: 1.5)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 12))
+                // T2-2: ``ownPhotoLockButtonLabel`` shortens to "Lock photos" at accessibility
+                // sizes, which is a legitimate LAYOUT decision but leaves the button's spoken
+                // NAME ambiguous — locked to what? VoiceOver has no width to run out of, so the
+                // name stays the full one at every size while the drawn label keeps shortening.
+                // Identical to the derived label at default sizes, so nothing changes there.
+                .accessibilityLabel("Lock photos to this device")
                 .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
 
                 Text(ownPhotoDeviceBindingExplanation)

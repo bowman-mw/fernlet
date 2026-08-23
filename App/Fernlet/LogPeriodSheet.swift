@@ -5,6 +5,30 @@ import PrivateHealthStore
 import HealthKitGateway
 import FernletUI
 
+/// App-target region derivation for ``PeriodTemperatureUnit`` — the ONE rule both the entry picker
+/// on this sheet and the read-back row on ``CycleDayDetailView`` obey.
+///
+/// The two sides had each written their own, and the rules disagreed. The picker asked
+/// `measurementSystem == .metric`; the detail row asked ``BodyMeasurementEntry/usesImperial``,
+/// which is `== .us`. `Locale.MeasurementSystem` has THREE values, so `.uk` fell in the gap: a
+/// British user was offered a Fahrenheit picker and read the same reading back in Celsius, on
+/// numbers whose entire value is small day-to-day movement. Deriving it here once removes the gap
+/// by construction — a reverter has to reintroduce two expressions to reintroduce the bug.
+///
+/// `.us` (not "not metric") is the test, because this unit is a TEMPERATURE unit: the UK is metric
+/// for temperature and imperial only for road distances and pints, so `.uk` belongs on the Celsius
+/// side. That also lines this up with `BodyMeasurementEntry.usesImperial`, so a user's weight,
+/// height, and basal temperature now agree about which system they are in.
+extension PeriodTemperatureUnit {
+    /// The unit this device's region reads body temperature in.
+    ///
+    /// Resolved at each use rather than cached, so changing Region in iOS Settings takes effect
+    /// without a relaunch.
+    static var regionDefault: PeriodTemperatureUnit {
+        Locale.current.measurementSystem == .us ? .fahrenheit : .celsius
+    }
+}
+
 /// The log/edit sheet for a cycle day: flow level, cycle-start and intermenstrual-bleeding flags,
 /// symptoms with intensity steppers, cervical mucus and ovulation-test observations, basal body
 /// temperature, and a private note.
@@ -127,13 +151,18 @@ struct LogPeriodSheet: View {
     init(periodStore: PeriodTrackerStore, targetDate: Date? = nil, editingEntry: CycleDayEntry? = nil) {
         self.periodStore = periodStore
         self.editingEntry = editingEntry
-        let defaultUnit: PeriodTemperatureUnit = Locale.current.measurementSystem == .metric ? .celsius : .fahrenheit
+        // ONE derivation for the entry unit and the read-back unit — see the extension at the top
+        // of this file. It seeds an EDIT too, not just a fresh log: the sealed store normalizes
+        // every stored reading to Fahrenheit, so re-opening a metric user's day with "97.70" and
+        // an F picker would contradict the "°C" the day detail draws for that very sample.
+        let entryUnit = PeriodTemperatureUnit.regionDefault
         // Seeded ONCE and reused for both the @State values and the dirty-check baseline — two
         // separate `Date()` calls would make a freshly opened sheet claim to be dirty.
         let seeded = SheetValues(
             eventDate: editingEntry?.date ?? targetDate ?? Date(),
             flowLevel: editingEntry?.flowLevel,
-            temperatureText: editingEntry?.basalBodyTemperatureFahrenheit.map { String(format: "%.2f", $0) } ?? "",
+            temperatureText: editingEntry?.basalBodyTemperatureFahrenheit
+                .map { LogPeriodSheet.temperatureText(fahrenheit: $0, in: entryUnit) } ?? "",
             mucusQuality: editingEntry?.cervicalMucusQuality,
             ovulationResult: editingEntry?.ovulationTestResult,
             hasIntermenstrualBleeding: editingEntry?.hasIntermenstrualBleeding ?? false,
@@ -151,7 +180,7 @@ struct LogPeriodSheet: View {
         _mucusQuality = State(initialValue: seeded.mucusQuality)
         _ovulationResult = State(initialValue: seeded.ovulationResult)
         _temperatureText = State(initialValue: seeded.temperatureText)
-        _temperatureUnit = State(initialValue: editingEntry?.basalBodyTemperatureFahrenheit == nil ? defaultUnit : .fahrenheit)
+        _temperatureUnit = State(initialValue: entryUnit)
         _note = State(initialValue: seeded.note)
         _symptoms = State(initialValue: seeded.symptoms)
         _customScales = State(initialValue: seeded.customScales)
@@ -313,17 +342,22 @@ struct LogPeriodSheet: View {
     private var observationsField: some View {
         SheetField("Observations") {
             VStack(spacing: 0) {
-                observationRow("Cervical mucus", value: mucusQuality?.title ?? "None") {
-                    Button("None") { mucusQuality = nil }
+                // `displayName` (the app-target forks in CycleTrackerView.swift), not `title`,
+                // which is `rawValue.capitalized` — a storage token wearing paint. Same reason the
+                // flow chips above were forked: the calendar day detail that READS these values
+                // renders the localized fork, so leaving the SETTER on tokens showed a French user
+                // "Egg White" here and the translation there.
+                observationRow("Cervical mucus", value: mucusQuality?.displayName ?? noneObservationName) {
+                    Button(noneObservationName) { mucusQuality = nil }
                     ForEach(CervicalMucusQuality.allCases) { quality in
-                        Button(quality.title) { mucusQuality = quality }
+                        Button(quality.displayName) { mucusQuality = quality }
                     }
                 }
                 Divider()
-                observationRow("Ovulation test", value: ovulationResult?.title ?? "None") {
-                    Button("None") { ovulationResult = nil }
+                observationRow("Ovulation test", value: ovulationResult?.displayName ?? noneObservationName) {
+                    Button(noneObservationName) { ovulationResult = nil }
                     ForEach(OvulationTestResult.allCases) { result in
-                        Button(result.title) { ovulationResult = result }
+                        Button(result.displayName) { ovulationResult = result }
                     }
                 }
             }
@@ -335,9 +369,27 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// The "nothing observed" word for both observation rows.
+    ///
+    /// Resolved here rather than left as the bare `"None"` literal the value chip used to carry: a
+    /// `String` reaches `Text` through the non-localizing `StringProtocol` initializer, so the chip
+    /// read English forever while the menu item beside it (a `LocalizedStringKey` literal) did not.
+    /// One resolved string now feeds both, so they cannot diverge either.
+    private var noneObservationName: String {
+        String(localized: "cycle.observation.none", defaultValue: "None",
+               comment: "Value shown for a cervical-mucus or ovulation-test row when nothing was observed that day.")
+    }
+
     /// One "label on the left, value chip on the right" observation row.
+    ///
+    /// `title` is a `LocalizedStringKey`, not a `String`: a `String` parameter reaches `Text` through
+    /// the verbatim overload, which silently opts both call sites out of localization with a clean
+    /// build — the exact failure mode the localization wall exists to catch, and the reason this
+    /// round's other display forks were made. `value` stays a `String` deliberately: it arrives
+    /// already resolved from `CycleDayEntry`'s display forks (`mucusQuality?.displayName`) or from
+    /// ``noneObservationName``, so it must be rendered verbatim rather than looked up a second time.
     private func observationRow<Options: View>(
-        _ title: String,
+        _ title: LocalizedStringKey,
         value: String,
         @ViewBuilder options: () -> Options
     ) -> some View {
@@ -362,7 +414,11 @@ struct LogPeriodSheet: View {
                 .background(Color.moss.opacity(0.10), in: Capsule())
                 .contentShape(Capsule())
             }
-            .accessibilityLabel("\(title), \(value)")
+            // `Text(title)` rather than `title`: a `LocalizedStringKey` cannot be interpolated into
+            // another `LocalizedStringKey` (the compiler rejects it outright — the interpolation
+            // would fall back to a debug description), but a `Text` carries its own lookup. Same
+            // idiom, and the same reason, as the widget slot rows in `HomeView`.
+            .accessibilityLabel("\(Text(title)), \(value)")
         }
         .padding(.vertical, 8)
     }
@@ -436,6 +492,16 @@ struct LogPeriodSheet: View {
 
     private var hasNarrative: Bool {
         !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty
+    }
+
+    /// Seeds the temperature field from an existing day's stored reading, in `unit`.
+    ///
+    /// `CycleDayEntry.basalBodyTemperatureFahrenheit` hands every stored reading back as Fahrenheit
+    /// whatever the user originally typed, so an edit in a Celsius region has to convert before the
+    /// field can honestly sit next to a °C picker.
+    private static func temperatureText(fahrenheit: Double, in unit: PeriodTemperatureUnit) -> String {
+        guard unit == .celsius else { return String(format: "%.2f", fahrenheit) }
+        return String(format: "%.2f", (fahrenheit - 32) * 5 / 9)
     }
 
     /// Plausible basal-body-temperature ranges. A value outside them is a typo or a paste, never a
