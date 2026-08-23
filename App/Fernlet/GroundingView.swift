@@ -197,7 +197,8 @@ struct GroundingView: View {
                     Button { restart() } label: {
                         Text("Begin again")
                             .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
+                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 26)
                             .background(
@@ -225,7 +226,8 @@ struct GroundingView: View {
 
                         Button("Next") { advance() }
                             .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
+                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                             .buttonStyle(.plain)
                             .fernletTapTarget(minWidth: 60)
                     }

@@ -280,5 +280,10 @@ struct DeletingEverythingOverlay: View {
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
         }
         .accessibilityIdentifier("deleteAll.spinner")
+        // T1-4: dims and swallows taps over the settings rows behind it, but was transparent to
+        // VoiceOver/Switch Control — a blind user could keep flipping the iCloud toggle, the sealed
+        // backup switches or the Health master switch mid-wipe. `.isModal` is this overlay's half;
+        // the caller hides the covered content (`SettingsSheet`, `PrivacyDataSettingsView`).
+        .accessibilityAddTraits(.isModal)
     }
 }

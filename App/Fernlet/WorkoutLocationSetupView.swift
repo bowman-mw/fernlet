@@ -493,6 +493,11 @@ struct WorkoutLocationSetupView: View {
             }
         }
         .buttonStyle(.plain)
+        // F2: the multi-select equipment grid — fill/stroke/checkmark are otherwise the only
+        // signal, on the tile a blind user relies on to build their equipment list one tap at a
+        // time. `SavedSpaceRow`'s trait (added earlier this batch) stays too — a real, separate
+        // selection row.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Helpers
@@ -740,6 +745,9 @@ private struct SavedSpaceRow: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.location.card")
         .accessibilityHint("Suggestions will use this space")
+        // T1-5: a hand-rolled selection row — "In use" is otherwise a badge in the label only,
+        // not a state VoiceOver announces the way `.isSelected` does.
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .contextMenu {
             if canDelete {
                 Button(role: .destructive, action: onDelete) {

@@ -131,6 +131,14 @@ struct MilestonesView: View {
             KeepsakeShelfView(rows: rows, totalMilestoneCoins: totalCoins)
         } label: {
             HStack(spacing: 8) {
+                // T1-8, F9 final correction (second pass): a `NavigationLink`/`Button` label
+                // auto-combines into one accessibility element, and a side-by-side probe of this
+                // exact shape confirmed the combine ALSO absorbs an unlabelled `Image(systemName:)`
+                // — hidden and unhidden variants both announced identically ("…, 4 gifts"), no
+                // "seal"/"chevron forward" leak either way. So `.accessibilityHidden` here would be
+                // INERT, not merely redundant: this is precisely the flattened-container case T1-8's
+                // own rule says to skip ("only hide glyphs in containers NOT flattened with
+                // .ignore/.combine+label"). No hiding needed on these two glyphs.
                 Image(systemName: "seal")
                     .font(.footnote.weight(.semibold))
                 Text("Keepsake shelf")
@@ -139,7 +147,8 @@ struct MilestonesView: View {
                 if totalGifts > 0 {
                     Text(totalGifts == 1 ? "1 gift" : "\(totalGifts) gifts")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                 }
                 Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
@@ -202,7 +211,9 @@ struct MilestonesView: View {
                             // Wraps rather than truncates at accessibility sizes (3f·AX3).
                             Text(row.giftCount == 1 ? "1 gift on the shelf" : "\(row.giftCount) gifts on the shelf")
                                 .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.goldenrod)
+                                // T1-3: text ink, not the `goldenrod` accent (2.22:1). The star
+                                // glyph beside it stays the decorative accent.
+                                .foregroundStyle(Color.goldenrodInk)
                                 .fernletWrappingText()
                         }
                     }

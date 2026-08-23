@@ -181,6 +181,10 @@ struct NutritionLabelCameraSheet: View {
                             .background(isSelected ? Color.cream : Color.clear)
                     }
                     .buttonStyle(.plain)
+                    // T1-5: the worst hand-rolled selection row in the app — fill color only, no
+                    // glyph, on the control that decides whether logged macros are per-serving or
+                    // per-container.
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))

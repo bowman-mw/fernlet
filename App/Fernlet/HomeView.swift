@@ -211,14 +211,16 @@ struct HomeView: View {
                             .foregroundStyle(Color.bark)
                         Spacer()
                         if coins > 0 {
-                            // Goldenrod text on the card's cream with a hairline goldenrod border — the
-                            // house coin style (MilestonesView), and the reason it isn't a goldenrod fill:
-                            // goldenrod-on-goldenrod-tint drops below the contrast floor for 12pt text.
+                            // Goldenrod-family text on the card's cream with a hairline goldenrod border
+                            // — the house coin style (MilestonesView), and the reason it isn't a
+                            // goldenrod fill: goldenrod-on-goldenrod-tint drops below the contrast floor
+                            // for 12pt text. T1-3: `goldenrodInk` (4.95:1), not plain `goldenrod`
+                            // (2.22:1) — the border stays the decorative accent.
                             HStack(spacing: 4) {
                                 Image(systemName: "star.fill").font(.system(size: 9))
                                 Text("\(coins) gifted").font(.fernlet(.labelSmall))
                             }
-                            .foregroundStyle(Color.goldenrod)
+                            .foregroundStyle(Color.goldenrodInk)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
                             .overlay(Capsule().strokeBorder(Color.goldenrod.opacity(0.4), lineWidth: 1))
@@ -1894,7 +1896,8 @@ private struct CompanionCustomizationSheet: View {
                 if isEquipped {
                     Text("Equipped")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
+                        // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Color.moss.opacity(0.12), in: Capsule())

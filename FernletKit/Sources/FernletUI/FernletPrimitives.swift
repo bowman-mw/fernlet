@@ -80,6 +80,12 @@ public struct SectionLabel: View {
             // I — none of which a caller-side `.uppercased()` on an English key could ever get
             // right. It is also the only option left: `LocalizedStringKey` has no `.uppercased()`.
             .textCase(.uppercase)
+            // A `SectionLabel` marks the start of a group of content within a screen (a card, a
+            // list section) rather than the screen itself, so it sits one level under
+            // ``ScreenHeader``/``SheetHeader`` on the Headings rotor. 91 call sites light up from
+            // this one addition; see `Docs/Accessibility-Review-2026-08-22.md` T1-1.
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h2)
     }
 }
 

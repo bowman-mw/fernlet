@@ -667,7 +667,8 @@ struct FriendListView: View {
                 if let awayProblem {
                     Text(awayProblem)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .fernletWrappingText()

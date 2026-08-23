@@ -73,6 +73,11 @@ struct CompanionAmbienceLayer: View {
     /// the tint strength and the feather profile both bend slightly with the scheme.
     @Environment(\.colorScheme) private var colorScheme
 
+    /// T1-6: pauses both `TimelineView` clocks below rather than hiding the sky — the celestial
+    /// pass and the weather drift both freeze on their current frame, so the wash still renders,
+    /// just without the slow parallax motion Reduce Motion asks to remove.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// A full-bleed feather: the wash reaches true strength through the middle band and
     /// dissolves to nothing at every edge, so it reads as "a sky felt more than seen"
     /// rather than a contained card. Elliptical so it stretches to the wide strip and all
@@ -106,7 +111,7 @@ struct CompanionAmbienceLayer: View {
                 // 2 · Celestial glow — also always on, mirroring the matrix's "Clear" row
                 //     where the tint alone carries the sun (dawn/day/dusk) or the crescent
                 //     moon + faint stars (night). Weather accents layer over this.
-                TimelineView(.animation(minimumInterval: 0.5)) { timeline in
+                TimelineView(.animation(minimumInterval: 0.5, paused: reduceMotion)) { timeline in
                     Canvas { context, size in
                         Self.drawCelestial(
                             context: &context,
@@ -121,7 +126,7 @@ struct CompanionAmbienceLayer: View {
                 //     deterministic drift driven by wall-clock time; a lazy update interval
                 //     keeps this far cheaper than the companion's own breath loop.
                 if let ambient {
-                    TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+                    TimelineView(.animation(minimumInterval: 0.25, paused: reduceMotion)) { timeline in
                         Canvas { context, size in
                             Self.drawAccents(
                                 context: &context,

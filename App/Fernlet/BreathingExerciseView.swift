@@ -535,6 +535,8 @@ struct BreathingExerciseView: View {
             }
         }
         .buttonStyle(.plain)
+        // T1-5: a hand-rolled selection tile — the checkmark glyph is otherwise the only signal.
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func lengthPill(_ candidate: Int) -> some View {
@@ -555,6 +557,8 @@ struct BreathingExerciseView: View {
                 )
         }
         .buttonStyle(.plain)
+        // T1-5: a hand-rolled selection pill — the stroke/tint is otherwise the only signal.
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// Return to the setup screen from the finished screen (no session running).

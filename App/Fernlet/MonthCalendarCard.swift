@@ -167,6 +167,11 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
                 }
 
                 LazyVGrid(columns: columns, spacing: 4) {
+                    // F6 revert: T1-8 originally hid these as decorative, but hiding the removal
+                    // half of T2-17 without its naming half (predicted/labelled days) leaves a
+                    // VoiceOver user with NO weekday info on this grid at all between now and
+                    // whenever T2-17 lands — strictly worse than the pre-batch baseline. T2-17
+                    // ships hide-initials + name-predicted-days + hide-pads together, in one pass.
                     ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
                         Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }

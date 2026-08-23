@@ -1296,11 +1296,14 @@ public struct FernletLockView: View {
     /// The lock glyph, title and "enter your <credential>" line at the top of the unlock screen.
     private var header: some View {
         VStack(spacing: 10) {
+            // T1-8 (carried from A1's review): decorative and redundant with the title text right
+            // below it — without this it was its own focusable VoiceOver stop, labelled "Lock".
             Image(systemName: "lock.fill")
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(Color.moss)
                 .frame(width: 72, height: 72)
                 .background(Color.moss.opacity(0.10), in: Circle())
+                .accessibilityHidden(true)
 
             Text(FernletLockCopy.Unlock.title)
                 .font(.fernlet(.header))

@@ -221,6 +221,16 @@ struct PrivacyDataSettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.parchment)
+            // T1-4: either busy overlay below dims and blocks touches but was transparent to
+            // VoiceOver/Switch Control, which could keep walking (and operating) the settings rows
+            // underneath — including the delete/storage controls the overlay exists to guard.
+            // F7 ruling: the harness proved `.isModal` on a ZStack-presented cover already hides
+            // covered content unaided, so this explicit `.accessibilityHidden` is redundant with
+            // both overlays' own `.isModal` trait. Left in deliberately — belt-and-braces on the
+            // one screen guarding a destructive, in-progress wipe — and it costs nothing: the
+            // mid-wipe Back-button escape hatch lives on the nav bar, outside this ScrollView, so
+            // hiding the scroll content doesn't hide the way out.
+            .accessibilityHidden(isUpdatingStorage || deleteFlow.isDeleting)
 
             if isUpdatingStorage {
                 storageSpinner
@@ -592,9 +602,12 @@ struct PrivacyDataSettingsView: View {
         if store != nil {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
+                    // T1-8: not `.combine`d with the label beside it — without this VoiceOver
+                    // reaches it as its own stop and speaks the raw symbol name, "lock shield".
                     Image(systemName: "lock.shield")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(Color.moss)
+                        .accessibilityHidden(true)
                     SectionLabel("Photo protection")
                 }
                 Text("Photos are sealed on this device. Locking them means a future iCloud backup can never carry them off it.")
@@ -1274,6 +1287,8 @@ struct PrivacyDataSettingsView: View {
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             .accessibilityIdentifier("privacy.storage.spinner")
         }
+        // T1-4: this overlay's covered-content half is `screenContent`'s `.accessibilityHidden`.
+        .accessibilityAddTraits(.isModal)
     }
 
     private var disableICloudConfirmationSheet: some View {

@@ -148,6 +148,9 @@ struct ShoppingListBuilderView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // T1-5: a hand-rolled checkbox row — the checkmark/circle glyph swap is otherwise
+            // invisible to VoiceOver and Differentiate Without Color.
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             if isSelected, RecipeScaling.isScalable(recipe) {
                 let current = yieldByID[recipe.id] ?? recipe.servings
@@ -260,7 +263,8 @@ struct WeeklyMealPlannerView: View {
                     Text("\u{201C}\(loggedRecipeName)\u{201D} logged to today.")
                         .font(.fernlet(.bodySmall))
                         .italic()
-                        .foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                         .fernletWrappingText()
                         .accessibilityIdentifier("mealPlanner.loggedNotice")
                 }

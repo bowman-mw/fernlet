@@ -191,11 +191,14 @@ struct DeleteEverythingSheet: View {
     private func bulletRow(glyph: String, text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if !dynamicTypeSize.isAccessibilitySize {
+                // T1-8: not `.combine`d with the text beside it, so without this the SF Symbol's
+                // own name would be announced ahead of the claim it merely illustrates.
                 Image(systemName: glyph)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.slate)
                     .frame(width: 22)
                     .padding(.top, 2)
+                    .accessibilityHidden(true)
             }
             Text(text)
                 .font(.fernlet(.body))

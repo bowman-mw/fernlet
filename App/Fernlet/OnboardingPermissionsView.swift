@@ -73,7 +73,8 @@ struct OnboardingPermissionsView: View {
             Label("On", systemImage: "checkmark.circle.fill")
                 .labelStyle(.titleAndIcon)
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.moss)
+                // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                .foregroundStyle(Color.mossInk)
         case .off:
             Text("Off in Settings")
                 .font(.fernlet(.labelSmall))
@@ -82,7 +83,8 @@ struct OnboardingPermissionsView: View {
             Button { requestNotifications() } label: {
                 Text(requestingNotifications ? "…" : "Turn on")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                    .foregroundStyle(Color.mossInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.moss.opacity(0.12), in: Capsule())
@@ -134,10 +136,13 @@ struct OnboardingPermissionsView: View {
     }
 
     private func rowIcon(_ systemImage: String) -> some View {
+        // T1-8: `permissionRow`'s HStack isn't `.combine`d, so this glyph would otherwise be its
+        // own VoiceOver stop announcing the raw SF Symbol name ahead of the row's title/body text.
         Image(systemName: systemImage)
             .font(.headline.weight(.semibold))
             .foregroundStyle(Color.moss)
             .frame(width: 30, height: 30)
             .background(Color.moss.opacity(0.10), in: Circle())
+            .accessibilityHidden(true)
     }
 }

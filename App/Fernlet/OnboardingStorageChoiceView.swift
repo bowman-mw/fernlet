@@ -167,6 +167,9 @@ struct OnboardingStorageChoiceView: View {
             )
         }
         .buttonStyle(.plain)
+        // T1-5: a hand-rolled selection card — the glyph swap and tint are otherwise the only
+        // signal, on the choice that decides where the user's data lives.
+        .accessibilityAddTraits(selectedStorage == choice ? .isSelected : [])
     }
 
     private func detectExistingCloudData() async {

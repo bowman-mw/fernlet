@@ -533,7 +533,9 @@ struct WorryBoxView: View {
                 Spacer(minLength: 8)
                 Button("Keep it") { keepPendingRelease() }
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text) — this
+                    // is the one control that undoes an otherwise-permanent deletion (T0-5).
+                    .foregroundStyle(Color.mossInk)
                     .buttonStyle(.plain)
                     .fernletTapTarget(minWidth: 60)
                     .accessibilityFocused($isKeepItFocused)
@@ -649,8 +651,9 @@ struct WorryBoxView: View {
                         Label("Release this worry", systemImage: "arrow.up")
                             .font(.fernlet(.labelSmall))
                             // Moss, not goldenrod: this is an action, and goldenrod on cream read as
-                            // decoration rather than something tappable.
-                            .foregroundStyle(Color.moss)
+                            // decoration rather than something tappable. T1-3: text ink, not the
+                            // `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                     }
                     .buttonStyle(.plain)
                     // A labelSmall text link was a ~16pt-tall target for a permanent action.
@@ -682,7 +685,8 @@ struct WorryBoxView: View {
                         .opacity(emberLifted ? 0 : 1)
                     Text("letting it go…")
                         .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                 }
             }
         }

@@ -580,6 +580,9 @@ struct DisposableCameraView: View {
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
     @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+    /// F10: this file is the repo's own cited exemplar for the `TimelineView(.animation(paused:))`
+    /// idiom — it should exemplify Reduce Motion too, not just the isArmed gating it already had.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The cap on a session name typed here — it rides the mesh descriptor to every peer.
     private static let maxMeshNameLength = 40
@@ -940,7 +943,7 @@ struct DisposableCameraView: View {
         // after a shot retargets the LED's opacity, which would kill a repeating animation for
         // good, and the pulse must survive every disarm/re-arm cycle.
         let visible = camera.isArmed ? 1.0 : Double(openness)
-        return TimelineView(.animation(paused: !camera.isArmed)) { context in
+        return TimelineView(.animation(paused: !camera.isArmed || reduceMotion)) { context in
             // 0.8 ↔ 1.0 cosine breathe with a 3.8s round trip (the old autoreversing 1.9s ease).
             let phase = context.date.timeIntervalSinceReferenceDate / 3.8 * 2 * .pi
             let breathe = camera.isArmed ? 0.9 - 0.1 * cos(phase) : 0.82

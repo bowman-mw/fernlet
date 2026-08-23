@@ -395,11 +395,14 @@ struct FernletLockGateModifier: ViewModifier {
             VStack(spacing: 20) {
                 Spacer()
 
+                // T1-8 (carried from A1's review): purely decorative next to the CTA text below —
+                // without this VoiceOver speaks the raw symbol name, "lock shield".
                 Image(systemName: "lock.shield")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(Color.moss)
                     .frame(width: 88, height: 88)
                     .background(Color.moss.opacity(0.10), in: Circle())
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
                     Text(GateCopy.setUpCallToAction)

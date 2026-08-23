@@ -55,6 +55,11 @@ struct FriendsView: View {
             }
 
         }
+        // F4: the harness proved `.fullScreenCover` does NOT remove the presenting content from
+        // the accessibility tree on its own — VoiceOver/Switch Control could still reach the
+        // camera/album underneath while the celebration overlay plays. This is the covered-content
+        // half; see the overlay's own `.isModal` note below for why that trait alone wasn't enough.
+        .accessibilityHidden(showConnectionAnimation)
         .animation(.easeInOut(duration: 0.3), value: sessionReady)
         .fullScreenCover(isPresented: $showConnectionAnimation) {
             ConnectionSuccessOverlay(peerName: connectionPeerName) {
@@ -294,7 +299,8 @@ struct FriendsView: View {
                         .foregroundStyle(Color.slate)
                     Text("Change")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 4)
@@ -1216,6 +1222,14 @@ struct ConnectionSuccessOverlay: View {
             .offset(y: cardOffset)
             .opacity(cardOpacity)
         }
+        // T1-4: a blocking celebration overlay — nothing behind it should be reachable while it
+        // runs its fixed choreography. F4 correction: the harness proved `.isModal` alone is a
+        // no-op here — this view has no covered SIBLING for the trait to scope against, it is
+        // presented through `.fullScreenCover`, so the real fix is `FriendsView`'s
+        // `.accessibilityHidden(showConnectionAnimation)` on the covered content. Left in place
+        // (harmless, and correct if this view is ever composed into a sibling-bearing container
+        // instead) rather than removed.
+        .accessibilityAddTraits(.isModal)
         .onAppear { runAnimation() }
         .onDisappear { animationTask?.cancel() }
     }

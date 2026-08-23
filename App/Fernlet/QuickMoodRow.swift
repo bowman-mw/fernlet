@@ -44,6 +44,7 @@ struct QuickMoodRow: View {
             // competing with the page/scroll gestures around it.
             FlowLayout(spacing: 8) {
                 ForEach(FeelingTag.allCases) { tag in
+                    let isCurrent = currentTag == tag
                     Button {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             store.logQuickMood(tag)
@@ -51,9 +52,11 @@ struct QuickMoodRow: View {
                     } label: {
                         moodChipLabel(tag)
                     }
-                    .buttonStyle(.plain)
+                    // T1-9: adopts the app's one chip treatment instead of hand-rolling a second —
+                    // same fill/ink pair as every other chip, and the `.isSelected` trait now comes
+                    // from the style itself rather than a second, easy-to-drift call-site line.
+                    .buttonStyle(ChipButtonStyle(selected: isCurrent))
                     .accessibilityLabel("Mood: \(tag.label)")
-                    .accessibilityAddTraits(currentTag == tag ? .isSelected : [])
                     .accessibilityIdentifier("quickMood.\(tag.rawValue)")
                 }
             }
@@ -63,11 +66,11 @@ struct QuickMoodRow: View {
         .accessibilityHint("One tap notes how today feels. No writing needed.")
     }
 
-    /// The chip itself — the coloured dot plus the label — shared by every tag so Home and the
-    /// Journal screen keep one mood-chip treatment.
+    /// The chip's own content — the coloured dot plus the label — shared by every tag so Home and
+    /// the Journal screen keep one mood-chip treatment. Shape, fill, ink and the selected trait all
+    /// come from ``ChipButtonStyle`` now; this is content only.
     private func moodChipLabel(_ tag: FeelingTag) -> some View {
-        let isCurrent = currentTag == tag
-        return HStack(spacing: 6) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(tag.color)
                 .frame(width: 8, height: 8)
@@ -75,12 +78,5 @@ struct QuickMoodRow: View {
                 .font(.fernlet(.label))
                 .lineLimit(1)
         }
-        .foregroundStyle(isCurrent ? Color.parchment : Color.bark)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(isCurrent ? Color.bark : Color.cream, in: Capsule())
-        .overlay(
-            Capsule().stroke(Color.bark.opacity(isCurrent ? 0 : 0.12), lineWidth: 1)
-        )
     }
 }

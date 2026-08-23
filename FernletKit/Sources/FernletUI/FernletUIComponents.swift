@@ -95,6 +95,29 @@ public extension Color {
         light: Color(red: 0.620, green: 0.251, blue: 0.157),
         dark:  Color(red: 0.839, green: 0.459, blue: 0.345)
     )
+
+    /// Accessible ink for text drawn in the moss family — presence/equipped labels, gift counts —
+    /// on parchment/cream, mirroring ``terracottaInk``. Plain `moss` is a fill/glyph accent at
+    /// 3.74:1/4.02:1 on light surfaces, which clears the 3:1 non-text floor but fails 4.5:1 text;
+    /// this token is for the *text* uses only. Light mode is the owner-approved `#46683A`
+    /// (`Docs/design-refs/ux-review-2026-08-16/design-spec-2026-08-21.md`), measured **5.54:1 on
+    /// parchment / 5.95:1 on cream**. Dark mode is unchanged from `moss`'s existing dark accent
+    /// (already 6.65:1 / 5.74:1 on the dark surfaces, so no dark-mode fix was needed).
+    static let mossInk = Color(
+        light: Color(red: 0.275, green: 0.408, blue: 0.227),
+        dark:  Color(red: 0.498, green: 0.690, blue: 0.412)
+    )
+
+    /// Accessible ink for text drawn in the goldenrod family — the app's "something is
+    /// misconfigured" copy (presence/heart/purge warnings) — on parchment/cream, mirroring
+    /// ``terracottaInk``. Plain `goldenrod` is the worst text contrast in the codebase at
+    /// 2.22:1/2.39:1 on light surfaces — it fails even the 3:1 non-text floor. Light mode is
+    /// `#8C5D18`, measured **4.95:1 on parchment / 5.32:1 on cream**. Dark mode is unchanged from
+    /// `goldenrod`'s existing dark accent (already 7.97:1 / 6.88:1 on the dark surfaces).
+    static let goldenrodInk = Color(
+        light: Color(red: 0.549, green: 0.365, blue: 0.094),
+        dark:  Color(red: 0.878, green: 0.663, blue: 0.329)
+    )
 }
 
 public extension Color {
@@ -257,6 +280,11 @@ public struct ScreenHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        // Must follow `.combine`, not precede it: a trait added to the pre-combine `VStack` is
+        // discarded when SwiftUI flattens the children into one accessibility element. This is the
+        // screen/pushed-page title, the top of the Headings rotor for the page — h1.
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityHeading(.h1)
         .accessibilityIdentifier(identifier ?? "")
     }
 
@@ -846,24 +874,40 @@ public struct ChipButtonStyle: ButtonStyle {
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        let ink: Color = destructive ? .terracottaInk : (selected ? .parchment : .bark)
-        let fill: Color = destructive
-            ? Color.terracotta.opacity(0.10)
-            : (selected ? Color.bark : Color.cream)
-        let stroke: Color = destructive
-            ? Color.terracottaInk.opacity(0.35)
-            : Color.bark.opacity(selected ? 0 : 0.12)
-        return configuration.label
-            .font(.fernlet(.label))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .foregroundStyle(ink)
-            .background(fill, in: shape)
-            .overlay(shape.stroke(stroke, lineWidth: 1))
-            .contentShape(shape)
-            .opacity(configuration.isPressed ? 0.75 : 1.0)
-            .accessibilityAddTraits(selected ? .isSelected : [])
+        Chip(selected: selected, destructive: destructive, configuration: configuration)
+    }
+
+    /// Nested so the style can read `isEnabled` — a `ButtonStyle` itself has no environment, the
+    /// same reason ``ActionPillButtonStyle``'s `Pill` is nested (`:912`). Carried finding NEW-1:
+    /// the caveat-saved sheets freeze with `.disabled(...)` on their chip rows, and without this
+    /// read every chip inside one kept rendering at full contrast — inert but indistinguishable
+    /// from a live one.
+    private struct Chip: View {
+        let selected: Bool
+        let destructive: Bool
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+            let ink: Color = destructive ? .terracottaInk : (selected ? .parchment : .bark)
+            let fill: Color = destructive
+                ? Color.terracotta.opacity(0.10)
+                : (selected ? Color.bark : Color.cream)
+            let stroke: Color = destructive
+                ? Color.terracottaInk.opacity(0.35)
+                : Color.bark.opacity(selected ? 0 : 0.12)
+            return configuration.label
+                .font(.fernlet(.label))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .foregroundStyle(ink)
+                .background(fill, in: shape)
+                .overlay(shape.stroke(stroke, lineWidth: 1))
+                .contentShape(shape)
+                .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1.0) : 0.4)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+        }
     }
 }
 

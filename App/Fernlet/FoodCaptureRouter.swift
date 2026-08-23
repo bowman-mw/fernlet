@@ -208,6 +208,11 @@ struct CaptureAnalyzingOverlay: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Analyzing your photo")
         .accessibilityIdentifier("captureAnalyzing")
+        // T1-4: this full-screen veil blocks touches but was transparent to VoiceOver/Switch
+        // Control, which could keep walking the capture screen underneath it. `.isModal` is the
+        // half that belongs to the overlay itself; hiding the covered content is the caller's half
+        // (`FoodView.swift`, owned by a separate track — deferred).
+        .accessibilityAddTraits(.isModal)
     }
 }
 

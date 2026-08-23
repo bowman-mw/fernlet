@@ -88,6 +88,11 @@ public struct SheetHeader<Accessory: View>: View {
                 .foregroundStyle(Color.bark)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                // The sheet's own title — the top of its Headings rotor, same level as
+                // ``ScreenHeader``. No `.combine` above it to discard the trait, unlike
+                // ``ScreenHeader``, so it applies directly to the title `Text`.
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHeading(.h1)
             if let subtitle, !dynamicTypeSize.isAccessibilitySize {
                 subtitle
                     .font(.fernlet(.bodySmall))

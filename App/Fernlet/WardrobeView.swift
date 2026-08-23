@@ -305,7 +305,8 @@ struct WardrobeView: View {
                     Text("In your shop · \(item.price) coins")
                         .font(.fernlet(.bodySmall))
                         .italic()
-                        .foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                 }
             } else {
                 Text("designed by you")
@@ -324,7 +325,8 @@ struct WardrobeView: View {
     private var equippedPill: some View {
         Text("Equipped")
             .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.moss)
+            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+            .foregroundStyle(Color.mossInk)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(Color.moss.opacity(0.12), in: Capsule())

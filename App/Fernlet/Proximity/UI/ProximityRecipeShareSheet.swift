@@ -177,10 +177,14 @@ struct ProximityRecipeShareSheet: View {
             manager.sendRecipeShare(outgoingPayload, to: recipient)
         } label: {
             HStack(spacing: 12) {
+                // T1-8: both glyphs are decorative next to text that already names the
+                // recipient/action — without this the button's announcement leaks their raw SF
+                // Symbol names ("person crop circle badge checkmark", "paperplane fill").
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Color.moss)
                     .frame(width: 34, height: 34)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(recipient.displayName)
                         .font(.fernlet(.headerMedium))
@@ -194,6 +198,7 @@ struct ProximityRecipeShareSheet: View {
                 Image(systemName: "paperplane.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.moss)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 10)
         }
@@ -208,7 +213,8 @@ struct ProximityRecipeShareSheet: View {
             ShareLink(item: draft.shareText) {
                 Label("Share outside Fernlet", systemImage: "square.and.arrow.up")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                    .foregroundStyle(Color.mossInk)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
             }

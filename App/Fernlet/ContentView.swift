@@ -659,56 +659,22 @@ struct ContentView: View {
 
         return HStack(spacing: isCompact ? 4 : 0) {
             ForEach(FernletTab.allCases) { tab in
-                let isSelected = selectedTab == tab
-                Button {
-                    selectedTab = tab
-                } label: {
-                    VStack(spacing: hidesLabel ? 0 : 3) {
-                        Image(systemName: tab.systemImage)
-                            // Scales with Dynamic Type instead of a fixed 18/20pt, so the bar's one
-                            // remaining element grows with the user's text size.
-                            .font(isCompact ? .body : .title3)
-                            .frame(minHeight: isCompact ? 22 : 24)
-                        Text(tab.title)
-                            .font(.fernlet(.labelSmall))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .opacity(hidesLabel ? 0 : 1)
-                            .frame(height: hidesLabel ? 0 : nil)
-                            // Always hidden: the Button carries the title as its accessibility
-                            // label, so VoiceOver reads it in every state (drawn or not) exactly once.
-                            .accessibilityHidden(true)
-                    }
-                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, isCompact ? 8 : 9)
-                    .background(
-                        isSelected ? Color.parchment : Color.clear,
-                        in: RoundedRectangle(cornerRadius: isCompact ? 14 : 16, style: .continuous)
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                // Settings is reachable from every tab (FLOW-34): the gear itself lives only on the
-                // Home header, so a long press on the Home tab item opens it from wherever you are.
-                // `simultaneousGesture` leaves the plain tap — switch tabs — untouched.
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                        guard tab == .home else { return }
-                        selectedTab = .home
-                        activeSheet = .settings
-                    }
-                )
+                tabButton(tab, isCompact: isCompact, hidesLabel: hidesLabel)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isTabBar)
         .padding(.horizontal, isCompact ? 6 : 8)
-        .padding(.vertical, isCompact ? 5 : 6)
+        // T1-9: compact trimmed from 5 to 2 to compensate for each button's frame now carrying a
+        // 44pt minimum height (was 38pt compacted) — keeps the floating bar's own footprint close
+        // to its previous size (4+44=48, was 10+38=48) while the tap target inside it grows.
+        // F5 correction: non-compact restored to its original 6 — the non-compact button already
+        // measures ~58pt tall (icon + label + padding), so `minHeight: 44` is a no-op there and
+        // trimming this padding shrank the bar's non-compact footprint by 6pt for zero accessibility
+        // gain, an unreviewed density change.
+        .padding(.vertical, isCompact ? 2 : 6)
         .frame(maxWidth: isCompact ? 300 : .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .background(tabBarBackground, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(Color.bark.opacity(0.08), lineWidth: 1)
@@ -716,6 +682,75 @@ struct ContentView: View {
         .shadow(color: Color.bark.opacity(0.12), radius: isCompact ? 12 : 16, x: 0, y: isCompact ? 4 : 6)
         .padding(.horizontal, isCompact ? 40 : 20)
         .padding(.bottom, isCompact ? 4 : 12)
+    }
+
+    /// T3-13, folded into the T1-9 commit: Reduce Transparency asks system materials to be
+    /// replaced with an opaque equivalent rather than merely dimmed — the tab bar is one of only
+    /// four material surfaces in the tree, so this is a one-site fix rather than a wall.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var tabBarBackground: AnyShapeStyle {
+        reduceTransparency ? AnyShapeStyle(Color.parchment) : AnyShapeStyle(.regularMaterial)
+    }
+
+    /// One tab bar button — extracted from ``customTabBar`` (54 of 60 code lines on its own)
+    /// before T1-9's 44pt frame and T3-13's material swap could land on top of it.
+    private func tabButton(_ tab: FernletTab, isCompact: Bool, hidesLabel: Bool) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            selectedTab = tab
+        } label: {
+            VStack(spacing: hidesLabel ? 0 : 3) {
+                Image(systemName: tab.systemImage)
+                    // Scales with Dynamic Type instead of a fixed 18/20pt, so the bar's one
+                    // remaining element grows with the user's text size.
+                    .font(isCompact ? .body : .title3)
+                    .frame(minHeight: isCompact ? 22 : 24)
+                Text(tab.title)
+                    .font(.fernlet(.labelSmall))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .opacity(hidesLabel ? 0 : 1)
+                    .frame(height: hidesLabel ? 0 : nil)
+                    // Always hidden: the Button carries the title as its accessibility
+                    // label, so VoiceOver reads it in every state (drawn or not) exactly once.
+                    .accessibilityHidden(true)
+            }
+            // F1 fix: under Reduce Transparency `tabBarBackground` resolves to solid `Color.parchment`
+            // (below), which is exactly the selected pill's own fill — the indicator went invisible
+            // (1.00:1) for the low-vision users the accommodation serves, leaving hue-only (moss vs
+            // slate) encoding. Swap to the existing filled-button pair instead of inventing a hex:
+            // `mossFill` measures **4.67:1 against parchment** (well past the 3:1 non-text floor) and
+            // its own `onMoss` ink measures 5.36:1 on it (clears 4.5:1 text too, for the non-compact
+            // label). Both tokens are already adaptive, so dark mode (mossFill 6.65:1 on midnight)
+            // needs no separate branch.
+            .foregroundStyle(isSelected ? (reduceTransparency ? Color.onMoss : Color.moss) : Color.slate)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, isCompact ? 8 : 9)
+            .background(
+                isSelected ? (reduceTransparency ? Color.mossFill : Color.parchment) : Color.clear,
+                in: RoundedRectangle(cornerRadius: isCompact ? 14 : 16, style: .continuous)
+            )
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
+            // T1-9: AssistiveTouch, Switch Control and Eye Tracking all key off the element's own
+            // frame, not the drawn pill — grows the tap target to 44pt without growing the visible
+            // background (the outer bar's own padding above was trimmed to match).
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        // Settings is reachable from every tab (FLOW-34): the gear itself lives only on the
+        // Home header, so a long press on the Home tab item opens it from wherever you are.
+        // `simultaneousGesture` leaves the plain tap — switch tabs — untouched.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                guard tab == .home else { return }
+                selectedTab = .home
+                activeSheet = .settings
+            }
+        )
     }
 
     /// Routes a sheet case to its family builder. Split per family (not per case) because the flat
@@ -1657,6 +1692,11 @@ struct LaunchScreen: View {
     var companionAppearance: CompanionAppearance = .standard
     var showsCompanion = false
 
+    /// T1-6: pauses both `TimelineView` clocks below — the halo pulse and the loading-dot wave —
+    /// rather than hiding them, so the launch screen still renders, just without the perpetual
+    /// motion Reduce Motion asks to remove.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var greeting: String {
         Self.greeting(for: Date.now)
     }
@@ -1680,7 +1720,7 @@ struct LaunchScreen: View {
                 Spacer()
 
                 if showsCompanion {
-                    TimelineView(.animation) { timeline in
+                    TimelineView(.animation(paused: reduceMotion)) { timeline in
                         let elapsed = timeline.date.timeIntervalSinceReferenceDate
                         let pulse = 1 + 0.14 * ((sin(elapsed * .pi / 0.85) + 1) / 2)
 
@@ -1709,7 +1749,7 @@ struct LaunchScreen: View {
                         .animation(.easeInOut(duration: 0.25), value: displayedStatusMessage)
                 }
 
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(paused: reduceMotion)) { timeline in
                     let elapsed = timeline.date.timeIntervalSinceReferenceDate
 
                     HStack(spacing: 7) {
