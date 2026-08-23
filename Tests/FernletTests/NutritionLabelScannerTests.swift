@@ -264,6 +264,98 @@ struct NutritionLabelScannerTests {
     }
 }
 
+/// The fix-1.14 gate as it sees an OCR result: absent stays absent all the way from the scanner's
+/// optionals into ``NutritionFacts``, so a label line the scanner never read is never mistaken for a
+/// claim that the product contains none of that nutrient.
+struct NutritionLabelPlausibilityTests {
+
+    @Test func unreadFieldsSurviveTheConversionAsNil() {
+        var scan = NutritionLabelResult()
+        scan.protein = 8
+        let facts = scan.nutritionFacts
+        #expect(facts.protein == 8)
+        #expect(facts.calories == nil)
+        #expect(facts.carbs == nil)
+        #expect(facts.fat == nil)
+        #expect(facts.fiber == nil)
+        #expect(facts.hasServingSize == false)
+        // Poly/mono are not parsed off the panel, so they are absent rather than zero.
+        #expect(facts.polyunsaturatedFat == nil)
+        #expect(facts.monounsaturatedFat == nil)
+    }
+
+    @Test func aZeroOnTheLabelSurvivesAsAZero() {
+        var scan = NutritionLabelResult()
+        scan.calories = 0
+        scan.protein = 0
+        scan.carbs = 0
+        scan.fat = 0
+        let facts = scan.nutritionFacts
+        #expect(facts.calories == 0)
+        #expect(facts.protein == 0)
+        // A reported zero IS a claim, so the not-all-zero rule fires — unlike the all-absent case.
+        #expect(scan.plausibilityReport(foodName: "Mystery bar").findings == [.allReportedValuesZero])
+    }
+
+    @Test func aBlankServingSizeDoesNotCountAsReported() {
+        var scan = NutritionLabelResult()
+        scan.servingSize = "   "
+        #expect(scan.nutritionFacts.hasServingSize == false)
+        scan.servingSize = "2 cookies (30g)"
+        #expect(scan.nutritionFacts.hasServingSize == true)
+    }
+
+    @Test func anEmptyScanIsIncompleteRatherThanImplausible() {
+        let report = NutritionLabelResult().plausibilityReport()
+        #expect(report.findings.isEmpty)
+        #expect(report.missingFields == NutritionPlausibility.coreFields)
+        #expect(report.needsReview)
+    }
+
+    @Test func aLostDecimalPointOnTheCaloriesLineIsCaught() {
+        // 30 g carb + 12 g fat + 4 g protein is ~244 kcal; the panel read "24".
+        var scan = NutritionLabelResult()
+        scan.servingSize = "1 bar (55g)"
+        scan.calories = 24
+        scan.protein = 4
+        scan.carbs = 30
+        scan.fat = 12
+        let report = scan.plausibilityReport(foodName: "Hazelnut oat bar")
+        #expect(report.isImplausible)
+        #expect(report.missingFields.isEmpty)
+        #expect(report.findings.contains { finding in
+            if case .caloriesDisagreeWithMacros = finding { return true }
+            return false
+        })
+    }
+
+    @Test func aCleanPanelPassesEveryCheck() {
+        var scan = NutritionLabelResult()
+        scan.servingSize = "1 bar (55g)"
+        scan.calories = 244
+        scan.protein = 4
+        scan.carbs = 30
+        scan.fat = 12
+        scan.saturatedFat = 5
+        scan.transFat = 0
+        scan.fiber = 3
+        scan.sugar = 14
+        scan.sodium = 95
+        #expect(scan.plausibilityReport(foodName: "Hazelnut oat bar") == .clean)
+    }
+
+    @Test func plainTeaIsExemptFromTheAllZeroRule() {
+        var scan = NutritionLabelResult()
+        scan.servingSize = "1 cup (240mL)"
+        scan.calories = 0
+        scan.protein = 0
+        scan.carbs = 0
+        scan.fat = 0
+        #expect(scan.plausibilityReport(foodName: "Green tea") == .clean)
+        #expect(scan.plausibilityReport(foodName: "Sweet tea").findings == [.allReportedValuesZero])
+    }
+}
+
 private final class ThreadCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var storedValue: Bool?

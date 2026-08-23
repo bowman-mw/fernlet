@@ -745,6 +745,14 @@ enum FoodProductWebImporter {
     /// Whether an OCR'd label scan is complete enough to trust from an arbitrary web image: serving
     /// size, calories, and all three macros must all be present. Guards the image tier against
     /// accepting a partial read off a lifestyle photo.
+    ///
+    /// - Note: deliberately calibrated apart from the fix-1.14 gate
+    ///   (`NutritionLabelResult.plausibilityReport(foodName:)`), whose completeness half checks the
+    ///   same five fields but only WARNS. The difference is who is watching: this path imports a
+    ///   photo nobody identified, with no user in the loop, so a partial read is rejected outright;
+    ///   the gate advises a user about a scan they took themselves and must never block them. Keep
+    ///   the field list here in step with `NutritionPlausibility.coreFields`, and if either
+    ///   threshold moves, look at the other.
     static func isCompleteNutritionLabelScan(_ result: NutritionLabelResult) -> Bool {
         guard let servingSize = result.servingSize?.trimmingCharacters(in: .whitespacesAndNewlines),
               servingSize.isEmpty == false,
