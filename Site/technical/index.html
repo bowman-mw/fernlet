@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>How Fernlet protects your data — Fernlet</title>
+<meta name="description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, and on-device AI.">
+<meta property="og:title" content="Fernlet — how it protects your data">
+<meta property="og:description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, and on-device AI.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fernlet.com/technical/">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="../assets/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html">
+    <picture>
+      <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
+      <img class="brand-mark" src="../assets/fernlet-mark-header.svg" width="25" height="30" alt="">
+    </picture>
+    <span class="wordmark">Fernlet</span>
+  </a>
+  <div class="navlinks">
+    <a href="../index.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Back to the app
+    </a>
+    <a class="btn btn-moss" href="../privacy/index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Privacy policy
+    </a>
+  </div>
+</nav>
+
+<header class="policy-head">
+  <div class="eyebrow">Technical details</div>
+  <h1>How Fernlet protects your data.</h1>
+  <div class="policy-meta">
+    <span>Michael Bowman Olay</span>
+    <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>
+    <a href="https://github.com/bowman-mw/fernlet">github.com/bowman-mw/fernlet</a>
+  </div>
+</header>
+
+<div class="policy-body">
+  <aside class="toc">
+    <div class="toc-inner">
+      <span class="label">Contents</span>
+      <nav>
+        <a href="#t1">No central copy of your data</a>
+        <a href="#t2">Two kinds of storage</a>
+        <a href="#t3">iCloud is optional</a>
+        <a href="#t4">No ads or tracking</a>
+        <a href="#t5">Friends are local and intentional</a>
+        <a href="#t6">On-device AI</a>
+        <a href="#t7">Inspect the work</a>
+      </nav>
+    </div>
+  </aside>
+
+  <main class="policy">
+    <div class="summary-card">
+      <p>This page explains the technical choices behind Fernlet's <a href="../privacy/index.html">privacy policy</a>, so you can inspect the design yourself.</p>
+    </div>
+
+    <section>
+      <h2 id="t1">No central copy of your data</h2>
+      <p>Fernlet does not operate a backend that collects your health information. There is no Fernlet account, advertising profile, or developer-owned database holding a copy of your life.</p>
+      <p>Some optional features use Apple services that belong to your own account, such as private iCloud sync. Those services are not a Fernlet server, and the developer cannot browse or retrieve your private data through them.</p>
+    </section>
+
+    <section>
+      <h2 id="t2">Two kinds of storage</h2>
+      <p>Fernlet separates everyday information from especially sensitive information.</p>
+      <div class="callout">
+        <p><strong>Everyday information</strong> — meals, movement, hydration, sleep, settings, and companion state are stored locally. You may choose to sync this information through your private iCloud database.</p>
+      </div>
+      <div class="callout">
+        <p><strong>Sealed information</strong> — journal text, cycle data, intimate notes, sensitive memories, and similar information are stored in a separate encrypted area on your device. Fernlet's networking code and its AI features are deliberately kept from reading that raw information — a build script blocks it: importing the sealed store from either one fails the build.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="t3">iCloud is optional</h2>
+      <p>During setup, you choose whether Fernlet stays only on this iPhone or syncs eligible information to your private iCloud database.</p>
+      <p>Sensitive information is not part of ordinary iCloud sync. If you choose to back up sealed information, Fernlet encrypts it before it leaves your device. That's a separate, clearly explained choice — not something ordinary sync turns on for you.</p>
+    </section>
+
+    <section>
+      <h2 id="t4">No ads or tracking</h2>
+      <p>Fernlet does not use advertising SDKs, third-party analytics, or behavioral tracking. The website you're reading this on uses no cookies and no analytics either.</p>
+      <p>Fernlet may ask permission to read selected Apple Health data. That permission is for the app's features on your device — not for advertising, profiling, or sale.</p>
+    </section>
+
+    <section>
+      <h2 id="t5">Friends are local and intentional</h2>
+      <p>Friend features are designed for people who meet in person. There is no discovery feed, public directory, or remote friend server.</p>
+      <p>Friends exchange only the information needed for the connection: display names, public keys, companion appearance, and a broad wellbeing state. They do not receive raw health records, scores, cycle data, or journal text.</p>
+    </section>
+
+    <section>
+      <h2 id="t6">On-device AI</h2>
+      <p>Fernlet's AI features run on your iPhone, using Apple's on-device models. Your journal, health data, photos, cycle information, and friend data don't get sent to an external AI service.</p>
+      <p>The sealed store is intentionally outside the AI feature boundary. On-device AI does not read raw cycle data, intimate notes, or sealed journal entries. The full on-device experience needs an iPhone 15 Pro or newer; on older supported phones, Fernlet falls back to simpler, deterministic logic instead of reaching for a server.</p>
+    </section>
+
+    <section>
+      <h2 id="t7">Inspect the work</h2>
+      <p>Fernlet is open source. The <a href="../privacy/index.html">privacy policy</a> explains what the app handles; the source code and technical documentation show how those commitments are enforced. Look as closely as you want — the repository is at <a href="https://github.com/bowman-mw/fernlet">github.com/bowman-mw/fernlet</a>.</p>
+    </section>
+
+    <div class="disclaimer">
+      <p>Fernlet is a wellness and self-care companion, not a medical device. It does not provide medical advice, diagnosis, or treatment. If you are in crisis, contact your local emergency services or, in the US, call or text 988 (the Suicide &amp; Crisis Lifeline).</p>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <picture>
+        <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
+        <img class="brand-mark sm" src="../assets/fernlet-mark-header.svg" width="20" height="24" alt="">
+      </picture>
+      <span class="wordmark sm">Fernlet</span>
+      <span class="tiny">© 2026 Michael Bowman Olay</span>
+    </div>
+    <nav class="foot-nav"><a href="../index.html">Home</a><a href="../privacy/index.html">Privacy policy</a><a href="../support/index.html">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+  </div>
+</footer>
+
+<script src="../app.js" defer></script>
+</body>
+</html>
