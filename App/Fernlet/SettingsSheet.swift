@@ -1273,7 +1273,11 @@ struct SettingsSheet: View {
     /// remove a saved task outright, with no confirmation and nothing to undo it with.
     private func confirmRemoveCareTask(_ task: PersonalCareTask) {
         pendingDestructiveAction = DestructiveConfirmation(
-            title: "Remove \(task.label)?",
+            // `displayLabel`, not the stored `label`: `PersonalCareTask` bakes the English label
+            // into the settings blob when defaults are first written, so the stored string is inert
+            // for built-ins and `displayLabel` is what resolves the current language. Its own doc
+            // comment mandates exactly this, and this dialog was reading around it.
+            title: "Remove \(task.displayLabel)?",
             message: "It comes off your personal care list. Days you've already ticked it stay as they are.",
             confirmLabel: "Remove",
             auditEvent: "settings.personalCare.removeConfirmed"
@@ -1473,7 +1477,16 @@ struct SettingsSheet: View {
     private func tierTwoMemoryRow(_ record: TierTwoMemoryRecord) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(record.category.uppercased())
+                // `uppercased()` — the ROOT-locale mapping — and deliberately NOT
+                // `.textCase(.uppercase)`, which uppercases in the USER's locale. This string is a
+                // Tier-2 memory CATEGORY: a frozen English classifier token persisted on the
+                // record, not display copy, and there is no catalog entry for the transform to run
+                // after. Locale-driven casing on frozen English is how "side item" becomes
+                // "SİDE İTEM" for a Turkish user (review A4 follow-up F5). Localizing the category
+                // itself is a token/display fork, and it belongs to the deferred class listed in
+                // `Tests/FernletTests/LocalizationBoundaryTests.swift`'s header ("UNCATALOGUED
+                // DISPLAY COPY") — not a casing change.
+                Text(verbatim: record.category.uppercased())
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()

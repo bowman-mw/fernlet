@@ -180,6 +180,9 @@ struct GroundingView: View {
             Text("You're here.")
                 .font(.custom(FernletFontName.frauncesSemiBold, size: 42, relativeTo: .largeTitle))
                 .foregroundStyle(Color.bark)
+                // T2-19: the completion screen's own heading — the arrival marker of the exercise.
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHeading(.h1)
             Text("That's enough. Take the calm with you — there's nothing else to do.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)

@@ -13,12 +13,26 @@ import HealthKitGateway
 /// calling the same payload two different things.
 extension SealedBackupPayloadType {
     /// The noun the user-facing copy uses for this payload ("your **period** backup").
+    ///
+    /// Localized (review A4 follow-up F4). Every consumer splices this into the `%@` slot of an
+    /// app-target sentence that DOES localize, so an English noun here shipped a half-translated
+    /// sentence — the failure is invisible in English and unfixable by a translator, who never sees
+    /// the word at all. Lower-case because every call site reads mid-sentence ("the encrypted
+    /// period backup"); the enum's own `rawValue` stays the frozen persisted/CloudKit token.
     var displayNoun: String {
         switch self {
-        case .sensitiveNotes: return "private notes"
-        case .periodData: return "period"
-        case .journalNarratives: return "journal"
-        case .intimacyLogs: return "intimate log"
+        case .sensitiveNotes:
+            return String(localized: "sealedBackup.noun.sensitiveNotes", defaultValue: "private notes",
+                          comment: "Mid-sentence noun for the sealed backup of the user's private notes, e.g. 'the encrypted private notes backup'.")
+        case .periodData:
+            return String(localized: "sealedBackup.noun.periodData", defaultValue: "period",
+                          comment: "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.")
+        case .journalNarratives:
+            return String(localized: "sealedBackup.noun.journalNarratives", defaultValue: "journal",
+                          comment: "Mid-sentence noun for the sealed backup of journal entries.")
+        case .intimacyLogs:
+            return String(localized: "sealedBackup.noun.intimacyLogs", defaultValue: "intimate log",
+                          comment: "Mid-sentence noun for the sealed backup of intimate-activity logs.")
         }
     }
 }

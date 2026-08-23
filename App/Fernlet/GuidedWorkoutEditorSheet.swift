@@ -112,6 +112,7 @@ struct GuidedWorkoutEditorSheet: View {
             if row.fromCatalog {
                 HStack(alignment: .center, spacing: 12) {
                     stepperField(title: "Sets", value: "\(row.sets)",
+                                 decrementLabel: "Fewer sets", incrementLabel: "More sets",
                                  onDecrement: { setSets(index, row.sets - 1) },
                                  onIncrement: { setSets(index, row.sets + 1) })
                     VStack(alignment: .leading, spacing: 4) {
@@ -125,6 +126,7 @@ struct GuidedWorkoutEditorSheet: View {
                 }
 
                 stepperField(title: "Rest", value: restLabel(effectiveRest(row)),
+                             decrementLabel: "Shorter rest", incrementLabel: "Longer rest",
                              onDecrement: { setRest(index, effectiveRest(row) - 15) },
                              onIncrement: { setRest(index, effectiveRest(row) + 15) },
                              fullWidth: true)
@@ -139,20 +141,37 @@ struct GuidedWorkoutEditorSheet: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func stepperField(title: String, value: String, onDecrement: @escaping () -> Void, onIncrement: @escaping () -> Void, fullWidth: Bool = false) -> some View {
+    /// - Parameters:
+    ///   - title: The caption above the stepper. Uppercased with `.textCase`, never
+    ///     `String.uppercased()`, so the transform runs on the translation and not on the key.
+    ///   - decrementLabel: The minus button's spoken name, written out per call site. It used to be
+    ///     spliced as `"Fewer \(title.lowercased())"`, and the note that replaced was right that
+    ///     lower-casing an English noun into a sentence does not survive translation — the fix is
+    ///     per-call-site copy, and with two call sites that is four short strings (T2-1).
+    ///   - incrementLabel: The plus button's spoken name.
+    private func stepperField(
+        title: LocalizedStringKey,
+        value: String,
+        decrementLabel: LocalizedStringKey,
+        incrementLabel: LocalizedStringKey,
+        onDecrement: @escaping () -> Void,
+        onIncrement: @escaping () -> Void,
+        fullWidth: Bool = false
+    ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased())
+            Text(title)
                 .font(.fernlet(.labelSmall)).tracking(0.6)
                 .foregroundStyle(Color.slate)
+                .textCase(.uppercase)
             HStack(spacing: 8) {
-                stepButton(system: "minus", label: "Fewer \(title.lowercased())", action: onDecrement)
+                stepButton(system: "minus", label: decrementLabel, action: onDecrement)
                 Text(value)
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                     .frame(minWidth: fullWidth ? 80 : 40)
                     .frame(maxWidth: fullWidth ? .infinity : nil)
                     .multilineTextAlignment(.center)
-                stepButton(system: "plus", label: "More \(title.lowercased())", action: onIncrement)
+                stepButton(system: "plus", label: incrementLabel, action: onIncrement)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -162,7 +181,7 @@ struct GuidedWorkoutEditorSheet: View {
         .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
     }
 
-    private func stepButton(system: String, label: String, action: @escaping () -> Void) -> some View {
+    private func stepButton(system: String, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
                 .font(.caption.weight(.bold))
@@ -173,11 +192,10 @@ struct GuidedWorkoutEditorSheet: View {
         .buttonStyle(.plain)
         // The drawn circle stays 30pt; the target and the VoiceOver label ("More sets") come from
         // the shared helper — without it these read as "plus" and "minus".
-        // `verbatim:` rather than flipping `stepButton`'s parameter: the callers build this
-        // label as "Fewer \(title.lowercased())", and lower-casing an English noun to splice into
-        // a sentence does not survive translation. Honest English beats broken German here; the
-        // real fix is per-call-site accessibility copy, which is a copy task, not a type change.
-        .fernletIconButton(verbatim: label)
+        // The label is a `LocalizedStringKey` now: T2-1 did the copy task the earlier note deferred
+        // to, so each call site writes its own ("Fewer sets", "Shorter rest") instead of splicing a
+        // lower-cased noun into a sentence.
+        .fernletIconButton(label)
     }
 
     // MARK: Last-time recall

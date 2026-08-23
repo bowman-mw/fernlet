@@ -1,0 +1,66 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "notification.dailyCheckIn.body" : {
+      "comment" : "Body of the once-a-day reminder notification. Must stay unconditional — care counts regardless of how the day went.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "However today went, a small note of care still counts."
+          }
+        }
+      }
+    },
+    "notification.dailyCheckIn.title" : {
+      "comment" : "Title of the once-a-day reminder notification. An invitation, never a streak warning or a nag.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A gentle check-in"
+          }
+        }
+      }
+    },
+    "notification.sessionMessage.body" : {
+      "comment" : "Body of the session-message notification. The disappearance is the important half: session chat is not stored anywhere after the session.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open Fernlet to reply — session messages disappear when the session ends."
+          }
+        }
+      }
+    },
+    "notification.sessionMessage.title" : {
+      "comment" : "Title of the notification for a mesh session message that arrived while the app was backgrounded. The argument is the sender's sanitized display name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New message from %@"
+          }
+        }
+      }
+    },
+    "notification.sessionMessage.unknownSender" : {
+      "comment" : "Stands in for a session peer whose name sanitized away to nothing. Reads inside the sentence 'New message from …', so it is lower-case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a friend"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

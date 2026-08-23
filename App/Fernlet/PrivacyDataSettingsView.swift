@@ -589,7 +589,12 @@ struct PrivacyDataSettingsView: View {
             let url = try store.writeDataExportFile()
             exportPayload = DataExportPayload(url: url)
         } catch {
-            setOperationError("Couldn't prepare your export. Please try again.", scope: .export)
+            setOperationError(
+                String(localized: "privacy.error.export",
+                       defaultValue: "Couldn't prepare your export. Please try again.",
+                       comment: "Shown and spoken when building the privacy data export fails."),
+                scope: .export
+            )
         }
         isBuildingExport = false
     }
@@ -849,14 +854,21 @@ struct PrivacyDataSettingsView: View {
         let backedUp = storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Lock photos to this device?",
+            // One multi-line literal per branch rather than `+`-concatenation: a concatenation is
+            // a `String` expression, which cannot become a `LocalizedStringKey` and so never
+            // reaches a catalog (T2-1). The rendered words are byte-identical.
             message: backedUp
-                ? "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
-                    + "this device. They'll come back on a new phone only through your encrypted photo "
-                    + "backup, never from a device backup. This can't be undone."
-                : "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
-                    + "this device. They will NOT restore onto a new or erased phone, and a device backup "
-                    + "won't bring them back. Turn on the encrypted photo backup first if you want them to "
-                    + "survive a phone swap. This can't be undone.",
+                ? """
+                  Your meal, recipe and progress photos will be encrypted with a key that never leaves \
+                  this device. They'll come back on a new phone only through your encrypted photo \
+                  backup, never from a device backup. This can't be undone.
+                  """
+                : """
+                  Your meal, recipe and progress photos will be encrypted with a key that never leaves \
+                  this device. They will NOT restore onto a new or erased phone, and a device backup \
+                  won't bring them back. Turn on the encrypted photo backup first if you want them to \
+                  survive a phone swap. This can't be undone.
+                  """,
             confirmLabel: "Lock to this device",
             auditEvent: "privacy.ownPhotos.deviceBindingConfirmed"
         ) {
@@ -1211,7 +1223,9 @@ struct PrivacyDataSettingsView: View {
                 // which on its own reads as a button that does nothing.
                 guard adopted else {
                     setOperationError(
-                        "Couldn't switch to your other device's backup key. Check iCloud and try again.",
+                        String(localized: "privacy.error.adoptBackupKey",
+                               defaultValue: "Couldn't switch to your other device's backup key. Check iCloud and try again.",
+                               comment: "Shown and spoken when adopting the sealed-backup key written by another device fails."),
                         scope: .backupStatus
                     )
                     FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict.failed")
@@ -1558,9 +1572,11 @@ struct PrivacyDataSettingsView: View {
         } else {
             pendingDestructiveAction = DestructiveConfirmation(
                 title: "Turn off encrypted photo backup?",
-                message: "This permanently deletes your encrypted meal, recipe and progress photo backup "
-                    + "from iCloud. If you lose or replace this device, those photos can't be recovered. "
-                    + "Turn off anyway?",
+                message: """
+                    This permanently deletes your encrypted meal, recipe and progress photo backup \
+                    from iCloud. If you lose or replace this device, those photos can't be recovered. \
+                    Turn off anyway?
+                    """,
                 confirmLabel: "Turn off",
                 auditEvent: "privacy.sealedBackup.disableConfirmed.ownPhotos"
             ) {
@@ -1592,7 +1608,9 @@ struct PrivacyDataSettingsView: View {
                     // consented to (size + binding disclosures) snaps back — say why instead of
                     // letting it look like a switch that refuses to move.
                     setOperationError(
-                        "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                        String(localized: "privacy.error.enablePhotoBackup",
+                               defaultValue: "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                               comment: "Shown and spoken when enabling the encrypted photo backup fails."),
                         scope: .iCloud
                     )
                     FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
@@ -1615,8 +1633,10 @@ struct PrivacyDataSettingsView: View {
             let noun = payload.displayNoun
             pendingDestructiveAction = DestructiveConfirmation(
                 title: "Turn off encrypted \(noun) backup?",
-                message: "This permanently deletes your encrypted \(noun) backup from iCloud. "
-                    + "If you lose or replace this device, that data can't be recovered. Turn off anyway?",
+                message: """
+                    This permanently deletes your encrypted \(noun) backup from iCloud. \
+                    If you lose or replace this device, that data can't be recovered. Turn off anyway?
+                    """,
                 confirmLabel: "Turn off",
                 auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)"
             ) {
@@ -1644,7 +1664,9 @@ struct PrivacyDataSettingsView: View {
                         // "Encrypt & back up" consent alert snaps back — say why rather than leaving
                         // the screen whose invariant is "never a silent swallow" doing exactly that.
                         setOperationError(
-                            "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again.",
+                            String(localized: "privacy.error.enableSealedBackup",
+                                   defaultValue: "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again.",
+                                   comment: "Shown and spoken when enabling a sealed iCloud backup fails. The argument is the noun for the data kind (period, journal, …), localized by SealedBackupPayloadType.displayNoun."),
                             scope: .iCloud
                         )
                         FernletAuditLog.log(
@@ -1725,10 +1747,12 @@ struct PrivacyDataSettingsView: View {
                     // before committing (WS-5).
                     pendingDestructiveAction = DestructiveConfirmation(
                         title: "Exclude Fernlet data from device backups?",
-                        message: "Excluding from device backup means your journals, intimate logs, and "
-                            + "cycle notes won't be in any iPhone backup. Because they're encrypted with a "
-                            + "key that never leaves this device, erasing or losing this device would lose "
-                            + "them permanently. Exclude anyway?",
+                        message: """
+                            Excluding from device backup means your journals, intimate logs, and \
+                            cycle notes won't be in any iPhone backup. Because they're encrypted with a \
+                            key that never leaves this device, erasing or losing this device would lose \
+                            them permanently. Exclude anyway?
+                            """,
                         confirmLabel: "Exclude",
                         auditEvent: "privacy.localBackup.excludeConfirmed"
                     ) {

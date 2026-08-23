@@ -209,10 +209,10 @@ public final class CaptureProtectionState {
     public func claimNudge(for pulse: Int) -> Bool {
         if let nudgePulse { return nudgePulse == pulse }
         nudgePulse = pulse
-        // `resolved:` because ``CaptureNudgeCopy`` is this module's own copy, and this module has
-        // no string catalog to resolve it against (review §4.0 — the nudge copy is the standing
-        // violation that item fixes). Routing it through the announcer neither creates nor hides
-        // that debt; it just stops a SECOND announcement seam existing here.
+        // `resolved:` because ``CaptureNudgeCopy`` is this module's own copy, already looked up
+        // against this module's catalog with `bundle: .module` (review §4.0, resolved). The
+        // announcer's resource-taking overload would build a `LocalizedStringResource` HERE, whose
+        // bundle defaults to `Bundle.main` — the app's — which never consults FernletUI's catalog.
         announcer.announce(.status, resolved: CaptureNudgeCopy.spokenAnnouncement)
         return true
     }
@@ -300,11 +300,28 @@ private final class WeakScreenBox {
 /// non-modal overlay that auto-dismisses. Per the design brief's copy rules, this must never
 /// imply the screenshot was blocked, degraded, or logged: it was none of those, and nothing
 /// about it leaves the device.
+/// Resolves through this module's own catalog with `bundle: .module` (see ``FernletUICopy``): the
+/// nudge renders from a view *modifier* and is spoken from ``CaptureProtectionState``, neither of
+/// which has a call site to take the copy from, so it is module-owned by construction. The
+/// members are computed rather than stored so the lookup happens under the locale in force when
+/// the screenshot is taken, not the one the process launched in.
 public enum CaptureNudgeCopy {
     /// The banner's bolded first line.
-    public static let headline = "This is your private data — it stays safest on your device."
+    public static var headline: String {
+        String(localized: "ui.capture.nudge.headline",
+               defaultValue: "This is your private data — it stays safest on your device.",
+               bundle: .module,
+               comment: "First line of the calm banner shown once per session after a screenshot on a protected screen. Must never imply the screenshot was blocked, degraded or logged — it was none of those.")
+    }
+
     /// The banner's quieter second line.
-    public static let detail = "A screenshot leaves Fernlet's protection behind."
+    public static var detail: String {
+        String(localized: "ui.capture.nudge.detail",
+               defaultValue: "A screenshot leaves Fernlet's protection behind.",
+               bundle: .module,
+               comment: "Second line of the post-screenshot banner: the image is now an ordinary photo outside the app's protections.")
+    }
+
     /// The single spoken form: both lines, in reading order.
     public static var spokenAnnouncement: String { "\(headline) \(detail)" }
 }
@@ -501,8 +518,17 @@ public struct CaptureProtectedModifier: ViewModifier {
     /// The cover's one-line explanation. Calm, cause-naming, and careful to claim nothing it
     /// does not do: the recording line names its own trigger and is obviously temporary; the
     /// snapshot line matches the progress-photo precedent ("Hidden").
+    ///
+    /// Resolved with `bundle: .module` for the same reason as ``CaptureNudgeCopy``: the cover is
+    /// drawn by a modifier, so there is no call site to hand the words in.
     private var coverText: String {
-        isActivelyCaptured ? "Hidden while your screen is being recorded" : "Hidden"
+        isActivelyCaptured
+            ? String(localized: "ui.capture.cover.recording",
+                     defaultValue: "Hidden while your screen is being recorded",
+                     bundle: .module,
+                     comment: "Line on the opaque cover drawn over a private screen while the display is being recorded or mirrored. Names the cause so the user knows why the screen went blank and that it is temporary.")
+            : String(localized: "ui.capture.cover.snapshot", defaultValue: "Hidden", bundle: .module,
+                     comment: "Line on the opaque cover drawn over a private screen while the app is not frontmost (app switcher / Control Center snapshots).")
     }
 
     /// The Tier-2 opaque cover: full-bleed parchment over the WHOLE surface (never a partial
@@ -524,7 +550,7 @@ public struct CaptureProtectedModifier: ViewModifier {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(coverText)
+        .accessibilityLabel(Text(verbatim: coverText))
         .accessibilityIdentifier("capture.cover.\(surface)")
         .transition(.opacity)
     }

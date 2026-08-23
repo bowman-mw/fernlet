@@ -438,7 +438,8 @@ struct WorkoutLocationSetupView: View {
         let selected = editingLocation?.selectedCount(in: category) ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text(category.label.uppercased())
+                Text(category.label)
+                    .textCase(.uppercase)
                     .font(.fernlet(.labelSmall))
                     .tracking(0.6)
                     .foregroundStyle(Color.slate)
@@ -653,14 +654,20 @@ struct WorkoutLocationSetupView: View {
     /// The delete-confirm body. Pluralizes and special-cases zero, so the one dialog where copy matters
     /// most doesn't read "the 1 pieces" or "the 0 pieces" — an empty custom location is one Add-then-back
     /// away. `static` so it can be unit-tested without standing up the view.
-    static func deleteMessage(equipmentCount count: Int) -> String {
-        let equipmentClause: String
+    static func deleteMessage(equipmentCount count: Int) -> LocalizedStringKey {
+        // Three WHOLE sentences rather than one sentence with a spliced-in clause. The clause
+        // version could never be a catalog key (a `String` built at runtime is invisible to the
+        // harvester), and even as a `%@` argument it would hand a translator a fragment they
+        // cannot reorder, decline or agree with the rest of the sentence — which is most of the
+        // languages this app will ever ship in.
         switch count {
-        case 0: equipmentClause = "its equipment setup"
-        case 1: equipmentClause = "the 1 piece of equipment you picked for it"
-        default: equipmentClause = "the \(count) pieces of equipment you picked for it"
+        case 0:
+            "This deletes the location and its equipment setup. Your logged workouts are not affected."
+        case 1:
+            "This deletes the location and the 1 piece of equipment you picked for it. Your logged workouts are not affected."
+        default:
+            "This deletes the location and the \(count) pieces of equipment you picked for it. Your logged workouts are not affected."
         }
-        return "This deletes the location and \(equipmentClause). Your logged workouts are not affected."
     }
 
     private func removeLocation(index: Int) {

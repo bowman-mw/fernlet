@@ -344,7 +344,14 @@ struct HomeView: View {
             // 3a·AX3: the date eyebrow gives way at accessibility sizes.
             ScreenHeader(
                 title: Text(verbatim: "Fernlet"),
-                subtitle: Text(verbatim: dynamicTypeSize.isAccessibilitySize ? "" : FernletDate.niceDate().uppercased()),
+                // `uppercased(with: .current)`, not the bare `uppercased()`: this is a FORMATTED
+                // DATE, already locale-dependent and already final, and Swift's bare form applies
+                // the Unicode ROOT case mapping — which turns a Turkish "i" into "I" rather than
+                // "İ". `.textCase(.uppercase)` is the fix everywhere the string is still a catalog
+                // key, but it returns a `View`, and `ScreenHeader.subtitle` is typed `Text` so the
+                // two halves of the header can be decided independently (T2-1).
+                subtitle: Text(verbatim: dynamicTypeSize.isAccessibilitySize
+                               ? "" : FernletDate.niceDate().uppercased(with: .current)),
                 subtitleFirst: true,
                 identifier: "screen.home"
             )
@@ -629,7 +636,7 @@ struct HomeView: View {
     }
 
     /// One chip inside the First Aid card — its own button straight to `tool`.
-    private func firstAidChip(_ icon: String, _ label: String, tool: FirstAidTool) -> some View {
+    private func firstAidChip(_ icon: String, _ label: LocalizedStringKey, tool: FirstAidTool) -> some View {
         Button {
             activeSheet = .firstAid(tool)
         } label: {
@@ -646,7 +653,10 @@ struct HomeView: View {
         .buttonStyle(.plain)
         .fernletTapTarget(minWidth: 0)
         .accessibilityLabel(label)
-        .accessibilityHint("Opens \(label.lowercased()) straight away")
+        // The tool's name is interpolated as a `Text`, not a lower-cased `String`: `LocalizedStringKey`
+        // has no `.lowercased()`, and case-folding a translated noun is wrong in German anyway. The
+        // key stays "Opens %@ straight away" — one sentence a translator can reorder.
+        .accessibilityHint("Opens \(Text(label)) straight away")
     }
 
     /// The recent photographed meals for the strip — any meal with a photo across the last 7 days, newest
@@ -1735,8 +1745,12 @@ private struct CompanionCustomizationSheet: View {
 
     /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
     /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge.
+    /// - Parameter slot: `LocalizedStringKey`, not `String` (review A4 follow-up F5). All four call
+    ///   sites pass a literal, and a `String` parameter bound `Text`'s verbatim overload — so the
+    ///   four slot names were never harvested and the `.textCase(.uppercase)` below had no catalog
+    ///   lookup to run after. One word of type is the whole fix.
     private func slotRowLabel<Icon: View>(
-        slot: String,
+        slot: LocalizedStringKey,
         value: String,
         isEmpty: Bool,
         @ViewBuilder icon: () -> Icon
@@ -1749,7 +1763,10 @@ private struct CompanionCustomizationSheet: View {
                         .fill(Color.bark.opacity(0.06))
                 )
 
-            Text(slot.uppercased())
+            // `.textCase`, not `String.uppercased()`: the transform has to run after any catalog
+            // lookup so it uppercases the translation, not the English key (T2-1).
+            Text(slot)
+                .textCase(.uppercase)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .frame(width: 66, alignment: .leading)
@@ -1774,7 +1791,10 @@ private struct CompanionCustomizationSheet: View {
                 .fill(Color.cream)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(slot): \(value)")
+        // `Text(slot)`, not `slot`: a `LocalizedStringKey` cannot be interpolated INTO another
+        // `LocalizedStringKey` (the compiler deprecates it — it would fall back to a debug
+        // description), but a `Text` can, and it carries the caption's own lookup with it.
+        .accessibilityLabel("\(Text(slot)): \(value)")
     }
 
     /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.

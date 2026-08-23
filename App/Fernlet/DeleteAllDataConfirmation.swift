@@ -82,7 +82,10 @@ enum DeleteAllDataConfirmation {
     ) -> DestructiveConfirmation {
         DestructiveConfirmation(
             title: "Delete everything?",
-            message: message(
+            // `verbatimMessage:` because this body is ASSEMBLED — up to four sentences chosen by
+            // what the user actually has in iCloud — so it can never be one catalog key. The
+            // fragments localize individually inside `message(…)`.
+            verbatimMessage: message(
                 healthSamples: healthSamples,
                 hasICloudDayCopy: hasICloudDayCopy,
                 hasSealedBackup: hasSealedBackup
@@ -104,7 +107,11 @@ enum DeleteAllDataConfirmation {
     /// on their behalf. The iCloud and Health sentences are CONDITIONAL — a claim about deleting an
     /// iCloud backup that the code will skip (because there isn't one) is exactly the kind of
     /// nearly-harmless overpromise that made the old "Reset everything" label untrue.
-    private static func message(healthSamples: HealthSampleOffer, hasICloudDayCopy: Bool, hasSealedBackup: Bool) -> String {
+    /// The composed dialog body. Internal rather than private so `DeleteHealthOfferTests` can assert
+    /// on the COPY directly: since review T2-1 the dialog stores its body as a `Text` (some bodies
+    /// are assembled), and a `Text` cannot be read back for a `.contains` assertion. The copy is
+    /// what those tests are about, so they now call the builder instead of the wrapper.
+    static func message(healthSamples: HealthSampleOffer, hasICloudDayCopy: Bool, hasSealedBackup: Bool) -> String {
         // "meals and their photos" + "gym progress photos" + "saved recipes and their photos" — never a
         // bare "photos". The photos this funnel deletes are the user's OWN logged pictures: the ones
         // attached to meals (`mealPhotoStore`), the gym progress-photo timeline (`progressPhotoStore`,
@@ -112,24 +119,35 @@ enum DeleteAllDataConfirmation {
         // (see below), so an unqualified "photos" here would contradict the kept list and re-open the exact
         // says-more-than-it-does gap this dialog exists to close. This enumeration is the invariant backstop
         // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b delete.
-        var scope = """
-            This deletes your logged days, meals and their photos, gym progress photos, journal entries, \
-            cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins.
-            """
+        var scope = String(
+            localized: "deleteAll.scope.base",
+            defaultValue: """
+                This deletes your logged days, meals and their photos, gym progress photos, journal \
+                entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, \
+                custom items and coins.
+                """,
+            comment: "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'."
+        )
         // Two INDEPENDENT claims, not one. The day-blob copy in iCloud (a live sync copy or one kept after
         // sync was turned off) and any sealed encrypted backups are removed by different legs of the
         // funnel, and a user can have either without the other — so each is only promised when it exists.
         if hasICloudDayCopy {
-            scope += " Your iCloud copy goes too."
+            scope += " " + String(localized: "deleteAll.scope.icloudCopy",
+                                  defaultValue: "Your iCloud copy goes too.",
+                                  comment: "Appended to the delete-everything scope only when a day-record copy exists in iCloud.")
         }
         if hasSealedBackup {
-            scope += " Any encrypted iCloud backups go too."
+            scope += " " + String(localized: "deleteAll.scope.sealedBackups",
+                                  defaultValue: "Any encrypted iCloud backups go too.",
+                                  comment: "Appended to the delete-everything scope only when the user has sealed encrypted backups in iCloud.")
         }
         // NOT "none of it can be recovered": local data is included in iOS device backups by default
         // (StoragePreferences.localBackupExcludedFromiOSBackup defaults to false, deliberately), so an
         // encrypted backup taken before today can still restore it. Fernlet cannot reach into that, and
         // an absolute permanence claim would be false for every user on the default setting.
-        scope += " Fernlet can't undo this."
+        scope += " " + String(localized: "deleteAll.scope.noUndo",
+                              defaultValue: "Fernlet can't undo this.",
+                              comment: "Closing line of the delete-everything scope. Deliberately NOT an absolute permanence claim — an iOS device backup taken earlier can still restore local data.")
 
         var paragraphs = [scope]
 
@@ -154,11 +172,15 @@ enum DeleteAllDataConfirmation {
         // death before it flushes loses the boundary silently. Neither is big enough to name in the
         // dialog — the user's data is deleted in both — but neither may be quietly forgotten either.
         if hasICloudDayCopy {
-            paragraphs.append("""
-                If you use Fernlet on another device, this reaches it the next time that device syncs — \
-                and a device you're using right then may re-add its most recent days and any custom \
-                clothing designs it still has.
-                """)
+            paragraphs.append(String(
+                localized: "deleteAll.multiDeviceCaveat",
+                defaultValue: """
+                    If you use Fernlet on another device, this reaches it the next time that device \
+                    syncs — and a device you're using right then may re-add its most recent days and \
+                    any custom clothing designs it still has.
+                    """,
+                comment: "Second paragraph of the delete-everything dialog, shown only when an iCloud day copy exists. Discloses that an actively-used second device can re-upload recent days after the wipe."
+            ))
         }
 
         // Blocks are NOT listed as kept. A block is a row in the trust vault (`blockedAt != nil`) and
@@ -183,14 +205,18 @@ enum DeleteAllDataConfirmation {
         // Milestone counts left the kept list on 2026-08-20 for the same reason, in the other
         // direction: the wipe now deletes the milestone ledger (delete-everything coverage round),
         // so naming it as a survivor would disclose a survival that no longer happens.
-        paragraphs.append("""
-            Kept on purpose: your shared photos — both the ones friends sent you and the ones you \
-            shared with them — and any restriction on sharing your own designs. You remove photos \
-            one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. \
-            This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: \
-            you'll need to add each other again in person, and anyone you blocked will no longer be \
-            blocked — block them again if you meet.
-            """)
+        paragraphs.append(String(
+            localized: "deleteAll.keptOnPurpose",
+            defaultValue: """
+                Kept on purpose: your shared photos — both the ones friends sent you and the ones you \
+                shared with them — and any restriction on sharing your own designs. You remove photos \
+                one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. \
+                This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: \
+                you'll need to add each other again in person, and anyone you blocked will no longer be \
+                blocked — block them again if you meet.
+                """,
+            comment: "Third paragraph of the delete-everything dialog: exactly what survives the wipe, and the consequences of the new identity. Every clause here is load-bearing — see the code comment above it before changing any of them."
+        ))
         paragraphs.append(healthParagraph(for: healthSamples))
         return paragraphs.joined(separator: "\n\n")
     }
@@ -214,24 +240,36 @@ enum DeleteAllDataConfirmation {
     private static func healthParagraph(for offer: HealthSampleOffer) -> String {
         switch offer {
         case .integrationOn:
-            return """
-                Fernlet can also delete the entries it wrote to Apple Health. It can only ever delete its \
-                own — everything else in Apple Health is yours to delete in the Health app.
-                """
+            return String(
+                localized: "deleteAll.health.integrationOn",
+                defaultValue: """
+                    Fernlet can also delete the entries it wrote to Apple Health. It can only ever \
+                    delete its own — everything else in Apple Health is yours to delete in the Health app.
+                    """,
+                comment: "Health paragraph of the delete-everything dialog when the Health integration is on."
+            )
         case .integrationOff:
-            return """
-                Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is \
-                still in Apple Health, and Fernlet can still delete it — you don't have to turn Health \
-                back on. It can only ever delete its own; everything else in Apple Health is yours to \
-                delete in the Health app. If you've taken Fernlet's Health access away since, it will say \
-                so instead of claiming it's gone.
-                """
+            return String(
+                localized: "deleteAll.health.integrationOff",
+                defaultValue: """
+                    Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before \
+                    that is still in Apple Health, and Fernlet can still delete it — you don't have to \
+                    turn Health back on. It can only ever delete its own; everything else in Apple \
+                    Health is yours to delete in the Health app. If you've taken Fernlet's Health \
+                    access away since, it will say so instead of claiming it's gone.
+                    """,
+                comment: "Health paragraph of the delete-everything dialog when the Health integration is off but Fernlet previously wrote samples."
+            )
         case .nothingAuthored:
-            return """
-                Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete \
-                from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet \
-                remove them, or delete them yourself in the Health app.
-                """
+            return String(
+                localized: "deleteAll.health.nothingAuthored",
+                defaultValue: """
+                    Fernlet has no record of writing anything to Apple Health, so it isn't offering to \
+                    delete from there. If it wrote entries on an earlier install, turn Health back on to \
+                    let Fernlet remove them, or delete them yourself in the Health app.
+                    """,
+                comment: "Health paragraph of the delete-everything dialog when Fernlet has no record of authoring any Health samples."
+            )
         }
     }
 
@@ -250,11 +288,19 @@ enum DeleteAllDataConfirmation {
     /// residual acceptable rather than harmless. Privacy-Policy.md §12 states it the same way; do not
     /// re-introduce an auto-expiry claim here without changing the mechanism first.
     static func failureMessage(for outcome: FernletStore.DeleteAllOutcome) -> String {
-        """
-        Fernlet deleted everything it could, but couldn't finish: \
-        \(ListFormatter.localizedString(byJoining: outcome.incompleteStores)). \
-        Anything named there may still exist. Trying again can help for anything still on this phone.
-        """
+        // The sibling assembled body, and it had zero `String(localized:)` — the same gap review
+        // T2-1 closed in `message(…)` next door. The store list stays an argument: it is built from
+        // store NAMES and joined with `ListFormatter.localizedString(byJoining:)`, which already
+        // applies the locale's own list conjunction.
+        String(
+            localized: "deleteAll.failure",
+            defaultValue: """
+                Fernlet deleted everything it could, but couldn't finish: \
+                \(ListFormatter.localizedString(byJoining: outcome.incompleteStores)). \
+                Anything named there may still exist. Trying again can help for anything still on this phone.
+                """,
+            comment: "Shown when a delete-everything wipe came back incomplete. The argument is the list of stores that failed. Deliberately does NOT promise a retry fixes everything — records already gone from the outbox cannot be reached again."
+        )
     }
 }
 

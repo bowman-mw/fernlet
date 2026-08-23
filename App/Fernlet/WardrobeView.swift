@@ -203,8 +203,13 @@ struct WardrobeView: View {
             }
     }
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text.uppercased())
+    /// `LocalizedStringKey`, not `String` (review A4 follow-up F5). As a `String` the caption bound
+    /// `Text`'s VERBATIM overload, so the word was never harvested and `.textCase` had no catalog
+    /// lookup to run after — the modifier was inert and the string absent from every catalog. With
+    /// the key type the transform does what its comment claims: it uppercases the TRANSLATION.
+    private func sectionLabel(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .textCase(.uppercase)
             .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
             .tracking(0.8)

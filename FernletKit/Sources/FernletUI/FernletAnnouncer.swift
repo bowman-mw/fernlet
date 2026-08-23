@@ -15,8 +15,8 @@
 //
 //  1. LOCALIZATION. `AccessibilityNotification.Announcement` takes a plain `String`, so a literal
 //     written *here* would be spoken in English forever — this is an SPM module and its catalog
-//     (which it does not even have; see the review's §4.0) is only ever consulted through
-//     `bundle: .module`. So this file contains ZERO announcement copy, and never will: every
+//     (`FernletKit/Sources/FernletUI/Localizable.xcstrings`, added by §4.0) is only ever consulted
+//     through `bundle: .module`. So this file contains ZERO announcement copy, and never will: every
 //     entry point takes text the CALLER resolved against the CALLER's own catalog, either as a
 //     `LocalizedStringResource` carrying its own bundle or as an already-resolved `String`.
 //

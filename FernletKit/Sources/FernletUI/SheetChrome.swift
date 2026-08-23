@@ -137,18 +137,33 @@ public struct SheetHeader<Accessory: View>: View {
     private var controlRow: some View {
         HStack(alignment: .center, spacing: 12) {
             if let onCancel {
-                Button("Cancel", action: onCancel)
+                // `FernletUICopy`, not a literal: a LocalizedStringKey written inside this package
+                // resolves against Bundle.main and never sees the module's catalog (§4.0).
+                Button(FernletUICopy.cancel, action: onCancel)
                     .font(.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body))
                     .foregroundStyle(Color.slate)
                     .buttonStyle(.plain)
                     .fernletTapTarget()
+                    // T2-19 (Full Keyboard Access): Escape leaves the sheet. The escape hatch is
+                    // the one control a keyboard-only user must always be able to reach without
+                    // tabbing through the whole form.
+                    //
+                    // SCOPE OF THE UNIQUENESS CLAIM, precisely: one *presented sheet* never carries
+                    // two Cancels — `fernletDraftGuard(showsCancelBar:)` exists to stop that, and
+                    // two `sheet.cancel` identifiers already break the UI tests. It does NOT follow
+                    // that only one claimant exists in the window: a sheet that presents another
+                    // sheet (MoveView presents WorkoutSuggestionSheet, which draws its own chrome)
+                    // has a claimant in each. SwiftUI resolves that the way it resolves any
+                    // shortcut collision — the frontmost presentation wins — which is the behaviour
+                    // a user wants from Escape anyway, but it is a resolution, not an absence.
+                    .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("sheet.cancel")
             } else {
                 accessory
             }
             Spacer(minLength: 0)
             if let onDone {
-                Button("Done", action: onDone)
+                Button(FernletUICopy.done, action: onDone)
                     .font(.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body))
                     .foregroundStyle(Color.moss.opacity(doneDisabled ? 0.45 : 1))
                     .buttonStyle(.plain)

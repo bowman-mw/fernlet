@@ -7,6 +7,9 @@
     " " : {
 
     },
+    "\"%@\"\n\nFernlet forgets it for good. Your journal entry stays." : {
+
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -223,6 +226,36 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$lld grams protein, %3$lld grams carbs, %4$lld grams fat"
+          }
+        }
+      }
+    },
+    "%@, day %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, %3$@"
+          }
+        }
+      }
+    },
+    "%@, day %lld, no workouts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, no workouts"
+          }
+        }
+      }
+    },
+    "%@, day %lld, planned %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, day %2$lld, planned %3$@"
           }
         }
       }
@@ -779,6 +812,9 @@
     "Add a meal to %@" : {
 
     },
+    "Add a note about this day…" : {
+
+    },
     "Add a photo" : {
 
     },
@@ -911,6 +947,12 @@
 
     },
     "Anything else?" : {
+
+    },
+    "Anything important to remember?" : {
+
+    },
+    "Anything to remember on the day (pace, warm-up, how you felt)" : {
 
     },
     "App lock" : {
@@ -1057,6 +1099,9 @@
     "Bottles: %lld" : {
 
     },
+    "Breathe" : {
+
+    },
     "Breathe and ground sessions, written back to Health." : {
 
     },
@@ -1090,10 +1135,16 @@
     "Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split." : {
 
     },
+    "Calories" : {
+
+    },
     "Camera" : {
 
     },
     "Camera access is off" : {
+
+    },
+    "Camera unavailable" : {
 
     },
     "Can't look for nearby friends" : {
@@ -1226,6 +1277,9 @@
 
     },
     "Color" : {
+
+    },
+    "Color %lld" : {
 
     },
     "Comfortable — could hold a conversation." : {
@@ -1465,6 +1519,9 @@
     "Date taken" : {
 
     },
+    "Day %lld" : {
+
+    },
     "Day %lld · %@" : {
       "localizations" : {
         "en" : {
@@ -1474,6 +1531,42 @@
           }
         }
       }
+    },
+    "Day %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld, %2$@"
+          }
+        }
+      }
+    },
+    "Day %lld, %@, intimacy logged" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld, %2$@, intimacy logged"
+          }
+        }
+      }
+    },
+    "Day %lld, feeling %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld, feeling %2$@"
+          }
+        }
+      }
+    },
+    "Day %lld, has data" : {
+
+    },
+    "Day %lld, intimacy logged" : {
+
     },
     "Day 1 lands here; the rest follow day by day." : {
 
@@ -1505,6 +1598,9 @@
     "Delete %@" : {
 
     },
+    "Delete %@?" : {
+
+    },
     "Delete %lld" : {
 
     },
@@ -1532,19 +1628,37 @@
     "Delete recipe" : {
 
     },
+    "Delete this day's cycle log?" : {
+
+    },
+    "Delete this entry?" : {
+
+    },
     "Delete this memory?" : {
 
     },
     "Delete this photo" : {
 
     },
+    "Delete this photo?" : {
+
+    },
+    "Delete this picture" : {
+
+    },
     "Delete this picture?" : {
+
+    },
+    "Delete this progress photo?" : {
 
     },
     "Delete this recipe photo" : {
 
     },
     "Delete your data" : {
+
+    },
+    "Delete “%@”?" : {
 
     },
     "Delete, and from Health" : {
@@ -1711,6 +1825,9 @@
     "Email the developer at %@" : {
 
     },
+    "Empty calendar cell" : {
+
+    },
     "Encrypt & back up" : {
 
     },
@@ -1835,7 +1952,16 @@
     "Everything you've unlocked stays unlocked." : {
 
     },
+    "Exclude" : {
+
+    },
+    "Exclude Fernlet data from device backups?" : {
+
+    },
     "Exclude from backups" : {
+
+    },
+    "Excluding from device backup means your journals, intimate logs, and cycle notes won't be in any iPhone backup. Because they're encrypted with a key that never leaves this device, erasing or losing this device would lose them permanently. Exclude anyway?" : {
 
     },
     "Exercise %lld of %lld · %lld min left" : {
@@ -1873,6 +1999,12 @@
 
     },
     "F %lldg" : {
+
+    },
+    "Fat" : {
+
+    },
+    "Favorite this photo" : {
 
     },
     "Feeling" : {
@@ -1946,6 +2078,18 @@
 
     },
     "Fernlet removed everything it stored on this device." : {
+
+    },
+    "Fernlet will contact %@ and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept." : {
+
+    },
+    "Fernlet will hide every cycle surface and stop reading your cycle data. Your entries are kept — turn this back on any time to see them again.\n\nYour daily score may change: Fernlet will stop softening it around your cycle. Anything you've saved in Apple Health stays in Apple Health." : {
+
+    },
+    "Fernlet will hide intimacy logging and stop reading it. Your notes are kept — turn this back on any time to see them again.\n\nAnything you've saved in Apple Health stays in Apple Health." : {
+
+    },
+    "Fewer sets" : {
 
     },
     "Fields sent, names only: %@" : {
@@ -2086,6 +2230,9 @@
 
     },
     "Good vibes from %@. Tap to tuck away." : {
+
+    },
+    "Ground" : {
 
     },
     "Grounding" : {
@@ -2316,6 +2463,15 @@
     "It came from Health, so manage it in the Health app." : {
 
     },
+    "It comes off your personal care list. Days you've already ticked it stay as they are." : {
+
+    },
+    "It leaves your closet and your companion. This can't be undone." : {
+
+    },
+    "It won't be logged — you can plan it again any time." : {
+
+    },
     "It works even while Fernlet is counting down from too many wrong attempts, and it never counts as a wrong attempt itself." : {
 
     },
@@ -2449,6 +2605,12 @@
     "Lock photos to this device" : {
 
     },
+    "Lock photos to this device?" : {
+
+    },
+    "Lock to this device" : {
+
+    },
     "Log" : {
 
     },
@@ -2517,6 +2679,9 @@
 
     },
     "Logged once" : {
+
+    },
+    "Longer rest" : {
 
     },
     "Looking for a barcode..." : {
@@ -2673,6 +2838,9 @@
     "More options for %@" : {
 
     },
+    "More sets" : {
+
+    },
     "Move" : {
 
     },
@@ -2806,6 +2974,9 @@
 
     },
     "No fields were recorded for this call." : {
+
+    },
+    "No film remaining" : {
 
     },
     "No friends yet — meet up in person to add one." : {
@@ -3027,6 +3198,9 @@
     "Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app." : {
 
     },
+    "One exercise per line, e.g. Squat 3x8 @60" : {
+
+    },
     "One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time." : {
 
     },
@@ -3148,6 +3322,9 @@
     "PER SERVING" : {
 
     },
+    "Pain, form issues, stopped early..." : {
+
+    },
     "Partial nutrition data — some meals were logged without micronutrients." : {
 
     },
@@ -3155,6 +3332,9 @@
 
     },
     "Paste URL" : {
+
+    },
+    "Paste a Fernlet recipe share here" : {
 
     },
     "Paste a plan" : {
@@ -3206,6 +3386,35 @@
 
     },
     "Photo couldn't be opened" : {
+
+    },
+    "Photo from %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo from %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "Photo from %@, %@, carousel, %lld photos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo from %1$@, %2$@, carousel, %3$lld photos"
+          }
+        }
+      }
+    },
+    "Photo of %@" : {
+
+    },
+    "Photo of %@, couldn't be opened" : {
+
+    },
+    "Photo of %@, on your other device" : {
 
     },
     "Photo on your other device" : {
@@ -3272,6 +3481,9 @@
 
     },
     "Please try again." : {
+
+    },
+    "Point the camera at the product's barcode." : {
 
     },
     "Preferences" : {
@@ -3373,6 +3585,9 @@
     "Protection used" : {
 
     },
+    "Protein" : {
+
+    },
     "Prototype only — not production-private. Debug surfaces for local inspection during development." : {
 
     },
@@ -3398,6 +3613,12 @@
 
     },
     "RPE (1–10)" : {
+
+    },
+    "Re-import" : {
+
+    },
+    "Re-import from %@?" : {
 
     },
     "Re-import from source" : {
@@ -3572,7 +3793,13 @@
     "Remove recovery device?" : {
 
     },
+    "Remove this meal?" : {
+
+    },
     "Remove this photo" : {
+
+    },
+    "Remove this plan?" : {
 
     },
     "Remove timer" : {
@@ -3742,6 +3969,9 @@
     "Save recipe" : {
 
     },
+    "Save this picture to your Photos library" : {
+
+    },
     "Save to closet" : {
 
     },
@@ -3761,6 +3991,9 @@
 
     },
     "Saved to Apple Health" : {
+
+    },
+    "Saved to Photos" : {
 
     },
     "Saving" : {
@@ -4040,6 +4273,9 @@
     "Shopping list" : {
 
     },
+    "Shorter rest" : {
+
+    },
     "Show calories" : {
 
     },
@@ -4213,6 +4449,12 @@
     "Steps (optional)" : {
 
     },
+    "Stop cooking" : {
+
+    },
+    "Stop cooking %@?" : {
+
+    },
     "Stop sharing" : {
 
     },
@@ -4357,10 +4599,16 @@
     "The lock guards period, intimacy, and other sensitive areas before they open." : {
 
     },
+    "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
+
+    },
     "The recovery device doesn't need its own app lock, and nothing about it is stored anywhere but on these two phones." : {
 
     },
     "The recovery lock needs a second phone of your own, enrolled in person. It holds the only copy of the key that can open this phone again — Fernlet never puts that key in the cloud, and there is no way to enrol a device remotely." : {
+
+    },
+    "The saved recipe, its notes and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
 
     },
     "The shared photo wall — the pictures friends gave you and the ones you shared with them stay, on both sides. You remove photos one at a time from the photo itself; there's no bulk delete." : {
@@ -4370,6 +4618,9 @@
 
     },
     "The shelf is filling in" : {
+
+    },
+    "The words you wrote for this day are sealed on this device — deleting them can't be undone." : {
 
     },
     "Theme, backgrounds, Home widgets" : {
@@ -4408,6 +4659,15 @@
     "This deletes" : {
 
     },
+    "This deletes the location and its equipment setup. Your logged workouts are not affected." : {
+
+    },
+    "This deletes the location and the %lld pieces of equipment you picked for it. Your logged workouts are not affected." : {
+
+    },
+    "This deletes the location and the 1 piece of equipment you picked for it. Your logged workouts are not affected." : {
+
+    },
     "This device holds the key from before your current app lock. It can still recover everything you wrote before then, but not what you have written since. Set it up again to cover both." : {
 
     },
@@ -4435,6 +4695,12 @@
     "This one lives in Apple Health" : {
 
     },
+    "This permanently deletes your encrypted %@ backup from iCloud. If you lose or replace this device, that data can't be recovered. Turn off anyway?" : {
+
+    },
+    "This permanently deletes your encrypted meal, recipe and progress photo backup from iCloud. If you lose or replace this device, those photos can't be recovered. Turn off anyway?" : {
+
+    },
     "This puts back the key your recovery device was given. If you have set up a new app lock since then, anything you wrote under it will be lost — everything from before is recovered." : {
 
     },
@@ -4442,6 +4708,15 @@
 
     },
     "This removes it from this device. It can't be undone." : {
+
+    },
+    "This removes it from your timeline and your device. Fernlet can't undo this." : {
+
+    },
+    "This removes the health samples Fernlet wrote for %@ and the sealed note kept with them. It can't be undone." : {
+
+    },
+    "This removes your photo of this recipe from your device. Fernlet can't undo this." : {
 
     },
     "This tunes suggestions without locking you into rules." : {
@@ -4492,6 +4767,48 @@
     "Today's workout" : {
 
     },
+    "Today, day %lld" : {
+
+    },
+    "Today, day %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today, day %1$lld, %2$@"
+          }
+        }
+      }
+    },
+    "Today, day %lld, %@, intimacy logged" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today, day %1$lld, %2$@, intimacy logged"
+          }
+        }
+      }
+    },
+    "Today, day %lld, feeling %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today, day %1$lld, feeling %2$@"
+          }
+        }
+      }
+    },
+    "Today, day %lld, has data" : {
+
+    },
+    "Today, day %lld, intimacy logged" : {
+
+    },
+    "Today, day %lld, no workouts" : {
+
+    },
     "Together, in person." : {
 
     },
@@ -4516,7 +4833,25 @@
     "Tucked away." : {
 
     },
+    "Turn off" : {
+
+    },
+    "Turn off Health integration?" : {
+
+    },
+    "Turn off encrypted %@ backup?" : {
+
+    },
+    "Turn off encrypted photo backup?" : {
+
+    },
     "Turn off iCloud sync?" : {
+
+    },
+    "Turn off intimacy tracking?" : {
+
+    },
+    "Turn off period tracking?" : {
 
     },
     "Turn on" : {
@@ -4541,6 +4876,9 @@
 
     },
     "Turn the flash on" : {
+
+    },
+    "Turning this off removes the activity, cycle, and other Health data Fernlet has cached on this device. Your data stays in Apple Health. Turn off?" : {
 
     },
     "Turning this off stops every kind below" : {
@@ -4672,7 +5010,13 @@
     "What did you eat?" : {
 
     },
+    "What happened today?" : {
+
+    },
     "What it does" : {
+
+    },
+    "What should Fernlet remember?" : {
 
     },
     "What should we call it?" : {
@@ -4714,10 +5058,16 @@
     "Which phone is this?" : {
 
     },
+    "Who was involved? Anything important to remember?" : {
+
+    },
     "Whole recipe" : {
 
     },
     "Wind camera" : {
+
+    },
+    "Wind camera first" : {
 
     },
     "Wind to open the viewfinder" : {
@@ -4938,6 +5288,12 @@
     "Your local data will upload to iCloud and sync to your other Fernlet devices." : {
 
     },
+    "Your meal, recipe and progress photos will be encrypted with a key that never leaves this device. They will NOT restore onto a new or erased phone, and a device backup won't bring them back. Turn on the encrypted photo backup first if you want them to survive a phone swap. This can't be undone." : {
+
+    },
+    "Your meal, recipe and progress photos will be encrypted with a key that never leaves this device. They'll come back on a new phone only through your encrypted photo backup, never from a device backup. This can't be undone." : {
+
+    },
     "Your name" : {
 
     },
@@ -4954,6 +5310,9 @@
 
     },
     "Your photo shelf is nearly full" : {
+
+    },
+    "Your place in the steps is forgotten and the Live Activity is cleared. The recipe itself is untouched." : {
 
     },
     "Your private calendar." : {
@@ -5010,8 +5369,203 @@
     "completed" : {
 
     },
+    "cooking notes, substitutions, tips" : {
+
+    },
     "covered" : {
 
+    },
+    "cycle.flow.heavy" : {
+      "comment" : "Menstrual flow level: heavy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heavy"
+          }
+        }
+      }
+    },
+    "cycle.flow.light" : {
+      "comment" : "Menstrual flow level: light",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "cycle.flow.medium" : {
+      "comment" : "Menstrual flow level: medium",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Medium"
+          }
+        }
+      }
+    },
+    "cycle.flow.noFlow" : {
+      "comment" : "Shown for a day with no menstrual-flow sample at all, as opposed to a sample recording no flow.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No flow"
+          }
+        }
+      }
+    },
+    "cycle.flow.none" : {
+      "comment" : "Menstrual flow recorded as explicitly none for that day (a sample exists and says no flow).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "cycle.flow.unspecified" : {
+      "comment" : "Menstrual flow recorded without a level — the sample exists but says nothing about how heavy.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unspecified"
+          }
+        }
+      }
+    },
+    "deleteAll.failure" : {
+      "comment" : "Shown when a delete-everything wipe came back incomplete. The argument is the list of stores that failed. Deliberately does NOT promise a retry fixes everything — records already gone from the outbox cannot be reached again.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet deleted everything it could, but couldn't finish: %@. Anything named there may still exist. Trying again can help for anything still on this phone."
+          }
+        }
+      }
+    },
+    "deleteAll.health.integrationOff" : {
+      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is off but Fernlet previously wrote samples.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is still in Apple Health, and Fernlet can still delete it — you don't have to turn Health back on. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app. If you've taken Fernlet's Health access away since, it will say so instead of claiming it's gone."
+          }
+        }
+      }
+    },
+    "deleteAll.health.integrationOn" : {
+      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is on.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can also delete the entries it wrote to Apple Health. It can only ever delete its own — everything else in Apple Health is yours to delete in the Health app."
+          }
+        }
+      }
+    },
+    "deleteAll.health.nothingAuthored" : {
+      "comment" : "Health paragraph of the delete-everything dialog when Fernlet has no record of authoring any Health samples.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app."
+          }
+        }
+      }
+    },
+    "deleteAll.keptOnPurpose" : {
+      "comment" : "Third paragraph of the delete-everything dialog: exactly what survives the wipe, and the consequences of the new identity. Every clause here is load-bearing — see the code comment above it before changing any of them.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept on purpose: your shared photos — both the ones friends sent you and the ones you shared with them — and any restriction on sharing your own designs. You remove photos one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: you'll need to add each other again in person, and anyone you blocked will no longer be blocked — block them again if you meet."
+          }
+        }
+      }
+    },
+    "deleteAll.multiDeviceCaveat" : {
+      "comment" : "Second paragraph of the delete-everything dialog, shown only when an iCloud day copy exists. Discloses that an actively-used second device can re-upload recent days after the wipe.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.base" : {
+      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.icloudCopy" : {
+      "comment" : "Appended to the delete-everything scope only when a day-record copy exists in iCloud.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your iCloud copy goes too."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.noUndo" : {
+      "comment" : "Closing line of the delete-everything scope. Deliberately NOT an absolute permanence claim — an iOS device backup taken earlier can still restore local data.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't undo this."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.sealedBackups" : {
+      "comment" : "Appended to the delete-everything scope only when the user has sealed encrypted backups in iCloud.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Any encrypted iCloud backups go too."
+          }
+        }
+      }
     },
     "designed by %@" : {
 
@@ -5061,6 +5615,53 @@
     "min %@" : {
 
     },
+    "move.goal.notSet" : {
+      "comment" : "Spoken in place of the movement goal when the user has not set one. Reads inside the sentence 'Goal, …'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "not set"
+          }
+        }
+      }
+    },
+    "move.goalCount" : {
+      "comment" : "Goal count in the Move header's goal segment, e.g. '3 goals'. Needs a plural variation per language; English also needs the one-goal form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld goal"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld goals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.space.accessibilityValue" : {
+      "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld items"
+          }
+        }
+      }
+    },
     "none yet" : {
 
     },
@@ -5073,6 +5674,300 @@
     "optional — we'll read the macros for you" : {
 
     },
+    "palette.bark" : {
+      "comment" : "Design-canvas colour name: the app's dark brown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bark"
+          }
+        }
+      }
+    },
+    "palette.cream" : {
+      "comment" : "Design-canvas colour name: the app's off-white card colour",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cream"
+          }
+        }
+      }
+    },
+    "palette.deepSlate" : {
+      "comment" : "Design-canvas colour name: a dark blue-grey",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deep slate"
+          }
+        }
+      }
+    },
+    "palette.emerald" : {
+      "comment" : "Design-canvas colour name: a deep green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Emerald"
+          }
+        }
+      }
+    },
+    "palette.fern" : {
+      "comment" : "Design-canvas colour name: a lighter green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern"
+          }
+        }
+      }
+    },
+    "palette.moss" : {
+      "comment" : "Design-canvas colour name: the app's green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moss"
+          }
+        }
+      }
+    },
+    "palette.nearBlack" : {
+      "comment" : "Design-canvas colour name: the darkest swatch, spoken by VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Near-black"
+          }
+        }
+      }
+    },
+    "palette.parchment" : {
+      "comment" : "Design-canvas colour name: the app's background off-white",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Parchment"
+          }
+        }
+      }
+    },
+    "palette.plum" : {
+      "comment" : "Design-canvas colour name: dark purple",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plum"
+          }
+        }
+      }
+    },
+    "palette.red" : {
+      "comment" : "Design-canvas colour name: red",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Red"
+          }
+        }
+      }
+    },
+    "palette.rose" : {
+      "comment" : "Design-canvas colour name: pink",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
+    "palette.slateBlue" : {
+      "comment" : "Design-canvas colour name: a muted blue",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slate blue"
+          }
+        }
+      }
+    },
+    "palette.sun" : {
+      "comment" : "Design-canvas colour name: yellow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "palette.taupe" : {
+      "comment" : "Design-canvas colour name: a soft grey-brown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Taupe"
+          }
+        }
+      }
+    },
+    "palette.terracotta" : {
+      "comment" : "Design-canvas colour name: the app's warm orange-red",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Terracotta"
+          }
+        }
+      }
+    },
+    "palette.white" : {
+      "comment" : "Design-canvas colour name: pure white",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "White"
+          }
+        }
+      }
+    },
+    "prep notes, substitutions, storage" : {
+
+    },
+    "privacy.error.adoptBackupKey" : {
+      "comment" : "Shown and spoken when adopting the sealed-backup key written by another device fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't switch to your other device's backup key. Check iCloud and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.enablePhotoBackup" : {
+      "comment" : "Shown and spoken when enabling the encrypted photo backup fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.enableSealedBackup" : {
+      "comment" : "Shown and spoken when enabling a sealed iCloud backup fails. The argument is the noun for the data kind (period, journal, …), localized by SealedBackupPayloadType.displayNoun.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't turn on the encrypted %@ backup. Check that iCloud sync is on and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.export" : {
+      "comment" : "Shown and spoken when building the privacy data export fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't prepare your export. Please try again."
+          }
+        }
+      }
+    },
+    "scrambled eggs and toast" : {
+
+    },
+    "sealedBackup.noun.intimacyLogs" : {
+      "comment" : "Mid-sentence noun for the sealed backup of intimate-activity logs.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "intimate log"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.journalNarratives" : {
+      "comment" : "Mid-sentence noun for the sealed backup of journal entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.periodData" : {
+      "comment" : "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "period"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.sensitiveNotes" : {
+      "comment" : "Mid-sentence noun for the sealed backup of the user's private notes, e.g. 'the encrypted private notes backup'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "private notes"
+          }
+        }
+      }
+    },
     "shoulder issues, hotel gyms only" : {
 
     },
@@ -5082,19 +5977,121 @@
     "strength, running, mobility" : {
 
     },
+    "tab.food" : {
+      "comment" : "Tab bar: meals, recipes and nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food"
+          }
+        }
+      }
+    },
+    "tab.home" : {
+      "comment" : "Tab bar: the daily companion / overview tab",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home"
+          }
+        }
+      }
+    },
+    "tab.move" : {
+      "comment" : "Tab bar: workouts and movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        }
+      }
+    },
+    "tab.personal" : {
+      "comment" : "Tab bar: the locked tab — journal, cycle, intimacy, worry box",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private"
+          }
+        }
+      }
+    },
+    "tab.social" : {
+      "comment" : "Tab bar: in-person friends and shared photos",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        }
+      }
+    },
     "tap to tuck away" : {
 
     },
     "tempo, form note" : {
 
     },
+    "what to do in this step" : {
+
+    },
     "woke up twice..." : {
 
+    },
+    "worryBox.error.compose" : {
+      "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The box couldn't quite close just now — your words are still here."
+          }
+        }
+      }
+    },
+    "worryBox.error.gentleClose" : {
+      "comment" : "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+          }
+        }
+      }
+    },
+    "worryBox.error.release" : {
+      "comment" : "Shown and spoken when releasing (deleting) a saved worry fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That one didn't quite lift just now — try again in a moment."
+          }
+        }
+      }
     },
     "z" : {
 
     },
     "· %lld servings" : {
+
+    },
+    "“%@” and any photo attached to it are removed from this device. Fernlet can't undo this." : {
 
     },
     "“%@” logged to today." : {

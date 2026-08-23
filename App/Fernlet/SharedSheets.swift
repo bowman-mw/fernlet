@@ -234,7 +234,7 @@ struct SleepSheet: View {
                     qualityPicker
 
                     HStack(alignment: .top, spacing: 12) {
-                        SheetField("Hours (optional)") {
+                        SheetField("Hours (optional)", namesControl: true) {
                             TextField("7.5", text: $hours)
                                 // A decimal pad, not the full alphabetic keyboard: "7.5" is the
                                 // expected value and there are no letters in it.

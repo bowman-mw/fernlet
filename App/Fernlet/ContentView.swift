@@ -706,7 +706,7 @@ struct ContentView: View {
                     // remaining element grows with the user's text size.
                     .font(isCompact ? .body : .title3)
                     .frame(minHeight: isCompact ? 22 : 24)
-                Text(tab.title)
+                Text(verbatim: tab.title)
                     .font(.fernlet(.labelSmall))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -739,7 +739,7 @@ struct ContentView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(Text(verbatim: tab.title))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         // Settings is reachable from every tab (FLOW-34): the gear itself lives only on the
         // Home header, so a long press on the Home tab item opens it from wherever you are.
@@ -1294,7 +1294,9 @@ struct ContentView: View {
         } catch {
             // Health context refresh is opportunistic and should never block tab navigation — but a
             // tab that never refreshes has to be diagnosable.
-            FernletAuditLog.log("health.contextRefreshSkipped", context: ["tab": tab.title, "error": String(describing: error)])
+            // `rawValue`, not `title`: an audit line is a diagnostic record, and `title` localizes.
+            FernletAuditLog.log("health.contextRefreshSkipped",
+                                context: ["tab": tab.rawValue, "error": String(describing: error)])
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import ActivityKit
 import FernletDomainModel
@@ -44,11 +45,45 @@ struct WorkoutProgramTests {
     }
 
     /// The delete-confirm copy must agree in number and never read "the 0/1 pieces".
-    @Test func deleteConfirmCopyPluralizesAndHandlesZero() {
-        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 0) == "This deletes the location and its equipment setup. Your logged workouts are not affected.")
-        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 1).contains("the 1 piece of equipment"))
-        #expect(!WorkoutLocationSetupView.deleteMessage(equipmentCount: 1).contains("1 pieces"))
-        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 5).contains("the 5 pieces of equipment"))
+    ///
+    /// Asserted against the CATALOG, not against `LocalizedStringKey` equality. The intermediate
+    /// version of this test compared `deleteMessage(equipmentCount: 5)` to `…!=…(1)` and passed by
+    /// construction: `LocalizedStringKey`'s `==` reaches into the interpolation's stored arguments,
+    /// so two keys built from different `Int`s always differ — including "the %lld piece" vs
+    /// "the %lld piece", which is the exact regression a test named *Pluralizes* exists to catch.
+    /// Reading the harvested key's own value is the only assertion here that can fail for the right
+    /// reason: it sees the plural noun a translator would see.
+    @Test func deleteConfirmCopyPluralizesAndHandlesZero() throws {
+        // The zero and singular branches carry no interpolation, so their keys ARE their text.
+        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 0)
+                == "This deletes the location and its equipment setup. Your logged workouts are not affected.")
+        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 1)
+                == "This deletes the location and the 1 piece of equipment you picked for it. Your logged workouts are not affected.")
+
+        // The plural branch, read out of the app's committed string catalog. `%lld pieces` is the
+        // assertion: a regression to `%lld piece` would be invisible to every other check here.
+        let catalog = try Self.appCatalogKeys()
+        let plural = "This deletes the location and the %lld pieces of equipment you picked for it. Your logged workouts are not affected."
+        #expect(catalog.contains(plural),
+                """
+                The plural delete-confirm sentence is not in App/Fernlet/Localizable.xcstrings. \
+                Either the wording changed (re-run Scripts/sync-string-catalogs.sh and update this \
+                pin) or the branch stopped saying "pieces".
+                """)
+        #expect(!catalog.contains(plural.replacingOccurrences(of: "%lld pieces", with: "%lld piece")),
+                "the plural branch is agreeing in the singular")
+    }
+
+    /// The keys the app's committed string catalog carries.
+    ///
+    /// Reading the catalog rather than the source is deliberate: the catalog is what a translator
+    /// receives, so a string missing from it is invisible to translation no matter how it looks in
+    /// Swift.
+    private static func appCatalogKeys() throws -> Set<String> {
+        let data = try Data(contentsOf: RepoRoot.url("App/Fernlet/Localizable.xcstrings"))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        return Set(strings.keys)
     }
 
     @Test func catalogDecodesWithEquipmentVariety() {

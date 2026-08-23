@@ -201,7 +201,10 @@ struct NutritionTargetsEditor: View {
 /// (derived); anything else is clamped to `maxValue` so a fat-fingered "99999" can't overflow the row
 /// or the residual math.
 private struct MacroTargetRow: View {
-    let label: String
+    /// Drawn beside the field AND used as the field's accessibility name. `LocalizedStringKey`,
+    /// not `String`: a `String` here binds `Text.init(_: some StringProtocol)` — the verbatim
+    /// overload — so the word was neither localized nor even harvested into the catalog (T2-1).
+    let label: LocalizedStringKey
     /// The row's stable automation id, passed explicitly rather than derived from ``label``.
     ///
     /// It used to be built as `"nutritionTargets.\(label.lowercased())"`. The moment `label`
@@ -229,6 +232,17 @@ private struct MacroTargetRow: View {
                 .padding(.vertical, 7)
                 .padding(.horizontal, 10)
                 .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                // T2-8: the placeholder is Fernlet's suggested NUMBER, so the field announced as
+                // "150, text field" with nothing saying which macro it is. The drawn word beside
+                // it becomes the field's name.
+                //
+                // A matching `.accessibilityValue` is deliberately NOT set. A blank field reports
+                // its PLACEHOLDER as its accessibility value, and that placeholder is the derived
+                // target — the number the row is actually telling the user about. Overriding the
+                // value replaces it with the (nil) override, which both silences that number for
+                // VoiceOver and breaks `NutritionTargetsEditorUITests`, which reads the derived
+                // target through exactly that channel.
+                .accessibilityLabel(Text(label))
                 .accessibilityIdentifier(identifier)
             Text(unit)
                 .font(.fernlet(.labelSmall))

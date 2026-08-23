@@ -27,12 +27,19 @@ public nonisolated enum ItemSlot: String, Codable, CaseIterable, Identifiable, S
 
     public var id: String { rawValue }
 
+    /// The slot's reader-facing name. `rawValue` above is the FROZEN persisted/mesh token; this is
+    /// the display half, and it feeds the `%@` slot of app-target sentences (the Home selector row,
+    /// the studio's slot picker), which were shipping a translated sentence around an English word.
     public var label: String {
         switch self {
-        case .hat: "Hat"
-        case .face: "Face"
-        case .body: "Outfit"
-        case .heldItem: "Held item"
+        case .hat: String(localized: "itemSlot.hat", defaultValue: "Hat", bundle: .module,
+                          comment: "Wearable slot: something worn on the companion's head")
+        case .face: String(localized: "itemSlot.face", defaultValue: "Face", bundle: .module,
+                           comment: "Wearable slot: glasses, masks and anything worn on the face")
+        case .body: String(localized: "itemSlot.body", defaultValue: "Outfit", bundle: .module,
+                           comment: "Wearable slot: the companion's clothing")
+        case .heldItem: String(localized: "itemSlot.heldItem", defaultValue: "Held item", bundle: .module,
+                               comment: "Wearable slot: something the companion carries")
         }
     }
 

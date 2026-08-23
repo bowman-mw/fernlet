@@ -7,6 +7,54 @@ import PeriodContextBridge
 import HealthKitGateway
 import FernletUI
 
+/// App-target display fork over ``PeriodFlowLevel`` (review A4 follow-up F4).
+///
+/// `PeriodFlowLevel` lives in `PrivateHealthStore` — a SEALED module with, deliberately, no string
+/// catalog: its job is ciphertext and HealthKit samples, and giving it one would invite copy to
+/// accumulate behind the seal. Its `title` is `rawValue.capitalized`, i.e. a storage token wearing
+/// paint, and `CycleDayEntry.flowLabel` returns the same English words. So the fork lands HERE, in
+/// the app target, where `Bundle.main` is the right bundle and every consumer already lives.
+///
+/// Switching on the CASE rather than matching the label string is the point: the sealed module can
+/// reword `flowLabel` freely and this stays correct, and a new case is a compiler error rather than
+/// a silently English row.
+extension PeriodFlowLevel {
+    /// The localized flow word shown on the cycle calendar and its day detail.
+    var displayName: String {
+        switch self {
+        case PeriodFlowLevel.none:
+            String(localized: "cycle.flow.none", defaultValue: "None",
+                   comment: "Menstrual flow recorded as explicitly none for that day (a sample exists and says no flow).")
+        case .light:
+            String(localized: "cycle.flow.light", defaultValue: "Light",
+                   comment: "Menstrual flow level: light")
+        case .medium:
+            String(localized: "cycle.flow.medium", defaultValue: "Medium",
+                   comment: "Menstrual flow level: medium")
+        case .heavy:
+            String(localized: "cycle.flow.heavy", defaultValue: "Heavy",
+                   comment: "Menstrual flow level: heavy")
+        case .unspecified:
+            String(localized: "cycle.flow.unspecified", defaultValue: "Unspecified",
+                   comment: "Menstrual flow recorded without a level — the sample exists but says nothing about how heavy.")
+        }
+    }
+}
+
+extension CycleDayEntry {
+    /// The localized replacement for the sealed store's English ``flowLabel``.
+    ///
+    /// Distinguishes "no sample at all" from a sample that records `PeriodFlowLevel.none`, exactly
+    /// as `flowLabel` does — the two mean different things to someone reading their own history.
+    var flowDisplayName: String {
+        guard let flowLevel else {
+            return String(localized: "cycle.flow.noFlow", defaultValue: "No flow",
+                          comment: "Shown for a day with no menstrual-flow sample at all, as opposed to a sample recording no flow.")
+        }
+        return flowLevel.displayName
+    }
+}
+
 /// The Private hub's merged Cycle page: ONE layered month calendar carrying both period flow
 /// tints and a distinct intimacy marker, with the period predictions/trends cards below and a
 /// single plus-menu that can log either kind of event.
@@ -405,7 +453,7 @@ struct CycleTrackerView: View {
                                 .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                             HStack(spacing: 6) {
-                                Text(entry.flowLabel)
+                                Text(verbatim: entry.flowDisplayName)
                                 ForEach(entry.narrative?.symptomFlags.sorted() ?? []) { symptom in
                                     Text(symptom.title)
                                 }
@@ -739,12 +787,25 @@ struct CycleMonthCell: Identifiable {
         }
     }
 
-    var accessibilityLabel: String {
-        guard let day else { return "Empty calendar cell" }
-        var label = isToday ? "Today, day \(day)" : "Day \(day)"
-        if !isFuture, let entry, entry.hasObservedEvent { label += ", \(entry.flowLabel)" }
-        if hasIntimacyEvent { label += ", intimacy logged" }
-        return label
+    /// `Text` rather than `String` (review T2-1) — see ``JournalMonthCell/accessibilityLabel`` for
+    /// why appending clauses cannot localize, and why whole sentences are chosen instead.
+    var accessibilityLabel: Text {
+        guard let day else { return Text("Empty calendar cell") }
+        let flow = (!isFuture && entry?.hasObservedEvent == true) ? entry?.flowDisplayName : nil
+        switch (flow, hasIntimacyEvent) {
+        case let (flow?, true):
+            return isToday
+                ? Text("Today, day \(day), \(flow), intimacy logged")
+                : Text("Day \(day), \(flow), intimacy logged")
+        case let (flow?, false):
+            return isToday ? Text("Today, day \(day), \(flow)") : Text("Day \(day), \(flow)")
+        case (nil, true):
+            return isToday
+                ? Text("Today, day \(day), intimacy logged")
+                : Text("Day \(day), intimacy logged")
+        case (nil, false):
+            return isToday ? Text("Today, day \(day)") : Text("Day \(day)")
+        }
     }
 }
 

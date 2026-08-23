@@ -959,12 +959,12 @@ struct WorkoutSheet: View {
     /// RPE + duration, side by side — strength mode only.
     private var strengthMetricsRow: some View {
         HStack(alignment: .top, spacing: 12) {
-            SheetField("RPE (1–10)") {
+            SheetField("RPE (1–10)", namesControl: true) {
                 TextField("7", text: $rpe)
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
-            SheetField("Duration (min)") {
+            SheetField("Duration (min)", namesControl: true) {
                 TextField("45", text: $duration)
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
@@ -1892,7 +1892,10 @@ struct WorkoutSuggestionSheet: View {
     private var feelingChips: some View {
         FlowLayout(spacing: 8) {
             ForEach(WorkoutIntensity.allCases) { intensity in
-                Button(intensity.rawValue.capitalized) { energy = intensity }
+                // `displayWord` is the localized token-free half; `.localizedCapitalized` raises it
+                // for a standalone chip using the USER's locale rules (Turkish dotless i included),
+                // which `String.capitalized` does not.
+                Button(intensity.displayWord.localizedCapitalized) { energy = intensity }
                     .buttonStyle(ChipButtonStyle(selected: energy == intensity))
             }
         }
@@ -2120,11 +2123,11 @@ struct WorkoutRow: View {
     /// Category, duration, and intensity.
     private var metaRow: some View {
         HStack(spacing: 12) {
-            Text(category.rawValue)
+            Text(verbatim: category.displayName)
                 .foregroundStyle(category.color)
             if let duration = workout.duration { Text("\(duration) min") }
-            // The localized half of the intensity fork; the category rawValue beside it stays a
-            // deferred fork (WorkoutType).
+            // Both halves of the fork are now localized: `WorkoutType.displayName` exists and this
+            // site was still rendering the FROZEN `rawValue` beside the translated intensity word.
             Text(verbatim: workout.intensity.displayWord)
         }
         .font(.fernlet(.labelSmall))
@@ -2308,7 +2311,7 @@ struct EditWorkoutSheet: View {
         SheetField("Intensity") {
             FlowLayout(spacing: 8) {
                 ForEach(WorkoutIntensity.allCases) { level in
-                    Button(level.rawValue.capitalized) { intensity = level }
+                    Button(level.displayWord.localizedCapitalized) { intensity = level }
                         .buttonStyle(ChipButtonStyle(selected: intensity == level))
                         .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
                 }
@@ -2351,13 +2354,13 @@ struct EditWorkoutSheet: View {
                     intensityField
 
                     HStack(alignment: .top, spacing: 12) {
-                        SheetField("RPE (1–10)") {
+                        SheetField("RPE (1–10)", namesControl: true) {
                             TextField("7", text: $rpe)
                                 .keyboardType(.numberPad)
                                 .sheetTextInput(font: .fernlet(.label))
                                 .accessibilityIdentifier("workout.edit.rpe")
                         }
-                        SheetField("Duration (min)") {
+                        SheetField("Duration (min)", namesControl: true) {
                             TextField("45", text: $duration)
                                 .keyboardType(.numberPad)
                                 .sheetTextInput(font: .fernlet(.label))
@@ -2431,7 +2434,8 @@ struct WorkoutCategoryPreview: View {
                 Text("Category")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
-                Text(category.rawValue)
+                // `displayName`, not `rawValue`: the raw value is the persisted category token.
+                Text(verbatim: category.displayName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
             }
@@ -2457,9 +2461,16 @@ struct WorkoutCategoryPreview: View {
 /// One function, so both read the same thing. Static so it is unit-testable without SwiftUI.
 enum MoveGoalSummary {
     /// e.g. "Wellness · 3 goals", "Wellness · 1 goal", or just "Wellness" when none are written.
+    ///
+    /// The count word is a catalog key with the number as an ARGUMENT, not an English `"s"` glued
+    /// on at runtime (review A4 follow-up F4): the ternary produced a string no translator ever
+    /// sees, welded to a two-form plural rule that most languages do not have. The `%lld` slot lets
+    /// the catalog carry as many plural variations as a language needs.
     static func text(selectedGoal: GoalType, goalCount: Int) -> String {
         guard goalCount > 0 else { return selectedGoal.displayName }
-        return "\(selectedGoal.displayName) · \(goalCount) goal\(goalCount == 1 ? "" : "s")"
+        let goals = String(localized: "move.goalCount", defaultValue: "\(goalCount) goals",
+                           comment: "Goal count in the Move header's goal segment, e.g. '3 goals'. Needs a plural variation per language; English also needs the one-goal form.")
+        return "\(selectedGoal.displayName) · \(goals)"
     }
 }
 
@@ -2492,9 +2503,22 @@ struct MoveContextStrip: View {
             : "\(location.name) · \(count) items"
     }
 
+    /// Spoken when no movement goal is set. A shared constant rather than an inline `??` literal:
+    /// a fallback written inside an interpolation never reaches the catalog (review T2-1).
+    static var goalNotSet: String {
+        String(localized: "move.goal.notSet", defaultValue: "not set",
+               comment: "Spoken in place of the movement goal when the user has not set one. Reads inside the sentence 'Goal, …'.")
+    }
+
     /// Always the full, unabbreviated sentence — VoiceOver has no width to run out of.
+    ///
+    /// Stays a `String` because it is spliced into the `%@` slot of the segment's own
+    /// `.accessibilityLabel` key — but a LOCALIZED one now (T2-1): the count word was frozen
+    /// English inside an otherwise translated sentence.
     private var spaceAccessibilityValue: String {
-        "\(location.name), \(location.ownedEquipment.count) items"
+        String(localized: "move.space.accessibilityValue",
+               defaultValue: "\(location.name), \(location.ownedEquipment.count) items",
+               comment: "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.")
     }
 
     var body: some View {
@@ -2509,7 +2533,7 @@ struct MoveContextStrip: View {
             // Both segments announce label + current value, then what a tap does — the Goal segment
             // used to announce only the action (never the goal) and Space only the value (never that
             // it opens anything).
-            .accessibilityLabel("Goal, \(goalValue ?? "not set")")
+            .accessibilityLabel("Goal, \(goalValue ?? MoveContextStrip.goalNotSet)")
             .accessibilityHint("Opens your movement goals")
 
             Rectangle()
@@ -2555,7 +2579,11 @@ private struct MoveContextSegment: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.moss)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(label.uppercased())
+                    // `.textCase` on a `LocalizedStringKey` caption: the transform runs after the
+                    // catalog lookup, on the translation. (F5: as a `String` parameter it ran on
+                    // nothing, because a `String` never reaches the catalog at all.)
+                    Text(label)
+                        .textCase(.uppercase)
                         .font(.fernlet(.labelSmall))
                         .tracking(0.6)
                         .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.slate)
@@ -2799,19 +2827,19 @@ struct WorkoutExerciseBuilder: View {
     /// Sets / reps / weight / details — the strength prescription fields.
     @ViewBuilder private var strengthFields: some View {
         HStack(alignment: .top, spacing: 12) {
-            SheetField("Sets") {
+            SheetField("Sets", namesControl: true) {
                 TextField("3", text: $sets)
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
-            SheetField("Reps") {
+            SheetField("Reps", namesControl: true) {
                 TextField("8", text: $reps)
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
         }
 
-        SheetField("Weight") {
+        SheetField("Weight", namesControl: true) {
             TextField("30 lb", text: $weight)
                 .sheetTextInput()
         }
@@ -2825,12 +2853,12 @@ struct WorkoutExerciseBuilder: View {
     /// Speed / incline / details — the treadmill prescription fields.
     @ViewBuilder private var treadmillFields: some View {
         HStack(alignment: .top, spacing: 12) {
-            SheetField("Speed") {
+            SheetField("Speed", namesControl: true) {
                 TextField("5.5 mph", text: $speed)
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
-            SheetField("Incline") {
+            SheetField("Incline", namesControl: true) {
                 TextField("2", text: $incline)
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
@@ -2990,7 +3018,10 @@ struct ExerciseSearchResultRow: View {
                     Text(exercise.name)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
-                    Text("\(exercise.category.rawValue) - \(exercise.muscles.joined(separator: ", "))")
+                    // `displayName`, not `rawValue` — the seventh site of this class in this file.
+                    // The harvested key here is "%@ - %@", so the row LOOKS localized while its
+                    // first argument is the frozen persisted category token.
+                    Text("\(exercise.category.displayName) - \(exercise.muscles.joined(separator: ", "))")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
@@ -3331,12 +3362,26 @@ struct WorkoutWeekCell: Identifiable {
         return workoutCount == 1 ? "1 log" : "\(workoutCount) logs"
     }
 
-    var accessibilityLabel: String {
-        let categoryText = categories.map(\.rawValue).joined(separator: ", ")
+    /// `Text` rather than `String` (review T2-1), and `displayName` rather than `rawValue`.
+    ///
+    /// The `rawValue` was a real defect, not a style point: `WorkoutType.rawValue` is the FROZEN
+    /// persisted category token, so VoiceOver was reading storage vocabulary aloud and would keep
+    /// reading English out of a fully translated screen. `displayName` is the reader-facing half
+    /// that already exists for exactly this.
+    var accessibilityLabel: Text {
+        let categoryText = categories.map(\.displayName).joined(separator: ", ")
         let planText = plannedSplits.map(\.title).joined(separator: ", ")
-        if categoryText.isEmpty && !planText.isEmpty { return "\(weekdayText), day \(day), planned \(planText)" }
-        if categoryText.isEmpty { return isToday ? "Today, day \(day), no workouts" : "\(weekdayText), day \(day), no workouts" }
-        return isToday ? "Today, day \(day), \(categoryText)" : "\(weekdayText), day \(day), \(categoryText)"
+        if categoryText.isEmpty && !planText.isEmpty {
+            return Text("\(weekdayText), day \(day), planned \(planText)")
+        }
+        if categoryText.isEmpty {
+            return isToday
+                ? Text("Today, day \(day), no workouts")
+                : Text("\(weekdayText), day \(day), no workouts")
+        }
+        return isToday
+            ? Text("Today, day \(day), \(categoryText)")
+            : Text("\(weekdayText), day \(day), \(categoryText)")
     }
 }
 
@@ -4048,7 +4093,7 @@ struct WorkoutPlanSheet: View {
             }
 
             if logMode == .strengthTraining {
-                SheetField("Duration (min)") {
+                SheetField("Duration (min)", namesControl: true) {
                     TextField("45", text: $duration)
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))

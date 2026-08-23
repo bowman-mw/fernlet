@@ -224,7 +224,11 @@ struct WorryEntryView: View {
             // looking at, but nothing moves focus to it, so a blind user's only evidence that the
             // seal failed would be that the entry view did not go away. The EVENT, never the
             // worry — the words in the field are the reason this screen is sealed at all.
-            let failure = "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+            let failure = String(
+                localized: "worryBox.error.gentleClose",
+                defaultValue: "The box couldn't quite close just now. Your words are still here — try once more in a moment.",
+                comment: "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost."
+            )
             gentleError = failure
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }
@@ -613,7 +617,11 @@ struct WorryBoxView: View {
         } catch {
             // The event, never the worry: the compose field keeps its text and the failure is
             // spoken so it is not discoverable only by noticing the list did not grow.
-            let failure = "The box couldn't quite close just now — your words are still here."
+            let failure = String(
+                localized: "worryBox.error.compose",
+                defaultValue: "The box couldn't quite close just now — your words are still here.",
+                comment: "Shown and spoken when saving a worry from the compose sheet fails."
+            )
             composeError = failure
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }
@@ -822,7 +830,11 @@ struct WorryBoxView: View {
             // Spoken too, because this is the one failure whose visible evidence is a NON-event:
             // the row simply stays in the list, which a VoiceOver user re-reading the list would
             // reasonably take for a release that has not animated out yet.
-            let failure = "That one didn't quite lift just now — try again in a moment."
+            let failure = String(
+                localized: "worryBox.error.release",
+                defaultValue: "That one didn't quite lift just now — try again in a moment.",
+                comment: "Shown and spoken when releasing (deleting) a saved worry fails."
+            )
             releaseError = failure
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }

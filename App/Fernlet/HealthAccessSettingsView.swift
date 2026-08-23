@@ -218,8 +218,10 @@ struct HealthAccessSettingsView: View {
                 } else {
                     pendingDestructiveAction = DestructiveConfirmation(
                         title: "Turn off Health integration?",
-                        message: "Turning this off removes the activity, cycle, and other Health data "
-                            + "Fernlet has cached on this device. Your data stays in Apple Health. Turn off?",
+                        message: """
+                            Turning this off removes the activity, cycle, and other Health data \
+                            Fernlet has cached on this device. Your data stays in Apple Health. Turn off?
+                            """,
                         confirmLabel: "Turn off",
                         auditEvent: "privacy.healthKit.masterDisableConfirmed"
                     ) {

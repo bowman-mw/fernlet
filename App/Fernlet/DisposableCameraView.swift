@@ -1105,11 +1105,13 @@ struct DisposableCameraView: View {
         return "Wind to arm"
     }
 
-    private func shutterAccessibilityLabel(canShoot: Bool) -> String {
-        if canShoot { return "Take photo" }
-        if manager.filmRemaining == 0 { return "No film remaining" }
-        if !camera.canCapturePhoto { return "Camera unavailable" }
-        return "Wind camera first"
+    /// `Text` rather than `String` (review T2-1): a `String` reaches `.accessibilityLabel(_:)`
+    /// through the verbatim overload, so none of these four states was ever harvested.
+    private func shutterAccessibilityLabel(canShoot: Bool) -> Text {
+        if canShoot { return Text("Take photo") }
+        if manager.filmRemaining == 0 { return Text("No film remaining") }
+        if !camera.canCapturePhoto { return Text("Camera unavailable") }
+        return Text("Wind camera first")
     }
 
     private func windIndicator(isLandscape: Bool) -> some View {

@@ -215,14 +215,14 @@ struct ActivityPickerSection: View {
     private func activityDetailFields(for type: WorkoutActivityType) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             AdaptiveStack(spacing: 12, horizontalAlignment: .leading, verticalAlignment: .top) {
-                SheetField("Duration (min)") {
+                SheetField("Duration (min)", namesControl: true) {
                     TextField("\(type.defaultDurationMinutes)", text: $duration)
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))
                         .accessibilityIdentifier("activity.duration")
                 }
                 if type.expectsDistance {
-                    SheetField("Distance (mi)") {
+                    SheetField("Distance (mi)", namesControl: true) {
                         TextField("3.0", text: $distance)
                             .keyboardType(.decimalPad)
                             .sheetTextInput(font: .fernlet(.label))
@@ -234,7 +234,7 @@ struct ActivityPickerSection: View {
             effortField
 
             if showsEnergyField {
-                SheetField("Energy (kcal)") {
+                SheetField("Energy (kcal)", namesControl: true) {
                     TextField("250", text: $energyKcal)
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))

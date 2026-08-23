@@ -47,6 +47,9 @@ TARGETS=(
     "FernletShareExtension:App/FernletShareExtension/Localizable.xcstrings"
     "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
     "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
+    "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"
+    "ProximityKit:FernletKit/Sources/ProximityKit/Localizable.xcstrings"
+    "AppServices:FernletKit/Sources/AppServices/Localizable.xcstrings"
 )
 
 echo "==> Building (SWIFT_EMIT_LOC_STRINGS=YES) to emit .stringsdata"

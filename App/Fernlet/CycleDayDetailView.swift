@@ -208,7 +208,8 @@ struct CycleDayDetailView: View {
         if let category = sample as? HKCategorySample {
             switch category.categoryType.identifier {
             case HKCategoryTypeIdentifier.menstrualFlow.rawValue:
-                return "Flow: \(entry.flowLabel)"
+                // `flowDisplayName` (app-target fork), not the sealed store's English `flowLabel`.
+                return "Flow: \(entry.flowDisplayName)"
             case HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue:
                 return "Cervical mucus: \(mucusLabel(category.value))"
             case HKCategoryTypeIdentifier.ovulationTestResult.rawValue:

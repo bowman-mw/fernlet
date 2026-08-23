@@ -349,7 +349,9 @@ struct BarcodeScanView: View {
 /// warm off-white rounded corner brackets, a soft glowing moss scan line, and one gentle caption.
 /// Purely decorative — it never intercepts the camera or its delivery.
 private struct ScanFrameOverlay: View {
-    var caption: String
+    /// `LocalizedStringKey`, not `String` (review T2-1): the caption is both drawn and spoken, and
+    /// a `String` lands on the verbatim overload of BOTH `Text(_:)` and `.accessibilityLabel(_:)`.
+    var caption: LocalizedStringKey
 
     /// T1-6: the app's one ungated `repeatForever` — rebuilt on the repo's `TimelineView(.animation
     /// (paused:))` idiom (`DisposableCameraView.swift`'s LED breathe) so Reduce Motion can freeze it

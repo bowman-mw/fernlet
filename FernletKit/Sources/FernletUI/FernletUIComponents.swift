@@ -486,7 +486,10 @@ public extension View {
                         #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
                     )
                 } label: {
-                    Label("Done", systemImage: "checkmark.circle.fill")
+                    // `FernletUICopy` (a resolved String), not a literal: a LocalizedStringKey
+                    // written inside this package resolves against Bundle.main and never sees this
+                    // module's catalog. See FernletUICopy's header.
+                    Label(FernletUICopy.done, systemImage: "checkmark.circle.fill")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                 }
@@ -505,11 +508,11 @@ public extension View {
     ///   popover also anchors to the view root rather than the control that raised it. An `alert`
     ///   always renders both buttons, anchored to the screen.
     func discardConfirmation(isPresented: Binding<Bool>, onDiscard: @escaping () -> Void) -> some View {
-        self.alert("Discard your changes?", isPresented: isPresented) {
-            Button("Keep editing", role: .cancel) {}
-            Button("Discard", role: .destructive, action: onDiscard)
+        self.alert(FernletUICopy.Discard.title, isPresented: isPresented) {
+            Button(FernletUICopy.Discard.keepEditing, role: .cancel) {}
+            Button(FernletUICopy.Discard.discard, role: .destructive, action: onDiscard)
         } message: {
-            Text("Anything you've typed here won't be saved.")
+            Text(verbatim: FernletUICopy.Discard.message)
         }
     }
 
@@ -522,19 +525,27 @@ public extension View {
     /// iOS 26 cannot hide the Cancel button, and the mutation runs *only* from `onConfirm`.
     ///
     /// - Parameters:
-    ///   - title: Phrase it as a question, e.g. "Delete 12 shared pictures?".
-    ///   - message: Name the exact data affected and whether anything survives.
-    ///   - confirmLabel: The destructive button, e.g. "Delete all 12".
+    /// Every string parameter here is **already resolved** — this helper is called from package
+    /// modules, whose literals must go through their own `bundle: .module` lookup before they get
+    /// here (a `LocalizedStringKey` would carry no bundle and land back in `Bundle.main`). That is
+    /// also why `cancelLabel` defaults to `nil` and resolves in the body from ``FernletUICopy``
+    /// rather than to the word "Cancel": a default literal written here is the §4.0 trap.
+    ///
+    /// - Parameters:
+    ///   - title: Phrase it as a question, e.g. "Delete 12 shared pictures?". Already localized.
+    ///   - message: Name the exact data affected and whether anything survives. Already localized.
+    ///   - confirmLabel: The destructive button, e.g. "Delete all 12". Already localized.
+    ///   - cancelLabel: Overrides the shared "Cancel"; already localized when passed.
     func confirmDestructive(
         _ title: String,
         isPresented: Binding<Bool>,
         message: String,
         confirmLabel: String,
-        cancelLabel: String = "Cancel",
+        cancelLabel: String? = nil,
         onConfirm: @escaping () -> Void
     ) -> some View {
         self.alert(title, isPresented: isPresented) {
-            Button(cancelLabel, role: .cancel) {}
+            Button(cancelLabel ?? FernletUICopy.cancel, role: .cancel) {}
             Button(confirmLabel, role: .destructive, action: onConfirm)
         } message: {
             Text(message)
@@ -693,10 +704,14 @@ public struct SheetCancelBar: View {
 
     public var body: some View {
         HStack {
-            Button("Cancel", action: action)
+            Button(FernletUICopy.cancel, action: action)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
                 .buttonStyle(.plain)
+                // T2-19: Escape leaves the sheet, matching ``SheetHeader``'s Cancel. Only one of
+                // the two bars is ever mounted (see `fernletDraftGuard(showsCancelBar:)`), so the
+                // shortcut has exactly one claimant per sheet.
+                .keyboardShortcut(.cancelAction)
                 .accessibilityIdentifier("sheet.cancel")
             Spacer()
         }
@@ -812,17 +827,36 @@ public struct AdaptiveStack<Content: View>: View {
 public struct SheetField<Content: View>: View {
     /// Resolved at init so the body never has to know which initializer it came through.
     var label: Text
+    /// Whether the caption is the accessibility NAME of the content — see ``init(_:namesControl:content:)``.
+    var namesControl: Bool
     var content: Content
+    /// Scopes the caption↔control pairing to this row. One namespace per `SheetField` instance, so
+    /// two fields in the same sheet can never pair across each other.
+    @Namespace private var pairing
 
     /// The localizing initializer — the one all ~114 sheet call sites use.
     ///
     /// The literal is harvested into the calling target's string catalog and looked up in
     /// `Bundle.main`; that is the app bundle, and every entry sheet lives in the app target. A
     /// package caller must pre-resolve with `String(localized:bundle:.module)` and use
-    /// ``init(verbatim:content:)``, since a key harvested into a package bundle is invisible to
-    /// `Bundle.main` and would render as untranslated English with no error anywhere.
-    public init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+    /// ``init(verbatim:namesControl:content:)``, since a key harvested into a package bundle is
+    /// invisible to `Bundle.main` and would render as untranslated English with no error anywhere.
+    ///
+    /// - Parameter namesControl: Opt in to making the caption the accessibility *name* of the
+    ///   content (review T2-16). **Only pass `true` when the content is exactly ONE focusable
+    ///   control** — a lone `TextField`, `Stepper`, `Picker`, `DatePicker` or `Toggle`. It is an
+    ///   opt-in, never the default, because most `SheetField`s wrap a `FlowLayout` of chips or a
+    ///   `ForEach`, and pairing there stamps the caption onto every chip in the row
+    ///   (`WorkoutSetupView`'s Experience and Areas-to-work-around fields are the worked examples).
+    ///   With it off the behaviour is exactly what it has always been: caption and content are
+    ///   separate elements.
+    public init(
+        _ label: LocalizedStringKey,
+        namesControl: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
         self.label = Text(label)
+        self.namesControl = namesControl
         self.content = content()
     }
 
@@ -832,25 +866,51 @@ public struct SheetField<Content: View>: View {
     /// The `verbatim:` label is what keeps this from being chosen by accident; see
     /// ``SectionLabel/init(verbatim:)`` for why a same-label `String` overload would quietly
     /// capture every literal in the app.
-    public init(verbatim label: String, @ViewBuilder content: () -> Content) {
+    ///
+    /// - Parameter namesControl: See ``init(_:namesControl:content:)`` — single control only.
+    public init(
+        verbatim label: String,
+        namesControl: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
         self.label = Text(verbatim: label)
+        self.namesControl = namesControl
         self.content = content()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            label
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .tracking(0.8)
-                // Uppercasing moved off the string and into the environment so it runs *after* the
-                // catalog lookup, on the translated caption rather than on the English key — the
-                // only order that gets German ß → SS and accented French capitals right. See
-                // ``SectionLabel`` for the same note; these two are the app's one caption treatment.
-                .textCase(.uppercase)
-            content
+            if namesControl {
+                // Both halves of the pair, or neither: VoiceOver reads the caption as the
+                // control's name and Voice Control can say it, instead of the control announcing
+                // as a bare "text field" with the caption stranded as a separate, untargetable
+                // element. A lone `.content` half with no `.label` partner would be a change with
+                // no benefit, which is why the opt-out branch attaches nothing at all.
+                caption.accessibilityLabeledPair(role: .label, id: Self.pairID, in: pairing)
+                content.accessibilityLabeledPair(role: .content, id: Self.pairID, in: pairing)
+            } else {
+                caption
+                content
+            }
         }
     }
+
+    /// The uppercase slate caption, before either half of the pairing is attached.
+    private var caption: some View {
+        label
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .tracking(0.8)
+            // Uppercasing moved off the string and into the environment so it runs *after* the
+            // catalog lookup, on the translated caption rather than on the English key — the
+            // only order that gets German ß → SS and accented French capitals right. See
+            // ``SectionLabel`` for the same note; these two are the app's one caption treatment.
+            .textCase(.uppercase)
+    }
+
+    /// The single pair id inside one row's namespace. A row has exactly one caption and (when
+    /// opted in) one control, so the id never has to vary — the *namespace* is what separates rows.
+    private static var pairID: Int { 0 }
 }
 
 /// A pill "chip" button style that inverts to a filled bark background when selected.
@@ -1008,12 +1068,29 @@ public struct ActionPillButtonStyle: ButtonStyle {
 /// cursor lands exactly where the placeholder text sits (see the inline note on `body`).
 public struct SheetTextEditor: View {
     @Binding var text: String
-    var placeholder: String
+    /// Resolved at init so the body never has to know which initializer it came through — the same
+    /// shape as ``SheetField``/``SectionLabel``.
+    var placeholder: Text
     var minHeight: CGFloat
 
-    public init(text: Binding<String>, placeholder: String, minHeight: CGFloat = 120) {
+    /// The localizing initializer. The literal is harvested into the calling target's string
+    /// catalog and looked up in `Bundle.main` — correct for the app-target sheets that own every
+    /// call site. A package caller resolves with `String(localized:bundle:.module)` and uses
+    /// ``init(text:verbatimPlaceholder:minHeight:)``.
+    ///
+    /// The `String` parameter this replaced never localized at all: an unwrapped `String` binds
+    /// `Text.init(_: some StringProtocol)`, the *verbatim* overload, so every placeholder in the
+    /// app was frozen English and none of them were even harvested (review T2-1).
+    public init(text: Binding<String>, placeholder: LocalizedStringKey, minHeight: CGFloat = 120) {
         self._text = text
-        self.placeholder = placeholder
+        self.placeholder = Text(placeholder)
+        self.minHeight = minHeight
+    }
+
+    /// The non-localizing initializer, for a placeholder that is already final.
+    public init(text: Binding<String>, verbatimPlaceholder: String, minHeight: CGFloat = 120) {
+        self._text = text
+        self.placeholder = Text(verbatim: verbatimPlaceholder)
         self.minHeight = minHeight
     }
 
@@ -1024,11 +1101,15 @@ public struct SheetTextEditor: View {
     public var body: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
-                Text(placeholder)
+                placeholder
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate.opacity(0.45))
                     .padding(14)
                     .allowsHitTesting(false)
+                    // The drawn placeholder is not the control's name — it vanishes the moment
+                    // anything is typed. It is hidden here and re-attached to the editor below, so
+                    // the field keeps a name for its whole life instead of only while empty.
+                    .accessibilityHidden(true)
             }
             TextEditor(text: $text)
                 .frame(minHeight: minHeight)
@@ -1038,6 +1119,10 @@ public struct SheetTextEditor: View {
                 .textContentType(.none)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
+                // T2-16: a `TextEditor` announces as an unnamed text field. Naming it from the
+                // placeholder is the only copy this component has, and it is the same words a
+                // sighted user reads before typing.
+                .accessibilityLabel(placeholder)
         }
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
@@ -1059,18 +1144,22 @@ public struct SheetTextEditor: View {
 /// ```
 public struct SheetGrowingTextField: View {
     @Binding var text: String
-    var placeholder: String
+    var placeholder: LocalizedStringKey
     var lineLimit: ClosedRange<Int>
     var submitLabel: SubmitLabel
     var onSubmit: (() -> Void)?
 
     /// - Parameters:
+    ///   - placeholder: Harvested into the *calling* target's catalog and looked up in
+    ///     `Bundle.main`, which is correct for the app-target sheets that own every call site. It
+    ///     was a plain `String` until review T2-1: `TextField(_ title: some StringProtocol, …)` is
+    ///     the verbatim overload, so no placeholder in the app was ever localized *or* harvested.
     ///   - lineLimit: How far the field may grow before it scrolls; 1…4 by default.
     ///   - onSubmit: Runs when Return is pressed. Guard it with the sheet's own validity check —
     ///     Return must never save a form the Save pill would refuse.
     public init(
         text: Binding<String>,
-        placeholder: String,
+        placeholder: LocalizedStringKey,
         lineLimit: ClosedRange<Int> = 1...4,
         submitLabel: SubmitLabel = .done,
         onSubmit: (() -> Void)? = nil
@@ -1083,6 +1172,9 @@ public struct SheetGrowingTextField: View {
     }
 
     public var body: some View {
+        // `TextField(_ titleKey:…)` uses the title as BOTH the drawn placeholder and the
+        // accessibility label, so this control names itself; only ``SheetTextEditor`` (whose
+        // `TextEditor` takes no title at all) needs the label attached by hand.
         TextField(placeholder, text: $text, axis: .vertical)
             .lineLimit(lineLimit)
             .submitLabel(submitLabel)
@@ -1291,15 +1383,14 @@ public struct SheetSaveBar: View {
     /// The localizing initializer. A literal at the call site is harvested into the calling target's
     /// string catalog and looked up in `Bundle.main` — the app bundle, where all ~41 call sites are.
     ///
-    /// - Important: the `"Save"` default is a literal *inside this package*, so it is harvested into
-    ///   FernletUI's bundle, not the app's — and `Bundle.main` never consults a package bundle. The
-    ///   ~6 sheets that omit `label:` therefore translate only if the app's own catalog happens to
-    ///   carry a `"Save"` entry. It does, because several sheets pass `label: "Save"` explicitly and
-    ///   that harvests the key from the app target; the entry must not be pruned from
-    ///   `App/Fernlet/Localizable.xcstrings` on the grounds that "nothing references it", because
-    ///   this default silently does.
-    public init(label: LocalizedStringKey = "Save", disabled: Bool = false, action: @escaping () -> Void) {
-        self.label = Text(label)
+    /// Omitting `label:` falls back to ``FernletUICopy/save``, this module's own catalog entry.
+    /// The default is `nil` rather than the word itself because a `LocalizedStringKey` default
+    /// written here would be a literal *inside the package*, harvested into FernletUI's bundle and
+    /// then looked up in `Bundle.main`, which never consults it — the §4.0 trap. The old default
+    /// translated only because several sheets happened to pass `label: "Save"` explicitly and so
+    /// harvested the same key into the app's catalog; that coincidence is now unnecessary.
+    public init(label: LocalizedStringKey? = nil, disabled: Bool = false, action: @escaping () -> Void) {
+        self.label = label.map { Text($0) } ?? Text(verbatim: FernletUICopy.save)
         self.disabled = disabled
         self.action = action
     }
@@ -1545,7 +1636,10 @@ public struct CoinBalancePill: View {
     public var body: some View {
         HStack(spacing: 6) {
             CoinGlyph(diameter: 14)
-            Text("\(balance)")
+            // `verbatim:` with a locale-formatted number: the pill draws a bare numeral, so there
+            // is no sentence to translate — but there IS a grouping separator and a numeral system
+            // to get right, which `Text("\(balance)")` (a "%lld" catalog key) would not.
+            Text(verbatim: balance.formatted(.number))
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
                 .contentTransition(.numericText())
@@ -1558,6 +1652,6 @@ public struct CoinBalancePill: View {
         .overlay(Capsule(style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
         .fernletSmallShadow()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(balance) coins")
+        .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(balance)))
     }
 }

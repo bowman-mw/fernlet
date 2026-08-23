@@ -497,13 +497,13 @@ struct FriendsView: View {
     }
 
     /// What VoiceOver says for one album cell: who shared it, when, and whether it opens a carousel.
-    private func albumCellLabel(_ post: FriendPhotoWallPost) -> String {
+    private func albumCellLabel(_ post: FriendPhotoWallPost) -> Text {
         let cover = post.coverPhoto
         let when = cover.addedAt.formatted(date: .abbreviated, time: .omitted)
         if post.isCarousel {
-            return "Photo from \(cover.senderName), \(when), carousel, \(post.photos.count) photos"
+            return Text("Photo from \(cover.senderName), \(when), carousel, \(post.photos.count) photos")
         }
-        return "Photo from \(cover.senderName), \(when)"
+        return Text("Photo from \(cover.senderName), \(when)")
     }
 
     private var sessionSearchField: some View {
@@ -859,10 +859,13 @@ private struct FriendPhotoCarouselPostView: View {
             }
     }
 
+    /// - Parameter accessibilityLabel: `LocalizedStringKey`, not `String` — the argument's STATIC
+    ///   TYPE is what picks SwiftUI's localizing `accessibilityLabel(_:)` overload, and a `String`
+    ///   parameter silently opted all three call sites out (review T2-1).
     private func circleActionButton(
         systemName: String,
         tint: Color,
-        accessibilityLabel: String,
+        accessibilityLabel: LocalizedStringKey,
         selected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {

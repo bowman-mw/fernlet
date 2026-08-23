@@ -240,7 +240,11 @@ struct LogPeriodSheet: View {
         SheetField("Flow level") {
             FlowLayout(spacing: 8) {
                 ForEach(PeriodFlowLevel.allCases) { level in
-                    Button(level.title) { flowLevel = level }
+                    // `displayName` (the app-target fork in CycleTrackerView.swift), not `title`,
+                    // which is `rawValue.capitalized` — a storage token wearing paint. The calendar
+                    // that READS this value was forked in the same round; leaving the SETTER on
+                    // tokens would have shown a French user "Heavy" here and the translation there.
+                    Button(level.displayName) { flowLevel = level }
                         .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
                 }
             }

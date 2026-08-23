@@ -34,6 +34,77 @@
 // MUST trip it and a near-miss that MUST NOT — because part A legitimately finds zero call sites on
 // the day it is written, and a matcher nobody has proven is indistinguishable from a matcher that
 // never fires.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// THE HONEST CEILING. These are GREP WALLS over Swift source, not a compiler, and the difference
+// is not academic: an adversarial review of the first draft walked through 8 of 8 planted
+// evasions. Every one is fixed and fixtured (`hardenedRulesCatchTheMeasuredEvasions`), but the
+// exercise established the shape of what a source scan can and cannot promise, and pretending
+// otherwise is how a wall gets trusted past its competence.
+//
+// What these rules DO catch: a display literal handed to one of the ~25 named SwiftUI heads; a
+// `LocalizedStringKey` held in a property, a parameter default, a single- or multi-line collection
+// literal, or a function return; an accessibility label/value/hint declared `String`, including
+// across a wrapped signature; a `String(localized:)` in package source that does not resolve
+// against `.module` — INCLUDING one that passes `bundle: .main`, which is the app→package migration
+// typo and reads as compliant to any "is there a bundle argument" test; and — through the pinned
+// lists — a revert of any member THIS round forked, or of any key it put in a catalog.
+//
+// What they CANNOT catch, and never will:
+//   * A HEAD NOT ON THE LIST. `displayInitializers`/`displayModifiers` are enumerations. A literal
+//     passed to a SwiftUI API nobody has written down is invisible; the lists grow by someone
+//     noticing, which is exactly the fallibility a wall is supposed to remove.
+//   * A MEMBER NOT NAMED LIKE ONE. Rule F keys off four name fragments. Rename the member to
+//     `spokenName: String` and it matches nothing — the measured evasion (g). `forkedMembers`
+//     answers it for this round's work by pinning names; it cannot answer it for code not yet
+//     written.
+//   * INDIRECTION THROUGH A TYPE. A literal assigned to a `String` and passed through two
+//     functions, a struct field, or a dictionary before reaching a display API is a data-flow
+//     question. No line-oriented scan resolves it.
+//   * WHETHER A KEY IS ANY GOOD. A key can be present, bundled, harvested — and still be spliced
+//     into a sentence a translator cannot reorder, or carry an English plural rule. Reviews find
+//     those; this file cannot.
+//   * WHETHER THE STRING ACTUALLY RESOLVES AT RUNTIME. Harvesting is checked here
+//     (`everyForkedStringActuallyReachedItsCatalog` reads the committed catalogs); RESOLUTION is
+//     not, and today it CANNOT be from inside the test bundle. Every package catalog in this repo
+//     is English-only, and an all-English `.xcstrings` compiles to nothing — the module resource
+//     bundles ship EMPTY, with `defaultValue` doing the rendering. There is therefore no runtime
+//     lookup to assert on yet, which is why the catalog-FILE pins
+//     (`theModuleStringCatalogsAddedBySection40StillExist`) are the guard.
+//
+//     The runtime check is a MANUAL procedure, recorded here so it is repeatable:
+//       1. Add an `"fr"` localization with a distinctive value to one key in the module's
+//          `Localizable.xcstrings` (e.g. `ui.action.save` → "ENREGISTRER-TEST").
+//       2. Build the app scheme. SwiftPM now emits a non-empty `fr.lproj` into that module's
+//          resource bundle.
+//       3. Run with `-AppleLanguages (fr)` and confirm the string renders as the French value.
+//          If it renders English, the lookup is going to `Bundle.main` and the `bundle: .module`
+//          is missing or wrong.
+//       4. Revert the injected localization.
+//     This was performed against `FernletUI` for review §4.0 and resolved correctly through
+//     `Bundle.module`; redo it whenever a module gains its first real translation.
+//
+// UNCATALOGUED DISPLAY COPY — the named deferred class. Three modules ship strings a person reads
+// that reach no catalog at all, and they are deferred rather than forgotten. None is a bug today
+// (no non-English locale ships); each becomes one the day a translation lands, which is when it is
+// hardest to find, so the inventory lives here rather than in a status report nobody can grep:
+//
+//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. The hard part is
+//     not the count: several of these strings are ALSO logic tokens that six call sites compare
+//     with `==` (see part D below), so localizing them requires the token/display FORK, not a
+//     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
+//   * `HealthKitGateway` (~10 strings) — status and authorization messages, plus
+//     `HealthKitService.title`. Straightforward forks; no catalog exists in that module yet.
+//   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
+//     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
+//     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
+//     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
+//     two cycle sites. The memory category is the remaining one.
+//
+// Nothing in this file enforces that list — a grep cannot tell a display string from a token
+// without knowing what the string is FOR, which is the whole reason the localization wall is a
+// token/display discipline and not a lint rule.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
 
 import Foundation
 import Testing
@@ -124,8 +195,12 @@ struct LocalizationBoundaryTests {
         let line: Int
         /// The full call text, from `String` to its matching `)`.
         let text: String
-        /// Whether the call passes a `bundle:` argument at all (the wall only asks that the author
-        /// made a deliberate choice; `.module` is the only meaningful value inside a package).
+        /// Whether the call resolves against `.module`.
+        ///
+        /// Not "passes a `bundle:` argument at all", which is what this asked at first and what an
+        /// adversarial review walked through by planting `bundle: .main` in package source. Inside
+        /// a package `.main` is the APP's bundle — precisely the wrong one, and precisely the typo
+        /// an app→package migration produces — so accepting it made the rule agree with the bug.
         let passesBundle: Bool
 
         /// `path:line: <call text, single-lined>` — pasteable straight into a search.
@@ -891,6 +966,1322 @@ struct LocalizationBoundaryTests {
         #expect(!values.contains("not a signal value"))
     }
 
+    // MARK: - E. The SwiftUI display-literal wall
+
+    /// SwiftUI initializers whose first parameter is a `LocalizedStringKey`.
+    ///
+    /// A bare literal handed to one of these inside a package module is looked up in `Bundle.main`
+    /// — the APP's bundle — which never consults the module's own catalog. Same silent failure as
+    /// part A, different door: part A watches `String(localized:)`, this watches the SwiftUI half,
+    /// and until this test existed the SwiftUI half was completely unguarded. Eighteen live
+    /// violations were sitting in `FernletUI` and `ProximityKit` on the day it was written.
+    ///
+    /// Matched only when the literal is the FIRST argument, so `Text(verbatim:)`,
+    /// `Image(systemName:)` and every already-resolved `FernletUICopy.…` call are non-matches by
+    /// construction rather than by exclusion list.
+    static let displayInitializers = [
+        "Text", "Button", "Label", "Toggle", "TextField", "SecureField", "Picker", "Section",
+        "Stepper", "Link", "NavigationLink", "ProgressView", "Menu", "DatePicker",
+        "ContentUnavailableView", "LocalizedStringKey", "LocalizedStringResource",
+    ]
+
+    /// View modifiers whose first parameter is a `LocalizedStringKey`, with the same `Bundle.main`
+    /// default and the same silent failure.
+    ///
+    /// `accessibilityIdentifier` is deliberately ABSENT: an identifier is a token, frozen English
+    /// forever, and a wall that demanded a bundle there would be asking for the wrong thing.
+    /// `accessibilityLabel`/`Value`/`Hint` have no `bundle:` parameter of their own, so the fix at
+    /// those sites is to pass `Text("…", bundle: .module)` — which this scan then sees as a
+    /// correct `Text(` call and the modifier as a non-literal first argument.
+    static let displayModifiers = [
+        "navigationTitle", "navigationBarTitle", "alert", "confirmationDialog",
+        "accessibilityLabel", "accessibilityValue", "accessibilityHint",
+        "accessibilityAction", "accessibilityInputLabels", "help",
+    ]
+
+    /// One SwiftUI display call in package source whose first argument is a string literal.
+    struct DisplayLiteralSite: Hashable, Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// 1-based line of the call head.
+        let line: Int
+        /// The initializer or modifier name, e.g. `Text` or `.alert`.
+        let head: String
+        /// The literal's text, interpolations collapsed to `{}`.
+        let literal: String
+        /// Whether a `bundle:` argument appears anywhere in the call span.
+        let passesBundle: Bool
+
+        /// `path:line: Head("literal")` — pasteable straight into a search.
+        var report: String { "\(path):\(line): \(head)(\"\(literal)\")" }
+    }
+
+    /// Inside an SPM module, SwiftUI resolves a `LocalizedStringKey` against `Bundle.main` unless a
+    /// `bundle:` argument is passed — and most of these APIs have no `bundle:` parameter at all, so
+    /// the only correct form is to resolve first (a copy vault: `FernletUICopy`, `FernletLockCopy`,
+    /// `ProximityUICopy`) or to wrap in `Text(_:bundle:)`.
+    ///
+    /// This is the exact sibling of ``everyPackageLocalizedStringPassesModuleBundle()`` and exists
+    /// because that test could not see SwiftUI. `CLAUDE.md`'s localization-wall paragraph has always
+    /// named BOTH doors — "`String(localized:)` **and** SwiftUI's `LocalizedStringKey`" — but only
+    /// the first was enforced, which is why `SheetSaveBar`'s `"Save"` default could carry a written
+    /// note admitting it was broken and still ship.
+    ///
+    /// The FLOOR is on files scanned, for the same reason as part A: zero violations is the
+    /// intended steady state, and is indistinguishable from a scan that read nothing.
+    @Test func packageDisplayLiteralsPassModuleBundle() throws {
+        let (sites, filesScanned) = try Self.scanPackageForDisplayLiterals()
+
+        #expect(
+            filesScanned >= Self.minimumPackageFilesScanned,
+            """
+            Scanned only \(filesScanned) Swift files under \(Self.packageSourceRoot) (floor \
+            \(Self.minimumPackageFilesScanned)) — the root moved or the enumerator broke, and this \
+            wall is now passing without looking at anything.
+            """
+        )
+
+        let offenders = sites.filter { !$0.passesBundle }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) SwiftUI display literal(s) inside FernletKit resolve against \
+            Bundle.main and will render untranslated English FOREVER — clean build, no warning, no \
+            other failing test. Resolve through the module's copy vault (FernletUICopy, \
+            FernletLockCopy, ProximityUICopy) with `String(localized:…, bundle: .module)`, or pass \
+            `Text("…", bundle: .module)`:
+            \(offenders.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+
+        let held = try Self.scanPackageForHeldKeys()
+        #expect(
+            held.isEmpty,
+            """
+            \(held.count) `LocalizedStringKey` member(s) inside FernletKit hold a literal of their \
+            own. A key carries no bundle, so it resolves against Bundle.main and never sees the \
+            module's catalog — moving the literal from a call site into a property hides it from \
+            every call-site scan without fixing anything. Resolve through the module's copy vault \
+            and type the member `String`. (A LocalizedStringKey PARAMETER is correct — that is a \
+            caller's key, and it is FernletUI's whole architecture.)
+            \(held.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Scans package source for `LocalizedStringKey` members holding their own literals.
+    static func scanPackageForHeldKeys() throws -> [DisplayLiteralSite] {
+        let rootURL = RepoRoot.url(packageSourceRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            Issue.record("Could not enumerate \(packageSourceRoot) — the held-key wall is unenforced.")
+            return []
+        }
+        var sites: [DisplayLiteralSite] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+            for found in localizedStringKeyLiteralDeclarations(in: source) {
+                sites.append(DisplayLiteralSite(
+                    path: relativePath, line: found.line, head: "LocalizedStringKey",
+                    literal: found.text, passesBundle: false
+                ))
+            }
+        }
+        return sites
+    }
+
+    /// Fixture: the display-literal scanner fires on each shape it must catch and stays silent on
+    /// each shape it must not.
+    ///
+    /// Without this the wall is unfalsifiable — it is expected to report zero forever, which looks
+    /// exactly like a matcher that never runs.
+    @Test func displayLiteralScannerSeparatesKeysFromResolvedText() {
+        // The two shapes that were actually shipping in the tree.
+        #expect(Self.displayLiterals(in: #"Button("Cancel", action: onCancel)"#).count == 1)
+        #expect(Self.displayLiterals(in: #"Text("Keep as friends?")"#).first?.literal == "Keep as friends?")
+
+        // A modifier head needs its leading dot; the same word as a declaration must not match.
+        #expect(Self.displayLiterals(in: #".accessibilityLabel("12 coins")"#).count == 1)
+        #expect(Self.displayLiterals(in: #"func accessibilityLabel("x")"#).isEmpty)
+
+        // The correct forms.
+        #expect(Self.displayLiterals(in: #"Text(verbatim: FernletUICopy.save)"#).isEmpty)
+        #expect(Self.displayLiterals(in: #"Button(FernletUICopy.cancel, action: action)"#).isEmpty)
+        #expect(Self.displayLiterals(in: #"Text("Hello", bundle: .module)"#).first?.passesBundle == true)
+
+        // A literal that is not the FIRST argument is somebody else's parameter, not a key.
+        #expect(Self.displayLiterals(in: #"Label(FernletUICopy.done, systemImage: "checkmark")"#).isEmpty)
+
+        // Substring safety: an identifier ENDING in a head word is not that head.
+        #expect(Self.displayLiterals(in: #"SheetText("caption")"#).isEmpty)
+        #expect(Self.displayLiterals(in: #"myButton("x")"#).isEmpty)
+
+        // Comments naming a call are documentation, not a call — the lesson part A learned the
+        // hard way when six doc comments warning against localizing failed CI.
+        #expect(Self.displayLiterals(in: #"// never write Text("Hello") here"#).isEmpty)
+        #expect(Self.displayLiterals(in: "/* Text(\"Hello\") */\nlet y = 1").isEmpty)
+        #expect(Self.displayLiterals(in: #"let sample = "Text(\"Hello\")""#).isEmpty,
+                "a call named inside a string literal is data, not a call site")
+
+        // A `bundle:` written inside a COMMENT in the span must not fake the argument.
+        let faked = """
+        Text("Hello",
+             // bundle: .module was never added
+             tableName: nil)
+        """
+        #expect(Self.displayLiterals(in: faked).first?.passesBundle == false)
+
+        // Multi-line: the literal on a later line than the head still matches, and a paren inside
+        // the literal does not end the span early.
+        let multiline = """
+        Text(
+            "Meals (today)",
+            bundle: .module
+        )
+        """
+        #expect(Self.displayLiterals(in: multiline).first?.passesBundle == true)
+
+        // THE TERNARY. Six of these were live in ProximityKit and the first draft of this rule —
+        // which required the literal to be the first token — saw none of them.
+        #expect(Self.displayLiterals(in: #"Button(isKept ? "Keeping" : "Keep") { toggle() }"#).count == 1)
+        #expect(Self.displayLiterals(in: #"Button(isKept ? copy.keeping : copy.keep) { toggle() }"#).isEmpty)
+
+        // The held-key form: the literal moved out of the call and into a property.
+        let heldKey = """
+        private var explainerText: LocalizedStringKey {
+            saveToPhotos == nil ? "Choose which to save." : "Choose which to keep."
+        }
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: heldKey).count == 1)
+
+        let resolvedProperty = """
+        private var explainerText: String {
+            saveToPhotos == nil ? ProximityUICopy.Review.explainerSave : ProximityUICopy.Review.explainerKeep
+        }
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: resolvedProperty).isEmpty)
+
+        // A `LocalizedStringKey` PARAMETER is the correct architecture, not a violation — it is the
+        // caller's key, harvested into the caller's catalog.
+        let parameter = """
+        public init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+            self.label = Text(label)
+        }
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: parameter).isEmpty)
+
+        // A stored property fed from such a parameter holds no literal of its own.
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: "    var placeholder: LocalizedStringKey").isEmpty)
+
+        // The one-line forms. The first draft of the span reader missed BOTH — it required the
+        // literal to be on a later line than the `{` — which the plant-it-and-watch-it-fail run
+        // caught and no fixture would have.
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    private var planted: LocalizedStringKey { "Planted" }"#).count == 1)
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    let planted: LocalizedStringKey = "Planted""#).count == 1)
+    }
+
+    /// Fixture: the eight shapes an adversarial review used to walk straight through the first
+    /// draft of these rules. One `#expect` per measured evasion; each was green before the
+    /// hardening and is red now.
+    @Test func hardenedRulesCatchTheMeasuredEvasions() {
+        // (a) A parameter DEFAULT — the shape review §4.0 is literally about, and it carries no
+        //     `var`/`let` for the property rule to key off.
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    public init(label: LocalizedStringKey = "Save", disabled: Bool = false) {"#).count == 1)
+        // …while a bare key parameter stays correct: that is the CALLER's key.
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: "    public init(_ label: LocalizedStringKey, disabled: Bool = false) {").isEmpty)
+        // …and a literal default on a DIFFERENT parameter is not blamed on this one.
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    init(_ label: LocalizedStringKey, identifier: String = "row") {"#).isEmpty)
+
+        // (b) A function RETURNING a key — the property shape one keyword away.
+        let returningFunction = """
+        private func primaryActionLabel() -> LocalizedStringKey {
+            saveToPhotos == nil ? "Save selected" : "Keep selected"
+        }
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: returningFunction).count == 1)
+
+        // (c) The array spelling, which `": LocalizedStringKey"` could never match.
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    static let names: [LocalizedStringKey] = ["Hat", "Face"]"#).count == 1)
+        #expect(Self.localizedStringKeyLiteralDeclarations(
+            in: #"    var title: LocalizedStringKey? = "Untitled""#).count == 1)
+
+        // (d) + (e) Two heads that were simply missing from the lists.
+        #expect(Self.displayLiterals(in: #".accessibilityAction(named: "Retry") { retry() }"#).count == 1)
+        #expect(Self.displayLiterals(in: #"ContentUnavailableView("No meals yet", systemImage: "fork.knife")"#).count == 1)
+        // A label-less action is a closure, not copy.
+        #expect(Self.displayLiterals(in: ".accessibilityAction { retry() }").isEmpty)
+
+        // (f) A MULTI-LINE signature. Rule F was line-based, so wrapping the parameter list hid the
+        //     name from the return type. Nothing more exotic than a line break was needed.
+        let wrappedSignature = """
+        private func shutterAccessibilityLabel(
+            canShoot: Bool
+        ) -> String {
+        """
+        #expect(Self.stringTypedAccessibilityCopy(in: wrappedSignature).count == 1)
+        // The same signature, correctly typed, still passes.
+        let wrappedCorrect = """
+        private func shutterAccessibilityLabel(
+            canShoot: Bool
+        ) -> Text {
+        """
+        #expect(Self.stringTypedAccessibilityCopy(in: wrappedCorrect).isEmpty)
+
+        // (h) The verbatim exemption is now ARGUMENT-LEVEL. A literal that merely contains the
+        //     word, or an interpolation of a variable named for it, no longer exempts the call.
+        #expect(Self.displayLiterals(in: #"Text("Read this verbatim, please")"#).count == 1)
+        #expect(Self.displayLiterals(in: #"Text("Signed \(verbatimFingerprint) today")"#).count == 1)
+        // The real label still exempts, and so does a `verbatim`-prefixed one.
+        #expect(Self.displayLiterals(in: #"Text(verbatim: "already final")"#).isEmpty)
+        #expect(Self.displayLiterals(in: #"SheetTextEditor(verbatimPlaceholder: "already final")"#).isEmpty)
+
+        // (g) is NOT here, and cannot be: a member renamed to `spokenName: String` matches no name
+        //     fragment any rule can know in advance. That evasion is answered by the pinned list in
+        //     `forkedMembers`, and its residue is stated in this file's header.
+    }
+
+    /// Fixture: the MULTI-LINE collection forms of evasion (c).
+    ///
+    /// The first fix for (c) was verified against a one-line array and declared closed; a second
+    /// review pointed out that the fixture had flattened the very thing that made it an evasion.
+    /// Wrapped across lines the array escaped twice over: ``logicalLines(in:)`` joined only round
+    /// brackets, so the literals were never in the declaration's text, and
+    /// ``declarationSpanHoldsLiteral(_:startingAt:)`` bails on a declaration with no `{`.
+    @Test func multiLineCollectionsOfKeysAreCaught() {
+        let wrappedArray = """
+        private static let paletteNames: [LocalizedStringKey] = [
+            "Near-black",
+            "Bark",
+        ]
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: wrappedArray).count == 1)
+
+        let wrappedDictionary = """
+        static let bySlot: [String: LocalizedStringKey] = [
+            "hat": "Hat",
+            "face": "Face",
+        ]
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: wrappedDictionary).count == 1)
+
+        // A wrapped collection of ALREADY-RESOLVED strings is the correct shape and stays clean.
+        let wrappedResolved = """
+        private static var paletteNames: [String] = [
+            FernletUICopy.nearBlack,
+            FernletUICopy.bark,
+        ]
+        """
+        #expect(Self.localizedStringKeyLiteralDeclarations(in: wrappedResolved).isEmpty)
+
+        // The joiner itself: square brackets now carry a unit across lines, and braces still do not
+        // (a joined function body would make every rule read one enormous string).
+        #expect(Self.logicalLines(in: "let a = [\n  1,\n  2\n]").first?.text == "let a = [ 1, 2 ]")
+        #expect(Self.logicalLines(in: "func f() {\n  let x = 1\n}").first?.text == "func f() {")
+        #expect(Self.delimiterBalance("let a = [") == 1)
+        #expect(Self.delimiterBalance("]") == -1)
+        #expect(Self.delimiterBalance(#"let s = "a [ b""#) == 0)
+    }
+
+    /// Fixture: `bundle: .main` inside a package is a violation, not a pass.
+    ///
+    /// The rule asked only whether a `bundle:` argument existed, so the one wrong value it will
+    /// ever realistically be given — `.main`, the app's bundle, which is what an app→package move
+    /// leaves behind — read as compliant. It is the same silent English as passing no bundle at all.
+    @Test func onlyTheModuleBundleCountsInsidePackageSource() {
+        let main = #"String(localized: "Saved", bundle: .main)"#
+        #expect(Self.localizedCalls(in: main).first?.passesBundle == false)
+        #expect(Self.localizedCalls(in: #"String(localized: "Saved", bundle: Bundle.main)"#).first?.passesBundle == false)
+
+        // The correct spellings, both of them.
+        #expect(Self.localizedCalls(in: #"String(localized: "Saved", bundle: .module)"#).first?.passesBundle == true)
+        #expect(Self.localizedCalls(in: #"String(localized: "Saved", bundle: Bundle.module)"#).first?.passesBundle == true)
+
+        // A trailing argument must not swallow the bundle value.
+        #expect(Self.localizedCalls(in: #"String(localized: "Saved", bundle: .module, comment: "x")"#)
+                .first?.passesBundle == true)
+        #expect(Self.localizedCalls(in: #"String(localized: "Saved", bundle: .main, comment: "x")"#)
+                .first?.passesBundle == false)
+
+        // The SwiftUI half keys off the same helper.
+        #expect(Self.displayLiterals(in: #"Text("Saved", bundle: .main)"#).first?.passesBundle == false)
+        #expect(Self.displayLiterals(in: #"Text("Saved", bundle: .module)"#).first?.passesBundle == true)
+    }
+
+    /// Fixture: ``logicalLines(in:)`` joins a wrapped signature and leaves everything else alone.
+    @Test func logicalLinesJoinWrappedSignaturesOnly() {
+        let wrapped = """
+        func f(
+            a: Int,
+            b: Int
+        ) -> String {
+            return "x"
+        }
+        """
+        let units = Self.logicalLines(in: wrapped)
+        #expect(units.first?.text == "func f( a: Int, b: Int ) -> String {")
+        #expect(units.first?.line == 1)
+        // The body lines are their own units — joining must not swallow the whole declaration.
+        #expect(units.contains { $0.text == "return \"x\"" })
+
+        // A balanced line is returned untouched, at its own 1-based number.
+        let flat = "let a = 1\nlet b = f(2)"
+        #expect(Self.logicalLines(in: flat).map(\.text) == ["let a = 1", "let b = f(2)"])
+        #expect(Self.logicalLines(in: flat).map(\.line) == [1, 2])
+
+        // A paren inside a string literal or a trailing comment must not unbalance the count.
+        #expect(Self.delimiterBalance(#"let s = "a ( b""#) == 0)
+        #expect(Self.delimiterBalance("let a = 1  // note (see above)") == 0)
+    }
+
+    /// Every display-literal call in `source`. Pure + testable; comments and nested string literals
+    /// are skipped through the same ``skipNonCode(_:from:)`` every other scan in this file uses.
+    static func displayLiterals(in source: String) -> [DisplayLiteralSite] {
+        let chars = Array(source)
+        var sites: [DisplayLiteralSite] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "\n" { line += 1 }
+            guard let head = displayCallHead(chars, at: index) else {
+                index += 1
+                continue
+            }
+            let end = endOfCall(chars, openParen: head.openParen)
+            let literal = readStringLiteral(chars, from: head.quote)
+            sites.append(DisplayLiteralSite(
+                path: "", line: line, head: head.name, literal: literal.text,
+                passesBundle: resolvesAgainstModuleBundle(code(chars, from: index, to: end))
+            ))
+            line += countNewlines(chars, from: index, to: end)
+            index = max(end, index + 1)
+        }
+        return sites
+    }
+
+    /// When a display initializer or modifier head starts at `index` AND its FIRST ARGUMENT contains
+    /// a string literal, that head's name plus the offsets of its `(` and of the literal's opening
+    /// quote; otherwise nil.
+    ///
+    /// "The first argument contains a literal" — rather than "begins with one" — is what catches the
+    /// shape that got past the first draft of this rule and shipped:
+    /// `Button(isKept ? "Keeping" : "Keep")`. Six live literals in `ProximityKit` were hiding inside
+    /// ternaries and were only found because adding that module's catalog made the harvester write
+    /// them out as valueless keys.
+    ///
+    /// A first argument mentioning `verbatim` is exempt by construction: that label is this repo's
+    /// marker for text that is already final, and it is chosen by typing it.
+    static func displayCallHead(
+        _ chars: [Character], at index: Int
+    ) -> (name: String, openParen: Int, quote: Int)? {
+        for name in displayModifiers where matches(chars, at: index, ".\(name)") {
+            if let found = literalArgument(chars, after: index + name.count + 1) {
+                return (".\(name)", found.openParen, found.quote)
+            }
+        }
+        guard index == 0 || !isIdentifierCharacter(chars[index - 1]) else { return nil }
+        for name in displayInitializers where matches(chars, at: index, name) {
+            if let found = literalArgument(chars, after: index + name.count) {
+                return (name, found.openParen, found.quote)
+            }
+        }
+        return nil
+    }
+
+    /// The `(` at or after `index` and the opening quote of the first string literal inside its
+    /// FIRST argument, when there is one; otherwise nil.
+    static func literalArgument(_ chars: [Character], after index: Int) -> (openParen: Int, quote: Int)? {
+        let cursor = skipWhitespace(chars, from: index)
+        guard cursor < chars.count, chars[cursor] == "(" else { return nil }
+        let openParen = cursor
+        let argumentEnd = endOfFirstArgument(chars, openParen: openParen)
+        // ARGUMENT-LEVEL exemption, not span-level. The first draft asked whether the word
+        // "verbatim" appeared anywhere in the first argument, which any literal could satisfy on
+        // its own: `Text("read this verbatim")` exempted itself, and so did an interpolation of a
+        // variable that merely happened to be named `verbatimSomething`. Only the argument LABEL
+        // counts now, because the label is the thing an author has to type on purpose.
+        if let label = firstArgumentLabel(chars, openParen: openParen),
+           label.lowercased().hasPrefix("verbatim") {
+            return nil
+        }
+        guard let quote = firstQuote(chars, from: openParen + 1, to: argumentEnd) else { return nil }
+        return (openParen, quote)
+    }
+
+    /// The first argument's LABEL (the identifier before its `:`), or nil when the first argument is
+    /// unlabelled — which a string literal always is.
+    static func firstArgumentLabel(_ chars: [Character], openParen: Int) -> String? {
+        var cursor = skipWhitespace(chars, from: openParen + 1)
+        var label = ""
+        while cursor < chars.count, isIdentifierCharacter(chars[cursor]), chars[cursor] != "." {
+            label.append(chars[cursor])
+            cursor += 1
+        }
+        guard !label.isEmpty else { return nil }
+        cursor = skipWhitespace(chars, from: cursor)
+        guard cursor < chars.count, chars[cursor] == ":" else { return nil }
+        return label
+    }
+
+    /// Index just past the first top-level argument of the call opening at `openParen` — the first
+    /// `,` at nesting depth 1, or the closing `)`.
+    static func endOfFirstArgument(_ chars: [Character], openParen: Int) -> Int {
+        var depth = 0
+        var index = openParen
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                index = max(skip, index + 1)
+                continue
+            }
+            let character = chars[index]
+            if character == "(" || character == "[" || character == "{" { depth += 1 }
+            if character == ")" || character == "]" || character == "}" {
+                depth -= 1
+                if depth <= 0 { return index }
+            }
+            if character == ",", depth == 1 { return index }
+            index += 1
+        }
+        return chars.count
+    }
+
+    /// The index of the first string-literal quote in `from..<to`, skipping comments.
+    static func firstQuote(_ chars: [Character], from: Int, to: Int) -> Int? {
+        var index = from
+        let end = min(to, chars.count)
+        while index < end {
+            if chars[index] == "\"" { return index }
+            if chars[index] == "/", let skip = skipNonCode(chars, from: index) {
+                index = max(skip, index + 1)
+                continue
+            }
+            index += 1
+        }
+        return nil
+    }
+
+    /// Declarations in package source that HOLD a `LocalizedStringKey` literal of their own, in any
+    /// of the three shapes a key can hide in.
+    ///
+    /// The second half of the ternary lesson, hardened after an adversarial review landed 3 of its
+    /// 8 evasions here. `private var explainerText: LocalizedStringKey { … }` moves the literal out
+    /// of the call and into a property, where no call-site scan can see it — and a key held in
+    /// package source carries no bundle, so it still resolves against `Bundle.main`. The first
+    /// draft caught only that one shape. All three are caught now:
+    ///
+    /// - **S — stored or computed property.** `var x: LocalizedStringKey { "…" }`, and the array,
+    ///   optional and dictionary spellings (`[LocalizedStringKey]`, `LocalizedStringKey?`), which
+    ///   the old `": LocalizedStringKey"` substring silently missed.
+    /// - **P — parameter with a literal DEFAULT.** `init(label: LocalizedStringKey = "Save")` — the
+    ///   exact shape review §4.0 exists to fix, and it has no `var`/`let` to key off. Only the
+    ///   default is a violation; a bare `LocalizedStringKey` parameter is the opposite of one, and
+    ///   is `FernletUI`'s whole architecture (it is the CALLER's key).
+    /// - **R — function RETURNING a key.** `func label() -> LocalizedStringKey { cond ? "a" : "b" }`
+    ///   is the property shape one keyword away, and evaded the property rule completely.
+    ///
+    /// Every span scan is bounded (Power of 10 rule 2): a declaration is read for at most
+    /// ``maximumDeclarationLines`` lines, so a missing closing brace cannot run to end of file.
+    static func localizedStringKeyLiteralDeclarations(in source: String) -> [(line: Int, text: String)] {
+        let rawLines = source.components(separatedBy: "\n")
+        var found: [(line: Int, text: String)] = []
+        for unit in logicalLines(in: source) {
+            let trimmed = unit.text
+            guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
+            guard declaresType(trimmed, named: "LocalizedStringKey") else { continue }
+            if parameterHoldsLiteralDefault(trimmed, type: "LocalizedStringKey") {
+                found.append((unit.line, trimmed))
+                continue
+            }
+            guard isPropertyOrKeyReturningFunction(trimmed, type: "LocalizedStringKey") else { continue }
+            // BOTH halves, because a value can live in either place. The joined logical line holds
+            // an `= "…"` or an `= [ … ]` collection (square brackets are joined); the raw brace span
+            // holds a multi-line computed body, which is NOT joined. Checking only the span missed
+            // every multi-line array and dictionary — the span reader bails when a declaration has
+            // no `{` at all.
+            if valueHoldsLiteral(trimmed) || declarationSpanHoldsLiteral(rawLines, startingAt: unit.line - 1) {
+                found.append((unit.line, trimmed))
+            }
+        }
+        return found
+    }
+
+    /// True when `text` mentions `name` in TYPE position — after a `:` or a `->`, through any number
+    /// of brackets, optionals and generic braces.
+    ///
+    /// Written as a token test rather than the old `": \(name)"` substring because `[Type]`,
+    /// `Type?` and `[String: Type]` are all the same declaration wearing different punctuation, and
+    /// the array spelling was a measured evasion.
+    static func declaresType(_ text: String, named name: String) -> Bool {
+        let chars = Array(text)
+        var index = 0
+        while index < chars.count {
+            guard matches(chars, at: index, name) else {
+                index += 1
+                continue
+            }
+            let after = index + name.count
+            let boundedAfter = after >= chars.count || !isIdentifierCharacter(chars[after]) || chars[after] == "."
+            if boundedAfter, typePositionPrecedes(chars, before: index) { return true }
+            index = after
+        }
+        return false
+    }
+
+    /// True when a `:` or `->` introduces the type starting at `index`, ignoring the brackets and
+    /// whitespace a container type puts in between.
+    static func typePositionPrecedes(_ chars: [Character], before index: Int) -> Bool {
+        var cursor = index - 1
+        var steps = 0
+        while cursor >= 0, steps < 64 {
+            let character = chars[cursor]
+            if character == ":" { return true }
+            if character == ">", cursor > 0, chars[cursor - 1] == "-" { return true }
+            guard character == " " || character == "[" || character == "<" || character == "(" else { return false }
+            cursor -= 1
+            steps += 1
+        }
+        return false
+    }
+
+    /// True when `text` is a `var`/`let` declaration of `type`, or a function RETURNING it.
+    static func isPropertyOrKeyReturningFunction(_ text: String, type: String) -> Bool {
+        if text.hasPrefix("var ") || text.hasPrefix("let ")
+            || text.contains(" var ") || text.contains(" let ") { return true }
+        guard let arrow = text.range(of: "->") else { return false }
+        return declaresType(String(text[arrow.lowerBound...]), named: type)
+    }
+
+    /// True when a parameter of `type` carries a string-literal DEFAULT.
+    ///
+    /// Scans forward from the type to the end of that ONE parameter (its top-level `,` or the
+    /// closing `)`), so a literal default on a *different* parameter — `Bool = false, name: String
+    /// = "x"` beside a clean `LocalizedStringKey` — cannot be blamed on this one.
+    static func parameterHoldsLiteralDefault(_ text: String, type: String) -> Bool {
+        let chars = Array(text)
+        var index = 0
+        while index < chars.count {
+            guard matches(chars, at: index, type), typePositionPrecedes(chars, before: index) else {
+                index += 1
+                continue
+            }
+            let end = endOfParameter(chars, from: index + type.count)
+            let slice = String(chars[min(index, end)..<end])
+            if slice.contains("="), firstQuote(chars, from: index, to: end) != nil { return true }
+            index = max(end, index + 1)
+        }
+        return false
+    }
+
+    /// Index of the `,` or `)` ending the parameter that starts at `index`.
+    static func endOfParameter(_ chars: [Character], from index: Int) -> Int {
+        var depth = 0
+        var cursor = index
+        while cursor < chars.count {
+            if let skip = skipNonCode(chars, from: cursor) {
+                cursor = max(skip, cursor + 1)
+                continue
+            }
+            let character = chars[cursor]
+            if character == "(" || character == "[" || character == "<" { depth += 1 }
+            if character == ")" || character == "]" || character == ">" {
+                if depth <= 0 { return cursor }
+                depth -= 1
+            }
+            if character == ",", depth <= 0 { return cursor }
+            cursor += 1
+        }
+        return chars.count
+    }
+
+    /// Source lines with their continuations joined, so a declaration split across lines is ONE unit.
+    ///
+    /// A line whose round OR SQUARE brackets are unbalanced absorbs the lines after it until they
+    /// balance. Round brackets alone were the first version, and they made the multi-line signature
+    /// evasion visible — but left the collection literal wide open:
+    ///
+    /// ```swift
+    /// static let names: [LocalizedStringKey] = [
+    ///     "Hat",                                  // ← invisible while only `(` counted
+    ///     "Face",
+    /// ]
+    /// ```
+    ///
+    /// which is the same evasion as the wrapped signature, one bracket shape over. Bounded by
+    /// ``maximumDeclarationLines`` per unit.
+    ///
+    /// Returns 1-based start lines and whitespace-collapsed text.
+    static func logicalLines(in source: String) -> [(line: Int, text: String)] {
+        let rawLines = source.components(separatedBy: "\n")
+        var units: [(line: Int, text: String)] = []
+        var index = 0
+        while index < rawLines.count {
+            var joined = rawLines[index].trimmingCharacters(in: .whitespaces)
+            var depth = delimiterBalance(joined)
+            var consumed = 0
+            while depth > 0, index + consumed + 1 < rawLines.count, consumed < maximumDeclarationLines {
+                consumed += 1
+                let next = rawLines[index + consumed].trimmingCharacters(in: .whitespaces)
+                joined += " " + next
+                depth += delimiterBalance(next)
+            }
+            units.append((index + 1, joined))
+            index += consumed + 1
+        }
+        return units
+    }
+
+    /// Round and square brackets opened minus closed on one line, ignoring comments and string
+    /// literals.
+    ///
+    /// Braces are deliberately NOT counted: a `{` opens a body, and joining a whole function body
+    /// into its signature would make every rule in this file read one enormous string. Bodies are
+    /// reached instead through ``declarationSpanHoldsLiteral(_:startingAt:)``, which brace-balances
+    /// on purpose.
+    static func delimiterBalance(_ line: String) -> Int {
+        let chars = Array(line)
+        var depth = 0
+        var index = 0
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                if skip > index, chars[index] == "/" { return depth }
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "(" || chars[index] == "[" { depth += 1 }
+            if chars[index] == ")" || chars[index] == "]" { depth -= 1 }
+            index += 1
+        }
+        return depth
+    }
+
+    /// How many lines of a declaration the span scan will read before giving up.
+    static let maximumDeclarationLines = 40
+
+    /// True when the declaration starting at `index` holds a string literal in its VALUE — after the
+    /// `{` of a computed property or the `=` of a stored one.
+    ///
+    /// Reading the value rather than the whole line is what keeps a `LocalizedStringKey` parameter
+    /// (`_ label: LocalizedStringKey`) and a stored property fed from one (`var placeholder:
+    /// LocalizedStringKey`) out of the results: neither has a value of its own here.
+    static func declarationSpanHoldsLiteral(_ lines: [String], startingAt index: Int) -> Bool {
+        var span = ""
+        var depth = 0
+        var seenBrace = false
+        var cursor = index
+        let limit = min(index + maximumDeclarationLines, lines.count)
+        while cursor < limit {
+            if cursor > index, !seenBrace { break }
+            let line = lines[cursor]
+            span += line + "\n"
+            for character in line where character == "{" || character == "}" {
+                seenBrace = true
+                depth += character == "{" ? 1 : -1
+            }
+            if seenBrace, depth <= 0 { break }
+            cursor += 1
+        }
+        return valueHoldsLiteral(span)
+    }
+
+    /// True when `text` holds a string literal in its VALUE — after the `{` of a computed property
+    /// or the `=` of a stored one (or of a parameter default).
+    ///
+    /// Reading only the value is what keeps a bare `LocalizedStringKey` parameter — a CALLER's key,
+    /// and `FernletUI`'s whole architecture — out of the results.
+    static func valueHoldsLiteral(_ text: String) -> Bool {
+        let chars = Array(text)
+        guard let bodyStart = chars.firstIndex(where: { $0 == "{" || $0 == "=" }) else { return false }
+        return firstQuote(chars, from: bodyStart, to: chars.count) != nil
+    }
+
+    /// True when `character` can appear inside a Swift identifier — the guard that stops `Text(`
+    /// from matching inside `SheetText(`.
+    static func isIdentifierCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_" || character == "."
+    }
+
+    /// Scans every `.swift` file under ``packageSourceRoot`` for SwiftUI display literals.
+    static func scanPackageForDisplayLiterals() throws -> (sites: [DisplayLiteralSite], filesScanned: Int) {
+        let rootURL = RepoRoot.url(packageSourceRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            Issue.record("Could not enumerate \(packageSourceRoot) — moved or renamed? The display-literal wall is unenforced.")
+            return ([], 0)
+        }
+        var sites: [DisplayLiteralSite] = []
+        var filesScanned = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            filesScanned += 1
+            let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+            for site in displayLiterals(in: source) {
+                sites.append(DisplayLiteralSite(
+                    path: relativePath, line: site.line, head: site.head,
+                    literal: site.literal, passesBundle: site.passesBundle
+                ))
+            }
+        }
+        return (sites, filesScanned)
+    }
+
+    // MARK: - F2. The forked members, pinned by name
+
+    /// One member this round forked off `String`, and the type it must keep.
+    struct ForkedMember: Sendable {
+        /// Repo-relative path of the file the member lives in.
+        let path: String
+        /// The declaration's exact trimmed text, as ``logicalLines(in:)`` renders it.
+        let declaration: String
+        /// What the member is for, so a failure reads as a regression and not a puzzle.
+        let role: String
+    }
+
+    /// Every member review T2-1 forked, pinned by name AND file.
+    ///
+    /// **Why a pin and not a pattern.** Rule F keys off four name fragments
+    /// (``accessibilityCopyNames``), which covers a member called `accessibilityLabel` and nothing
+    /// else. Most of this round's forks are not named that way at all — `albumCellLabel`,
+    /// `paletteName(at:)`, `caption`, `deleteMessage(equipmentCount:)` — so reverting any of them
+    /// to `String` compiles, renders correctly in English, drops the string out of every catalog,
+    /// and passes every other test in this file. The adversarial review demonstrated exactly that
+    /// by renaming a member to `spokenName: String` and watching the wall stay green.
+    ///
+    /// A pin cannot generalize to a member nobody wrote down — that limit is stated in this file's
+    /// header — but it does make THIS round's work non-revertible-in-silence, which is the property
+    /// the round was for.
+    static let forkedMembers: [ForkedMember] = [
+        ForkedMember(path: "App/Fernlet/ConnectView.swift",
+                     declaration: "private func albumCellLabel(_ post: FriendPhotoWallPost) -> Text {",
+                     role: "the friend-photo album cell's spoken description"),
+        ForkedMember(path: "App/Fernlet/ConnectView.swift",
+                     declaration: "accessibilityLabel: LocalizedStringKey,",
+                     role: "circleActionButton's caller-supplied VoiceOver label"),
+        ForkedMember(path: "App/Fernlet/CreationStudioView.swift",
+                     declaration: "private static func paletteName(at index: Int) -> Text {",
+                     role: "the design canvas's 16 spoken colour names"),
+        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift",
+                     declaration: "var caption: LocalizedStringKey",
+                     role: "the scan-frame caption, drawn AND spoken"),
+        ForkedMember(path: "App/Fernlet/HomeView.swift",
+                     declaration: "private func firstAidChip(_ icon: String, _ label: LocalizedStringKey, tool: FirstAidTool) -> some View {",
+                     role: "the First Aid chip's name and hint"),
+        ForkedMember(path: "App/Fernlet/HomeView.swift",
+                     declaration: "private var accessibilityLabelText: Text {",
+                     role: "the Home summary card's spoken label"),
+        ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift",
+                     declaration: "private var accessibilityText: Text {",
+                     role: "the meal photo's spoken description, including its unavailable states"),
+        ForkedMember(path: "App/Fernlet/JournalView.swift",
+                     declaration: "var accessibilityLabel: Text {",
+                     role: "the journal calendar cell, including the feeling tag"),
+        ForkedMember(path: "App/Fernlet/CycleTrackerView.swift",
+                     declaration: "var accessibilityLabel: Text {",
+                     role: "the cycle calendar cell, including flow and intimacy"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var accessibilityLabel: Text {",
+                     role: "the workout week cell — the one that was speaking WorkoutType.rawValue"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private func shutterAccessibilityLabel(canShoot: Bool) -> Text {",
+                     role: "the camera shutter's four states"),
+        ForkedMember(path: "App/Fernlet/WorkoutLocationSetupView.swift",
+                     declaration: "static func deleteMessage(equipmentCount count: Int) -> LocalizedStringKey {",
+                     role: "the location-delete confirmation body"),
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift",
+                     declaration: "let label: LocalizedStringKey",
+                     role: "the macro row's drawn word, which is also the field's accessibility name"),
+        ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
+                     declaration: "let title: LocalizedStringKey",
+                     role: "every irreversible dialog's title"),
+        ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
+                     declaration: "let message: Text",
+                     role: "every irreversible dialog's body"),
+        ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
+                     declaration: "let confirmLabel: LocalizedStringKey",
+                     role: "every irreversible dialog's destructive button"),
+        ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
+                     declaration: "let label: LocalizedStringKey",
+                     role: "the second destructive outcome's button"),
+        ForkedMember(path: "App/Fernlet/HomeView.swift",
+                     declaration: "slot: LocalizedStringKey,",
+                     role: "the wardrobe selector row's uppercase slot caption"),
+        ForkedMember(path: "App/Fernlet/WardrobeView.swift",
+                     declaration: "private func sectionLabel(_ text: LocalizedStringKey) -> some View {",
+                     role: "the wardrobe's uppercase section caption"),
+        ForkedMember(path: "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
+                     declaration: "public init(text: Binding<String>, placeholder: LocalizedStringKey, minHeight: CGFloat = 120) {",
+                     role: "SheetTextEditor's placeholder, which is also the editor's accessibility name"),
+        ForkedMember(path: "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
+                     declaration: "var placeholder: LocalizedStringKey",
+                     role: "SheetGrowingTextField's placeholder, which names the field"),
+    ]
+
+    /// The members this round forked are still forked.
+    ///
+    /// Each entry names a declaration that used to be `String` and now must not be. Reverting one
+    /// is SILENT in every other way — it compiles, it renders in English, and the string simply
+    /// leaves the catalog — so this is the only test that would notice. The failure message names
+    /// the member and what it is for, because "a fork was reverted" is useless without which one.
+    ///
+    /// Matching is on the declaration TEXT within its file, so a rename fails here too (loudly, as
+    /// a stale pin) rather than quietly ceasing to protect anything.
+    @Test func thisRoundsForkedMembersStillCarryLocalizedTypes() throws {
+        var missing: [String] = []
+        for entry in Self.forkedMembers {
+            let url = RepoRoot.url(entry.path)
+            let source = try String(contentsOf: url, encoding: .utf8)
+            let present = Self.logicalLines(in: source).contains { $0.text.contains(entry.declaration) }
+            if !present { missing.append("\(entry.path): \(entry.declaration)  ← \(entry.role)") }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) member(s) forked by accessibility review T2-1 no longer carry their \
+            localized type. A revert to `String` binds SwiftUI's verbatim overload: it compiles, it \
+            reads correctly in English, and the sentence silently leaves every string catalog. If a \
+            member was deliberately RENAMED, update its pin in `forkedMembers` in the same commit:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// One catalog key that a review-T2-1 fork put there, and the file it came from.
+    struct HarvestedKey: Sendable {
+        /// Repo-relative path of the catalog the key must appear in.
+        let catalog: String
+        /// The key exactly as the compiler harvested it.
+        let key: String
+        /// The fork that produced it, for the failure message.
+        let source: String
+    }
+
+    /// Keys that exist ONLY because a `String` was forked to `LocalizedStringKey`/`Text` or routed
+    /// through a copy vault. Every one was measured ABSENT from its catalog before the fork.
+    static let harvestedForkKeys: [HarvestedKey] = [
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Delete everything?",
+                     source: "DestructiveConfirmation.title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "This deletes the location and its equipment setup. Your logged workouts are not affected.",
+                     source: "WorkoutLocationSetupView.deleteMessage, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Photo of %@",
+                     source: "MealPhotoPolaroid.accessibilityText, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Day %lld, feeling %@",
+                     source: "JournalMonthCell.accessibilityLabel, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Take photo",
+                     source: "DisposableCameraView.shutterAccessibilityLabel, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Opens %@ straight away",
+                     source: "HomeView.firstAidChip hint, label forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "tab.home",
+                     source: "FernletTab.title, forked literal → String(localized:)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings", key: "ui.action.save",
+                     source: "SheetSaveBar's default label, §4.0 — the trap its own doc comment named"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
+                     key: "ui.capture.cover.recording",
+                     source: "CaptureProtectedModifier.coverText, §4.0"),
+        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+                     key: "proximity.keepFriends.keeping",
+                     source: "the keep-as-friend chip's ternary literal, §4.0"),
+        HarvestedKey(catalog: "FernletKit/Sources/AppServices/Localizable.xcstrings",
+                     key: "notification.dailyCheckIn.title",
+                     source: "NotificationService's daily check-in title, T2-19"),
+    ]
+
+    /// The forks actually reached a catalog.
+    ///
+    /// This is the half the other tests cannot show. Parts A, E and F prove no *bad* shape is left
+    /// in the source; none of them proves a *good* shape produced anything. Harvesting is the step
+    /// that was silently missing before — a `String` parameter compiles, renders correctly in
+    /// English, and is simply never seen by the extractor, so the key a translator would work on
+    /// does not exist. Reading the committed catalog is the only place that is observable.
+    ///
+    /// Every key below was measured absent from its catalog before this round's fork, so a failure
+    /// here means a fork was reverted (or `Scripts/sync-string-catalogs.sh` was not re-run and
+    /// committed), not that a string moved.
+    @Test func everyForkedStringActuallyReachedItsCatalog() throws {
+        var missing: [String] = []
+        for entry in Self.harvestedForkKeys {
+            let url = RepoRoot.url(entry.catalog)
+            let data = try Data(contentsOf: url)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            #expect(!strings.isEmpty, "\(entry.catalog) parsed to zero keys — the catalog moved or broke")
+            if strings[entry.key] == nil {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) key(s) that a review-T2-1/§4.0 fork put into a string catalog are gone. \
+            Either the fork was reverted — in which case the string is frozen English again, with a \
+            clean build and no other failing test — or the catalogs were not re-synced. Run \
+            Scripts/sync-string-catalogs.sh and commit the diff with the code change:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Keys whose whole point is a COUNT, and the catalog they live in.
+    ///
+    /// A `%lld` in a `defaultValue` is not a plural rule — it is one string with a number in it.
+    /// Without an explicit `variations.plural` block the catalog offers a translator exactly one
+    /// form, and every language with more than two (Russian, Polish, Arabic, Welsh) is stuck
+    /// agreeing in the wrong number forever. English is already wrong at "1 coins".
+    static let pluralRuledKeys: [HarvestedKey] = [
+        HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
+                     key: "ui.coins.balance",
+                     source: "the coin pill's spoken balance"),
+        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+                     key: "proximity.review.deleteAll",
+                     source: "the photo review sheet's destructive button"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "move.goalCount",
+                     source: "the Move header's goal count"),
+    ]
+
+    /// Every count-bearing key carries real plural variations.
+    ///
+    /// These are hand-authored: `xcstringstool sync` adds keys and preserves what is already there,
+    /// but it will never INVENT a plural rule, so nothing except this test would notice one being
+    /// dropped — and the failure mode is a wrong number in a language nobody here reads.
+    @Test func countBearingKeysCarryPluralVariations() throws {
+        var missing: [String] = []
+        for entry in Self.pluralRuledKeys {
+            let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            let localizations = (strings[entry.key] as? [String: Any])?["localizations"] as? [String: Any]
+            let english = localizations?["en"] as? [String: Any]
+            let plural = (english?["variations"] as? [String: Any])?["plural"] as? [String: Any]
+            let forms = Set(plural?.keys ?? [:].keys)
+            if !forms.contains("one") || !forms.contains("other") {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) count-bearing key(s) have no `one`/`other` plural variation. A bare \
+            `%lld` default gives a translator ONE form for a language that may need six, and \
+            `xcstringstool sync` will never add the block back:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The two package string catalogs added by review §4.0 must keep existing.
+    ///
+    /// Their absence is SILENT in exactly the way ``theDomainModelStringCatalogStillExists()``
+    /// describes: every `String(localized:…, bundle: .module)` in `FernletUI` and `ProximityKit`
+    /// keeps compiling and keeps returning its `defaultValue`. Nothing else would notice.
+    @Test func theModuleStringCatalogsAddedBySection40StillExist() {
+        for module in ["FernletUI", "ProximityKit", "AppServices"] {
+            let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")
+            #expect(
+                FileManager.default.fileExists(atPath: catalog.path),
+                """
+                FernletKit/Sources/\(module)/Localizable.xcstrings is gone. Its absence is SILENT — \
+                the module's copy vault keeps compiling and keeps returning English defaultValues. \
+                Restore it (and its line in Scripts/sync-string-catalogs.sh) rather than deleting \
+                this pin.
+                """
+            )
+        }
+    }
+
+    // MARK: - F. Accessibility copy may not be typed `String`
+
+    /// Roots scanned by part F: shipping source in both the app target and the package.
+    ///
+    /// Unlike part A this scan is NOT package-only, because the failure it guards is not about
+    /// bundles at all — it is about which SwiftUI overload the argument's static type selects, and
+    /// that is identical in the app target.
+    static let accessibilityScanRoots = ["App", "FernletKit/Sources"]
+
+    /// Floor for the part-F scan (385 `.swift` files across both roots at the time of writing). Set
+    /// well below the real count so ordinary churn never trips it, but a root that stops resolving
+    /// does — the same house rule as ``minimumPackageFilesScanned``.
+    static let minimumAccessibilityFilesScanned = 320
+
+    /// Identifier fragments that mark a declaration as *accessibility copy* — text whose only job is
+    /// to be spoken.
+    static let accessibilityCopyNames = [
+        "accessibilitylabel", "accessibilityvalue", "accessibilityhint", "accessibilitytext",
+    ]
+
+    /// A declaration of accessibility copy that is typed `String`.
+    struct AccessibilityCopyDeclaration: Hashable, Sendable {
+        /// Repo-relative path.
+        let path: String
+        /// 1-based line.
+        let line: Int
+        /// The declaration's trimmed source line.
+        let text: String
+
+        /// `path:line: <declaration>` — pasteable straight into a search.
+        var report: String { "\(path):\(line): \(text)" }
+    }
+
+    /// A `String`-typed accessibility member that is nonetheless correct, and why.
+    struct AccessibilityCopyException: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The declaration's exact trimmed text.
+        let declaration: String
+        /// Why `String` is right here.
+        let reason: String
+    }
+
+    /// Every allowlisted `String`-typed accessibility member. Keep this list very short: a third or
+    /// fourth entry means the rule, not the list, needs rethinking.
+    static let accessibilityCopyExceptions: [AccessibilityCopyException] = [
+        AccessibilityCopyException(
+            path: "App/Fernlet/MoveView.swift",
+            declaration: "private var spaceAccessibilityValue: String {",
+            reason: """
+                Not handed to `.accessibilityValue(_:)` at all — it is spliced into the `%@` slot of \
+                the segment's own `.accessibilityLabel("Space, \\(…)")` key, which is where the \
+                localization happens. Its own body resolves through `String(localized:)`, so the \
+                value in that slot is translated too. A `Text` here could not be interpolated into \
+                a `LocalizedStringKey` argument list without becoming a second key.
+                """
+        ),
+    ]
+
+    /// An accessibility label, value or hint whose static type is `String` does not localize —
+    /// SwiftUI's `StringProtocol` overload renders it verbatim — and, worse, the compiler never
+    /// harvests it, so the string is not even *present* in the catalog for a translator to find.
+    ///
+    /// This is the rule the review's §4.5 calls "the highest-value single rule available", and it
+    /// deliberately lives HERE rather than in an accessibility wall: it is a localization failure
+    /// that happens to surface through accessibility APIs, and one home beats two half-rules.
+    ///
+    /// It is a TYPE check, not a call-site grep, for the reason §4.5 gives: a grep over
+    /// `.accessibilityLabel(x)` cannot tell `x: String` (a defect) from `x: Text` (correct), because
+    /// the argument's type is exactly what is invisible at the call site. Checking the declaration
+    /// is the one place the type is written down.
+    ///
+    /// A declaration carrying `verbatim` is exempt by construction: that label is this repo's
+    /// documented marker for text that is *already final* (`SectionLabel.init(verbatim:)`,
+    /// `EmptyState.init(verbatim:)`, `FernletAnnouncer.announce(_:resolved:)`), and it is chosen by
+    /// typing it, which is the whole point of the convention.
+    @Test func accessibilityCopyIsNeverTypedString() throws {
+        let (declarations, filesScanned) = try Self.scanForStringTypedAccessibilityCopy()
+
+        #expect(
+            filesScanned >= Self.minimumAccessibilityFilesScanned,
+            """
+            Scanned only \(filesScanned) Swift files under \(Self.accessibilityScanRoots.joined(separator: ", ")) \
+            (floor \(Self.minimumAccessibilityFilesScanned)) — a root moved or the enumerator broke, \
+            and this wall is now passing without looking at anything.
+            """
+        )
+
+        let offenders = declarations.filter { declaration in
+            !Self.accessibilityCopyExceptions.contains { Self.matches($0, declaration) }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) accessibility label/value/hint member(s) are typed `String`. SwiftUI \
+            renders a `String` VERBATIM — it never localizes — and the compiler never harvests it, \
+            so the sentence is not in any catalog for a translator to even see. Declare it as \
+            `Text` (or `LocalizedStringKey` for a parameter), or, if it really is already-resolved \
+            text, give it a `verbatim` label so the choice is one somebody typed:
+            \(offenders.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+
+        let unused = Self.accessibilityCopyExceptions.filter { entry in
+            !declarations.contains { Self.matches(entry, $0) }
+        }
+        #expect(
+            unused.isEmpty,
+            """
+            \(unused.count) allowlisted `String`-typed accessibility member(s) match nothing any \
+            more. Delete them — a stale entry is a hole nobody is watching:
+            \(unused.map { "\($0.path): \($0.declaration)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Exact path AND exact declaration text — never a path-only match, so an entry cannot turn its
+    /// file into an exempt file.
+    static func matches(_ entry: AccessibilityCopyException, _ declaration: AccessibilityCopyDeclaration) -> Bool {
+        declaration.path == entry.path && declaration.text == entry.declaration
+    }
+
+    /// Fixture: the type check fires on each shape that must fail and stays silent on each shape
+    /// that must pass.
+    ///
+    /// Part F is expected to report zero forever, so — as everywhere else in this file — only a
+    /// planted token distinguishes "nothing is wrong" from "the matcher never runs".
+    @Test func accessibilityCopyTypeCheckSeesTheStringForms() {
+        // The four shapes that were live in the tree the day this rule was written.
+        #expect(Self.stringTypedAccessibilityCopy(in: "    var accessibilityLabel: String {").count == 1)
+        #expect(Self.stringTypedAccessibilityCopy(in: "    private var accessibilityText: String {").count == 1)
+        #expect(Self.stringTypedAccessibilityCopy(in: "    private func shutterAccessibilityLabel(canShoot: Bool) -> String {").count == 1)
+        #expect(Self.stringTypedAccessibilityCopy(in: "        accessibilityLabel: String,").count == 1)
+        #expect(Self.stringTypedAccessibilityCopy(in: "    var accessibilityHint: String?").count == 1,
+                "an optional is the same defect")
+
+        // The corrected forms.
+        #expect(Self.stringTypedAccessibilityCopy(in: "    var accessibilityLabel: Text {").isEmpty)
+        #expect(Self.stringTypedAccessibilityCopy(in: "        accessibilityLabel: LocalizedStringKey,").isEmpty)
+        #expect(Self.stringTypedAccessibilityCopy(in: "    private func albumCellLabel(_ post: Post) -> Text {").isEmpty)
+
+        // `verbatim` is the documented "already final" marker and is exempt by construction.
+        #expect(Self.stringTypedAccessibilityCopy(in: "        verbatim accessibilityLabel: String,").isEmpty)
+
+        // A CALL SITE is not a declaration — the leading dot is the discriminator, and without it
+        // this rule would fire on all ~150 correct `.accessibilityLabel(…)` uses in the app.
+        #expect(Self.stringTypedAccessibilityCopy(in: "        .accessibilityLabel(name as String)").isEmpty)
+        #expect(Self.stringTypedAccessibilityCopy(in: "            .accessibilityValue(String(describing: x))").isEmpty)
+
+        // Documentation naming the pattern is documentation.
+        #expect(Self.stringTypedAccessibilityCopy(in: "    /// var accessibilityLabel: String is the defect").isEmpty)
+        #expect(Self.stringTypedAccessibilityCopy(in: "    // accessibilityLabel: String").isEmpty)
+
+        // An unrelated `String` member is not accessibility copy.
+        #expect(Self.stringTypedAccessibilityCopy(in: "    var summaryText: String {").isEmpty)
+    }
+
+    /// The `String`-typed accessibility-copy declarations in `source`, by line. Pure + testable.
+    ///
+    /// Runs over ``logicalLines(in:)``, not raw lines. The first draft was line-based, and an
+    /// adversarial review broke it by doing nothing more exotic than wrapping a signature:
+    ///
+    /// ```swift
+    /// private func shutterAccessibilityLabel(
+    ///     canShoot: Bool
+    /// ) -> String {          // ← the name and the type are now on different lines
+    /// ```
+    ///
+    /// Joining continuation lines until the round brackets balance puts the name and the return
+    /// type back in one string, which is the only form this rule can reason about.
+    static func stringTypedAccessibilityCopy(in source: String) -> [(line: Int, text: String)] {
+        var found: [(line: Int, text: String)] = []
+        for unit in logicalLines(in: source) {
+            let trimmed = unit.text
+            guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*"), !trimmed.contains("verbatim") else { continue }
+            if accessibilityCopyTypes(in: trimmed).contains(where: isStringType) {
+                found.append((unit.line, trimmed))
+            }
+        }
+        return found
+    }
+
+    /// The declared type of every accessibility-copy member named in `text`.
+    ///
+    /// Reading each member's OWN type — rather than asking whether the string `": String"` occurs
+    /// anywhere in it — is what makes the rule survive line-joining. A wrapped signature legitimately
+    /// mixes types (`systemName: String` beside `accessibilityLabel: LocalizedStringKey`), and the
+    /// first joined version of this rule reported all three such helpers in the tree as violations.
+    /// Returns one entry per named member, so a signature carrying two is fully checked.
+    static func accessibilityCopyTypes(in text: String) -> [String] {
+        let chars = Array(text)
+        var types: [String] = []
+        var index = 0
+        while index < chars.count {
+            guard let nameEnd = accessibilityCopyNameEnd(chars, at: index) else {
+                index += 1
+                continue
+            }
+            if let type = declaredType(chars, after: nameEnd) { types.append(type) }
+            index = nameEnd
+        }
+        return types
+    }
+
+    /// The index just past an accessibility-copy identifier starting at `index`, or nil.
+    ///
+    /// Whole-identifier matching: the scan finds identifier STARTS (a letter or `_` whose
+    /// predecessor is neither an identifier character nor a `.`), reads the identifier out, and asks
+    /// whether it contains one of ``accessibilityCopyNames``. That covers both `accessibilityLabel`
+    /// and `shutterAccessibilityLabel` without a second code path, and the leading-dot exclusion is
+    /// what separates a DECLARATION from the ~150 correct `.accessibilityLabel(…)` call sites.
+    static func accessibilityCopyNameEnd(_ chars: [Character], at index: Int) -> Int? {
+        guard chars[index].isLetter || chars[index] == "_" else { return nil }
+        if index > 0, isIdentifierCharacter(chars[index - 1]) { return nil }
+        var cursor = index
+        while cursor < chars.count, chars[cursor].isLetter || chars[cursor].isNumber || chars[cursor] == "_" {
+            cursor += 1
+        }
+        let identifier = String(chars[index..<cursor]).lowercased()
+        guard accessibilityCopyNames.contains(where: identifier.contains) else { return nil }
+        return cursor
+    }
+
+    /// The type a declaration gives the member whose identifier ends at `nameEnd`.
+    ///
+    /// Two shapes, and only two: `name: Type` (property or parameter) and
+    /// `name(<params>) -> Type` (function). Anything else — a call, a `case`, prose — yields nil.
+    static func declaredType(_ chars: [Character], after nameEnd: Int) -> String? {
+        var cursor = skipWhitespace(chars, from: nameEnd)
+        guard cursor < chars.count else { return nil }
+        if chars[cursor] == ":" {
+            let end = endOfParameter(chars, from: cursor + 1)
+            return String(chars[(cursor + 1)..<min(end, chars.count)]).trimmingCharacters(in: .whitespaces)
+        }
+        guard chars[cursor] == "(" else { return nil }
+        cursor = endOfCall(chars, openParen: cursor)
+        cursor = skipWhitespace(chars, from: cursor)
+        guard matches(chars, at: cursor, "->") else { return nil }
+        cursor = skipWhitespace(chars, from: cursor + 2)
+        var end = cursor
+        while end < chars.count, chars[end] != "{" { end += 1 }
+        return String(chars[cursor..<end]).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// True when a declared type IS `String` (optionals included) rather than merely mentioning it.
+    ///
+    /// `StringProtocol`, `StringLiteralType` and `[String]` are other types; a bare `String`,
+    /// `String?` and `String!` are the defect, and `= "default"` after it is still the same type.
+    static func isStringType(_ type: String) -> Bool {
+        var head = type
+        // A property carries its body brace and a parameter its default; neither is part of the
+        // type. Trimming both is what lets `var accessibilityLabel: String {` and
+        // `accessibilityHint: String? = nil` resolve to the same answer as a bare `String`.
+        if let brace = head.firstIndex(of: "{") { head = String(head[..<brace]) }
+        if let equals = head.firstIndex(of: "=") { head = String(head[..<equals]) }
+        head = head.trimmingCharacters(in: .whitespaces)
+        return head == "String" || head == "String?" || head == "String!"
+    }
+
+    /// Scans both shipping roots for `String`-typed accessibility copy.
+    static func scanForStringTypedAccessibilityCopy() throws -> (
+        declarations: [AccessibilityCopyDeclaration], filesScanned: Int
+    ) {
+        var declarations: [AccessibilityCopyDeclaration] = []
+        var filesScanned = 0
+        for root in accessibilityScanRoots {
+            let rootURL = RepoRoot.url(root)
+            guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root) — moved or renamed? The accessibility-copy wall is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                for found in stringTypedAccessibilityCopy(in: source) {
+                    declarations.append(AccessibilityCopyDeclaration(
+                        path: relativePath, line: found.line, text: found.text
+                    ))
+                }
+            }
+        }
+        return (declarations, filesScanned)
+    }
+
     // MARK: - Pure matchers
 
     /// Every `String(localized:…)` / `AttributedString(localized:…)` call in `source`, with whether it
@@ -925,7 +2316,8 @@ struct LocalizationBoundaryTests {
             let end = endOfCall(chars, openParen: openParen)
             let text = String(chars[index..<min(end, chars.count)])
             sites.append(LocalizedCallSite(
-                path: "", line: line, text: text, passesBundle: code(chars, from: index, to: end).contains("bundle:")
+                path: "", line: line, text: text,
+                passesBundle: resolvesAgainstModuleBundle(code(chars, from: index, to: end))
             ))
             line += countNewlines(chars, from: index, to: end)
             index = max(end, index + 1)
@@ -1186,6 +2578,25 @@ struct LocalizationBoundaryTests {
             index += 1
         }
         return chars.count
+    }
+
+    /// True when a call's code text passes `bundle:` AND the value it passes is the MODULE bundle.
+    ///
+    /// `.module` and `Bundle.module` both count; `.main`, `Bundle.main` and anything else do not.
+    /// The distinction is the entire point inside a package: `.main` resolves against the app's
+    /// bundle, which never contains the module's catalog, so the string falls back to its English
+    /// literal exactly as if no bundle had been passed. A wall that accepted any `bundle:` argument
+    /// was checking that a keyword had been typed, not that the lookup was correct.
+    static func resolvesAgainstModuleBundle(_ callText: String) -> Bool {
+        guard let marker = callText.range(of: "bundle:") else { return false }
+        let chars = Array(callText[marker.upperBound...])
+        let end = endOfParameter(chars, from: 0)
+        // `.whitespacesAndNewlines`, not `.whitespaces`: this runs over the RAW call text, and the
+        // formatting these calls are actually written in puts the bundle argument on its own line.
+        // `.whitespaces` leaves the trailing newline attached and every correct multi-line call
+        // reads as a violation.
+        let value = String(chars[0..<min(end, chars.count)]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value == ".module" || value == "Bundle.module"
     }
 
     /// True when `token` appears verbatim at `index`.

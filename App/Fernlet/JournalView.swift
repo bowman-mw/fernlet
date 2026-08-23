@@ -835,13 +835,23 @@ struct JournalMonthCell: Identifiable {
     /// The spoken cell. The feeling tag is named here because the grid encodes it as a tint alone —
     /// without it the mood a day carries is invisible to VoiceOver and to anyone who can't
     /// distinguish the tints.
-    var accessibilityLabel: String {
-        guard let day else { return "Empty calendar cell" }
-        if isFuture { return "Day \(day)" }
-        var label = isToday ? "Today, day \(day)" : "Day \(day)"
-        if let tag { label += ", feeling \(tag.label.lowercased())" }
-        else if hasData { label += ", has data" }
-        return label
+    /// `Text` rather than `String`, and built by CHOOSING a whole sentence rather than appending
+    /// clauses (review T2-1): a `String` reaches `.accessibilityLabel(_:)` through the verbatim
+    /// overload, and a clause appended with `+=` can never be a catalog key at all. The feeling
+    /// name is no longer lower-cased on the way in — `tag.label` is already localized, and
+    /// case-folding a translated word is wrong in every language that capitalizes nouns.
+    var accessibilityLabel: Text {
+        guard let day else { return Text("Empty calendar cell") }
+        if isFuture { return Text("Day \(day)") }
+        if let tag {
+            return isToday
+                ? Text("Today, day \(day), feeling \(tag.label)")
+                : Text("Day \(day), feeling \(tag.label)")
+        }
+        if hasData {
+            return isToday ? Text("Today, day \(day), has data") : Text("Day \(day), has data")
+        }
+        return isToday ? Text("Today, day \(day)") : Text("Day \(day)")
     }
 }
 
@@ -1259,7 +1269,9 @@ struct DayDetailView: View {
                         Text(workout.name)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
-                        Text(verbatim: "\(workout.type.displayName) · \(workout.intensity.rawValue.capitalized)")
+                        // `displayWord`, not the frozen `rawValue`: the type beside it was already
+                        // localized, so this line read half-translated.
+                        Text(verbatim: "\(workout.type.displayName) · \(workout.intensity.displayWord.localizedCapitalized)")
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
@@ -1658,13 +1670,13 @@ struct DayEditSheet: View {
 
                     Menu {
                         ForEach(WorkoutIntensity.allCases) { intensity in
-                            Button(intensity.rawValue.capitalized) {
+                            Button(intensity.displayWord.localizedCapitalized) {
                                 workoutIntensity = intensity
                                 workoutTouched = true
                             }
                         }
                     } label: {
-                        menuLabel(workoutIntensity.rawValue.capitalized)
+                        menuLabel(workoutIntensity.displayWord.localizedCapitalized)
                     }
                 }
             }
