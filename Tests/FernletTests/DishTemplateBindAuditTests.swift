@@ -66,10 +66,31 @@
 //     arrays into one failure message; it is now compared per-template-per-field so a failure names
 //     the one thing that moved.
 //
-//   • The COUNT half (1.4, THIS increment): `DishTemplateLexicon.fallbackCount` now treats a bare
-//     mention of the template's own unit word ("pizza slice", not "2 pizza slices") as count = 1 instead
-//     of the old `defaultCount` guess — closing the silent doubling `theTesterQueryNowAutoCommitsAgainPendingFix15`
+//   • The COUNT half (1.4): `DishTemplateLexicon.fallbackCount` now treats a bare mention of the
+//     template's own unit word ("pizza slice", not "2 pizza slices") as count = 1 instead of the old
+//     `defaultCount` guess — closing the silent doubling `theTesterQueryNowRoutesToReviewNamingCostco`
 //     measures (120/80/60 g → 60/40/30 g for one slice).
+//
+//   • The UNMATCHED-BRAND-TOKEN half (1.5, THIS increment): `DishTemplateLexicon.resolve` now names a
+//     brand/retailer token the matched template key didn't cover ("costco" out of "cheese pizza"
+//     matching only "cheese pizza") as an unmatched item, which forces review a second, independent
+//     way. See `theTesterQueryNowRoutesToReviewNamingCostco` and
+//     `brandTokenInsideATemplateAliasDoesNotFalsePositive`.
+//
+//   • 1.5's ADVERSARIAL REVIEW (same day) found and fixed six more findings before the round closed:
+//     F1 — a possessive apostrophe ("wendy's") normalized to two tokens and silently missed 12 of 43
+//     chain entries; fixed inside `FoodBrandLexicon.matchedChainTokens` only, `queryContainsBrandToken`
+//     left byte-unchanged (§37 Q7 stays open). F3 — the chip showed the lexicon's own sentence-cased
+//     spelling ("Costco") instead of the user's typed text; now a verbatim slice of the original item
+//     name, recovered word-span by word-span. F6 — the MEAL's own persisted confidence stamp was
+//     computed before the brand flag folded in, so a meal with a brand chip could still stamp "Food
+//     match"; the fold now happens inside `assemble` before the stamp. F9 — the longest-substring
+//     tie-break was hash-order nondeterministic, now a deterministic lexicographic tuple compare. F2 —
+//     an ordinary food word that collides with a chain's lexicon spelling ("chipotle" the pepper,
+//     "chilis" the vegetable) still false-positives; PINNED, not fixed — see
+//     `foodWordCollisionWithAChainNameIsPinnedNotFixed` and §37 Q7. F7 — a theoretical double-naming
+//     risk (a brand chip AND the same item's whole raw text both landing in `unmatchedItems`) is closed
+//     by construction: the brand check is now recorded only on the successful-assembly path.
 //
 // THE FLOOR IS NOT RELAXED TO MAKE THIS GREEN. `confidentBindScore` stays 250; genuinely weak-but-
 // correct binds are still pinned weak and their templates still pinned as not-auto-committing.
@@ -94,15 +115,18 @@
 // measured unit at order-5/6/7. Recorded here so §31's promise is not read as delivered for
 // multi-item descriptions the lexicon does not recognise at all.
 //
-// COSTCO CHEESE PIZZA SLICE, POST-1.3: it auto-commits again (`.high`, no review). This is NOT a
-// regression — it is 1.3 removing an ACCIDENTAL safety net (a bad score standing in for brand
-// disclosure) now that the template's own data is honest. But it is also NOT, on its own, an
-// acceptable stopping point: the committed meal (~390 kcal, pinned) is roughly HALF a real Costco
-// food-court slice (699–760 kcal, §31), and the review sheet that would have surfaced a wrong number
-// is gone relative to HEAD for this exact query. The correct, PRECISE disclosure — naming "costco"
-// itself — is research fix 1.5, the NEXT ITEM IN THIS SAME ROUND, which is what makes this cut point
-// defensible; it would not be defensible as a place to stop. See
-// `theTesterQueryNowAutoCommitsAgainPendingFix15` for the full accounting.
+// COSTCO CHEESE PIZZA SLICE, POST-1.5: fix 1.3 alone reopened auto-commit for this query (`.high`, no
+// review) — a genuine improvement over 1.1/1.2's ACCIDENTAL safety net (a bad score standing in for
+// brand disclosure), but not an acceptable stopping point on its own: the committed meal (~390 kcal,
+// still pinned below) runs roughly HALF a real Costco food-court slice (699–760 kcal, §31), with
+// nothing on screen saying so. Fix 1.5, THIS increment, closes that: `DishTemplateLexicon.resolve`
+// now names "costco" as an unmatched brand token whenever the template match's key didn't cover it,
+// which forces `needsReview` a second, independent way (`NutritionModels.swift:625`'s
+// `!unmatchedItems.isEmpty` clause) on top of the confidence dropping to `.low`
+// (`DishTemplateBindQuality.confidence` counts the token as a drop). §31's promise — "costco" appears
+// as an unmatched item, flipping `needsReview`" — is now DELIVERED for this exact query, with the
+// otherwise-correct three-component decomposition intact. See
+// `theTesterQueryNowRoutesToReviewNamingCostco` for the full accounting.
 //
 // Read-only and self-contained: opens the shipped catalog read-only, writes nothing, shares no
 // mutable fixture with any other suite. Re-pin with:
@@ -673,11 +697,17 @@ struct DishTemplateBindAuditTests {
         try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tier must be the rung under test")
         try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
 
-        // The query that started the round — see `theTesterQueryNowAutoCommitsAgainPendingFix15` for
-        // why `.high`/no-review is the CORRECT reading of fix 1.3 landing alone.
+        // The query that started the round — see `theTesterQueryNowRoutesToReviewNamingCostco` for
+        // the full accounting. Fix 1.5 (this increment) closes the gap fix 1.3 alone reopened: the
+        // template decomposition is still correct and still builds, but "costco" now rides out as an
+        // unmatched item, which routes to review before the meal counts toward the day.
         let tester = await store.resolveMeals(from: "costco cheese pizza slice")
-        #expect(tester.confidence == .high)
-        #expect(tester.needsReview == false)
+        #expect(tester.confidence == .low, "the unmatched brand token counts as a drop")
+        #expect(tester.unmatchedItems == ["costco"], "verbatim as typed (review finding F3) — not sentence-cased")
+        #expect(tester.needsReview == true)
+        #expect(tester.meals.first?.componentSnapshots.count == 3, "the decomposition itself is untouched by 1.5")
+        #expect(tester.meals.first?.confidence == MealConfidence.roughEstimate.token,
+                "review finding F6: the MEAL's own persisted stamp must also reflect the brand flag")
 
         // Both dishes build now that `tomato soup` binds confidently.
         let multi = await store.resolveMeals(from: "smoothie and tomato soup")
@@ -694,32 +724,34 @@ struct DishTemplateBindAuditTests {
 
     // MARK: - The query that started the round
 
-    /// "costco cheese pizza slice" auto-commits again — and that is fix 1.3 working as designed, not a
-    /// regression to paper over. But it is NOT, by itself, an acceptable cut point for the round to stop
-    /// at — the sentence below states why, per an adversarial review's explicit finding.
+    /// "costco cheese pizza slice", END STATE for this round: §31's promise ("costco" becomes a
+    /// visible unmatched item, flipping `needsReview` — a second, independent safety net") is now
+    /// DELIVERED for this exact query, with the otherwise-correct three-component decomposition intact.
     ///
-    /// Before fix 1.3 this query's three components bound to a Pillsbury dough product, a mozzarella-
-    /// sticks snack (58, below the 250 floor) and tomato sauce — the weak mozzarella bind was an
-    /// ACCIDENTAL safety net that forced review for the wrong reason (a bad score), not because "costco"
-    /// names a brand the template cannot represent. Fix 1.3 repairs the data: all three components now
-    /// bind confidently to the RIGHT foods (`pizza dough`, `low moisture part skim mozzarella cheese`,
-    /// `tomato sauce`), so the template resolves `.high` and the accidental net is gone. Fix 1.4 also
-    /// moves the count: "slice" is the template's own unit word with no leading number, so it resolves
-    /// to 1 or fix 1.4's job — grams are 60/40/30, not the old 120/80/60.
+    /// The chain of fixes that got here, for the record: before 1.1/1.2 the three components bound to a
+    /// Pillsbury dough product, a mozzarella-sticks snack (58, below the 250 floor) and tomato sauce,
+    /// auto-committed `.high` with no review at all. 1.1/1.2 forced review, but for the WRONG reason (a
+    /// bad score standing in for brand disclosure). 1.3 repaired the template data so all three
+    /// components now bind confidently to the RIGHT foods — which, landing alone, reopened auto-commit
+    /// for this query (that interim state is `Tests/FernletTests/…` history now, not a live test; see
+    /// the file header's COSTCO CHEESE PIZZA SLICE note). 1.4 fixed the count: "slice" is the template's
+    /// own unit word with no leading number, so it resolves to 1, not `defaultCount = 2` — grams are
+    /// 60/40/30, not 120/80/60. 1.5 (this increment) closes the loop 1.3 reopened: `"costco"` is a
+    /// retailer term (`FoodProductWebSearch.retailerTerms`) present in the typed text that the matched
+    /// template key ("cheese pizza") does not cover, so it rides out in `unmatchedItems` — VERBATIM, as
+    /// typed (review finding F3; an earlier draft of this fix sentence-cased it to "Costco", which the
+    /// adversarial review correctly called a lexicon-flavored mangling, not the user's own text) — and
+    /// counts as a drop, which pulls confidence down to `.low` too. Both independently force
+    /// `needsReview`, and the MEAL's own persisted stamp reflects it too (review finding F6).
     ///
-    /// **The honest accounting, stated plainly.** The meal this now commits (`calorieSnapshot`, pinned
-    /// below) runs roughly **HALF** of what a real Costco food-court slice actually is — §31's own
-    /// table puts three independent sources at 699–760 kcal/slice, and this template's generic-USDA
-    /// components (raw dough + part-skim mozzarella + plain tomato sauce, no Costco-scale cheese and
-    /// oil) land far short of that. And the review sheet that would have caught a wrong number — the ONE
-    /// thing HEAD (the pre-1.1/1.2 baseline) never had — is GONE relative to HEAD for this exact query,
-    /// even though it is a genuine improvement over the immediately-prior state (1.1/1.2, which forced
-    /// review here for the wrong reason). Landing 1.3 alone and calling it done would leave the tester's
-    /// own query auto-committing a number that is roughly half right, with no visible flag. **That is
-    /// only acceptable because research fix 1.5 (surfacing "costco" as an unmatched brand token) is the
-    /// very next item in this same round**, not a someday follow-up — see the file header's COSTCO
-    /// CHEESE PIZZA SLICE note. If 1.5 does not land in this round, this cut point should be revisited.
-    @Test func theTesterQueryNowAutoCommitsAgainPendingFix15() throws {
+    /// **The honest accounting that remains, stated plainly.** The meal's OWN numbers (`calorieSnapshot`,
+    /// pinned below) still run roughly **HALF** of what a real Costco food-court slice actually is —
+    /// §31's own table puts three independent sources at 699–760 kcal/slice, and this template's
+    /// generic-USDA components (raw dough + part-skim mozzarella + plain tomato sauce, no Costco-scale
+    /// cheese and oil) land far short of that. Fix 1.5 does not correct THAT number — no government
+    /// dataset can (§31's closing finding) — it makes sure the user sees "costco" flagged as unaccounted
+    /// for before the estimate counts toward their day, which is the disclosure this whole round chases.
+    @Test func theTesterQueryNowRoutesToReviewNamingCostco() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
         let resolved = try #require(DishTemplateLexicon.resolve(
@@ -727,26 +759,235 @@ struct DishTemplateBindAuditTests {
             mealType: nil,
             catalog: catalog
         ), "the template tier must still recognise the dish — falling through is a different bug")
-        #expect(resolved.confidence == .high, "every component now binds confidently to the right food")
+        #expect(resolved.confidence == .low, "the unmatched brand token counts as a drop (fix 1.5)")
+        #expect(resolved.unmatchedItems == ["costco"], "verbatim as typed (review finding F3), not lexicon-cased")
         #expect(resolved.meals.count == 1)
         let components = resolved.meals.first?.componentSnapshots ?? []
-        #expect(components.count == 3, "still the three-component decomposition")
+        #expect(components.count == 3, "still the three-component decomposition — 1.5 does not touch binding")
         #expect(components.map(\.quantity) == [60, 40, 30],
                 "fix 1.4: 'slice' is the template's own unit word with no leading number, so count = 1, not defaultCount = 2")
         #expect(components.map(\.name) == [
             "Pizza Dough",
             "Cheese, mozzarella, low moisture, part-skim",
             "Tomato sauce, canned, no salt added"
-        ], "the three RIGHT rows — fix 1.3's repair")
+        ], "the three RIGHT rows — fix 1.3's repair, still intact")
+        #expect(resolved.meals.first?.confidence == MealConfidence.roughEstimate.token,
+                "review finding F6: the meal's own stamp must fold in the brand flag, not just component binds")
 
-        // The honest number this commits: roughly HALF a real Costco slice (699–760 kcal per §31),
-        // auto-committed with no review — acceptable ONLY because 1.5 lands next in this round.
+        // The honest number this WOULD commit if the user pushes through review: roughly HALF a real
+        // Costco slice (699–760 kcal per §31) — 1.5 does not fix the number, only the disclosure.
         let kcal = resolved.meals.first?.calorieSnapshot ?? -1
         #expect((350...430).contains(kcal), "committed slice calories: \(kcal) — roughly half a real Costco slice, pinned so this claim stays measured, not asserted")
 
-        let resolution = MealResolution(meals: resolved.meals, createdRecipes: [], confidence: resolved.confidence, isFallback: false)
-        #expect(resolution.needsReview == false,
-                "1.3 alone re-opens auto-commit for this query; 1.5's brand-token disclosure is what should reclose it")
+        let resolution = MealResolution(meals: resolved.meals, createdRecipes: [], confidence: resolved.confidence, isFallback: false, unmatchedItems: resolved.unmatchedItems)
+        #expect(resolution.needsReview == true,
+                "§31's promise, delivered: \"costco\" flips needsReview a second, independent time")
+    }
+
+    /// A brand token that IS part of the template's OWN alias must not false-positive — AND the
+    /// mechanism must still be demonstrably alive for a DIFFERENT, genuinely unaccounted brand word in
+    /// the same item (review finding F5: an earlier draft of this test only asserted the negative,
+    /// which passes identically whether fix 1.5 exists or was deleted outright — not discriminating).
+    /// `burrito bowl`'s alias list includes "chipotle bowl" — an EXACT key match for the second query,
+    /// so `matchedKey` equals the whole typed item and there is nothing left over for
+    /// `unaccountedBrandChips` to flag from "chipotle" specifically. This is the case fix 1.5's design
+    /// note calls out by construction, not by a special-cased exclusion list.
+    @Test func brandTokenInsideATemplateAliasDoesNotFalsePositive() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+
+        // Discriminating half: "costco" is NOT part of the matched key ("chipotle bowl"), so it must
+        // still be flagged — proving the feature is alive, not merely silent. If fix 1.5 were deleted,
+        // `unmatchedItems` would be empty here instead.
+        let withStrayBrand = try #require(DishTemplateLexicon.resolve(
+            description: "costco chipotle bowl", mealType: nil, catalog: catalog
+        ))
+        #expect(withStrayBrand.unmatchedItems == ["costco"],
+                "costco is unaccounted; chipotle is NOT — it's inside the matched key \"chipotle bowl\"")
+
+        // Non-false-positive half: bare "chipotle bowl" is an EXACT key match, so nothing is left over.
+        let bare = try #require(DishTemplateLexicon.resolve(
+            description: "chipotle bowl", mealType: nil, catalog: catalog
+        ), "burrito bowl's own alias names a chain — it must still resolve, not fall through")
+        #expect(bare.unmatchedItems.isEmpty,
+                "the matched key IS \"chipotle bowl\" exactly — nothing to flag; false-positive would defeat the whole feature")
+    }
+
+    // MARK: - Adversarial phrasings that never reach fix 1.5 (documented, not tested)
+    //
+    // Two phrasings were checked and found NOT to exercise fix 1.5 at all, so a live @Test asserting
+    // `resolve(...) == nil` for either would be non-discriminating — it would pass identically whether
+    // fix 1.5 exists, was deleted, or was never written (review finding F5). Recorded here as comments
+    // instead of tests wearing documentation:
+    //
+    //   • "kirkland protein bar" — no `DishTemplates.json` entry is anywhere close to "protein bar", so
+    //     the template tier does not recognise the dish AT ALL and `resolve` returns nil before fix
+    //     1.5's brand check ever runs. In scope, not a gap: 1.5's location column names the
+    //     template/lexicon tier only, so a retailer name attached to a food the lexicon has no
+    //     template for was someone else's tier's problem before this fix and stays so after.
+    //
+    //   • "trader joes orange chicken" — a MULTI-WORD retailer name typed with a plural/possessive
+    //     ("trader joes", not the list's singular "trader joe"). `String.contains` would still find
+    //     "trader joe" as a substring of "trader joes" if this phrase ever reached the check — Q7's
+    //     token-BOUNDARY concern does not bite THIS phrase either way — but it never reaches the check:
+    //     no template recognises "orange chicken" at all, so `resolve` returns nil first, same as the
+    //     kirkland case above.
+
+    // MARK: - Review finding F1: the possessive-apostrophe class
+
+    /// 12 of `FoodBrandLexicon`'s 43 chain entries are spelled as the COLLAPSED possessive ("wendys",
+    /// not "wendy"), but `FoodItemSearch.normalized` maps an apostrophe to a bare SPACE, so the
+    /// CANONICAL possessive spelling ("wendy's") used to normalize to "wendy s" — two tokens — and
+    /// silently miss the chain lexicon entirely: "wendys burger" flagged "wendys"; "wendy's burger"
+    /// auto-committed. `FoodBrandLexicon.matchedChainTokens` now also checks a possessive-collapsed
+    /// form (review finding F1). Both spellings are pinned for all 12 — the pre-existing (already-
+    /// collapsed) spelling must still work, and the canonical possessive spelling must now ALSO work,
+    /// verbatim (review finding F3: the chip is the user's own substring, apostrophe intact — "Wendy's
+    /// burger" flags "Wendy's", not "wendys").
+    @Test(arguments: [
+        ("mcdonalds", "mcdonald's"),
+        ("wendys", "wendy's"),
+        ("arbys", "arby's"),
+        ("applebees", "applebee's"),
+        ("chilis", "chili's"),
+        ("dennys", "denny's"),
+        ("hardees", "hardee's"),
+        ("friendlys", "friendly's"),
+        ("rallys", "rally's"),
+        ("dominos", "domino's"),
+        ("carls jr", "carl's jr"),
+        ("long john silvers", "long john silver's"),
+    ])
+    func possessiveChainsFlagBothSpellingsVerbatim(plain: String, possessive: String) throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+
+        let plainResolved = try #require(DishTemplateLexicon.resolve(
+            description: "\(plain) burger", mealType: nil, catalog: catalog
+        ), "\"\(plain) burger\" must still match the burger template")
+        #expect(plainResolved.unmatchedItems == [plain], "the pre-existing (already-collapsed) spelling")
+
+        let possessiveResolved = try #require(DishTemplateLexicon.resolve(
+            description: "\(possessive) burger", mealType: nil, catalog: catalog
+        ), "\"\(possessive) burger\" must still match the burger template")
+        #expect(possessiveResolved.unmatchedItems == [possessive],
+                "F1: the canonical possessive spelling, verbatim (F3) — this used to be silently missed entirely")
+    }
+
+    /// F1's companion "verify" instruction: is `FoodProductWebSearch.retailerTerms` ALSO
+    /// possessive-vulnerable? Checked, not just asserted: "trader joe" (the list's entry, no
+    /// apostrophe) is a substring of "trader joe s" (what "trader joe's" normalizes to) with NO
+    /// collapsing needed — the entry is already the possessive STEM, so both the bare and possessive
+    /// spellings match through the existing `.contains` check unmodified. This also doubles as an F3
+    /// pin: the verbatim chip recovers the FULLER "trader joe's" (apostrophe included), not just the
+    /// "trader joe" the membership check happened to find, because chip extraction always works off
+    /// the possessive-collapsed word spans regardless of which check found the term.
+    @Test func retailerTermsAreAlreadyPossessiveSafeVerified() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        let resolved = try #require(DishTemplateLexicon.resolve(
+            description: "trader joe's chicken burrito", mealType: nil, catalog: catalog
+        ), "\"chicken burrito\" is a real template alias")
+        #expect(resolved.unmatchedItems == ["trader joe's"],
+                "no possessive-collapse needed for membership; F3 recovers the apostrophe anyway")
+    }
+
+    // MARK: - Closure-round residual 1: the character users actually type
+
+    /// The 12-pair possessive pins above use ASCII apostrophes only. U+2019 (RIGHT SINGLE QUOTATION
+    /// MARK) is the curly "smart quote" iOS text fields insert by default — the character a real user
+    /// types far more often than `'` — and U+2018 is its opening twin, occasionally substituted by
+    /// third-party keyboards/autocorrect. Both already work with ZERO code change: neither is a
+    /// Unicode letter, so `FoodItemSearch.normalized` already treats them as a separator exactly like
+    /// `'`, and the existing possessive-collapse reunites the split. Pinned for 4 representative chains
+    /// (one 2-word entry included) rather than all 12 — the mechanism is `normalized()`'s CHARACTER
+    /// CLASSIFICATION, not per-chain string content, so one failure here would indicate the mechanism
+    /// broke for every chain simultaneously; a future normalization change silently regressing this
+    /// would otherwise go undetected with only ASCII pins green.
+    @Test(arguments: [
+        ("wendy\u{2019}s", "wendys"),           // U+2019 RIGHT SINGLE QUOTATION MARK
+        ("mcdonald\u{2019}s", "mcdonalds"),
+        ("carl\u{2019}s jr", "carls jr"),        // 2-word entry
+        ("wendy\u{2018}s", "wendys"),            // U+2018 LEFT SINGLE QUOTATION MARK
+    ])
+    func smartQuoteApostrophesFlagVerbatim(typed: String, plainEquivalent: String) throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        let resolved = try #require(DishTemplateLexicon.resolve(
+            description: "\(typed) burger", mealType: nil, catalog: catalog
+        ), "\"\(typed) burger\" must still match the burger template")
+        #expect(resolved.unmatchedItems == [typed],
+                "the curly quote (real iOS input) flags, verbatim, exactly as \"\(plainEquivalent)\" already did")
+    }
+
+    // MARK: - Closure-round residual 2: the Lm-apostrophe class
+
+    /// U+02BC (MODIFIER LETTER APOSTROPHE) is Unicode category **Lm — a LETTER**, not punctuation, so
+    /// `Character.isLetter` is true for it and `FoodItemSearch.normalized` keeps it FUSED inside its
+    /// word run instead of splitting on it: "wendyʼs" (U+02BC) normalizes to the single token
+    /// "wendyʼs" — neither the raw substring check nor the possessive collapse (which needs a
+    /// SEPARATE trailing "s" token to reunite) can ever match that against the lexicon's "wendys".
+    /// Reachable from third-party/locale keyboards and text pipelines that canonicalize the apostrophe
+    /// to U+02BC. `FoodBrandLexicon.apostropheNormalized` pre-maps it (and U+02BB, U+A78C) to the ASCII
+    /// apostrophe before normalization, so it now flags — through `matchedChainTokens` ONLY; neither
+    /// `queryContainsBrandToken` nor `FoodItemSearch.normalized` itself was touched.
+    ///
+    /// **The chip is the raw lexicon spelling ("wendys"), not a verbatim "wendyʼs" slice** — an honest
+    /// gap in `unaccountedBrandChips`'s span-finding, which was deliberately NOT touched (the fix is
+    /// scoped to `matchedChainTokens` only): `possessiveCollapsedWordSpans` classifies characters the
+    /// same `isLetter`-based way, so "wendyʼs" is still ONE span there too, and `spanOfTerm` cannot find
+    /// "wendys" inside a span whose own normalized text is "wendyʼs" — `unaccountedBrandChips`'s
+    /// documented fallback ("should not happen... falls back to the lexicon's own spelling") is exactly
+    /// what fires. Still routes to review, which is the property that matters; the cosmetic mismatch
+    /// joins the ledger's other two (trailing-apostrophe chains, sub-word containment).
+    @Test func lmModifierLetterApostropheFlags() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+        let resolved = try #require(DishTemplateLexicon.resolve(
+            description: "wendy\u{02BC}s burger", mealType: nil, catalog: catalog
+        ), "\"wendyʼs burger\" (U+02BC) must still match the burger template")
+        #expect(resolved.unmatchedItems.isEmpty == false, "must flag — the property that matters")
+        #expect(resolved.unmatchedItems == ["wendys"],
+                "honest gap: falls back to the lexicon spelling, not a verbatim \"wendyʼs\" slice — see doc comment")
+    }
+
+    // MARK: - Review finding F2: the food-word collision class (pinned, not fixed)
+
+    /// The SAME unanchored-substring matching that catches "costco" also catches an ordinary FOOD WORD
+    /// that happens to collide with a chain's lexicon entry — "chipotle" (the pepper) and "chilis"
+    /// (plural of chili, the vegetable) both match real chain entries. Building a food-word exception
+    /// list would invent phrase-vs-token semantics that belong to §37 Q7's restructuring, not to this
+    /// fix — recorded here as a KNOWN, ACCEPTED trade (the round's ledger), not fixed.
+    @Test func foodWordCollisionWithAChainNameIsPinnedNotFixed() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
+
+        // "chicken taco" (12 chars) out-matches the bare "taco" (4 chars) alias, so the unaccounted
+        // leftover is "chipotle" — the pepper, not the restaurant chain the lexicon assumes it is.
+        let pepper = try #require(DishTemplateLexicon.resolve(
+            description: "chipotle chicken taco", mealType: nil, catalog: catalog
+        ))
+        #expect(pepper.unmatchedItems == ["chipotle"], "false positive: this \"chipotle\" is a pepper, not the chain — Q7")
+
+        // "quesadilla" (10 chars) is the matched key; "chilis" (the vegetable, plural of chili) is the
+        // unaccounted leftover — and also, coincidentally, Chili's the restaurant chain's own entry.
+        let vegetable = try #require(DishTemplateLexicon.resolve(
+            description: "green chilis quesadilla", mealType: nil, catalog: catalog
+        ))
+        #expect(vegetable.unmatchedItems == ["chilis"], "false positive: this \"chilis\" is chili peppers, not Chili's — Q7")
+    }
+
+    // MARK: - Review finding F9: deterministic length-tie tie-break
+
+    /// `matchDetailsWithCount`'s longest-substring `.max` used to break a LENGTH TIE using whichever
+    /// key `Dictionary` iteration visited first — hash-seed-randomized per process, and no longer
+    /// harmless now that `matchedKey` feeds user-visible unmatched-item text (fix 1.5). "poke" and
+    /// "taco" are both real, 4-character index keys (`poke bowl`'s alias and `taco`'s name); "poke
+    /// taco" ties them at length 4. Pinned deterministic: the tuple tie-break makes the
+    /// lexicographically LARGER key win ("taco" > "poke") — an arbitrary but now-STABLE choice.
+    @Test func lengthTiedSubstringMatchesAreDeterministic() {
+        let (template, _) = DishTemplateLexicon.matchWithCount("poke taco")
+        #expect(template?.name == "taco", "lexicographic tie-break: \"taco\" > \"poke\"")
     }
 
     /// Plain "cheese pizza" — a query that genuinely IS the template, no brand token involved — now

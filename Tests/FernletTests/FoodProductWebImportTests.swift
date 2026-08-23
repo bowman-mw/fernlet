@@ -285,6 +285,23 @@ struct FoodProductWebImportTests {
         #expect(!FoodProductWebSearch.shouldSearch(for: description, foodItems: [reviewedProduct]))
     }
 
+    /// Research §26 fix 1.5's adversarial review, finding F4: `meaningfulTokens`'s ignored-word set
+    /// used to be a SEPARATE hand-maintained word-split of `retailerTerms` ("trader joe" → "trader",
+    /// "joe"), one un-synchronized edit away from silently diverging from the list it was meant to
+    /// mirror. It is now derived by splitting `retailerTerms` at definition time — this pins that the
+    /// derivation is byte-identical to the old hand-written list for the exact case the review named
+    /// ("starbucks latte" — one retailer word plus one real word, which must still fail the ≥2
+    /// meaningful-token gate) plus two more retailer words the old list also carried by hand.
+    @Test func meaningfulTokensIgnoredSetStaysByteIdenticalAfterDerivation() {
+        // A lone retailer word plus ONE real word: still only 1 meaningful token, must still be false.
+        #expect(!FoodProductWebSearch.shouldSearch(for: "starbucks latte", foodItems: []))
+        #expect(!FoodProductWebSearch.shouldSearch(for: "whole foods yogurt", foodItems: []))
+        #expect(!FoodProductWebSearch.shouldSearch(for: "sandwich bros wrap", foodItems: []))
+
+        // The same retailer word plus TWO real words clears the gate exactly as before.
+        #expect(FoodProductWebSearch.shouldSearch(for: "starbucks caramel latte", foodItems: []))
+    }
+
     @MainActor
     @Test func compactNutritionGridUsesExistingLabelParser() async throws {
         let sourceURL = try #require(URL(string: "https://foods.example.com/calories-nutrition/costco/chicken-melt"))

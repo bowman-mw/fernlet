@@ -122,6 +122,25 @@ struct DishTemplateBindQuality {
         appendUnmatched(text.trimmingCharacters(in: .whitespaces))
     }
 
+    /// Records one brand/retailer chip the typed description named that the matched template's
+    /// key did not account for — the alias/name match consumed only PART of the text ("cheese pizza"
+    /// out of "costco cheese pizza slice"), and the store/chain name silently vanished instead of
+    /// steering resolution or getting flagged (research §26 fix 1.5, closing the exact gap
+    /// `theTesterQueryNowRoutesToReviewNamingCostco` names). Counts as a drop, same as an unbound
+    /// component, so it forces review the identical way `recordDropped` does.
+    ///
+    /// `chip` is surfaced EXACTLY as passed — the caller (`unaccountedBrandChips`) is responsible for
+    /// handing this the user's own typed substring, verbatim, punctuation and casing intact
+    /// ("Wendy's" stays "Wendy's"). Matches `recordUnresolved`'s documented verbatim convention.
+    /// **Was** sentence-cased via `Self.displayName` (the lexicon's own spelling, "costco" →
+    /// "Costco") until the fix's adversarial review, finding F3: that mangled the chip into neither
+    /// the user's text nor a real catalog name, and diverged from `recordUnresolved` sitting right
+    /// above this for no principled reason.
+    mutating func recordUnmatchedBrandToken(_ chip: String) {
+        dropped += 1
+        appendUnmatched(chip)
+    }
+
     /// Folds another item's bind quality into this one — one description can name several dishes,
     /// and the resolution is only as good as its worst component.
     mutating func merge(_ other: DishTemplateBindQuality) {
@@ -261,26 +280,40 @@ enum DishTemplateLexicon {
     /// Returns the best-matching template and the count extracted from the item name.
     /// e.g. "6 pieces salmon nigiri" → (nigiriTemplate, 6.0)
     static func matchWithCount(_ itemName: String) -> (DishTemplate?, Double) {
-        let (match, count) = matchDetailsWithCount(itemName)
-        return (match?.template, count)
+        let details = matchDetailsWithCount(itemName)
+        return (details.match?.template, details.count)
     }
 
-    private static func matchDetailsWithCount(_ itemName: String) -> (DishTemplateMatch?, Double) {
+    /// `matchedKey` is the normalized index key that actually produced `match`: for an exact match
+    /// that is `norm` itself (the whole typed item IS the template, so nothing can be left over —
+    /// "chipotle bowl" must not later read as an unaccounted "chipotle"); for a longest-substring
+    /// match it is only the matched portion ("cheese pizza" out of "costco cheese pizza slice").
+    /// Threaded out to ``resolve(description:mealType:catalog:)`` so it can tell what the match did
+    /// NOT cover (research §26 fix 1.5) without re-deriving the same lookup a second time.
+    private static func matchDetailsWithCount(
+        _ itemName: String
+    ) -> (match: DishTemplateMatch?, count: Double, matchedKey: String) {
         let norm = FoodItemSearch.normalized(itemName)
         let count = extractLeadingCount(from: norm)
 
         // Exact key match
         if let match = catalog.index[norm] {
-            return (match, count ?? fallbackCount(norm: norm, template: match.template))
+            return (match, count ?? fallbackCount(norm: norm, template: match.template), norm)
         }
-        // Longest-substring match (avoids "roll" matching "roll" in "spring roll blend")
+        // Longest-substring match (avoids "roll" matching "roll" in "spring roll blend"). Tie-broken
+        // lexicographically on the key itself (research §26 fix 1.5 review finding F9): `catalog.index`
+        // is a Dictionary, whose iteration order is hash-seed-randomized per process, so an unbroken
+        // length tie used to pick whichever key iteration visited first — nondeterministic across
+        // process launches. Harmless while `matchedKey` was internal; not harmless now that it feeds
+        // user-visible unmatched-item text (fix 1.5). The tuple comparison makes the larger key win a
+        // tie, an arbitrary but now-STABLE choice.
         let best = catalog.index
             .filter { norm.contains($0.key) }
-            .max { $0.key.count < $1.key.count }
+            .max { ($0.key.count, $0.key) < ($1.key.count, $1.key) }
         if let best {
-            return (best.value, count ?? fallbackCount(norm: norm, template: best.value.template))
+            return (best.value, count ?? fallbackCount(norm: norm, template: best.value.template), best.key)
         }
-        return (nil, 1)
+        return (nil, 1, "")
     }
 
     /// The count to use when the typed text carries no leading number (research §26 fix 1.4).
@@ -330,10 +363,10 @@ enum DishTemplateLexicon {
     static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
         var bounds: [String: ClosedRange<Double>] = [:]
         for itemName in MealItemSplitter.items(from: description) {
-            let (match, count) = matchDetailsWithCount(itemName)
-            guard let match else { continue }
+            let details = matchDetailsWithCount(itemName)
+            guard let match = details.match else { continue }
             for component in match.resolvedComponents {
-                let grams = max(component.gramsPerUnit * count, 1)
+                let grams = max(component.gramsPerUnit * details.count, 1)
                 let lower = max(1, grams * 0.5)
                 let upper = max(lower, grams * 1.75)
                 bounds[FoodItemSearch.normalized(component.search)] = lower...upper
@@ -370,12 +403,27 @@ enum DishTemplateLexicon {
         var quality = DishTemplateBindQuality()
 
         for itemName in items {
-            let (match, count) = matchDetailsWithCount(itemName)
-            guard let match = match else { return nil }  // an unknown item belongs to a later tier
+            let details = matchDetailsWithCount(itemName)
+            guard let match = details.match else { return nil }  // an unknown item belongs to a later tier
+
+            // research §26 fix 1.5: a brand/retailer chip the match's key didn't cover ("costco" out
+            // of "cheese pizza" matching only "cheese pizza") silently vanishes unless named here.
+            // Computed regardless of whether assembly below succeeds, but only ever RECORDED on the
+            // success path, inside `assemble` — see the guard's comment (review finding F7) for why.
+            let brandChips = unaccountedBrandChips(itemName: itemName, matchedKey: details.matchedKey)
+
             guard let assembled = assemble(
-                match: match, count: count, itemName: itemName,
-                mealType: mealType, description: description, catalog: catalog
+                match: match, count: details.count, itemName: itemName,
+                mealType: mealType, description: description, catalog: catalog,
+                unaccountedBrandChips: brandChips
             ) else {
+                // review finding F7: `brandChips` is deliberately NOT recorded here.
+                // `recordUnresolved` below already surfaces the WHOLE typed item verbatim, which
+                // already contains whatever brand word was in it — a separate "Costco" chip alongside
+                // "costco cheese pizza slice" would double-name the same problem. Unreachable today
+                // (every shipped template that can name a brand also binds at least one component,
+                // per `DishTemplateBindAuditTests`' full-catalog audit), kept as a guard against a
+                // future template that could combine both rather than a live behavior.
                 quality.recordUnresolved(item: itemName)
                 continue
             }
@@ -391,6 +439,128 @@ enum DishTemplateLexicon {
         )
     }
 
+    /// Verbatim, AS-TYPED chips for the brand/retailer tokens `itemName` names that `matchedKey` —
+    /// the template name/alias that actually matched it — does not account for (research §26 fix 1.5).
+    ///
+    /// `matchedKey` equals ``FoodItemSearch/normalized(_:)`` of `itemName` exactly for an exact-key
+    /// match, so a template whose OWN alias names a chain ("chipotle bowl") never false-positives: the
+    /// token is inside the key by construction. It is only ever a strict prefix/substring of the
+    /// normalized item for a longest-substring match, which is the one case where typed text can
+    /// extend past what the template accounted for.
+    ///
+    /// Reuses ``FoodProductWebSearch/retailerTerms`` (store/grocer names — verified possessive-safe:
+    /// "trader joe" already matches "trader joe's" as a plain substring with no collapsing needed) and
+    /// ``FoodBrandLexicon/matchedChainTokens(in:)`` (restaurant chains, possessive-aware as of the
+    /// review's finding F1) rather than a third parallel list. Returns each match's ORIGINAL substring
+    /// out of `itemName` — not the lexicon's own spelling — so "Wendy's" surfaces as "Wendy's", not a
+    /// sentence-cased "Wendys" (review finding F3, which also dissolves finding F8: `retailerTerms`
+    /// stays undisplayed matching-input English, because what reaches the screen is the user's own
+    /// text, never the lexicon term). §37 Q7 is an open owner question about token-boundary matching
+    /// (over-matching a food word that collides with a chain name, like "chipotle" the pepper or
+    /// "chilis" the vegetable — review finding F2, pinned not fixed) — deliberately not touched here.
+    private static func unaccountedBrandChips(itemName: String, matchedKey: String) -> [String] {
+        let itemNorm = FoodItemSearch.normalized(itemName)
+        var terms: [String] = []
+        for term in FoodProductWebSearch.retailerTerms
+        where itemNorm.contains(term) && !matchedKey.contains(term) {
+            terms.append(term)
+        }
+        for term in FoodBrandLexicon.matchedChainTokens(in: itemNorm) where !matchedKey.contains(term) {
+            if !terms.contains(term) { terms.append(term) }
+        }
+        guard !terms.isEmpty else { return [] }
+
+        let spans = possessiveCollapsedWordSpans(in: itemName)
+        return terms.map { term in
+            guard let range = spanOfTerm(term, in: spans) else {
+                // Recovery: should not happen — `term` was just confirmed present in `itemNorm` (or
+                // its possessive-collapsed form), and `spans` tokenizes + collapses `itemName` the
+                // same way. Falls back to the lexicon's own spelling rather than dropping the chip.
+                return term
+            }
+            return String(itemName[range])
+        }
+    }
+
+    /// One run of letters/numbers in the ORIGINAL `itemName`, tagged with its own range and its
+    /// individually-normalized spelling — the unit ``spanOfTerm(_:in:)`` searches over to recover a
+    /// verbatim substring for a matched brand/retailer term (research §26 fix 1.5 review finding F3).
+    private struct WordSpan {
+        let normalized: String
+        let range: Range<String.Index>
+    }
+
+    /// Tokenizes `itemName` into ``WordSpan``s the same way `FoodItemSearch.normalized` tokenizes
+    /// text (a run of `isLetter || isNumber` characters is one word; anything else is a separator) —
+    /// except each span keeps its ORIGINAL range in `itemName` instead of being flattened into one
+    /// lowercase string. A lone "s" span is merged into the PRECEDING span (its normalized text
+    /// appended, its range extended through the "s"), mirroring `FoodBrandLexicon`'s possessive
+    /// collapse (review finding F1): a stripped apostrophe is the only realistic source of a
+    /// standalone "s" token in typed food text, and merging the two spans' ORIGINAL ranges naturally
+    /// recaptures the apostrophe that sat between them — "wendy" + "s" merges into the range spanning
+    /// "wendy's" verbatim, punctuation and casing intact.
+    private static func possessiveCollapsedWordSpans(in itemName: String) -> [WordSpan] {
+        var spans: [WordSpan] = []
+        var wordStart: String.Index?
+        var index = itemName.startIndex
+        while index < itemName.endIndex {
+            let isWordChar = itemName[index].isLetter || itemName[index].isNumber
+            if isWordChar, wordStart == nil {
+                wordStart = index
+            } else if !isWordChar, let start = wordStart {
+                appendWordSpan(itemName: itemName, range: start..<index, into: &spans)
+                wordStart = nil
+            }
+            index = itemName.index(after: index)
+        }
+        if let start = wordStart {
+            appendWordSpan(itemName: itemName, range: start..<itemName.endIndex, into: &spans)
+        }
+        return spans
+    }
+
+    /// Appends one word's span to `spans`, collapsing it into the previous span when it is a lone
+    /// possessive "s" (see ``possessiveCollapsedWordSpans(in:)``).
+    private static func appendWordSpan(itemName: String, range: Range<String.Index>, into spans: inout [WordSpan]) {
+        let normalized = FoodItemSearch.normalized(String(itemName[range]))
+        if normalized == "s", let last = spans.indices.last {
+            spans[last] = WordSpan(normalized: spans[last].normalized + "s", range: spans[last].range.lowerBound..<range.upperBound)
+        } else {
+            spans.append(WordSpan(normalized: normalized, range: range))
+        }
+    }
+
+    /// Locates the ORIGINAL range in `itemName` that a matched `term` (a raw lexicon spelling like
+    /// "wendys" or "trader joe") corresponds to: joins `spans`' normalized text with single spaces
+    /// (character-identical to `FoodItemSearch.normalized` of the whole item, except wherever a
+    /// possessive was collapsed), finds `term`'s FIRST occurrence in that one joined string — the same
+    /// unanchored-substring rule the membership check uses — then maps the matched character range
+    /// back to which span(s) it overlaps and returns their combined ORIGINAL range.
+    ///
+    /// Deliberately NOT a "grow a window from every start until it contains `term`" search: that
+    /// shape has a real bug — searching "green chilis" for "chilis" from `start = 0` (word "green")
+    /// finds it the moment the window grows to include "chilis" too, because the CONCATENATED string
+    /// "green chilis" trivially contains "chilis" as its own suffix — returning "green chilis" instead
+    /// of the tight "chilis" match. Locating the match ONCE in the fully-joined string and mapping
+    /// back avoids manufacturing a false window match at every start position.
+    private static func spanOfTerm(_ term: String, in spans: [WordSpan]) -> Range<String.Index>? {
+        guard !spans.isEmpty else { return nil }
+        var joined = ""
+        var joinedRanges: [Range<String.Index>] = []
+        for (index, span) in spans.enumerated() {
+            if index > 0 { joined += " " }
+            let start = joined.endIndex
+            joined += span.normalized
+            joinedRanges.append(start..<joined.endIndex)
+        }
+        guard let found = joined.range(of: term),
+              let first = joinedRanges.firstIndex(where: { $0.upperBound > found.lowerBound }),
+              let last = joinedRanges.lastIndex(where: { $0.lowerBound < found.upperBound }) else {
+            return nil
+        }
+        return spans[first].range.lowerBound..<spans[last].range.upperBound
+    }
+
     // MARK: Private assembly
 
     private static func assemble(
@@ -399,11 +569,23 @@ enum DishTemplateLexicon {
         itemName: String,
         mealType: MealType?,
         description: String,
-        catalog: FoodCatalog
+        catalog: FoodCatalog,
+        unaccountedBrandChips: [String]
     ) -> (meal: Meal, quality: DishTemplateBindQuality)? {
         let template = match.template
         let bound = bindComponents(match.resolvedComponents, count: count, catalog: catalog)
         guard !bound.ingredients.isEmpty else { return nil }
+
+        // research §26 fix 1.5 review finding F6: folded in BEFORE the confidence stamp below, not
+        // after. The resolution-level confidence (`DishTemplateResolution.confidence`, `resolve`'s
+        // outer accumulator) always reflected an unaccounted brand chip via `quality.merge` — but the
+        // MEAL's OWN persisted stamp used to be computed from a component-binds-ONLY local copy that
+        // never saw it, so a meal whose components all bound confidently but which also carried
+        // "costco" persisted as "Food match" even though the resolution routed to review as `.low`.
+        var quality = bound.quality
+        for chip in unaccountedBrandChips {
+            quality.recordUnmatchedBrandToken(chip)
+        }
 
         let resolvedType = mealType ?? MealParser.classifyMealType(description)
         let displayName = itemName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -414,11 +596,11 @@ enum DishTemplateLexicon {
             resolvedIngredients: bound.ingredients,
             mealType: resolvedType,
             // The meal carries the same verdict as the resolution: a template whose components only
-            // bound weakly is an estimate, and saying "matched to a food" on it is the false label
-            // the research calls out (§6).
-            confidenceToken: bound.quality.confidence.mealConfidence.token
+            // bound weakly (or which carries an unaccounted brand chip) is an estimate, and saying
+            // "matched to a food" on it is the false label the research calls out (§6).
+            confidenceToken: quality.confidence.mealConfidence.token
         )
-        return (meal, bound.quality)
+        return (meal, quality)
     }
 
     /// Binds each template component to its best catalog row, applying the same bind floor the AI

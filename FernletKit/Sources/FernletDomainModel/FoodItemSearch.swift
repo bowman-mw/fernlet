@@ -32,6 +32,75 @@ public nonisolated enum FoodBrandLexicon {
         let n = FoodItemSearch.normalized(query)
         return chains.contains { n.contains($0) }
     }
+
+    /// The token-level twin of ``queryContainsBrandToken``: every chain name (not just whether one
+    /// exists) that `text` contains as a normalized substring, sorted for a deterministic order.
+    ///
+    /// Added for research §26 fix 1.5 — `DishTemplateLexicon` needs to name WHICH chain a description
+    /// mentioned (to surface it as an unmatched item) rather than only a yes/no signal, and this reuses
+    /// `chains` instead of a caller re-deriving its own copy.
+    ///
+    /// **Widened by the fix's adversarial review, finding F1 — THIS function only.**
+    /// `FoodItemSearch.normalized` maps an apostrophe to a bare SPACE (it keeps only letters/numbers),
+    /// so "McDonald's" normalizes to "mcdonald s" — two tokens — while the lexicon entry is spelled
+    /// "mcdonalds", the already-collapsed possessive. 12 of `chains`' 43 entries are canonically
+    /// possessive (McDonald's, Wendy's, Arby's, Applebee's, Chili's, Denny's, Hardee's, Friendly's,
+    /// Rally's, Domino's, Carl's Jr., Long John Silver's), so the CORRECT spelling of each one used to
+    /// be silently missed while the incidentally-already-collapsed spelling worked. This also checks a
+    /// possessive-collapsed form of `text` (a lone "s" token folded back onto the word before it —
+    /// "mcdonald" + "s" → "mcdonalds") in addition to the plain normalized form.
+    /// ``queryContainsBrandToken`` is deliberately left BYTE-UNCHANGED: its token-boundary semantics
+    /// are `Docs/Food-Search-And-Community-Database-Research-2026-08-22.md` §37 Q7's open owner
+    /// question, and widening the wrong function would prejudge that decision.
+    ///
+    /// **Widened again, same review, the Lm-apostrophe finding.** U+2019/U+2018 (the curly "smart
+    /// quote" apostrophes iOS text fields insert by default) already work with NO further change here:
+    /// they are Unicode punctuation, not letters, so `FoodItemSearch.normalized` already treats them as
+    /// a separator exactly like the ASCII `'` — "wendy’s" normalizes to "wendy s" and the possessive
+    /// collapse above reunites it. U+02BC (MODIFIER LETTER APOSTROPHE) and U+02BB (MODIFIER LETTER
+    /// TURNED COMMA) are different: Unicode category **Lm — letters** — so `Character.isLetter` is
+    /// TRUE for them and `normalized()` keeps one fused INSIDE its word run instead of splitting on it:
+    /// "wendyʼs" (U+02BC) normalizes to the single token "wendyʼs", which neither the raw substring
+    /// check nor the possessive collapse (which needs a SEPARATE trailing "s" token to reunite) can
+    /// ever match against the lexicon's "wendys". Reachable from third-party/locale keyboards and text-
+    /// canonicalization pipelines that map the apostrophe to U+02BC. `apostropheNormalized` below
+    /// pre-maps these to the ASCII apostrophe before normalization runs, so they fall through the SAME
+    /// separator + collapse path U+2019/U+2018/`'` already use — `FoodItemSearch.normalized` itself is
+    /// still not touched.
+    nonisolated public static func matchedChainTokens(in text: String) -> [String] {
+        let n = FoodItemSearch.normalized(apostropheNormalized(text))
+        let possessive = possessiveCollapsed(n)
+        return chains.filter { n.contains($0) || possessive.contains($0) }.sorted()
+    }
+
+    /// Replaces Unicode letter-class (Lm) apostrophe look-alikes with the plain ASCII apostrophe —
+    /// see ``matchedChainTokens(in:)``'s Lm-apostrophe note. U+A78C (LATIN SMALL LETTER SALTILLO) is
+    /// visually near-identical to U+02BC and included for the same reason, though its real source is
+    /// different (some Mexican indigenous orthographies use it as a real letter). Deliberately local
+    /// to this file: `FoodItemSearch.normalized` is not touched, so nothing outside brand-chain
+    /// matching changes shape.
+    nonisolated private static func apostropheNormalized(_ text: String) -> String {
+        let lmApostrophes: Set<Character> = ["\u{02BC}", "\u{02BB}", "\u{A78C}"]
+        return String(text.map { lmApostrophes.contains($0) ? "'" : $0 })
+    }
+
+    /// Reunites a normalized possessive split ("mcdonald s" → "mcdonalds") back into one token —
+    /// see ``matchedChainTokens(in:)``'s F1 note. A lone single-character "s" token is folded onto
+    /// the token immediately before it; every other token passes through unchanged. A standalone "s"
+    /// arising from anything OTHER than a stripped apostrophe is not a realistic token in typed food
+    /// text, so this is safe as a general collapse rather than a per-chain special case.
+    nonisolated private static func possessiveCollapsed(_ normalizedText: String) -> String {
+        let tokens = normalizedText.split(separator: " ").map(String.init)
+        var collapsed: [String] = []
+        for token in tokens {
+            if token == "s", let last = collapsed.indices.last {
+                collapsed[last] += "s"
+            } else {
+                collapsed.append(token)
+            }
+        }
+        return collapsed.joined(separator: " ")
+    }
 }
 
 /// Pure relevance search over ``FoodItem``s: normalization, tokenization, scoring, and ranking.
