@@ -145,8 +145,21 @@ final class MealResolutionService {
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
-        if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: host.foodCatalog) {
-            let resolution = MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
+        // The confidence comes from how well the template's components actually bound to catalog rows
+        // (research §26 fixes 1.1/1.2): this tier used to assert `.high` unconditionally, which is how
+        // a three-ingredient pizza decomposition — one component bound at score 58 against a floor of
+        // 250 — auto-committed with no review sheet.
+        if let lexicon = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: host.foodCatalog) {
+            // The dropped components and unbuildable dishes ride out as `unmatchedItems` so the review
+            // sheet's existing "Couldn't find" card names them: a burger whose patty bound to nothing
+            // must not present as a two-row meal with 62% of its declared mass silently gone.
+            let resolution = MealResolution(
+                meals: lexicon.meals,
+                createdRecipes: [],
+                confidence: lexicon.confidence,
+                isFallback: false,
+                unmatchedItems: lexicon.unmatchedItems
+            )
             return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
@@ -220,7 +233,7 @@ final class MealResolutionService {
             mealSource: .manual,
             isAIFallback: parts.contains { $0.isAIFallback },
             quality: macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: parts[0].confidence,
+            confidence: Self.pessimisticConfidenceToken(of: parts),
             note: "Logged as one meal from your description.",
             source: parts[0].source
         )
@@ -232,6 +245,41 @@ final class MealResolutionService {
             suggestedRecipe: resolution.suggestedRecipe,
             unmatchedItems: resolution.unmatchedItems
         )
+    }
+
+    /// The stamp a merged meal carries: the least-confident of its parts when they are all
+    /// *estimate-grade*, and otherwise the first part's stamp exactly as before.
+    ///
+    /// **What this fixes.** `parts[0].confidence` made the persisted stamp depend on WORD ORDER:
+    /// "smoothie and taco" wrote `foodMatch` while "taco and smoothie" wrote `roughEstimate` for the
+    /// identical food. Among the three estimate-grade stamps the resolver tiers produce — `foodMatch`
+    /// (matched a catalog row), `estimated`, `roughEstimate` (a low-confidence guess) — there IS an
+    /// ordering, stated in their own `label` comments, and a merged row can only honestly carry the
+    /// weakest one. `MealConfidence(persistedToken:)` resolves the legacy English spellings, so an
+    /// older part cannot dodge the fold.
+    ///
+    /// **What this deliberately does NOT decide.** ``MealConfidence`` is documented as "the provenance
+    /// stamp on a logged meal — how this row got its numbers", and most of its cases (`recipe`,
+    /// `savedProduct`, `scannedLabel`, `repeated`, `corrected`…) name a SOURCE, not a rung on a
+    /// confidence ladder — that ladder is ``MealResolutionConfidence``. `MealBuilder.mealFromRecipe`
+    /// stamps `recipe`, and those meals do reach this fold through `MealBuilder.meals(from:)` on both
+    /// the AI-selection and deterministic tiers. Ranking `recipe` against `foodMatch` would be
+    /// inventing an order the enum does not define, so any part carrying a stamp outside the
+    /// estimate-grade set short-circuits to the pre-existing `parts[0]` behaviour: this function never
+    /// relabels a recipe-backed merge, and never changes an answer this codebase gave before.
+    /// `[recipe, roughEstimate]` therefore still stamps `recipe`, and `[foodMatch, recipe]` still
+    /// depends on word order — an OPEN owner question, flagged rather than settled here.
+    static func pessimisticConfidenceToken(of parts: [Meal]) -> String {
+        guard let first = parts.first else { return MealConfidence.roughEstimate.token }
+        let leastConfidentFirst: [MealConfidence] = [.roughEstimate, .estimated, .foodMatch]
+        let stamps = parts.map { MealConfidence(persistedToken: $0.confidence) }
+        guard stamps.allSatisfy({ stamp in stamp.map(leastConfidentFirst.contains) == true }) else {
+            return first.confidence
+        }
+        for candidate in leastConfidentFirst where stamps.contains(candidate) {
+            return candidate.token
+        }
+        return first.confidence
     }
 
     /// Rewrites colloquial ingredient phrasing to the catalog's vocabulary so the resolver matches the

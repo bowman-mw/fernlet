@@ -411,15 +411,18 @@ struct FernletTests {
         ]
 
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([surveyTaco] + componentItems))
-        let meals = try #require(DishTemplateLexicon.resolve(
+        let resolved = try #require(DishTemplateLexicon.resolve(
             description: "taco",
             mealType: nil,
             catalog: catalog
         ))
-        let meal = try #require(meals.first)
+        let meal = try #require(resolved.meals.first)
 
         #expect(meal.componentSnapshots.count >= 4)
         #expect(!meal.componentSnapshots.contains { $0.name == surveyTaco.name })
+        // Every component here is an exact name match, so the bind-quality derivation (research §26
+        // fix 1.1) still yields `.high` — a clean template resolution keeps auto-committing.
+        #expect(resolved.confidence == .high)
     }
 
     @MainActor

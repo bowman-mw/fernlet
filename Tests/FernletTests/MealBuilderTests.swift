@@ -592,6 +592,90 @@ struct MealBuilderTests {
         #expect(unchanged.meals[0].name == "Egg")
     }
 
+    /// The merged meal's persisted provenance stamp must not depend on WORD ORDER.
+    ///
+    /// `mergedIntoSingleMeal` took `parts[0].confidence`, so "smoothie and taco" persisted
+    /// `foodMatch` while "taco and smoothie" persisted `roughEstimate` for identical food — and a
+    /// resolution that skips the review sheet (the AI-retry commit path does not consult
+    /// `needsReview`) carried that wrong stamp into the diary. A merged row can only honestly carry
+    /// its weakest part's stamp.
+    @Test func mergedMealTakesTheLeastConfidentStampRegardlessOfOrder() {
+        func part(_ name: String, _ confidence: MealConfidence) -> Meal {
+            let component = MealComponentSnapshot(
+                foodItemId: UUID(), name: name, quantity: 1, unit: RecipeUnit.serving.rawValue,
+                macros: Macros(protein: 5, carbs: 5, fat: 5), micronutrients: Micronutrients()
+            )
+            return Meal(
+                name: name, mealType: .lunch, macros: Macros(protein: 5, carbs: 5, fat: 5),
+                componentSnapshots: [component], quality: .ok, confidence: confidence.token,
+                note: "", source: "manual"
+            )
+        }
+        let clean = part("Smoothie", .foodMatch)
+        let weak = part("Taco", .roughEstimate)
+        func mergedToken(_ parts: [Meal]) -> String? {
+            MealResolutionService.mergedIntoSingleMeal(
+                MealResolution(meals: parts, createdRecipes: [], confidence: .low, isFallback: false),
+                description: "two dishes"
+            ).meals.first?.confidence
+        }
+        #expect(mergedToken([clean, weak]) == MealConfidence.roughEstimate.token)
+        #expect(mergedToken([weak, clean]) == MealConfidence.roughEstimate.token)
+        // All-clean parts keep the confident stamp — the fold is pessimistic, not punitive.
+        #expect(mergedToken([clean, part("Sashimi", .foodMatch)]) == MealConfidence.foodMatch.token)
+        // The legacy English spellings resolve too, so an old part cannot dodge the fold.
+        let legacyWeak = part("Taco", .foodMatch)
+        var legacy = legacyWeak
+        legacy.confidence = "Rough estimate"
+        #expect(mergedToken([clean, legacy]) == MealConfidence.roughEstimate.token)
+    }
+
+    /// A recipe-backed part is NOT relabelled by the fold.
+    ///
+    /// `MealBuilder.mealFromRecipe` stamps `MealConfidence.recipe`, and those meals reach
+    /// `mergedIntoSingleMeal` through `MealBuilder.meals(from:)` on both the AI-selection and the
+    /// deterministic plan tiers — so "no resolver tier produces another stamp" was simply false.
+    /// `MealConfidence` is documented as a PROVENANCE stamp ("how this row got its numbers"), and
+    /// `recipe` names a source rather than a rung on a confidence ladder — that ladder is
+    /// `MealResolutionConfidence`. Ordering `recipe` against `foodMatch` would invent an order the
+    /// enum does not define, so a part carrying any stamp outside the estimate-grade set
+    /// (`roughEstimate`/`estimated`/`foodMatch`) short-circuits the fold to the pre-existing
+    /// `parts[0]` behaviour. These pins therefore record BOTH that no answer regressed and that
+    /// `[foodMatch, recipe]` is still word-order dependent — an open owner question, not a fix.
+    @Test func recipeStampedPartsKeepThePreExistingFold() {
+        func part(_ name: String, _ confidence: MealConfidence) -> Meal {
+            let component = MealComponentSnapshot(
+                foodItemId: UUID(), name: name, quantity: 1, unit: RecipeUnit.serving.rawValue,
+                macros: Macros(protein: 5, carbs: 5, fat: 5), micronutrients: Micronutrients()
+            )
+            return Meal(
+                name: name, mealType: .lunch, macros: Macros(protein: 5, carbs: 5, fat: 5),
+                componentSnapshots: [component], quality: .ok, confidence: confidence.token,
+                note: "", source: "manual"
+            )
+        }
+        let recipeBacked = part("Chili", .recipe)
+        let matched = part("Rice", .foodMatch)
+        let rough = part("Guess", .roughEstimate)
+        let fold = MealResolutionService.pessimisticConfidenceToken
+
+        // The measured regression, now closed: this returned `foodMatch` before this round's repair.
+        #expect(fold([recipeBacked, matched]) == MealConfidence.recipe.token)
+        // The other order is unchanged from pre-fix too — and still order-dependent. Owner question.
+        #expect(fold([matched, recipeBacked]) == MealConfidence.foodMatch.token)
+        #expect(fold([recipeBacked, rough]) == MealConfidence.recipe.token)
+        #expect(fold([recipeBacked, recipeBacked]) == MealConfidence.recipe.token)
+        #expect(fold([recipeBacked]) == MealConfidence.recipe.token)
+        // Every other provenance-only stamp behaves the same way — the fold is total, not partial.
+        for stamp in MealConfidence.allCases where [.roughEstimate, .estimated, .foodMatch].contains(stamp) == false {
+            #expect(fold([part("A", stamp), rough]) == stamp.token, "\(stamp.token) must not be relabelled")
+        }
+        // An unparseable stamp (a newer build's token arriving over sync) is likewise left alone.
+        var unknown = matched
+        unknown.confidence = "somethingNewerBuildsWrite"
+        #expect(fold([unknown, rough]) == "somethingNewerBuildsWrite")
+    }
+
     @Test func burgerPattyCanonicalizesToBeefButLeavesDishesAndNonBeefAlone() {
         // "burger patties" is the meat — rewrite so it matches "beef patty", not FNDDS hamburger dishes.
         #expect(MealResolutionService.canonicalizedQuery("two burger patties") == "two beef patties")

@@ -181,7 +181,12 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
 /// All data is discarded when the store is deallocated.
 ///
 /// `bundledFoodItems` seeds an in-memory food catalog (the SQLite-backed bundle is not loaded in
-/// tests), so tests stay deterministic — pass the specific USDA items a test needs.
+/// tests), so tests stay deterministic — pass the specific USDA items a test needs. A test that must
+/// exercise the SHIPPED catalog (the dish-template bind audit replays the real 118,317 rows) passes
+/// `foodCatalog: FoodCatalog.bundled()` instead; it is opt-in precisely because it is not
+/// deterministic in the same way. The two are mutually exclusive — an explicit `foodCatalog` REPLACES
+/// the seeded items rather than adding to them, so passing both traps rather than silently dropping
+/// the seed.
 ///
 /// `photoDocumentsDirectory` defaults to a fresh `uniquePhotoDirectory()`; pass an explicit one only
 /// to give two stores a SHARED photo corpus (e.g. simulating a relaunch over the same photos). The
@@ -192,6 +197,7 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
 func makeTestStore(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
+    foodCatalog: FoodCatalog? = nil,
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
@@ -203,6 +209,7 @@ func makeTestStore(
     makeTestStoreWithRepositories(
         date: date,
         bundledFoodItems: bundledFoodItems,
+        foodCatalog: foodCatalog,
         appGroupDirectory: appGroupDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
@@ -224,6 +231,7 @@ func makeTestStore(
 func makeTestStoreWithRepositories(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
+    foodCatalog: FoodCatalog? = nil,
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
@@ -233,6 +241,10 @@ func makeTestStoreWithRepositories(
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
+    precondition(
+        foodCatalog == nil || bundledFoodItems.isEmpty,
+        "pass bundledFoodItems OR an explicit foodCatalog — an explicit catalog replaces the seeded items"
+    )
     let controller = PersistenceController(inMemory: true)
     // Use a non-existent temp path so the legacy migration returns an empty database.
     let legacyURL = FileManager.default.temporaryDirectory
@@ -269,7 +281,7 @@ func makeTestStoreWithRepositories(
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
-        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
+        foodCatalog: foodCatalog ?? FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
         // The period/intimacy visibility resolution AND the age verdict share one defaults SUITE, and
         // `resetAll` clears both — see `uniqueSensitiveVisibilityDefaults()`.
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,

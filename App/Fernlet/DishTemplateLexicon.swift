@@ -51,6 +51,119 @@ struct DishTemplateMatch {
     let componentOverrides: [DishTemplateComponent]
 }
 
+/// How strongly a dish template's components bound to catalog rows — the only honest signal this
+/// tier has about whether its decomposition describes what the person actually ate.
+///
+/// `bound` counts components that produced an ingredient; `dropped` counts everything that fell out
+/// of the meal — a component whose best catalog hit was below `FoodItemSearch.minimumBindScore`
+/// (matched via category/tags only), or a whole named dish that produced no bindable component at
+/// all; `weak` counts components that bound below `FoodItemSearch.confidentBindScore`; `minScore` is
+/// the weakest bind score seen. Mirrors `FoundationDishDecomposition`'s `ComponentBinding` — the bind
+/// gate every other tier of the quick-log cascade already applies (research §26 fix 1.2).
+///
+/// `unmatched` is the *visible* half of `dropped`: the human-readable names that ride out to
+/// `MealResolution.unmatchedItems`, which forces review and renders in the review sheet's
+/// "Couldn't find" card. A drop that is counted but not named is a meal quietly missing food — a
+/// burger showing two rows with the patty gone and nothing on screen saying so.
+struct DishTemplateBindQuality {
+    private(set) var minScore = Int.max
+    private(set) var bound = 0
+    private(set) var dropped = 0
+    private(set) var weak = 0
+    private(set) var unmatched: [String] = []
+
+    /// Records one component that bound at `score`.
+    mutating func record(score: Int) {
+        bound += 1
+        minScore = min(minScore, score)
+        if score < FoodItemSearch.confidentBindScore { weak += 1 }
+    }
+
+    /// Records one component whose best catalog hit was below the bind floor, so it was dropped from
+    /// the meal. `query` is the component's own catalog query — preparation included, because what
+    /// went missing from fried rice is FRIED rice, not rice.
+    mutating func recordDropped(component query: String) {
+        dropped += 1
+        appendUnmatched(Self.displayName(for: query))
+    }
+
+    /// Records one item of the description that matched a template but produced no bindable component
+    /// at all, so no meal was built for it. The typed text is surfaced verbatim, matching what
+    /// `MealResolution.unmatchedItems` documents.
+    mutating func recordUnresolved(item text: String) {
+        dropped += 1
+        appendUnmatched(text.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Folds another item's bind quality into this one — one description can name several dishes,
+    /// and the resolution is only as good as its worst component.
+    mutating func merge(_ other: DishTemplateBindQuality) {
+        minScore = min(minScore, other.minScore)
+        bound += other.bound
+        dropped += other.dropped
+        weak += other.weak
+        for name in other.unmatched { appendUnmatched(name) }
+    }
+
+    /// Appends a name to ``unmatched`` unless it is already there, preserving first-seen order.
+    ///
+    /// Two dishes in one description can drop the SAME component ("burger and BLT" both lose their
+    /// lettuce). The review sheet renders this list with `ForEach(id: \.self)`, where a repeated
+    /// element is undefined behaviour in SwiftUI — and "Lettuce, Lettuce" would be absurd copy even
+    /// if it rendered.
+    private mutating func appendUnmatched(_ name: String) {
+        guard name.isEmpty == false, unmatched.contains(name) == false else { return }
+        unmatched.append(name)
+    }
+
+    /// A template component's catalog query as it should read on the review sheet: sentence case,
+    /// preparation included ("fried rice white cooked" → "Fried rice white cooked").
+    ///
+    /// **These strings are food-name DATA, not UI copy.** They are the same class as a catalog
+    /// `FoodItem.name` ("Mozzarella Cheese", "Beans, black, mature seeds, cooked, boiled, with
+    /// salt"), which this app already renders untranslated on every food surface — so rendering one
+    /// here does not breach the localization wall, and they stay frozen English in the JSON because
+    /// they are also matching inputs. The obligation that remains is data, not translation: the
+    /// templates carry no separate display name, and research §26 fix 1.3 — which rewrites these
+    /// search strings anyway — should give them one that reads like a food.
+    private static func displayName(for query: String) -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard let first = trimmed.first else { return trimmed }
+        return String(first).uppercased() + trimmed.dropFirst()
+    }
+
+    /// The confidence these binds justify: `.high` only when every component bound at or above
+    /// `FoodItemSearch.confidentBindScore` and none was dropped; `.low` otherwise (research §26
+    /// fix 1.1 — this tier used to assert `.high` unconditionally).
+    ///
+    /// `.medium` is deliberately never produced here. `MealResolutionConfidence.needsReview` is
+    /// `== .low`, so a `.medium` template resolution would still auto-commit — which is precisely
+    /// the failure this derivation exists to close. Anything short of "every component bound
+    /// confidently" therefore lands on `.low`, and the quick-log flow pauses on the review sheet
+    /// before the meal counts toward the day.
+    var confidence: MealResolutionConfidence {
+        guard bound > 0, dropped == 0, weak == 0, minScore >= FoodItemSearch.confidentBindScore else {
+            return .low
+        }
+        return .high
+    }
+}
+
+/// The outcome of a dish-template resolution: the assembled meals plus the confidence their
+/// component binds justify.
+///
+/// Replaces the bare `[Meal]?` the tier used to return, which left ``MealResolutionService`` with
+/// nothing to judge and made it stamp `.high` on every template hit however badly the components
+/// bound (research §26 fix 1.1).
+///
+/// `unmatchedItems` carries what fell out — dropped components and dishes that produced nothing — so
+/// `MealResolution.needsReview` fires and the review sheet names them.
+struct DishTemplateResolution {
+    let meals: [Meal]
+    let confidence: MealResolutionConfidence
+    let unmatchedItems: [String]
+}
+
 /// The top-level shape of `DishTemplates.json` — a schema version plus the dish list.
 ///
 /// Decoded once by ``DishTemplateLexicon``'s lazy catalog load; a decode failure degrades to an
@@ -159,10 +272,8 @@ enum DishTemplateLexicon {
                 let grams = max(component.gramsPerUnit * count, 1)
                 let lower = max(1, grams * 0.5)
                 let upper = max(lower, grams * 1.75)
-                let prep = component.preparation ?? ""
-                let query = prep.isEmpty ? component.search : "\(prep) \(component.search)"
                 bounds[FoodItemSearch.normalized(component.search)] = lower...upper
-                bounds[FoodItemSearch.normalized(query)] = lower...upper
+                bounds[FoodItemSearch.normalized(catalogQuery(for: component))] = lower...upper
             }
         }
         return bounds
@@ -170,31 +281,50 @@ enum DishTemplateLexicon {
 
     // MARK: Resolution
 
-    /// Resolves `description` into `Meal`s using dish templates + the full food catalog.
+    /// Resolves `description` into `Meal`s using dish templates + the full food catalog, together
+    /// with the confidence the component binds justify and whatever fell out along the way.
     ///
-    /// All items split from the description must be found in the lexicon for this to return non-nil;
-    /// if any item is unrecognised the whole call returns nil so the next fallback tier can handle it.
+    /// Every item split from the description must be KNOWN to the lexicon: if any is unrecognised the
+    /// whole call returns nil, so the next tier sees the entire description rather than half of it.
+    /// But an item the lexicon knows and cannot build — a template whose every component drops — no
+    /// longer discards its siblings: the successful dishes are kept and the failed item's text rides
+    /// out in `unmatchedItems`, which forces the review sheet. Returning nil there destroyed the good
+    /// half of "smoothie and tomato soup" and handed the whole description to a tier that answered
+    /// with a peach-mango juice.
+    ///
+    /// The returned confidence is `.high` only when every component of every matched template bound
+    /// confidently and nothing was dropped — see ``DishTemplateBindQuality/confidence``.
     static func resolve(
         description: String,
         mealType: MealType?,
         catalog: FoodCatalog
-    ) -> [Meal]? {
+    ) -> DishTemplateResolution? {
         let items = MealItemSplitter.items(from: description)
         guard !items.isEmpty else { return nil }
 
         var resolvedMeals: [Meal] = []
+        var quality = DishTemplateBindQuality()
 
         for itemName in items {
             let (match, count) = matchDetailsWithCount(itemName)
-            guard let match = match else { return nil }  // require all items to match
-            guard let meal = assemble(
+            guard let match = match else { return nil }  // an unknown item belongs to a later tier
+            guard let assembled = assemble(
                 match: match, count: count, itemName: itemName,
                 mealType: mealType, description: description, catalog: catalog
-            ) else { return nil }
-            resolvedMeals.append(meal)
+            ) else {
+                quality.recordUnresolved(item: itemName)
+                continue
+            }
+            resolvedMeals.append(assembled.meal)
+            quality.merge(assembled.quality)
         }
 
-        return resolvedMeals.isEmpty ? nil : resolvedMeals
+        guard resolvedMeals.isEmpty == false else { return nil }
+        return DishTemplateResolution(
+            meals: resolvedMeals,
+            confidence: quality.confidence,
+            unmatchedItems: quality.unmatched
+        )
     }
 
     // MARK: Private assembly
@@ -206,35 +336,80 @@ enum DishTemplateLexicon {
         mealType: MealType?,
         description: String,
         catalog: FoodCatalog
-    ) -> Meal? {
+    ) -> (meal: Meal, quality: DishTemplateBindQuality)? {
         let template = match.template
         let components = template.components + match.componentOverrides
-        let resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = components.compactMap { component in
-            let prep = component.preparation ?? ""
-            let query = prep.isEmpty ? component.search : "\(prep) \(component.search)"
-            guard let foodItem = catalog.results(for: query, limit: 1).first else { return nil }
-            // R3/R5: no single template component may exceed the shared single-log gram cap, however
-            // large a count the user typed.
-            let grams = min(component.gramsPerUnit * count, MealPlausibility.maxSingleLogGrams)
-            let ingredient = FoodSelectionIngredient(
-                candidateId: 0,
-                foodName: foodItem.name,
-                quantity: grams,
-                unit: RecipeUnit.gram.rawValue
-            )
-            return (ingredient, foodItem)
-        }
-        guard !resolvedIngredients.isEmpty else { return nil }
+        let bound = bindComponents(components, count: count, catalog: catalog)
+        guard !bound.ingredients.isEmpty else { return nil }
 
         let resolvedType = mealType ?? MealParser.classifyMealType(description)
         let displayName = itemName.trimmingCharacters(in: .whitespaces).isEmpty
             ? template.name.capitalized
             : itemName.capitalized
-        return MealBuilder.mealFromIngredients(
+        let meal = MealBuilder.mealFromIngredients(
             itemName: displayName,
-            resolvedIngredients: resolvedIngredients,
-            mealType: resolvedType
+            resolvedIngredients: bound.ingredients,
+            mealType: resolvedType,
+            // The meal carries the same verdict as the resolution: a template whose components only
+            // bound weakly is an estimate, and saying "matched to a food" on it is the false label
+            // the research calls out (§6).
+            confidenceToken: bound.quality.confidence.mealConfidence.token
         )
+        return (meal, bound.quality)
+    }
+
+    /// Binds each template component to its best catalog row, applying the same bind floor the AI
+    /// decomposition tier applies (`FoundationDishDecomposition.bindComponents`), and reports how
+    /// well each one bound.
+    ///
+    /// A component whose top hit scores below `FoodItemSearch.minimumBindScore` matched via
+    /// category/tags only — no real name signal — so it is DROPPED rather than silently contributing
+    /// an unrelated food's macros; the drop is recorded so the resolution confidence can reflect the
+    /// missing ingredient instead of hiding it (research §26 fix 1.2).
+    private static func bindComponents(
+        _ components: [DishTemplateComponent],
+        count: Double,
+        catalog: FoodCatalog
+    ) -> (ingredients: [(FoodSelectionIngredient, FoodItem)], quality: DishTemplateBindQuality) {
+        var ingredients: [(FoodSelectionIngredient, FoodItem)] = []
+        var quality = DishTemplateBindQuality()
+        for component in components {
+            let query = catalogQuery(for: component)
+            guard let match = catalog.scoredResults(for: query, limit: 1).first,
+                  match.score >= FoodItemSearch.minimumBindScore else {
+                quality.recordDropped(component: query)
+                continue
+            }
+            quality.record(score: match.score)
+            // R3/R5: no single template component may exceed the shared single-log gram cap, however
+            // large a count the user typed.
+            let grams = min(component.gramsPerUnit * count, MealPlausibility.maxSingleLogGrams)
+            let ingredient = FoodSelectionIngredient(
+                candidateId: 0,
+                foodName: match.item.name,
+                quantity: grams,
+                unit: RecipeUnit.gram.rawValue
+            )
+            ingredients.append((ingredient, match.item))
+        }
+        return (ingredients, quality)
+    }
+
+    /// Every decoded dish template, in file order.
+    ///
+    /// The audit surface for `DishTemplateBindAuditTests`, which replays each component's catalog
+    /// query against the shipped catalog and pins which ones clear the bind floor — the data-quality
+    /// half of the same defect (research §26 fix 1.3 owns repairing the search strings this exposes).
+    static var allTemplates: [DishTemplate] { catalog.templates }
+
+    /// The catalog query one template component binds through: its `preparation` prefixed onto its
+    /// `search` term when present.
+    ///
+    /// The single definition of that string — the gram-bounds path, the bind path, and the bind audit
+    /// all build it here, so an audit can never measure a query the resolver does not actually run.
+    static func catalogQuery(for component: DishTemplateComponent) -> String {
+        let prep = (component.preparation ?? "").trimmingCharacters(in: .whitespaces)
+        return prep.isEmpty ? component.search : "\(prep) \(component.search)"
     }
 
     // MARK: Count extraction
