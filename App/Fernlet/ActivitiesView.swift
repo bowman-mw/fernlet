@@ -278,7 +278,12 @@ struct ActivitiesView: View {
     @ViewBuilder
     private func memberAvatar(_ member: ActivityParticipant) -> some View {
         if let cached = store.cachedFriendState(fingerprint: member.fingerprint) {
+            // Someone ELSE's companion, drawn at 40pt beside their name. T1-10: it used to inherit
+            // the shared "Fernlet companion, <state>" label, so every friend in the roster
+            // announced as the user's own — and leaked their fuzzed wellbeing state along the way.
+            // The name is already spoken by the row; the avatar adds nothing but noise.
             CompanionView(state: cached.fuzzyState.representativeState, appearance: cached.appearance, size: 40)
+                .accessibilityHidden(true)
         } else {
             ZStack {
                 Circle().fill(Color.moss.opacity(0.18)).frame(width: 40, height: 40)

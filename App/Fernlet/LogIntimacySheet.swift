@@ -218,7 +218,9 @@ struct LogIntimacySheet: View {
                 // is the whole point of the branch, and a 1.8 s window with the cursor elsewhere is
                 // not a way of telling anyone anything.
                 savedWithCaveat = true
-                report(String(localized: "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"))
+                // `.success`: the sealed note IS on disk — only the Health sample failed.
+                report(String(localized: "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"),
+                       kind: .success)
                 return
             }
             dismiss()
@@ -231,9 +233,10 @@ struct LogIntimacySheet: View {
             // `savedWithCaveat` stays false: the typed note is still only in this sheet, Save is
             // still the honest verb for the bar, and the draft guard still stands between the note
             // and a swipe-down. What was missing is that none of it was ever spoken.
-            report(String(localized: "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."))
+            report(String(localized: "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."),
+                   kind: .error)
         } catch {
-            report(error.localizedDescription)
+            report(error.localizedDescription, kind: .error)
         }
     }
 
@@ -241,8 +244,13 @@ struct LogIntimacySheet: View {
     ///
     /// **Privacy:** the outcome only. The note itself is sealed, device-only, and behind the app
     /// lock; an announcement is spoken aloud to whoever is within earshot.
-    private func report(_ message: String) {
+    ///
+    /// - Parameters:
+    ///   - message: The already-localized outcome sentence — never the note itself.
+    ///   - kind: `.error` when nothing was written at all; `.status` (the default) for a save that
+    ///     landed with a caveat the user still has to read.
+    private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
-        AccessibilityNotification.Announcement(message).post()
+        FernletAnnouncer.system.announce(kind, resolved: message)
     }
 }

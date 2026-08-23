@@ -119,10 +119,12 @@ public final class CaptureProtectionState {
     /// tests can simulate a capture transition (posting `capturedDidChangeNotification` then
     /// asserting the re-read), which real automation cannot trigger.
     @ObservationIgnored private let readScreenIsCaptured: @MainActor (UIScreen) -> Bool
-    /// Posts the once-per-session nudge copy as a VoiceOver announcement — production posts
-    /// `AccessibilityNotification.Announcement`; injectable so a unit test can record what was
-    /// (and was not) announced, which the real accessibility system never reports back.
-    @ObservationIgnored private let postAccessibilityAnnouncement: @MainActor (String) -> Void
+    /// Speaks the once-per-session nudge copy. This state's own injected closure was the pattern
+    /// ``FernletAnnouncer`` was extracted from (accessibility review T1-2); it now holds the shared
+    /// announcer instead, so there is exactly one announcement seam in the module and a test still
+    /// records what was (and was not) announced — which the real accessibility system never
+    /// reports back.
+    @ObservationIgnored private let announcer: FernletAnnouncer
 
     /// Creates the state and installs both notification observers once.
     ///
@@ -132,9 +134,8 @@ public final class CaptureProtectionState {
     ///   - readScreenIsCaptured: Test seam for the per-screen captured read; nil (production)
     ///     resolves to `{ $0.isCaptured }` in the init body — deliberately not a default-argument
     ///     value, since `UIScreen.isCaptured` is main-actor state.
-    ///   - postAccessibilityAnnouncement: Test seam for the VoiceOver nudge announcement; nil
-    ///     (production) resolves to posting `AccessibilityNotification.Announcement` in the
-    ///     init body.
+    ///   - announcer: Test seam for the VoiceOver nudge announcement; nil (production) resolves
+    ///     to ``FernletAnnouncer/system``. Pass a recording announcer to assert what was spoken.
     ///   - notificationCenter: The center both trigger observers attach to. Defaults to
     ///     `.default`, which is the only center UIKit posts the real notifications on, so
     ///     production must never pass anything else. A test that posts either trigger MUST pass a
@@ -143,13 +144,12 @@ public final class CaptureProtectionState {
     public init(
         captureOverride: Bool? = nil,
         readScreenIsCaptured: (@MainActor (UIScreen) -> Bool)? = nil,
-        postAccessibilityAnnouncement: (@MainActor (String) -> Void)? = nil,
+        announcer: FernletAnnouncer? = nil,
         notificationCenter: NotificationCenter = .default
     ) {
         self.captureOverride = captureOverride
         self.readScreenIsCaptured = readScreenIsCaptured ?? { $0.isCaptured }
-        self.postAccessibilityAnnouncement = postAccessibilityAnnouncement
-            ?? { AccessibilityNotification.Announcement($0).post() }
+        self.announcer = announcer ?? .system
         self.observerBag = NotificationObserverBag(center: notificationCenter)
         // The blocks run nonisolated under Swift 6 — never touch state directly; hop first.
         observerBag.hold(notificationCenter.addObserver(
@@ -209,7 +209,11 @@ public final class CaptureProtectionState {
     public func claimNudge(for pulse: Int) -> Bool {
         if let nudgePulse { return nudgePulse == pulse }
         nudgePulse = pulse
-        postAccessibilityAnnouncement(CaptureNudgeCopy.spokenAnnouncement)
+        // `resolved:` because ``CaptureNudgeCopy`` is this module's own copy, and this module has
+        // no string catalog to resolve it against (review §4.0 — the nudge copy is the standing
+        // violation that item fixes). Routing it through the announcer neither creates nor hides
+        // that debt; it just stops a SECOND announcement seam existing here.
+        announcer.announce(.status, resolved: CaptureNudgeCopy.spokenAnnouncement)
         return true
     }
 

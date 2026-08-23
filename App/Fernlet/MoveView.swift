@@ -1620,7 +1620,10 @@ struct WorkoutSuggestionSheet: View {
             Button(action: startSuggesting) {
                 HStack(spacing: 8) {
                     if isSuggesting {
+                        // The button's own label already changes while it runs; the spinner is the
+                        // visual half of the same fact and has nothing of its own to say.
                         ProgressView().controlSize(.small).tint(Color.onMoss)
+                            .accessibilityHidden(true)
                     }
                     suggestLabel
                         .font(.fernlet(.label))
@@ -1788,7 +1791,8 @@ struct WorkoutSuggestionSheet: View {
                     runAdjustment()
                 } label: {
                     HStack(spacing: 8) {
-                        if isAdjusting { ProgressView().controlSize(.small) }
+                        // "Adjusting…" below is the spoken half; the spinner is the drawn one.
+                        if isAdjusting { ProgressView().controlSize(.small).accessibilityHidden(true) }
                         Image(systemName: "wand.and.stars")
                             .font(.caption.weight(.semibold))
                         Text(isAdjusting ? "Adjusting…" : "Adjust with AI")

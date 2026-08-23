@@ -367,9 +367,15 @@ struct JournalSheet: View {
         let notification = JournalPromptNotification(reason: reason)
         journalPromptNotification = notification
 
+        // The banner offers an action — it opens the long-form journaling app — so it gets the
+        // stretched ACTION window, not the notice one. A prompt that has gone by the time the
+        // VoiceOver cursor reaches it is the same as no prompt at all.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(6),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
         Task { @MainActor in
             do {
-                try await Task.sleep(for: .seconds(6))
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
                 return
@@ -680,9 +686,15 @@ struct JournalEntryEditorSheet: View {
         let notification = JournalPromptNotification(reason: reason)
         journalPromptNotification = notification
 
+        // The banner offers an action — it opens the long-form journaling app — so it gets the
+        // stretched ACTION window, not the notice one. A prompt that has gone by the time the
+        // VoiceOver cursor reaches it is the same as no prompt at all.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(6),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
         Task { @MainActor in
             do {
-                try await Task.sleep(for: .seconds(6))
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
                 return
@@ -1765,9 +1777,15 @@ struct DayEditSheet: View {
         let notification = JournalPromptNotification(reason: reason)
         journalPromptNotification = notification
 
+        // The banner offers an action — it opens the long-form journaling app — so it gets the
+        // stretched ACTION window, not the notice one. A prompt that has gone by the time the
+        // VoiceOver cursor reaches it is the same as no prompt at all.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(6),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
         Task { @MainActor in
             do {
-                try await Task.sleep(for: .seconds(6))
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled: this sheet is gone or a newer banner owns the state — touch nothing.
                 return

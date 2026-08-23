@@ -15,6 +15,28 @@ import FernletUI
 /// would fail decode on older builds) layering the frazzle, calm, and pet-cooldown looks.
 /// Used everywhere a companion appears: Home, activity rosters (friends' cached appearances),
 /// the studio preview, and more.
+///
+/// **It carries no accessibility label, deliberately** (accessibility review T1-10). It used to
+/// carry `"Fernlet companion, \(state.rawValue)"` — which was wrong twice over: `rawValue` is a
+/// FROZEN persistence token that is byte-mirrored into the widget process and is a field of the
+/// Coach export schema, so speaking it aloud spoke an untranslatable identifier; and the label was
+/// discarded anyway wherever a caller applied its own. The drawing is made of `Shape`s and
+/// `Image(decorative:)`s, none of which is an accessibility element, so a bare render is silent.
+///
+/// Nine call sites, three treatments:
+///
+/// - **One interactive** — Home's `companionSection` — supplies its own label, its state as an
+///   `.accessibilityValue` via the localized `CompanionState.displayName` fork, the `.isButton`
+///   trait, and a custom action for the long-press edit path (which VoiceOver cannot perform).
+/// - **Seven decorative** — the launch illustration, both Home wardrobe previews, the studio's
+///   design preview, both onboarding illustrations, and the activity roster's friend avatars —
+///   say so with `.accessibilityHidden(true)`. The roster one matters most: the shared label used
+///   to make someone else's companion announce as your own, fuzzed state and all.
+/// - **One labelled but not interactive** — the studio's confirmation preview, which is the first
+///   thing on a screen with no header, so silence there would read as "the drawing is gone".
+///
+/// Any new interactive render must carry the full set; a new decorative one must say it is
+/// decorative. Silence by accident and silence on purpose look identical six months later.
 struct CompanionView: View {
     var state: CompanionState
     var appearance: CompanionAppearance = .standard
@@ -72,7 +94,6 @@ struct CompanionView: View {
             let bodyColor = appearance.resolvedBodyColor(for: state)
             figure(elapsed: elapsed, breath: breath, petBounce: petBounce, bodyColor: bodyColor)
         }
-        .accessibilityLabel("Fernlet companion, \(state.rawValue)")
     }
 
     /// The layered figure itself — extracted so ``body`` stays under the Power-of-10 line ceiling

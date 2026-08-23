@@ -1586,9 +1586,9 @@ public struct FernletLockView: View {
     /// there is no error text to focus and this announcement is the ONLY channel.
     ///
     /// - Parameter message: An ALREADY-LOCALIZED sentence from ``FernletLockCopy`` or an error's
-    ///   `localizedDescription`. `AccessibilityNotification.Announcement` takes a plain `String`, so
-    ///   a literal here would be spoken in English forever — this module is an SPM package and its
-    ///   catalog is only consulted through `bundle: .module`.
+    ///   `localizedDescription` — hence ``FernletAnnouncer``'s `resolved:` form. The announcement
+    ///   API takes a plain `String`, so a literal here would be spoken in English forever: this
+    ///   module is an SPM package and its catalog is only consulted through `bundle: .module`.
     private func announceUnlockFailure(_ message: String) {
         let attempts = lockService.currentAttemptCount
         let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
@@ -1597,7 +1597,7 @@ public struct FernletLockView: View {
                 failure: message,
                 attempts: FernletLockCopy.Unlock.attemptsRemaining(remaining))
             : message
-        AccessibilityNotification.Announcement(spoken).post()
+        FernletAnnouncer.system.announce(.error, resolved: spoken)
     }
 
     /// Whether a biometric error is the user declining biometrics rather than biometrics failing.

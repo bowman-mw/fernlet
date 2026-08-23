@@ -1438,6 +1438,9 @@
     "Daily check-in off" : {
 
     },
+    "Daily check-in reminders are on." : {
+
+    },
     "Daily check-in · %@" : {
 
     },
@@ -1627,6 +1630,9 @@
     "Done set" : {
 
     },
+    "Double tap to pet." : {
+
+    },
     "Drag to paint · pinch to zoom" : {
 
     },
@@ -1691,6 +1697,9 @@
 
     },
     "Edit workout" : {
+
+    },
+    "Edit your companion" : {
 
     },
     "Effort" : {
@@ -1891,9 +1900,6 @@
 
     },
     "Fernlet companion" : {
-
-    },
-    "Fernlet companion, %@" : {
 
     },
     "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
@@ -3274,6 +3280,12 @@
     "Prepare summary" : {
 
     },
+    "Preparing the plan review" : {
+
+    },
+    "Preparing to recover this phone" : {
+
+    },
     "Preparing…" : {
 
     },
@@ -3284,6 +3296,9 @@
 
     },
     "Preview" : {
+
+    },
+    "Preview of your item on your companion" : {
 
     },
     "Previous" : {
@@ -3491,6 +3506,9 @@
 
     },
     "Reminders" : {
+
+    },
+    "Reminders stay off. You can turn them on in Settings whenever you like." : {
 
     },
     "Removal Requests" : {
@@ -3889,6 +3907,9 @@
     "Sent to" : {
 
     },
+    "Sent to %@." : {
+
+    },
     "Serving: %@" : {
 
     },
@@ -3945,6 +3966,9 @@
 
     },
     "Sets" : {
+
+    },
+    "Setting up the recovery ceremony" : {
 
     },
     "Settings" : {
@@ -4277,9 +4301,6 @@
 
     },
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
-
-    },
-    "Tap to interact. Press and hold to edit." : {
 
     },
     "Tap to log it again with today's time." : {

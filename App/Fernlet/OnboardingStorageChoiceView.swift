@@ -41,6 +41,7 @@ struct OnboardingStorageChoiceView: View {
                 if isDetecting {
                     HStack(spacing: 10) {
                         ProgressView()
+                            .accessibilityHidden(true)
                         Text("Checking iCloud for Fernlet data")
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)

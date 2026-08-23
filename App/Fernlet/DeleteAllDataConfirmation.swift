@@ -270,8 +270,12 @@ struct DeletingEverythingOverlay: View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
             VStack(spacing: 12) {
+                // Hidden, not labelled: "Deleting everything…" below is the label, and this
+                // overlay is the app's most consequential busy state — the one place a doubled or
+                // empty utterance is least welcome.
                 ProgressView()
                     .tint(Color.moss)
+                    .accessibilityHidden(true)
                 Text("Deleting everything…")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)

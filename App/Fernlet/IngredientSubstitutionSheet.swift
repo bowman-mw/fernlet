@@ -116,7 +116,10 @@ struct IngredientSubstitutionSheet: View {
 
                 if isLoadingAI {
                     HStack(spacing: 8) {
+                        // The sentence beside it is the label; an unlabelled spinner would be a
+                        // second, empty stop on the way to it.
                         ProgressView()
+                            .accessibilityHidden(true)
                         Text("Thinking of swaps…")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)

@@ -460,6 +460,9 @@ private struct OnboardingStarterScreen: View {
                 CompanionView(state: .thriving, appearance: previewAppearance, size: 120)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
+                    // Decorative: a live preview of the colour being picked below, at a fixed
+                    // `.thriving`. The controls under it are what carries the meaning.
+                    .accessibilityHidden(true)
 
                 SheetField("Name") {
                     TextField("Fernlet", text: $starterName)

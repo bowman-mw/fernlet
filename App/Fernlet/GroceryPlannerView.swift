@@ -299,8 +299,12 @@ struct WeeklyMealPlannerView: View {
         // The confirmation line clears after a beat; a newer log supersedes the sleeper.
         .task(id: loggedRecipeName) {
             guard loggedRecipeName != nil else { return }
+            // A confirmation line with nothing to act on — the notice window.
+            let window = FernletDismissalWindow.system.window(
+                standard: .seconds(4),
+                assistive: FernletDismissalWindow.assistiveNoticeWindow)
             do {
-                try await Task.sleep(for: .seconds(4))
+                try await Task.sleep(for: window)
             } catch {
                 return
             }

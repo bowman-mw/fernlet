@@ -57,7 +57,11 @@ struct CoachPlanReviewView: View {
                 if let review {
                     content(review)
                 } else {
+                    // Alone on the screen with no text beside it, so this one gets a real label
+                    // rather than being hidden — hiding it would leave the sheet empty to
+                    // VoiceOver, which reads as "the plan failed to load".
                     ProgressView().padding(40)
+                        .accessibilityLabel("Preparing the plan review")
                 }
             }
             .background(Color.parchment)

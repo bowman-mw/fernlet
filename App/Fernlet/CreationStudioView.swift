@@ -210,6 +210,9 @@ struct CreationStudioView: View {
         )
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
+        // Decorative: a live render of the item being designed. The chips and fields below are
+        // the semantics; the drawing has nothing to say that they do not.
+        .accessibilityHidden(true)
     }
 
     /// The slot picker as Fernlet chips (3e), replacing the system segmented control — the one
@@ -449,6 +452,16 @@ struct CreationStudioView: View {
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
+                // The one companion render that is neither the interactive Home one nor purely
+                // decorative. Deleting `CompanionView`'s shared label (T1-10) left this a subtree of
+                // `Shape`s announcing nothing, and this screen has NO header above it — hiding it
+                // like the other seven would open the confirm step with "Name, text field" and no
+                // sign the drawing survived. So it keeps an element, with a real label, and
+                // `studio.confirm.preview` keeps resolving for anyone who later writes a test
+                // against it. `children: .ignore` because there is nothing underneath for a label
+                // to attach to otherwise.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Preview of your item on your companion")
                 .accessibilityIdentifier("studio.confirm.preview")
 
                 SheetField("Name") {

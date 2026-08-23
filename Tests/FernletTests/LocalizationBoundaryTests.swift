@@ -75,6 +75,43 @@ struct LocalizationBoundaryTests {
     /// resolving does.
     static let minimumPackageFilesScanned = 170
 
+    /// A package call site where `bundle:` is not merely unnecessary but IMPOSSIBLE.
+    ///
+    /// `String(localized:)` has an overload taking a `LocalizedStringResource` — a value the CALLER
+    /// built, carrying the bundle the caller attached to it. That overload has no `bundle:`
+    /// parameter, and the file doing the resolving holds no key of its own, so failure mode (A) —
+    /// a literal in package source silently falling back to English — cannot occur: there is no
+    /// literal to fall back to.
+    ///
+    /// Matched on path AND exact call text so an entry can never drift onto a different call, and
+    /// an entry that stops matching is reported rather than left to rot (the
+    /// `Scripts/power-of-10-allowlist.json` house rule: every entry states the invariant that makes
+    /// it safe).
+    struct BundleFreeResolution: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The call's exact flattened text, as ``LocalizedCallSite/report`` renders it.
+        let call: String
+        /// Why `bundle:` cannot apply here.
+        let reason: String
+    }
+
+    /// Every allowlisted bundle-free resolution. Keep this list at one or two entries; a third
+    /// should prompt the question of whether the rule, not the list, needs to change.
+    static let bundleFreeResolutions: [BundleFreeResolution] = [
+        BundleFreeResolution(
+            path: "FernletKit/Sources/FernletUI/FernletAnnouncer.swift",
+            call: "String(localized: text)",
+            reason: """
+                `text` is a caller-supplied `LocalizedStringResource`, which carries its own bundle; \
+                the resource-taking overload has no `bundle:` parameter at all. FernletAnnouncer is \
+                the app's single VoiceOver-announcement seam and holds ZERO copy by design — \
+                FernletAnnouncerTests scans its source for string literals to keep it that way, \
+                which is the other half of this entry's invariant.
+                """
+        )
+    ]
+
     /// One `String(localized:…)` call site found in package source.
     ///
     /// `text` is the WHOLE call — from `String` through its matching close paren, newlines included —
@@ -128,7 +165,8 @@ struct LocalizationBoundaryTests {
             """
         )
 
-        let offenders = sites.filter { !$0.passesBundle }
+        let bundleless = sites.filter { !$0.passesBundle }
+        let offenders = bundleless.filter { !Self.isAllowlistedBundleFree($0) }
         #expect(
             offenders.isEmpty,
             """
@@ -139,6 +177,57 @@ struct LocalizationBoundaryTests {
             \(offenders.map(\.report).sorted().joined(separator: "\n"))
             """
         )
+
+        // Allowlist hygiene: an entry that no longer matches anything is an entry nobody is
+        // reading, and it would silently cover the next call that happens to land on that text.
+        let unused = Self.bundleFreeResolutions.filter { entry in
+            !bundleless.contains { Self.matches(entry, $0) }
+        }
+        #expect(
+            unused.isEmpty,
+            """
+            \(unused.count) allowlisted bundle-free resolution(s) match no call any more. Delete \
+            them — a stale entry is a hole nobody is watching:
+            \(unused.map { "\($0.path): \($0.call)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Whether a bundle-less call is one of the ``bundleFreeResolutions``.
+    static func isAllowlistedBundleFree(_ site: LocalizedCallSite) -> Bool {
+        bundleFreeResolutions.contains { matches($0, site) }
+    }
+
+    /// Exact path AND exact flattened-call match — never a prefix or a path-only match, so an entry
+    /// cannot widen to cover a neighbouring call added later in the same file.
+    static func matches(_ entry: BundleFreeResolution, _ site: LocalizedCallSite) -> Bool {
+        guard site.path == entry.path else { return false }
+        return site.report.hasSuffix(": \(entry.call)")
+    }
+
+    /// Fixture: the bundle-free allowlist covers exactly one call in exactly one file.
+    ///
+    /// An allowlist is only as good as its narrowness. This plants the two ways a well-meaning
+    /// entry usually widens — the same call text appearing in a different module, and a genuinely
+    /// bad neighbouring call in the allowlisted file — and proves neither is swallowed.
+    @Test func bundleFreeAllowlistCoversOnlyItsExactCall() throws {
+        let entry = try #require(Self.bundleFreeResolutions.first)
+
+        let exact = LocalizedCallSite(path: entry.path, line: 1, text: entry.call, passesBundle: false)
+        #expect(Self.isAllowlistedBundleFree(exact))
+
+        // Same call text, another module — the resource might come from anywhere there.
+        let elsewhere = LocalizedCallSite(
+            path: "FernletKit/Sources/ProximityKit/SomeOtherFile.swift",
+            line: 1, text: entry.call, passesBundle: false)
+        #expect(!Self.isAllowlistedBundleFree(elsewhere))
+
+        // The allowlisted file's NEXT bundle-less call, with a real literal in it, stays a
+        // violation — an entry must never turn its file into an exempt file.
+        let neighbour = LocalizedCallSite(
+            path: entry.path, line: 2,
+            text: #"String(localized: "Saved")"#, passesBundle: false)
+        #expect(!Self.isAllowlistedBundleFree(neighbour))
     }
 
     /// The pinned package string catalog must keep existing.

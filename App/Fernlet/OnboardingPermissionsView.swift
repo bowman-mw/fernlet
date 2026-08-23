@@ -103,6 +103,18 @@ struct OnboardingPermissionsView: View {
             await MainActor.run {
                 notifications = granted ? .on : .off
                 requestingNotifications = false
+                // The control the user just activated is REPLACED by a static line — the button
+                // they were focused on stops existing, and VoiceOver's cursor lands nowhere in
+                // particular. The review's §4.3 answer for that is to move focus; SwiftUI's focus
+                // timing across a system permission prompt is not something this repo can verify
+                // twice in a row, so the outcome is SPOKEN instead. Same information, no timing
+                // dependency, and the announcement is the one channel the system alert's own
+                // dismissal cannot swallow.
+                FernletAnnouncer.system.announce(
+                    .status,
+                    granted
+                        ? LocalizedStringResource("Daily check-in reminders are on.")
+                        : LocalizedStringResource("Reminders stay off. You can turn them on in Settings whenever you like."))
             }
         }
     }

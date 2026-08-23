@@ -923,11 +923,17 @@ private struct FriendPhotoCarouselPostView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             chromeVisible = true
         }
+        // `assistive: nil` — this fade REMOVES CONTROLS from the accessibility tree rather than
+        // retiring a notice: the close, save and share buttons go with the chrome. A stretched
+        // timer would only delay deleting the screen's only controls out from under a VoiceOver
+        // user mid-swipe, so while an assistive technology is running the chrome simply stays.
+        guard let window = FernletDismissalWindow.system
+            .windowUnlessAssistive(standard: .seconds(5)) else { return }
         chromeTask = Task {
             // The sleep result IS the cancellation check: `Task.sleep` throws exactly when the task
             // is cancelled, so a cancelled fade simply returns (R7 — no swallowed error).
             do {
-                try await Task.sleep(for: .seconds(5))
+                try await Task.sleep(for: window)
             } catch {
                 return
             }

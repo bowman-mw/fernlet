@@ -220,7 +220,13 @@ struct WorryEntryView: View {
                 withAnimation(.easeOut(duration: 0.4)) { phase = .tucked }
             }
         } catch {
-            gentleError = "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+            // Spoken as well as shown: the line renders above a text field the user is still
+            // looking at, but nothing moves focus to it, so a blind user's only evidence that the
+            // seal failed would be that the entry view did not go away. The EVENT, never the
+            // worry — the words in the field are the reason this screen is sealed at all.
+            let failure = "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+            gentleError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 }
@@ -445,19 +451,23 @@ struct WorryBoxView: View {
     /// row that is deliberately absent from `SealedBackup` — there is no second chance anywhere — so
     /// the window stretches toward Mail's Undo Send (10–30 s), which this screen's own doc comment
     /// names as its model.
-    private static let assistiveKeepItWindow: Duration = .seconds(20)
+    ///
+    /// The number itself now lives on ``FernletDismissalWindow`` — this screen was where it was
+    /// first reasoned out, and the rest of the app's transient surfaces adopted the same value in
+    /// batch A3 rather than each inventing one.
+    private static let assistiveKeepItWindow: Duration = FernletDismissalWindow.assistiveActionWindow
 
     /// The window in force right now.
     ///
     /// Read at the moment a release starts rather than cached, because VoiceOver and Switch Control
     /// can both be turned on mid-session (Siri, the accessibility shortcut, a Shortcuts automation).
     private var activeKeepItWindow: Duration {
-        #if canImport(UIKit)
-        if UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning {
-            return Self.assistiveKeepItWindow
-        }
-        #endif
-        return Self.keepItWindow
+        // The hand-rolled `UIAccessibility` read this screen shipped in batch A1 is now
+        // ``FernletDismissalWindow`` — same decision, one place, and unit-testable through its
+        // injected flag.
+        FernletDismissalWindow.system.window(
+            standard: Self.keepItWindow,
+            assistive: Self.assistiveKeepItWindow)
     }
 
     /// The kept worries, minus one waiting out its "Keep it" window.
@@ -601,7 +611,11 @@ struct WorryBoxView: View {
             isComposeFocused = false
             composeError = nil
         } catch {
-            composeError = "The box couldn't quite close just now — your words are still here."
+            // The event, never the worry: the compose field keeps its text and the failure is
+            // spoken so it is not discoverable only by noticing the list did not grow.
+            let failure = "The box couldn't quite close just now — your words are still here."
+            composeError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 
@@ -737,9 +751,9 @@ struct WorryBoxView: View {
     /// spoken out loud to whoever is in the room.
     private func announceKeepItWindow() {
         isKeepItFocused = true
-        AccessibilityNotification.Announcement(
-            String(localized: "Released. Keep it, if you'd rather it stayed.")
-        ).post()
+        FernletAnnouncer.system.announce(
+            .status, LocalizedStringResource("Released. Keep it, if you'd rather it stayed.")
+        )
     }
 
     /// Starts the undo window. When it elapses undisturbed, the sealed row is really deleted.
@@ -805,7 +819,12 @@ struct WorryBoxView: View {
             // than showing a letting-go that did not happen. On the leaving/backgrounding paths the
             // strip is already gone, but the worry stays in the box — so the list itself is the
             // honest answer when the user comes back.
-            releaseError = "That one didn't quite lift just now — try again in a moment."
+            // Spoken too, because this is the one failure whose visible evidence is a NON-event:
+            // the row simply stays in the list, which a VoiceOver user re-reading the list would
+            // reasonably take for a release that has not animated out yet.
+            let failure = "That one didn't quite lift just now — try again in a moment."
+            releaseError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 }

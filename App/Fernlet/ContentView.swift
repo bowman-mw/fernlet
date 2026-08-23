@@ -1306,11 +1306,17 @@ struct ContentView: View {
         // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
 
+        // Read at post time, not at view construction: VoiceOver can be turned on mid-session.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(5),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
         Task { @MainActor in
             do {
                 // 5 seconds (FLOW-15): the toast is now the fastest correction path — Undo and
-                // Adjust need a window long enough to actually read and tap.
-                try await Task.sleep(for: .seconds(5))
+                // Adjust need a window long enough to actually read and tap. Under VoiceOver or
+                // Switch Control that budget buys nothing — the toast is gone before the cursor
+                // has reached it — so the stretched action window applies instead.
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled: leave the toast to whatever superseded this one (the id check below is
                 // the same supersede rule).
@@ -1734,6 +1740,9 @@ struct LaunchScreen: View {
                                 appearance: companionAppearance,
                                 size: 112
                             )
+                            // Decorative: the launch illustration. The greeting below it is what
+                            // the screen actually says.
+                            .accessibilityHidden(true)
                         }
                     }
                 }

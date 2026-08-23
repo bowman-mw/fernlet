@@ -82,6 +82,8 @@ public struct SheetHeader<Accessory: View>: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
                     .lineLimit(1)
+                    // Above the title in the same raised band — see the title's note below.
+                    .accessibilitySortPriority(12)
             }
             title
                 .font(.fernlet(.displayMedium))
@@ -93,12 +95,29 @@ public struct SheetHeader<Accessory: View>: View {
                 // ``ScreenHeader``, so it applies directly to the title `Text`.
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHeading(.h1)
+                // Read ahead of the control row above it (review §4.3(a)). In layout order Cancel
+                // and Done come first, so a sheet used to open with "Cancel, button" and the user
+                // had to swipe past the way out before learning what they were in. Sort priority
+                // orders siblings within this `VStack` (default 0, higher first), so the three
+                // header texts keep their designed order — eyebrow, title, subtitle — and the
+                // controls follow them. One place, all 16 ``SheetHeader`` sites.
+                //
+                // BE HONEST ABOUT WHAT THIS CHANGES. It is not a no-op: it relocates the effective
+                // first element of every sheet in the app, and where VoiceOver puts its cursor on
+                // presentation follows reading order. The direction is the reviewed one and the
+                // blast radius is one component, but it is UNVERIFIED at runtime — XCUITest's
+                // element enumeration reflects the view hierarchy, not VoiceOver's sorted
+                // traversal, so the probe used for the rest of this batch demonstrably cannot see
+                // the difference (it still lists Cancel first). This awaits a manual VoiceOver pass.
+                .accessibilitySortPriority(11)
             if let subtitle, !dynamicTypeSize.isAccessibilitySize {
                 subtitle
                     .font(.fernlet(.bodySmall))
                     .italic()
                     .foregroundStyle(Color.slate)
                     .lineLimit(1)
+                    // Last of the three header texts, still ahead of the controls.
+                    .accessibilitySortPriority(10)
             }
         }
         .padding(.horizontal, 20)

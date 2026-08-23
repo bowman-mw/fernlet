@@ -334,13 +334,31 @@ struct ProximityRecipeShareSheet: View {
         }
     }
 
+    /// Speaks the send confirmation, then closes the sheet after a beat.
+    ///
+    /// This is the app's shortest and most destructive auto-dismissal: 1.4 s after a successful
+    /// send the ENTIRE SHEET goes away, taking the "Sent to …" line with it. A VoiceOver user could
+    /// not reach that line in 1.4 s, so the only evidence their recipe went anywhere was a surface
+    /// vanishing — which is also what a cancel looks like. Two changes, and they need each other:
+    /// the outcome is ANNOUNCED (so it does not depend on the cursor being in the right place), and
+    /// the window stretches for an assistive technology.
+    ///
+    /// **Deliberately NOT `assistive: nil`.** "Never auto-dismiss" is normally the right answer when
+    /// dismissal destroys a surface, but this sheet OWNS the recipe radio — `handleAppear` starts
+    /// the manager and `handleDisappear` stops it — so a sheet that stays open keeps the device
+    /// advertising. Broadcasting indefinitely because a screen reader is on would trade an
+    /// accessibility gap for a privacy one. The stretched action window closes it either way.
     private func scheduleDismissAfterSendIfNeeded(_ state: ProximityRecipeShareManager.SendState) {
         dismissAfterSendTask?.cancel()
-        guard case .sent = state else { return }
+        guard case .sent(let recipientName) = state else { return }
+        FernletAnnouncer.system.announce(.success, LocalizedStringResource("Sent to \(recipientName)."))
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(1.4),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
         dismissAfterSendTask = Task { @MainActor in
             // Same shape as `scheduleNoNearbyState`: a cancelled wait must not dismiss the sheet.
             do {
-                try await Task.sleep(for: .seconds(1.4))
+                try await Task.sleep(for: window)
             } catch {
                 return
             }

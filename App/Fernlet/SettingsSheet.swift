@@ -2222,6 +2222,10 @@ struct AppLockSettingsView: View {
             } catch {
                 verifyCurrentPasscode = ""
                 verifyError = error.localizedDescription
+                // Same rule the unlock screen adopted in batch A1: a passcode that did not verify
+                // clears the field and renders a line nothing focuses, so without this the only
+                // signal is an empty field — indistinguishable from a mis-typed digit.
+                FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
     }
@@ -2256,6 +2260,9 @@ struct AppLockSettingsView: View {
             } catch {
                 FernletAuditLog.log("lock.biometric.disableFailed")
                 biometricDisableError = error.localizedDescription
+                // The toggle springs back on failure; the explanation is a line under it that
+                // nothing focuses. Spoken, so "it just flipped back" stops being the whole story.
+                FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
     }

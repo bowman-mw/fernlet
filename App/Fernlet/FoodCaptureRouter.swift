@@ -190,6 +190,9 @@ struct CaptureAnalyzingOverlay: View {
                     ProgressView()
                         .controlSize(.large)
                         .tint(Color.moss)
+                        // "Analyzing" below is the label; the ring and the spinner are the same
+                        // fact drawn twice, and neither has anything of its own to say.
+                        .accessibilityHidden(true)
                 }
 
                 VStack(spacing: 6) {

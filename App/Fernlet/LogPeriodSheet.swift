@@ -488,7 +488,7 @@ struct LogPeriodSheet: View {
         case .value(let value):
             basalBodyTemperature = value
         case .invalid(let message):
-            report(message)
+            report(message, kind: .error)
             return
         }
         do {
@@ -518,15 +518,21 @@ struct LogPeriodSheet: View {
                 // The only clean outcome: everything the user typed is where they expect it, so
                 // there is nothing to read and the sheet gets out of the way.
                 dismiss()
+            // `.success`, not `.status`: on both arms the write LANDED — the caveat is about where
+            // the note ended up, not about whether anything was saved. "Your data is safe now" is a
+            // different thing to hear than "here is a fact", and these are the batch's only two
+            // durable-write announcements on this sheet.
             case .savedWithBufferedNarrative:
                 savedWithCaveat = true
-                report(String(localized: "Note saved. Unlock to view it on your calendar."))
+                report(String(localized: "Note saved. Unlock to view it on your calendar."),
+                       kind: .success)
             case .savedWithDroppedNarrative:
                 savedWithCaveat = true
-                report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."))
+                report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."),
+                       kind: .success)
             }
         } catch {
-            report(error.localizedDescription)
+            report(error.localizedDescription, kind: .error)
         }
     }
 
@@ -539,8 +545,13 @@ struct LogPeriodSheet: View {
     ///
     /// **Privacy:** the outcome sentence and nothing else. An announcement is audible across the
     /// room, and the note this sheet seals is the reason the whole surface is behind an app lock.
-    private func report(_ message: String) {
+    ///
+    /// - Parameters:
+    ///   - message: The already-localized outcome sentence — never the note itself.
+    ///   - kind: `.error` when nothing was written at all; `.status` (the default) for a save that
+    ///     landed with a caveat the user still has to read.
+    private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
-        AccessibilityNotification.Announcement(message).post()
+        FernletAnnouncer.system.announce(kind, resolved: message)
     }
 }

@@ -774,9 +774,10 @@ struct CookingModeView: View {
     /// authoritative.
     private func signalTimerExpiry() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        AccessibilityNotification.Announcement(
-            String(localized: "Timer's up — tap Next when you're ready. Nothing advances on its own.")
-        ).post()
+        FernletAnnouncer.system.announce(
+            .status,
+            LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+        )
     }
 
     private func formattedDuration(_ seconds: Int) -> String {

@@ -528,11 +528,23 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// Records a failure against the card that raised it. One seam so a new failure path cannot
-    /// ship without saying where it belongs.
+    /// Records a failure against the card that raised it, and speaks it. One seam so a new failure
+    /// path cannot ship without saying where it belongs — or without being heard.
+    ///
+    /// The sentence was previously rendered as a plain `Text` inside a card the user may not be
+    /// looking at, on the screen that runs iCloud sync, sealed backups and the deletion ceremonies:
+    /// "nothing happened, and nothing said so" is the worst outcome on this surface. Clearing the
+    /// error (`nil`) announces nothing — silence is the correct sound for a failure going away.
+    ///
+    /// Localization note: these sentences reach us as plain `String`s and several call sites pass
+    /// bare literals, so they are frozen English today. That is the review's T2-1 class (the
+    /// `String`-typed-copy sweep), not something announcing them creates or hides — the printed and
+    /// spoken forms stay the same words either way, and both are fixed by the same one edit.
     private func setOperationError(_ message: String?, scope: PrivacyErrorScope = .general) {
         operationError = message
         operationErrorScope = scope
+        guard let message else { return }
+        FernletAnnouncer.system.announce(.error, resolved: message)
     }
 
     private var exportDataCard: some View {
@@ -1277,8 +1289,12 @@ struct PrivacyDataSettingsView: View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
             VStack(spacing: 12) {
+                // Hidden, not labelled: the sentence below IS the label, and an unlabelled
+                // `ProgressView` is otherwise an empty leaf that VoiceOver stops on and says
+                // nothing about. Labelling it too would speak the same state twice.
                 ProgressView()
                     .tint(Color.moss)
+                    .accessibilityHidden(true)
                 Text("Updating storage settings…")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
@@ -1315,8 +1331,10 @@ struct PrivacyDataSettingsView: View {
     private var disableSheetSpinner: some View {
         VStack(spacing: 12) {
             Spacer()
+            // See ``storageSpinner`` — the sentence below is the label.
             ProgressView()
                 .tint(Color.moss)
+                .accessibilityHidden(true)
             Text("Updating storage settings…")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
@@ -1425,6 +1443,7 @@ struct PrivacyDataSettingsView: View {
             if isDetectingCloudData {
                 HStack(spacing: 8) {
                     ProgressView()
+                        .accessibilityHidden(true)
                     Text("Checking iCloud")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)

@@ -143,6 +143,7 @@ struct NutritionLabelCameraSheet: View {
                 if isScanning {
                     HStack(spacing: 8) {
                         ProgressView()
+                            .accessibilityHidden(true)
                         Text("Reading label...")
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)

@@ -121,8 +121,13 @@ struct HomeView: View {
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
             await refreshRecentPeriodActivity()
+            // A notice, not an action: nothing is lost by missing it, so the stretched window only
+            // has to be long enough for the cursor to reach and read it.
+            let window = FernletDismissalWindow.system.window(
+                standard: .seconds(6),
+                assistive: FernletDismissalWindow.assistiveNoticeWindow)
             do {
-                try await Task.sleep(for: .seconds(6))
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled with the view's `.task` — the thought goes away with the view.
                 return
@@ -446,8 +451,27 @@ struct HomeView: View {
             .onLongPressGesture(minimumDuration: 0.45) {
                 isCompanionSheetPresented = true
             }
+            // The app's one INTERACTIVE companion, and the only render that names itself (T1-10).
+            // `children: .ignore` makes the drawing a single element rather than leaving the outer
+            // label hoping to land on something — the figure is `Shape`s and decorative images, so
+            // without this there is nothing underneath for a label to attach to.
+            .accessibilityElement(children: .ignore)
+            // Name in the label, CHANGING STATE in the value: a value is re-announced when it
+            // changes while the element is focused, so the mood is heard when it moves rather than
+            // only on first landing. `displayName` is the localized display fork — never
+            // `rawValue`, which is a frozen cross-process token.
             .accessibilityLabel("Fernlet companion")
-            .accessibilityHint("Tap to interact. Press and hold to edit.")
+            .accessibilityValue(store.companionState.displayName)
+            // It is a control, and it was never announced as one; the explicit default action makes
+            // the VoiceOver activate gesture pet the companion rather than depend on how SwiftUI
+            // maps `onTapGesture`.
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { interactWithCompanion() }
+            // The old hint promised "Press and hold to edit" — a gesture a VoiceOver user cannot
+            // make, since a long press is intercepted by the screen reader. The edit path is a
+            // named custom action instead, which is the reachable form of the same affordance.
+            .accessibilityAction(named: "Edit your companion") { isCompanionSheetPresented = true }
+            .accessibilityHint("Double tap to pet.")
             .accessibilityIdentifier("home.companion")
             // 8, down from 14 (FLOW-18): part of the compacted cold open.
             .padding(.vertical, 8)
@@ -911,9 +935,14 @@ struct HomeView: View {
         }
 
         guard thought != nil else { return }
+        // Same notice window as the arrival thought above — the bubble says something worth
+        // hearing, and four seconds is a glance, not a swipe-and-read.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(4),
+            assistive: FernletDismissalWindow.assistiveNoticeWindow)
         Task {
             do {
-                try await Task.sleep(for: .seconds(4))
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled: leave the bubble to whatever superseded this tap.
                 return
@@ -1493,6 +1522,8 @@ private struct CompanionCustomizationSheet: View {
             equippedItems: store.equippedCustomItems
         )
         .frame(width: 84, height: 84)
+        // Decorative: a live preview of the edits being made below, not a control.
+        .accessibilityHidden(true)
     }
 
     /// The named Wardrobe row: the closet with its item count, one chevron. Carries the
@@ -1811,6 +1842,8 @@ private struct CompanionCustomizationSheet: View {
         .frame(width: 96, height: 96)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
+        // Decorative: a live preview above the slot picker; the picker carries the semantics.
+        .accessibilityHidden(true)
     }
 
     /// The custom-item section folded into a slot picker: the user's own items for the covered

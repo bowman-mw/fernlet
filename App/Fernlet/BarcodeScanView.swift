@@ -297,6 +297,7 @@ struct BarcodeScanView: View {
         if isDetecting {
             HStack(spacing: 8) {
                 ProgressView()
+                    .accessibilityHidden(true)
                 Text("Looking for a barcode...")
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)

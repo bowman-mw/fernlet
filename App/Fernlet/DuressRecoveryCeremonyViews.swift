@@ -345,7 +345,11 @@ struct DuressRecoveryEnrollmentSheet: View {
                 DuressCeremonyCustodianFlow(coordinator: coordinator, onFinish: finish)
             }
         } else {
+            // Alone on screen while the coordinator is built, so it carries its own label: this is
+            // a security ceremony, and an empty screen with nothing spoken is the one impression
+            // it must never give.
             ProgressView().tint(Color.moss)
+                .accessibilityLabel("Setting up the recovery ceremony")
         }
     }
 
@@ -427,7 +431,10 @@ struct DuressRecoveryReturnSheet: View {
                         preamble
                     }
                 } else {
+                    // This is the RECOVER surface, not the enrol one — the sheet above it says
+                    // "Recover this phone". Same shape as the enrolment spinner, different words.
                     ProgressView().tint(Color.moss)
+                        .accessibilityLabel("Preparing to recover this phone")
                 }
             }
             .navigationTitle("Recover this phone")
