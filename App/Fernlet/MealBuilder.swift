@@ -36,38 +36,50 @@ struct MealBuilder {
     ) -> PlanResult? {
         var availableRecipes = recipes
         var createdRecipes: [RecipeDefinition] = []
-        let meals = plan.items.compactMap { item -> Meal? in
-            if let recipe = bestRecipeMatch(for: item.name, in: availableRecipes) {
-                return mealFromRecipe(recipe, mealType: plan.mealType, foodItems: foodItems)
-            }
-
-            let relevantIngredients = item.ingredients.filter { ingredient in
-                guard let foodItem = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return false }
-                return isRelevant(foodItem: foodItem, to: item.name)
-            }
-            let sourceIngredients = relevantIngredients.isEmpty
-                ? FoundationFoodSelectionModel.deterministicPlan(description: item.name, candidates: candidates, fallbackType: plan.mealType)?.ingredients ?? []
-                : relevantIngredients
-            let resolved = sourceIngredients.compactMap { ingredient -> (FoodSelectionIngredient, FoodItem)? in
-                guard let foodItem = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return nil }
-                return (ingredient, foodItem)
-            }
-            guard resolved.isEmpty == false else { return nil }
-
-            if resolved.count > 1 {
-                let recipe = createRecipe(
-                    for: item.name,
-                    resolvedIngredients: resolved,
-                    servings: defaultRecipeServings(description: item.name)
-                )
+        var meals: [Meal] = []
+        for item in plan.items {
+            guard let result = resolvedMeal(
+                for: item, availableRecipes: availableRecipes, candidates: candidates, foodItems: foodItems,
+                mealType: plan.mealType
+            ) else { return nil }
+            meals.append(result.meal)
+            if let recipe = result.createdRecipe {
                 createdRecipes.append(recipe)
                 availableRecipes.insert(recipe, at: 0)
-                return mealFromRecipe(recipe, mealType: plan.mealType, foodItems: foodItems)
             }
-
-            return mealFromIngredients(itemName: item.name, resolvedIngredients: resolved, mealType: plan.mealType)
         }
         return meals.isEmpty ? nil : PlanResult(meals: meals, createdRecipes: createdRecipes)
+    }
+
+    private static func resolvedMeal(
+        for item: FoodSelectionMealItem, availableRecipes: [RecipeDefinition], candidates: [FoodSelectionCandidate],
+        foodItems: [FoodItem], mealType: MealType
+    ) -> (meal: Meal, createdRecipe: RecipeDefinition?)? {
+        if let recipe = bestRecipeMatch(for: item.name, in: availableRecipes),
+           let meal = mealFromRecipe(recipe, mealType: mealType, foodItems: foodItems) {
+            return (meal, nil)
+        }
+        let relevant = item.ingredients.filter { ingredient in
+            guard let food = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return false }
+            return isRelevant(foodItem: food, to: item.name)
+        }
+        let source = relevant.isEmpty
+            ? FoundationFoodSelectionModel.deterministicPlan(
+                description: item.name, candidates: candidates, fallbackType: mealType
+            )?.ingredients ?? [] : relevant
+        let resolved = source.compactMap { ingredient -> (FoodSelectionIngredient, FoodItem)? in
+            guard let food = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return nil }
+            return (ingredient, food)
+        }
+        guard resolved.isEmpty == false else { return nil }
+        guard resolved.count > 1 else {
+            return mealFromIngredients(itemName: item.name, resolvedIngredients: resolved, mealType: mealType)
+                .map { ($0, nil) }
+        }
+        let recipe = createRecipe(
+            for: item.name, resolvedIngredients: resolved, servings: defaultRecipeServings(description: item.name)
+        )
+        return mealFromRecipe(recipe, mealType: mealType, foodItems: foodItems).map { ($0, recipe) }
     }
 
     /// One logged serving of `recipe`: component snapshots scaled to 1/servings, with macro and
@@ -77,9 +89,10 @@ struct MealBuilder {
         _ recipe: RecipeDefinition,
         mealType: MealType,
         foodItems: [FoodItem]
-    ) -> Meal {
+    ) -> Meal? {
         let divisor = max(recipe.servings, 1)
-        let components = componentSnapshots(for: recipe, foodItems: foodItems, divisor: divisor)
+        guard let components = componentSnapshots(for: recipe, foodItems: foodItems, divisor: divisor),
+              components.isEmpty == false else { return nil }
         let componentTotals = totals(for: components)
         let perServing = Macros(
             protein: componentTotals.macros.protein,
@@ -111,8 +124,8 @@ struct MealBuilder {
         mealType: MealType,
         confidenceToken: String = MealConfidence.foodMatch.token,
         source: String = MealLogSource.foundationModelFoodSelection
-    ) -> Meal {
-        let components = componentSnapshots(for: resolvedIngredients)
+    ) -> Meal? {
+        guard let components = componentSnapshots(for: resolvedIngredients), components.isEmpty == false else { return nil }
         let totals = totals(for: components)
         let ingredientText = components
             .prefix(3)
@@ -217,67 +230,68 @@ struct MealBuilder {
         }
     }
 
-    /// Freezes resolved (ingredient, food item) pairs into component snapshots, with macros and
-    /// micronutrients scaled to each ingredient's quantity via `RecipeIngredient`'s scaling.
+    /// Freezes resolved (ingredient, food item) pairs from one shared source-backed conversion.
     static func componentSnapshots(
         for resolvedIngredients: [(FoodSelectionIngredient, FoodItem)]
-    ) -> [MealComponentSnapshot] {
-        resolvedIngredients.map { resolvedIngredient in
+    ) -> [MealComponentSnapshot]? {
+        var snapshots: [MealComponentSnapshot] = []
+        for resolvedIngredient in resolvedIngredients {
             let ingredient = RecipeIngredient(
                 foodItemId: resolvedIngredient.1.id,
                 quantity: resolvedIngredient.0.quantity,
                 unit: resolvedIngredient.0.unit
             )
-            return MealComponentSnapshot(
+            guard let conversion = ingredient.servingConversion(using: resolvedIngredient.1) else { return nil }
+            snapshots.append(MealComponentSnapshot(
                 foodItemId: resolvedIngredient.1.id,
                 name: resolvedIngredient.1.name,
-                quantity: resolvedIngredient.0.quantity,
-                unit: resolvedIngredient.0.unit,
-                macros: ingredient.scaledMacros(using: resolvedIngredient.1),
-                micronutrients: ingredient.scaledMicronutrients(using: resolvedIngredient.1)
-            )
+                quantity: conversion.componentQuantity,
+                unit: conversion.componentUnit,
+                macros: conversion.scaledMacros(for: resolvedIngredient.1),
+                micronutrients: conversion.scaledMicronutrients(for: resolvedIngredient.1)
+            ))
         }
+        return snapshots
     }
 
     /// Component snapshots for one serving of a recipe: each ingredient resolved against `foodItems`
-    /// and scaled down by `divisor` (the recipe yield); unresolvable ingredients are dropped.
+    /// and scaled down by `divisor` (the recipe yield). Any unresolvable ingredient rejects the meal.
     private static func componentSnapshots(
         for recipe: RecipeDefinition,
         foodItems: [FoodItem],
         divisor: Int
-    ) -> [MealComponentSnapshot] {
-        recipe.ingredients.compactMap { ingredient in
-            guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return nil }
+    ) -> [MealComponentSnapshot]? {
+        var snapshots: [MealComponentSnapshot] = []
+        for ingredient in recipe.ingredients {
+            guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }),
+                  let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
             let scale = 1 / Double(max(divisor, 1))
-            return MealComponentSnapshot(
+            snapshots.append(MealComponentSnapshot(
                 foodItemId: foodItem.id,
                 name: foodItem.name,
-                quantity: ingredient.quantity * scale,
-                unit: ingredient.unit,
-                macros: ingredient.scaledMacros(using: foodItem).scaled(by: scale),
-                micronutrients: ingredient.scaledMicronutrients(using: foodItem).scaled(by: scale)
-            )
+                quantity: conversion.componentQuantity * scale,
+                unit: conversion.componentUnit,
+                macros: conversion.scaledMacros(for: foodItem).scaled(by: scale),
+                micronutrients: conversion.scaledMicronutrients(for: foodItem).scaled(by: scale)
+            ))
         }
+        return snapshots
     }
 
-    /// Whole-recipe macro totals resolved against `foodItems` (unresolvable ingredients contribute
-    /// nothing).
+    /// Whole-recipe macro totals from the same component conversions used for a logged recipe.
     static func macroTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> MacroTotals {
-        recipe.ingredients.reduce(into: MacroTotals()) { totals, ingredient in
-            guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
-            let macros = ingredient.scaledMacros(using: foodItem)
-            totals.protein += macros.protein
-            totals.carbs += macros.carbs
-            totals.fat += macros.fat
+        guard let components = componentSnapshots(for: recipe, foodItems: foodItems, divisor: 1) else {
+            return MacroTotals()
         }
+        return totals(for: components).macros
     }
 
-    /// Whole-recipe micronutrient totals resolved against `foodItems`, mirroring `macroTotals`.
+    /// Whole-recipe micronutrient totals from the same component conversions as `macroTotals`.
     static func micronutrientTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> Micronutrients {
-        recipe.ingredients.reduce(into: Micronutrients()) { totals, ingredient in
-            guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
-            totals.add(ingredient.scaledMicronutrients(using: foodItem))
+        guard let components = componentSnapshots(for: recipe, foodItems: foodItems, divisor: 1) else {
+            return Micronutrients()
         }
+        return totals(for: components).micronutrients
     }
 
     /// The saved recipe that best matches a plan item's name, by exact normalized match (1000),

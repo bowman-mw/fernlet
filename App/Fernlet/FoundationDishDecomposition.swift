@@ -172,12 +172,12 @@ enum MealDecompositionResolver {
             ?? payload.fallbackMealType
             ?? MealParser.classifyMealType(payload.mealDescription)
 
-        let meal = MealBuilder.mealFromIngredients(
+        guard let meal = MealBuilder.mealFromIngredients(
             itemName: dishName,
             resolvedIngredients: deduped,
             mealType: mealType,
             confidenceToken: confidence.mealConfidence.token
-        )
+        ) else { return nil }
         // F1(a) wire: the decomposition already computed the deduped, catalog-bound ingredient pairs a
         // recipe needs — build one from the SAME pairs (macros stay catalog-bound, never model-emitted)
         // and carry it out for review. Only a genuine multi-ingredient dish becomes a recipe; a single
@@ -254,10 +254,11 @@ enum MealDecompositionResolver {
     @available(iOS 26.0, *)
     private static func passesTotalPlausibility(_ deduped: [(FoodSelectionIngredient, FoodItem)]) -> Bool {
         let totalGrams = deduped.reduce(0.0) { $0 + $1.0.quantity }
-        let totalCalories = deduped.reduce(0.0) { cal, pair in
+        var totalCalories = 0.0
+        for pair in deduped {
             let ri = RecipeIngredient(foodItemId: pair.1.id, quantity: pair.0.quantity, unit: pair.0.unit)
-            let m = ri.scaledMacros(using: pair.1)
-            return cal + Double(m.calories)
+            guard let conversion = ri.servingConversion(using: pair.1) else { return false }
+            totalCalories += Double(conversion.scaledMacros(for: pair.1).calories)
         }
         let caloriesPerGram = totalCalories / max(totalGrams, 1)
         guard caloriesPerGram >= 0.3, caloriesPerGram <= 9 else { return false }

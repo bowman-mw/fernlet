@@ -195,8 +195,8 @@ final class MealResolutionService {
     private func wholeDescriptionResolution(_ description: String, type: MealType?) -> MealResolution? {
         guard let probe = WholeDescriptionFoodProbe.match(
             description: description, catalog: host.foodCatalog
-        ) else { return nil }
-        return Self.plausibilityGated(Self.probeResolution(probe, description: description, type: type))
+        ), let resolution = Self.probeResolution(probe, description: description, type: type) else { return nil }
+        return Self.plausibilityGated(resolution)
     }
 
     /// Builds the one-row whole-description result in the food's validated nutrition basis. A
@@ -206,7 +206,7 @@ final class MealResolutionService {
         _ probe: WholeDescriptionFoodProbe.Match,
         description: String,
         type: MealType?
-    ) -> MealResolution {
+    ) -> MealResolution? {
         let confidence: MealResolutionConfidence = probe.unmatchedItems.isEmpty ? .high : .low
         let ingredient = FoodSelectionIngredient(
             candidateId: 1,
@@ -214,13 +214,13 @@ final class MealResolutionService {
             quantity: probe.ingredientQuantity,
             unit: probe.ingredientUnit
         )
-        let meal = MealBuilder.mealFromIngredients(
+        guard let meal = MealBuilder.mealFromIngredients(
             itemName: description,
             resolvedIngredients: [(ingredient, probe.item)],
             mealType: type ?? MealParser.classifyMealType(description),
             confidenceToken: confidence.mealConfidence.token,
             source: MealLogSource.manual
-        )
+        ) else { return nil }
         return MealResolution(
             meals: [meal],
             createdRecipes: [],

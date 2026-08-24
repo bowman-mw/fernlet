@@ -186,7 +186,7 @@ struct FernletTests {
         }
     }
 
-    @Test func volumeRecipeUnitsScaleAgainstMilliliterServings() {
+    @Test func volumeRecipeUnitsScaleAgainstMilliliterServings() throws {
         let oil = FoodItem(
             name: "Olive oil",
             brandSource: nil,
@@ -203,9 +203,9 @@ struct FernletTests {
         let teaspoon = RecipeIngredient(foodItemId: oil.id, quantity: 1, unit: RecipeUnit.teaspoon.rawValue)
         let milliliters = RecipeIngredient(foodItemId: oil.id, quantity: 30, unit: RecipeUnit.milliliter.rawValue)
 
-        #expect(tablespoon.scaledMacros(using: oil).fat == 15)
-        #expect(teaspoon.scaledMacros(using: oil).fat == 5)
-        #expect(milliliters.scaledMacros(using: oil).fat == 30)
+        #expect(try #require(tablespoon.servingConversion(using: oil)).scaledMacros(for: oil).fat == 15)
+        #expect(try #require(teaspoon.servingConversion(using: oil)).scaledMacros(for: oil).fat == 5)
+        #expect(try #require(milliliters.servingConversion(using: oil)).scaledMacros(for: oil).fat == 30)
     }
 
     @Test func milliliterFoodItemsPreferTablespoonForOilEntry() {
@@ -285,8 +285,9 @@ struct FernletTests {
 
         let savedIngredient = try #require(recipe.ingredients.first)
         #expect(savedIngredient.foodItemId == chicken.id)
-        #expect(savedIngredient.scaledMacros(using: chicken).protein == 47)
-        #expect(savedIngredient.scaledMicronutrients(using: chicken).potassium == 384)
+        let conversion = try #require(savedIngredient.servingConversion(using: chicken))
+        #expect(conversion.scaledMacros(for: chicken).protein == 47)
+        #expect(conversion.scaledMicronutrients(for: chicken).potassium == 384)
         #expect(store.foodItems.isEmpty)
     }
 

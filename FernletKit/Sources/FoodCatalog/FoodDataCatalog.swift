@@ -304,19 +304,12 @@ struct USDAFoodItemRecord: Decodable {
         return portions
     }
 
-    /// Gram weight for convertible units only (g/ml treated 1:1, oz, lb); nil for anything else,
-    /// which drops the label portion rather than guessing.
+    /// Gram weight for physical mass units only. Volume is not mass without source-backed density or
+    /// a gram-equivalent portion, so label volumes deliberately do not invent a gram weight here.
     private static func gramWeight(quantity: Double, unit: String?) -> Double? {
-        switch RecipeUnit.normalized(unit ?? RecipeUnit.gram.rawValue) {
-        case .gram, .milliliter:
-            return quantity
-        case .ounce:
-            return quantity * 28.3495
-        case .pound:
-            return quantity * 453.592
-        default:
-            return nil
-        }
+        guard let recipeUnit = RecipeUnit.normalized(unit ?? RecipeUnit.gram.rawValue),
+              recipeUnit.dimension == .mass else { return nil }
+        return recipeUnit.baseAmount(for: quantity)
     }
 
     /// "USDA FDC <id>" — the brand-source fallback that preserves data provenance for unbranded rows.
@@ -402,12 +395,23 @@ private struct FDCFoodPortion: Decodable {
         guard let gramWeight, gramWeight > 0 else { return nil }
         let unit = measureUnit?.abbreviation ?? measureUnit?.name ?? portionDescription ?? modifier
         guard let unit, unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return nil }
+        let description = [modifier, portionDescription].compactMap { $0 }.joined(separator: " ")
+        let resolvedAmount = amount ?? leadingAmount(in: description)
+        guard let resolvedAmount, resolvedAmount.isFinite, resolvedAmount > 0 else { return nil }
         return FoodPortion(
-            amount: max(amount ?? 1, 0.01),
+            amount: resolvedAmount,
             unit: unit,
             gramWeight: gramWeight,
-            description: [modifier, portionDescription].compactMap { $0 }.joined(separator: " ")
+            description: description
         )
+    }
+
+    private func leadingAmount(in description: String) -> Double? {
+        let words = description.split(whereSeparator: \.isWhitespace)
+        guard let first = words.first else { return nil }
+        let amount = LocaleTolerantNumber.double(from: String(first))
+        guard let amount, amount.isFinite, amount > 0 else { return nil }
+        return amount
     }
 }
 

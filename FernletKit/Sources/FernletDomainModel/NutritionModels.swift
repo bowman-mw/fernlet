@@ -1621,9 +1621,8 @@ public nonisolated enum FoodSelectionCandidateBuilder {
 
 /// One structured recipe line: a bound catalog food id, quantity, and unit.
 ///
-/// Stores no nutrition of its own — macros/micros always derive from the bound ``FoodItem`` at
-/// read time via `scaledMacros(using:)`/`scaledMicronutrients(using:)`, which convert through the
-/// food's serving definition and portion table.
+/// Stores no nutrition of its own — macros/micros always derive from one validated
+/// ``RecipeServingConversion`` against the bound ``FoodItem``.
 public nonisolated struct RecipeIngredient: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var foodItemId: UUID
@@ -1686,13 +1685,20 @@ public nonisolated enum RecipeStepSanitizer {
 /// Un-normalizable unit strings return nil and are treated as incompatible — quantity math never
 /// silently mixes units (see ``GroceryAggregation``'s merge rules).
 public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
+    case milligram = "mg"
     case gram = "g"
+    case kilogram = "kg"
     case milliliter = "ml"
     case ounce = "oz"
     case pound = "lb"
+    case fluidOunce = "fl oz"
+    case liter = "l"
     case cup = "cup"
     case tablespoon = "tbsp"
     case teaspoon = "tsp"
+    case glass = "glass"
+    case slice = "slice"
+    case piece = "piece"
     case each = "each"
     case serving = "serving"
 
@@ -1700,13 +1706,20 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
 
     public var label: String {
         switch self {
+        case .milligram: "Milligrams"
         case .gram: "Grams"
+        case .kilogram: "Kilograms"
         case .milliliter: "Milliliters"
         case .ounce: "Ounces"
         case .pound: "Pounds"
+        case .fluidOunce: "US Fluid Ounces"
+        case .liter: "Liters"
         case .cup: "Cups"
         case .tablespoon: "Tablespoons"
         case .teaspoon: "Teaspoons"
+        case .glass: "Glass (12 US fl oz)"
+        case .slice: "Slices"
+        case .piece: "Pieces"
         case .each: "Each"
         case .serving: "Servings"
         }
@@ -1714,20 +1727,34 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
 
     public static func normalized(_ unit: String) -> RecipeUnit? {
         switch unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "mg", "milligram", "milligrams":
+            return .milligram
         case "g", "gram", "grams":
             return .gram
+        case "kg", "kilogram", "kilograms":
+            return .kilogram
         case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
             return .milliliter
         case "oz", "ounce", "ounces":
             return .ounce
         case "lb", "lbs", "pound", "pounds":
             return .pound
+        case "fl oz", "floz", "fluid ounce", "fluid ounces", "us fluid ounce", "us fluid ounces":
+            return .fluidOunce
+        case "l", "liter", "liters", "litre", "litres":
+            return .liter
         case "cup", "cups":
             return .cup
         case "tbsp", "tablespoon", "tablespoons":
             return .tablespoon
         case "tsp", "teaspoon", "teaspoons":
             return .teaspoon
+        case "glass", "glasses":
+            return .glass
+        case "slice", "slices":
+            return .slice
+        case "piece", "pieces":
+            return .piece
         case "each", "unit", "units", "item", "items":
             return .each
         case "serving", "servings":
@@ -1738,28 +1765,199 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
     }
 }
 
+/// The source-backed explanation for one recipe quantity's nutrition scale.
+///
+/// This is intentionally transient: logged components persist their already-scaled values, while this
+/// result keeps every consumer of a new conversion on one validated quantity, unit, scale, and source
+/// measure. A `.glassDefault` is Fernlet's editable 12-US-fluid-ounce assumption, never a mass ounce.
+public nonisolated struct RecipeServingConversion: Equatable, Sendable {
+    public enum Provenance: String, Equatable, Sendable {
+        case exactServingBasis
+        case physicalUnit
+        case sourcePortion
+        case glassDefault
+    }
+
+    public let foodItemID: UUID
+    public let componentQuantity: Double
+    public let componentUnit: String
+    public let servingScale: Double
+    public let grams: Double?
+    public let sourceServingSize: Double
+    public let sourceServingUnit: String
+    public let sourcePortion: FoodPortion?
+    public let provenance: Provenance
+
+    public func scaledMacros(for foodItem: FoodItem) -> Macros {
+        foodItem.macros.scaled(by: servingScale)
+    }
+
+    public func scaledMicronutrients(for foodItem: FoodItem) -> Micronutrients {
+        foodItem.micronutrients.scaled(by: servingScale)
+    }
+}
+
+/// Domain-level bounds shared by every recipe quantity conversion, independent of app-side meal UI.
+public nonisolated enum RecipeConversionLimits {
+    public static let maxGrams: Double = 3_000
+    public static let maxCount: Double = 100
+}
+
+extension RecipeUnit {
+    public enum Dimension: Equatable, Sendable {
+        case mass
+        case volume
+        case count
+    }
+
+    public var dimension: Dimension? {
+        switch self {
+        case .milligram, .gram, .kilogram, .ounce, .pound: .mass
+        case .milliliter, .fluidOunce, .liter, .cup, .tablespoon, .teaspoon, .glass: .volume
+        case .slice, .piece, .each: .count
+        case .serving: nil
+        }
+    }
+
+    public var isVolume: Bool { dimension == .volume }
+    public var isCount: Bool { dimension == .count }
+
+    public func baseAmount(for quantity: Double) -> Double? {
+        guard quantity.isFinite, quantity > 0 else { return nil }
+        let factor: Double
+        switch self {
+        case .milligram: factor = 0.001
+        case .gram: factor = 1
+        case .kilogram: factor = 1_000
+        case .ounce: factor = 28.3495
+        case .pound: factor = 453.592
+        case .milliliter: factor = 1
+        case .fluidOunce: factor = 29.5735
+        case .liter: factor = 1_000
+        case .cup: factor = 236.588
+        case .tablespoon: factor = 14.7868
+        case .teaspoon: factor = 4.92892
+        case .glass: factor = 354.882
+        case .slice, .piece, .each, .serving: return nil
+        }
+        let value = quantity * factor
+        guard value.isFinite, value > 0, value <= RecipeConversionLimits.maxGrams else { return nil }
+        return value
+    }
+}
+
+extension RecipeServingConversion {
+    fileprivate static func resolve(quantity: Double, unit: String, foodItem: FoodItem) -> RecipeServingConversion? {
+        guard let requestedUnit = RecipeUnit.normalized(unit), validRequest(quantity, unit: requestedUnit),
+              validServing(foodItem), let servingUnit = RecipeUnit.normalized(foodItem.servingUnit) else { return nil }
+        if requestedUnit == .serving {
+            return declaredServing(quantity: quantity, foodItem: foodItem)
+        }
+        if requestedUnit == servingUnit {
+            return exactBasis(quantity: quantity, foodItem: foodItem, unit: requestedUnit)
+        }
+        if requestedUnit.dimension == servingUnit.dimension,
+           let requestedBase = requestedUnit.baseAmount(for: quantity),
+           let servingBase = servingUnit.baseAmount(for: foodItem.servingSize) {
+            return physicalBasis(quantity: quantity, unit: unit, requestedBase: requestedBase,
+                                 servingBase: servingBase, foodItem: foodItem, requestedUnit: requestedUnit)
+        }
+        guard let requestedGrams = grams(quantity: quantity, unit: unit, foodItem: foodItem),
+              let servingGrams = grams(quantity: foodItem.servingSize, unit: foodItem.servingUnit, foodItem: foodItem),
+              let scale = validScale(requestedGrams / servingGrams) else { return nil }
+        return RecipeServingConversion(
+            foodItemID: foodItem.id, componentQuantity: quantity, componentUnit: unit,
+            servingScale: scale, grams: requestedGrams, sourceServingSize: foodItem.servingSize,
+            sourceServingUnit: foodItem.servingUnit, sourcePortion: sourcePortion(for: requestedUnit, foodItem: foodItem),
+            provenance: requestedUnit == .glass ? .glassDefault : .sourcePortion
+        )
+    }
+
+    fileprivate static func grams(quantity: Double, unit: String, foodItem: FoodItem) -> Double? {
+        guard let recipeUnit = RecipeUnit.normalized(unit), validRequest(quantity, unit: recipeUnit) else { return nil }
+        if recipeUnit.dimension == .mass { return recipeUnit.baseAmount(for: quantity) }
+        guard let dimension = recipeUnit.dimension,
+              let portion = sourcePortion(for: recipeUnit, foodItem: foodItem),
+              let amount = convertedAmount(quantity, from: recipeUnit, to: portion.recipeUnit, dimension: dimension)
+        else { return nil }
+        return portion.grams(for: amount)
+    }
+
+    private static func exactBasis(quantity: Double, foodItem: FoodItem, unit: RecipeUnit) -> RecipeServingConversion? {
+        guard let scale = validScale(quantity / foodItem.servingSize) else { return nil }
+        return RecipeServingConversion(
+            foodItemID: foodItem.id, componentQuantity: quantity, componentUnit: foodItem.servingUnit,
+            servingScale: scale, grams: grams(quantity: quantity, unit: unit.rawValue, foodItem: foodItem),
+            sourceServingSize: foodItem.servingSize, sourceServingUnit: foodItem.servingUnit,
+            sourcePortion: sourcePortion(for: unit, foodItem: foodItem), provenance: .exactServingBasis
+        )
+    }
+
+    private static func declaredServing(quantity: Double, foodItem: FoodItem) -> RecipeServingConversion? {
+        guard let scale = validScale(quantity) else { return nil }
+        return RecipeServingConversion(
+            foodItemID: foodItem.id, componentQuantity: quantity, componentUnit: RecipeUnit.serving.rawValue,
+            servingScale: scale, grams: grams(quantity: foodItem.servingSize, unit: foodItem.servingUnit, foodItem: foodItem),
+            sourceServingSize: foodItem.servingSize, sourceServingUnit: foodItem.servingUnit,
+            sourcePortion: nil, provenance: .exactServingBasis
+        )
+    }
+
+    private static func physicalBasis(
+        quantity: Double, unit: String, requestedBase: Double, servingBase: Double,
+        foodItem: FoodItem, requestedUnit: RecipeUnit
+    ) -> RecipeServingConversion? {
+        guard let scale = validScale(requestedBase / servingBase) else { return nil }
+        let grams = requestedUnit.dimension == .mass ? requestedBase : nil
+        return RecipeServingConversion(
+            foodItemID: foodItem.id, componentQuantity: quantity, componentUnit: unit,
+            servingScale: scale, grams: grams, sourceServingSize: foodItem.servingSize,
+            sourceServingUnit: foodItem.servingUnit, sourcePortion: nil,
+            provenance: requestedUnit == .glass ? .glassDefault : .physicalUnit
+        )
+    }
+
+    private static func sourcePortion(for unit: RecipeUnit, foodItem: FoodItem) -> FoodPortion? {
+        guard let dimension = unit.dimension else { return nil }
+        if unit.isCount { return foodItem.uniquePortion(matching: unit) }
+        return foodItem.uniquePortion(in: dimension)
+    }
+
+    private static func convertedAmount(
+        _ quantity: Double, from source: RecipeUnit, to destination: RecipeUnit?, dimension: RecipeUnit.Dimension
+    ) -> Double? {
+        guard let destination, source.dimension == dimension, destination.dimension == dimension else { return nil }
+        if source == destination { return quantity }
+        guard let sourceBase = source.baseAmount(for: quantity),
+              let destinationOne = destination.baseAmount(for: 1) else { return nil }
+        let converted = sourceBase / destinationOne
+        guard converted.isFinite, converted > 0, converted <= RecipeConversionLimits.maxGrams else { return nil }
+        return converted
+    }
+
+    private static func validRequest(_ quantity: Double, unit: RecipeUnit) -> Bool {
+        let limit = unit.isCount || unit == .serving
+            ? RecipeConversionLimits.maxCount : RecipeConversionLimits.maxGrams
+        return quantity.isFinite && quantity > 0 && quantity <= limit
+    }
+
+    private static func validServing(_ foodItem: FoodItem) -> Bool {
+        foodItem.servingSize.isFinite && foodItem.servingSize > 0 &&
+            foodItem.servingSize <= RecipeConversionLimits.maxGrams
+    }
+
+    private static func validScale(_ value: Double) -> Double? {
+        guard value.isFinite, value > 0, value <= RecipeConversionLimits.maxGrams else { return nil }
+        return value
+    }
+}
+
 extension RecipeIngredient {
-    private func scale(using foodItem: FoodItem) -> Double {
-        if unit.caseInsensitiveCompare(foodItem.servingUnit) == .orderedSame {
-            return quantity / max(foodItem.servingSize, 0.01)
-        }
-        if let quantityGrams = foodItem.gramsEquivalent(quantity: quantity, unit: unit) {
-            if foodItem.servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame {
-                return quantityGrams / max(foodItem.servingSize, 0.01)
-            }
-            if let servingGrams = foodItem.gramsEquivalent(quantity: foodItem.servingSize, unit: foodItem.servingUnit) {
-                return quantityGrams / max(servingGrams, 0.01)
-            }
-        }
-        return quantity
-    }
-
-    public func scaledMacros(using foodItem: FoodItem) -> Macros {
-        foodItem.macros.scaled(by: scale(using: foodItem))
-    }
-
-    public func scaledMicronutrients(using foodItem: FoodItem) -> Micronutrients {
-        foodItem.micronutrients.scaled(by: scale(using: foodItem))
+    /// Resolves one quantity once for its component display, provenance, macros, and micronutrients.
+    /// Incompatible, ambiguous, non-finite, or implausibly large conversions return `nil`; callers must
+    /// review or fall through rather than treating a raw quantity as a count of servings.
+    public func servingConversion(using foodItem: FoodItem) -> RecipeServingConversion? {
+        RecipeServingConversion.resolve(quantity: quantity, unit: unit, foodItem: foodItem)
     }
 }
 
@@ -2152,10 +2350,18 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    public func resolvedMacros(foodItems: [FoodItem]) -> Macros {
-        guard let selectedFoodItem = selectedFoodItem(in: foodItems) else { return macros }
-        return RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: quantity, unit: unit)
-            .scaledMacros(using: selectedFoodItem)
+    /// Returns entered manual macros, or catalog macros only when the selected food has one
+    /// source-backed conversion. `nil` is an explicit unavailable state, never zero nutrition.
+    public func resolvedMacros(foodItems: [FoodItem]) -> Macros? {
+        guard selectedFoodItemId != nil else { return macros }
+        guard let selectedFoodItem = selectedFoodItem(in: foodItems) else { return nil }
+        let ingredient = RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: quantity, unit: unit)
+        return ingredient.servingConversion(using: selectedFoodItem)?.scaledMacros(for: selectedFoodItem)
+    }
+
+    /// A hand-authored row is always valid; a catalog-bound row must retain a safe conversion.
+    public func hasResolvedMacros(foodItems: [FoodItem]) -> Bool {
+        resolvedMacros(foodItems: foodItems) != nil
     }
 
     public func selectedFoodItem(in foodItems: [FoodItem]) -> FoodItem? {
@@ -2212,48 +2418,36 @@ extension FoodItem {
 
     public func defaultRecipeQuantity(for unit: RecipeUnit) -> Double {
         switch unit {
-        case .gram:
+        case .milligram, .gram, .kilogram:
             servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame ? servingSize : 1
-        case .milliliter:
-            RecipeUnit.normalized(servingUnit) == .milliliter ? servingSize : 1
-        case .ounce, .pound, .cup, .tablespoon, .teaspoon, .each, .serving:
+        case .milliliter, .fluidOunce, .liter, .cup, .tablespoon, .teaspoon, .glass:
+            RecipeUnit.normalized(servingUnit)?.isVolume == true ? servingSize : 1
+        case .ounce, .pound, .slice, .piece, .each, .serving:
             1
         }
     }
 
+    /// Returns grams only when a mass conversion is physical or a unique source portion supplies
+    /// gram evidence. In particular, milliliters/cups/spoons never silently become grams.
     public func gramsEquivalent(quantity: Double, unit: String) -> Double? {
-        let unit = RecipeUnit.normalized(unit)
-        switch unit {
-        case .gram:
-            return quantity
-        case .milliliter:
-            return quantity
-        case .ounce:
-            if let portion = portion(for: .ounce) { return portion.grams(for: quantity) }
-            return quantity * 28.3495
-        case .pound:
-            return quantity * 453.592
-        case .cup:
-            if let portion = portion(for: .cup) { return portion.grams(for: quantity) }
-            return quantity * 240
-        case .tablespoon:
-            if let portion = portion(for: .tablespoon) { return portion.grams(for: quantity) }
-            return quantity * 15
-        case .teaspoon:
-            if let portion = portion(for: .teaspoon) { return portion.grams(for: quantity) }
-            return quantity * 5
-        case .each:
-            if let portion = portion(for: .each) { return portion.grams(for: quantity) }
-            return nil
-        case .serving:
-            return nil
-        case nil:
-            return nil
+        RecipeServingConversion.grams(quantity: quantity, unit: unit, foodItem: self)
+    }
+
+    fileprivate func uniquePortion(matching unit: RecipeUnit) -> FoodPortion? {
+        let matches = portions.filter { $0.recipeUnit == unit && $0.hasValidGramMeasure }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    fileprivate func uniquePortion(in dimension: RecipeUnit.Dimension) -> FoodPortion? {
+        let matches = portions.filter {
+            guard let unit = $0.recipeUnit else { return false }
+            return unit.dimension == dimension && $0.hasValidGramMeasure
         }
+        return matches.count == 1 ? matches[0] : nil
     }
 
     private func portion(for unit: RecipeUnit) -> FoodPortion? {
-        portions.first { $0.recipeUnit == unit }
+        uniquePortion(matching: unit)
     }
 }
 
@@ -2261,31 +2455,32 @@ extension FoodPortion {
     public var recipeUnit: RecipeUnit? {
         let normalizedUnit = FoodItemSearch.normalized(unit)
         let normalizedDescription = FoodItemSearch.normalized(description ?? "")
-        switch normalizedUnit {
-        case "g", "gram", "grams":
-            return .gram
-        case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
-            return .milliliter
-        case "oz", "ounce", "ounces":
-            return .ounce
-        case "lb", "lbs", "pound", "pounds":
-            return .pound
-        case "cup", "cups":
-            return .cup
-        case "tbsp", "tablespoon", "tablespoons":
-            return .tablespoon
-        case "tsp", "teaspoon", "teaspoons":
-            return .teaspoon
-        default:
-            if normalizedUnit == "unit" || normalizedUnit == "serving" || normalizedDescription.contains("large") || normalizedDescription.contains("medium") || normalizedDescription.contains("small") {
-                return .each
-            }
-            return nil
+        if let direct = RecipeUnit.normalized(normalizedUnit), direct != .serving {
+            return direct
         }
+        guard normalizedUnit.isEmpty || normalizedUnit == "undetermined" else { return nil }
+        let words = normalizedDescription.split(separator: " ").map(String.init)
+        guard words.count >= 2,
+              let amount = LocaleTolerantNumber.double(from: words[0]), amount.isFinite, amount > 0,
+              let derived = RecipeUnit.normalized(words[1]), derived.isCount else { return nil }
+        return derived
     }
 
-    public func grams(for quantity: Double) -> Double {
-        quantity * gramWeight / max(amount, 0.01)
+    public var hasValidGramMeasure: Bool {
+        amount.isFinite && amount > 0 && amount <= RecipeConversionLimits.maxGrams &&
+            gramWeight.isFinite && gramWeight > 0 && gramWeight <= RecipeConversionLimits.maxGrams
+    }
+
+    public func grams(for quantity: Double) -> Double? {
+        guard hasValidGramMeasure,
+              quantity.isFinite, quantity > 0,
+              quantity <= RecipeConversionLimits.maxGrams else { return nil }
+        let gramsPerUnit = gramWeight / amount
+        let grams = gramsPerUnit * quantity
+        guard gramsPerUnit.isFinite, gramsPerUnit > 0,
+              grams.isFinite, grams > 0,
+              grams <= RecipeConversionLimits.maxGrams else { return nil }
+        return grams
     }
 }
 

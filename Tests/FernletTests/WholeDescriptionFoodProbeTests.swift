@@ -142,8 +142,8 @@ struct WholeDescriptionFoodProbeTests {
             description: "safe toast slice", catalog: catalog
         ))
         #expect(generic.item.id == safe.id, "the stripped query has a safe answer in isolation")
-        #expect(generic.ingredientQuantity == 60)
-        #expect(generic.ingredientUnit == RecipeUnit.gram.rawValue)
+        #expect(generic.ingredientQuantity == 1)
+        #expect(generic.ingredientUnit == RecipeUnit.slice.rawValue)
         #expect(WholeDescriptionFoodProbe.match(
             description: "costco safe toast slice", catalog: catalog
         ) == nil, "unsafe direct row must abort instead of masking through retailer stripping")
@@ -241,8 +241,8 @@ struct WholeDescriptionFoodProbeTests {
             description: "1.5 slices of pizza", catalog: catalog
         ))
         #expect(fractional.grams == 150)
-        #expect(fractional.ingredientQuantity == 150)
-        #expect(fractional.ingredientUnit == RecipeUnit.gram.rawValue)
+        #expect(fractional.ingredientQuantity == 1.5)
+        #expect(fractional.ingredientUnit == RecipeUnit.slice.rawValue)
     }
 
     @Test func realQuickLogPathShortCircuitsToOnePortionBeforeDecomposition() async throws {
@@ -268,7 +268,7 @@ struct WholeDescriptionFoodProbeTests {
         #expect(meal.source == MealLogSource.manual)
         #expect(meal.quality == .ok)
         #expect(meal.confidence == MealConfidence.roughEstimate.token)
-        #expect(meal.note == "Matched locally from food selection: 100 g PIZZA HUT 12\" Cheese Pizza, Pan Crust.")
+        #expect(meal.note == "Matched locally from food selection: 1 slice PIZZA HUT 12\" Cheese Pizza, Pan Crust.")
         #expect(meal.macros == Macros(protein: 12, carbs: 30, fat: 13))
         #expect(meal.macroSnapshot == meal.macros)
         #expect(meal.calorieSnapshot == 285)
@@ -278,8 +278,8 @@ struct WholeDescriptionFoodProbeTests {
         let component = try #require(meal.componentSnapshots.first)
         #expect(component.foodItemId == match.item.id)
         #expect(component.name == "PIZZA HUT 12\" Cheese Pizza, Pan Crust")
-        #expect(component.quantity == 100)
-        #expect(component.unit == RecipeUnit.gram.rawValue)
+        #expect(component.quantity == 1)
+        #expect(component.unit == RecipeUnit.slice.rawValue)
         #expect(component.macros == meal.macros)
         #expect(component.micronutrients == meal.micronutrientSnapshot)
 
@@ -315,9 +315,9 @@ struct WholeDescriptionFoodProbeTests {
         let match = try #require(WholeDescriptionFoodProbe.safeMatch(
             item: item, score: 800, portion: portion, quantity: quantity
         ))
-        let resolution = MealResolutionService.probeResolution(
+        let resolution = try #require(MealResolutionService.probeResolution(
             match, description: item.name, type: type
-        )
+        ))
         return try #require(resolution.meals.first)
     }
 
@@ -325,9 +325,9 @@ struct WholeDescriptionFoodProbeTests {
         _ match: WholeDescriptionFoodProbe.Match,
         description: String
     ) throws -> Meal {
-        let resolution = MealResolutionService.probeResolution(
+        let resolution = try #require(MealResolutionService.probeResolution(
             match, description: description, type: .breakfast
-        )
+        ))
         return try #require(resolution.meals.first)
     }
 

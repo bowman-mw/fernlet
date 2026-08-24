@@ -722,7 +722,10 @@ public enum RecipeWebImporter {
             fat = siteNutrition.fat
             micronutrients = siteNutrition.micronutrients
         } else {
-            (protein, carbs, fat) = estimateMacrosFromIngredients(ingredients, servings: servings, catalog: catalog)
+            guard let estimate = estimateMacrosFromIngredients(ingredients, servings: servings, catalog: catalog) else {
+                return nil
+            }
+            (protein, carbs, fat) = estimate
             micronutrients = Micronutrients()
         }
 
@@ -849,25 +852,31 @@ public enum RecipeWebImporter {
     /// USDA fallback when the site publishes no nutrition label: parses each ingredient line, matches
     /// its cleaned name against the catalog's top result, sums scaled macros, and divides by servings.
     /// Unparseable or unmatched lines contribute nothing, so this UNDERestimates rather than invents.
+    /// A matched line with an unsupported conversion invalidates the entire fallback rather than
+    /// silently publishing a partial nutrition estimate.
     ///
     /// - Important: one catalog search per line, on the main actor. Callers cap `ingredients` at
     ///   ``maxImportedIngredients`` where the page's list enters (R3); do not hand it an uncapped
     ///   page-controlled array.
-    nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
+    nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int)? {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
+        var matchedIngredient = false
 
         for text in ingredients {
             guard let parsed = parseIngredient(text),
                   let match = catalog.results(
                     for: parsed.name, limit: 1, context: .machineGenerated
                   ).first else { continue }
+            matchedIngredient = true
             let ri = RecipeIngredient(foodItemId: match.id, quantity: parsed.quantity, unit: parsed.unit)
-            let macros = ri.scaledMacros(using: match)
+            guard let conversion = ri.servingConversion(using: match) else { return nil }
+            let macros = conversion.scaledMacros(for: match)
             totalProtein += Double(macros.protein)
             totalCarbs += Double(macros.carbs)
             totalFat += Double(macros.fat)
         }
 
+        guard matchedIngredient else { return nil }
         let d = max(Double(servings), 1.0)
         return (
             Int((totalProtein / d).rounded()),
@@ -883,7 +892,7 @@ public enum RecipeWebImporter {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Leading quantity: mixed fraction "1 1/2", pure fraction "3/4", or decimal/integer "2"
         // Followed by optional unit, then food name
-        let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(tablespoons?|teaspoons?|cups?|ounces?|pounds?|tbsps?|tsps?|oz|lbs?|g|grams?|ml|milliliters?|millilitres?|cloves?|large|medium|small|whole|each)?\s*(.+)$"#
+        let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(fluid\s+ounces?|fl\s*oz|floz|tablespoons?|teaspoons?|cups?|ounces?|pounds?|tbsps?|tsps?|oz|lbs?|milligrams?|mg|kilograms?|kg|g|grams?|liters?|litres?|l|ml|milliliters?|millilitres?|glasses?|slices?|pieces?|cloves?|large|medium|small|whole|each)?\s*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
               let match = regex.firstMatch(in: s, range: NSRange(s.startIndex..<s.endIndex, in: s)),
               match.numberOfRanges >= 4 else { return nil }
@@ -929,22 +938,9 @@ public enum RecipeWebImporter {
     }
 
     nonisolated private static func resolveUnit(quantity: Double, unitString: String) -> (Double, String) {
+        if let unit = RecipeUnit.normalized(unitString) { return (quantity, unit.rawValue) }
         switch unitString.lowercased().trimmingCharacters(in: .whitespaces) {
-        case "cup", "cups":
-            return (quantity, RecipeUnit.cup.rawValue)
-        case "tbsp", "tablespoon", "tablespoons":
-            return (quantity, RecipeUnit.tablespoon.rawValue)
-        case "tsp", "teaspoon", "teaspoons":
-            return (quantity, RecipeUnit.teaspoon.rawValue)
-        case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
-            return (quantity, RecipeUnit.milliliter.rawValue)
-        case "oz", "ounce", "ounces":
-            return (quantity, RecipeUnit.ounce.rawValue)
-        case "g", "gram", "grams":
-            return (quantity, RecipeUnit.gram.rawValue)
-        case "lb", "lbs", "pound", "pounds":
-            return (quantity * 453.592, RecipeUnit.gram.rawValue)
-        case "clove", "cloves", "large", "medium", "small", "whole", "each":
+        case "clove", "cloves", "large", "medium", "small", "whole":
             return (quantity, RecipeUnit.each.rawValue)
         default:
             return (quantity, RecipeUnit.serving.rawValue)
@@ -1163,9 +1159,10 @@ struct ExtractedRecipe {
             throw RecipeWebImportError.incompleteRecipe
         }
 
-        let (protein, carbs, fat) = RecipeWebImporter.estimateMacrosFromIngredients(
+        guard let estimate = RecipeWebImporter.estimateMacrosFromIngredients(
             trimmedIngredients, servings: 1, catalog: catalog
-        )
+        ) else { throw RecipeWebImportError.incompleteRecipe }
+        let (protein, carbs, fat) = estimate
 
         return ImportedRecipe(
             sourceURL: sourceURL,

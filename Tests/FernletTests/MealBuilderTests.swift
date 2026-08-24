@@ -166,7 +166,9 @@ struct MealBuilderTests {
 
         #expect(unit == RecipeUnit.gram.rawValue)
         #expect(quantity == 100) // 2 servings × 50 g
-        let macros = RecipeIngredient(foodItemId: eggs.id, quantity: quantity, unit: unit).scaledMacros(using: eggs)
+        let macros = try #require(RecipeIngredient(
+            foodItemId: eggs.id, quantity: quantity, unit: unit
+        ).servingConversion(using: eggs)).scaledMacros(for: eggs)
         #expect(macros == Macros(protein: 12, carbs: 0, fat: 10))
         #expect(macros.calories > 100) // guards against the ~3 kcal undercount regression
     }
@@ -178,7 +180,9 @@ struct MealBuilderTests {
 
         #expect(unit == RecipeUnit.gram.rawValue)
         #expect(quantity == 100)
-        let macros = RecipeIngredient(foodItemId: chicken.id, quantity: quantity, unit: unit).scaledMacros(using: chicken)
+        let macros = try #require(RecipeIngredient(
+            foodItemId: chicken.id, quantity: quantity, unit: unit
+        ).servingConversion(using: chicken)).scaledMacros(for: chicken)
         #expect(macros == Macros(protein: 30, carbs: 0, fat: 3))
     }
 
@@ -189,18 +193,23 @@ struct MealBuilderTests {
 
         #expect(unit == RecipeUnit.gram.rawValue)
         #expect(quantity == 50) // one serving
-        let macros = RecipeIngredient(foodItemId: eggs.id, quantity: quantity, unit: unit).scaledMacros(using: eggs)
+        let macros = try #require(RecipeIngredient(
+            foodItemId: eggs.id, quantity: quantity, unit: unit
+        ).servingConversion(using: eggs)).scaledMacros(for: eggs)
         #expect(macros == Macros(protein: 6, carbs: 0, fat: 5))
     }
 
     @Test func explicitCupUnitScalesByVolume() throws {
         // "2 cups rice" uses the typed cup unit (1 cup = 240 g = one serving here → two servings).
-        let rice = gramFood(name: "Rice", servingSize: 240, macros: Macros(protein: 4, carbs: 45, fat: 0))
+        var rice = gramFood(name: "Rice", servingSize: 240, macros: Macros(protein: 4, carbs: 45, fat: 0))
+        rice.portions = [FoodPortion(amount: 1, unit: "cup", gramWeight: 240)]
         let (quantity, unit) = try resolveSingleIngredient(description: "2 cups rice", food: rice)
 
         #expect(unit == RecipeUnit.cup.rawValue)
         #expect(quantity == 2)
-        let macros = RecipeIngredient(foodItemId: rice.id, quantity: quantity, unit: unit).scaledMacros(using: rice)
+        let macros = try #require(RecipeIngredient(
+            foodItemId: rice.id, quantity: quantity, unit: unit
+        ).servingConversion(using: rice)).scaledMacros(for: rice)
         #expect(macros == Macros(protein: 8, carbs: 90, fat: 0)) // 480 g / 240 g = 2 servings
     }
 
@@ -233,6 +242,136 @@ struct MealBuilderTests {
             source: .usda,
             tags: []
         )
+    }
+
+    @Test func conversionRejectsUnprovenVolumeBridgeAndRamenIdentityFallback() {
+        let ramen = gramFood(name: "Ramen", servingSize: 43, macros: Macros(protein: 7, carbs: 54, fat: 14))
+        let unsupported = RecipeIngredient(foodItemId: ramen.id, quantity: 100, unit: RecipeUnit.each.rawValue)
+        #expect(unsupported.servingConversion(using: ramen) == nil)
+
+        let glass = RecipeIngredient(foodItemId: ramen.id, quantity: 1, unit: RecipeUnit.glass.rawValue)
+        #expect(glass.servingConversion(using: ramen) == nil)
+        let input = ManualRecipeIngredientInput(
+            name: ramen.name, selectedFoodItemId: ramen.id, quantity: 100, unit: RecipeUnit.each.rawValue
+        )
+        #expect(input.resolvedMacros(foodItems: [ramen]) == nil)
+        #expect(input.hasResolvedMacros(foodItems: [ramen]) == false)
+        #expect(MealBuilder.mealFromIngredients(
+            itemName: "Ramen", resolvedIngredients: [(ingredient(candidateId: 1, foodName: "Ramen", quantity: 100, unit: "each"), ramen)],
+            mealType: .lunch
+        ) == nil)
+    }
+
+    @Test func conversionKeepsMassAndVolumeSeparateAndNamesGlassDefault() throws {
+        let drink = FoodItem(
+            name: "Milk",
+            brandSource: nil,
+            servingSize: 354.882,
+            servingUnit: RecipeUnit.milliliter.rawValue,
+            macros: Macros(protein: 12, carbs: 18, fat: 8),
+            micronutrients: Micronutrients(),
+            category: "test",
+            source: .manual,
+            tags: []
+        )
+        let glass = try #require(RecipeIngredient(
+            foodItemId: drink.id, quantity: 1, unit: RecipeUnit.glass.rawValue
+        ).servingConversion(using: drink))
+        #expect(glass.servingScale == 1)
+        #expect(glass.provenance == .glassDefault)
+        #expect(RecipeUnit.normalized("oz") == .ounce)
+        #expect(RecipeUnit.normalized("fl oz") == .fluidOunce)
+        #expect(RecipeUnit.normalized("mg") == .milligram)
+        #expect(RecipeUnit.normalized("kg") == .kilogram)
+        #expect(RecipeUnit.normalized("l") == .liter)
+        #expect(RecipeUnit.normalized("slice") == .slice)
+        #expect(RecipeUnit.normalized("piece") == .piece)
+        #expect(RecipeUnit.glass.label == "Glass (12 US fl oz)")
+    }
+
+    @Test func conversionUsesExactIntraDimensionPhysicalFactors() throws {
+        let massFood = gramFood(name: "Flour", servingSize: 100, macros: Macros(protein: 10, carbs: 76, fat: 1))
+        let massCases: [(Double, RecipeUnit, Double)] = [
+            (1_000, .milligram, 0.01), (0.001, .kilogram, 0.01), (1, .ounce, 0.283495), (1, .pound, 4.53592)
+        ]
+        for (quantity, unit, expectedScale) in massCases {
+            let conversion = try #require(RecipeIngredient(
+                foodItemId: massFood.id, quantity: quantity, unit: unit.rawValue
+            ).servingConversion(using: massFood))
+            #expect(abs(conversion.servingScale - expectedScale) < 0.000_001)
+        }
+
+        let volumeFood = FoodItem(
+            name: "Broth", brandSource: nil, servingSize: 1_000, servingUnit: "ml",
+            macros: Macros(protein: 0, carbs: 0, fat: 0), micronutrients: Micronutrients(),
+            category: "test", source: .manual, tags: []
+        )
+        let volumeCases: [(Double, RecipeUnit, Double)] = [
+            (1, .liter, 1), (1, .teaspoon, 0.00492892), (1, .tablespoon, 0.0147868),
+            (1, .cup, 0.236588), (1, .fluidOunce, 0.0295735)
+        ]
+        for (quantity, unit, expectedScale) in volumeCases {
+            let conversion = try #require(RecipeIngredient(
+                foodItemId: volumeFood.id, quantity: quantity, unit: unit.rawValue
+            ).servingConversion(using: volumeFood))
+            #expect(abs(conversion.servingScale - expectedScale) < 0.000_001)
+        }
+        #expect(RecipeIngredient(foodItemId: volumeFood.id, quantity: 1, unit: "oz")
+            .servingConversion(using: volumeFood) == nil)
+    }
+
+    @Test func sourceFaithfulFNDDSBlankAmountPieceDerivesWithoutRewritingRawFields() throws {
+        let sourceID = "usda_fdc:2708615"
+        let sourceVersion = "2026-04-30"
+        let sourceMemberSHA256 = "378fea2f2f70801c6710119fdb3c7de47f5a57db636db972a661dda23988d780"
+        let rawPortionID = "303668"
+        let rawAmount: String? = nil
+        let rawUnit = "undetermined"
+        let rawDescription = "1 piece, NFS"
+        let rawGramWeight = 86.0
+
+        #expect(sourceID == "usda_fdc:2708615")
+        #expect(sourceVersion == "2026-04-30")
+        #expect(sourceMemberSHA256.count == 64)
+        #expect(rawPortionID == "303668")
+        #expect(rawAmount == nil)
+        #expect(rawUnit == "undetermined")
+        #expect(rawDescription == "1 piece, NFS")
+
+        let derived = FoodPortion(
+            amount: 1, unit: rawUnit, gramWeight: rawGramWeight, description: rawDescription
+        )
+        #expect(derived.recipeUnit == .piece)
+        let pizza = FoodItem(
+            name: "Pizza, cheese, from restaurant or fast food, thin crust",
+            brandSource: nil, servingSize: 1, servingUnit: "piece",
+            macros: Macros(protein: 12, carbs: 30, fat: 13), micronutrients: Micronutrients(fiber: 2),
+            category: "Survey (FNDDS)", source: .usda, dataType: .survey, tags: [], portions: [derived]
+        )
+        let conversion = try #require(RecipeIngredient(
+            foodItemId: pizza.id, quantity: 1, unit: "piece"
+        ).servingConversion(using: pizza))
+        #expect(conversion.componentQuantity == 1)
+        #expect(conversion.componentUnit == "piece")
+        #expect(conversion.grams == rawGramWeight)
+        #expect(conversion.sourcePortion == derived)
+        #expect(conversion.scaledMacros(for: pizza) == pizza.macros)
+        #expect(conversion.scaledMicronutrients(for: pizza) == pizza.micronutrients)
+    }
+
+    @Test func conversionRejectsInvalidBoundsAndAmbiguousSourcePortions() {
+        var food = gramFood(name: "Toast", servingSize: 100, macros: Macros(protein: 4, carbs: 18, fat: 2))
+        food.portions = [
+            FoodPortion(amount: 1, unit: "slice", gramWeight: 50),
+            FoodPortion(amount: 1, unit: "slice", gramWeight: 50)
+        ]
+        let invalid: [(Double, String)] = [
+            (0, "g"), (-1, "g"), (.nan, "g"), (.infinity, "g"), (3_001, "g"), (101, "slice"), (1, "slice")
+        ]
+        for (quantity, unit) in invalid {
+            let ingredient = RecipeIngredient(foodItemId: food.id, quantity: quantity, unit: unit)
+            #expect(ingredient.servingConversion(using: food) == nil)
+        }
     }
 
     @Test func sandwichAcceptsBreadOrCheeseIngredientsAsRelevant() throws {
@@ -296,7 +435,7 @@ struct MealBuilderTests {
         #expect(meal.mealSource == .manual)
     }
 
-    @Test func mealFromRecipeClassifiesLogSource() {
+    @Test func mealFromRecipeClassifiesLogSource() throws {
         let usda = foodItem(name: "USDA chicken", source: .usda, macros: Macros(protein: 26, carbs: 0, fat: 3))
         let scanned = foodItem(
             name: "Scanned bar",
@@ -306,26 +445,26 @@ struct MealBuilderTests {
         )
         let manual = foodItem(name: "Manual rice", source: .manual, macros: Macros(protein: 4, carbs: 45, fat: 1))
 
-        let usdaMeal = MealBuilder.mealFromRecipe(
+        let usdaMeal = try #require(MealBuilder.mealFromRecipe(
             recipe(name: "Chicken", ingredients: [RecipeIngredient(foodItemId: usda.id, quantity: 1, unit: RecipeUnit.serving.rawValue)]),
             mealType: .lunch,
             foodItems: [usda]
-        )
-        let scannedMeal = MealBuilder.mealFromRecipe(
+        ))
+        let scannedMeal = try #require(MealBuilder.mealFromRecipe(
             recipe(name: "Scanned Bar", ingredients: [RecipeIngredient(foodItemId: scanned.id, quantity: 1, unit: RecipeUnit.serving.rawValue)]),
             mealType: .snack,
             foodItems: [scanned]
-        )
-        let webImportMeal = MealBuilder.mealFromRecipe(
+        ))
+        let webImportMeal = try #require(MealBuilder.mealFromRecipe(
             recipe(name: "Web Bowl", ingredients: [RecipeIngredient(foodItemId: manual.id, quantity: 1, unit: RecipeUnit.serving.rawValue)], source: MealLogSource.webImport),
             mealType: .dinner,
             foodItems: [manual]
-        )
-        let manualMeal = MealBuilder.mealFromRecipe(
+        ))
+        let manualMeal = try #require(MealBuilder.mealFromRecipe(
             recipe(name: "Manual Bowl", ingredients: [RecipeIngredient(foodItemId: manual.id, quantity: 1, unit: RecipeUnit.serving.rawValue)]),
             mealType: .dinner,
             foodItems: [manual]
-        )
+        ))
 
         #expect(usdaMeal.source == MealLogSource.usdaRecipe)
         #expect(scannedMeal.source == MealLogSource.labelScan)
@@ -341,11 +480,11 @@ struct MealBuilderTests {
             micronutrients: Micronutrients(fiber: 1)
         )
 
-        let meal = MealBuilder.mealFromIngredients(
+        let meal = try #require(MealBuilder.mealFromIngredients(
             itemName: "rice bowl",
             resolvedIngredients: [(ingredient(candidateId: 1, foodName: "Cooked rice", quantity: 2), rice)],
             mealType: .lunch
-        )
+        ))
 
         let component = try #require(meal.componentSnapshots.first)
         #expect(meal.componentSnapshots.count == 1)
@@ -371,7 +510,9 @@ struct MealBuilderTests {
             updatedAt: Date(timeIntervalSince1970: 1_779_664_800)
         )
 
-        let meal = MealBuilder.mealFromRecipe(recipe, mealType: .breakfast, foodItems: [yogurt, berries])
+        let meal = try #require(MealBuilder.mealFromRecipe(
+            recipe, mealType: .breakfast, foodItems: [yogurt, berries]
+        ))
 
         #expect(meal.macros == Macros(protein: 19, carbs: 18, fat: 0))
         #expect(meal.componentSnapshots.count == 2)

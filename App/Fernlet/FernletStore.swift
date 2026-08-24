@@ -2402,14 +2402,14 @@ final class FernletStore {
 
     // NOTE (deviation): logRecipe STAYS IN THE FACADE — it builds the meal via app-target
     // `MealBuilder`, then writes it through the diary's pure `appendMeal`.
-    @discardableResult func logRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
+    @discardableResult func logRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal? {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "recipe meal date required")
-        let meal = MealBuilder.mealFromRecipe(
+        guard let meal = MealBuilder.mealFromRecipe(
             recipe,
             mealType: mealType ?? MealParser.classifyMealType(recipe.name),
             foodItems: foodCatalog.items(forRecipe: recipe)
-        )
+        ) else { return nil }
         batchSnapshotPersistence {
             // R7: today's branch always succeeds; a PAST-day repository write can fail, and a
             // dropped meal must not be invisible.

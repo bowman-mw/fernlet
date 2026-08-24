@@ -592,7 +592,7 @@ enum DishTemplateLexicon {
         let displayName = itemName.trimmingCharacters(in: .whitespaces).isEmpty
             ? template.name.capitalized
             : itemName.capitalized
-        let meal = MealBuilder.mealFromIngredients(
+        guard let meal = MealBuilder.mealFromIngredients(
             itemName: displayName,
             resolvedIngredients: bound.ingredients,
             mealType: resolvedType,
@@ -600,7 +600,7 @@ enum DishTemplateLexicon {
             // bound weakly (or which carries an unaccounted brand chip) is an estimate, and saying
             // "matched to a food" on it is the false label the research calls out (§6).
             confidenceToken: quality.confidence.mealConfidence.token
-        )
+        ) else { return nil }
         return (meal, quality)
     }
 

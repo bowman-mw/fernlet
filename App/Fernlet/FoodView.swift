@@ -427,12 +427,11 @@ struct FoodView: View {
     /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
     /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
     private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
-        let meal: Meal
         if isSaved {
-            meal = store.logSavedRecipe(recipe, mealType: mealType)
-        } else {
-            meal = store.logRecipe(recipe, mealType: mealType)
+            onMealsLogged([store.logSavedRecipe(recipe, mealType: mealType)])
+            return
         }
+        guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
     }
 
@@ -1604,15 +1603,17 @@ struct RecipeSheet: View {
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ingredients.contains { !$0.trimmedName.isEmpty }
+        let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
+        return !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        ingredients.contains { !$0.trimmedName.isEmpty } &&
+        ingredients.filter { !$0.trimmedName.isEmpty }.allSatisfy { $0.hasResolvedMacros(foodItems: resolved) }
     }
 
     private var perServingTotals: MacroTotals {
         let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
         let totals = ingredients.reduce(into: MacroTotals()) { partial, ingredient in
-            guard !ingredient.trimmedName.isEmpty else { return }
-            let macros = ingredient.resolvedMacros(foodItems: resolved)
+            guard !ingredient.trimmedName.isEmpty,
+                  let macros = ingredient.resolvedMacros(foodItems: resolved) else { return }
             partial.protein += macros.protein
             partial.carbs += macros.carbs
             partial.fat += macros.fat
@@ -1818,17 +1819,20 @@ private struct CollapsedIngredientRow: View {
     var onExpand: () -> Void
     var onRemove: () -> Void
 
-    private var macros: Macros {
+    private var macros: Macros? {
         ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))
     }
 
-    private var calories: Int {
-        macros.calories
+    private var calories: Int? {
+        macros?.calories
     }
 
     private var summaryLine: String {
+        guard let macros else {
+            return "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · Conversion unavailable"
+        }
         var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(macros.protein)g C\(macros.carbs)g F\(macros.fat)g"
-        if showCalories {
+        if showCalories, let calories {
             line += " · \(calories) cal"
         }
         return line
@@ -2156,11 +2160,24 @@ private struct RecipeIngredientEditor: View {
     /// item; the three editable macro rows when it isn't.
     @ViewBuilder private var macroSection: some View {
         if let selectedFoodItem {
-            LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))) {
-                ingredient.selectedFoodItemId = nil
-                ingredient.protein = selectedFoodItem.macros.protein
-                ingredient.carbs = selectedFoodItem.macros.carbs
-                ingredient.fat = selectedFoodItem.macros.fat
+            if let macros = ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient)) {
+                LockedMacroSummary(foodItem: selectedFoodItem, macros: macros) {
+                    ingredient.selectedFoodItemId = nil
+                    ingredient.protein = selectedFoodItem.macros.protein
+                    ingredient.carbs = selectedFoodItem.macros.carbs
+                    ingredient.fat = selectedFoodItem.macros.fat
+                }
+            } else {
+                Text("This amount needs an exact serving basis or one source-backed portion.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.sun)
+                Button("Use manual nutrition") {
+                    ingredient.selectedFoodItemId = nil
+                    ingredient.protein = selectedFoodItem.macros.protein
+                    ingredient.carbs = selectedFoodItem.macros.carbs
+                    ingredient.fat = selectedFoodItem.macros.fat
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         } else {
             MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0...250)
@@ -4074,17 +4091,18 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
     /// through the catalog at the food item's own reference serving. A new item has no captured
     /// meal base to scale from, so its base IS that reference — macros and micronutrients scaled
     /// exactly as `MealBuilder`'s component snapshots are, never invented.
-    static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput {
+    static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput? {
         let unit = foodItem.preferredRecipeUnit
         let quantity = foodItem.defaultRecipeQuantity(for: unit)
         let ingredient = RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit.rawValue)
+        guard let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
         return MealComponentCorrectionInput(snapshot: MealComponentSnapshot(
             foodItemId: foodItem.id,
             name: foodItem.name,
-            quantity: quantity,
-            unit: unit.rawValue,
-            macros: ingredient.scaledMacros(using: foodItem),
-            micronutrients: ingredient.scaledMicronutrients(using: foodItem)
+            quantity: conversion.componentQuantity,
+            unit: conversion.componentUnit,
+            macros: conversion.scaledMacros(for: foodItem),
+            micronutrients: conversion.scaledMicronutrients(for: foodItem)
         ))
     }
 }
@@ -4378,8 +4396,9 @@ private struct MealCorrectionItemsEditor: View {
             initialText: component.name,
             onCreate: onSaveCustomIngredient
         ) { foodItem, searchText in
-            if let index = components.firstIndex(where: { $0.id == component.id }) {
-                components[index] = .fresh(from: foodItem)
+            if let index = components.firstIndex(where: { $0.id == component.id }),
+               let fresh = MealComponentCorrectionInput.fresh(from: foodItem) {
+                components[index] = fresh
             }
             correctionDraft.record(searchText: searchText, prefilledWith: component.name, foodItemID: foodItem.id)
             replacingComponentID = nil
@@ -4425,8 +4444,10 @@ private struct MealCorrectionItemsEditor: View {
                 initialText: "",
                 onCreate: onSaveCustomIngredient
             ) { foodItem, _ in
-                components.append(.fresh(from: foodItem))
-                isAddingItem = false
+                if let fresh = MealComponentCorrectionInput.fresh(from: foodItem) {
+                    components.append(fresh)
+                    isAddingItem = false
+                }
             }
         }
     }
@@ -6570,12 +6591,11 @@ struct RecipeBookSheet: View {
     /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
     /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
     private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
-        let meal: Meal
         if isSaved {
-            meal = store.logSavedRecipe(recipe, mealType: mealType)
-        } else {
-            meal = store.logRecipe(recipe, mealType: mealType)
+            onMealsLogged([store.logSavedRecipe(recipe, mealType: mealType)])
+            return
         }
+        guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
     }
 

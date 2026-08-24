@@ -451,7 +451,7 @@ struct FoodSearchHistoryCatalogTests {
 
     /// Recipe ingredient names are parser-produced machine queries. A warm profile may change the
     /// interactive result, but must not change the importer's macro estimate.
-    @Test func recipeImportEstimationStaysCold() {
+    @Test func recipeImportEstimationStaysCold() throws {
         var alpha = FoodSearchHistoryRankingTests.food("Flour Alpha")
         var bravo = FoodSearchHistoryRankingTests.food("Flour Bravo")
         alpha.macros = Macros(protein: 1, carbs: 2, fat: 3)
@@ -461,10 +461,18 @@ struct FoodSearchHistoryCatalogTests {
         #expect(catalog.results(for: "flour", limit: 1, context: .userTyped).first?.id == bravo.id,
                 "precondition: the warm profile did not discriminate the importer test")
 
-        let estimate = RecipeWebImporter.estimateMacrosFromIngredients(
+        let estimate = try #require(RecipeWebImporter.estimateMacrosFromIngredients(
             ["1 flour"], servings: 1, catalog: catalog
-        )
+        ))
         #expect(estimate == (1, 2, 3), "recipe estimation consumed the typed history tier")
+    }
+
+    @Test func recipeImportEstimationRejectsMatchedUnsupportedConversion() {
+        let ramen = FoodSearchHistoryRankingTests.food("Ramen")
+        let catalog = FoodCatalog(source: InMemoryBundledFoodSource([ramen]))
+        #expect(RecipeWebImporter.estimateMacrosFromIngredients(
+            ["1 each ramen"], servings: 1, catalog: catalog
+        ) == nil)
     }
 
     /// **Boundary 2 — `scoredResults` is cold, structurally.** `FoodItemSearch.scoredResults` has no

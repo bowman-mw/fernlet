@@ -152,31 +152,17 @@ enum WholeDescriptionFoodProbe {
     /// safe only when they are the food's own basis; otherwise an existing convertible RecipeUnit is
     /// required. Unsupported bases return nil so later resolution tiers can act.
     static func servingBasis(item: FoodItem, portion: FoodPortion, quantity: Double) -> ServingBasis? {
-        guard quantity.isFinite, quantity > 0, quantity <= 100,
-              portion.amount.isFinite, portion.amount > 0,
-              portion.amount <= MealPlausibility.maxSingleLogGrams,
-              portion.gramWeight.isFinite, portion.gramWeight > 0,
-              portion.gramWeight <= MealPlausibility.maxSingleLogGrams,
-              item.servingSize.isFinite, item.servingSize > 0,
-              item.servingSize <= MealPlausibility.maxSingleLogGrams else { return nil }
-        let gramsPerUnit = portion.gramWeight / portion.amount
-        let grams = gramsPerUnit * quantity
-        guard gramsPerUnit.isFinite, gramsPerUnit > 0,
-              grams.isFinite, grams > 0, grams <= MealPlausibility.maxSingleLogGrams else { return nil }
-
-        let portionUnit = normalizedUnit(portion.unit)
-        let servingUnit = normalizedUnit(item.servingUnit)
-        if let portionUnit, portionUnit == servingUnit {
-            return ServingBasis(quantity: quantity, unit: item.servingUnit, grams: grams)
-        }
-        guard servingUnit != nil,
-              let servingGrams = item.gramsEquivalent(
-                quantity: item.servingSize, unit: item.servingUnit
-              ), servingGrams.isFinite, servingGrams > 0 else { return nil }
-        let basisQuantity = (grams / servingGrams) * item.servingSize
-        guard basisQuantity.isFinite, basisQuantity > 0,
-              basisQuantity <= MealPlausibility.maxSingleLogGrams else { return nil }
-        return ServingBasis(quantity: basisQuantity, unit: item.servingUnit, grams: grams)
+        guard portion.hasValidGramMeasure, let unit = portion.recipeUnit,
+              let conversion = RecipeIngredient(
+                foodItemId: item.id, quantity: quantity, unit: unit.rawValue
+              ).servingConversion(using: item),
+              conversion.sourcePortion == portion,
+              let grams = conversion.grams else { return nil }
+        return ServingBasis(
+            quantity: conversion.componentQuantity,
+            unit: conversion.componentUnit,
+            grams: grams
+        )
     }
 
     private static func parsedDescription(_ description: String) -> ParsedDescription? {
@@ -184,12 +170,25 @@ enum WholeDescriptionFoodProbe {
         let tokens = description.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !tokens.isEmpty, tokens.count <= maximumTokens else { return nil }
         var unitIndex: Int?
+        var unitLength = 0
         var unit: String?
         for (index, token) in tokens.enumerated() {
+            if let start = unitIndex, index < start + unitLength { continue }
             let normalized = FoodItemSearch.normalized(token)
-            guard !normalized.contains(" "), let candidate = normalizedUnit(normalized) else { continue }
+            let next = index + 1 < tokens.count ? FoodItemSearch.normalized(tokens[index + 1]) : ""
+            let candidate: String?
+            let candidateLength: Int
+            if (normalized == "fl" && next == "oz") || (normalized == "fluid" && next.hasPrefix("ounce")) {
+                candidate = RecipeUnit.fluidOunce.rawValue
+                candidateLength = 2
+            } else {
+                candidate = normalizedUnit(normalized)
+                candidateLength = candidate == nil ? 0 : 1
+            }
+            guard let candidate else { continue }
             guard unitIndex == nil else { return nil }
             unitIndex = index
+            unitLength = candidateLength
             unit = candidate
         }
         guard let index = unitIndex, let unit else { return nil }
@@ -197,7 +196,8 @@ enum WholeDescriptionFoodProbe {
         let explicitCount = countIndex.flatMap { quantity(tokens[$0]) }
         let count = explicitCount ?? 1
         guard count.isFinite, count > 0, count <= 100 else { return nil }
-        let removed = Set([index, explicitCount == nil ? nil : countIndex].compactMap { $0 })
+        let unitTokens = (index..<(index + unitLength)).filter { $0 < tokens.count }
+        let removed = Set(unitTokens + [explicitCount == nil ? nil : countIndex].compactMap { $0 })
         let search = tokens.enumerated().filter { !removed.contains($0.offset) }.map(\.element)
         guard !search.isEmpty else { return nil }
         let searchText = FoodItemSearch.normalized(search.joined(separator: " "))
@@ -206,11 +206,7 @@ enum WholeDescriptionFoodProbe {
     }
 
     private static func normalizedUnit(_ token: String) -> String? {
-        switch token {
-        case "slice", "slices": return "slice"
-        case "piece", "pieces": return "piece"
-        default: return RecipeUnit.normalized(token)?.rawValue
-        }
+        RecipeUnit.normalized(token)?.rawValue
     }
 
     private static func quantity(_ token: String) -> Double? {
@@ -218,10 +214,9 @@ enum WholeDescriptionFoodProbe {
     }
 
     private static func matchingPortion(in item: FoodItem, unit: String) -> FoodPortion? {
+        guard let target = RecipeUnit.normalized(unit) else { return nil }
         for portion in item.portions.prefix(maximumPortionsPerFood) {
-            let portionTokens = FoodItemSearch.normalized(portion.unit).split(separator: " ").map(String.init)
-            guard let first = portionTokens.first else { continue }
-            if normalizedUnit(first) == unit { return portion }
+            if portion.recipeUnit == target { return portion }
         }
         return nil
     }
