@@ -39,6 +39,33 @@ enum WidgetCompanionState: String {
     case tired = "Tired"
     case resting = "Resting"
     case sick = "Sick"
+
+    /// The localized state name — the ONLY form a person is ever shown or read.
+    ///
+    /// Display fork of the frozen token, mirroring `CompanionState.displayName` on the app side. The
+    /// `rawValue` above is what the app writes into `WidgetSnapshot.companionStateRaw` and what this
+    /// process re-parses out of it, so translating it would make every widget fail that parse and
+    /// render the neutral fallback forever, with nothing in either process to show why. Reading
+    /// `displayName` instead keeps the spoken and drawn word translatable while the wire byte stays
+    /// English.
+    ///
+    /// No `bundle:` argument on purpose: this target is an app extension, not an SPM module, so
+    /// `Bundle.main` already resolves to `App/FernletWidgets/Localizable.xcstrings`. Passing
+    /// `.module` here would look for a resource bundle that does not exist.
+    var displayName: String {
+        switch self {
+        case .thriving: String(localized: "companionState.thriving", defaultValue: "Thriving",
+                               comment: "Companion wellbeing state: best of five")
+        case .okay: String(localized: "companionState.okay", defaultValue: "Okay",
+                           comment: "Companion wellbeing state: steady")
+        case .tired: String(localized: "companionState.tired", defaultValue: "Tired",
+                            comment: "Companion wellbeing state: running low")
+        case .resting: String(localized: "companionState.resting", defaultValue: "Resting",
+                              comment: "Companion wellbeing state: deliberately taking it easy")
+        case .sick: String(localized: "companionState.sick", defaultValue: "Sick",
+                           comment: "Companion wellbeing state: worst of five")
+        }
+    }
 }
 
 /// The benign outbound snapshot the app mirrors into the app-group container.

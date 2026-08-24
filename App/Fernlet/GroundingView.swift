@@ -180,6 +180,9 @@ struct GroundingView: View {
             Text("You're here.")
                 .font(.custom(FernletFontName.frauncesSemiBold, size: 42, relativeTo: .largeTitle))
                 .foregroundStyle(Color.bark)
+                // T2-19: the completion screen's own heading — the arrival marker of the exercise.
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHeading(.h1)
             Text("That's enough. Take the calm with you — there's nothing else to do.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
@@ -197,7 +200,8 @@ struct GroundingView: View {
                     Button { restart() } label: {
                         Text("Begin again")
                             .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
+                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                             .padding(.vertical, 12)
                             .padding(.horizontal, 26)
                             .background(
@@ -225,7 +229,8 @@ struct GroundingView: View {
 
                         Button("Next") { advance() }
                             .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
+                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                             .buttonStyle(.plain)
                             .fernletTapTarget(minWidth: 60)
                     }

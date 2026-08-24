@@ -139,10 +139,15 @@ struct NutritionLabelCameraSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     .frame(maxWidth: .infinity)
+                    // T2-10: this is the photo the user checks their framing against before
+                    // re-shooting a weak read. Inverted, black-on-white label text becomes
+                    // white-on-black and the glare/blur cues the tips talk about disappear.
+                    .accessibilityIgnoresInvertColors()
 
                 if isScanning {
                     HStack(spacing: 8) {
                         ProgressView()
+                            .accessibilityHidden(true)
                         Text("Reading label...")
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
@@ -181,6 +186,10 @@ struct NutritionLabelCameraSheet: View {
                             .background(isSelected ? Color.cream : Color.clear)
                     }
                     .buttonStyle(.plain)
+                    // T1-5: the worst hand-rolled selection row in the app — fill color only, no
+                    // glyph, on the control that decides whether logged macros are per-serving or
+                    // per-container.
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))

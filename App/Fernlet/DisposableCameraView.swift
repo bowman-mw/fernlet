@@ -15,11 +15,19 @@ import os
 /// session reference in `dismantleUIView`. ``DisposableCameraView`` keeps exactly one instance
 /// structurally stable across rotation so the running capture session is never torn down and
 /// reattached (the old freeze / black flash).
+///
+/// The preview view opts out of Smart Invert (`accessibilityIgnoresInvertColors`, T2-10): an
+/// inverted viewfinder frames a shot the camera will not take.
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
+        // T2-10: Smart Invert inverts the live preview, so the user frames a shot against a colour
+        // negative and the photo that comes out is nothing like what they aimed at. Set here rather
+        // than at the call site because exactly one instance exists and it is repositioned, never
+        // rebuilt, across rotation — a call-site modifier would be easy to lose in that dance.
+        v.accessibilityIgnoresInvertColors = true
         guard let previewLayer = v.previewLayer else {
             // Unreachable: `layerClass` guarantees the layer's type. Degrade to a blank preview
             // rather than trapping if UIKit ever hands back a different layer.
@@ -580,6 +588,9 @@ struct DisposableCameraView: View {
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
     @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+    /// F10: this file is the repo's own cited exemplar for the `TimelineView(.animation(paused:))`
+    /// idiom — it should exemplify Reduce Motion too, not just the isArmed gating it already had.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The cap on a session name typed here — it rides the mesh descriptor to every peer.
     private static let maxMeshNameLength = 40
@@ -940,7 +951,7 @@ struct DisposableCameraView: View {
         // after a shot retargets the LED's opacity, which would kill a repeating animation for
         // good, and the pulse must survive every disarm/re-arm cycle.
         let visible = camera.isArmed ? 1.0 : Double(openness)
-        return TimelineView(.animation(paused: !camera.isArmed)) { context in
+        return TimelineView(.animation(paused: !camera.isArmed || reduceMotion)) { context in
             // 0.8 ↔ 1.0 cosine breathe with a 3.8s round trip (the old autoreversing 1.9s ease).
             let phase = context.date.timeIntervalSinceReferenceDate / 3.8 * 2 * .pi
             let breathe = camera.isArmed ? 0.9 - 0.1 * cos(phase) : 0.82
@@ -1102,11 +1113,13 @@ struct DisposableCameraView: View {
         return "Wind to arm"
     }
 
-    private func shutterAccessibilityLabel(canShoot: Bool) -> String {
-        if canShoot { return "Take photo" }
-        if manager.filmRemaining == 0 { return "No film remaining" }
-        if !camera.canCapturePhoto { return "Camera unavailable" }
-        return "Wind camera first"
+    /// `Text` rather than `String` (review T2-1): a `String` reaches `.accessibilityLabel(_:)`
+    /// through the verbatim overload, so none of these four states was ever harvested.
+    private func shutterAccessibilityLabel(canShoot: Bool) -> Text {
+        if canShoot { return Text("Take photo") }
+        if manager.filmRemaining == 0 { return Text("No film remaining") }
+        if !camera.canCapturePhoto { return Text("Camera unavailable") }
+        return Text("Wind camera first")
     }
 
     private func windIndicator(isLandscape: Bool) -> some View {

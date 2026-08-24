@@ -20,6 +20,21 @@
 #                   writing it. This is the CI form: it proves the committed
 #                   catalogs match the code.
 #
+# Env:    FERNLET_DESTINATION      xcodebuild -destination (default: iPhone 17 sim)
+#         FERNLET_DERIVED_DATA     xcodebuild -derivedDataPath. Unset (the default)
+#                                  uses Xcode's shared DerivedData, which is right for
+#                                  CI and for a lone developer — but two xcodebuilds
+#                                  sharing one DerivedData corrupt it, so set this to a
+#                                  private path when running from one of several
+#                                  concurrent worktrees. It is threaded through BOTH
+#                                  xcodebuild calls on purpose: -showBuildSettings has
+#                                  to report the same BUILD_DIR the build wrote to, or
+#                                  the .stringsdata search below finds nothing.
+#
+# `--check` NEVER writes: `xcstringstool sync` has no dry-run, so the check syncs for
+# real and restores the file afterwards. That restore is trap-backed (see `cleanup`)
+# because `set -e` would otherwise strand a mutated catalog on any non-zero status in
+# the window between the sync and the restore.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +49,13 @@ PROJECT="App/Fernlet.xcodeproj"
 SCHEME="Fernlet"
 DESTINATION="${FERNLET_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
 
+# Seeded non-empty on purpose: macOS ships bash 3.2, where expanding an EMPTY array
+# under `set -u` is an unbound-variable error.
+XCODEBUILD_ARGS=(-project "$PROJECT" -scheme "$SCHEME" -destination "$DESTINATION")
+if [[ -n "${FERNLET_DERIVED_DATA:-}" ]]; then
+    XCODEBUILD_ARGS+=(-derivedDataPath "$FERNLET_DERIVED_DATA")
+fi
+
 # Every target that owns a Localizable.xcstrings, and where that catalog lives.
 #
 # The FernletKit entries are package targets. They only emit .stringsdata because
@@ -47,6 +69,9 @@ TARGETS=(
     "FernletShareExtension:App/FernletShareExtension/Localizable.xcstrings"
     "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
     "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
+    "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"
+    "ProximityKit:FernletKit/Sources/ProximityKit/Localizable.xcstrings"
+    "AppServices:FernletKit/Sources/AppServices/Localizable.xcstrings"
 )
 
 echo "==> Building (SWIFT_EMIT_LOC_STRINGS=YES) to emit .stringsdata"
@@ -55,10 +80,50 @@ echo "==> Building (SWIFT_EMIT_LOC_STRINGS=YES) to emit .stringsdata"
 # SwiftPM-synthesized FernletKit targets (same gotcha as SUPPRESS_WARNINGS in
 # Scripts/spm-wall-check.sh).
 BUILD_LOG="$(mktemp -t fernlet-locstrings)"
+
+# ── The never-writes invariant, made structural ──────────────────────────────────────
+#
+# `xcstringstool sync` writes IN PLACE, so `--check` is sync-then-restore and the
+# catalog is genuinely dirty in between. Under `set -euo pipefail` ANY non-zero status
+# in that window kills the script before the restore, and the mutation ships: a failing
+# `sync`, a `diff` (which exits 1 by definition when it finds the difference we are
+# reporting), a `head` closing the pipe early, or a Ctrl-C / CI cancellation.
+#
+# A trap is the only structure that covers all four, so the in-flight pair is registered
+# here rather than restored by straight-line code at the end of the branch. `cleanup`
+# also owns the build log, which every early `exit 1` above used to leak.
+#
+# ARMING ORDER IS LOAD-BEARING: PENDING_* are set only AFTER the backup is a real copy.
+# Arming on the bare `mktemp` would let an interrupted `cp` leave the trap copying an
+# EMPTY file over the catalog — turning a safety net into the data loss it prevents.
+PENDING_CATALOG=""
+PENDING_BACKUP=""
+
+restore_pending() {
+    if [[ -n "$PENDING_BACKUP" ]]; then
+        # `|| true` on each step: a restore that fails for catalog N must not abort the
+        # trap (under `set -e` it would) and strand catalogs N+1…
+        [[ -f "$PENDING_BACKUP" && -n "$PENDING_CATALOG" ]] \
+            && cp "$PENDING_BACKUP" "$PENDING_CATALOG" || true
+        rm -f "$PENDING_BACKUP" || true
+    fi
+    PENDING_CATALOG=""
+    PENDING_BACKUP=""
+    return 0
+}
+
+cleanup() {
+    restore_pending
+    rm -f "$BUILD_LOG" || true
+    return 0
+}
+
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
+
 if ! xcodebuild build \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -destination "$DESTINATION" \
+        "${XCODEBUILD_ARGS[@]}" \
         SWIFT_EMIT_LOC_STRINGS=YES \
         > "$BUILD_LOG" 2>&1; then
     echo "BUILD FAILED — last 40 lines:" >&2
@@ -66,7 +131,7 @@ if ! xcodebuild build \
     exit 1
 fi
 
-BUILD_DIR="$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -destination "$DESTINATION" \
+BUILD_DIR="$(xcodebuild "${XCODEBUILD_ARGS[@]}" \
     -showBuildSettings 2>/dev/null | awk -F' = ' '/[ ]BUILD_DIR = /{print $2; exit}')"
 if [[ -z "$BUILD_DIR" ]]; then
     echo "Could not resolve BUILD_DIR from xcodebuild -showBuildSettings" >&2
@@ -104,16 +169,21 @@ for entry in "${TARGETS[@]}"; do
     if [[ $CHECK_ONLY -eq 1 ]]; then
         before="$(mktemp -t fernlet-catalog)"
         cp "$catalog" "$before"
+        PENDING_BACKUP="$before"   # arm the trap only now — see the arming-order note
+        PENDING_CATALOG="$catalog"
         xcrun xcstringstool sync "$catalog" --stringsdata "${stringsdata[@]}"
         if diff -q "$before" "$catalog" >/dev/null; then
             echo "   $target: catalog up to date (${#stringsdata[@]} stringsdata)"
         else
             echo "!! $target: $catalog is STALE — run Scripts/sync-string-catalogs.sh and commit" >&2
-            diff "$before" "$catalog" | head -40 >&2
+            # `|| true` is what keeps this a REPORT of every stale target rather than an
+            # abort at the first one: `diff` exits 1 precisely because it found the
+            # difference being printed, and `head` can SIGPIPE the pipeline to 141. The
+            # trap would restore the catalog either way; only this makes the loop finish.
+            diff "$before" "$catalog" | head -40 >&2 || true
             STATUS=1
         fi
-        cp "$before" "$catalog"   # --check never writes
-        rm -f "$before"
+        restore_pending   # --check never writes
     else
         xcrun xcstringstool sync "$catalog" --stringsdata "${stringsdata[@]}"
         keys="$(xcrun xcstringstool print "$catalog" | wc -l | tr -d ' ')"
@@ -121,7 +191,8 @@ for entry in "${TARGETS[@]}"; do
     fi
 done
 
-rm -f "$BUILD_LOG"
+# (The build log and any in-flight catalog backup are the `cleanup` trap's, so that every
+# exit path — including the early `exit 1`s above — disposes of them exactly once.)
 
 if [[ $STATUS -ne 0 ]]; then
     exit $STATUS

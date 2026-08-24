@@ -9,6 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 import PrivateMemoryStore
 import FernletUI
 
@@ -217,7 +220,17 @@ struct WorryEntryView: View {
                 withAnimation(.easeOut(duration: 0.4)) { phase = .tucked }
             }
         } catch {
-            gentleError = "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+            // Spoken as well as shown: the line renders above a text field the user is still
+            // looking at, but nothing moves focus to it, so a blind user's only evidence that the
+            // seal failed would be that the entry view did not go away. The EVENT, never the
+            // worry — the words in the field are the reason this screen is sealed at all.
+            let failure = String(
+                localized: "worryBox.error.gentleClose",
+                defaultValue: "The box couldn't quite close just now. Your words are still here — try once more in a moment.",
+                comment: "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost."
+            )
+            gentleError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 }
@@ -426,9 +439,40 @@ struct WorryBoxView: View {
     @State private var emberTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var isComposeFocused: Bool
+    /// Puts VoiceOver on "Keep it" the moment the undo strip appears, so the undo is one activation
+    /// away instead of an unknown number of swipes away inside a countdown.
+    @AccessibilityFocusState private var isKeepItFocused: Bool
 
-    /// How long a released worry can still be kept.
+    /// How long a released worry can still be kept, for a user who can see the strip arrive and
+    /// reach it with one tap.
     private static let keepItWindow: Duration = .seconds(6)
+
+    /// The same window for someone driving the phone through an assistive technology.
+    ///
+    /// Six seconds is a *sighted-tap* budget. A VoiceOver user has to notice a new bottom overlay
+    /// exists, swipe to it and double-tap; a Switch Control scan cannot finish a single pass of the
+    /// page in six seconds at the default scan rate. This gates the PERMANENT deletion of a sealed
+    /// row that is deliberately absent from `SealedBackup` — there is no second chance anywhere — so
+    /// the window stretches toward Mail's Undo Send (10–30 s), which this screen's own doc comment
+    /// names as its model.
+    ///
+    /// The number itself now lives on ``FernletDismissalWindow`` — this screen was where it was
+    /// first reasoned out, and the rest of the app's transient surfaces adopted the same value in
+    /// batch A3 rather than each inventing one.
+    private static let assistiveKeepItWindow: Duration = FernletDismissalWindow.assistiveActionWindow
+
+    /// The window in force right now.
+    ///
+    /// Read at the moment a release starts rather than cached, because VoiceOver and Switch Control
+    /// can both be turned on mid-session (Siri, the accessibility shortcut, a Shortcuts automation).
+    private var activeKeepItWindow: Duration {
+        // The hand-rolled `UIAccessibility` read this screen shipped in batch A1 is now
+        // ``FernletDismissalWindow`` — same decision, one place, and unit-testable through its
+        // injected flag.
+        FernletDismissalWindow.system.window(
+            standard: Self.keepItWindow,
+            assistive: Self.assistiveKeepItWindow)
+    }
 
     /// The kept worries, minus one waiting out its "Keep it" window.
     private var visibleWorries: [WorryNarrative] {
@@ -475,6 +519,13 @@ struct WorryBoxView: View {
         // user just completed ("releasing one lets it go for good") must not quietly un-happen and
         // put the worry back with nothing said.
         .onDisappear { commitPendingRelease() }
+        // Driven from the STRIP APPEARING, not from the release task that sets `pendingRelease`:
+        // at that point the toast — and the "Keep it" button this focuses — has not been built yet,
+        // so the focus request would land on nothing and the announcement would be the only channel.
+        .onChange(of: pendingRelease?.id) { _, id in
+            guard id != nil else { return }
+            announceKeepItWindow()
+        }
         .onChange(of: scenePhase) { _, phase in
             // Backgrounding takes the strip away just as thoroughly as leaving does, and the pending
             // timer can be suspended — or the app killed — long before its deadline. Commit here too,
@@ -496,9 +547,12 @@ struct WorryBoxView: View {
                 Spacer(minLength: 8)
                 Button("Keep it") { keepPendingRelease() }
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text) — this
+                    // is the one control that undoes an otherwise-permanent deletion (T0-5).
+                    .foregroundStyle(Color.mossInk)
                     .buttonStyle(.plain)
                     .fernletTapTarget(minWidth: 60)
+                    .accessibilityFocused($isKeepItFocused)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
@@ -561,7 +615,15 @@ struct WorryBoxView: View {
             isComposeFocused = false
             composeError = nil
         } catch {
-            composeError = "The box couldn't quite close just now — your words are still here."
+            // The event, never the worry: the compose field keeps its text and the failure is
+            // spoken so it is not discoverable only by noticing the list did not grow.
+            let failure = String(
+                localized: "worryBox.error.compose",
+                defaultValue: "The box couldn't quite close just now — your words are still here.",
+                comment: "Shown and spoken when saving a worry from the compose sheet fails."
+            )
+            composeError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 
@@ -611,8 +673,9 @@ struct WorryBoxView: View {
                         Label("Release this worry", systemImage: "arrow.up")
                             .font(.fernlet(.labelSmall))
                             // Moss, not goldenrod: this is an action, and goldenrod on cream read as
-                            // decoration rather than something tappable.
-                            .foregroundStyle(Color.moss)
+                            // decoration rather than something tappable. T1-3: text ink, not the
+                            // `moss` accent (3.74:1, fails 4.5:1 small text).
+                            .foregroundStyle(Color.mossInk)
                     }
                     .buttonStyle(.plain)
                     // A labelSmall text link was a ~16pt-tall target for a permanent action.
@@ -644,7 +707,8 @@ struct WorryBoxView: View {
                         .opacity(emberLifted ? 0 : 1)
                     Text("letting it go…")
                         .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                 }
             }
         }
@@ -685,12 +749,28 @@ struct WorryBoxView: View {
         }
     }
 
+    /// Says the undo strip has arrived and hands VoiceOver the undo itself.
+    ///
+    /// The strip is a new bottom overlay that appears with no sound and no focus change: a blind
+    /// user's first hint that the countdown to a permanent delete has started would otherwise be the
+    /// worry's absence from the list afterwards.
+    ///
+    /// **Privacy:** the event only, never the worry. The text is sealed, and an announcement is
+    /// spoken out loud to whoever is in the room.
+    private func announceKeepItWindow() {
+        isKeepItFocused = true
+        FernletAnnouncer.system.announce(
+            .status, LocalizedStringResource("Released. Keep it, if you'd rather it stayed.")
+        )
+    }
+
     /// Starts the undo window. When it elapses undisturbed, the sealed row is really deleted.
     private func startKeepItWindow(for worry: WorryNarrative) {
         pendingReleaseTask?.cancel()
+        let window = activeKeepItWindow
         pendingReleaseTask = Task { @MainActor in
             do {
-                try await Task.sleep(for: Self.keepItWindow)
+                try await Task.sleep(for: window)
             } catch {
                 // Cancelled by "Keep it" (the worry stays) or by a commit path that has already
                 // claimed it (the worry is already gone). Nothing to do either way.
@@ -747,7 +827,16 @@ struct WorryBoxView: View {
             // than showing a letting-go that did not happen. On the leaving/backgrounding paths the
             // strip is already gone, but the worry stays in the box — so the list itself is the
             // honest answer when the user comes back.
-            releaseError = "That one didn't quite lift just now — try again in a moment."
+            // Spoken too, because this is the one failure whose visible evidence is a NON-event:
+            // the row simply stays in the list, which a VoiceOver user re-reading the list would
+            // reasonably take for a release that has not animated out yet.
+            let failure = String(
+                localized: "worryBox.error.release",
+                defaultValue: "That one didn't quite lift just now — try again in a moment.",
+                comment: "Shown and spoken when releasing (deleting) a saved worry fails."
+            )
+            releaseError = failure
+            FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
 }

@@ -195,7 +195,8 @@ struct WorkoutSetupSheet: View {
                         Text(subtitle).font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
                     }
                     if tag.isEmpty == false {
-                        Text(tag).font(.fernlet(.labelSmall)).foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        Text(tag).font(.fernlet(.labelSmall)).foregroundStyle(Color.mossInk)
                     }
                 }
                 Spacer(minLength: 0)
@@ -206,6 +207,9 @@ struct WorkoutSetupSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Color.moss.opacity(0.5) : Color.bark.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        // T1-5: a hand-rolled radio row — the filled/outline circle glyph is the only visual
+        // selection cue, invisible to VoiceOver and Differentiate Without Color without this.
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var locationsEntry: some View {

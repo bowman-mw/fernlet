@@ -190,6 +190,9 @@ struct CaptureAnalyzingOverlay: View {
                     ProgressView()
                         .controlSize(.large)
                         .tint(Color.moss)
+                        // "Analyzing" below is the label; the ring and the spinner are the same
+                        // fact drawn twice, and neither has anything of its own to say.
+                        .accessibilityHidden(true)
                 }
 
                 VStack(spacing: 6) {
@@ -208,6 +211,11 @@ struct CaptureAnalyzingOverlay: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Analyzing your photo")
         .accessibilityIdentifier("captureAnalyzing")
+        // T1-4: this full-screen veil blocks touches but was transparent to VoiceOver/Switch
+        // Control, which could keep walking the capture screen underneath it. `.isModal` is the
+        // half that belongs to the overlay itself; hiding the covered content is the caller's half
+        // (`FoodView.swift`, owned by a separate track — deferred).
+        .accessibilityAddTraits(.isModal)
     }
 }
 

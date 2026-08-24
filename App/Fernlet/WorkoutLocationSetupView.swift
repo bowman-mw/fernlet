@@ -61,7 +61,22 @@ struct WorkoutLocationSetupView: View {
     }
 
     private let twoColumns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 2)
-    private let threeColumns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+
+    /// T2-11: the equipment checklist's fixed three-up grid truncated its labels at Larger Text
+    /// sizes — three columns leave roughly 100pt per tile, and a two-word piece of equipment set in
+    /// `.labelSmall` needs far more than that once the user is in the accessibility sizes. Collapse
+    /// to a single column there (the same `isAccessibilitySize` branch this file already uses for
+    /// the step header and `SavedSpaceRow`'s summary); the default sizes are untouched.
+    private var equipmentColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
+
+    /// The equipment tile's glyph and the tile's own minimum height are one measurement: the tile is
+    /// a glyph stacked over up to two lines of label. Both scale against `.body` — a fixed 28pt mark
+    /// beside AX-size text reads as a speck, and the fixed 56pt floor cropped the second label line.
+    @ScaledMetric(relativeTo: .body) private var equipmentGlyphSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var equipmentCardMinHeight: CGFloat = 56
 
     var body: some View {
         Group {
@@ -424,9 +439,10 @@ struct WorkoutLocationSetupView: View {
                     // no later Done to carry it.
                     trainHereID = editing.id
                 }
+                // T1-9: `ChipButtonStyle` itself now grows the tap target to 44pt
+                // (`.frame(minHeight: 44)` inside the style), so the `fernletTapTarget()`
+                // this call site used to need as a manual patch would only duplicate it.
                 .buttonStyle(ChipButtonStyle(selected: false))
-                // Chip drawing, 44pt target.
-                .fernletTapTarget()
                 .accessibilityHint("Plans your workouts around this space")
                 .accessibilityIdentifier("workout.location.makeActive")
             }
@@ -438,7 +454,8 @@ struct WorkoutLocationSetupView: View {
         let selected = editingLocation?.selectedCount(in: category) ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text(category.label.uppercased())
+                Text(category.label)
+                    .textCase(.uppercase)
                     .font(.fernlet(.labelSmall))
                     .tracking(0.6)
                     .foregroundStyle(Color.slate)
@@ -447,7 +464,7 @@ struct WorkoutLocationSetupView: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
-            LazyVGrid(columns: threeColumns, spacing: 10) {
+            LazyVGrid(columns: equipmentColumns, spacing: 10) {
                 ForEach(items) { item in
                     equipmentCard(item)
                 }
@@ -459,9 +476,9 @@ struct WorkoutLocationSetupView: View {
         let isSelected = editingLocation?.ownedEquipment.contains(item) ?? false
         return Button { toggle(item) } label: {
             VStack(spacing: 9) {
-                EquipmentGlyph(item: item, size: 28)
+                EquipmentGlyph(item: item, size: equipmentGlyphSize)
                     .foregroundStyle(Color.bark)
-                    .frame(height: 28)
+                    .frame(height: equipmentGlyphSize)
                 Text(item.displayName)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.bark)
@@ -470,7 +487,7 @@ struct WorkoutLocationSetupView: View {
                     .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 56)
+            .frame(minHeight: equipmentCardMinHeight)
             .padding(.vertical, 14)
             .padding(.horizontal, 6)
             .background(
@@ -493,6 +510,11 @@ struct WorkoutLocationSetupView: View {
             }
         }
         .buttonStyle(.plain)
+        // F2: the multi-select equipment grid — fill/stroke/checkmark are otherwise the only
+        // signal, on the tile a blind user relies on to build their equipment list one tap at a
+        // time. `SavedSpaceRow`'s trait (added earlier this batch) stays too — a real, separate
+        // selection row.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Helpers
@@ -648,14 +670,20 @@ struct WorkoutLocationSetupView: View {
     /// The delete-confirm body. Pluralizes and special-cases zero, so the one dialog where copy matters
     /// most doesn't read "the 1 pieces" or "the 0 pieces" — an empty custom location is one Add-then-back
     /// away. `static` so it can be unit-tested without standing up the view.
-    static func deleteMessage(equipmentCount count: Int) -> String {
-        let equipmentClause: String
+    static func deleteMessage(equipmentCount count: Int) -> LocalizedStringKey {
+        // Three WHOLE sentences rather than one sentence with a spliced-in clause. The clause
+        // version could never be a catalog key (a `String` built at runtime is invisible to the
+        // harvester), and even as a `%@` argument it would hand a translator a fragment they
+        // cannot reorder, decline or agree with the rest of the sentence — which is most of the
+        // languages this app will ever ship in.
         switch count {
-        case 0: equipmentClause = "its equipment setup"
-        case 1: equipmentClause = "the 1 piece of equipment you picked for it"
-        default: equipmentClause = "the \(count) pieces of equipment you picked for it"
+        case 0:
+            "This deletes the location and its equipment setup. Your logged workouts are not affected."
+        case 1:
+            "This deletes the location and the 1 piece of equipment you picked for it. Your logged workouts are not affected."
+        default:
+            "This deletes the location and the \(count) pieces of equipment you picked for it. Your logged workouts are not affected."
         }
-        return "This deletes the location and \(equipmentClause). Your logged workouts are not affected."
     }
 
     private func removeLocation(index: Int) {
@@ -740,6 +768,9 @@ private struct SavedSpaceRow: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.location.card")
         .accessibilityHint("Suggestions will use this space")
+        // T1-5: a hand-rolled selection row — "In use" is otherwise a badge in the label only,
+        // not a state VoiceOver announces the way `.isSelected` does.
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .contextMenu {
             if canDelete {
                 Button(role: .destructive, action: onDelete) {

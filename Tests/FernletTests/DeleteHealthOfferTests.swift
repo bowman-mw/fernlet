@@ -14,6 +14,7 @@
 // row, so a fixture written there would be deleted mid-test by any concurrently running suite.
 
 import Foundation
+import SwiftUI
 import Testing
 import FernletFoundation
 @testable import Fernlet
@@ -31,14 +32,16 @@ struct DeleteHealthOfferTests {
     }
 
     /// The dialog body for one offer state, without standing up a store — the copy is what is asserted.
+    ///
+    /// Calls the copy BUILDER rather than reading `.message` off the built dialog: since review
+    /// T2-1 the dialog's body is a `Text` (THIS dialog — the only one of the 26 — assembles its from conditional
+    /// fragments, so it cannot be a single catalog key), and a `Text` cannot be read back out.
     private func message(for offer: DeleteAllDataConfirmation.HealthSampleOffer) -> String {
-        DeleteAllDataConfirmation.make(
+        DeleteAllDataConfirmation.message(
             healthSamples: offer,
             hasICloudDayCopy: false,
-            hasSealedBackup: false,
-            delete: { _ in FernletStore.DeleteAllOutcome() },
-            onFinished: { _ in }
-        ).message
+            hasSealedBackup: false
+        )
     }
 
     // MARK: - The offer

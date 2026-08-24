@@ -266,7 +266,8 @@ struct BarcodeScanView: View {
             } label: {
                 Text("Enter details by hand")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.goldenrod)
+                    // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                    .foregroundStyle(Color.goldenrodInk)
                     .frame(maxWidth: .infinity)
                     .padding(14)
                     .background(
@@ -291,11 +292,15 @@ struct BarcodeScanView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
+                // T2-10: this is the camera-off fallback's only feedback on whether the barcode
+                // was actually in frame. An inverted barcode is a barcode nobody can check.
+                .accessibilityIgnoresInvertColors()
         }
 
         if isDetecting {
             HStack(spacing: 8) {
                 ProgressView()
+                    .accessibilityHidden(true)
                 Text("Looking for a barcode...")
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
@@ -347,14 +352,21 @@ struct BarcodeScanView: View {
 /// warm off-white rounded corner brackets, a soft glowing moss scan line, and one gentle caption.
 /// Purely decorative — it never intercepts the camera or its delivery.
 private struct ScanFrameOverlay: View {
-    var caption: String
+    /// `LocalizedStringKey`, not `String` (review T2-1): the caption is both drawn and spoken, and
+    /// a `String` lands on the verbatim overload of BOTH `Text(_:)` and `.accessibilityLabel(_:)`.
+    var caption: LocalizedStringKey
 
-    /// A slow, gentle vertical sweep for the scan line (matches the companion's calm — never clinical).
-    @State private var sweep = false
+    /// T1-6: the app's one ungated `repeatForever` — rebuilt on the repo's `TimelineView(.animation
+    /// (paused:))` idiom (`DisposableCameraView.swift`'s LED breathe) so Reduce Motion can freeze it
+    /// on a single frame instead of only being able to hide it outright.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let windowWidth: CGFloat = 250
     private let windowHeight: CGFloat = 160
     private let cornerRadius: CGFloat = 22
+    /// Full up-and-back round trip; matches the previous `.easeInOut(duration: 2.6)
+    /// .repeatForever(autoreverses: true)` (2.6s each way).
+    private let sweepPeriod: Double = 5.2
 
     var body: some View {
         GeometryReader { geo in
@@ -365,51 +377,66 @@ private struct ScanFrameOverlay: View {
                 height: windowHeight
             )
 
-            ZStack {
-                // Dimmed surround with a clear cut-out window.
-                Color.black.opacity(0.5)
-                    .reverseMask {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .frame(width: window.width, height: window.height)
-                            .position(x: window.midX, y: window.midY)
-                    }
-
-                // Corner brackets + scan line, positioned on the window.
-                ZStack {
-                    ScanBrackets(cornerRadius: cornerRadius)
-                        .stroke(Color.scannerBracket, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .frame(width: window.width, height: window.height)
-
-                    // Soft glowing moss scan line, sweeping between the top and bottom of the window.
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.moss.opacity(0), Color.moss, Color.moss.opacity(0)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: window.width - 16, height: 2)
-                        .shadow(color: Color.moss.opacity(0.8), radius: 6)
-                        .offset(y: sweep ? window.height / 2 - 8 : -window.height / 2 + 8)
-                        .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: sweep)
-                }
-                .position(x: window.midX, y: window.midY)
-
-                // Caption below the window.
-                Text(caption)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.cream)
-                    .multilineTextAlignment(.center)
-                    .shadow(color: .black.opacity(0.4), radius: 6)
-                    .frame(maxWidth: geo.size.width - 80)
-                    .position(x: geo.size.width / 2, y: window.maxY + 64)
+            TimelineView(.animation(paused: reduceMotion)) { timeline in
+                let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                // Raised cosine: 0 → 1 → 0 once per `sweepPeriod`, an ease-in/ease-out-shaped
+                // round trip with no discontinuity at the turnarounds.
+                let t = (1 - cos(elapsed * 2 * .pi / sweepPeriod)) / 2
+                let lowerY = -window.height / 2 + 8
+                let upperY = window.height / 2 - 8
+                let sweepOffset = lowerY + (upperY - lowerY) * t
+                chrome(window: window, sweepOffset: sweepOffset, geoWidth: geo.size.width)
             }
         }
         .allowsHitTesting(false)
-        .onAppear { sweep = true }
         .accessibilityElement()
         .accessibilityLabel(caption)
+    }
+
+    /// The dimmed surround, corner brackets + scan line, and caption for one animation frame — split
+    /// out of ``body`` so it stays under the Power-of-10 line ceiling once the sweep math and the
+    /// Reduce Motion environment read landed on top of it.
+    @ViewBuilder
+    private func chrome(window: CGRect, sweepOffset: CGFloat, geoWidth: CGFloat) -> some View {
+        ZStack {
+            // Dimmed surround with a clear cut-out window.
+            Color.black.opacity(0.5)
+                .reverseMask {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .frame(width: window.width, height: window.height)
+                        .position(x: window.midX, y: window.midY)
+                }
+
+            // Corner brackets + scan line, positioned on the window.
+            ZStack {
+                ScanBrackets(cornerRadius: cornerRadius)
+                    .stroke(Color.scannerBracket, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: window.width, height: window.height)
+
+                // Soft glowing moss scan line, sweeping between the top and bottom of the window.
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.moss.opacity(0), Color.moss, Color.moss.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: window.width - 16, height: 2)
+                    .shadow(color: Color.moss.opacity(0.8), radius: 6)
+                    .offset(y: sweepOffset)
+            }
+            .position(x: window.midX, y: window.midY)
+
+            // Caption below the window.
+            Text(caption)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.cream)
+                .multilineTextAlignment(.center)
+                .shadow(color: .black.opacity(0.4), radius: 6)
+                .frame(maxWidth: geoWidth - 80)
+                .position(x: geoWidth / 2, y: window.maxY + 64)
+        }
     }
 }
 
@@ -480,6 +507,9 @@ private extension View {
 /// (camera permission revoked mid-session) through `onUnavailable` so the parent can drop to the
 /// still-photo fallback. The symbology list is injectable — the QR verify ceremony reuses this exact
 /// viewfinder with `[.qr]`.
+///
+/// The hosted view opts out of Smart Invert (`accessibilityIgnoresInvertColors`, T2-10) — an
+/// inverted live preview does not decode — so every call site inherits that without repeating it.
 struct BarcodeDataScannerView: UIViewControllerRepresentable {
     /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
     /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
@@ -499,6 +529,11 @@ struct BarcodeDataScannerView: UIViewControllerRepresentable {
             isHighlightingEnabled: true
         )
         scanner.delegate = context.coordinator
+        // T2-10: Smart Invert inverts the LIVE VIDEO too, and a barcode or QR read off an inverted
+        // preview does not decode. Set on the UIKit view rather than as a SwiftUI modifier at each
+        // call site so every user of this representable — the food scanner and both QR ceremonies —
+        // inherits it and none can forget.
+        scanner.view.accessibilityIgnoresInvertColors = true
         return scanner
     }
 
@@ -764,7 +799,8 @@ struct BarcodeNotFoundView: View {
                         .font(.fernlet(.labelSmall))
                         .tracking(1.2)
                         .textCase(.uppercase)
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                     Text("We haven't met this one")
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
@@ -1083,10 +1119,11 @@ private struct RememberedConfirmationView: View {
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
                 HStack(spacing: 10) {
+                    // T1-3: text ink for the two tokens that have one; `.stat` is 14pt.
                     Text("P \(item.macros.protein)")
-                        .foregroundStyle(Color.moss)
+                        .foregroundStyle(Color.mossInk)
                     Text("C \(item.macros.carbs)")
-                        .foregroundStyle(Color.goldenrod)
+                        .foregroundStyle(Color.goldenrodInk)
                     Text("F \(item.macros.fat)")
                         .foregroundStyle(Color.terracotta)
                 }

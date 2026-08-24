@@ -55,6 +55,11 @@ struct FriendsView: View {
             }
 
         }
+        // F4: the harness proved `.fullScreenCover` does NOT remove the presenting content from
+        // the accessibility tree on its own — VoiceOver/Switch Control could still reach the
+        // camera/album underneath while the celebration overlay plays. This is the covered-content
+        // half; see the overlay's own `.isModal` note below for why that trait alone wasn't enough.
+        .accessibilityHidden(showConnectionAnimation)
         .animation(.easeInOut(duration: 0.3), value: sessionReady)
         .fullScreenCover(isPresented: $showConnectionAnimation) {
             ConnectionSuccessOverlay(peerName: connectionPeerName) {
@@ -294,7 +299,8 @@ struct FriendsView: View {
                         .foregroundStyle(Color.slate)
                     Text("Change")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 4)
@@ -485,19 +491,45 @@ struct FriendsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(albumCellLabel(post))
+                .accessibilityInputLabels(albumCellInputLabels(post))
             }
         }
         .padding(.top, 2)
     }
 
+    /// Short spoken alternatives for one album cell — the Voice Control half of T2-12.
+    ///
+    /// ``albumCellLabel(_:)`` is a whole SENTENCE ending in a date and a photo count, so a Voice
+    /// Control user had to say "tap Photo from Alex, 12 Aug 2026, carousel, 4 photos" to open one
+    /// cell. Input labels are ADDITIVE — the spoken VoiceOver label is unchanged, and it stays a
+    /// sentence deliberately: a photo cell has no other text, so the sender and date are the only
+    /// thing distinguishing one grey square from the next.
+    ///
+    /// The friend's name leads because it is the only short candidate that DIFFERS between cells,
+    /// and the first input label is what Voice Control's numbered overlay shows (the same reason
+    /// ``MoveView``'s calendar leads with "Day 4" rather than "Day"). It is `verbatim` — a person's
+    /// name is never localized — and an empty name is dropped rather than offered as a blank
+    /// command. "Photo" is kept as the generic fallback: duplicates across the grid are what the
+    /// numbered overlay is for.
+    private func albumCellInputLabels(_ post: FriendPhotoWallPost) -> [Text] {
+        let sender = post.coverPhoto.senderName
+        guard !sender.isEmpty else {
+            return post.isCarousel ? [Text("Photo"), Text("Carousel")] : [Text("Photo")]
+        }
+        guard post.isCarousel else {
+            return [Text(verbatim: sender), Text("Photo"), Text("Photo from \(sender)")]
+        }
+        return [Text(verbatim: sender), Text("Photo"), Text("Carousel"), Text("Photo from \(sender)")]
+    }
+
     /// What VoiceOver says for one album cell: who shared it, when, and whether it opens a carousel.
-    private func albumCellLabel(_ post: FriendPhotoWallPost) -> String {
+    private func albumCellLabel(_ post: FriendPhotoWallPost) -> Text {
         let cover = post.coverPhoto
         let when = cover.addedAt.formatted(date: .abbreviated, time: .omitted)
         if post.isCarousel {
-            return "Photo from \(cover.senderName), \(when), carousel, \(post.photos.count) photos"
+            return Text("Photo from \(cover.senderName), \(when), carousel, \(post.photos.count) photos")
         }
-        return "Photo from \(cover.senderName), \(when)"
+        return Text("Photo from \(cover.senderName), \(when)")
     }
 
     private var sessionSearchField: some View {
@@ -853,10 +885,13 @@ private struct FriendPhotoCarouselPostView: View {
             }
     }
 
+    /// - Parameter accessibilityLabel: `LocalizedStringKey`, not `String` — the argument's STATIC
+    ///   TYPE is what picks SwiftUI's localizing `accessibilityLabel(_:)` overload, and a `String`
+    ///   parameter silently opted all three call sites out (review T2-1).
     private func circleActionButton(
         systemName: String,
         tint: Color,
-        accessibilityLabel: String,
+        accessibilityLabel: LocalizedStringKey,
         selected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
@@ -917,11 +952,17 @@ private struct FriendPhotoCarouselPostView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             chromeVisible = true
         }
+        // `assistive: nil` — this fade REMOVES CONTROLS from the accessibility tree rather than
+        // retiring a notice: the close, save and share buttons go with the chrome. A stretched
+        // timer would only delay deleting the screen's only controls out from under a VoiceOver
+        // user mid-swipe, so while an assistive technology is running the chrome simply stays.
+        guard let window = FernletDismissalWindow.system
+            .windowUnlessAssistive(standard: .seconds(5)) else { return }
         chromeTask = Task {
             // The sleep result IS the cancellation check: `Task.sleep` throws exactly when the task
             // is cancelled, so a cancelled fade simply returns (R7 — no swallowed error).
             do {
-                try await Task.sleep(for: .seconds(5))
+                try await Task.sleep(for: window)
             } catch {
                 return
             }
@@ -949,6 +990,9 @@ private struct LazyFriendPhotoImage: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+                    // T2-10: a friend photo inverted is a colour negative of a person's face. The
+                    // `photo` placeholder below is a tinted glyph and is left to invert normally.
+                    .accessibilityIgnoresInvertColors()
             } else {
                 Image(systemName: "photo")
                     .font(.largeTitle)
@@ -1216,6 +1260,14 @@ struct ConnectionSuccessOverlay: View {
             .offset(y: cardOffset)
             .opacity(cardOpacity)
         }
+        // T1-4: a blocking celebration overlay — nothing behind it should be reachable while it
+        // runs its fixed choreography. F4 correction: the harness proved `.isModal` alone is a
+        // no-op here — this view has no covered SIBLING for the trait to scope against, it is
+        // presented through `.fullScreenCover`, so the real fix is `FriendsView`'s
+        // `.accessibilityHidden(showConnectionAnimation)` on the covered content. Left in place
+        // (harmless, and correct if this view is ever composed into a sibling-bearing container
+        // instead) rather than removed.
+        .accessibilityAddTraits(.isModal)
         .onAppear { runAnimation() }
         .onDisappear { animationTask?.cancel() }
     }

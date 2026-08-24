@@ -15,6 +15,28 @@ import FernletUI
 /// would fail decode on older builds) layering the frazzle, calm, and pet-cooldown looks.
 /// Used everywhere a companion appears: Home, activity rosters (friends' cached appearances),
 /// the studio preview, and more.
+///
+/// **It carries no accessibility label, deliberately** (accessibility review T1-10). It used to
+/// carry `"Fernlet companion, \(state.rawValue)"` — which was wrong twice over: `rawValue` is a
+/// FROZEN persistence token that is byte-mirrored into the widget process and is a field of the
+/// Coach export schema, so speaking it aloud spoke an untranslatable identifier; and the label was
+/// discarded anyway wherever a caller applied its own. The drawing is made of `Shape`s and
+/// `Image(decorative:)`s, none of which is an accessibility element, so a bare render is silent.
+///
+/// Nine call sites, three treatments:
+///
+/// - **One interactive** — Home's `companionSection` — supplies its own label, its state as an
+///   `.accessibilityValue` via the localized `CompanionState.displayName` fork, the `.isButton`
+///   trait, and a custom action for the long-press edit path (which VoiceOver cannot perform).
+/// - **Seven decorative** — the launch illustration, both Home wardrobe previews, the studio's
+///   design preview, both onboarding illustrations, and the activity roster's friend avatars —
+///   say so with `.accessibilityHidden(true)`. The roster one matters most: the shared label used
+///   to make someone else's companion announce as your own, fuzzed state and all.
+/// - **One labelled but not interactive** — the studio's confirmation preview, which is the first
+///   thing on a screen with no header, so silence there would read as "the drawing is gone".
+///
+/// Any new interactive render must carry the full set; a new decorative one must say it is
+/// decorative. Silence by accident and silence on purpose look identical six months later.
 struct CompanionView: View {
     var state: CompanionState
     var appearance: CompanionAppearance = .standard
@@ -48,8 +70,15 @@ struct CompanionView: View {
         calmTint && !stressTint && !state.isLowEnergy && !settled
     }
 
+    /// T1-6: Reduce Motion pauses the breathing clock rather than hiding the companion — `paused:`
+    /// freezes `TimelineView` on its current frame, so the figure keeps rendering (last breath
+    /// phase held) with no perpetual motion. `DisposableCameraView.swift`'s LED breathe is the
+    /// same idiom; a shared schedule helper doesn't work here because `.animation`/`.periodic` are
+    /// different concrete `TimelineSchedule` types.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.animation(paused: reduceMotion)) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             // Breath tempo: the tense accent quickens the swell (~3s), the calm accent and the
             // settled pose slow it into a longer, softer cycle (~6.6s). The sine period is 2·tempo.
@@ -63,49 +92,54 @@ struct CompanionView: View {
             let breath = (sin(elapsed * .pi / tempo) + 1) / 2
             let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
             let bodyColor = appearance.resolvedBodyColor(for: state)
-
-            ZStack {
-                CompanionBaseLayers(
-                    appearance: appearance,
-                    state: state,
-                    size: size,
-                    breath: breath,
-                    petBounce: petBounce,
-                    bodyColor: bodyColor,
-                    settled: settled
-                )
-
-                CompanionFaceLayers(
-                    state: state,
-                    size: size,
-                    facePetBounce: settled ? size * 0.05 : petBounce,
-                    settled: settled,
-                    showsCalmAccent: showsCalmAccent
-                )
-
-                ForEach(equippedItems) { item in
-                    CompanionCustomItemLayer(item: item, size: size)
-                        .offset(y: petBounce)
-                        .zIndex(Self.itemPaintOrder(item.slot))
-                }
-
-                // The accents used to be flat siblings carrying zIndex 5/6, i.e. above every equipped
-                // custom item (paint order 1...4). Grouping them into one child would have dropped
-                // them to the container's implicit 0 — this keeps the original stacking.
-                CompanionAccentLayers(
-                    size: size,
-                    elapsed: elapsed,
-                    petBounce: petBounce,
-                    showsStressAccent: showsStressAccent,
-                    showsCalmAccent: showsCalmAccent,
-                    settled: settled
-                )
-                .zIndex(5)
-            }
-            .animation(.easeInOut(duration: 0.44), value: interactionLevel)
-            .animation(.easeInOut(duration: 0.5), value: settled)
+            figure(elapsed: elapsed, breath: breath, petBounce: petBounce, bodyColor: bodyColor)
         }
-        .accessibilityLabel("Fernlet companion, \(state.rawValue)")
+    }
+
+    /// The layered figure itself — extracted so ``body`` stays under the Power-of-10 line ceiling
+    /// once the Reduce Motion environment read and the extra doc comment landed on top of it.
+    @ViewBuilder
+    private func figure(elapsed: Double, breath: Double, petBounce: CGFloat, bodyColor: Color) -> some View {
+        ZStack {
+            CompanionBaseLayers(
+                appearance: appearance,
+                state: state,
+                size: size,
+                breath: breath,
+                petBounce: petBounce,
+                bodyColor: bodyColor,
+                settled: settled
+            )
+
+            CompanionFaceLayers(
+                state: state,
+                size: size,
+                facePetBounce: settled ? size * 0.05 : petBounce,
+                settled: settled,
+                showsCalmAccent: showsCalmAccent
+            )
+
+            ForEach(equippedItems) { item in
+                CompanionCustomItemLayer(item: item, size: size)
+                    .offset(y: petBounce)
+                    .zIndex(Self.itemPaintOrder(item.slot))
+            }
+
+            // The accents used to be flat siblings carrying zIndex 5/6, i.e. above every equipped
+            // custom item (paint order 1...4). Grouping them into one child would have dropped
+            // them to the container's implicit 0 — this keeps the original stacking.
+            CompanionAccentLayers(
+                size: size,
+                elapsed: elapsed,
+                petBounce: petBounce,
+                showsStressAccent: showsStressAccent,
+                showsCalmAccent: showsCalmAccent,
+                settled: settled
+            )
+            .zIndex(5)
+        }
+        .animation(.easeInOut(duration: 0.44), value: interactionLevel)
+        .animation(.easeInOut(duration: 0.5), value: settled)
     }
 
     /// Back-to-front paint order for equipped custom items so layers stack naturally (the outfit sits

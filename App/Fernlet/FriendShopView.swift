@@ -19,6 +19,19 @@ struct FriendShopView: View {
     @State private var feedback: String?
     @State private var reportTarget: ReportTarget?
 
+    /// T2-11: the item grid's adaptive minimum was a fixed 150pt, so at Larger Text sizes the tile
+    /// stayed the same width while the item name — the widest thing in it, set in `.headerMedium`
+    /// and hard-limited to one line — grew straight past the edge. Scaled against `.title3`, the
+    /// text style `.headerMedium` itself is relative to, so the cell tracks exactly the text it
+    /// holds. Read through ``itemTileMinimum``, which caps it.
+    @ScaledMetric(relativeTo: .title3) private var scaledItemTileMinimum: CGFloat = 150
+
+    /// The grid minimum actually handed to `GridItem(.adaptive:)`. The cap matters: at AX5 the
+    /// scaled value exceeds a compact iPhone's content width, and an adaptive minimum wider than
+    /// the container is a request the grid cannot honour. 300pt still forces the single column the
+    /// large text needs while staying inside the narrowest screen the app supports.
+    private var itemTileMinimum: CGFloat { min(scaledItemTileMinimum, 300) }
+
     /// The item (plus its seller's identity) a report confirmation is currently about.
     ///
     /// Captured at ••• time so the dialog keeps a stable target even if the catalog refreshes;
@@ -134,7 +147,8 @@ struct FriendShopView: View {
                             .fill(Color.cream)
                     )
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: FernletMetrics.spaceMd)],
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: itemTileMinimum),
+                                             spacing: FernletMetrics.spaceMd)],
                           spacing: FernletMetrics.spaceMd) {
                     ForEach(items) { item in
                         itemTile(item, catalog: catalog)
@@ -157,14 +171,20 @@ struct FriendShopView: View {
                         .fill(Color.parchment)
                 )
 
+            // T2-11, second half: the tile now grows with the text (``itemTileMinimum``), but both
+            // labels were still hard-limited to ONE line, so at Larger Text sizes the wider tile
+            // just truncated a wider name — "Winter Cardig…" — and the byline lost the friend it
+            // credits. Both wrap instead. Bounded by construction: every rendered name comes
+            // through `ItemNameModeration.sanitizedName`, which caps at 24 characters, so wrapping
+            // costs a tile at most a few lines and a hostile catalog cannot stretch the grid.
             Text(item.name.isEmpty ? item.slot.label : item.name)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
-                .lineLimit(1)
+                .fernletWrappingText()
             Text("designed by \(sellerName(catalog))")
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
-                .lineLimit(1)
+                .fernletWrappingText()
 
             Button {
                 buy(item, from: catalog)
@@ -250,9 +270,16 @@ struct FriendShopView: View {
     /// The seller's display name, sanitized with the SAME rule the store applies before persisting
     /// it (`DiaryStore.setKnownDesignerName`), so a hostile wire-claimed name — multi-kilobyte, or
     /// carrying bidi overrides — can neither render raw here nor disagree with what is stored.
+    ///
+    /// The envelope's own `senderDisplayName` is sanitized too, not just the payload's: it is the
+    /// FALLBACK, it comes off the same wire, and nothing bounds it there — so the branch that
+    /// rendered it raw was the one case the paragraph above already claimed was impossible. It
+    /// mattered less while the byline was pinned to one line; now that it wraps for Dynamic Type
+    /// (T2-11), an unbounded name would be an unbounded tile.
     private func sellerName(_ catalog: ProximityClothingCatalog) -> String {
         let name = ItemNameModeration.sanitizedName(catalog.payload.displayName)
-        return name.isEmpty ? catalog.senderDisplayName : name
+        guard name.isEmpty else { return name }
+        return ItemNameModeration.sanitizedName(catalog.senderDisplayName)
     }
 
     private func buy(_ item: CustomizationItem, from catalog: ProximityClothingCatalog) {

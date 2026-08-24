@@ -1,0 +1,161 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "ui.action.cancel" : {
+      "comment" : "Button. Leaves the current sheet or dialog without saving anything.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "ui.action.done" : {
+      "comment" : "Button. Two shared places: the keyboard accessory that dismisses the keyboard, and the trailing commit button of a sheet header.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "ui.action.save" : {
+      "comment" : "Default label of the green commit bar at the bottom of an entry sheet, for sheets that do not name their own commit verb.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "ui.capture.cover.recording" : {
+      "comment" : "Line on the opaque cover drawn over a private screen while the display is being recorded or mirrored. Names the cause so the user knows why the screen went blank and that it is temporary.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hidden while your screen is being recorded"
+          }
+        }
+      }
+    },
+    "ui.capture.cover.snapshot" : {
+      "comment" : "Line on the opaque cover drawn over a private screen while the app is not frontmost (app switcher / Control Center snapshots).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hidden"
+          }
+        }
+      }
+    },
+    "ui.capture.nudge.detail" : {
+      "comment" : "Second line of the post-screenshot banner: the image is now an ordinary photo outside the app's protections.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A screenshot leaves Fernlet's protection behind."
+          }
+        }
+      }
+    },
+    "ui.capture.nudge.headline" : {
+      "comment" : "First line of the calm banner shown once per session after a screenshot on a protected screen. Must never imply the screenshot was blocked, degraded or logged — it was none of those.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is your private data — it stays safest on your device."
+          }
+        }
+      }
+    },
+    "ui.coins.balance" : {
+      "comment" : "VoiceOver label for the coin balance pill. The number is the user's current coin count.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld coin"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld coins"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ui.discard.confirm" : {
+      "comment" : "Destructive button on the unsaved-changes alert. Closes the sheet and throws the draft away.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Discard"
+          }
+        }
+      }
+    },
+    "ui.discard.keepEditing" : {
+      "comment" : "Cancel-role button on the unsaved-changes alert. Returns to the sheet with the draft intact.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep editing"
+          }
+        }
+      }
+    },
+    "ui.discard.message" : {
+      "comment" : "Body of the unsaved-changes alert. Names what is lost without implying anything already saved is at risk.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Anything you've typed here won't be saved."
+          }
+        }
+      }
+    },
+    "ui.discard.title" : {
+      "comment" : "Title of the alert shown when the user cancels an entry sheet that has unsaved edits.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Discard your changes?"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -147,7 +147,8 @@ struct AmbientCardsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("A gentle offer")
                                     .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.moss)
+                                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                                    .foregroundStyle(Color.mossInk)
                                 Text(kind.invitation)
                                     .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
@@ -212,7 +213,9 @@ struct AmbientCardsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(lookBack.label)
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.goldenrod)
+                            // T1-3: text ink, not the `goldenrod` accent (2.22:1). The bar at
+                            // left stays the decorative accent.
+                            .foregroundStyle(Color.goldenrodInk)
                         Text(lookBack.text)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)

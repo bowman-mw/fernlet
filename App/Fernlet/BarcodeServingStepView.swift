@@ -145,7 +145,11 @@ struct BarcodeServingStepView: View {
                         .foregroundStyle(Color.bark)
                         .accessibilityIdentifier("barcodeServingValue")
                     Spacer()
-                    Stepper("", value: $servings, in: 0...99, step: 1)
+                    // T2-8: an empty label makes VoiceOver announce "stepper" with no name and
+                    // leaves Voice Control nothing to say. The word is given to the control and
+                    // hidden from the layout, so the visual row is unchanged — the same pattern
+                    // the age stepper in onboarding already uses.
+                    Stepper("Servings", value: $servings, in: 0...99, step: 1)
                         .labelsHidden()
                         .accessibilityIdentifier("barcodeServingStepper")
                 }

@@ -166,13 +166,22 @@ public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable, S
 
     public var id: String { rawValue }
 
+    /// The category's reader-facing name — the uppercase section caption in the location editor.
+    ///
+    /// Localized (`rawValue` stays the frozen token). Without this the `.textCase(.uppercase)` on
+    /// that caption had nothing to transform *after*: the word never reached a catalog at all.
     public var label: String {
         switch self {
-        case .cardio: "Cardio"
-        case .freeWeights: "Free weights"
-        case .machines: "Machines"
-        case .functional: "Functional"
-        case .recovery: "Recovery"
+        case .cardio: String(localized: "equipmentCategory.cardio", defaultValue: "Cardio",
+                             bundle: .module, comment: "Equipment category: treadmills, bikes, rowers")
+        case .freeWeights: String(localized: "equipmentCategory.freeWeights", defaultValue: "Free weights",
+                                  bundle: .module, comment: "Equipment category: dumbbells, barbells, kettlebells")
+        case .machines: String(localized: "equipmentCategory.machines", defaultValue: "Machines",
+                               bundle: .module, comment: "Equipment category: cable and plate-loaded machines")
+        case .functional: String(localized: "equipmentCategory.functional", defaultValue: "Functional",
+                                 bundle: .module, comment: "Equipment category: bands, mats, pull-up bars")
+        case .recovery: String(localized: "equipmentCategory.recovery", defaultValue: "Recovery",
+                               bundle: .module, comment: "Equipment category: foam rollers and mobility tools")
         }
     }
 }
@@ -285,6 +294,22 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
     public var systemImage: String
     public var equipment: Set<GymEquipment>
 
+    /// Mints a saved location from this template.
+    ///
+    /// **Known localization debt — deliberately deferred (accessibility review A4, F4).** `name`
+    /// and `subtitle` are English literals, and this function BAKES `name` into the persisted
+    /// `WorkoutLocation`, which the user can then rename. Localizing them would therefore be worse
+    /// than leaving them: a French user's saved location would read "Salle de sport complète" until
+    /// they switched language, after which the stored English-era or French-era string would be
+    /// frozen and wrong — the exact trap `PersonalCareTask.displayLabel` documents and works around
+    /// for built-in care tasks.
+    ///
+    /// The fix has a known shape and is a schema change, not a copy change: give `WorkoutLocation`
+    /// an optional `templateID` written at mint time, resolve a built-in's display name live from
+    /// the template (falling back to the stored `name` for a renamed or user-created location), and
+    /// migrate existing rows by matching `name` against `LocationTemplate.all` — which is already
+    /// how `availableTemplates` decides what is saved. Until that lands, these five names stay
+    /// English on purpose.
     public func makeLocation() -> WorkoutLocation {
         WorkoutLocation(name: name, ownedEquipment: equipment)
     }

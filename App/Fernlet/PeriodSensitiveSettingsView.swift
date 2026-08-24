@@ -170,10 +170,13 @@ struct PeriodSensitiveSettingsView: View {
                 }
                 pendingDestructiveAction = DestructiveConfirmation(
                     title: "Turn off period tracking?",
-                    message: "Fernlet will hide every cycle surface and stop reading your cycle data. "
-                        + "Your entries are kept — turn this back on any time to see them again.\n\n"
-                        + "Your daily score may change: Fernlet will stop softening it around your cycle. "
-                        + "Anything you've saved in Apple Health stays in Apple Health.",
+                    message: """
+                        Fernlet will hide every cycle surface and stop reading your cycle data. \
+                        Your entries are kept — turn this back on any time to see them again.
+
+                        Your daily score may change: Fernlet will stop softening it around your cycle. \
+                        Anything you've saved in Apple Health stays in Apple Health.
+                        """,
                     confirmLabel: "Turn off",
                     auditEvent: "settings.period.hideConfirmed"
                 ) {
@@ -193,9 +196,12 @@ struct PeriodSensitiveSettingsView: View {
                 }
                 pendingDestructiveAction = DestructiveConfirmation(
                     title: "Turn off intimacy tracking?",
-                    message: "Fernlet will hide intimacy logging and stop reading it. Your notes are "
-                        + "kept — turn this back on any time to see them again.\n\n"
-                        + "Anything you've saved in Apple Health stays in Apple Health.",
+                    message: """
+                        Fernlet will hide intimacy logging and stop reading it. Your notes are \
+                        kept — turn this back on any time to see them again.
+
+                        Anything you've saved in Apple Health stays in Apple Health.
+                        """,
                     confirmLabel: "Turn off",
                     auditEvent: "settings.intimacy.hideConfirmed"
                 ) {

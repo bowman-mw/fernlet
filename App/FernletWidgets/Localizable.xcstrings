@@ -17,6 +17,16 @@
     "%lld" : {
 
     },
+    "%lld of %lld bottles" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld bottles"
+          }
+        }
+      }
+    },
     "%lld/%lld" : {
       "localizations" : {
         "en" : {
@@ -31,6 +41,12 @@
 
     },
     "Adds one bottle of water to today's Fernlet diary." : {
+
+    },
+    "Cooking" : {
+
+    },
+    "Couldn't update your workout just now — please try again in a moment." : {
 
     },
     "Done set" : {
@@ -52,10 +68,16 @@
     "Fernlet" : {
 
     },
+    "Fernlet companion" : {
+
+    },
     "Finish" : {
 
     },
     "Finish workout" : {
+
+    },
+    "In progress" : {
 
     },
     "Log a bottle of water" : {
@@ -71,6 +93,28 @@
 
     },
     "Next cooking step" : {
+
+    },
+    "Next up · %@" : {
+
+    },
+    "Next up · %@ · Set %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Next up · %1$@ · Set %2$lld of %3$lld"
+          }
+        }
+      }
+    },
+    "No mood yet today" : {
+
+    },
+    "No workout is running, so there's no rest to skip." : {
+
+    },
+    "No workout is running, so there's no set to finish." : {
 
     },
     "Open Fernlet" : {
@@ -91,6 +135,12 @@
     "Rest" : {
 
     },
+    "Rest skipped — your workout is finished." : {
+
+    },
+    "Rest skipped. Your next set is up." : {
+
+    },
     "Restarts the timer on the current cooking step." : {
 
     },
@@ -103,6 +153,22 @@
           }
         }
       }
+    },
+    "Set %lld of %lld · %@ reps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld of %2$lld · %3$@ reps"
+          }
+        }
+      }
+    },
+    "Set done. Resting now." : {
+
+    },
+    "Set done. Your next exercise is up." : {
+
     },
     "Skip rest" : {
 
@@ -117,11 +183,89 @@
         }
       }
     },
+    "Take it at your own pace" : {
+
+    },
+    "That was the last set — your workout is finished." : {
+
+    },
+    "Water" : {
+
+    },
+    "Workout" : {
+
+    },
+    "You're not resting right now, so there's nothing to skip." : {
+
+    },
+    "You're resting right now, so there's no set to finish yet." : {
+
+    },
     "Your companion's mood and today's water, at a glance." : {
 
     },
     "bottles today" : {
 
+    },
+    "companionState.okay" : {
+      "comment" : "Companion wellbeing state: steady",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Okay"
+          }
+        }
+      }
+    },
+    "companionState.resting" : {
+      "comment" : "Companion wellbeing state: deliberately taking it easy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resting"
+          }
+        }
+      }
+    },
+    "companionState.sick" : {
+      "comment" : "Companion wellbeing state: worst of five",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sick"
+          }
+        }
+      }
+    },
+    "companionState.thriving" : {
+      "comment" : "Companion wellbeing state: best of five",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thriving"
+          }
+        }
+      }
+    },
+    "companionState.tired" : {
+      "comment" : "Companion wellbeing state: running low",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tired"
+          }
+        }
+      }
     },
     "to meet your companion" : {
 

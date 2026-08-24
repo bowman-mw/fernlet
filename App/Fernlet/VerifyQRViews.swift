@@ -56,6 +56,15 @@ struct VerifyQRDisplaySheet: View {
                     .frame(maxWidth: 260)
                     .padding(14)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    // T2-10: Smart Invert would flip the black-on-white modules to white-on-black
+                    // and no scanner would read them. A QR is data, not decoration.
+                    .accessibilityIgnoresInvertColors()
+                    // T2-20: the image was silent, so VoiceOver skipped straight past the only
+                    // thing on the sheet that matters. The protocol commits the *displayer*'s side
+                    // (`MeshNetworkManager.beginQRVerification`), so "I hold up my phone, you scan
+                    // it" is a fully supported ceremony for a blind user — it just has to be
+                    // narratable.
+                    .accessibilityLabel("Your verification code, as a QR code for \(peerName) to scan")
                     .accessibilityIdentifier("friends.verifyQR.code")
                 Text("Have \(peerName) scan this code. It proves this phone really holds your Fernlet identity — the code expires after a few minutes.")
                     .font(.fernlet(.bodySmall))
@@ -93,6 +102,10 @@ struct VerifyQRDisplaySheet: View {
 /// frame can't double-fire) and dismisses itself; the caller reports success or failure back
 /// through the row's own alert after the sheet is gone. Falls back to guidance copy when the
 /// scanner is unavailable (camera access off).
+///
+/// Acquisition is reported non-visually as well (accessibility review T2-20): a success haptic on
+/// the `handedOff` latch plus a `FernletAnnouncer` announcement of the *event*. Neither carries the
+/// scanned payload — this is a security ceremony and an announcement is audible to the room.
 struct VerifyQRScanSheet: View {
     /// Called with the scanned URL; the caller runs `beginQRVerification` and reports back.
     let onScanned: (URL) -> Void
@@ -102,6 +115,14 @@ struct VerifyQRScanSheet: View {
     var title: String = "Scan their code"
     /// The line under the viewfinder, defaulted for the same reason.
     var prompt: String = "Point at the code on your friend's screen."
+    /// What VoiceOver says when it lands on the live viewfinder (T2-20).
+    ///
+    /// Deliberately a *separate* `LocalizedStringKey` rather than a reuse of ``prompt``: `prompt`
+    /// is `String`-typed, so it is frozen English (the T2-1 class) and would carry that freeze into
+    /// speech. Aiming instructions are also not the same sentence for eyes and for ears — a sighted
+    /// user has already seen the viewfinder and only needs to know *what* to aim at, while a
+    /// VoiceOver user needs to be told there is a camera running here at all.
+    var scannerLabel: LocalizedStringKey = "Camera viewfinder. Point the camera at the code on your friend's screen."
     @Environment(\.dismiss) private var dismiss
     @State private var handedOff = false
     @State private var scannerUnavailable = false
@@ -125,6 +146,11 @@ struct VerifyQRScanSheet: View {
                     onPayload: { payload in
                         guard !handedOff, let url = URL(string: payload) else { return }
                         handedOff = true
+                        // T2-20: acquisition is otherwise entirely visual — the viewfinder simply
+                        // vanishes. Announce the EVENT, never the payload: this URL carries the
+                        // peer's signing key and a fingerprint, and an announcement is spoken out
+                        // loud into whatever room the ceremony is happening in.
+                        FernletAnnouncer.system.announce(.success, "Code captured")
                         onScanned(url)
                         dismiss()
                     },
@@ -132,6 +158,11 @@ struct VerifyQRScanSheet: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .frame(maxHeight: 380)
+                // The representable hosts a live `DataScannerViewController` with no accessible
+                // content of its own, so without this the viewfinder is a hole in the tree that
+                // VoiceOver walks straight over.
+                .accessibilityElement()
+                .accessibilityLabel(scannerLabel)
                 .accessibilityIdentifier("friends.verifyQR.scanner")
                 Text(prompt)
                     .font(.fernlet(.bodySmall))
@@ -146,5 +177,9 @@ struct VerifyQRScanSheet: View {
         .padding(20)
         .presentationDetents([.large])
         .presentationBackground(Color.parchment)
+        // The second half of acquisition feedback (T2-20). `handedOff` is a one-way latch, so this
+        // fires exactly once per sheet; it is on the root rather than the viewfinder because the
+        // viewfinder is inside the `else` branch and leaves the tree the instant the latch flips.
+        .sensoryFeedback(.success, trigger: handedOff)
     }
 }

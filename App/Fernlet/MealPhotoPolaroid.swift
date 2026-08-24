@@ -30,11 +30,14 @@ struct MealPhotoPolaroid: View {
             hasPhoto: true, sealedFileExists: sealedFileExists, bytesAvailable: bytesAvailable ?? true)
     }
 
-    private var accessibilityText: String {
+    /// `Text`, not `String` (review T2-1). A `String` handed to `.accessibilityLabel(_:)` lands on
+    /// the `StringProtocol` overload, which renders it verbatim — so this sentence was frozen
+    /// English and was never even harvested into the catalog.
+    private var accessibilityText: Text {
         switch presence {
-        case .onOtherDevice: return "Photo of \(name), on your other device"
-        case .unavailable: return "Photo of \(name), couldn't be opened"
-        default: return "Photo of \(name)"
+        case .onOtherDevice: Text("Photo of \(name), on your other device")
+        case .unavailable: Text("Photo of \(name), couldn't be opened")
+        default: Text("Photo of \(name)")
         }
     }
 
@@ -74,6 +77,9 @@ struct MealPhotoPolaroid: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
+                // T2-10: a meal photograph inverted is an inedible-looking negative — and the
+                // polaroid exists precisely so the user can recognize the meal at a glance.
+                .accessibilityIgnoresInvertColors()
         } else if presence == .onOtherDevice {
             // The meal synced here, but its photo bytes stayed on the device it was taken on.
             // A soft, deliberate placeholder — clearly intentional, not a broken image.
@@ -227,6 +233,8 @@ struct MealPhotoDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    // T2-10: the full-size meal photo, same reason as the polaroid thumbnail.
+                    .accessibilityIgnoresInvertColors()
             } else if presence == .onOtherDevice {
                 // The photo bytes stayed on the device this meal was snapped on; day data
                 // synced here, the picture didn't. A calm, deliberate state.

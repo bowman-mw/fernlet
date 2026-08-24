@@ -7,6 +7,7 @@
 // confirm — so a destructive toggle can't mutate without a warning having been shown first.
 
 import Foundation
+import SwiftUI
 import Testing
 import FernletFoundation
 @testable import Fernlet
@@ -45,8 +46,13 @@ struct DestructiveConfirmationTests {
             auditEvent: "privacy.sealedBackup.periodDisableConfirmed"
         ) {}
 
+        // `LocalizedStringKey`/`Text` comparisons, not `String` ones: the title, the body and the
+        // button labels were forked off `String` by accessibility review T2-1 so that all 23 production dialogs
+        // localize. `LocalizedStringKey` is `Equatable` and takes a literal, so the title and the
+        // button read exactly as before; the message is a `Text` (some dialogs compose it), so it
+        // is compared against the `Text` the same literal builds.
         #expect(action.title == "Turn off encrypted period backup?")
-        #expect(action.message.contains("permanently deletes"))
+        #expect(action.message == Text("This permanently deletes your encrypted period backup from iCloud."))
         #expect(action.confirmLabel == "Turn off")
         #expect(action.auditEvent == "privacy.sealedBackup.periodDisableConfirmed")
     }

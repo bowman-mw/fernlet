@@ -5,6 +5,30 @@ import PrivateHealthStore
 import HealthKitGateway
 import FernletUI
 
+/// App-target region derivation for ``PeriodTemperatureUnit`` — the ONE rule both the entry picker
+/// on this sheet and the read-back row on ``CycleDayDetailView`` obey.
+///
+/// The two sides had each written their own, and the rules disagreed. The picker asked
+/// `measurementSystem == .metric`; the detail row asked ``BodyMeasurementEntry/usesImperial``,
+/// which is `== .us`. `Locale.MeasurementSystem` has THREE values, so `.uk` fell in the gap: a
+/// British user was offered a Fahrenheit picker and read the same reading back in Celsius, on
+/// numbers whose entire value is small day-to-day movement. Deriving it here once removes the gap
+/// by construction — a reverter has to reintroduce two expressions to reintroduce the bug.
+///
+/// `.us` (not "not metric") is the test, because this unit is a TEMPERATURE unit: the UK is metric
+/// for temperature and imperial only for road distances and pints, so `.uk` belongs on the Celsius
+/// side. That also lines this up with `BodyMeasurementEntry.usesImperial`, so a user's weight,
+/// height, and basal temperature now agree about which system they are in.
+extension PeriodTemperatureUnit {
+    /// The unit this device's region reads body temperature in.
+    ///
+    /// Resolved at each use rather than cached, so changing Region in iOS Settings takes effect
+    /// without a relaunch.
+    static var regionDefault: PeriodTemperatureUnit {
+        Locale.current.measurementSystem == .us ? .fahrenheit : .celsius
+    }
+}
+
 /// The log/edit sheet for a cycle day: flow level, cycle-start and intermenstrual-bleeding flags,
 /// symptoms with intensity steppers, cervical mucus and ovulation-test observations, basal body
 /// temperature, and a private note.
@@ -40,6 +64,23 @@ struct LogPeriodSheet: View {
     @State private var customScales: [PeriodSymptom: Int]
     @State private var statusMessage: String?
     @State private var isSaving = false
+    /// Set when a write LANDED but not cleanly — the sealed note was buffered until unlock, or
+    /// dropped for want of an app lock.
+    ///
+    /// The sheet used to show that sentence for 1.2–1.8 s and dismiss itself. It is the one message
+    /// telling the user their note was not kept, VoiceOver's focus is somewhere else for the whole
+    /// window, and a blind user was structurally guaranteed never to hear it. Stretching the timer
+    /// only makes the race less unfair; the sheet now simply stays.
+    ///
+    /// Staying open raises two hazards, and this flag closes both by FREEZING the sheet: the fields
+    /// go `disabled`, so there are no post-write edits for a swipe-down to discard (which is why
+    /// `isDirty` may honestly report false and retire the draft guard), and the commit bar becomes a
+    /// plain Done, so a second tap cannot write the day again. Re-arming Save instead would be
+    /// worse than the bug it fixes: `PeriodTrackerStore.logEvent` mints a fresh `externalUUID` and
+    /// inserts a new sealed narrative every time, so a second commit duplicates the day rather than
+    /// amending it. Changing a logged day is what the calendar's Edit is for, and it routes through
+    /// `editEvent(replacingEntry:)`.
+    @State private var savedWithCaveat = false
     /// The field values the sheet opened with, so the dirty check compares against exactly what was
     /// seeded (a fresh log and an edit of an existing day seed very different things).
     private let initialValues: SheetValues
@@ -76,8 +117,9 @@ struct LogPeriodSheet: View {
         )
     }
 
-    /// Whether the sheet holds anything a swipe-down would throw away.
-    private var isDirty: Bool { currentValues != initialValues }
+    /// Whether the sheet holds anything a swipe-down would throw away. Nothing once the entry has
+    /// been written, because the fields are frozen at the same moment — see ``savedWithCaveat``.
+    private var isDirty: Bool { !savedWithCaveat && currentValues != initialValues }
 
     /// Whether Save is available.
     ///
@@ -109,13 +151,18 @@ struct LogPeriodSheet: View {
     init(periodStore: PeriodTrackerStore, targetDate: Date? = nil, editingEntry: CycleDayEntry? = nil) {
         self.periodStore = periodStore
         self.editingEntry = editingEntry
-        let defaultUnit: PeriodTemperatureUnit = Locale.current.measurementSystem == .metric ? .celsius : .fahrenheit
+        // ONE derivation for the entry unit and the read-back unit — see the extension at the top
+        // of this file. It seeds an EDIT too, not just a fresh log: the sealed store normalizes
+        // every stored reading to Fahrenheit, so re-opening a metric user's day with "97.70" and
+        // an F picker would contradict the "°C" the day detail draws for that very sample.
+        let entryUnit = PeriodTemperatureUnit.regionDefault
         // Seeded ONCE and reused for both the @State values and the dirty-check baseline — two
         // separate `Date()` calls would make a freshly opened sheet claim to be dirty.
         let seeded = SheetValues(
             eventDate: editingEntry?.date ?? targetDate ?? Date(),
             flowLevel: editingEntry?.flowLevel,
-            temperatureText: editingEntry?.basalBodyTemperatureFahrenheit.map { String(format: "%.2f", $0) } ?? "",
+            temperatureText: editingEntry?.basalBodyTemperatureFahrenheit
+                .map { LogPeriodSheet.temperatureText(fahrenheit: $0, in: entryUnit) } ?? "",
             mucusQuality: editingEntry?.cervicalMucusQuality,
             ovulationResult: editingEntry?.ovulationTestResult,
             hasIntermenstrualBleeding: editingEntry?.hasIntermenstrualBleeding ?? false,
@@ -133,7 +180,7 @@ struct LogPeriodSheet: View {
         _mucusQuality = State(initialValue: seeded.mucusQuality)
         _ovulationResult = State(initialValue: seeded.ovulationResult)
         _temperatureText = State(initialValue: seeded.temperatureText)
-        _temperatureUnit = State(initialValue: editingEntry?.basalBodyTemperatureFahrenheit == nil ? defaultUnit : .fahrenheit)
+        _temperatureUnit = State(initialValue: entryUnit)
         _note = State(initialValue: seeded.note)
         _symptoms = State(initialValue: seeded.symptoms)
         _customScales = State(initialValue: seeded.customScales)
@@ -144,23 +191,33 @@ struct LogPeriodSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    lockWarning
-                    dateField
-                    flowLevelField
-                    cycleDetailsField
-                    symptomsField
-                    observationsField
-                    temperatureField
-                    noteField
-                    noteCounter
+                    // Frozen once the entry is written — see ``savedWithCaveat``. `statusText` is
+                    // deliberately OUTSIDE the disabled group: the caveat sentence is the reason
+                    // the sheet stayed open, so nothing may dim or mute it.
+                    Group {
+                        lockWarning
+                        dateField
+                        flowLevelField
+                        cycleDetailsField
+                        symptomsField
+                        observationsField
+                        temperatureField
+                        noteField
+                        noteCounter
+                    }
+                    .disabled(savedWithCaveat)
+
                     statusText
                 }
                 .padding(20)
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: saveLabel, disabled: isSaving || !canSave) {
-                Task { await save() }
+            SheetSaveBar(label: saveLabel, disabled: isSaving || !(canSave || savedWithCaveat)) {
+                // Once the entry is written the bar is a Done, not a second Save: leaving the sheet
+                // open is what lets the caveat be read (and heard), and re-arming the write would
+                // let the same tap log the day twice.
+                if savedWithCaveat { dismiss() } else { Task { await save() } }
             }
         }
         .background(Color.parchment)
@@ -212,7 +269,11 @@ struct LogPeriodSheet: View {
         SheetField("Flow level") {
             FlowLayout(spacing: 8) {
                 ForEach(PeriodFlowLevel.allCases) { level in
-                    Button(level.title) { flowLevel = level }
+                    // `displayName` (the app-target fork in CycleTrackerView.swift), not `title`,
+                    // which is `rawValue.capitalized` — a storage token wearing paint. The calendar
+                    // that READS this value was forked in the same round; leaving the SETTER on
+                    // tokens would have shown a French user "Heavy" here and the translation there.
+                    Button(level.displayName) { flowLevel = level }
                         .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
                 }
             }
@@ -281,17 +342,22 @@ struct LogPeriodSheet: View {
     private var observationsField: some View {
         SheetField("Observations") {
             VStack(spacing: 0) {
-                observationRow("Cervical mucus", value: mucusQuality?.title ?? "None") {
-                    Button("None") { mucusQuality = nil }
+                // `displayName` (the app-target forks in CycleTrackerView.swift), not `title`,
+                // which is `rawValue.capitalized` — a storage token wearing paint. Same reason the
+                // flow chips above were forked: the calendar day detail that READS these values
+                // renders the localized fork, so leaving the SETTER on tokens showed a French user
+                // "Egg White" here and the translation there.
+                observationRow("Cervical mucus", value: mucusQuality?.displayName ?? noneObservationName) {
+                    Button(noneObservationName) { mucusQuality = nil }
                     ForEach(CervicalMucusQuality.allCases) { quality in
-                        Button(quality.title) { mucusQuality = quality }
+                        Button(quality.displayName) { mucusQuality = quality }
                     }
                 }
                 Divider()
-                observationRow("Ovulation test", value: ovulationResult?.title ?? "None") {
-                    Button("None") { ovulationResult = nil }
+                observationRow("Ovulation test", value: ovulationResult?.displayName ?? noneObservationName) {
+                    Button(noneObservationName) { ovulationResult = nil }
                     ForEach(OvulationTestResult.allCases) { result in
-                        Button(result.title) { ovulationResult = result }
+                        Button(result.displayName) { ovulationResult = result }
                     }
                 }
             }
@@ -303,9 +369,27 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// The "nothing observed" word for both observation rows.
+    ///
+    /// Resolved here rather than left as the bare `"None"` literal the value chip used to carry: a
+    /// `String` reaches `Text` through the non-localizing `StringProtocol` initializer, so the chip
+    /// read English forever while the menu item beside it (a `LocalizedStringKey` literal) did not.
+    /// One resolved string now feeds both, so they cannot diverge either.
+    private var noneObservationName: String {
+        String(localized: "cycle.observation.none", defaultValue: "None",
+               comment: "Value shown for a cervical-mucus or ovulation-test row when nothing was observed that day.")
+    }
+
     /// One "label on the left, value chip on the right" observation row.
+    ///
+    /// `title` is a `LocalizedStringKey`, not a `String`: a `String` parameter reaches `Text` through
+    /// the verbatim overload, which silently opts both call sites out of localization with a clean
+    /// build — the exact failure mode the localization wall exists to catch, and the reason this
+    /// round's other display forks were made. `value` stays a `String` deliberately: it arrives
+    /// already resolved from `CycleDayEntry`'s display forks (`mucusQuality?.displayName`) or from
+    /// ``noneObservationName``, so it must be rendered verbatim rather than looked up a second time.
     private func observationRow<Options: View>(
-        _ title: String,
+        _ title: LocalizedStringKey,
         value: String,
         @ViewBuilder options: () -> Options
     ) -> some View {
@@ -330,7 +414,11 @@ struct LogPeriodSheet: View {
                 .background(Color.moss.opacity(0.10), in: Capsule())
                 .contentShape(Capsule())
             }
-            .accessibilityLabel("\(title), \(value)")
+            // `Text(title)` rather than `title`: a `LocalizedStringKey` cannot be interpolated into
+            // another `LocalizedStringKey` (the compiler rejects it outright — the interpolation
+            // would fall back to a debug description), but a `Text` carries its own lookup. Same
+            // idiom, and the same reason, as the widget slot rows in `HomeView`.
+            .accessibilityLabel("\(Text(title)), \(value)")
         }
         .padding(.vertical, 8)
     }
@@ -370,6 +458,7 @@ struct LogPeriodSheet: View {
     /// `LocalizedStringKey`, not `String`: all three words are authored copy, and only this type
     /// extracts them into the string catalog.
     private var saveLabel: LocalizedStringKey {
+        if savedWithCaveat { return "Done" }
         if isSaving { return "Saving" }
         return isEmptiedEdit ? "Remove entry" : "Save"
     }
@@ -403,6 +492,16 @@ struct LogPeriodSheet: View {
 
     private var hasNarrative: Bool {
         !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty
+    }
+
+    /// Seeds the temperature field from an existing day's stored reading, in `unit`.
+    ///
+    /// `CycleDayEntry.basalBodyTemperatureFahrenheit` hands every stored reading back as Fahrenheit
+    /// whatever the user originally typed, so an edit in a Celsius region has to convert before the
+    /// field can honestly sit next to a °C picker.
+    private static func temperatureText(fahrenheit: Double, in unit: PeriodTemperatureUnit) -> String {
+        guard unit == .celsius else { return String(format: "%.2f", fahrenheit) }
+        return String(format: "%.2f", (fahrenheit - 32) * 5 / 9)
     }
 
     /// Plausible basal-body-temperature ranges. A value outside them is a typo or a paste, never a
@@ -459,7 +558,7 @@ struct LogPeriodSheet: View {
         case .value(let value):
             basalBodyTemperature = value
         case .invalid(let message):
-            statusMessage = message
+            report(message, kind: .error)
             return
         }
         do {
@@ -486,20 +585,43 @@ struct LogPeriodSheet: View {
             }
             switch result {
             case .saved:
+                // The only clean outcome: everything the user typed is where they expect it, so
+                // there is nothing to read and the sheet gets out of the way.
                 dismiss()
+            // `.success`, not `.status`: on both arms the write LANDED — the caveat is about where
+            // the note ended up, not about whether anything was saved. "Your data is safe now" is a
+            // different thing to hear than "here is a fact", and these are the batch's only two
+            // durable-write announcements on this sheet.
             case .savedWithBufferedNarrative:
-                statusMessage = "Note saved. Unlock to view it on your calendar."
-                // Cancelled: the sheet is already going away — the save has landed, so there is
-                // nothing left to do but stop.
-                do { try await Task.sleep(for: .seconds(1.2)) } catch { return }
-                dismiss()
+                savedWithCaveat = true
+                report(String(localized: "Note saved. Unlock to view it on your calendar."),
+                       kind: .success)
             case .savedWithDroppedNarrative:
-                statusMessage = "Health event saved. Set up app lock to keep notes with future cycles."
-                do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
-                dismiss()
+                savedWithCaveat = true
+                report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."),
+                       kind: .success)
             }
         } catch {
-            statusMessage = error.localizedDescription
+            report(error.localizedDescription, kind: .error)
         }
+    }
+
+    /// Publishes a save outcome: renders the sentence and speaks it once.
+    ///
+    /// Every one of these sentences reports something the user did NOT get — a note buffered, a note
+    /// dropped, a temperature refused, a write that threw. Rendered as a plain `Text` it reached
+    /// only people looking at the sheet, which contradicts the project's nothing-silent invariant
+    /// for exactly the users least able to check.
+    ///
+    /// **Privacy:** the outcome sentence and nothing else. An announcement is audible across the
+    /// room, and the note this sheet seals is the reason the whole surface is behind an app lock.
+    ///
+    /// - Parameters:
+    ///   - message: The already-localized outcome sentence — never the note itself.
+    ///   - kind: `.error` when nothing was written at all; `.status` (the default) for a save that
+    ///     landed with a caveat the user still has to read.
+    private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
+        statusMessage = message
+        FernletAnnouncer.system.announce(kind, resolved: message)
     }
 }

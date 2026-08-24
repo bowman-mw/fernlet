@@ -22,6 +22,8 @@ struct OnboardingWelcomeView: View {
                     CompanionView(state: .thriving, size: 132)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
+                        // Decorative: a fixed `.thriving` illustration, not the user's companion.
+                        .accessibilityHidden(true)
 
                     VStack(spacing: 10) {
                         privacyRow("lock.shield.fill", title: "Private by default", body: "Your personal logs stay in your own storage unless you choose iCloud sync.")

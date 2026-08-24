@@ -102,7 +102,12 @@ struct FernletApp: App {
         // `Color.parchment` token resolves — because a hard-coded light parchment flashed pale
         // behind every sheet and push while the app was rendering dark.
         UIWindow.appearance().backgroundColor = UIColor { @Sendable trait in
-            FernletThemePalette.current(for: trait.userInterfaceStyle).background
+            // Forwards `accessibilityContrast` as well as the style (§4.2): the two UIKit
+            // appearance proxies resolve the same palette the SwiftUI tokens do, so leaving the
+            // contrast axis off here would make the window ground and the nav title the only two
+            // surfaces in the app that ignore Increase Contrast.
+            FernletThemePalette.current(for: trait.userInterfaceStyle,
+                                        contrast: trait.accessibilityContrast).background
         }
         Self.configureNavigationBarAppearance()
         #endif
@@ -117,7 +122,8 @@ struct FernletApp: App {
         // `@Sendable` keeps the provider off this target's MainActor default isolation — UIKit resolves it
         // on whatever thread needs the color, and the executor check traps there. See FernletTheme.swift.
         let bark = UIColor { @Sendable trait in
-            FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
+            FernletThemePalette.current(for: trait.userInterfaceStyle,
+                                        contrast: trait.accessibilityContrast).primaryText
         }
         // Scale the serif faces with Dynamic Type via UIFontMetrics.
         let baseInlineFont = UIFont(name: FernletFontName.dmSerifDisplay, size: 18)

@@ -667,7 +667,8 @@ struct FriendListView: View {
                 if let awayProblem {
                     Text(awayProblem)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .fernletWrappingText()
@@ -869,9 +870,12 @@ struct SendGoodVibesLabel: View {
     var body: some View {
         HStack(spacing: 9) {
             if state == .sending {
+                // `label` below already reads "Sending…"; the spinner is the drawn half of the
+                // same state and would otherwise be an empty leaf in front of it.
                 ProgressView()
                     .controlSize(.small)
                     .tint(Color.parchment)
+                    .accessibilityHidden(true)
             } else {
                 Image(systemName: state == .cooldown ? "checkmark" : "heart.fill")
                     .font(.subheadline.weight(.semibold))

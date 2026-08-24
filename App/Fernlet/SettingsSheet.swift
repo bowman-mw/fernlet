@@ -90,6 +90,10 @@ struct SettingsSheet: View {
     @State private var showDeleteEverything = false
     /// Sub-labels drop at accessibility sizes (5a·AX3): the breadcrumb line is the first casualty.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Read for the Appearance page's live "Contrast" readout only. The renderer's colour providers
+    /// already forward `trait.accessibilityContrast`; this is the SwiftUI-side spelling of the same
+    /// axis, so the number the picker quotes is the number the user will actually get.
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
     /// lives on the stable `settingsContent` so it persists across that swap.
     @State private var settingsSearch = ""
@@ -101,6 +105,9 @@ struct SettingsSheet: View {
     /// One in-flight HealthKit body-profile sync at a time (R3): Stepper/Picker ticks would otherwise
     /// each spawn their own `saveBodyProfileMeasurements` write for a single edit session.
     @State private var profileSyncTask: Task<Void, Never>?
+    /// One in-flight search-result announcement at a time (T2-14) — the debounce itself. See
+    /// ``announceSearchResultCount(_:)``.
+    @State private var searchAnnouncementTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -113,6 +120,13 @@ struct SettingsSheet: View {
                 // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
                 // swallows taps on whatever row settles behind it.
                 .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
+                // T2-14: the Form ⇄ results swap is silent to VoiceOver — nothing moves the cursor
+                // and the field's own value is the typed query, not the outcome. Watches the COUNT,
+                // not the query, so keystrokes that leave the same number of matches standing say
+                // nothing; see `announceSearchResultCount(_:)` for the second gate.
+                .onChange(of: searchResultCount) { _, count in
+                    announceSearchResultCount(count)
+                }
                 // Setting names, not sentences: the automatic capitalization turned a typed
                 // "lock" into "Lock" while the user was still choosing what to search for.
                 .textInputAutocapitalization(.never)
@@ -165,6 +179,53 @@ struct SettingsSheet: View {
     /// Whether the search field currently has a query. Drives the Form ⇄ results swap.
     private var isSearching: Bool {
         !settingsSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// How many settings the current query matches, or `nil` while the field is empty and the Form
+    /// — not a result list — is what is on screen. `nil` rather than `0` so clearing the field is
+    /// silent instead of announcing "0 settings" at a user who just cancelled a search.
+    private var searchResultCount: Int? {
+        guard isSearching else { return nil }
+        return SettingsSearchIndex.results(for: settingsSearch).count
+    }
+
+    /// The plural-correct "6 settings" sentence.
+    ///
+    /// A catalog key with the number as an ARGUMENT, never an English `"s"` glued on in Swift: a
+    /// `count == 1 ? "setting" : "settings"` ternary welds the app to a two-form plural rule most
+    /// languages do not have, and produces a string no translator ever sees.
+    private static func searchResultCountText(_ count: Int) -> String {
+        String(localized: "settings.search.resultCount", defaultValue: "\(count) settings",
+               comment: "Spoken count of settings search results, e.g. '6 settings'. Needs a plural variation per language; English also needs the one-setting form.")
+    }
+
+    /// Speaks how many settings the query now matches, debounced so the field does not talk once
+    /// per keystroke.
+    ///
+    /// Announcement rather than a value on the field: `.searchable` vends a system search control
+    /// this view cannot attach a value to, and the field's value is legitimately the typed query —
+    /// overwriting it would cost a blind user the ability to hear back what they typed. The results
+    /// are a plain `List` whose rows are the accessibility elements, and wrapping a `List` in an
+    /// accessibility container to hang a value on it changes the list's own semantics. So on this
+    /// surface the announcement is the whole mechanism, and the debounce is what makes it bearable:
+    /// typing "l-o-c-k" walks the count 12 → 6 → 4 → 4 and speaks only "4 settings", because each
+    /// new count cancels the announcement the previous one scheduled. A cancelled sleep simply ends
+    /// the superseded task, exactly as `rescheduleDailyCheckIn(at:)` below.
+    ///
+    /// A count, never a matched row: an announcement is spoken aloud into the room, and the
+    /// announcer's standing rule is to announce the event and not the payload.
+    private func announceSearchResultCount(_ count: Int?) {
+        searchAnnouncementTask?.cancel()
+        guard let count else { return }
+        searchAnnouncementTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(450))
+            } catch {
+                return  // superseded by a newer keystroke (or the sheet went away)
+            }
+            guard !Task.isCancelled else { return }
+            FernletAnnouncer.system.announce(.status, resolved: Self.searchResultCountText(count))
+        }
     }
 
     @ViewBuilder
@@ -518,7 +579,8 @@ struct SettingsSheet: View {
                         defaultHex: FernletThemeDefaults.lightBackgroundHex
                     ),
                     hex: customLightBackgroundHex,
-                    defaultHex: FernletThemeDefaults.lightBackgroundHex
+                    defaultHex: FernletThemeDefaults.lightBackgroundHex,
+                    isDarkRow: false
                 ) {
                     customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
                 }
@@ -530,7 +592,8 @@ struct SettingsSheet: View {
                         defaultHex: FernletThemeDefaults.darkBackgroundHex
                     ),
                     hex: customDarkBackgroundHex,
-                    defaultHex: FernletThemeDefaults.darkBackgroundHex
+                    defaultHex: FernletThemeDefaults.darkBackgroundHex,
+                    isDarkRow: true
                 ) {
                     customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
                 }
@@ -562,22 +625,126 @@ struct SettingsSheet: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func themeColorRow(title: String, color: Binding<Color>, hex: String, defaultHex: String, reset: @escaping () -> Void) -> some View {
+    private func themeColorRow(title: String, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             ColorPicker(title, selection: color, supportsOpacity: false)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
-            Text(hex.uppercased())
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(hex.uppercased())
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+                themeContrastLine(hex: hex, defaultHex: defaultHex, isDarkRow: isDarkRow)
+            }
             Button("Reset", action: reset)
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
+                .foregroundStyle(Color.mossInk)
                 .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
         }
         .padding(12)
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// T2-7's live readout: what the picked background will actually measure, computed from the
+    /// same ``FernletThemePalette/fitted(background:contrast:)`` the renderer uses, while the
+    /// picker is open — **on the same contrast axis the reader is running**.
+    ///
+    /// Before the ink-fit guardrail, a mid-grey like `#B3B3B3` fell on the dark-ink side of one
+    /// binary luminance threshold and produced 1.79:1 primary ink and 1.13:1 secondary — on every
+    /// screen, including the Reset button that would undo it. The fit means the *ink* is now safe
+    /// whatever the user picks, and this line is how they can see that rather than take it on
+    /// trust. The residual risk the fit cannot cover is the **accents**, which are fixed hues that
+    /// do not adapt to a custom background, so the line calls that out separately when one of them
+    /// drops under the 3:1 non-text floor.
+    ///
+    /// The contrast axis is forwarded because it changes the answer: with Increase Contrast on, the
+    /// palette the renderer builds is fitted to raised targets (and the *default* background swaps
+    /// to the approved high-contrast secondary ink), so a readout computed at `.unspecified` quotes
+    /// a number the user will never see. A settings line that disagrees with what the app actually
+    /// renders is worse than no line — the same reason the default hex takes the default palette
+    /// below rather than the fitted one.
+    @ViewBuilder
+    private func themeContrastLine(hex: String, defaultHex: String, isDarkRow: Bool) -> some View {
+        #if canImport(UIKit)
+        if let background = UIColor(hex: hex) {
+            // SwiftUI's spelling of the axis, in UIKit's. `.increased` is `.high`; `.standard` and
+            // anything the environment cannot answer stay `.unspecified`, which is what every
+            // palette call in the app meant before it carried a contrast at all.
+            let contrast: UIAccessibilityContrast = colorSchemeContrast == .increased ? .high : .unspecified
+            // The DEFAULT hex takes the default palette, not the fitted one — the two differ by a
+            // few tenths, and a settings line that disagrees with what the app actually renders is
+            // worse than no line. `fitted()` only ever runs on a genuinely custom colour, exactly
+            // as `current(for:contrast:)` does.
+            let palette = hex.caseInsensitiveCompare(defaultHex) == .orderedSame
+                ? FernletThemePalette.current(for: isDarkRow ? .dark : .light, contrast: contrast)
+                : FernletThemePalette.fitted(background: background, contrast: contrast)
+            // The WORST of the four pairs, not the flattering one. Text is drawn on both surfaces
+            // and in both inks, so the number a user needs is the one they will actually struggle
+            // with — reporting `primary on box` would have read 12:1 for the mid-grey background
+            // whose *secondary ink on the page* was 1.13:1.
+            let ratio = Self.ratioText(Self.worstInkContrast(palette))
+            // Two separate `Text` literals rather than a ternary INSIDE one: a ternary of two
+            // interpolated literals infers `String`, which silently opts the line out of the string
+            // catalog (the localization wall's sharpest edge). Each literal here is its own
+            // `LocalizedStringKey` and each harvests as its own "Contrast %@:1…" format string.
+            if Self.accentsFallBelowFloor(on: background) {
+                Text("Contrast \(ratio):1 · accents may be hard to see")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.goldenrodInk)
+                    .lineLimit(2)
+            } else {
+                Text("Contrast \(ratio):1")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .lineLimit(2)
+            }
+        }
+        #endif
+    }
+
+    /// The ratio rendered to one decimal place, locale-formatted (Phase 0 ships comma decimals).
+    private static func ratioText(_ ratio: CGFloat) -> String {
+        (Double(ratio)).formatted(.number.precision(.fractionLength(1)))
+    }
+
+    /// The worst of the four ink/surface pairs a fitted palette produces — primary and secondary
+    /// ink against both the page background and the card box.
+    private static func worstInkContrast(_ palette: FernletThemePalette) -> CGFloat {
+        min(
+            min(palette.primaryText.contrastRatio(to: palette.background),
+                palette.primaryText.contrastRatio(to: palette.box)),
+            min(palette.secondaryText.contrastRatio(to: palette.background),
+                palette.secondaryText.contrastRatio(to: palette.box))
+        )
+    }
+
+    /// Whether either of the two accents that carry *meaning* on a background — moss (the app's
+    /// affirmative tint, 179 foreground sites) and terracotta (destructive) — falls under the 3:1
+    /// WCAG non-text floor on either surface the chosen colour produces.
+    ///
+    /// Accents are fixed hues with no dependence on the background, so unlike the inks they cannot
+    /// be fitted; the honest move is to warn rather than to silently recolour the whole design
+    /// system out from under the user's choice. This is the one risk the T2-7 guardrail does not
+    /// remove, which is exactly why the line says so.
+    ///
+    /// Deliberately takes no contrast argument, unlike the ratio beside it: the two colours it
+    /// measures against are the background itself and `palette.box`, and `boxColor(from:…)` is a
+    /// fixed 0.97/0.17 brightness pin with no contrast axis at all. Only the *inks* move with
+    /// Increase Contrast, so threading it here would imply a dependence that does not exist.
+    private static func accentsFallBelowFloor(on background: UIColor) -> Bool {
+        let palette = FernletThemePalette.fitted(background: background)
+        let isDark = background.relativeLuminance < FernletThemePalette.inkFamilyCrossover
+        let moss = isDark
+            ? UIColor(red: 0.498, green: 0.690, blue: 0.412, alpha: 1)
+            : UIColor(red: 0.369, green: 0.518, blue: 0.302, alpha: 1)
+        let terracotta = isDark
+            ? UIColor(red: 0.839, green: 0.459, blue: 0.345, alpha: 1)
+            : UIColor(red: 0.724, green: 0.329, blue: 0.239, alpha: 1)
+        let worst = [moss, terracotta]
+            .flatMap { [$0.contrastRatio(to: background), $0.contrastRatio(to: palette.box)] }
+            .min() ?? 21
+        return worst < 3.0
     }
 
     private func themeColorBinding(keyPath: ReferenceWritableKeyPath<SettingsSheet, String>, defaultHex: String) -> Binding<Color> {
@@ -1273,7 +1440,11 @@ struct SettingsSheet: View {
     /// remove a saved task outright, with no confirmation and nothing to undo it with.
     private func confirmRemoveCareTask(_ task: PersonalCareTask) {
         pendingDestructiveAction = DestructiveConfirmation(
-            title: "Remove \(task.label)?",
+            // `displayLabel`, not the stored `label`: `PersonalCareTask` bakes the English label
+            // into the settings blob when defaults are first written, so the stored string is inert
+            // for built-ins and `displayLabel` is what resolves the current language. Its own doc
+            // comment mandates exactly this, and this dialog was reading around it.
+            title: "Remove \(task.displayLabel)?",
             message: "It comes off your personal care list. Days you've already ticked it stay as they are.",
             confirmLabel: "Remove",
             auditEvent: "settings.personalCare.removeConfirmed"
@@ -1473,7 +1644,16 @@ struct SettingsSheet: View {
     private func tierTwoMemoryRow(_ record: TierTwoMemoryRecord) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(record.category.uppercased())
+                // `uppercased()` — the ROOT-locale mapping — and deliberately NOT
+                // `.textCase(.uppercase)`, which uppercases in the USER's locale. This string is a
+                // Tier-2 memory CATEGORY: a frozen English classifier token persisted on the
+                // record, not display copy, and there is no catalog entry for the transform to run
+                // after. Locale-driven casing on frozen English is how "side item" becomes
+                // "SİDE İTEM" for a Turkish user (review A4 follow-up F5). Localizing the category
+                // itself is a token/display fork, and it belongs to the deferred class listed in
+                // `Tests/FernletTests/LocalizationBoundaryTests.swift`'s header ("UNCATALOGUED
+                // DISPLAY COPY") — not a casing change.
+                Text(verbatim: record.category.uppercased())
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()
@@ -2192,6 +2372,9 @@ struct AppLockSettingsView: View {
                     }
                 }
                 .padding(24)
+                // Hosts the shared PIN pad, whose tiles grow with Dynamic Type; without this the
+                // bottom key row falls off the sheet at the accessibility sizes and in landscape.
+                .fernletLockPadPage()
             }
             .navigationTitle("Verify passcode")
             .navigationBarTitleDisplayMode(.inline)
@@ -2219,6 +2402,10 @@ struct AppLockSettingsView: View {
             } catch {
                 verifyCurrentPasscode = ""
                 verifyError = error.localizedDescription
+                // Same rule the unlock screen adopted in batch A1: a passcode that did not verify
+                // clears the field and renders a line nothing focuses, so without this the only
+                // signal is an empty field — indistinguishable from a mis-typed digit.
+                FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
     }
@@ -2253,6 +2440,9 @@ struct AppLockSettingsView: View {
             } catch {
                 FernletAuditLog.log("lock.biometric.disableFailed")
                 biometricDisableError = error.localizedDescription
+                // The toggle springs back on failure; the explanation is a line under it that
+                // nothing focuses. Spoken, so "it just flipped back" stops being the whole story.
+                FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
     }
@@ -2338,7 +2528,12 @@ private struct FernletLockChangePasscodeView: View {
         NavigationStack {
             ZStack {
                 Color.parchment.ignoresSafeArea()
-                stepContent.padding(24)
+                // All three steps host the shared PIN pad, whose tiles grow with Dynamic Type;
+                // without this the bottom key row falls off the sheet at the accessibility sizes
+                // and in landscape, on a flow whose only other exit is Cancel.
+                stepContent
+                    .padding(24)
+                    .fernletLockPadPage()
             }
             .navigationTitle("Change passcode")
             .navigationBarTitleDisplayMode(.inline)

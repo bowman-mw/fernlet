@@ -174,6 +174,13 @@ struct HealthAccessSettingsView: View {
 
     // MARK: - Master switch
 
+    /// The master switch's sub-line, held in one place because it is now rendered twice: drawn
+    /// under the toggle at default sizes, and re-attached to the toggle as accessibility custom
+    /// content at every size (T2-2 — see ``masterCard``).
+    private var masterSubline: LocalizedStringKey {
+        "Turning this off stops every kind below"
+    }
+
     private var masterCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: masterBinding) {
@@ -183,7 +190,7 @@ struct HealthAccessSettingsView: View {
                         .foregroundStyle(Color.bark)
                     // 5d·AX3: the master switch keeps its card and loses its sub-line.
                     if !dynamicTypeSize.isAccessibilitySize {
-                        Text("Turning this off stops every kind below")
+                        Text(masterSubline)
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
@@ -192,6 +199,12 @@ struct HealthAccessSettingsView: View {
             }
             .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.health.master")
+            // T2-2: the sub-line above is DELETED from the layout at accessibility sizes, and a
+            // view that is never drawn never enters the accessibility tree either — so a user
+            // running Larger Text and VoiceOver together lost the one sentence that says what the
+            // master switch does to the kinds below it. Re-attached on the More Content rotor at
+            // every size; the toggle's own on/off value is untouched.
+            .accessibilityCustomContent("Details", masterSubline)
             if let healthError {
                 Text(healthError)
                     .font(.fernlet(.bodySmall))
@@ -218,8 +231,10 @@ struct HealthAccessSettingsView: View {
                 } else {
                     pendingDestructiveAction = DestructiveConfirmation(
                         title: "Turn off Health integration?",
-                        message: "Turning this off removes the activity, cycle, and other Health data "
-                            + "Fernlet has cached on this device. Your data stays in Apple Health. Turn off?",
+                        message: """
+                            Turning this off removes the activity, cycle, and other Health data \
+                            Fernlet has cached on this device. Your data stays in Apple Health. Turn off?
+                            """,
                         confirmLabel: "Turn off",
                         auditEvent: "privacy.healthKit.masterDisableConfirmed"
                     ) {
@@ -320,6 +335,13 @@ struct HealthAccessSettingsView: View {
                     Text(card.title)
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
+                        // T2-2: the summary below is dropped from the LAYOUT at accessibility
+                        // sizes, which also drops it out of the accessibility tree. Re-attached
+                        // to the card's name — the one element that is always present — so
+                        // "what Fernlet does with this kind" stays reachable on the More Content
+                        // rotor. On the title rather than the card, because the card is not a
+                        // single accessibility element (it contains the action buttons).
+                        .accessibilityCustomContent("Details", card.summary)
                     // 5d·AX3: the description is what gives way; name, state and action stay.
                     if !dynamicTypeSize.isAccessibilitySize {
                         Text(card.summary)

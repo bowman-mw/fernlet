@@ -153,11 +153,19 @@ private enum PolicyBlock {
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 2)
+                // T2-19: the policy is ~120 lines of prose in one scroll. Without the trait the
+                // Headings rotor is empty and the only way through it is swiping paragraph by
+                // paragraph. Two edits here light up all 15 headings, because every heading in the
+                // document is parsed into one of these two cases.
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHeading(.h1)
         case .header(let s):
             Text(s)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
                 .padding(.top, 8)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHeading(.h2)
         case .paragraph(let s):
             Text(PolicyMarkdown.inline(s))
                 .font(.fernlet(.body))

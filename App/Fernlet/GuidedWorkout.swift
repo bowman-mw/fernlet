@@ -184,6 +184,10 @@ struct GuidedWorkoutSheet: View {
         }
         .font(.fernlet(.labelSmall))
         .foregroundStyle(Color.slate)
+        // T2-2: the shortened form drops the noun that says what "1 of 5" counts, and this line sits
+        // beside a rest countdown and a set counter that are also "n of m". The drawn text keeps the
+        // accessibility-size treatment; the spoken one keeps the noun.
+        .accessibilityLabel("Exercise \(position) of \(total) · \(minutes) min left")
     }
 
     /// Whole minutes remaining, floored at 1 — a live run never claims "0 min left".
@@ -266,6 +270,9 @@ struct GuidedWorkoutSheet: View {
                     restPreview(run, exercise)
                 }
 
+                // The read-ahead list gives way at accessibility sizes (3a·AX3) — and a view that is
+                // never drawn is never in the accessibility tree, so ``exerciseTitle(_:_:)`` re-hangs
+                // it there as custom content (T2-2).
                 if !dynamicTypeSize.isAccessibilitySize {
                     GuidedUpNextList(exercises: upcomingExercises(run))
                 }
@@ -281,9 +288,7 @@ struct GuidedWorkoutSheet: View {
     /// The cream card naming the current exercise with its Set / Reps / Last-time pills.
     private func exerciseCard(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(exercise.name)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+            exerciseTitle(run, exercise)
 
             if exercise.fromCatalog && exercise.sets >= 1 {
                 HStack(spacing: 10) {
@@ -292,6 +297,7 @@ struct GuidedWorkoutSheet: View {
                         metricPill(title: "Reps", value: exercise.reps)
                     }
                     // 1e·AX3: the Last-time pill is the first thing to go at accessibility sizes.
+                    // ``exerciseTitle(_:_:)`` puts it back on the rotor there (T2-2).
                     if !dynamicTypeSize.isAccessibilitySize,
                        let lastWeight = lastWeightByName[WorkoutExerciseCatalog.normalizedName(exercise.name)] {
                         metricPill(title: "Last time", value: lastWeight)
@@ -306,6 +312,48 @@ struct GuidedWorkoutSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// The exercise name — and, at accessibility text sizes only, the two things the layout drops
+    /// around it, re-hung on this element as VoiceOver custom content (T2-2).
+    ///
+    /// **The custom-content convention.** A view that is never *drawn* never enters the accessibility
+    /// tree, so an `if !dynamicTypeSize.isAccessibilitySize` that removes real content removes it from
+    /// speech as well — for a user running Larger Text *and* VoiceOver, which is a common pairing.
+    /// The visual decisions stay exactly as designed; the content comes back as a rotor entry on the
+    /// nearest element that owns it, which for both of these is the exercise being performed. Custom
+    /// content, not a longer `.accessibilityLabel`: it is there on demand and never lengthens the
+    /// sentence spoken on every landing. Each entry is a `Text` so a value that is user data stays
+    /// `Text(verbatim:)` while its "nothing yet" case can be a localized literal.
+    @ViewBuilder
+    private func exerciseTitle(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        let title = Text(exercise.name)
+            .font(.fernlet(.displayMedium))
+            .foregroundStyle(Color.bark)
+        if dynamicTypeSize.isAccessibilitySize {
+            title
+                .accessibilityCustomContent("Last time", lastWeightValue(exercise))
+                .accessibilityCustomContent("Up next", upNextValue(run))
+        } else {
+            title
+        }
+    }
+
+    /// The dropped "Last time" pill as one spoken value (`GuidedWorkout.swift` 1e·AX3 drop site).
+    /// The no-history case is stated rather than omitted — a silent rotor entry would read as a bug.
+    private func lastWeightValue(_ exercise: GuidedWorkoutRunState.Exercise) -> Text {
+        guard let weight = lastWeightByName[WorkoutExerciseCatalog.normalizedName(exercise.name)] else {
+            return Text("Not logged yet")
+        }
+        return Text(verbatim: weight)
+    }
+
+    /// The dropped `GuidedUpNextList` as one spoken value. `formatted(.list(type: .and))` rather than
+    /// a hand-joined string: the separator and the final conjunction are locale-dependent.
+    private func upNextValue(_ run: GuidedWorkoutRunState) -> Text {
+        let names = upcomingExercises(run).map(\.name)
+        guard !names.isEmpty else { return Text("Nothing after this one") }
+        return Text(verbatim: names.formatted(.list(type: .and)))
     }
 
     /// "1 of 4", abbreviated to "1/4" at accessibility sizes so the numerals stay large (1e·AX3).
@@ -491,6 +539,10 @@ struct GuidedWorkoutSheet: View {
         .disabled(!run.canSkipToNextExercise)
         .opacity(run.canSkipToNextExercise ? 1 : 0)
         .accessibilityHidden(!run.canSkipToNextExercise)
+        // T2-2: the accessibility-size form of the visible title is the bare word "Skip", which in a
+        // runner that also skips *rests* names nothing. The shortened text is the design decision;
+        // the spoken name stays the whole one at every text size.
+        .accessibilityLabel("Skip to next exercise")
         .accessibilityIdentifier("workout.guided.skipExercise")
     }
 

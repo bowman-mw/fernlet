@@ -71,8 +71,17 @@ public enum NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: [dailyCheckInID])
 
         let content = UNMutableNotificationContent()
-        content.title = "A gentle check-in"
-        content.body = "However today went, a small note of care still counts."
+        // T2-19: the daily check-in is delivered to Announce Notifications and to a Braille
+        // display as well as to the Lock Screen, and it is the one sentence of Fernlet many users
+        // hear each day. `bundle: .module` because this is an SPM module — without it the lookup
+        // goes to Bundle.main, misses this module's catalog, and speaks English forever.
+        content.title = String(localized: "notification.dailyCheckIn.title",
+                               defaultValue: "A gentle check-in", bundle: .module,
+                               comment: "Title of the once-a-day reminder notification. An invitation, never a streak warning or a nag.")
+        content.body = String(localized: "notification.dailyCheckIn.body",
+                              defaultValue: "However today went, a small note of care still counts.",
+                              bundle: .module,
+                              comment: "Body of the once-a-day reminder notification. Must stay unconditional — care counts regardless of how the day went.")
         content.sound = .default
 
         var components = DateComponents()
@@ -110,10 +119,19 @@ public enum NotificationService {
     public static func postSessionMessage(from senderName: String) async {
         guard await isAuthorized() else { return }
         var name = ItemNameModeration.sanitizedName(senderName)
-        if name.isEmpty { name = "a friend" }
+        if name.isEmpty {
+            name = String(localized: "notification.sessionMessage.unknownSender",
+                          defaultValue: "a friend", bundle: .module,
+                          comment: "Stands in for a session peer whose name sanitized away to nothing. Reads inside the sentence 'New message from …', so it is lower-case.")
+        }
         let content = UNMutableNotificationContent()
-        content.title = "New message from \(name)"
-        content.body = "Open Fernlet to reply — session messages disappear when the session ends."
+        content.title = String(localized: "notification.sessionMessage.title",
+                               defaultValue: "New message from \(name)", bundle: .module,
+                               comment: "Title of the notification for a mesh session message that arrived while the app was backgrounded. The argument is the sender's sanitized display name.")
+        content.body = String(localized: "notification.sessionMessage.body",
+                              defaultValue: "Open Fernlet to reply — session messages disappear when the session ends.",
+                              bundle: .module,
+                              comment: "Body of the session-message notification. The disappearance is the important half: session chat is not stored anywhere after the session.")
         content.sound = .default
         // nil trigger → deliver as soon as possible; the fixed id coalesces rapid arrivals.
         let request = UNNotificationRequest(identifier: sessionMessageID, content: content, trigger: nil)

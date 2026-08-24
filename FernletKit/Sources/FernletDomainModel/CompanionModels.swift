@@ -283,17 +283,32 @@ public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Iden
 
     public var id: String { rawValue }
 
+    /// The colour's reader-facing name — drawn under the swatch and spoken by VoiceOver.
+    ///
+    /// Localized (review T2-1). `rawValue` above is the FROZEN persisted token; this is the display
+    /// half, and it was the one member of this file's four display forks that the localization
+    /// round missed — ``CompanionState/displayName``, ``FeelingTag/label`` and
+    /// ``SleepQuality/label`` all already resolve the same way.
     public var label: String {
         switch self {
-        case .state: "Mood"
-        case .moss: "Moss"
-        case .fern: "Fern"
-        case .rose: "Rose"
-        case .sun: "Sun"
-        case .slate: "Slate"
-        case .terracotta: "Clay"
-        case .cream: "Cream"
-        case .bark: "Bark"
+        case .state: String(localized: "companionColor.state", defaultValue: "Mood", bundle: .module,
+                            comment: "Companion colour option that follows the day's mood instead of a fixed colour")
+        case .moss: String(localized: "companionColor.moss", defaultValue: "Moss", bundle: .module,
+                           comment: "Companion colour: the app's green")
+        case .fern: String(localized: "companionColor.fern", defaultValue: "Fern", bundle: .module,
+                           comment: "Companion colour: a lighter green")
+        case .rose: String(localized: "companionColor.rose", defaultValue: "Rose", bundle: .module,
+                           comment: "Companion colour: pink")
+        case .sun: String(localized: "companionColor.sun", defaultValue: "Sun", bundle: .module,
+                          comment: "Companion colour: yellow")
+        case .slate: String(localized: "companionColor.slate", defaultValue: "Slate", bundle: .module,
+                            comment: "Companion colour: blue-grey")
+        case .terracotta: String(localized: "companionColor.terracotta", defaultValue: "Clay", bundle: .module,
+                                 comment: "Companion colour: the app's warm orange-red")
+        case .cream: String(localized: "companionColor.cream", defaultValue: "Cream", bundle: .module,
+                            comment: "Companion colour: off-white")
+        case .bark: String(localized: "companionColor.bark", defaultValue: "Bark", bundle: .module,
+                           comment: "Companion colour: dark brown")
         }
     }
 

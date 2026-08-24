@@ -203,6 +203,11 @@ struct FirstAidView: View {
                 Text("If things feel heavy")
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Self.supportHeadingInk)
+                    // T2-19: the one section heading on this screen, and the section under it is
+                    // the crisis-line block — the part of First Aid a distressed user most needs
+                    // to reach without swiping through the three tool cards first.
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityHeading(.h2)
             }
             Text(resource.blurb)
                 .font(.fernlet(.body))

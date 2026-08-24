@@ -85,6 +85,22 @@ enum FernletLockCopy {
         }
     }
 
+    // MARK: Numeric pad
+
+    /// The PIN pad's spoken copy. Nothing here is ever drawn — ``FernletNumericPad`` renders a glyph
+    /// and these are the words VoiceOver, Braille and Voice Control get instead.
+    ///
+    /// Shared by all three pad hosts (setup, unlock, and the app's passcode-change screens), which is
+    /// why it sits at the top level of the vault rather than under ``FernletLockCopy/Unlock``.
+    enum Pad {
+        /// Name of the delete key, which draws as an SF Symbol and so has no text of its own.
+        /// Voice Control users speak this word to press it.
+        static var backspace: String {
+            String(localized: "lock.pad.backspace", defaultValue: "Delete", bundle: .module,
+                   comment: "Spoken name of the backspace key on the PIN pad; it draws as a left-pointing delete glyph with no text. Use the word your platform's own keypad uses for removing the last typed digit.")
+        }
+    }
+
     // MARK: Setup wizard
 
     /// The five-step passcode-setup wizard's own copy.
@@ -343,13 +359,18 @@ public struct FernletLockSetupView: View {
                 // Once the lock IS configured the wizard stops pretending it isn't: the live step
                 // (with its tappable Cancel and Continue, which re-opened the disclosure) is
                 // replaced by a settled "You're set" state while the toast dwells.
-                if showSuccess {
-                    completedStep
-                        .padding(24)
-                } else {
-                    stepContent
-                        .padding(24)
+                Group {
+                    if showSuccess {
+                        completedStep
+                    } else {
+                        stepContent
+                    }
                 }
+                .padding(24)
+                // The entry and confirm steps host the shared pad, and passcode CREATION is
+                // mandatory and un-skippable — there is no route past it if the bottom row of keys
+                // is off-screen at an accessibility text size.
+                .fernletLockPadPage()
             }
             .navigationTitle(FernletLockCopy.Setup.navTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -1012,6 +1033,46 @@ extension FernletLockCopy {
                    comment: "Inline error when a biometric unlock is refused because too many passcode attempts failed and only a reset continues.")
         }
 
+        /// A lockout, spoken as one sentence.
+        ///
+        /// Two whole sentences joined, as a FORMAT rather than by splicing them together in Swift
+        /// with a space: the pieces are independently translated, and a language that needs them
+        /// reordered, differently punctuated, or written right-to-left cannot express that from the
+        /// call site.
+        ///
+        /// - Parameters:
+        ///   - title: The lockout heading, already localized.
+        ///   - countdown: The live "try again in …" line, already localized.
+        static func announceLockout(title: String, countdown: String) -> String {
+            String(localized: "lock.unlock.announce.lockout",
+                   defaultValue: "\(title) \(countdown)",
+                   bundle: .module,
+                   comment: "Spoken aloud when the app lock refuses an entry because a cooldown is running; the screen shows a card instead of an error line. First placeholder is the lockout heading, second is the live countdown. Both are complete phrases — order, join and punctuate them however the two read naturally together.")
+        }
+
+        /// A failed attempt and the countdown to lockout, spoken as one sentence. Same
+        /// format-not-splice reasoning as ``announceLockout(title:countdown:)``.
+        ///
+        /// - Parameters:
+        ///   - failure: The failure sentence, already localized.
+        ///   - attempts: The attempts-remaining warning, already localized.
+        static func announceFailureWithAttempts(failure: String, attempts: String) -> String {
+            String(localized: "lock.unlock.announce.failureWithAttempts",
+                   defaultValue: "\(failure) \(attempts)",
+                   bundle: .module,
+                   comment: "Spoken aloud after a failed app-lock attempt. First placeholder is what went wrong, second is the warning counting the tries left before lockout. Both are complete sentences — order, join and punctuate them however the two read naturally together.")
+        }
+
+        /// What the bare spinner that replaces the PIN dots is doing.
+        ///
+        /// The spinner covers the whole unlock round trip — key derivation plus the content-key
+        /// unwrap — which is deliberately slow. Unlabeled it is an unnamed, valueless element, so a
+        /// blind user cannot tell a working check from a screen that has stopped responding.
+        static var checkingPasscode: String {
+            String(localized: "lock.unlock.checking", defaultValue: "Checking your passcode", bundle: .module,
+                   comment: "Spoken while the app lock verifies a submitted passcode; the screen shows only a spinner. Present tense — the check is still running.")
+        }
+
         /// VoiceOver's reading of the PIN-dot row: the only feedback a masked field can give.
         static func pinProgress(entered: Int, total: Int) -> String {
             String(localized: "lock.pinDots.accessibilityLabel",
@@ -1082,6 +1143,13 @@ public struct FernletLockView: View {
     /// recoverable key to destroy it. On the first occurrence the passcode pad stays live and the
     /// message points at Face ID (which really can repair the wrap) instead.
     @State private var contentKeyUnrecoverableCount = 0
+    /// Puts VoiceOver's cursor on the inline error the moment one appears.
+    ///
+    /// The failure states of this screen used to be visible-only: the cursor stayed wherever the
+    /// pad had left it, so a wrong PIN, an exhausted ladder and a lost content key all read as
+    /// "nothing happened". Focus moves only TOWARD an error and never away from one, so it can never
+    /// yank the cursor off a key the user is in the middle of pressing.
+    @AccessibilityFocusState private var isErrorFocused: Bool
     /// One-second tick that keeps the cooldown countdown text current while a deadline
     /// is active.
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -1104,72 +1172,98 @@ public struct FernletLockView: View {
         ZStack {
             Color.parchment.ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                Spacer()
-
-                header
-
-                // Error / cooldown feedback
-                if let msg = errorMessage {
-                    Text(msg)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.terracotta)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                }
-
-                // Attempt counter
-                let attempts = lockService.currentAttemptCount
-                if attempts > 0 && !isInputDisabled {
-                    let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
-                    // Terracotta ink, not goldenrod: goldenrod on parchment measured about 2.2:1,
-                    // and this line is the warning that the next mistakes cost a lockout.
-                    Text(FernletLockCopy.Unlock.attemptsRemaining(remaining))
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.terracottaInk)
-                }
-
-                // Input
-                if contentKeyUnrecoverableCount >= 2 {
-                    // Checked FIRST: this state is not a failed attempt (requiresReset is false and
-                    // stays false), so nothing else in this branch would ever surface it — and the
-                    // reset it prescribes has to be reachable from the very screen that prescribes it.
-                    contentKeyUnrecoverableCard
-                } else {
-                    // The lockout cards ACCOMPANY the entry surface; they no longer replace it.
-                    // `FernletLockService.unlock` runs the duress compare before the `requiresReset`
-                    // and cooldown guards precisely because lockout is when coercion is likeliest —
-                    // and that property is unreachable if the pad the duress code is typed on has
-                    // been swapped out for a countdown. A non-duress entry still refuses exactly as
-                    // before (the guards below the compare are untouched) and still costs no attempt,
-                    // so nothing here weakens the ladder: the real verifier is never even derived
-                    // while a cooldown is in force.
-                    if lockService.requiresReset {
-                        resetRequiredCard
-                    } else if isInputDisabled {
-                        cooldownCard
-                    }
-                    inputSection
-                }
-
-                // Biometric button — isBiometricUnlockAvailable is the service's single
-                // offer policy (enabled + usable biometry + one passcode success this
-                // process); never restate its conjunction here.
-                if !lockService.requiresReset && !isInputDisabled && lockService.isBiometricUnlockAvailable {
-                    biometricButton
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 32)
+            // ~272pt of keypad before the header, the error line, the attempts warning and either
+            // lockout card, on a screen the user cannot skip, in an app that declares landscape on
+            // iPhone and locks orientation nowhere. See ``fernletLockPadPage()`` — every host of
+            // the shared pad uses it.
+            unlockStack
+                .padding(.horizontal, 32)
+                .fernletLockPadPage()
         }
         .onAppear {
             refreshCooldown()
             autoPromptBiometricIfEligible()
         }
+        // Toward an error only, never away from one: an arriving failure takes the cursor, and
+        // clearing the message at the start of the next attempt leaves it where the user put it.
+        .onChange(of: errorMessage) { _, message in
+            guard message != nil else { return }
+            isErrorFocused = true
+        }
         .onReceive(timer) { _ in refreshCooldown() }
+        // The trigger is `String?`, and it is set to nil at the START of every attempt — feeding it
+        // to `.sensoryFeedback(.error, trigger:)` directly would buzz on the way INTO each try. Only
+        // an arriving message is a failure.
+        .sensoryFeedback(trigger: errorMessage) { _, message in message == nil ? nil : .error }
         .animation(.easeInOut(duration: 0.2), value: errorMessage)
         .animation(.easeInOut(duration: 0.2), value: isInputDisabled)
+    }
+
+    /// The unlock screen's whole column — header, failure feedback, the entry surface (with either
+    /// lockout card above it) and the biometric offer.
+    ///
+    /// Extracted from ``body`` when the `ScrollView` went in: the body was already close to the
+    /// 60-code-line ceiling (Power of 10 R4), and wrapping in a scroll container plus a geometry
+    /// reader would have pushed it over.
+    @ViewBuilder private var unlockStack: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            header
+
+            // Error / cooldown feedback
+            if let msg = errorMessage {
+                Text(msg)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.terracotta)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .accessibilityFocused($isErrorFocused)
+            }
+
+            // Attempt counter
+            let attempts = lockService.currentAttemptCount
+            if attempts > 0 && !isInputDisabled {
+                let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
+                // Terracotta ink, not goldenrod: goldenrod on parchment measured about 2.2:1,
+                // and this line is the warning that the next mistakes cost a lockout.
+                Text(FernletLockCopy.Unlock.attemptsRemaining(remaining))
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.terracottaInk)
+            }
+
+            // Input
+            if contentKeyUnrecoverableCount >= 2 {
+                // Checked FIRST: this state is not a failed attempt (requiresReset is false and
+                // stays false), so nothing else in this branch would ever surface it — and the
+                // reset it prescribes has to be reachable from the very screen that prescribes it.
+                contentKeyUnrecoverableCard
+            } else {
+                // The lockout cards ACCOMPANY the entry surface; they no longer replace it.
+                // `FernletLockService.unlock` runs the duress compare before the `requiresReset`
+                // and cooldown guards precisely because lockout is when coercion is likeliest —
+                // and that property is unreachable if the pad the duress code is typed on has
+                // been swapped out for a countdown. A non-duress entry still refuses exactly as
+                // before (the guards below the compare are untouched) and still costs no attempt,
+                // so nothing here weakens the ladder: the real verifier is never even derived
+                // while a cooldown is in force.
+                if lockService.requiresReset {
+                    resetRequiredCard
+                } else if isInputDisabled {
+                    cooldownCard
+                }
+                inputSection
+            }
+
+            // Biometric button — isBiometricUnlockAvailable is the service's single
+            // offer policy (enabled + usable biometry + one passcode success this
+            // process); never restate its conjunction here.
+            if !lockService.requiresReset && !isInputDisabled && lockService.isBiometricUnlockAvailable {
+                biometricButton
+            }
+
+            Spacer()
+        }
     }
 
     /// How long the auto-prompt waits for the overlay to settle before presenting Face ID.
@@ -1202,11 +1296,14 @@ public struct FernletLockView: View {
     /// The lock glyph, title and "enter your <credential>" line at the top of the unlock screen.
     private var header: some View {
         VStack(spacing: 10) {
+            // T1-8 (carried from A1's review): decorative and redundant with the title text right
+            // below it — without this it was its own focusable VoiceOver stop, labelled "Lock".
             Image(systemName: "lock.fill")
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(Color.moss)
                 .frame(width: 72, height: 72)
                 .background(Color.moss.opacity(0.10), in: Circle())
+                .accessibilityHidden(true)
 
             Text(FernletLockCopy.Unlock.title)
                 .font(.fernlet(.header))
@@ -1237,6 +1334,7 @@ public struct FernletLockView: View {
                     .tint(Color.moss)
                     .scaleEffect(1.2)
                     .frame(height: 28)
+                    .accessibilityLabel(FernletLockCopy.Unlock.checkingPasscode)
             } else {
                 pinDotsRow(current: passcode, total: total)
             }
@@ -1266,6 +1364,7 @@ public struct FernletLockView: View {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(Color.moss)
+                        .accessibilityLabel(FernletLockCopy.Unlock.checkingPasscode)
                 }
             }
             .animation(.easeInOut(duration: 0.15), value: isUnlocking)
@@ -1431,10 +1530,16 @@ public struct FernletLockView: View {
                 contentKeyUnrecoverableCount = 0
                 refreshCooldown()
                 errorMessage = nil
+                // The only arm with no inline error text — the countdown card carries the state
+                // instead, and it is a card that silently appeared. Say the countdown out loud.
+                announceUnlockFailure(FernletLockCopy.Unlock.announceLockout(
+                    title: FernletLockCopy.Unlock.lockoutTitle,
+                    countdown: cooldownDisplayText))
             } catch FernletLockError.resetRequired {
                 passcode = ""
                 contentKeyUnrecoverableCount = 0
                 errorMessage = FernletLockCopy.Unlock.errorResetRequired
+                announceUnlockFailure(FernletLockCopy.Unlock.errorResetRequired)
             } catch FernletLockError.contentKeyUnrecoverable {
                 // The passcode was RIGHT; this device's Secure Enclave key is gone, so the sealed
                 // data is unopenable. Say so instead of inviting another attempt (nothing-silent).
@@ -1442,20 +1547,70 @@ public struct FernletLockView: View {
                 // second raises the card that actually offers the reset (see the count's doc).
                 passcode = ""
                 contentKeyUnrecoverableCount += 1
-                errorMessage = canRepairWithBiometrics
+                let keyGone = canRepairWithBiometrics
                     ? FernletLockCopy.Unlock.errorKeyGoneTryBiometric(biometricName(lockService.biometricType))
                     : FernletLockCopy.Unlock.errorKeyGone
+                errorMessage = keyGone
+                announceUnlockFailure(keyGone)
             } catch FernletLockError.contentKeyTemporarilyUnavailable(let status) {
                 // NOT the terminal state: the keychain would not answer, which says nothing about
                 // whether the key survives. Never advance the count, never mention reset.
                 passcode = ""
                 contentKeyUnrecoverableCount = 0
-                errorMessage = FernletLockError.contentKeyTemporarilyUnavailable(status: status).errorDescription
+                let unavailable = FernletLockError.contentKeyTemporarilyUnavailable(status: status).errorDescription
+                errorMessage = unavailable
+                if let unavailable { announceUnlockFailure(unavailable) }
             } catch {
                 passcode = ""
                 contentKeyUnrecoverableCount = 0
                 errorMessage = error.localizedDescription
+                announceUnlockFailure(error.localizedDescription)
             }
+        }
+    }
+
+    /// Speaks a FAILED unlock attempt, appending the attempts-remaining warning when one is on
+    /// screen.
+    ///
+    /// **Security — this must never be reachable from a success.** `FernletLockService.unlock`
+    /// answers a duress code and a real passcode identically, on purpose; an announcement keyed off
+    /// *which* credential matched would be a duress oracle audible from across the room. So this is
+    /// called only from ``attemptUnlock()``'s catch arms, where nothing knows or can know which
+    /// secret was tried — every path through it has already failed.
+    ///
+    /// Where a failure ALSO sets `errorMessage`, two channels carry it: this announcement and the
+    /// `@AccessibilityFocusState` move onto the error text, which speaks the same words. A focus
+    /// change can swallow a pending announcement and vice versa, so pairing them means the failure
+    /// is spoken exactly once in practice and never zero times. The `cooldownActive` arm is the
+    /// exception and the reason this exists: it clears `errorMessage` and shows a card instead, so
+    /// there is no error text to focus and this announcement is the ONLY channel.
+    ///
+    /// - Parameter message: An ALREADY-LOCALIZED sentence from ``FernletLockCopy`` or an error's
+    ///   `localizedDescription` — hence ``FernletAnnouncer``'s `resolved:` form. The announcement
+    ///   API takes a plain `String`, so a literal here would be spoken in English forever: this
+    ///   module is an SPM package and its catalog is only consulted through `bundle: .module`.
+    private func announceUnlockFailure(_ message: String) {
+        let attempts = lockService.currentAttemptCount
+        let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
+        let spoken = (attempts > 0 && !isInputDisabled && remaining > 0)
+            ? FernletLockCopy.Unlock.announceFailureWithAttempts(
+                failure: message,
+                attempts: FernletLockCopy.Unlock.attemptsRemaining(remaining))
+            : message
+        FernletAnnouncer.system.announce(.error, resolved: spoken)
+    }
+
+    /// Whether a biometric error is the user declining biometrics rather than biometrics failing.
+    ///
+    /// The gate auto-presents Face ID once per lock session, so someone who prefers to type their
+    /// passcode dismisses that sheet on EVERY entry to the Private tab. Announcing those as failures
+    /// would greet them with an error each time — the opposite of the nothing-silent intent. Real
+    /// failures (a face that did not match, a lockout, a keychain refusal) still speak.
+    private static func isUserDismissal(_ error: any Error) -> Bool {
+        guard let code = (error as? LAError)?.code else { return false }
+        switch code {
+        case .userCancel, .userFallback, .appCancel, .systemCancel: return true
+        default: return false
         }
     }
 
@@ -1481,12 +1636,18 @@ public struct FernletLockView: View {
                 // English literal this replaced told Touch ID and Optic ID users that a sensor they
                 // do not have failed to recognise them, and it would have baked that same wrong
                 // product name into every translation.
-                errorMessage = FernletLockCopy.Unlock.errorBiometricUnrecognized(
+                let unrecognized = FernletLockCopy.Unlock.errorBiometricUnrecognized(
                     biometricName(lockService.biometricType))
+                errorMessage = unrecognized
+                announceUnlockFailure(unrecognized)
             } catch FernletLockError.resetRequired {
                 errorMessage = FernletLockCopy.Unlock.errorTooManyAttempts
+                announceUnlockFailure(FernletLockCopy.Unlock.errorTooManyAttempts)
             } catch {
+                // Rendered text unchanged (pre-existing behaviour); only the SPEECH is filtered, so
+                // a dismissed Face ID sheet stops sounding like something went wrong.
                 errorMessage = error.localizedDescription
+                if !Self.isUserDismissal(error) { announceUnlockFailure(error.localizedDescription) }
             }
         }
     }
@@ -1578,12 +1739,27 @@ public struct FernletNumericPad: View {
     /// Maximum digit count (4 or 6 in practice); key presses beyond it are ignored.
     var maxLength: Int
 
+    /// The delete key's own token. Internal vocabulary, never spoken and never persisted — the glyph
+    /// is what `padKey` draws for it and ``FernletLockCopy/Pad/backspace`` is what VoiceOver says.
+    private static let backspaceKey = "⌫"
+    /// The bottom-left hole in the 3×4 grid. Named so the empty-string check reads as "the gap",
+    /// and so nothing mistakes it for a key that lost its label.
+    private static let gapKey = ""
+
+    /// The 3×4 grid, row by row. The last row is ``gapKey``, zero, ``backspaceKey`` — spelled out
+    /// rather than referencing the constants because a stored property's initializer runs before
+    /// there is a `Self` to reach them through.
     private let rows: [[String]] = [
         ["1", "2", "3"],
         ["4", "5", "6"],
         ["7", "8", "9"],
         ["", "0", "⌫"]
     ]
+
+    /// The key face's minimum box. A MINIMUM rather than a fixed frame: at the accessibility Dynamic
+    /// Type sizes a 24pt digit no longer fits inside 76×56, and a hard frame clipped it.
+    private static let keyMinWidth: CGFloat = 76
+    private static let keyMinHeight: CGFloat = 56
 
     public init(value: Binding<String>, maxLength: Int) {
         self._value = value
@@ -1602,38 +1778,93 @@ public struct FernletNumericPad: View {
         }
     }
 
-    private func padKey(_ key: String) -> some View {
-        Button {
-            handleKey(key)
-        } label: {
-            Group {
-                if key == "⌫" {
-                    Image(systemName: "delete.left")
-                        .font(.title2.weight(.medium))
-                } else if key.isEmpty {
-                    Color.clear
-                } else {
-                    Text(key)
-                        .font(.fernlet(.stat))
-                }
+    /// One key, or — for the grid's bottom-left hole — a layout-only stand-in.
+    ///
+    /// The hole used to be a real `Button` with an empty label, disabled. VoiceOver and Switch
+    /// Control still enumerate a disabled button, so the pad exposed a nameless "dimmed button" the
+    /// user had to swipe past on the way to 0, and Voice Control had nothing to call it. It is now a
+    /// hidden mirror of a key face: `hidden()` keeps its layout so the 0 and the delete key stay
+    /// under the 8 and the 9 at every Dynamic Type size, and takes it out of the tree entirely.
+    @ViewBuilder private func padKey(_ key: String) -> some View {
+        if key == Self.gapKey {
+            keyFace("0")
+                .hidden()
+                .accessibilityHidden(true)
+        } else {
+            Button {
+                handleKey(key)
+            } label: {
+                keyFace(key)
             }
-            .foregroundStyle(Color.bark)
-            .frame(width: 76, height: 56)
-            .background(key.isEmpty ? Color.clear : Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(key.isEmpty ? Color.clear : Color.bark.opacity(0.08), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .accessibilityLabel(key == Self.backspaceKey
+                                ? Text(verbatim: FernletLockCopy.Pad.backspace)
+                                : Text(verbatim: key))
         }
-        .buttonStyle(.plain)
-        .disabled(key.isEmpty)
+    }
+
+    /// The drawn face of one key: its glyph on a cream tile.
+    ///
+    /// The digits were `.fernlet(.stat)` — 14pt, less than half the size iOS's own passcode keypad
+    /// uses — inside a hard 76×56 frame. They now scale with Dynamic Type from 24pt, and the frame
+    /// is a floor rather than a ceiling so a grown digit pushes the tile out instead of clipping.
+    private func keyFace(_ key: String) -> some View {
+        Group {
+            if key == Self.backspaceKey {
+                Image(systemName: "delete.left")
+                    .font(.title2.weight(.medium))
+            } else {
+                Text(verbatim: key)
+                    .font(.custom(FernletFontName.dmSansMedium, size: 24, relativeTo: .title2))
+            }
+        }
+        .foregroundStyle(Color.bark)
+        .frame(minWidth: Self.keyMinWidth, minHeight: Self.keyMinHeight)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private func handleKey(_ key: String) {
-        if key == "⌫" {
+        if key == Self.backspaceKey {
             if !value.isEmpty { value.removeLast() }
-        } else if !key.isEmpty, value.count < maxLength {
+        } else if key != Self.gapKey, value.count < maxLength {
             value.append(key)
+        }
+    }
+}
+
+// MARK: - Pad page hosting
+
+public extension View {
+    /// Hosts a screen that contains a ``FernletNumericPad`` so its keys stay reachable at every
+    /// Dynamic Type size and in every orientation.
+    ///
+    /// The pad's key tiles are a MINIMUM (76×56) around a `relativeTo: .title2` digit, so the whole
+    /// 3×4 grid grows with the user's text size — from ~260pt at the default size to well over 300pt
+    /// at the accessibility sizes. Every host of the pad is also a screen the user cannot skip
+    /// (unlock, passcode creation, passcode change, biometric re-verification), the app declares
+    /// landscape on iPhone, and none of these screens locks orientation. Unscrolled, the bottom rows
+    /// of the pad simply fall off the screen with no way to reach them.
+    ///
+    /// The geometry-derived `minHeight` is what keeps this from being a visual change: while the
+    /// content fits, the host's own `Spacer`s still centre it exactly as before and
+    /// `.basedOnSize` suppresses the rubber-band, so a default-size portrait screen looks
+    /// untouched; only content that genuinely overflows starts scrolling.
+    ///
+    /// - Important: apply this to the screen's CONTENT (inside its background layer), not to the
+    ///   background — a `Color.ignoresSafeArea()` inside a `ScrollView` would scroll away.
+    ///   ``DuressPINSetupView`` is the one pad host that cannot use this, because its pad is a
+    ///   `safeAreaInset`; it caps the pad's Dynamic Type instead.
+    func fernletLockPadPage() -> some View {
+        GeometryReader { proxy in
+            ScrollView {
+                self
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
     }
 }

@@ -37,6 +37,114 @@
         }
       }
     },
+    "companionColor.bark" : {
+      "comment" : "Companion colour: dark brown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bark"
+          }
+        }
+      }
+    },
+    "companionColor.cream" : {
+      "comment" : "Companion colour: off-white",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cream"
+          }
+        }
+      }
+    },
+    "companionColor.fern" : {
+      "comment" : "Companion colour: a lighter green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern"
+          }
+        }
+      }
+    },
+    "companionColor.moss" : {
+      "comment" : "Companion colour: the app's green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moss"
+          }
+        }
+      }
+    },
+    "companionColor.rose" : {
+      "comment" : "Companion colour: pink",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
+    "companionColor.slate" : {
+      "comment" : "Companion colour: blue-grey",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slate"
+          }
+        }
+      }
+    },
+    "companionColor.state" : {
+      "comment" : "Companion colour option that follows the day's mood instead of a fixed colour",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood"
+          }
+        }
+      }
+    },
+    "companionColor.sun" : {
+      "comment" : "Companion colour: yellow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "companionColor.terracotta" : {
+      "comment" : "Companion colour: the app's warm orange-red",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clay"
+          }
+        }
+      }
+    },
     "companionState.okay" : {
       "comment" : "Companion wellbeing state: steady",
       "extractionState" : "extracted_with_value",
@@ -217,6 +325,66 @@
         }
       }
     },
+    "equipmentCategory.cardio" : {
+      "comment" : "Equipment category: treadmills, bikes, rowers",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "equipmentCategory.freeWeights" : {
+      "comment" : "Equipment category: dumbbells, barbells, kettlebells",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Free weights"
+          }
+        }
+      }
+    },
+    "equipmentCategory.functional" : {
+      "comment" : "Equipment category: bands, mats, pull-up bars",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Functional"
+          }
+        }
+      }
+    },
+    "equipmentCategory.machines" : {
+      "comment" : "Equipment category: cable and plate-loaded machines",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Machines"
+          }
+        }
+      }
+    },
+    "equipmentCategory.recovery" : {
+      "comment" : "Equipment category: foam rollers and mobility tools",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery"
+          }
+        }
+      }
+    },
     "feeling.bright" : {
       "comment" : "Journal mood tag: the brightest of the six moods",
       "extractionState" : "extracted_with_value",
@@ -381,6 +549,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Brush teeth PM"
+          }
+        }
+      }
+    },
+    "itemSlot.body" : {
+      "comment" : "Wearable slot: the companion's clothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Outfit"
+          }
+        }
+      }
+    },
+    "itemSlot.face" : {
+      "comment" : "Wearable slot: glasses, masks and anything worn on the face",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Face"
+          }
+        }
+      }
+    },
+    "itemSlot.hat" : {
+      "comment" : "Wearable slot: something worn on the companion's head",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hat"
+          }
+        }
+      }
+    },
+    "itemSlot.heldItem" : {
+      "comment" : "Wearable slot: something the companion carries",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Held item"
           }
         }
       }

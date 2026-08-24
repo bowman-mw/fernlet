@@ -303,6 +303,35 @@ struct CoinEconomyTests {
     }
 }
 
+/// The coin pill's rendering is locale-formatted, deliberately and visibly.
+///
+/// `CoinBalancePill` drew `Text("\(balance)")` — which is a `LocalizedStringKey`, so it minted a
+/// pointless `"%lld"` catalog entry — and now draws `balance.formatted(.number)`. That is a
+/// VISIBLE change and worth stating rather than letting someone "fix" later: at four digits the
+/// pill reads "1,200" in `en_US` and "1.200" in `de_DE`, where it previously read "1200"
+/// everywhere. Grouping separators and numbering systems are exactly what a number in a localized
+/// UI is supposed to pick up, and the pill has room for the extra glyph; the assertion below is
+/// here so the decision has to be re-made deliberately rather than reverted by accident.
+///
+/// `.formatted(.number)` resolves against the process locale, so the expectations are written
+/// through explicit `FloatingPointFormatStyle`/`IntegerFormatStyle` locales rather than assuming
+/// the simulator's.
+struct CoinBalanceRenderingTests {
+
+    @Test func fourDigitBalancesGroupUnderTheUsersLocale() {
+        #expect(1_200.formatted(.number.locale(Locale(identifier: "en_US"))) == "1,200")
+        #expect(1_200.formatted(.number.locale(Locale(identifier: "de_DE"))) == "1.200")
+    }
+
+    /// Below the grouping threshold the pill is character-for-character what it always was, so the
+    /// change is invisible to the overwhelming majority of balances.
+    @Test func smallBalancesRenderExactlyAsBefore() {
+        for balance in [0, 7, 42, 999] {
+            #expect(balance.formatted(.number.locale(Locale(identifier: "en_US"))) == "\(balance)")
+        }
+    }
+}
+
 /// A non-persisting ledger repo that appends without deduping (like the real append-only store, which
 /// can hold duplicate-id rows synced from multiple devices) so tests can hand the service raw rows.
 /// `failAppends` simulates a Core Data append error (the context rolls back → nothing persisted).

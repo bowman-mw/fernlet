@@ -50,6 +50,10 @@ struct CookingLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "flame.fill")
                     .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
+                    // Compact slots carry no text, so an unlabelled glyph announces its SF Symbol
+                    // name ("flame fill") — this is the only word saying WHICH activity is running,
+                    // and the workout activity's compact leading slot looks identical to VoiceOver.
+                    .accessibilityLabel(Text("Cooking"))
             } compactTrailing: {
                 CookingIslandCompactTrailing(state: state, isStale: isStale)
             } minimal: {
@@ -161,7 +165,11 @@ private struct CookingIslandCompactTrailing: View {
         if isStale {
             Image(systemName: "pause.circle")
                 .foregroundStyle(.secondary)
+                .accessibilityLabel(Text("Paused"))
         } else if hasTimer(state) {
+            // No label here on purpose: a label REPLACES a timer Text's content, which would trade
+            // the live countdown for a fixed phrase. The countdown speaks itself; the compact
+            // leading slot supplies the noun.
             StepCountdownText(state: state,
                               font: .caption2.monospacedDigit(),
                               color: .primary,
@@ -171,6 +179,8 @@ private struct CookingIslandCompactTrailing: View {
                 .font(.caption2)
                 .monospacedDigit()
                 .foregroundStyle(.primary)
+                // "3/8" is read as "three slash eight"; the expanded slot's own wording, spoken.
+                .accessibilityLabel(Text("Step \(state.stepNumber) of \(state.stepCount)"))
         }
     }
 }
@@ -184,6 +194,7 @@ private struct CookingIslandMinimal: View {
         if isStale {
             Image(systemName: "pause.fill")
                 .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
+                .accessibilityLabel(Text("Paused"))
         } else if hasTimer(state) {
             StepCountdownText(state: state,
                               font: .caption2.monospacedDigit(),
@@ -192,6 +203,7 @@ private struct CookingIslandMinimal: View {
         } else {
             Image(systemName: "flame.fill")
                 .foregroundStyle(FernletWidgetPalette.leaf)
+                .accessibilityLabel(Text("Cooking"))
         }
     }
 }
@@ -234,6 +246,10 @@ private struct StepCountdownText: View {
                 .font(font)
                 .monospacedDigit()
                 .foregroundStyle(color)
+                // The step timer redraws every second but its accessibility value is only re-read
+                // when the element is marked as changing on its own; without this VoiceOver reports
+                // whatever the clock said when focus landed, for the whole step.
+                .accessibilityAddTraits(.updatesFrequently)
         } else {
             EmptyView()
         }
@@ -304,6 +320,9 @@ private struct CookingLockScreenView: View {
             Image(systemName: "pause.circle")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.45))
+                // "Paused" is already written beside it — otherwise this reads "pause circle" into
+                // the middle of the card, which Speak Screen takes as part of the sentence.
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)

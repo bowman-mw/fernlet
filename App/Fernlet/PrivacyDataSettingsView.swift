@@ -225,6 +225,16 @@ struct PrivacyDataSettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.parchment)
+            // T1-4: either busy overlay below dims and blocks touches but was transparent to
+            // VoiceOver/Switch Control, which could keep walking (and operating) the settings rows
+            // underneath — including the delete/storage controls the overlay exists to guard.
+            // F7 ruling: the harness proved `.isModal` on a ZStack-presented cover already hides
+            // covered content unaided, so this explicit `.accessibilityHidden` is redundant with
+            // both overlays' own `.isModal` trait. Left in deliberately — belt-and-braces on the
+            // one screen guarding a destructive, in-progress wipe — and it costs nothing: the
+            // mid-wipe Back-button escape hatch lives on the nav bar, outside this ScrollView, so
+            // hiding the scroll content doesn't hide the way out.
+            .accessibilityHidden(isUpdatingStorage || deleteFlow.isDeleting)
 
             if isUpdatingStorage {
                 storageSpinner
@@ -525,11 +535,23 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// Records a failure against the card that raised it. One seam so a new failure path cannot
-    /// ship without saying where it belongs.
+    /// Records a failure against the card that raised it, and speaks it. One seam so a new failure
+    /// path cannot ship without saying where it belongs — or without being heard.
+    ///
+    /// The sentence was previously rendered as a plain `Text` inside a card the user may not be
+    /// looking at, on the screen that runs iCloud sync, sealed backups and the deletion ceremonies:
+    /// "nothing happened, and nothing said so" is the worst outcome on this surface. Clearing the
+    /// error (`nil`) announces nothing — silence is the correct sound for a failure going away.
+    ///
+    /// Localization note: these sentences reach us as plain `String`s and several call sites pass
+    /// bare literals, so they are frozen English today. That is the review's T2-1 class (the
+    /// `String`-typed-copy sweep), not something announcing them creates or hides — the printed and
+    /// spoken forms stay the same words either way, and both are fixed by the same one edit.
     private func setOperationError(_ message: String?, scope: PrivacyErrorScope = .general) {
         operationError = message
         operationErrorScope = scope
+        guard let message else { return }
+        FernletAnnouncer.system.announce(.error, resolved: message)
     }
 
     private var exportDataCard: some View {
@@ -605,8 +627,10 @@ struct PrivacyDataSettingsView: View {
     private func presentForgetSearchCorrectionsConfirmation() {
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Forget corrected searches?",
-            message: "Fernlet will stop putting the foods you picked at the top of those searches. "
-                + "Your meals, recipes and everything else stay exactly as they are.",
+            message: """
+                Fernlet will stop putting the foods you picked at the top of those searches. \
+                Your meals, recipes and everything else stay exactly as they are.
+                """,
             confirmLabel: "Forget",
             auditEvent: "privacy.searchCorrections.forgetConfirmed"
         ) {
@@ -623,7 +647,12 @@ struct PrivacyDataSettingsView: View {
             let url = try store.writeDataExportFile()
             exportPayload = DataExportPayload(url: url)
         } catch {
-            setOperationError("Couldn't prepare your export. Please try again.", scope: .export)
+            setOperationError(
+                String(localized: "privacy.error.export",
+                       defaultValue: "Couldn't prepare your export. Please try again.",
+                       comment: "Shown and spoken when building the privacy data export fails."),
+                scope: .export
+            )
         }
         isBuildingExport = false
     }
@@ -648,9 +677,12 @@ struct PrivacyDataSettingsView: View {
         if store != nil {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
+                    // T1-8: not `.combine`d with the label beside it — without this VoiceOver
+                    // reaches it as its own stop and speaks the raw symbol name, "lock shield".
                     Image(systemName: "lock.shield")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(Color.moss)
+                        .accessibilityHidden(true)
                     SectionLabel("Photo protection")
                 }
                 Text("Photos are sealed on this device. Locking them means a future iCloud backup can never carry them off it.")
@@ -832,6 +864,12 @@ struct PrivacyDataSettingsView: View {
                         .stroke(Color.moss, lineWidth: 1.5)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 12))
+                // T2-2: ``ownPhotoLockButtonLabel`` shortens to "Lock photos" at accessibility
+                // sizes, which is a legitimate LAYOUT decision but leaves the button's spoken
+                // NAME ambiguous — locked to what? VoiceOver has no width to run out of, so the
+                // name stays the full one at every size while the drawn label keeps shortening.
+                // Identical to the derived label at default sizes, so nothing changes there.
+                .accessibilityLabel("Lock photos to this device")
                 .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
 
                 Text(ownPhotoDeviceBindingExplanation)
@@ -880,14 +918,21 @@ struct PrivacyDataSettingsView: View {
         let backedUp = storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Lock photos to this device?",
+            // One multi-line literal per branch rather than `+`-concatenation: a concatenation is
+            // a `String` expression, which cannot become a `LocalizedStringKey` and so never
+            // reaches a catalog (T2-1). The rendered words are byte-identical.
             message: backedUp
-                ? "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
-                    + "this device. They'll come back on a new phone only through your encrypted photo "
-                    + "backup, never from a device backup. This can't be undone."
-                : "Your meal, recipe and progress photos will be encrypted with a key that never leaves "
-                    + "this device. They will NOT restore onto a new or erased phone, and a device backup "
-                    + "won't bring them back. Turn on the encrypted photo backup first if you want them to "
-                    + "survive a phone swap. This can't be undone.",
+                ? """
+                  Your meal, recipe and progress photos will be encrypted with a key that never leaves \
+                  this device. They'll come back on a new phone only through your encrypted photo \
+                  backup, never from a device backup. This can't be undone.
+                  """
+                : """
+                  Your meal, recipe and progress photos will be encrypted with a key that never leaves \
+                  this device. They will NOT restore onto a new or erased phone, and a device backup \
+                  won't bring them back. Turn on the encrypted photo backup first if you want them to \
+                  survive a phone swap. This can't be undone.
+                  """,
             confirmLabel: "Lock to this device",
             auditEvent: "privacy.ownPhotos.deviceBindingConfirmed"
         ) {
@@ -1242,7 +1287,9 @@ struct PrivacyDataSettingsView: View {
                 // which on its own reads as a button that does nothing.
                 guard adopted else {
                     setOperationError(
-                        "Couldn't switch to your other device's backup key. Check iCloud and try again.",
+                        String(localized: "privacy.error.adoptBackupKey",
+                               defaultValue: "Couldn't switch to your other device's backup key. Check iCloud and try again.",
+                               comment: "Shown and spoken when adopting the sealed-backup key written by another device fails."),
                         scope: .backupStatus
                     )
                     FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict.failed")
@@ -1320,8 +1367,12 @@ struct PrivacyDataSettingsView: View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
             VStack(spacing: 12) {
+                // Hidden, not labelled: the sentence below IS the label, and an unlabelled
+                // `ProgressView` is otherwise an empty leaf that VoiceOver stops on and says
+                // nothing about. Labelling it too would speak the same state twice.
                 ProgressView()
                     .tint(Color.moss)
+                    .accessibilityHidden(true)
                 Text("Updating storage settings…")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
@@ -1330,6 +1381,8 @@ struct PrivacyDataSettingsView: View {
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             .accessibilityIdentifier("privacy.storage.spinner")
         }
+        // T1-4: this overlay's covered-content half is `screenContent`'s `.accessibilityHidden`.
+        .accessibilityAddTraits(.isModal)
     }
 
     private var disableICloudConfirmationSheet: some View {
@@ -1356,8 +1409,10 @@ struct PrivacyDataSettingsView: View {
     private var disableSheetSpinner: some View {
         VStack(spacing: 12) {
             Spacer()
+            // See ``storageSpinner`` — the sentence below is the label.
             ProgressView()
                 .tint(Color.moss)
+                .accessibilityHidden(true)
             Text("Updating storage settings…")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
@@ -1466,6 +1521,7 @@ struct PrivacyDataSettingsView: View {
             if isDetectingCloudData {
                 HStack(spacing: 8) {
                     ProgressView()
+                        .accessibilityHidden(true)
                     Text("Checking iCloud")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
@@ -1580,9 +1636,11 @@ struct PrivacyDataSettingsView: View {
         } else {
             pendingDestructiveAction = DestructiveConfirmation(
                 title: "Turn off encrypted photo backup?",
-                message: "This permanently deletes your encrypted meal, recipe and progress photo backup "
-                    + "from iCloud. If you lose or replace this device, those photos can't be recovered. "
-                    + "Turn off anyway?",
+                message: """
+                    This permanently deletes your encrypted meal, recipe and progress photo backup \
+                    from iCloud. If you lose or replace this device, those photos can't be recovered. \
+                    Turn off anyway?
+                    """,
                 confirmLabel: "Turn off",
                 auditEvent: "privacy.sealedBackup.disableConfirmed.ownPhotos"
             ) {
@@ -1614,7 +1672,9 @@ struct PrivacyDataSettingsView: View {
                     // consented to (size + binding disclosures) snaps back — say why instead of
                     // letting it look like a switch that refuses to move.
                     setOperationError(
-                        "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                        String(localized: "privacy.error.enablePhotoBackup",
+                               defaultValue: "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                               comment: "Shown and spoken when enabling the encrypted photo backup fails."),
                         scope: .iCloud
                     )
                     FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
@@ -1637,8 +1697,10 @@ struct PrivacyDataSettingsView: View {
             let noun = payload.displayNoun
             pendingDestructiveAction = DestructiveConfirmation(
                 title: "Turn off encrypted \(noun) backup?",
-                message: "This permanently deletes your encrypted \(noun) backup from iCloud. "
-                    + "If you lose or replace this device, that data can't be recovered. Turn off anyway?",
+                message: """
+                    This permanently deletes your encrypted \(noun) backup from iCloud. \
+                    If you lose or replace this device, that data can't be recovered. Turn off anyway?
+                    """,
                 confirmLabel: "Turn off",
                 auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)"
             ) {
@@ -1666,7 +1728,9 @@ struct PrivacyDataSettingsView: View {
                         // "Encrypt & back up" consent alert snaps back — say why rather than leaving
                         // the screen whose invariant is "never a silent swallow" doing exactly that.
                         setOperationError(
-                            "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again.",
+                            String(localized: "privacy.error.enableSealedBackup",
+                                   defaultValue: "Couldn't turn on the encrypted \(payload.displayNoun) backup. Check that iCloud sync is on and try again.",
+                                   comment: "Shown and spoken when enabling a sealed iCloud backup fails. The argument is the noun for the data kind (period, journal, …), localized by SealedBackupPayloadType.displayNoun."),
                             scope: .iCloud
                         )
                         FernletAuditLog.log(
@@ -1747,10 +1811,12 @@ struct PrivacyDataSettingsView: View {
                     // before committing (WS-5).
                     pendingDestructiveAction = DestructiveConfirmation(
                         title: "Exclude Fernlet data from device backups?",
-                        message: "Excluding from device backup means your journals, intimate logs, and "
-                            + "cycle notes won't be in any iPhone backup. Because they're encrypted with a "
-                            + "key that never leaves this device, erasing or losing this device would lose "
-                            + "them permanently. Exclude anyway?",
+                        message: """
+                            Excluding from device backup means your journals, intimate logs, and \
+                            cycle notes won't be in any iPhone backup. Because they're encrypted with a \
+                            key that never leaves this device, erasing or losing this device would lose \
+                            them permanently. Exclude anyway?
+                            """,
                         confirmLabel: "Exclude",
                         auditEvent: "privacy.localBackup.excludeConfirmed"
                     ) {

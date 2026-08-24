@@ -210,6 +210,9 @@ struct CreationStudioView: View {
         )
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
+        // Decorative: a live render of the item being designed. The chips and fields below are
+        // the semantics; the drawing has nothing to say that they do not.
+        .accessibilityHidden(true)
     }
 
     /// The slot picker as Fernlet chips (3e), replacing the system segmented control — the one
@@ -394,18 +397,60 @@ struct CreationStudioView: View {
         .accessibilityAddTraits(selectedColor == index ? [.isSelected] : [])
     }
 
-    /// Spoken names for `ItemDesignPalette.hexes`, in its order. Kept here (not on the domain
-    /// palette) so this stays a presentation concern; the index fallback keeps it total if a colour
-    /// is ever appended upstream.
-    private static let paletteNames = [
-        "Near-black", "Bark", "Taupe", "Cream", "Parchment", "White",
-        "Moss", "Fern", "Terracotta", "Sun", "Rose", "Plum",
-        "Slate blue", "Deep slate", "Red", "Emerald"
-    ]
+    /// Spoken names for `ItemDesignPalette.hexes`, in its order — one catalog key each.
+    ///
+    /// The ARRAY is the palette's order (a token: index N must keep naming `hexes[N]`); each entry
+    /// is display, so each is keyed and commented individually, exactly as
+    /// `CompanionAssetColor.label` does for the nine companion colours. An earlier pass routed
+    /// these through `Text(verbatim:)`, which type-checks and reads correctly in English while
+    /// leaving all sixteen names out of every catalog — the localization loss this whole round is
+    /// about, laundered through the one modifier that is exempt from the wall by construction.
+    private static var paletteNames: [String] {
+        [
+            String(localized: "palette.nearBlack", defaultValue: "Near-black",
+                   comment: "Design-canvas colour name: the darkest swatch, spoken by VoiceOver"),
+            String(localized: "palette.bark", defaultValue: "Bark",
+                   comment: "Design-canvas colour name: the app's dark brown"),
+            String(localized: "palette.taupe", defaultValue: "Taupe",
+                   comment: "Design-canvas colour name: a soft grey-brown"),
+            String(localized: "palette.cream", defaultValue: "Cream",
+                   comment: "Design-canvas colour name: the app's off-white card colour"),
+            String(localized: "palette.parchment", defaultValue: "Parchment",
+                   comment: "Design-canvas colour name: the app's background off-white"),
+            String(localized: "palette.white", defaultValue: "White",
+                   comment: "Design-canvas colour name: pure white"),
+            String(localized: "palette.moss", defaultValue: "Moss",
+                   comment: "Design-canvas colour name: the app's green"),
+            String(localized: "palette.fern", defaultValue: "Fern",
+                   comment: "Design-canvas colour name: a lighter green"),
+            String(localized: "palette.terracotta", defaultValue: "Terracotta",
+                   comment: "Design-canvas colour name: the app's warm orange-red"),
+            String(localized: "palette.sun", defaultValue: "Sun",
+                   comment: "Design-canvas colour name: yellow"),
+            String(localized: "palette.rose", defaultValue: "Rose",
+                   comment: "Design-canvas colour name: pink"),
+            String(localized: "palette.plum", defaultValue: "Plum",
+                   comment: "Design-canvas colour name: dark purple"),
+            String(localized: "palette.slateBlue", defaultValue: "Slate blue",
+                   comment: "Design-canvas colour name: a muted blue"),
+            String(localized: "palette.deepSlate", defaultValue: "Deep slate",
+                   comment: "Design-canvas colour name: a dark blue-grey"),
+            String(localized: "palette.red", defaultValue: "Red",
+                   comment: "Design-canvas colour name: red"),
+            String(localized: "palette.emerald", defaultValue: "Emerald",
+                   comment: "Design-canvas colour name: a deep green"),
+        ]
+    }
 
-    private static func paletteName(at index: Int) -> String {
-        guard index >= 0, index < paletteNames.count else { return "Color \(index + 1)" }
-        return paletteNames[index]
+    /// `Text` rather than `String` (review T2-1): these are spoken colour names, and a `String`
+    /// reaches `.accessibilityLabel(_:)` through the verbatim overload.
+    ///
+    /// `Text(verbatim:)` here is honest — the name arrives already resolved from the keyed list
+    /// above — rather than a way of avoiding the lookup, which is what it was before.
+    private static func paletteName(at index: Int) -> Text {
+        let names = paletteNames
+        guard index >= 0, index < names.count else { return Text("Color \(index + 1)") }
+        return Text(verbatim: names[index])
     }
 
     /// Selected → moss ring; unselected → a hairline so light swatches (cream, parchment, white) never
@@ -449,6 +494,16 @@ struct CreationStudioView: View {
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
+                // The one companion render that is neither the interactive Home one nor purely
+                // decorative. Deleting `CompanionView`'s shared label (T1-10) left this a subtree of
+                // `Shape`s announcing nothing, and this screen has NO header above it — hiding it
+                // like the other seven would open the confirm step with "Name, text field" and no
+                // sign the drawing survived. So it keeps an element, with a real label, and
+                // `studio.confirm.preview` keeps resolving for anyone who later writes a test
+                // against it. `children: .ignore` because there is nothing underneath for a label
+                // to attach to otherwise.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Preview of your item on your companion")
                 .accessibilityIdentifier("studio.confirm.preview")
 
                 SheetField("Name") {

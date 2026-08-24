@@ -54,6 +54,36 @@ replaced having locked itself. Two gates sharing one scope (the progress-photo s
 pushed detail) share one unlock session; different scopes never do, which costs a fresh
 authentication per hop between the Private tab, the photo strip and Settings → App lock.
 
+**The gate's cover is an accessibility cover too, not only a visual one.** `zIndex(100)` reorders
+drawing and nothing else, so for its first life the overlay left the gated content fully focusable
+underneath it: VoiceOver, Switch Control and Full Keyboard Access walked off the passcode pad into
+the Private hub's headers, the worry composer and the cycle grid — and could operate them — while
+the lock was painted over the screen. The gate therefore applies `accessibilityHidden` to its
+content whenever either overlay is up (`overlayIsUp`, the modifier-local twin of
+``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)``; a change to one is a change to all
+three) and `.isModal` to both overlays, and posts an `AccessibilityNotification.ScreenChanged` on the
+rising edge — `.isModal` scopes where the cursor may go but never moves it, so without that post the
+focused element just vanishes when the gate engages. **Any future overlay added to this gate must do
+the same** — the mandatory gate to the most sensitive half of the app is the one screen in Fernlet
+that has to be modal, and the failure mode is silent: the screen looks right and the wall simply is
+not there.
+
+**One known limit of that cover, for whoever gates the next screen.** `accessibilityHidden` covers
+the gated view's own subtree, and `.navigationTitle`/`.toolbar` content does not stay in it: an
+enclosing `NavigationStack` hoists those into its own bar, OUTSIDE the modifier, so a gated screen's
+title and toolbar buttons remain focusable while the overlay is up. None of today's gated surfaces
+puts anything sensitive or operable there, but a gated screen that adds a toolbar action must hide
+it itself.
+
+The unlock screen carries two related obligations of its own. Every distinguishing FAILURE state is
+spoken — the inline error, the attempts-remaining warning, the countdown that replaces them, the
+lost-key card — through an announcement posted from ``FernletLockView``'s catch arms plus an
+`@AccessibilityFocusState` move onto the error text. Never from a success: the service answers a
+duress code and a real passcode identically on purpose, and speech keyed off *which* secret matched
+would be a duress oracle audible from across the room. And the unlock column scrolls, because the
+app declares landscape on iPhone and locks orientation nowhere — unscrolled, the 3×4 pad clipped
+below the fold with no way to reach it.
+
 The gate encodes the module's central invariant: **one unlock session never outlives the
 screen it unlocked — and it covers exactly one screen while it lives.** Re-locking scrubs the
 in-memory content key, so every re-entry re-prompts. The service backs that up beneath the UI:

@@ -211,6 +211,13 @@ private struct CeremonyQRCard: View {
                     .frame(maxWidth: 280)
                     .padding(14)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    // T2-10: an inverted QR is an unscannable QR, and this ceremony is the ONLY
+                    // route back into a recovery-locked account.
+                    .accessibilityIgnoresInvertColors()
+                    // T2-20: the code itself was silent — a VoiceOver user heard the instruction
+                    // under it and nothing at the place the instruction was pointing. The
+                    // step-specific wording stays on ``instruction`` below; this names the object.
+                    .accessibilityLabel("Fernlet QR code for the other phone to scan")
                     .accessibilityIdentifier("duress.ceremony.qr")
             } else {
                 Text("Couldn't create a code just now. Close this and try again.")
@@ -345,7 +352,11 @@ struct DuressRecoveryEnrollmentSheet: View {
                 DuressCeremonyCustodianFlow(coordinator: coordinator, onFinish: finish)
             }
         } else {
+            // Alone on screen while the coordinator is built, so it carries its own label: this is
+            // a security ceremony, and an empty screen with nothing spoken is the one impression
+            // it must never give.
             ProgressView().tint(Color.moss)
+                .accessibilityLabel("Setting up the recovery ceremony")
         }
     }
 
@@ -427,7 +438,10 @@ struct DuressRecoveryReturnSheet: View {
                         preamble
                     }
                 } else {
+                    // This is the RECOVER surface, not the enrol one — the sheet above it says
+                    // "Recover this phone". Same shape as the enrolment spinner, different words.
                     ProgressView().tint(Color.moss)
+                        .accessibilityLabel("Preparing to recover this phone")
                 }
             }
             .navigationTitle("Recover this phone")
@@ -535,7 +549,8 @@ private struct DuressCeremonyPrimaryFlow: View {
             VerifyQRScanSheet(
                 onScanned: handleScan,
                 title: "Scan the other phone",
-                prompt: "Point at the code on your other phone's screen."
+                prompt: "Point at the code on your other phone's screen.",
+                scannerLabel: "Camera viewfinder. Point the camera at the code on your other phone's screen."
             )
         }
     }
@@ -844,7 +859,8 @@ private struct DuressCeremonyCustodianFlow: View {
             VerifyQRScanSheet(
                 onScanned: handleScan,
                 title: "Scan the other phone",
-                prompt: "Point at the code on the other phone's screen."
+                prompt: "Point at the code on the other phone's screen.",
+                scannerLabel: "Camera viewfinder. Point the camera at the code on the other phone's screen."
             )
         }
     }

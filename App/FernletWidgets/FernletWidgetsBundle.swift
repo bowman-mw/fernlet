@@ -165,6 +165,18 @@ enum FernletWidgetPalette {
     }
 }
 
+/// The mood a ``CompanionGlyph`` is speaking, for the families where the glyph is the ONLY place the
+/// mood appears (systemSmall and the circular accessory both draw it without a written label).
+///
+/// The word comes from ``WidgetCompanionState/displayName`` and never from `rawValue` — that raw
+/// string is the cross-process wire token, so speaking it would read the persistence format aloud
+/// and would stay English after translation. A day-gated `nil` has no mood to report: the glyph is
+/// the neutral face, so it says so rather than implying yesterday's state still holds.
+private func companionMoodValue(_ state: WidgetCompanionState?) -> Text {
+    guard let state else { return Text("No mood yet today") }
+    return Text(state.displayName)
+}
+
 // MARK: - Companion glyph (9a): a blob silhouette with the FACE as negative space
 //
 // Ported from the SVG masks in Docs/design-refs/widget.html (100×100 userSpace). The blob is a
@@ -353,6 +365,12 @@ private struct WaterRing: View {
                 .stroke(accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                 .frame(width: lineWidth * 3, height: lineWidth * 3)
         }
+        // Three strokes and a teardrop carry the whole hydration reading visually and nothing at all
+        // otherwise. Flattened to one element so the arc, track and drop stop being three silent
+        // shapes, with the count as the VALUE — a value re-announces when it changes, a label does not.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Water"))
+        .accessibilityValue(Text("\(filled) of \(target) bottles"))
     }
 }
 
@@ -435,6 +453,11 @@ private struct SmallCompanionView: View {
                     CompanionGlyph(state: entry.currentDayCompanionState,
                                    fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
                         .frame(width: 52, height: 52)
+                        // systemSmall never writes the mood down — the face IS the reading, so this
+                        // element is the only place it can be heard.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("Fernlet companion"))
+                        .accessibilityValue(companionMoodValue(entry.currentDayCompanionState))
                     Spacer(minLength: 8)
                     WaterRing(filled: entry.bottleCount, target: entry.hydrationTarget, lineWidth: 6)
                         .frame(width: 52, height: 52)
@@ -465,6 +488,10 @@ private struct SmallCompanionView: View {
                             .frame(width: 40, height: 40)
                     }
                     .buttonStyle(.plain)
+                    // "+1" alone announces as "plus one, button". The intent's own title already says
+                    // what the tap does, in every language the catalog carries — borrowing it labels
+                    // the control without minting a second string that could drift from it.
+                    .accessibilityLabel(Text(WaterPlusOneIntent.title))
                     .background(FernletWidgetPalette.buttonFill, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 }
             }
@@ -484,6 +511,9 @@ private struct PlaceholderView: View {
             DashedCompanionOutline()
                 .frame(width: 60, height: 60)
                 .opacity(0.6)
+                // There is no companion yet, so the dashed blob illustrates the invitation below
+                // rather than reporting anything — an empty element in front of the real message.
+                .accessibilityHidden(true)
             VStack(spacing: 3) {
                 Text("Open Fernlet")
                     .font(.system(size: 15, weight: .semibold))
@@ -541,6 +571,12 @@ private struct CircularCompanionView: View {
         // AND a stale (previous-day) snapshot both resolve to the neutral glyph via the day gate.
         CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
             .padding(3)
+            // The whole accessory is one Canvas, which is an accessibility element with no content —
+            // it reads as an unlabelled blank on the Lock Screen. The face is the only reading this
+            // family offers, so it has to be spoken here or not at all.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Fernlet companion"))
+            .accessibilityValue(companionMoodValue(entry.currentDayCompanionState))
     }
 }
 
@@ -554,15 +590,14 @@ private struct CircularCompanionView: View {
 private struct RectangularCompanionView: View {
     let entry: FernletCompanionEntry
 
+    /// The written mood word, from the localized display fork.
+    ///
+    /// This used to switch over the state and return English literals, which no catalog could ever
+    /// see. It must not switch over `rawValue` either — that string is the cross-process wire token
+    /// (see ``WidgetCompanionState/displayName``). With no current-day state there is no mood to
+    /// name, so the companion's own name stands in, exactly as the glyph falls back to a neutral face.
     private var moodLabel: String {
-        switch entry.currentDayCompanionState {
-        case .thriving: return "Thriving"
-        case .okay:     return "Okay"
-        case .tired:    return "Tired"
-        case .resting:  return "Resting"
-        case .sick:     return "Sick"
-        case nil:       return "Fernlet"
-        }
+        entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
     }
 
     var body: some View {
@@ -570,6 +605,9 @@ private struct RectangularCompanionView: View {
             HStack(spacing: 10) {
                 CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
                     .frame(width: 34, height: 34)
+                    // Unlike the other two families this one WRITES the mood beside the face, so
+                    // labelling the Canvas would say it twice; hiding it drops the empty element.
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("\(moodLabel) · \(entry.bottleCount) of \(entry.hydrationTarget) bottles")
                         .font(.system(size: 14, weight: .semibold))
@@ -583,6 +621,7 @@ private struct RectangularCompanionView: View {
             HStack(spacing: 10) {
                 CompanionGlyph(state: nil, fill: .white)
                     .frame(width: 34, height: 34)
+                    .accessibilityHidden(true)     // decorative: the invitation beside it is the message
                 Text("Open Fernlet to say hi")
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(2)

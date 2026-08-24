@@ -52,6 +52,9 @@ struct WorkoutLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "leaf.fill")
                     .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
+                    // Compact slots carry no text, so an unlabelled glyph announces its SF Symbol
+                    // name ("leaf fill") — this is the only word saying WHICH activity is running.
+                    .accessibilityLabel(Text("Workout"))
             } compactTrailing: {
                 WorkoutIslandCompactTrailing(state: state, isStale: isStale)
             } minimal: {
@@ -147,12 +150,12 @@ private struct WorkoutIslandBottom: View {
                 RestCountdownText(state: state,
                                   font: .system(size: 38, weight: .semibold, design: .rounded),
                                   color: .primary)
-                Text(nextUpLine(state))
+                nextUpLine(state)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
-                Text(setRepsLine(state))
+                setRepsLine(state)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -173,7 +176,11 @@ private struct WorkoutIslandCompactTrailing: View {
             // Degrade to a still pause glyph — never a frozen timer or set count.
             Image(systemName: "pause.circle")
                 .foregroundStyle(.secondary)
+                .accessibilityLabel(Text("Paused"))
         } else if state.phase == .resting {
+            // No label here on purpose: a label REPLACES a timer Text's content, which would trade
+            // the live countdown for a fixed phrase. The countdown speaks itself; the compact
+            // leading slot supplies the noun.
             RestCountdownText(state: state,
                               font: .caption2.monospacedDigit(),
                               color: .primary)
@@ -183,9 +190,12 @@ private struct WorkoutIslandCompactTrailing: View {
                 .font(.caption2)
                 .monospacedDigit()
                 .foregroundStyle(.primary)
+                // "3/5" is read as "three slash five"; the expanded slot's own wording, spoken.
+                .accessibilityLabel(Text("Set \(state.setNumber) of \(state.totalSets)"))
         } else {
             Image(systemName: "figure.strengthtraining.functional")
                 .foregroundStyle(FernletWidgetPalette.leaf)
+                .accessibilityLabel(Text("In progress"))
         }
     }
 }
@@ -199,6 +209,7 @@ private struct WorkoutIslandMinimal: View {
         if isStale {
             Image(systemName: "pause.fill")
                 .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
+                .accessibilityLabel(Text("Paused"))
         } else if state.phase == .resting {
             // The minimal slot is a tiny circle: clamp the timer's width and scale digits down,
             // or the Text reserves room for its widest possible value ("88:88") and overflows.
@@ -209,6 +220,7 @@ private struct WorkoutIslandMinimal: View {
         } else {
             Image(systemName: "leaf.fill")
                 .foregroundStyle(FernletWidgetPalette.leaf)
+                .accessibilityLabel(Text("Workout"))
         }
     }
 }
@@ -221,16 +233,22 @@ private func isSimpleStep(_ state: WorkoutActivityAttributes.ContentState) -> Bo
     state.reps.isEmpty && state.totalSets <= 1
 }
 
-private func setRepsLine(_ state: WorkoutActivityAttributes.ContentState) -> String {
-    guard !isSimpleStep(state) else { return "Take it at your own pace" }
-    var parts = ["Set \(state.setNumber) of \(state.totalSets)"]
-    if !state.reps.isEmpty { parts.append("\(state.reps) reps") }
-    return parts.joined(separator: " · ")
+/// The working-state line: "Set 2 of 4 · 12 reps", or the gentle line for a single-step move.
+///
+/// Returns `Text`, not `String`: these were English literals assembled with `joined(separator:)`,
+/// which no string catalog can see and no translator can reorder. Each shape is now one whole
+/// harvested sentence — a language that puts the rep count first, or separates clauses differently,
+/// can say so, which a runtime join of pre-built fragments can never allow.
+private func setRepsLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    guard !isSimpleStep(state) else { return Text("Take it at your own pace") }
+    guard !state.reps.isEmpty else { return Text("Set \(state.setNumber) of \(state.totalSets)") }
+    return Text("Set \(state.setNumber) of \(state.totalSets) · \(state.reps) reps")
 }
 
-private func nextUpLine(_ state: WorkoutActivityAttributes.ContentState) -> String {
-    guard !isSimpleStep(state) else { return "Next up · \(state.exerciseName)" }
-    return "Next up · \(state.exerciseName) · Set \(state.setNumber) of \(state.totalSets)"
+/// The resting line: what the rest is leading into. Same fork, same reason, as ``setRepsLine(_:)``.
+private func nextUpLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    guard !isSimpleStep(state) else { return Text("Next up · \(state.exerciseName)") }
+    return Text("Next up · \(state.exerciseName) · Set \(state.setNumber) of \(state.totalSets)")
 }
 
 /// Crash-safe rest countdown. See the CRASH RULE at the top of this file.
@@ -267,6 +285,10 @@ private struct RestCountdownText: View {
                 .font(font)
                 .monospacedDigit()
                 .foregroundStyle(color)
+                // The rest timer redraws every second but its accessibility value is only re-read
+                // when the element is marked as changing on its own; without this VoiceOver reports
+                // whatever the clock said when focus landed, for the whole rest.
+                .accessibilityAddTraits(.updatesFrequently)
         } else {
             // Never a live `Date()` range — a static label is the fail-safe fallback.
             Text("Rest")
@@ -325,6 +347,9 @@ private struct WorkoutLockScreenView: View {
             Image(systemName: "pause.circle")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.45))
+                // "Paused" is already written beside it — otherwise this reads "pause circle" into
+                // the middle of the card, which Speak Screen takes as part of the sentence.
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -349,7 +374,7 @@ private struct WorkoutLockScreenView: View {
                         Text("Rest")
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(FernletWidgetPalette.buttonFill)
-                        Text(nextUpLine(state))
+                        nextUpLine(state)
                             .font(.subheadline)
                             .foregroundStyle(FernletWidgetPalette.ink)
                             .lineLimit(2)
@@ -359,7 +384,7 @@ private struct WorkoutLockScreenView: View {
                             .foregroundStyle(FernletWidgetPalette.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
-                        Text(setRepsLine(state))
+                        setRepsLine(state)
                             .font(.subheadline)
                             .foregroundStyle(FernletWidgetPalette.inkSoft)
                             .lineLimit(1)

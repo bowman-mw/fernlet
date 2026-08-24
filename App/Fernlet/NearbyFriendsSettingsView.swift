@@ -123,7 +123,10 @@ struct NearbyFriendsSettingsView: View {
         if store.settings.allowNearbyHearts && !store.settings.allowNearbyPresence {
             Text("Hearts need Presence turned on to work — turn it on above.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.goldenrod)
+                // Text ink, not the `goldenrod` accent (2.22:1, fails even the 3:1 non-text floor) —
+                // this string's whole job is telling the user a privacy feature is silently not
+                // working (T1-3).
+                .foregroundStyle(Color.goldenrodInk)
                 .fernletWrappingText()
         }
         FernletRowDivider()
@@ -151,7 +154,8 @@ struct NearbyFriendsSettingsView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Text(problem)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.goldenrod)
+                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                        .foregroundStyle(Color.goldenrodInk)
                         // Identifiers sit on the leaves, not the HStack: an identifier on the
                         // container shadows its children for UI tests.
                         .accessibilityIdentifier("settings.heartsAway.problem")
@@ -160,7 +164,8 @@ struct NearbyFriendsSettingsView: View {
                         store.heartDropService.acknowledgeDeliveryProblem()
                     }
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.moss)
+                    // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                    .foregroundStyle(Color.mossInk)
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("settings.heartsAway.dismissProblem")
                 }
@@ -170,7 +175,8 @@ struct NearbyFriendsSettingsView: View {
             // delete didn't go through. Say so rather than let "off" imply they were removed.
             Text("Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.goldenrod)
+                // T1-3: text ink, not the `goldenrod` accent (2.22:1).
+                .foregroundStyle(Color.goldenrodInk)
                 .accessibilityIdentifier("settings.heartsAway.purgePending")
         }
     }
@@ -196,6 +202,14 @@ struct NearbyFriendsSettingsView: View {
     /// One consent toggle with its one-line footnote. At accessibility sizes the footnote drops
     /// unless it carries a dependency the user must know about (5b·AX3: only Presence keeps its
     /// footnote).
+    ///
+    /// **T2-2.** `keepFootnoteAtAccessibilitySizes` is a *layout* escape hatch, so it does not
+    /// cover the accessibility tree: for the five rows that do not set it, the footnote is not
+    /// drawn at accessibility sizes and therefore is not spoken either — exactly the Larger Text
+    /// × VoiceOver hole. The footnote is re-attached to the toggle as custom content at every
+    /// size (harmless when it is also drawn: default-importance custom content is never part of
+    /// the spoken utterance, only of the More Content rotor). The toggle's own on/off value is
+    /// left alone.
     private func consentRow(
         _ title: LocalizedStringKey,
         footnote: LocalizedStringKey,
@@ -208,6 +222,7 @@ struct NearbyFriendsSettingsView: View {
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
             }
+            .accessibilityCustomContent("Details", footnote)
             if keepFootnoteAtAccessibilitySizes || !dynamicTypeSize.isAccessibilitySize {
                 Text(footnote)
                     .font(.fernlet(.bodySmall))

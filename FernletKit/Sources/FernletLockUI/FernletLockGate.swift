@@ -165,6 +165,13 @@ struct FernletLockGateModifier: ViewModifier {
     func body(content: Content) -> some View {
         ZStack {
             content
+                // `zIndex` reorders DRAWING, not the accessibility tree: without this the gated
+                // content stays focusable underneath the overlay, so VoiceOver / Switch Control /
+                // Full Keyboard Access walk straight off the passcode pad into the Private hub's
+                // headers, the worry composer and the cycle grid — and can operate them — while the
+                // lock is painted over the screen. Same pattern as the capture cover
+                // (`FernletUI/CaptureProtection.swift`, `.accessibilityHidden(covered)`).
+                .accessibilityHidden(overlayIsUp)
                 .onAppear  { handleAppear()  }
                 .onDisappear { handleDisappear() }
 
@@ -172,12 +179,14 @@ struct FernletLockGateModifier: ViewModifier {
             if active && isLocked {
                 lockOverlay
                     .zIndex(100)
+                    .accessibilityAddTraits(.isModal)
             }
 
             // Not-configured CTA overlay
             if active && isNotConfigured {
                 setupCTAOverlay
                     .zIndex(100)
+                    .accessibilityAddTraits(.isModal)
             }
         }
         .sheet(isPresented: $showSetup) {
@@ -204,6 +213,16 @@ struct FernletLockGateModifier: ViewModifier {
             Button(FernletLockCopy.Action.ok, role: .cancel) { lockService.acknowledgeHardBindingNotice() }
         } message: {
             Text(GateCopy.hardBindingMessage)
+        }
+        // The RISING edge only. `.isModal` scopes where the cursor may go; it never moves it — so
+        // when the gate engages under an assistive technology, the element the user was on simply
+        // ceases to exist and nothing says why. A screen change is the system's own "this is a
+        // different screen now" signal: VoiceOver plays its boundary sound and reads the new
+        // screen from the top, which is the unlock prompt. Falling edge deliberately omitted: the
+        // revealed content is the screen the user asked for and SwiftUI's own transition handles it.
+        .onChange(of: overlayIsUp) { _, isUp in
+            guard isUp else { return }
+            AccessibilityNotification.ScreenChanged().post()
         }
         .onChange(of: lockService.state) { _, _ in
             // The flip happens inside the unlock that just landed, so the state change is the
@@ -292,6 +311,19 @@ struct FernletLockGateModifier: ViewModifier {
         lockService.state == .notConfigured
     }
 
+    /// Whether either overlay is painted over the content right now — the ACCESSIBILITY half of the
+    /// gate's cover, driving `accessibilityHidden` on the gated content so an assistive technology
+    /// sees exactly what the eye sees.
+    ///
+    /// Delegates to ``FernletLockGateOcclusion/overlayIsUp(active:state:scope:)`` rather than
+    /// restating `active && (isLocked || isNotConfigured)`: that pure function is the one place this
+    /// condition is written down and `CaptureOcclusionGatingTests` pins its whole truth table, so
+    /// calling it makes those tests cover the accessibility cover too. A hand-copied third version
+    /// could drift from both.
+    private var overlayIsUp: Bool {
+        FernletLockGateOcclusion.overlayIsUp(active: active, state: lockService.state, scope: scope)
+    }
+
     // MARK: Lifecycle
 
     /// Marks the gate active and cancels any deferred re-lock; the unlock overlay itself
@@ -338,14 +370,21 @@ struct FernletLockGateModifier: ViewModifier {
 
     /// The non-dismissible unlock overlay: a full-bleed parchment backdrop under
     /// ``FernletLockView``, wired to surface the reset confirmation dialog on request.
-    @ViewBuilder private var lockOverlay: some View {
-        Color.parchment.ignoresSafeArea()
-        FernletLockView(
-            scope: scope,
-            onUnlocked: { },
-            onResetRequested: { showReset = true }
-        )
-        .environment(lockService)
+    ///
+    /// One `ZStack` rather than two siblings of the gate's own stack, so the modal trait the caller
+    /// adds has a single subtree to attach to: a `@ViewBuilder` pair is flattened into the parent
+    /// stack, and a modifier on it is applied to each half separately — which would put `.isModal`
+    /// on a bare `Color` (no element to carry it) as well as on the unlock screen.
+    private var lockOverlay: some View {
+        ZStack {
+            Color.parchment.ignoresSafeArea()
+            FernletLockView(
+                scope: scope,
+                onUnlocked: { },
+                onResetRequested: { showReset = true }
+            )
+            .environment(lockService)
+        }
     }
 
     /// The call-to-action overlay shown when no lock is configured, offering the
@@ -356,11 +395,14 @@ struct FernletLockGateModifier: ViewModifier {
             VStack(spacing: 20) {
                 Spacer()
 
+                // T1-8 (carried from A1's review): purely decorative next to the CTA text below —
+                // without this VoiceOver speaks the raw symbol name, "lock shield".
                 Image(systemName: "lock.shield")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(Color.moss)
                     .frame(width: 88, height: 88)
                     .background(Color.moss.opacity(0.10), in: Circle())
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
                     Text(GateCopy.setUpCallToAction)

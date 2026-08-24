@@ -331,6 +331,10 @@ struct ProgressPhotoCard: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
+                            // T2-10: a photograph of a person under Smart Invert is a colour
+                            // negative. The placeholder glyph below is a tinted symbol and is
+                            // deliberately left to invert with the rest of the chrome.
+                            .accessibilityIgnoresInvertColors()
                     } else {
                         Image(systemName: "figure.strengthtraining.traditional")
                             .font(.title2)
@@ -491,6 +495,9 @@ struct ProgressPhotoDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    // T2-10: the full-size progress photo, for the same reason as the strip
+                    // thumbnail — inverted, it is a negative of the user's own body.
+                    .accessibilityIgnoresInvertColors()
             } else {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Color.parchment)

@@ -10,7 +10,7 @@ import XCTest
 /// DEBUG hook, which opens the editor pre-painted.
 final class ItemCreationFlowUITests: XCTestCase {
     @MainActor
-    func testNameAndShopAreOffTheEditorAndLeadToNext() {
+    func testNameAndShopAreOffTheEditorAndLeadToNext() throws {
         let app = launchToStudioEditor(seedCanvas: false)
 
         // Editor: the canvas is here, but the name + shop controls are NOT — they moved to the
@@ -23,14 +23,14 @@ final class ItemCreationFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 10),
                       "editor should lead to a Next step, not save directly")
 
-        UXScreenProbe(app, "Studio · Editor (name/shop moved off)", in: self).capture()
+        try UXScreenProbe(app, "Studio · Editor (name/shop moved off)", in: self).capture()
     }
 
     /// A listing refused by the name gate must TELL the user, from the screen they are actually looking at.
     /// The alert used to hang off the editor — by then the covered middle of the nav stack — so "Save to
     /// closet" read as inert while the item was quietly saved-but-unlisted.
     @MainActor
-    func testFlaggedNameShowsAlertOnTheConfirmationScreen() {
+    func testFlaggedNameShowsAlertOnTheConfirmationScreen() throws {
         let app = launchToStudioEditor(seedCanvas: true)
 
         let next = app.buttons["Next"]
@@ -60,7 +60,7 @@ final class ItemCreationFlowUITests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 6),
                       "flagged-name alert must present on the confirmation screen")
 
-        UXScreenProbe(app, "Studio · Confirmation (flagged name)", in: self).capture()
+        try UXScreenProbe(app, "Studio · Confirmation (flagged name)", in: self).capture()
 
         alert.buttons["OK"].tap()
 

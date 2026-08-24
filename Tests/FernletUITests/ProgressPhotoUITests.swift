@@ -9,7 +9,7 @@ import XCTest
 /// attached screenshots are the visual proof the real photos rendered.
 final class ProgressPhotoUITests: XCTestCase {
     @MainActor
-    func testProgressPhotoTimelineAppearsUnderMoveWithDetail() {
+    func testProgressPhotoTimelineAppearsUnderMoveWithDetail() throws {
         let app = UXTestApp.launch()  // Home, demo-seeded
 
         app.buttons["Move"].firstMatch.tap()
@@ -25,7 +25,7 @@ final class ProgressPhotoUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 5), "no progress photo card rendered in the strip")
 
-        UXScreenProbe(app, "Move · Progress photos", in: self).capture()
+        try UXScreenProbe(app, "Move · Progress photos", in: self).capture()
 
         // Tap through to the detail view and confirm the editable note + delete affordance rendered.
         card.tap()
@@ -34,6 +34,6 @@ final class ProgressPhotoUITests: XCTestCase {
         XCTAssertTrue(app.buttons["progressPhoto.delete"].waitForExistence(timeout: 3),
                       "progress photo detail is missing its delete affordance")
 
-        UXScreenProbe(app, "Move · Progress photo detail", in: self).capture()
+        try UXScreenProbe(app, "Move · Progress photo detail", in: self).capture()
     }
 }

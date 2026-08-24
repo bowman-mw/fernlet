@@ -78,13 +78,24 @@ enum FernletTab: String, CaseIterable, Hashable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The tab's reader-facing name — drawn in the tab bar and spoken by VoiceOver.
+    ///
+    /// Localized (review T2-1). It used to be plain literals doing two jobs: the tab-bar caption
+    /// AND the `tab` field of an audit-log line (`ContentView.swift`), which would have written a
+    /// translated word into a diagnostic record. ``id``/`rawValue` is the token half and is what
+    /// the log takes now.
     var title: String {
         switch self {
-        case .home: "Home"
-        case .food: "Food"
-        case .move: "Move"
-        case .social: "Friends"
-        case .personal: "Private"
+        case .home: String(localized: "tab.home", defaultValue: "Home",
+                           comment: "Tab bar: the daily companion / overview tab")
+        case .food: String(localized: "tab.food", defaultValue: "Food",
+                           comment: "Tab bar: meals, recipes and nutrition")
+        case .move: String(localized: "tab.move", defaultValue: "Move",
+                           comment: "Tab bar: workouts and movement")
+        case .social: String(localized: "tab.social", defaultValue: "Friends",
+                             comment: "Tab bar: in-person friends and shared photos")
+        case .personal: String(localized: "tab.personal", defaultValue: "Private",
+                               comment: "Tab bar: the locked tab — journal, cycle, intimacy, worry box")
         }
     }
 

@@ -148,6 +148,9 @@ struct ShoppingListBuilderView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // T1-5: a hand-rolled checkbox row — the checkmark/circle glyph swap is otherwise
+            // invisible to VoiceOver and Differentiate Without Color.
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             if isSelected, RecipeScaling.isScalable(recipe) {
                 let current = yieldByID[recipe.id] ?? recipe.servings
@@ -260,7 +263,8 @@ struct WeeklyMealPlannerView: View {
                     Text("\u{201C}\(loggedRecipeName)\u{201D} logged to today.")
                         .font(.fernlet(.bodySmall))
                         .italic()
-                        .foregroundStyle(Color.moss)
+                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                        .foregroundStyle(Color.mossInk)
                         .fernletWrappingText()
                         .accessibilityIdentifier("mealPlanner.loggedNotice")
                 }
@@ -295,8 +299,12 @@ struct WeeklyMealPlannerView: View {
         // The confirmation line clears after a beat; a newer log supersedes the sleeper.
         .task(id: loggedRecipeName) {
             guard loggedRecipeName != nil else { return }
+            // A confirmation line with nothing to act on — the notice window.
+            let window = FernletDismissalWindow.system.window(
+                standard: .seconds(4),
+                assistive: FernletDismissalWindow.assistiveNoticeWindow)
             do {
-                try await Task.sleep(for: .seconds(4))
+                try await Task.sleep(for: window)
             } catch {
                 return
             }

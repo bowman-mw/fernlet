@@ -76,12 +76,17 @@ private final class CaptureFlagBox {
     var value = false
 }
 
-/// Records every string the state posts through its injectable VoiceOver-announcement seam —
-/// the real accessibility system never reports back what was (or was not) announced.
+/// Records every announcement the state posts through its injected ``FernletAnnouncer`` — the
+/// real accessibility system never reports back what was (or was not) announced.
 @MainActor
 private final class AnnouncementRecorder {
-    /// Announcements in posting order.
-    var announcements: [String] = []
+    /// Announcements in posting order, kind and words together.
+    var announcements: [FernletAnnouncement] = []
+
+    /// An announcer that appends here instead of speaking.
+    var announcer: FernletAnnouncer {
+        FernletAnnouncer { [self] in announcements.append($0) }
+    }
 }
 
 /// Unit tests for ``CaptureProtectionState``: pulse transitions off the real screenshot
@@ -250,12 +255,13 @@ struct CaptureProtectionStateTests {
     @Test func firstNudgeClaimPostsExactlyOneVoiceOverAnnouncement() async throws {
         let recorder = AnnouncementRecorder()
         let state = CaptureProtectionState(
-            postAccessibilityAnnouncement: { recorder.announcements.append($0) },
+            announcer: recorder.announcer,
             notificationCenter: isolatedCenter()
         )
 
         #expect(state.claimNudge(for: 1))
-        #expect(recorder.announcements == [CaptureNudgeCopy.spokenAnnouncement])
+        #expect(recorder.announcements
+            == [FernletAnnouncement(kind: .status, message: CaptureNudgeCopy.spokenAnnouncement)])
 
         // Same pulse, second surface (hub + sheet agree): banner yes, re-announcement no.
         #expect(state.claimNudge(for: 1))

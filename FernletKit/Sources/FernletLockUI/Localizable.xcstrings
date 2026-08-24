@@ -445,6 +445,18 @@
         }
       }
     },
+    "lock.pad.backspace" : {
+      "comment" : "Spoken name of the backspace key on the PIN pad; it draws as a left-pointing delete glyph with no text. Use the word your platform's own keypad uses for removing the last typed digit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete"
+          }
+        }
+      }
+    },
     "lock.pinDots.accessibilityLabel" : {
       "comment" : "Spoken by VoiceOver for the row of PIN dots. First number is how many digits have been typed, second is how many the PIN has. This is the only feedback a masked PIN field gives, so keep both numbers.",
       "extractionState" : "extracted_with_value",
@@ -733,6 +745,30 @@
         }
       }
     },
+    "lock.unlock.announce.failureWithAttempts" : {
+      "comment" : "Spoken aloud after a failed app-lock attempt. First placeholder is what went wrong, second is the warning counting the tries left before lockout. Both are complete sentences — order, join and punctuate them however the two read naturally together.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "lock.unlock.announce.lockout" : {
+      "comment" : "Spoken aloud when the app lock refuses an entry because a cooldown is running; the screen shows a card instead of an error line. First placeholder is the lockout heading, second is the live countdown. Both are complete phrases — order, join and punctuate them however the two read naturally together.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "lock.unlock.attemptsRemaining.one" : {
       "comment" : "Warning above the passcode pad when exactly one try is left before the app lock stops accepting entries for a while. Singular form; see lock.unlock.attemptsRemaining.other for the rest.",
       "extractionState" : "extracted_with_value",
@@ -753,6 +789,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%lld attempts remaining before lockout"
+          }
+        }
+      }
+    },
+    "lock.unlock.checking" : {
+      "comment" : "Spoken while the app lock verifies a submitted passcode; the screen shows only a spinner. Present tense — the check is still running.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Checking your passcode"
           }
         }
       }

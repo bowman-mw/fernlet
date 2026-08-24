@@ -18,14 +18,30 @@ import SwiftUI
 public struct FernletCard<Content: View>: View {
     private let content: Content
 
+    /// §4.2 / T2-6. A `FernletCard`'s only boundary at default settings is its shadow — cream on
+    /// parchment measures **1.08:1**, so the card edge is, for a low-vision user, not there. A
+    /// shadow is also the first thing an OS-level contrast accommodation cannot strengthen. Under
+    /// Increase Contrast the card therefore grows a real hairline; at default settings it draws
+    /// exactly as it did, which is why the branch is an `if` rather than a variable alpha.
+    @Environment(\.colorSchemeContrast) private var contrast
+
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     public var body: some View {
-        content
+        let shape = RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)   // 18
+        return content
             .padding(FernletMetrics.spaceMd)   // 16
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous))   // 18
+            .background(Color.cream, in: shape)
+            .overlay {
+                if contrast == .increased {
+                    // `strokeBorder`, not `stroke`: an inset border keeps the drawn size identical
+                    // to the default-contrast card, so turning the accommodation on does not
+                    // reflow a single screen.
+                    shape.strokeBorder(Color.barkEdge(contrast, normal: 0), lineWidth: 1)
+                }
+            }
             // Kept as the current single-layer `bark`-tinted shadow (not `fernletCardShadow()`): the
             // two-layer barkShadow token renders differently, and this card primitive is used across 13
             // files — swapping its shadow is a deliberate visual change, not a cleanup.
@@ -80,6 +96,12 @@ public struct SectionLabel: View {
             // I — none of which a caller-side `.uppercased()` on an English key could ever get
             // right. It is also the only option left: `LocalizedStringKey` has no `.uppercased()`.
             .textCase(.uppercase)
+            // A `SectionLabel` marks the start of a group of content within a screen (a card, a
+            // list section) rather than the screen itself, so it sits one level under
+            // ``ScreenHeader``/``SheetHeader`` on the Headings rotor. 91 call sites light up from
+            // this one addition; see `Docs/Accessibility-Review-2026-08-22.md` T1-1.
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h2)
     }
 }
 

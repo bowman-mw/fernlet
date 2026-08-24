@@ -73,7 +73,8 @@ struct OnboardingPermissionsView: View {
             Label("On", systemImage: "checkmark.circle.fill")
                 .labelStyle(.titleAndIcon)
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.moss)
+                // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                .foregroundStyle(Color.mossInk)
         case .off:
             Text("Off in Settings")
                 .font(.fernlet(.labelSmall))
@@ -82,7 +83,8 @@ struct OnboardingPermissionsView: View {
             Button { requestNotifications() } label: {
                 Text(requestingNotifications ? "…" : "Turn on")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                    .foregroundStyle(Color.mossInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.moss.opacity(0.12), in: Capsule())
@@ -101,6 +103,18 @@ struct OnboardingPermissionsView: View {
             await MainActor.run {
                 notifications = granted ? .on : .off
                 requestingNotifications = false
+                // The control the user just activated is REPLACED by a static line — the button
+                // they were focused on stops existing, and VoiceOver's cursor lands nowhere in
+                // particular. The review's §4.3 answer for that is to move focus; SwiftUI's focus
+                // timing across a system permission prompt is not something this repo can verify
+                // twice in a row, so the outcome is SPOKEN instead. Same information, no timing
+                // dependency, and the announcement is the one channel the system alert's own
+                // dismissal cannot swallow.
+                FernletAnnouncer.system.announce(
+                    .status,
+                    granted
+                        ? LocalizedStringResource("Daily check-in reminders are on.")
+                        : LocalizedStringResource("Reminders stay off. You can turn them on in Settings whenever you like."))
             }
         }
     }
@@ -134,10 +148,13 @@ struct OnboardingPermissionsView: View {
     }
 
     private func rowIcon(_ systemImage: String) -> some View {
+        // T1-8: `permissionRow`'s HStack isn't `.combine`d, so this glyph would otherwise be its
+        // own VoiceOver stop announcing the raw SF Symbol name ahead of the row's title/body text.
         Image(systemName: systemImage)
             .font(.headline.weight(.semibold))
             .foregroundStyle(Color.moss)
             .frame(width: 30, height: 30)
             .background(Color.moss.opacity(0.10), in: Circle())
+            .accessibilityHidden(true)
     }
 }

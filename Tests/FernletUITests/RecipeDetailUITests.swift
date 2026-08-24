@@ -5,7 +5,7 @@ import XCTest
 /// Verifies the detail renders with its log + add-photo affordances, and screenshots it.
 final class RecipeDetailUITests: XCTestCase {
     @MainActor
-    func testRecipeRowOpensDetailView() {
+    func testRecipeRowOpensDetailView() throws {
         let app = UXTestApp.launch()  // Home, demo-seeded (seeds "Overnight oats" + another recipe)
 
         app.buttons["Food"].firstMatch.tap()
@@ -27,7 +27,7 @@ final class RecipeDetailUITests: XCTestCase {
         let ingredient = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "oats")).firstMatch
         XCTAssertTrue(ingredient.waitForExistence(timeout: 4), "ingredient lines did not render")
 
-        UXScreenProbe(app, "Food · Recipe detail", in: self).capture()
+        try UXScreenProbe(app, "Food · Recipe detail", in: self).capture()
     }
 
     /// The Food page's own Recipes section used to jump straight into the editor on tap; it now pushes

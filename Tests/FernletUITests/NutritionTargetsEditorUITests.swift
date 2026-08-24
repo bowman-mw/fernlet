@@ -9,7 +9,7 @@ final class NutritionTargetsEditorUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
     @MainActor
-    func testEditorRebalancesResidualAndFatPlaceholderTracksCalories() {
+    func testEditorRebalancesResidualAndFatPlaceholderTracksCalories() throws {
         let app = UXTestApp.launch(openSheet: "settings")
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "Settings did not open")
 
@@ -30,7 +30,7 @@ final class NutritionTargetsEditorUITests: XCTestCase {
 
         // Settings persist across launches, so clear any override left by a prior run → known baseline.
         resetIfPresent(app)
-        UXScreenProbe(app, "Settings · Nutrition targets", in: self).capture()
+        try UXScreenProbe(app, "Settings · Nutrition targets", in: self).capture()
 
         // Baselines with every field blank (derived). A blank field reports its placeholder as `.value`.
         let derivedCalories = intValue(calories)
@@ -44,7 +44,7 @@ final class NutritionTargetsEditorUITests: XCTestCase {
         XCTAssertNotEqual(fat.value as? String, fatBaseline,
                           "blank Fat placeholder did not track the calorie override (stale fully-derived value)")
         XCTAssertNotEqual(carbs.label, carbsBaseline, "carbs did not rebalance after pinning calories")
-        UXScreenProbe(app, "Settings · Nutrition targets", in: self).capture("calories pinned")
+        try UXScreenProbe(app, "Settings · Nutrition targets", in: self).capture("calories pinned")
 
         // Back to baseline; the Fat placeholder returns to its derived value.
         resetIfPresent(app)

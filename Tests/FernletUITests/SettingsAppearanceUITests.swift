@@ -37,25 +37,25 @@ final class SettingsAppearanceUITests: XCTestCase {
     ]
 
     @MainActor
-    func testSettingsHubAndSubscreensAppearance() {
+    func testSettingsHubAndSubscreensAppearance() throws {
         let app = UXTestApp.launch(openSheet: "settings")
 
         // Settings hub itself.
         let settingsBar = app.navigationBars["Settings"]
-        UXScreenProbe(app, "Settings · Hub", in: self)
+        try UXScreenProbe(app, "Settings · Hub", in: self)
             .assertOnScreen("sheet.settings")
             .assertElementOnScreen(settingsBar, "Settings nav bar")
             .capture()
 
         for screen in subscreens {
-            openAndProbe(tap: screen.tap, title: screen.title, app: app)
+            try openAndProbe(tap: screen.tap, title: screen.title, app: app)
         }
     }
 
     /// The pages nested one level down since the restructure: Core memory and Signals live inside
     /// AI & data sources.
     @MainActor
-    func testNestedMemoryAndSignalsAppearance() {
+    func testNestedMemoryAndSignalsAppearance() throws {
         let app = UXTestApp.launch(openSheet: "settings")
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "settings sheet did not open")
 
@@ -69,7 +69,7 @@ final class SettingsAppearanceUITests: XCTestCase {
             XCTAssertTrue(link.isHittable, "'\(label)' link not reachable inside AI & data sources")
             link.tap()
             let bar = app.navigationBars[title]
-            UXScreenProbe(app, "Settings · \(title)", in: self)
+            try UXScreenProbe(app, "Settings · \(title)", in: self)
                 .assertElementOnScreen(bar, "\(title) nav bar")
                 .capture()
             let back = bar.buttons.firstMatch
@@ -80,7 +80,7 @@ final class SettingsAppearanceUITests: XCTestCase {
     }
 
     @MainActor
-    func testPrivacyDataAppearance() {
+    func testPrivacyDataAppearance() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
         app.launchEnvironment["FERNLET_UI_TEST_OPEN_PRIVACY_DATA"] = "1"
@@ -94,7 +94,7 @@ final class SettingsAppearanceUITests: XCTestCase {
         let verify = app.descendants(matching: .any)["privacy.verify"]
         if verify.waitForExistence(timeout: 2) { verify.tap() }
 
-        UXScreenProbe(app, "Settings · Privacy & Data", in: self)
+        try UXScreenProbe(app, "Settings · Privacy & Data", in: self)
             .assertElementOnScreen(nav, "Privacy & Data nav bar")
             .capture()
     }
@@ -102,13 +102,13 @@ final class SettingsAppearanceUITests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor
-    private func openAndProbe(tap label: String, title: String, app: XCUIApplication) {
+    private func openAndProbe(tap label: String, title: String, app: XCUIApplication) throws {
         let row = scrollToRow(label, app: app)
         XCTAssertTrue(row.isHittable, "settings row '\(label)' not reachable")
         row.tap()
 
         let bar = app.navigationBars[title]
-        UXScreenProbe(app, "Settings · \(title)", in: self)
+        try UXScreenProbe(app, "Settings · \(title)", in: self)
             .assertElementOnScreen(bar, "\(title) nav bar")
             .capture()
 
