@@ -439,9 +439,10 @@ struct WorkoutLocationSetupView: View {
                     // no later Done to carry it.
                     trainHereID = editing.id
                 }
+                // T1-9: `ChipButtonStyle` itself now grows the tap target to 44pt
+                // (`.frame(minHeight: 44)` inside the style), so the `fernletTapTarget()`
+                // this call site used to need as a manual patch would only duplicate it.
                 .buttonStyle(ChipButtonStyle(selected: false))
-                // Chip drawing, 44pt target.
-                .fernletTapTarget()
                 .accessibilityHint("Plans your workouts around this space")
                 .accessibilityIdentifier("workout.location.makeActive")
             }

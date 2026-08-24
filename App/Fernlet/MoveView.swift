@@ -1870,8 +1870,8 @@ struct WorkoutSuggestionSheet: View {
     }
 
     /// The pre-plan configurator (1b): readiness chips, the inline stated space, and the free-text
-    /// note — exactly the children that sum to the 437pt medium detent with no internal scroll at
-    /// default type. The old Goal row and closing caption gave way to make that true.
+    /// note. The accepted 44pt chip targets now exceed the 437pt medium-detent budget, so the note
+    /// can require a short scroll at default type. The old Goal row and closing caption stay out.
     @ViewBuilder private var configuratorContent: some View {
         feelingSection
         spaceRow

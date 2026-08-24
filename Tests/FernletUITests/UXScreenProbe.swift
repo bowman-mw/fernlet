@@ -336,8 +336,10 @@ struct UXScreenProbe {
     /// halves)` reported 23 Dynamic Type findings, then 0, while all 4 of its non-Dynamic-Type
     /// findings reproduced byte-for-byte both times. `Home tab` reported 18, then 12 — a *partial*
     /// answer, which is why this is not modelled as an all-or-nothing switch (that was the first
-    /// hypothesis and the Home run refuted it). Across every run, **not one non-Dynamic-Type
-    /// finding has ever failed to reproduce.**
+    /// hypothesis and the Home run refuted it). Across these runs, non-Dynamic-Type findings were
+    /// stable except `.hitRegion` for the shared recipe quantity field: that finding has failed to
+    /// reproduce nondeterministically in both recipe sheets on an unchanged binary. Those two
+    /// entries are excluded from the frozen baseline rather than called fixed.
     ///
     /// Run those numbers back through the original bug report and they account for it completely:
     /// Home measured 19 findings in isolation and 25 in suite context, and 18 of Home's baseline
@@ -678,8 +680,10 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // BASELINE CORRECTION (2026-08-23), separate from T1-9: both recipe sheets share the
+        // sub-44pt `TextField("Qty")` in FoodView. Its `.hitRegion` finding was proven to flap on
+        // pristine ba6d561, so the two non-deterministic entries are not frozen as ratchet truth.
         "Sheet · Edit recipe": [
-            "Hit area is too small — <no label> (49)",
             "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> (49)",
         ],
@@ -709,7 +713,6 @@ extension UXScreenProbe {
             "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
         "Sheet · Recipe": [
-            "Hit area is too small — <no label> (49)",
             "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> (49)",
         ],
@@ -740,18 +743,33 @@ extension UXScreenProbe {
             "Potentially inaccessible text",
             "Text clipped",
         ],
+        // T1-9 (CHIP 44PT GROWTH, 2026-08-23): `kindField`'s Strength/Cardio chips are the FIRST
+        // child of this sheet's ScrollView VStack, directly above `recentExerciseChips` ->
+        // `strengthSection` -> `WorkoutExerciseBuilder`'s `id=exercise.search` field. Growing the
+        // chip row's layout box from ~34pt to 44pt (`ChipButtonStyle`, FernletUIComponents.swift)
+        // shifts every sibling below it down by the same ~10pt within this one scrollable sheet,
+        // which is exactly why "Text clipped — <no label> id=exercise.search (49)" (the field's
+        // clipping relative to the sheet's visible viewport at audit time) no longer reproduces.
+        // Re-verified deterministic across two independent `xcodebuild test` runs before removing.
         "Sheet · Workout": [
             "Potentially inaccessible text",
             "Text clipped",
-            "Text clipped — <no label> id=exercise.search (49)",
             "Text clipped — “Bench press” (48)",
             "Text clipped — “Log workout” (48)",
             "Text clipped — “Overhead press” (48)",
         ],
+        // T1-9 (CHIP 44PT GROWTH, 2026-08-23): `feelingSection`'s Light/Moderate/Hard chips sit
+        // directly above `SheetField("Anything else?")` in `configuratorContent`. That content was
+        // hand-budgeted to fit the 437pt medium detent before T1-9. Growing the chip row's layout
+        // box by ~10pt (`ChipButtonStyle`) breaks that old exact fit and shifts the "ANYTHING ELSE?"
+        // caption's position relative to the sheet's visible viewport, which is why
+        // "Text clipped — “ANYTHING ELSE?” (48)" no longer reproduces. Re-verified deterministic
+        // across two independent `xcodebuild test` runs before removing. NOTE: this is a real
+        // layout consequence, not just an audit artifact — see the increment's report for whether
+        // the medium-detent budget needs to grow to match (out of this increment's scope).
         "Sheet · Workout suggestion": [
             "Potentially inaccessible text",
             "Text clipped",
-            "Text clipped — “ANYTHING ELSE?” (48)",
             "Text clipped — “SPACE & EQUIPMENT” (48)",
             "Text clipped — “Shed · # items” (48)",
             "Text clipped — “Suggest a workout” id=workout.suggest (9)",

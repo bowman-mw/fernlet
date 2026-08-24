@@ -1067,7 +1067,13 @@ public struct SheetField<Content: View>: View {
 /// `destructive: true` renders the terracotta variant for a chip that destroys something (the
 /// button's `role` alone is invisible to a custom style). It is a *selection* style: a real
 /// call-to-action ("Ask to join", "End activity", "Delete all") belongs in
-/// ``ActionPillButtonStyle``, which meets the 44pt target these 34pt chips do not.
+/// ``ActionPillButtonStyle``.
+///
+/// T1-9 (CHIP 44PT GROWTH, 2026-08-23): the drawn capsule cannot reach 44pt from inside
+/// `makeBody` without a visible density change — 14pt label + 8pt vertical padding is a ~34pt
+/// box — so the owner accepted growing the *layout* box to 44pt via `.frame(minHeight:)` while
+/// leaving the capsule's drawn size alone. Call-site rows spread by roughly the same ~10pt this
+/// costs; that spread is the accepted consequence, not a bug to chase.
 public struct ChipButtonStyle: ButtonStyle {
     var selected: Bool
     var destructive: Bool
@@ -1113,7 +1119,13 @@ public struct ChipButtonStyle: ButtonStyle {
                 .foregroundStyle(ink)
                 .background(fill, in: shape)
                 .overlay(shape.stroke(stroke, lineWidth: 1))
-                .contentShape(shape)
+                // T1-9: the frame grows the tappable LAYOUT box to 44pt high in this view's own
+                // coordinate space; the capsule above stays its drawn ~34pt size, centered inside
+                // it. `contentShape` is a plain `Rectangle` sized to that grown frame (not `shape`,
+                // which would leave the invisible margin untappable). This style guarantees height,
+                // not width; an ancestor transform can also change the window-space measurement.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1.0) : 0.4)
                 .accessibilityAddTraits(selected ? .isSelected : [])
         }
@@ -1141,10 +1153,11 @@ public enum FernletActionPillKind {
 /// ```
 ///
 /// Use it wherever a tap *does* something (join, connect, end, leave, delete) rather than selecting
-/// an option — those stay ``ChipButtonStyle``. The distinction is the point: chips are 34pt tall,
-/// which is under the 44pt minimum target, so the Friends/Activities surfaces that dressed their
-/// primary actions as chips were shipping undersized buttons. The label wraps rather than
-/// truncating, and the pill grows to fit at accessibility sizes.
+/// an option — those stay ``ChipButtonStyle``. The distinction is the point: a chip's drawn
+/// capsule is ~34pt tall (its hit target is separately grown to 44pt, see ``ChipButtonStyle``'s
+/// T1-9 note), which is why the Friends/Activities primary actions were migrated from compact chips
+/// to full-height action pills. The label wraps rather than truncating, and the pill grows to fit at
+/// accessibility sizes.
 ///
 /// Disabled state fades the *fill* only and switches to a legible ink (bark on primary, taupe on
 /// the destructive tint): fading white ink along with the fill is what made the disabled Save pill
