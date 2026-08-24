@@ -853,6 +853,270 @@
         }
       }
     },
+    "nutrient.calories" : {
+      "comment" : "Nutrition field name: energy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calories"
+          }
+        }
+      }
+    },
+    "nutrient.carbs" : {
+      "comment" : "Nutrition field name: total carbohydrate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carbs"
+          }
+        }
+      }
+    },
+    "nutrient.cholesterol" : {
+      "comment" : "Nutrition field name: cholesterol",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cholesterol"
+          }
+        }
+      }
+    },
+    "nutrient.fat" : {
+      "comment" : "Nutrition field name: total fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fat"
+          }
+        }
+      }
+    },
+    "nutrient.fiber" : {
+      "comment" : "Nutrition field name: dietary fiber",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fiber"
+          }
+        }
+      }
+    },
+    "nutrient.monounsaturatedFat" : {
+      "comment" : "Nutrition field name: monounsaturated fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Monounsaturated fat"
+          }
+        }
+      }
+    },
+    "nutrient.polyunsaturatedFat" : {
+      "comment" : "Nutrition field name: polyunsaturated fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Polyunsaturated fat"
+          }
+        }
+      }
+    },
+    "nutrient.protein" : {
+      "comment" : "Nutrition field name: protein",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein"
+          }
+        }
+      }
+    },
+    "nutrient.saturatedFat" : {
+      "comment" : "Nutrition field name: saturated fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saturated fat"
+          }
+        }
+      }
+    },
+    "nutrient.servingSize" : {
+      "comment" : "Nutrition field name: the serving the numbers describe",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Serving size"
+          }
+        }
+      }
+    },
+    "nutrient.sodium" : {
+      "comment" : "Nutrition field name: sodium",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sodium"
+          }
+        }
+      }
+    },
+    "nutrient.sugar" : {
+      "comment" : "Nutrition field name: total sugars",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sugars"
+          }
+        }
+      }
+    },
+    "nutrient.transFat" : {
+      "comment" : "Nutrition field name: trans fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trans fat"
+          }
+        }
+      }
+    },
+    "nutritionCheck.allZero" : {
+      "comment" : "Food plausibility warning: every reported nutrient is zero",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Everything here is zero, so this food won't count toward your day."
+          }
+        }
+      }
+    },
+    "nutritionCheck.andMore" : {
+      "comment" : "Tail on a truncated list of food plausibility warnings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "…and %lld more."
+          }
+        }
+      }
+    },
+    "nutritionCheck.caloriesVsMacros" : {
+      "comment" : "Food plausibility warning: declared calories disagree with the macro sum",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The calories don't match the protein, carbs and fat."
+          }
+        }
+      }
+    },
+    "nutritionCheck.carbComponents" : {
+      "comment" : "Food plausibility warning: fibre plus sugars exceed total carbohydrate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fiber and sugars add up to more than the total carbs."
+          }
+        }
+      }
+    },
+    "nutritionCheck.ceiling" : {
+      "comment" : "Food plausibility warning: one serving exceeds an outer absurdity ceiling",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That's a lot of %@ for one serving — worth a second look."
+          }
+        }
+      }
+    },
+    "nutritionCheck.fatFractions" : {
+      "comment" : "Food plausibility warning: fatty-acid fractions exceed total fat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The fat breakdown adds up to more than the total fat."
+          }
+        }
+      }
+    },
+    "nutritionCheck.missing" : {
+      "comment" : "Food completeness note listing the nutrition fields that were never filled in",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still missing: %@."
+          }
+        }
+      }
+    },
+    "nutritionCheck.negative" : {
+      "comment" : "Food plausibility warning: a nutrient value is negative",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ can't be less than zero."
+          }
+        }
+      }
+    },
+    "nutritionCheck.unreadable" : {
+      "comment" : "Food plausibility warning: a nutrient value could not be read as a number",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ didn't come through as a number."
+          }
+        }
+      }
+    },
     "sleep.quality.good" : {
       "comment" : "Sleep quality rating, third of four",
       "extractionState" : "extracted_with_value",
