@@ -110,7 +110,7 @@ struct MoveView: View {
         }
     }
 
-    /// The tab header: title plus the Log / Share / Settings actions.
+    /// The tab header: title plus the Log and Share actions.
     ///
     /// The action pills sit in an ``AdaptiveStack`` so they stack into a column at accessibility text
     /// sizes rather than squeezing side by side (where "Share" broke to "Shar/e").
@@ -127,22 +127,9 @@ struct MoveView: View {
                 HeaderActionButton(title: "Share") { showingTrainerShare = true }
                     .accessibilityIdentifier("move.trainerShare")
                     .accessibilityLabel("Share with a trainer")
-                // Settings used to be reachable only from Home (tab switch + gear). The same compact
-                // gear the Home header draws, so every tab opens Settings in one tap.
-                settingsButton
             }
         }
         .padding(.top, 4)
-    }
-
-    /// The Settings gear, drawn with the shared ``HeaderActionButton`` exactly as the Home and Food
-    /// headers do. A hand-rolled 44pt 6%-bark circle here would re-create the very mismatch the Home
-    /// header just dropped — smaller and lighter than the "Log" / "Share" pills beside it.
-    private var settingsButton: some View {
-        HeaderActionButton(systemImage: "gearshape", accessibilityLabel: "Settings") {
-            activeSheet = .settings
-        }
-        .accessibilityIdentifier("move.settings")
     }
 
     /// Resume-a-run card, else the approved "Today's workout" card, else the SAME card in its

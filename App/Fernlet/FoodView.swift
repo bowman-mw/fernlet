@@ -86,9 +86,6 @@ struct FoodView: View {
         HStack(alignment: .top) {
             ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
             Spacer()
-            // Settings used to be reachable only from Home (tab switch + gear). Every tab header
-            // carries the same small gear so it is one tap from wherever the user already is.
-            HeaderActionButton(systemImage: "gearshape", accessibilityLabel: "Settings") { activeSheet = .settings }
             HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
         }
         .padding(.top, 4)

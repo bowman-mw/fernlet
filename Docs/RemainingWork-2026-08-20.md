@@ -28,22 +28,23 @@ never once been done.
 
 ### Owner-only (no engineering can shorten these)
 
-- **App Store Connect setup.** Create the app record; paste the App Description (ready-to-paste
-  copy in [`Export-Compliance-Encryption.md`](Export-Compliance-Encryption.md) §10.3 — ASC will
-  not assess encryption documentation until this field is populated); set Privacy Policy URL
+- **App Store Connect setup.** Create the app record; if App Encryption Documentation asks for a
+  description, use the 300-character-ready copy in
+  [`Export-Compliance-Encryption.md`](Export-Compliance-Encryption.md) §10.3; set Privacy Policy URL
   `https://fernlet.com/privacy/` and Support URL `https://fernlet.com/support/`; enter the labels
   from [`App-Privacy-Nutrition-Labels.md`](App-Privacy-Nutrition-Labels.md); answer the age-rating
-  questionnaire; walk the encryption flow; deselect China mainland and the Country Group E:1
-  storefronts.
+  questionnaire; retain the completed 2026-08-23 no-document encryption determination; deselect China
+  mainland and the Country Group E:1 storefronts.
 - **Promote `SealedPhotoRecord` to the Production CloudKit schema.** Flagged independently by two
   auditors. TestFlight runs against Production, Production does not auto-create record types, and
   the delete-everything teardown enumerates by record type — so a missing type means sealed photo
   backups cannot be restored **and** the wipe is silently incomplete. Also verify
   `HeartDrop.tag`/`HeartDrop.payload` rode along in the 2026-08-11 batched deploy;
   [`CloudKit-Schema-Deploy.md`](CloudKit-Schema-Deploy.md) says not to assume it.
-- **Sign and date** the self-classification memo
-  ([`Export-Self-Classification-Memo.md`](Export-Self-Classification-Memo.md) ends with an unsigned
-  signature block) and file the one-time France/ANSSI declaration.
+- ✅ **Self-classification memo signed and dated** — see
+  [`Export-Self-Classification-Memo.md`](Export-Self-Classification-Memo.md). The 2026-08-23 App Store
+  Connect outcome requires no encryption document for the current distribution; complete the
+  France/ANSSI declaration only before adding France.
 - **App Store screenshots** do not exist. No shortcut, but the UX-appearance UI-test harness plus
   the DEBUG launch hooks in `App/Fernlet/UITestSupport.swift` already produce per-screen galleries.
 
@@ -67,9 +68,10 @@ never once been done.
 - ✅ **Repository is public** — <https://github.com/bowman-mw/fernlet>.
 - ✅ **`fernlet.com` is deployed** and `https://fernlet.com/privacy/` serves the policy at the
   matching effective date. The old tracker's "create the Cloudflare Pages project" step is moot.
-- ✅ Export compliance is consistent with the 5D992.c determination *in code*:
-  `ITSAppUsesNonExemptEncryption = YES` in both app configurations, zero StoreKit anywhere in the
-  tree (the free invariant), Apache-2.0 source published (the public invariant).
+- ✅ 2026-08-23 — Export compliance is consistent with App Store Connect's no-document determination
+  *in code*: `ITSAppUsesNonExemptEncryption = NO` in both app configurations, with no
+  `ITSEncryptionExportComplianceCode`. This means exempt from Apple's documentation requirement for
+  the current non-France distribution, not that the app lacks encryption.
 - ✅ No TODO/placeholder strings a tester would see; DEBUG surfaces walled behind `#if DEBUG`;
   icons, launch screen, and version 1.0(1) consistent across all targets.
 

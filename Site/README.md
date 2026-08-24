@@ -69,8 +69,10 @@ One-time setup (owner):
    [`Docs/Verifiability.md`](../Docs/Verifiability.md) §7.)
 3. **Custom domain (optional but intended):** Settings → Pages → Custom domain → `fernlet.com`.
    GitHub writes a `CNAME` file into the repo; keep it. Then at the registrar point the apex at
-   GitHub's four A records (185.199.108–111.153) plus the AAAA records, or use `www` with a CNAME
-   to `bowman-mw.github.io`. Tick **Enforce HTTPS** once the certificate is issued.
+   GitHub's four A records (185.199.108–111.153) plus the AAAA records. To serve
+   `www.fernlet.com` too, add a DNS CNAME record for `www` pointing to `bowman-mw.github.io`.
+   GitHub Pages redirects it to the canonical `https://fernlet.com/` address. Tick **Enforce HTTPS**
+   once the certificate is issued.
 4. In App Store Connect, set:
    - Privacy Policy URL: `https://fernlet.com/privacy/`
    - Support URL: `https://fernlet.com/support/`

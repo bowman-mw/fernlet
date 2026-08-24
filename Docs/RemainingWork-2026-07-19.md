@@ -32,11 +32,11 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
 - **EULA/terms:** policy §9 now references the in-app safety rules and Apple's standard EULA; if a
   custom EULA is ever wanted, that's new work.
 - **Release-country / compliance checklist (researched 2026-07-19):**
-  - **Encryption declaration — DECIDED 2026-07-19: mass-market 5D992.c.** Flip
-    `ITSAppUsesNonExemptEncryption` to true/non-exempt in ASC's flow, self-classify 5D992.c
-    (standard CryptoKit crypto ⇒ no BIS reporting since 2021), and file the one-time France/ANSSI
-    declaration via ASC. Rationale: the medical-end-use exemption would contradict the app's
-    wellness-not-medical positioning (MDR / App Review).
+  - **Encryption declaration — superseded 2026-08-23.** App Store Connect's completed flow required
+    no document for Fernlet's current non-France distribution. Both app configurations now set
+    `ITSAppUsesNonExemptEncryption` to `NO`; do not add an export-compliance code. Re-run the
+    declaration before adding France or proprietary/unpublished cryptography. The separate 5D992.c
+    self-classification record remains in [Export-Compliance-Encryption.md](Export-Compliance-Encryption.md).
   - **Pricing — DECIDED 2026-07-19: Fernlet is always free** (no IAP). EU DSA: declare
     **non-trader** — nothing gets published on EU product pages. (Coach-app monetization is a
     separate, later question — spec D7.)

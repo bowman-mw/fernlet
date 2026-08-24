@@ -80,3 +80,40 @@ import FernletUI
         }
     }
 }
+
+/// Policy tests for the height fed from the floating tab bar into every tab's scroll-content
+/// padding. The reservation must not follow the bar's per-frame compact/expand geometry.
+@MainActor
+@Suite struct TabBarClearanceTests {
+
+    @Test func retainsTheLargestValidMeasurement() {
+        let expanded: CGFloat = 94
+        let compact: CGFloat = 58
+
+        let afterExpanded = FernletTabBarClearance.stableHeight(current: 0, measured: expanded)
+        let afterCompact = FernletTabBarClearance.stableHeight(current: afterExpanded, measured: compact)
+
+        #expect(afterExpanded == expanded)
+        #expect(afterCompact == expanded)
+    }
+
+    @Test func acceptsAGreaterExpandedMeasurement() {
+        let previous: CGFloat = 94
+        let accessibilitySize: CGFloat = 126
+
+        let result = FernletTabBarClearance.stableHeight(
+            current: previous,
+            measured: accessibilitySize
+        )
+
+        #expect(result == accessibilitySize)
+    }
+
+    @Test func rejectsInvalidMeasurementsWithoutLosingReservation() {
+        let reservation: CGFloat = 94
+
+        #expect(FernletTabBarClearance.stableHeight(current: reservation, measured: .nan) == reservation)
+        #expect(FernletTabBarClearance.stableHeight(current: reservation, measured: .infinity) == reservation)
+        #expect(FernletTabBarClearance.stableHeight(current: reservation, measured: -1) == reservation)
+    }
+}

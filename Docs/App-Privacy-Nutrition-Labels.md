@@ -42,13 +42,18 @@ Already present on the app, share-extension, and widgets targets. Declared reaso
 
 ## Encryption
 
-`ITSAppUsesNonExemptEncryption = true` (set from the build settings —
+`ITSAppUsesNonExemptEncryption = NO` (set from the build settings —
 `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption` in both configurations of the `Fernlet` target, not the
-`Info.plist` file). Fernlet does **not** qualify for a Category 5 Part 2 exemption: it ships its own
-key hierarchy on top of CryptoKit plus a third-party scrypt implementation (CryptoSwift), and it does
-bulk confidentiality encryption, not authentication-only. Classification is mass-market **5D992.c**,
-self-classified under License Exception ENC §740.17(b)(1) — so **no CCATS and no App Store Connect
-document upload**, except the French/ANSSI declaration if France is a release country.
+`Info.plist` file). This is the App Store Connect result recorded on 2026-08-23: for Fernlet's current
+distribution, with France excluded and no proprietary/non-standard algorithms declared, Apple requires
+no encryption documentation and provides no compliance code. `NO` means exempt from Apple's
+documentation requirement; it does **not** mean Fernlet has no encryption.
+
+Fernlet still ships CryptoKit-based confidentiality encryption and CryptoSwift's third-party scrypt
+implementation. Its separate EAR classification remains mass-market **5D992.c**, self-classified under
+License Exception ENC §740.17(b)(1). Re-run the App Store Connect declaration before adding France as a
+release country or introducing proprietary/unpublished cryptography; France may require an ANSSI
+declaration.
 
 Revised 2026-08-19: there is **no recurring BIS filing**. §740.17(e)(3) was rewritten in 2021 to cover
 only encryption components and "executable software", which a finished consumer app is not — at most

@@ -1136,14 +1136,38 @@ public extension View {
     }
 }
 
-/// Publishes the floating tab bar's measured on-screen height (its whole `safeAreaInset` block)
+/// Keeps the scroll-content reservation for the floating tab bar stable while the bar animates.
+///
+/// A compact/expand transition reports every intermediate height through SwiftUI's geometry
+/// callback. Publishing those intermediate values as bottom padding makes every tab relayout while
+/// the bar is moving, which reads as navigation jitter. The first expanded measurement is the
+/// largest one; retaining that maximum keeps the last card clear in both modes without feeding the
+/// animation back into the scroll views. The caller independently publishes zero while the camera
+/// hides the bar, so a temporary zero must not erase the cached reservation.
+public enum FernletTabBarClearance {
+    /// Returns the largest valid bar height observed in this view lifetime.
+    ///
+    /// Geometry is framework-produced rather than user input, but rejecting non-finite values keeps
+    /// a malformed measurement from becoming padding on every tab page for the rest of the session.
+    public static func stableHeight(current: CGFloat, measured: CGFloat) -> CGFloat {
+        guard measured.isFinite, measured >= 0 else { return validHeight(current) }
+        guard current.isFinite, current >= 0 else { return measured }
+        return max(current, measured)
+    }
+
+    private static func validHeight(_ height: CGFloat) -> CGFloat {
+        height.isFinite && height >= 0 ? height : 0
+    }
+}
+
+/// Publishes the floating tab bar's stable on-screen height (its whole `safeAreaInset` block)
 /// from the tab container down to the pages. Zero when no bar is showing (the camera session).
 private struct FernletTabBarClearanceKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
 
 public extension EnvironmentValues {
-    /// The floating tab bar's current height plus breathing room, set by the tab container and
+    /// The floating tab bar's stable height plus breathing room, set by the tab container and
     /// consumed by ``SwiftUI/View/fernletTabBarBottomClearance()`` on each page's scroll content.
     var fernletTabBarClearance: CGFloat {
         get { self[FernletTabBarClearanceKey.self] }
