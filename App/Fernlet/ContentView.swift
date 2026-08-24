@@ -252,7 +252,6 @@ struct ContentView: View {
     }
 
     private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
-        tabResetTokens[oldTab, default: 0] += 1
         isHomeTabBarCompact = false
         if newTab == .social {
             startFriendsDiscovery()
@@ -262,6 +261,18 @@ struct ContentView: View {
         updateRecipeShareListener()
         healthRefreshTask?.cancel()
         healthRefreshTask = Task { await refreshHealthContextForActiveTab(newTab) }
+    }
+
+    /// Preserves each page's scroll position across tabs. Re-selecting its current tab is the
+    /// deliberate scroll-to-top gesture; doing that while changing selection made SwiftUI receive
+    /// a scroll request and a navigation request in the same frame.
+    private func selectTab(_ tab: FernletTab) {
+        guard selectedTab == tab else {
+            selectedTab = tab
+            return
+        }
+        tabResetTokens[tab, default: 0] += 1
+        isHomeTabBarCompact = false
     }
 
     private func handleScenePhaseChange(_ phase: ScenePhase) {
@@ -678,7 +689,7 @@ struct ContentView: View {
             ForEach(FernletTab.allCases) { tab in
                 let isSelected = selectedTab == tab
                 Button {
-                    selectedTab = tab
+                    selectTab(tab)
                 } label: {
                     VStack(spacing: hidesLabel ? 0 : 3) {
                         Image(systemName: tab.systemImage)

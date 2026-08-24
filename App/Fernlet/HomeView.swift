@@ -70,9 +70,11 @@ struct HomeView: View {
     @State private var settledResyncTask: Task<Void, Never>?
     /// The photowall strip's height, scaled with the user's text size — the tiles sit inside it and
     /// the thought bubble sits on top of it, so a fixed height clipped both at accessibility sizes.
-    /// 92, down from 132 (FLOW-18): the compacted cold open puts both quick-log rows and the mood
-    /// card above the floating tab bar on a 6.1-inch screen.
-    @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 92
+    /// 126: FLOW-18 cut this to 92 for the compacted cold open, which shrank the prints to stamps.
+    /// The keepsake wall is the warmest thing on Home, so the full-size print is back — but in a
+    /// strip 6pt under the original 132, which the (deliberately unclipped) tiles overhang by a
+    /// couple of points at each end exactly as they did before.
+    @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 126
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         NavigationStack {
@@ -356,6 +358,10 @@ struct HomeView: View {
             GeometryReader { geometry in
                 let tiles = photowallTiles
                 let horizontalInset: CGFloat = 46
+                // The full-size prints are taller than the strip and hang out of both ends of it
+                // (nothing clips them). Riding 10pt above centre spends that overhang upward, into
+                // the header's own margin, instead of down onto the companion's sprout.
+                let verticalLift: CGFloat = 10
                 let finalIndex = max(tiles.count - 1, 1)
 
                 ZStack {
@@ -368,17 +374,18 @@ struct HomeView: View {
                             caption: showsAllPolaroidCaptions || index == finalIndex ? tile.caption : "",
                             rotation: tile.rotation,
                             imageData: tile.photoID.flatMap { store.meshNetworkManager.thumbnailData(forPhotoID: $0) },
-                            // Scaled to the 92pt strip (FLOW-18): the polaroid's caption chrome
-                            // is a fixed ~43pt, so a 50pt print keeps the whole tile inside the
-                            // strip, preserving the old 104×92 print's aspect.
-                            imageWidth: 57,
-                            imageHeight: 50
+                            // The original print, restored: at the 57×50 the 92pt strip allowed,
+                            // the four tiles stopped overlapping and read as swatches rather than
+                            // photos. 104 wide against the 90pt gap between positions is what
+                            // gives the wall its hand-placed overlap.
+                            imageWidth: 104,
+                            imageHeight: 92
                         )
                         .position(
                             x: horizontalInset
                                 + (geometry.size.width - horizontalInset * 2)
                                 * CGFloat(index) / CGFloat(finalIndex),
-                            y: geometry.size.height / 2
+                            y: geometry.size.height / 2 - verticalLift
                         )
                         .zIndex(Double(index))
                     }
@@ -479,7 +486,16 @@ struct HomeView: View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(spacing: 8) { companionActionChips }
         } else {
-            HStack(spacing: 8) { companionActionChips }
+            // Tucked into the companion's trailing corner rather than centred beneath it: these
+            // are quiet doors (the long-press is still the direct one), and a centred pill sat on
+            // the hero's own axis, reading as the thing to press. The negative inset lifts the row
+            // beside the companion's lower corner — the pill is narrow and hard right, so it rides
+            // the empty margin there rather than the creature.
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                companionActionChips
+            }
+            .padding(.top, -14)
         }
     }
 
@@ -498,21 +514,28 @@ struct HomeView: View {
         }
     }
 
-    /// One 44pt cream companion-action pill (HOME-22) — the shared chrome that makes Customize
+    /// One compact cream companion-action pill (HOME-22) — the shared chrome that makes Customize
     /// and Body signals read as one row of companion actions.
+    ///
+    /// The drawn pill is ~30pt tall; the *target* is still 44. The visual capsule is painted around
+    /// the padded label, and the 44pt frame plus `contentShape` outside it is what a finger hits —
+    /// so quieting the chrome never shrinks the tap area (nor the VoiceOver element).
     private func companionChip(systemImage: String, title: Text, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: systemImage)
-                    .font(.caption)
+                    // .caption2 rather than a fixed size: still scales with Dynamic Type.
+                    .font(.caption2)
                 title
                     .font(.fernlet(.labelSmall))
             }
             .foregroundStyle(Color.slate)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : nil, minHeight: 44)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : nil)
             .background(Color.cream, in: Capsule())
             .overlay(Capsule().stroke(Color.bark.opacity(0.12), lineWidth: 1))
+            .frame(minHeight: 44)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

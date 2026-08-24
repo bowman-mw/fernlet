@@ -64,13 +64,15 @@ public nonisolated enum BackupExclusion {
     /// variant for stores with no Core Data sidecars (today: `LocalFernletRepository`'s JSON day
     /// blob, security-hardening Phase 6). Kept separate from
     /// ``apply(storeURL:excluded:includeSupportDir:)`` so a sidecar-less caller does not log a
-    /// permanent failure for `-wal`/`-shm` files that can never exist. Same contract otherwise:
-    /// idempotent, and a failure (e.g. the file does not exist yet) is logged, never fatal.
+    /// permanent failure for `-wal`/`-shm` files that can never exist. Missing sidecars have no
+    /// inode and therefore no backup flag to set, so they are an idempotent no-op; other failures
+    /// are logged and never fatal.
     ///
     /// - Important: The flag lives on the file's inode, so an ATOMIC rewrite (temp file + rename)
     ///   silently drops it — callers that rewrite their file must re-apply after every write, the
     ///   way `LocalFernletRepository.saveDatabase` does.
     public static func apply(fileURL: URL, excluded: Bool) {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
             try (fileURL as NSURL).setResourceValue(excluded, forKey: URLResourceKey.isExcludedFromBackupKey)
         } catch {
