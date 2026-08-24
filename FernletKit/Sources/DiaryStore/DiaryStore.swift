@@ -735,6 +735,23 @@ public final class DiaryStore {
         )
     }
 
+    /// Logs the exact food the user picked from catalog search as one editable serving.
+    ///
+    /// This must not feed the picked name back through the free-text resolver: doing so can bind a
+    /// different same-name row and makes the catalog search look selectable without preserving the
+    /// selection. The explicit serving snapshot also keeps quantity correction available afterward.
+    @discardableResult public func logCatalogFoodItem(
+        _ foodItem: FoodItem,
+        mealType: MealType? = nil,
+        date: String? = nil
+    ) -> Meal {
+        logFoodItemMeal(
+            foodItem, mealType: mealType, date: date,
+            confidence: MealConfidence.foodMatch.token,
+            note: "Selected from the food catalog.", source: MealLogSource.manual, servings: 1
+        )
+    }
+
     /// Logs a product resolved from a barcode scan (user-item pairing or a barcode-carrying catalog)
     /// as a single meal. `servings` scales the known per-serving macros/micros and is persisted as a
     /// single editable component (see `logFoodItemMeal`) so the count can be corrected later.

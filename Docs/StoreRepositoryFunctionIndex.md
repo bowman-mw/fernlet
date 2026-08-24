@@ -248,7 +248,7 @@ split is by concern, not alphabetical.
 | `correctedNutrition(macros:componentSnapshots:)` | Uses component totals when component snapshots exist; otherwise keeps manual macros. |
 | `applyMealCorrection(...)` | Updates meal nutrition, note, confidence, fallback flag, and quality. |
 | `attachMealPhoto(mealID:photoID:)`, `mealPhotoData(for:)`, `saveMealPhoto(_:)` | Bridge meal photo attachment and storage through `MealPhotoStore`. |
-| `logRecipe(_:)`, `logSavedRecipe(_:)`, `logWebImportedFoodProduct(_:)` | Convert local recipes, saved URL recipes, or imported products into logged meals. |
+| `logCatalogFoodItem(_:)`, `logRecipe(_:)`, `logSavedRecipe(_:)`, `logWebImportedFoodProduct(_:)` | Convert an exact catalog pick (as one editable serving), local recipe, saved URL recipe, or imported product into a logged meal. |
 | Saved recipe wrappers | Delegate share text, add, update, and delete to `SavedRecipeService`. |
 | `addWorkout(_:date:)` | Appends a workout, invalidates summaries, persists, and saves to HealthKit when appropriate. |
 | `refreshWorkoutsFromHealth()` / `backfillWorkoutsFromHealthIfNeeded(defaults:)` | Delegate HealthKit import/backfill to `WorkoutHealthKitSync`. |
