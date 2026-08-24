@@ -1,0 +1,259 @@
+{
+  "manifestVersion": 1,
+  "catalogSchemaVersion": 4,
+  "canonicalUSDARelease": "2026-04-30",
+  "sources": [
+    {
+      "key": "usda_fdc_consumer",
+      "enabled": true,
+      "role": "canonical",
+      "version": "2026-04-30",
+      "releaseDate": "2026-04-30",
+      "acceptedFilenames": ["FoodData_Central_csv_2026-04-30.zip"],
+      "bytes": 481517495,
+      "sha256": "c33d91e5c44ddbcd71ed6038714fb648b26089b3f91fabfa3be63d96d5763a01",
+      "license": "CC0 1.0 / United States public domain",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher": "USDA FoodData Central",
+      "attribution": "USDA FoodData Central; citation requested but not required by CC0.",
+      "provenance": {
+        "canonicalDownloadURL": "https://fdc.nal.usda.gov/download-datasets.html",
+        "retrievedAt": "2026-08-24",
+        "repackSteps": [
+          "Downloaded archive is retained unchanged outside Git.",
+          "The generator streams named CSV members directly from the archive and never extracts or rewrites them.",
+          "Only a local ignored SQLite preservation artifact is generated."
+        ],
+        "memberSHA256": {
+          "food.csv": "5ed40e3fcd62cba188a9986dd550448e5f17ceadf5115c0ad49404faa054e88e",
+          "branded_food.csv": "36195ac3a901e9900742fdb3ae812fb0837c12d6daaf4f0997b53f20a825d59e",
+          "food_nutrient.csv": "581cf96381ee1bf4f155f1e9268eb69ea85592de7ef2a9e3da78f71754069357",
+          "food_portion.csv": "378fea2f2f70801c6710119fdb3c7de47f5a57db636db972a661dda23988d780"
+        }
+      },
+      "expected": {
+        "Survey (FNDDS)": 5432,
+        "SR Legacy": 7793,
+        "Foundation": 469
+      },
+      "includeDataTypes": ["Survey (FNDDS)", "SR Legacy", "Foundation"],
+      "excludeDataTypes": ["Branded", "Experimental", "sample food", "sub sample food", "market acquisition", "agricultural acquisition"]
+    },
+    {
+      "key": "usda_fndds_ingredients",
+      "enabled": true,
+      "role": "validation_and_moisture_authority",
+      "version": "2021-2023",
+      "releaseDate": "2024-10-31",
+      "acceptedFilenames": ["2021-2023 FNDDS At A Glance - FNDDS Ingredients.xlsx", "FNDDS 2021-2023 Ingredients.xlsx"],
+      "bytes": 1047224,
+      "sha256": "0281173c2b4ecf758994d55038d3ec66c7752bade5219e796343205408557781",
+      "license": "USDA public-domain work; FDC release distributed under CC0 1.0",
+      "licenseURL": "https://www.ars.usda.gov/northeast-area/beltsville-md-bhnrc/beltsville-human-nutrition-research-center/food-surveys-research-group/docs/fndds/",
+      "publisher": "USDA Agricultural Research Service",
+      "attribution": "USDA ARS, Food Surveys Research Group, FNDDS 2021-2023.",
+      "expected": {"ingredientRows": 18584, "dishes": 5431, "ingredientCodes": 2336}
+    },
+    {
+      "key": "usda_survey_validation",
+      "enabled": true,
+      "role": "validation_fixture_only",
+      "version": "2021-2023",
+      "releaseDate": "2024-10-31",
+      "acceptedFilenames": ["surveyDownload.json"],
+      "bytes": 66294426,
+      "sha256": "2e7eb9fda92adf1d4d784dba5eaa3a7fd4418cd86ccff383c7c9294d79e9b808",
+      "license": "CC0 1.0 / United States public domain",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher": "USDA FoodData Central",
+      "attribution": "Validation fixture only; rows are not co-ingested.",
+      "expected": {
+        "foods": 5432,
+        "inputRelations": 18584,
+        "legacyPortionParentDriftTopology": {
+          "canonicalFdcID": "2710777",
+          "fixtureFdcIDs": [
+            "2710778", "2710779", "2710780", "2710781", "2710782", "2710783",
+            "2710784", "2710785", "2710786", "2710787", "2710788", "2710789",
+            "2710790", "2710791", "2710792", "2710793", "2710794", "2710795",
+            "2710796", "2710797", "2710798", "2710799", "2710800", "2710801",
+            "2710802", "2710803", "2710804", "2710805", "2710806", "2710807",
+            "2710808", "2710809", "2710810", "2710811", "2710812", "2710813",
+            "2710814"
+          ],
+          "portionIDs": ["312548", "312549", "312550", "312551"]
+        }
+      }
+    },
+    {
+      "key": "usda_sr_validation",
+      "enabled": true,
+      "role": "validation_fixture_only",
+      "version": "2018-04",
+      "releaseDate": "2018-04-01",
+      "acceptedFilenames": ["FoodData_Central_sr_legacy_food_json_2018-04.json"],
+      "bytes": 210758826,
+      "sha256": "70d4235ae3a2bdf48a7b9eaa1286a83fa67b6f3270436c9ce8b008213f500129",
+      "license": "CC0 1.0 / United States public domain",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher": "USDA FoodData Central",
+      "attribution": "Validation fixture only; rows are not co-ingested.",
+      "expected": {"foods": 7793}
+    },
+    {
+      "key": "usda_branded_curated",
+      "enabled": true,
+      "role": "existing_curated_base_tier",
+      "version": "2026-04-30-derived",
+      "releaseDate": "2026-04-30",
+      "acceptedFilenames": ["BrandedCuratedFoodItems.json"],
+      "bytes": 18193345,
+      "sha256": "30410ff51f7070bb08f63820eeaf23e047d0983a9b281e6a6c4b1b389e940481",
+      "license": "CC0 1.0 / United States public domain",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher": "USDA FoodData Central; Fernlet deterministic curated subset",
+      "attribution": "Existing 50,000-row curated branded floor; no wholesale FDC Branded refresh.",
+      "expected": {
+        "foods": 50000,
+        "shippingCatalogSHA256": "822fb87a1443d3ce7b651231aa855bebfcb12a53f18529050fd05ceb99540b61",
+        "legacyFullFdcExceptions": [
+          {
+            "gtin": "00070074649214",
+            "shippingUUID": "AFC5AD5B-8E57-47C0-8ADC-31DA31CDFB92",
+            "reason": "The immutable shipping selection contains this GTIN, but no matching row exists in the pinned 2026-04-30 full FDC Branded member. Preserve its current curated record without inventing an FDC ID."
+          }
+        ]
+      },
+      "provenance": {
+        "selectionKey": "normalized 14-digit GTIN",
+        "derivationChain": [
+          "Read the 50,000 GTINs from BrandedCuratedFoodItems.json.",
+          "Require exact set equality with the committed FoodCatalog.sqlite GTIN-to-UUID mapping.",
+          "Use that immutable GTIN set as the full-FDC branded_food.csv allowlist.",
+          "Preserve every full-FDC record for each selected GTIN; never choose one duplicate record as canonical in the preservation database.",
+          "Retain the listed legacy exception as a compatibility row with no FDC ID."
+        ],
+        "futureDecision": "A future owner-approved runtime projection may select current branded records by an explicit dated policy. It must not alter the GTIN allowlist, shipping UUID mapping, or preserved raw FDC record history."
+      }
+    },
+    {
+      "key": "uk_cofid",
+      "enabled": true,
+      "role": "parallel_national_composition_source",
+      "version": "2021",
+      "releaseDate": "2021-03-19",
+      "acceptedFilenames": ["McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx"],
+      "bytes": 4629542,
+      "sha256": "436e9445ef2adb2a75f3d7edd51302de3adad25385f9795fc94ba58bd030e97d",
+      "license": "Open Government Licence v3.0",
+      "licenseURL": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      "publisher": "Office for Health Improvement and Disparities / Public Health England",
+      "attribution": "Contains public sector information licensed under the Open Government Licence v3.0.",
+      "provenance": {
+        "canonicalDownloadURL": "https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid",
+        "basisPolicy": "The CoFID notes state 100 g food except alcoholic beverages at 100 mL; preservation records the food-specific basis. Fatty-acid sheets retain their separate per-100-g-fatty-acids basis."
+      },
+      "expected": {"foods": 2887, "duplicateSourceCodes": ["13-669"]}
+    },
+    {
+      "key": "canada_cnf",
+      "enabled": false,
+      "role": "excluded_pending_exact_value_adapter_decision",
+      "version": "2026",
+      "acceptedFilenames": ["cnf_fcen_all-files-data_2026.zip"],
+      "bytes": 26656195,
+      "sha256": "f5faad8977ee6bbdd9d69c8649077cacd87d8658ad200509a4047db1e29edcdd",
+      "license": "Open Government Licence - Canada plus CNF-specific no-modification instruction",
+      "licenseURL": "https://food-nutrition.canada.ca/cnf-fce/",
+      "publisher": "Health Canada",
+      "attribution": "Excluded: exact-value storage/adapter policy or written clearance is unresolved."
+    },
+    {
+      "key": "nl_nevo",
+      "enabled": false,
+      "role": "excluded_no_transformed_redistribution_grant",
+      "version": "2025 v9.0",
+      "acceptedFilenames": ["NEVO2025_v9.0.zip"],
+      "bytes": 27727760,
+      "sha256": "e1b0329410ef33ae44f8e2babdb2da414370b6bca1f33726b2cac42004648250",
+      "license": "NEVO online 2025 conditions of use",
+      "licenseURL": "https://www.rivm.nl/en/dutch-food-composition-database",
+      "publisher": "RIVM",
+      "attribution": "Excluded: conditions require unchanged use and do not grant transformed redistribution."
+    },
+    {
+      "key": "nl_nevo_terms",
+      "enabled": false,
+      "role": "excluded_source_contract_evidence",
+      "version": "2025",
+      "acceptedFilenames": ["Conditions-of-use-NEVO-online-2025-dataset.pdf"],
+      "bytes": 108403,
+      "sha256": "21af0831faadada45e3dec459c160845b36525ad190ee72c65f20c699f9fb8f2",
+      "license": "NEVO online 2025 conditions of use",
+      "licenseURL": "https://www.rivm.nl/en/dutch-food-composition-database",
+      "publisher": "RIVM",
+      "attribution": "Evidence only; never ingested into the catalog."
+    }
+  ],
+  "outputContract": {
+    "tableCounts": {
+      "source_manifest": 9,
+      "food": 66581,
+      "nutrient_definition": 762,
+      "nutrient_value": 1745863,
+      "food_factor": 5188,
+      "portion": 86682,
+      "food_ingredient": 18584,
+      "ingredient_nutrient_value": 275535,
+      "fndds_dish": 5431,
+      "branded_compatibility": 50000,
+      "branded_fdc_record": 240311,
+      "branded_fdc_nutrient": 3428087,
+      "branded_fdc_portion": 0,
+      "legacy_compatibility": 66581,
+      "validation_evidence": 11
+    },
+    "foodBySourceAndDataType": [
+      ["uk_cofid", "cofid", 2887],
+      ["usda_branded_curated", "branded", 50000],
+      ["usda_fdc_consumer", "Foundation", 469],
+      ["usda_fdc_consumer", "SR Legacy", 7793],
+      ["usda_fdc_consumer", "Survey (FNDDS)", 5432]
+    ],
+    "nutrientDefinitionBySource": [
+      ["uk_cofid", 275],
+      ["usda_branded_curated", 10],
+      ["usda_fdc_consumer", 477]
+    ],
+    "nutrientValueBySourceStatusBasis": [
+      ["uk_cofid", "numeric", "per_100g_fatty_acids", 29174],
+      ["uk_cofid", "numeric", "per_100g_food", 162686],
+      ["uk_cofid", "numeric", "per_100ml_alcoholic_beverage", 1126],
+      ["uk_cofid", "parenthesized_numeric", "per_100g_food", 14],
+      ["uk_cofid", "present_unknown", "per_100g_fatty_acids", 138],
+      ["uk_cofid", "present_unknown", "per_100g_food", 11693],
+      ["uk_cofid", "present_unknown", "per_100ml_alcoholic_beverage", 96],
+      ["uk_cofid", "trace", "per_100g_fatty_acids", 6425],
+      ["uk_cofid", "trace", "per_100g_food", 23426],
+      ["uk_cofid", "trace", "per_100ml_alcoholic_beverage", 374],
+      ["usda_branded_curated", "numeric", "label_serving", 492145],
+      ["usda_fdc_consumer", "numeric", "per_100g", 1018566]
+    ],
+    "foodFactorByStatus": [
+      ["numeric", 5147],
+      ["present_unknown", 40],
+      ["trace", 1]
+    ],
+    "portionBySource": [
+      ["usda_branded_curated", 50000],
+      ["usda_fdc_consumer", 36682]
+    ],
+    "foodIngredientBySource": [["usda_fdc_consumer", 18584]],
+    "cofidFoodBasis": [
+      ["per_100g_fatty_acids", 670, 35737],
+      ["per_100g_food", 2856, 197819],
+      ["per_100ml_alcoholic_beverage", 31, 1596]
+    ],
+    "ftsRowIDCount": 66581
+  }
+}
