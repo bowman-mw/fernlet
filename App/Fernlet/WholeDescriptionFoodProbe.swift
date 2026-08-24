@@ -11,6 +11,10 @@ import FoodCatalog
 /// search floors shipped by research items 1.6–1.9.
 @MainActor
 enum WholeDescriptionFoodProbe {
+    /// One accepted probe result: the catalog row, the grams it resolves to, and the audit trail.
+    ///
+    /// `unmatchedItems` carries the description words the probe could not account for, so the
+    /// composer can hold the row for review instead of silently under-counting them.
     struct Match {
         let item: FoodItem
         let grams: Double
@@ -21,12 +25,20 @@ enum WholeDescriptionFoodProbe {
         let unmatchedItems: [String]
     }
 
+    /// A single positive, finite serving basis read off a catalog row, in its own typed unit.
+    ///
+    /// Kept separate from `Match` because a row can yield a basis that is real but incompatible
+    /// with the typed household unit; that case aborts the probe rather than scaling anyway.
     struct ServingBasis: Equatable {
         let quantity: Double
         let unit: String
         let grams: Double
     }
 
+    /// A whole description split into the text that goes to search and the typed household amount.
+    ///
+    /// The unit is deliberately preserved rather than dropped as a search stopword; routing it to
+    /// `FoodPortion` is the whole point of this probe.
     private struct ParsedDescription {
         let searchText: String
         let quantity: Double

@@ -1771,6 +1771,11 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
 /// result keeps every consumer of a new conversion on one validated quantity, unit, scale, and source
 /// measure. A `.glassDefault` is Fernlet's editable 12-US-fluid-ounce assumption, never a mass ounce.
 public nonisolated struct RecipeServingConversion: Equatable, Sendable {
+    /// Which of the four conversion routes produced the scale, most trusted first.
+    ///
+    /// The rawValue is a frozen token: it rides in persisted and exported rows, so it never
+    /// localizes. `.glassDefault` is the only route resting on an assumption rather than source
+    /// data, which is why callers surface it for review.
     public enum Provenance: String, Equatable, Sendable {
         case exactServingBasis
         case physicalUnit
@@ -1804,6 +1809,10 @@ public nonisolated enum RecipeConversionLimits {
 }
 
 extension RecipeUnit {
+    /// The measurement family a unit belongs to, used to reject incompatible conversions.
+    ///
+    /// `.serving` has no dimension — it is a source-relative multiplier, not a physical quantity —
+    /// so `dimension` returns nil for it rather than inventing a family.
     public enum Dimension: Equatable, Sendable {
         case mass
         case volume
