@@ -119,11 +119,13 @@
 // named — `planTierStillCommitsBurgerAndFriesAtHighConfidence`, which records that `burger and fries`
 // still resolves `.high` because both of its binds clear 250 on the +250 substring bonus alone.
 //
-// COSTCO CHEESE PIZZA SLICE, POST-1.5: fix 1.3 alone reopened auto-commit for this query (`.high`, no
-// review) — a genuine improvement over 1.1/1.2's ACCIDENTAL safety net (a bad score standing in for
-// brand disclosure), but not an acceptable stopping point on its own: the committed meal (~390 kcal,
-// still pinned below) runs roughly HALF a real Costco food-court slice (699–760 kcal, §31), with
-// nothing on screen saying so. Fix 1.5, THIS increment, closes that: `DishTemplateLexicon.resolve`
+// COSTCO CHEESE PIZZA SLICE, DIRECT TEMPLATE AUDIT POST-1.5: fix 1.3 alone reopened auto-commit for
+// the template result (`.high`, no review) — a genuine improvement over 1.1/1.2's ACCIDENTAL safety
+// net (a bad score standing in for brand disclosure), but not an acceptable stopping point on its
+// own: the template-only meal (~390 kcal, still pinned below) runs roughly HALF a real Costco
+// food-court slice (699–760 kcal, §31), with nothing on screen saying so. The live quick-log end state
+// now short-circuits earlier at item 1.12's whole-description probe; this paragraph records the direct
+// lexicon seam. Fix 1.5 closes that seam's disclosure gap: `DishTemplateLexicon.resolve`
 // now names "costco" as an unmatched brand token whenever the template match's key didn't cover it,
 // which forces `needsReview` a second, independent way (`NutritionModels.swift:625`'s
 // `!unmatchedItems.isEmpty` clause) on top of the confidence dropping to `.low`
@@ -798,15 +800,17 @@ struct DishTemplateBindAuditTests {
         try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tier must be the rung under test")
         try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
 
-        // The query that started the round — see `theTesterQueryNowRoutesToReviewNamingCostco` for
-        // the full accounting. Fix 1.5 (this increment) closes the gap fix 1.3 alone reopened: the
-        // template decomposition is still correct and still builds, but "costco" now rides out as an
-        // unmatched item, which routes to review before the meal counts toward the day.
+        // The query that started the round now short-circuits at item 1.12's whole-description probe
+        // before it reaches the template whose direct accounting is still pinned below. The dropped
+        // retailer remains visible, so the new one-row result retains 1.5's review guarantee.
         let tester = await store.resolveMeals(from: "costco cheese pizza slice")
         #expect(tester.confidence == .low, "the unmatched brand token counts as a drop")
         #expect(tester.unmatchedItems == ["costco"], "verbatim as typed (review finding F3) — not sentence-cased")
         #expect(tester.needsReview == true)
-        #expect(tester.meals.first?.componentSnapshots.count == 3, "the decomposition itself is untouched by 1.5")
+        #expect(tester.meals.first?.componentSnapshots.count == 1, "the portion-bearing row preempts decomposition")
+        #expect(tester.meals.first?.componentSnapshots.first?.name == "PIZZA HUT 12\" Cheese Pizza, Pan Crust")
+        #expect(tester.meals.first?.componentSnapshots.first?.quantity == 100)
+        #expect(tester.meals.first?.componentSnapshots.first?.unit == RecipeUnit.gram.rawValue)
         #expect(tester.meals.first?.confidence == MealConfidence.roughEstimate.token,
                 "review finding F6: the MEAL's own persisted stamp must also reflect the brand flag")
 
@@ -825,9 +829,10 @@ struct DishTemplateBindAuditTests {
 
     // MARK: - The query that started the round
 
-    /// "costco cheese pizza slice", END STATE for this round: §31's promise ("costco" becomes a
-    /// visible unmatched item, flipping `needsReview` — a second, independent safety net") is now
-    /// DELIVERED for this exact query, with the otherwise-correct three-component decomposition intact.
+    /// "costco cheese pizza slice", DIRECT TEMPLATE-ONLY AUDIT: §31's promise ("costco" becomes a
+    /// visible unmatched item, flipping `needsReview` — a second, independent safety net") remains
+    /// delivered at the lexicon seam with the otherwise-correct three-component decomposition intact.
+    /// The live quick-log end state now answers earlier with item 1.12's one-row portion probe.
     ///
     /// The chain of fixes that got here, for the record: before 1.1/1.2 the three components bound to a
     /// Pillsbury dough product, a mozzarella-sticks snack (58, below the 250 floor) and tomato sauce,

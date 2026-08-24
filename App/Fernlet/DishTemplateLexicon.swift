@@ -225,10 +225,11 @@ private struct DishTemplateFile: Decodable {
 
 /// Loads DishTemplates.json once and provides deterministic dish lookup for the M2 fallback path.
 ///
-/// The first deterministic tier of the quick-log cascade (``MealResolutionService``): when AI is off
-/// or the AI tiers fall through, it matches composite dishes ("6 pieces salmon nigiri") by exact or
-/// longest-substring name/alias, extracts a leading count, and assembles catalog-grounded meals via
-/// ``MealBuilder``. It also supplies per-component gram bounds that ``MealDecompositionResolver``
+/// The composite-dish deterministic fallback tier of the quick-log cascade
+/// (``MealResolutionService``): after the cold whole-description probe misses, and when AI is off or
+/// its tiers fall through, it matches dishes ("6 pieces salmon nigiri") by exact or longest-substring
+/// name/alias, extracts a leading count, and assembles catalog-grounded meals via ``MealBuilder``. It
+/// also supplies per-component gram bounds that ``MealDecompositionResolver``
 /// uses to sanity-clamp the AI tier's estimates, and default yields for auto-minted recipes. A
 /// missing or undecodable JSON degrades to an empty lexicon (every lookup misses).
 enum DishTemplateLexicon {
@@ -458,7 +459,7 @@ enum DishTemplateLexicon {
     /// text, never the lexicon term). §37 Q7 is an open owner question about token-boundary matching
     /// (over-matching a food word that collides with a chain name, like "chipotle" the pepper or
     /// "chilis" the vegetable — review finding F2, pinned not fixed) — deliberately not touched here.
-    private static func unaccountedBrandChips(itemName: String, matchedKey: String) -> [String] {
+    static func unaccountedBrandChips(itemName: String, matchedKey: String) -> [String] {
         let itemNorm = FoodItemSearch.normalized(itemName)
         var terms: [String] = []
         for term in FoodProductWebSearch.retailerTerms

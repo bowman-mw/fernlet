@@ -335,7 +335,8 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/App/Fernlet/RecipeShareCodec.swift` | Encodes and decodes recipes into a shareable text format for peer-to-peer recipe sharing. |
 | `Fernlet/App/Fernlet/MealBuilder.swift` | Converts a `FoodSelectionPlan` and food candidates into structured `Meal` records and inline recipe definitions, with good-protein threshold logic. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/CustomIngredientUpsert.swift` | Resolves manual recipe ingredient inputs into `FoodItem` records, creating or updating custom food entries in the catalog. |
-| `Fernlet/App/Fernlet/MealResolutionService.swift` | `MealResolutionService` + `MealPlausibility` — the quick-log meal-resolution cascade (AI decomposition → AI selection → lexicon → plan → heuristic) plus the micronutrient fallback and implausible-total gate. |
+| `Fernlet/App/Fernlet/MealResolutionService.swift` | `MealResolutionService` + `MealPlausibility` — the quick-log meal-resolution cascade (cold whole-description probe → AI decomposition → AI selection → lexicon → plan → heuristic) plus the micronutrient fallback and implausible-total gate. |
+| `Fernlet/App/Fernlet/WholeDescriptionFoodProbe.swift` | Cold pre-decomposition whole-description resolver probe: requires the corpus-calibrated high score floor plus a typed-unit `FoodPortion`, computes its grams, emits only a validated food-serving basis, and conservatively surfaces stripped brand/retailer text. |
 | `Fernlet/App/Fernlet/FoundationDishDecomposition.swift` | `FoundationDishDecompositionModel` — on-device Foundation Models decomposition of a meal description into catalog-resolved, scaled `Meal` components with a match confidence. |
 | `Fernlet/App/Fernlet/DishTemplateLexicon.swift` | `DishTemplateLexicon` + JSON template types — loads `DishTemplates.json` for deterministic, count-aware dish-template lookup (the decomposition fallback path). |
 | `Fernlet/App/Fernlet/FoodCaptureRouter.swift` | `FoodCaptureRoute` + router — auto-detects a captured photo (barcode / nutrition label / meal) and routes to the matching existing flow, or `.ambiguous` for a gentle chooser. |
@@ -574,6 +575,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Tests/FernletTests/MeshNetworkManagerTests.swift` | Mesh network manager discovery visibility, session open/closed transitions, slot allocation, peer admission, lifecycle, session-photo retention, and film-quota tests (10-shot limit, `filmRemaining`, `leaveSession` reset). |
 | `Fernlet/Tests/FernletTests/DisposableCameraControllerTests.swift` | Pure state-machine unit tests for `CameraCaptureController`: initial armed state, disarm, wind progress, arm-on-full-wind, re-arm cycle, and no-op guards. |
 | `Fernlet/Tests/FernletTests/MealBuilderTests.swift` | Meal builder food plan to meal/recipe conversion tests. |
+| `Fernlet/Tests/FernletTests/WholeDescriptionFoodProbeTests.swift` | Whole-description probe floor calibration, full corpus/resolver-bank fired-population pins, portion/count boundaries, retailer disclosure, and real quick-log short-circuit tests. |
 | `Fernlet/Tests/FernletTests/SavedRecipeServiceTests.swift` | Saved recipe service load, add, delete, and persistence tests. |
 | `Fernlet/Tests/FernletTests/SnapshotSaveCoordinatorTests.swift` | Snapshot save coordinator debounce and remote-reload tests. |
 | `Fernlet/Tests/FernletTests/WorkoutHealthKitSyncTests.swift` | HealthKit workout import and upsert logic tests. |

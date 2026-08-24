@@ -38,9 +38,9 @@ enum MealPlausibility {
     static let maxSingleLogGrams = 3000.0
 }
 
-/// The quick-log meal resolution cascade (AI dish decomposition → candidate-
-/// constrained AI selection → deterministic lexicon → deterministic plan →
-/// keyword-heuristic fallback) plus the catalog-grounded micronutrient fallback,
+/// The quick-log meal resolution cascade (cold whole-description catalog probe → AI dish
+/// decomposition → candidate-constrained AI selection → deterministic lexicon → deterministic plan
+/// → keyword-heuristic fallback) plus the catalog-grounded micronutrient fallback,
 /// extracted from `FernletStore` (plan §5d).
 ///
 /// Owns the FoundationModels meal dependencies
@@ -103,6 +103,11 @@ final class MealResolutionService {
         // resolver binds the MEAT rather than an assembled fast-food dish ("burger patties" → "beef
         // patties", which the FNDDS "hamburger, on wheat bun" entries can't match).
         let description = Self.canonicalizedQuery(rawDescription)
+
+        // Whole-description short-circuit (research §26 item 1.12): this must run before either AI
+        // or deterministic decomposition so a catalog row that confidently represents the typed
+        // food and household portion is not split into fabricated ingredients.
+        if let resolution = wholeDescriptionResolution(description, type: type) { return resolution }
 
         if host.settings.aiStatus != .off {
             // The two on-device meal-resolution model calls both route through the store's AI gate
@@ -185,6 +190,44 @@ final class MealResolutionService {
         // Still try to ground its micronutrients in the catalog so the snapshot isn't fully empty.
         let fallback = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
         return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
+    }
+
+    private func wholeDescriptionResolution(_ description: String, type: MealType?) -> MealResolution? {
+        guard let probe = WholeDescriptionFoodProbe.match(
+            description: description, catalog: host.foodCatalog
+        ) else { return nil }
+        return Self.plausibilityGated(Self.probeResolution(probe, description: description, type: type))
+    }
+
+    /// Builds the one-row whole-description result in the food's validated nutrition basis. A
+    /// stripped brand is both surfaced and stamped `.low`; an unstripped high-floor match remains a
+    /// normal catalog food match. Internal so focused tests can verify synthetic basis edge cases.
+    static func probeResolution(
+        _ probe: WholeDescriptionFoodProbe.Match,
+        description: String,
+        type: MealType?
+    ) -> MealResolution {
+        let confidence: MealResolutionConfidence = probe.unmatchedItems.isEmpty ? .high : .low
+        let ingredient = FoodSelectionIngredient(
+            candidateId: 1,
+            foodName: probe.item.name,
+            quantity: probe.ingredientQuantity,
+            unit: probe.ingredientUnit
+        )
+        let meal = MealBuilder.mealFromIngredients(
+            itemName: description,
+            resolvedIngredients: [(ingredient, probe.item)],
+            mealType: type ?? MealParser.classifyMealType(description),
+            confidenceToken: confidence.mealConfidence.token,
+            source: MealLogSource.manual
+        )
+        return MealResolution(
+            meals: [meal],
+            createdRecipes: [],
+            confidence: confidence,
+            isFallback: false,
+            unmatchedItems: probe.unmatchedItems
+        )
     }
 
     /// Builds a resolution from a candidate-constrained selection plan, or `nil` when the plan yields

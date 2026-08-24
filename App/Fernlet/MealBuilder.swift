@@ -109,7 +109,8 @@ struct MealBuilder {
         itemName: String,
         resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
         mealType: MealType,
-        confidenceToken: String = MealConfidence.foodMatch.token
+        confidenceToken: String = MealConfidence.foodMatch.token,
+        source: String = MealLogSource.foundationModelFoodSelection
     ) -> Meal {
         let components = componentSnapshots(for: resolvedIngredients)
         let totals = totals(for: components)
@@ -134,7 +135,7 @@ struct MealBuilder {
             quality: totals.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: confidenceToken,
             note: "Matched locally from food selection: \(ingredientText).",
-            source: MealLogSource.foundationModelFoodSelection
+            source: source
         )
     }
 
