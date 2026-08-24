@@ -8,6 +8,49 @@ import Foundation
 /// none — while `recipeIngredients(from:...)` maps a whole editor form into bound ingredients,
 /// creating any missing custom foods along the way. Pure value logic; the caller owns persistence.
 public nonisolated struct CustomIngredientUpsert {
+
+    /// The plausibility + completeness report for one editor row, before it is saved (fix 1.14).
+    ///
+    /// Deliberately NOT wired into ``resolve(ingredient:in:verifiedAt:)``: the gate warns and routes
+    /// to review, it never blocks or rewrites a save, so it is the presenting surface — not the
+    /// upsert — that decides what to do with a finding. Call this, show what it found, and let the
+    /// user save anyway if they want to.
+    ///
+    /// - Important: only the ARITHMETIC half of the gate runs here, and that is deliberate.
+    ///   ``ManualRecipeIngredientInput`` stores protein/carbs/fat as non-optional `Int`, so by the
+    ///   time a value arrives the absent-versus-zero distinction is already gone and all three
+    ///   always read as *reported*; calories are never collected by this form at all; and
+    ///   `quantity` is the RECIPE amount (defaulting to 1), not a nutrition-panel serving size.
+    ///   Running the completeness half over that would report "calories missing" on every single
+    ///   row — the same answer for every record, which is noise wearing a finding's clothes. So the
+    ///   scope is ``NutritionCompletenessScope/notApplicable`` and an untouched row surfaces through
+    ///   the all-zero rule instead. Any caller that still holds the optional-typed source of the
+    ///   numbers (an OCR scan, a product record) should report from THAT — see
+    ///   `NutritionLabelResult.plausibilityReport(foodName:)`, which keeps nil as nil and does run
+    ///   completeness — and use this overload only for hand-typed rows.
+    ///
+    /// - Parameters:
+    ///   - ingredient: the editor row about to be saved.
+    ///   - declaredCalories: an independently declared energy value, when one exists (a scanned
+    ///     panel, a product record). Pass nil for a hand-typed row: ``Macros/calories`` is derived
+    ///     via 4/4/9, so feeding it back in would compare the identity with itself and always pass.
+    public static func plausibility(
+        of ingredient: ManualRecipeIngredientInput,
+        declaredCalories: Double? = nil
+    ) -> NutritionPlausibilityReport {
+        let facts = NutritionFacts(
+            macros: ingredient.macros,
+            micronutrients: ingredient.scannedMicronutrients ?? Micronutrients(),
+            declaredCalories: declaredCalories,
+            hasServingSize: false
+        )
+        return NutritionPlausibility.report(
+            for: facts,
+            exemption: NutritionPlausibility.exemption(forFoodNamed: ingredient.trimmedName),
+            completeness: .notApplicable
+        )
+    }
+
     public static func resolve(
         ingredient: ManualRecipeIngredientInput,
         in foodItems: inout [FoodItem],

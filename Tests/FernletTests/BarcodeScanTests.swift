@@ -1,6 +1,7 @@
 import Foundation
 import SQLite3
 import Testing
+import AppServices
 import FernletDomainModel
 import FoodCatalog
 @testable import Fernlet
@@ -134,7 +135,7 @@ struct BarcodeScanTests {
         // return nil (not fail) for barcode lookups.
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount > 0, "bundled FoodCatalog.sqlite missing from the test host")
-        #expect(catalog.results(for: "chicken", limit: 3).isEmpty == false)
+        #expect(catalog.results(for: "chicken", limit: 3, context: .userTyped).isEmpty == false)
         #expect(catalog.item(forBarcode: "0012345678905") == nil)
     }
 
@@ -226,5 +227,42 @@ struct BarcodeScanTests {
         let decoded = try JSONDecoder().decode(FoodItem.self, from: data)
         #expect(decoded == item)
         #expect(decoded.barcode == "00012345678905")
+    }
+
+    // MARK: - The not-found screen's completeness line (fix 1.14)
+
+    @Test func theNoScanNudgeNamesTheFieldsAboutToBeStoredAsZero() throws {
+        // Regression guard for `scanResult?.plausibilityReport() ?? .clean`. `.clean` names no
+        // missing fields, so with nothing scanned the "Still missing: …" line disappeared from the
+        // empty-macro nudge — and no-scan is the DOMINANT trigger of that nudge, because this screen
+        // has no manual macro entry at all. Neither branch raises an arithmetic finding, so the
+        // regression is invisible from the outside; only this assertion catches it.
+        let message = try #require(BarcodeNotFoundView.missingMacrosMessage(forScan: nil))
+        #expect(message.contains(NutrientField.servingSize.displayName))
+        #expect(message.contains(NutrientField.protein.displayName))
+        #expect(message.contains(NutrientField.carbs.displayName))
+        #expect(message.contains(NutrientField.fat.displayName))
+        // Calories are deliberately dropped: this screen deals in grams and shows no calorie box.
+        #expect(!message.contains(NutrientField.calories.displayName))
+        // And the no-scan report stays a COMPLETENESS problem — no finding fires, so substituting an
+        // empty result cannot spuriously raise the contradiction dialog.
+        let report = BarcodeNotFoundView.plausibility(ofScan: nil)
+        #expect(report.findings.isEmpty)
+        #expect(report.missingFields == NutritionPlausibility.coreFields)
+    }
+
+    @Test func aCompleteScanLeavesNothingForTheCompletenessLineToSay() {
+        var scan = NutritionLabelResult()
+        scan.servingSize = "1 bar (55g)"
+        scan.calories = 244
+        scan.protein = 4
+        scan.carbs = 30
+        scan.fat = 12
+        #expect(BarcodeNotFoundView.missingMacrosMessage(forScan: scan) == nil)
+        // A partial scan names exactly the gap, not the whole panel.
+        scan.carbs = nil
+        let partial = BarcodeNotFoundView.missingMacrosMessage(forScan: scan)
+        #expect(partial?.contains(NutrientField.carbs.displayName) == true)
+        #expect(partial?.contains(NutrientField.protein.displayName) == false)
     }
 }

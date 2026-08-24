@@ -65,7 +65,7 @@ struct MealDecompositionRecipeWireTests {
 
     // MARK: - createRecipe yield scaling (per-serving == the resolved plate)
 
-    @Test func createRecipeScalesIngredientsByYieldSoPerServingIsThePlate() {
+    @Test func createRecipeScalesIngredientsByYieldSoPerServingIsThePlate() throws {
         let oats = foodItem(name: "Oats", macros: Macros(protein: 5, carbs: 27, fat: 3))
         let yogurt = foodItem(name: "Greek yogurt", macros: Macros(protein: 18, carbs: 6, fat: 0))
         // One plated serving: 1 serving of each.
@@ -80,7 +80,9 @@ struct MealDecompositionRecipeWireTests {
         #expect(recipe.ingredients.map(\.quantity) == [4, 4])
 
         // Logging it back divides by servings → exactly one plate. per-serving is invariant to the yield.
-        let logged = MealBuilder.mealFromRecipe(recipe, mealType: .breakfast, foodItems: [oats, yogurt])
+        let logged = try #require(MealBuilder.mealFromRecipe(
+            recipe, mealType: .breakfast, foodItems: [oats, yogurt]
+        ))
         #expect(logged.macros == Macros(protein: 23, carbs: 33, fat: 3))
     }
 
@@ -221,7 +223,9 @@ struct MealDecompositionRecipeWireTests {
         #expect(recipe.name == "Chicken And Rice")   // createRecipe title-cases the dish name
         #expect(recipe.servings == MealBuilder.defaultRecipeServings(description: "chicken and rice"))
         // Macros stay catalog-bound (never model-emitted): logging one serving reproduces the plate.
-        let logged = MealBuilder.mealFromRecipe(recipe, mealType: .dinner, foodItems: [chicken, rice])
+        let logged = try #require(MealBuilder.mealFromRecipe(
+            recipe, mealType: .dinner, foodItems: [chicken, rice]
+        ))
         #expect(logged.macros == resolved.meal.macros)
     }
 

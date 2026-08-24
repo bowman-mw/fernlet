@@ -111,6 +111,23 @@ repository purge runs late, widget files after that, then the proximity identity
 store's compaction last of all (before the preference reset, so the app's own preference-driven
 container reload cannot race it). See the numbered commentary inside `deleteAllData`.
 
+**One surface is deliberately absent from this table, and the auditor should know why: research §26
+fix 1.9's food-search history profile.** It ranks the foods this person has logged above everything
+else in the typed food search, so it looks like exactly the kind of per-user residue this document
+tracks — and §26's own risk column assumed it would be a stored per-`foodItemId` usage ledger needing
+a row here. It is not stored. `FoodSearchHistory` is DERIVED from `DiaryStore.recentMeals` — already
+in the synced snapshot, already cleared by the day-rows/blob row below — and held only as an
+in-memory snapshot inside the live `FoodCatalog`. There is no `UserDefaults` key, no field of its
+own, nothing on disk, and therefore no independent clear call to register in `wipeManifest`. The
+live in-memory copy is emptied by the `didSet` on `recentMeals`: `resetDiary()` assigns `[]`, which
+re-derives and republishes the empty profile in the same statement, closing the same "deleted but
+still there until relaunch" hazard the correction memory's explicit `setSearchAliases([:])` line
+closes — without a second call site that could drift out of step with the first. Two tests hold that
+shape: `FoodSearchHistoryStoreTests.aWipeCoolsTheCatalogInTheSameProcess` proves the live catalog
+really does stop promoting after a wipe, and `historyIsDerivedNotStored` pins the derivation/publisher
+topology plus the exact proposed `foodSearchHistory` defaults-key spelling. It is deliberately not a
+general proof against arbitrarily renamed storage.
+
 | Surface | Where it lives | Wiped by (token) |
 | --- | --- | --- |
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
@@ -153,6 +170,7 @@ container reload cannot race it). See the numbered commentary inside `deleteAllD
 | Barcode serving memory | UserDefaults `fernlet.barcodeLastServings.v1` | `BarcodeServingMemory.clearAll` |
 | Log-activity "Recent" chips — the last five workout types picked | UserDefaults `fernlet.recentActivityTypes` (`RecentActivityTypeMemory`, device-local, never synced) | `RecentActivityTypeMemory.clearAll` (plain UserDefaults removal — no failure signal) |
 | Recipe web-image one-attempt memory | UserDefaults `fernlet.recipeWebImageAttempts.v1` | `RecipeWebImageAttemptMemory.clearAll` |
+| Local food-search correction memory — the searches the user corrected once (normalized query → the food id they picked in "Adjust meal"), research §26 fix 1.10 | UserDefaults `fernlet.foodSearchCorrections.v1` (`FoodSearchCorrectionMemory`, device-local: never in the synced snapshot and never in CloudKit, but — like the two `UserDefaults` sidecars above — it rides an encrypted device backup and returns with a restore of this device; capped at 200 entries ≈ 17 KB, oldest evicted first) | `FoodSearchCorrectionMemory.clearAll` (plain UserDefaults removal — no failure signal), immediately followed by `foodCatalog.setSearchAliases` with an empty map, because the live catalog holds an in-memory copy of this surface that would otherwise keep answering corrected searches until relaunch. It also has its OWN user-facing clear — "Forget corrected searches" in Privacy & data (`FernletStore.forgetAllFoodSearchCorrections`), added because a correction is invisible, permanent and individually unremovable, so "delete everything" used to be the only way to unlearn one |
 | Workout tombstone ring — up to 200 UUIDs of removed workouts whose app-authored Health delete never confirmed | UserDefaults `fernlet.workout.tombstones` (`WorkoutTombstoneStore`) | `workoutTombstones.clearAll` (correct for both Health answers: the delete path already removed the samples, the keep path wants re-import — a surviving tombstone would delete a kept sample on the next re-enable) |
 | Group-activity rosters (persisted) | Sidecar | `activities.clearAll` |
 | Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |

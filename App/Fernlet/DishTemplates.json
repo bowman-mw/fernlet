@@ -8,8 +8,8 @@
       "unit": "piece",
       "defaultCount": 1,
       "components": [
-        { "search": "fish raw", "gramsPerUnit": 17, "preparation": "raw" },
-        { "search": "rice white cooked", "gramsPerUnit": 18, "preparation": "steamed" }
+        { "search": "fish raw", "gramsPerUnit": 17, "preparation": "raw", "displayName": "Raw fish" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 18, "displayName": "Steamed rice" }
       ]
     },
     {
@@ -19,7 +19,7 @@
       "unit": "piece",
       "defaultCount": 1,
       "components": [
-        { "search": "fish raw", "gramsPerUnit": 28, "preparation": "raw" }
+        { "search": "fish raw", "gramsPerUnit": 28, "preparation": "raw", "displayName": "Raw fish" }
       ]
     },
     {
@@ -29,8 +29,8 @@
       "unit": "piece",
       "defaultCount": 8,
       "components": [
-        { "search": "fish raw", "gramsPerUnit": 10, "preparation": "raw" },
-        { "search": "rice white cooked", "gramsPerUnit": 20, "preparation": "steamed" }
+        { "search": "fish raw", "gramsPerUnit": 10, "preparation": "raw", "displayName": "Raw fish" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 20, "displayName": "Steamed rice" }
       ]
     },
     {
@@ -40,10 +40,10 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "tuna raw", "gramsPerUnit": 140, "preparation": "raw" },
-        { "search": "rice white cooked", "gramsPerUnit": 150 },
-        { "search": "avocado", "gramsPerUnit": 50 },
-        { "search": "edamame", "gramsPerUnit": 40 }
+        { "search": "tuna raw", "gramsPerUnit": 140, "preparation": "raw", "displayName": "Raw tuna" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 150, "displayName": "Steamed rice" },
+        { "search": "avocado raw", "gramsPerUnit": 50, "displayName": "Avocado" },
+        { "search": "edamame", "gramsPerUnit": 40, "displayName": "Edamame" }
       ]
     },
     {
@@ -53,9 +53,9 @@
       "unit": "sandwich",
       "defaultCount": 1,
       "components": [
-        { "search": "bread white", "gramsPerUnit": 50 },
-        { "search": "cheese american", "gramsPerUnit": 42 },
-        { "search": "butter", "gramsPerUnit": 10 }
+        { "search": "bread white commercially prepared includes soft bread crumbs", "gramsPerUnit": 50, "displayName": "White bread" },
+        { "search": "cheese american restaurant", "gramsPerUnit": 42, "displayName": "American cheese" },
+        { "search": "butter salted", "gramsPerUnit": 10, "displayName": "Butter" }
       ]
     },
     {
@@ -65,9 +65,9 @@
       "unit": "sandwich",
       "defaultCount": 1,
       "components": [
-        { "search": "bread white", "gramsPerUnit": 50 },
-        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned" },
-        { "search": "mayonnaise", "gramsPerUnit": 20 }
+        { "search": "bread white commercially prepared includes soft bread crumbs", "gramsPerUnit": 50, "displayName": "White bread" },
+        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned", "displayName": "Canned tuna" },
+        { "search": "salad dressing mayonnaise regular", "gramsPerUnit": 20, "displayName": "Mayonnaise" }
       ]
     },
     {
@@ -77,10 +77,10 @@
       "unit": "sandwich",
       "defaultCount": 1,
       "components": [
-        { "search": "bread white", "gramsPerUnit": 50 },
-        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned" },
-        { "search": "cheddar cheese", "gramsPerUnit": 28 },
-        { "search": "mayonnaise", "gramsPerUnit": 15 }
+        { "search": "bread white commercially prepared includes soft bread crumbs", "gramsPerUnit": 50, "displayName": "White bread" },
+        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned", "displayName": "Canned tuna" },
+        { "search": "cheese cheddar", "gramsPerUnit": 28, "displayName": "Cheddar cheese" },
+        { "search": "salad dressing mayonnaise regular", "gramsPerUnit": 15, "displayName": "Mayonnaise" }
       ]
     },
     {
@@ -90,11 +90,11 @@
       "unit": "sandwich",
       "defaultCount": 1,
       "components": [
-        { "search": "bread white", "gramsPerUnit": 50 },
-        { "search": "bacon cooked", "gramsPerUnit": 24, "preparation": "cooked" },
-        { "search": "lettuce", "gramsPerUnit": 15 },
-        { "search": "tomato", "gramsPerUnit": 40 },
-        { "search": "mayonnaise", "gramsPerUnit": 15 }
+        { "search": "bread white commercially prepared includes soft bread crumbs", "gramsPerUnit": 50, "displayName": "White bread" },
+        { "search": "pork cured bacon cooked baked", "gramsPerUnit": 24, "displayName": "Bacon" },
+        { "search": "lettuce iceberg raw", "gramsPerUnit": 15, "displayName": "Lettuce" },
+        { "search": "tomatoes red ripe raw", "gramsPerUnit": 40, "displayName": "Tomato" },
+        { "search": "salad dressing mayonnaise regular", "gramsPerUnit": 15, "displayName": "Mayonnaise" }
       ]
     },
     {
@@ -104,7 +104,7 @@
         {
           "alias": "cheeseburger",
           "componentOverrides": [
-            { "search": "cheese american", "gramsPerUnit": 21 }
+            { "search": "cheese american restaurant", "gramsPerUnit": 21, "displayName": "American cheese" }
           ]
         }
       ],
@@ -112,10 +112,10 @@
       "unit": "burger",
       "defaultCount": 1,
       "components": [
-        { "search": "beef patty ground", "gramsPerUnit": 113, "preparation": "grilled" },
-        { "search": "hamburger bun", "gramsPerUnit": 50 },
-        { "search": "lettuce", "gramsPerUnit": 15 },
-        { "search": "tomato", "gramsPerUnit": 30 }
+        { "search": "beef ground 80 lean meat 20 fat patty cooked broiled", "gramsPerUnit": 113, "displayName": "Beef patty" },
+        { "search": "rolls hamburger or hotdog plain", "gramsPerUnit": 50, "displayName": "Hamburger bun" },
+        { "search": "lettuce iceberg raw", "gramsPerUnit": 15, "displayName": "Lettuce" },
+        { "search": "tomatoes red ripe raw", "gramsPerUnit": 30, "displayName": "Tomato" }
       ]
     },
     {
@@ -125,11 +125,11 @@
       "unit": "burrito",
       "defaultCount": 1,
       "components": [
-        { "search": "tortilla flour", "gramsPerUnit": 72 },
-        { "search": "chicken grilled", "gramsPerUnit": 120, "preparation": "grilled" },
-        { "search": "rice white cooked", "gramsPerUnit": 100 },
-        { "search": "beans black cooked", "gramsPerUnit": 80 },
-        { "search": "cheese shredded", "gramsPerUnit": 28 }
+        { "search": "tortillas ready to bake or fry flour", "gramsPerUnit": 72, "displayName": "Flour tortilla" },
+        { "search": "chicken breast grilled", "gramsPerUnit": 120, "preparation": "grilled", "displayName": "Grilled chicken" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 100, "displayName": "White rice" },
+        { "search": "beans black cooked", "gramsPerUnit": 80, "displayName": "Black beans" },
+        { "search": "cheese cheddar", "gramsPerUnit": 28, "displayName": "Cheddar cheese" }
       ]
     },
     {
@@ -139,10 +139,10 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "chicken grilled", "gramsPerUnit": 150, "preparation": "grilled" },
-        { "search": "rice white cooked", "gramsPerUnit": 150 },
-        { "search": "beans black cooked", "gramsPerUnit": 90 },
-        { "search": "cheese shredded", "gramsPerUnit": 28 }
+        { "search": "chicken breast grilled", "gramsPerUnit": 150, "preparation": "grilled", "displayName": "Grilled chicken" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 150, "displayName": "White rice" },
+        { "search": "beans black cooked", "gramsPerUnit": 90, "displayName": "Black beans" },
+        { "search": "cheese cheddar", "gramsPerUnit": 28, "displayName": "Cheddar cheese" }
       ]
     },
     {
@@ -152,10 +152,10 @@
       "unit": "taco",
       "defaultCount": 2,
       "components": [
-        { "search": "beef ground cooked", "gramsPerUnit": 60, "preparation": "cooked" },
-        { "search": "tortilla corn", "gramsPerUnit": 26 },
-        { "search": "cheese shredded", "gramsPerUnit": 14 },
-        { "search": "lettuce", "gramsPerUnit": 10 }
+        { "search": "beef ground cooked", "gramsPerUnit": 60, "preparation": "cooked", "displayName": "Ground beef" },
+        { "search": "tortilla corn", "gramsPerUnit": 26, "displayName": "Corn tortilla" },
+        { "search": "cheese cheddar", "gramsPerUnit": 14, "displayName": "Cheddar cheese" },
+        { "search": "lettuce iceberg raw", "gramsPerUnit": 10, "displayName": "Lettuce" }
       ]
     },
     {
@@ -165,9 +165,9 @@
       "unit": "quesadilla",
       "defaultCount": 1,
       "components": [
-        { "search": "tortilla flour", "gramsPerUnit": 60 },
-        { "search": "cheese shredded", "gramsPerUnit": 60 },
-        { "search": "chicken grilled", "gramsPerUnit": 80, "preparation": "grilled" }
+        { "search": "tortillas ready to bake or fry flour", "gramsPerUnit": 60, "displayName": "Flour tortilla" },
+        { "search": "cheese cheddar", "gramsPerUnit": 60, "displayName": "Cheddar cheese" },
+        { "search": "chicken breast grilled", "gramsPerUnit": 80, "preparation": "grilled", "displayName": "Grilled chicken" }
       ]
     },
     {
@@ -177,21 +177,28 @@
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "chicken breast cooked", "gramsPerUnit": 150, "preparation": "cooked" },
-        { "search": "broccoli cooked", "gramsPerUnit": 100 },
-        { "search": "rice white cooked", "gramsPerUnit": 150 }
+        { "search": "chicken breast cooked roasted", "gramsPerUnit": 150, "displayName": "Chicken breast" },
+        { "search": "broccoli cooked", "gramsPerUnit": 100, "displayName": "Broccoli" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 150, "displayName": "White rice" }
       ]
     },
     {
       "name": "fried rice",
-      "aliases": ["chicken fried rice", "shrimp fried rice", "vegetable fried rice"],
-      "isComposite": true,
+      "aliases": ["chicken fried rice", "shrimp fried rice"],
+      "aliasOverrides": [
+        {
+          "alias": "vegetable fried rice",
+          "componentOverrides": [
+            { "search": "rice fried meatless", "gramsPerUnit": 166, "displayName": "Vegetable fried rice" }
+          ],
+          "replacesBaseComponents": true
+        }
+      ],
+      "isComposite": false,
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "rice white cooked", "gramsPerUnit": 200, "preparation": "fried" },
-        { "search": "egg whole", "gramsPerUnit": 50 },
-        { "search": "soy sauce", "gramsPerUnit": 15 }
+        { "search": "rice fried", "gramsPerUnit": 198, "displayName": "Fried rice" }
       ]
     },
     {
@@ -201,10 +208,10 @@
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "rice noodle cooked", "gramsPerUnit": 180 },
-        { "search": "egg whole", "gramsPerUnit": 50 },
-        { "search": "shrimp cooked", "gramsPerUnit": 80, "preparation": "cooked" },
-        { "search": "peanut", "gramsPerUnit": 20 }
+        { "search": "rice noodle cooked", "gramsPerUnit": 180, "displayName": "Rice noodles" },
+        { "search": "egg whole raw", "gramsPerUnit": 50, "displayName": "Egg" },
+        { "search": "shrimp cooked", "gramsPerUnit": 80, "preparation": "cooked", "displayName": "Shrimp" },
+        { "search": "dry roasted peanuts", "gramsPerUnit": 20, "displayName": "Peanuts" }
       ]
     },
     {
@@ -214,10 +221,10 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "rice white cooked", "gramsPerUnit": 150 },
-        { "search": "beef sirloin cooked", "gramsPerUnit": 80, "preparation": "cooked" },
-        { "search": "egg fried", "gramsPerUnit": 50 },
-        { "search": "spinach cooked", "gramsPerUnit": 50 }
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 150, "displayName": "White rice" },
+        { "search": "beef sirloin cooked", "gramsPerUnit": 80, "preparation": "cooked", "displayName": "Beef sirloin" },
+        { "search": "fried egg whole cooked", "gramsPerUnit": 50, "displayName": "Fried egg" },
+        { "search": "spinach cooked", "gramsPerUnit": 50, "displayName": "Spinach" }
       ]
     },
     {
@@ -227,9 +234,9 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "rice noodle cooked", "gramsPerUnit": 150 },
-        { "search": "beef round raw", "gramsPerUnit": 100, "preparation": "raw" },
-        { "search": "beef broth", "gramsPerUnit": 300 }
+        { "search": "rice noodle cooked", "gramsPerUnit": 150, "displayName": "Rice noodles" },
+        { "search": "beef round raw", "gramsPerUnit": 100, "preparation": "raw", "displayName": "Raw beef" },
+        { "search": "broth beef ready to serve", "gramsPerUnit": 300, "displayName": "Beef broth" }
       ]
     },
     {
@@ -239,10 +246,10 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "noodle wheat cooked", "gramsPerUnit": 200 },
-        { "search": "pork belly cooked", "gramsPerUnit": 80, "preparation": "cooked" },
-        { "search": "egg soft boiled", "gramsPerUnit": 50 },
-        { "search": "chicken broth", "gramsPerUnit": 300 }
+        { "search": "egg noodles cooked", "gramsPerUnit": 200, "displayName": "Egg noodles" },
+        { "search": "pork belly cooked", "gramsPerUnit": 80, "preparation": "cooked", "displayName": "Pork belly" },
+        { "search": "egg whole cooked hard boiled", "gramsPerUnit": 50, "displayName": "Hard-boiled egg" },
+        { "search": "broth chicken ready to serve", "gramsPerUnit": 300, "displayName": "Chicken broth" }
       ]
     },
     {
@@ -252,8 +259,8 @@
       "unit": "slice",
       "defaultCount": 1,
       "components": [
-        { "search": "bread whole grain", "gramsPerUnit": 40 },
-        { "search": "avocado", "gramsPerUnit": 75 }
+        { "search": "bread whole grain", "gramsPerUnit": 40, "displayName": "Whole grain bread" },
+        { "search": "avocado raw", "gramsPerUnit": 75, "displayName": "Avocado" }
       ]
     },
     {
@@ -263,9 +270,9 @@
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "spaghetti pasta cooked", "gramsPerUnit": 200 },
-        { "search": "beef ground cooked", "gramsPerUnit": 120, "preparation": "cooked" },
-        { "search": "tomato sauce", "gramsPerUnit": 80 }
+        { "search": "pasta cooked enriched", "gramsPerUnit": 200, "displayName": "Pasta" },
+        { "search": "beef ground cooked", "gramsPerUnit": 120, "preparation": "cooked", "displayName": "Ground beef" },
+        { "search": "tomato sauce", "gramsPerUnit": 80, "displayName": "Tomato sauce" }
       ]
     },
     {
@@ -275,10 +282,10 @@
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "romaine lettuce", "gramsPerUnit": 100 },
-        { "search": "chicken breast grilled", "gramsPerUnit": 100, "preparation": "grilled" },
-        { "search": "caesar dressing", "gramsPerUnit": 30 },
-        { "search": "parmesan cheese", "gramsPerUnit": 15 }
+        { "search": "romaine lettuce raw", "gramsPerUnit": 100, "displayName": "Romaine lettuce" },
+        { "search": "chicken breast grilled", "gramsPerUnit": 100, "preparation": "grilled", "displayName": "Grilled chicken breast" },
+        { "search": "caesar dressing regular", "gramsPerUnit": 30, "displayName": "Caesar dressing" },
+        { "search": "cheese parmesan grated", "gramsPerUnit": 15, "displayName": "Parmesan cheese" }
       ]
     },
     {
@@ -288,9 +295,9 @@
       "unit": "slice",
       "defaultCount": 2,
       "components": [
-        { "search": "pizza dough crust", "gramsPerUnit": 60 },
-        { "search": "mozzarella cheese", "gramsPerUnit": 40 },
-        { "search": "tomato sauce", "gramsPerUnit": 30 }
+        { "search": "pizza dough", "gramsPerUnit": 60, "displayName": "Pizza dough" },
+        { "search": "low moisture part skim mozzarella cheese", "gramsPerUnit": 40, "displayName": "Mozzarella cheese" },
+        { "search": "tomato sauce", "gramsPerUnit": 30, "displayName": "Tomato sauce" }
       ]
     },
     {
@@ -300,9 +307,9 @@
       "unit": "wrap",
       "defaultCount": 1,
       "components": [
-        { "search": "chicken thigh cooked", "gramsPerUnit": 150, "preparation": "grilled" },
-        { "search": "pita bread", "gramsPerUnit": 65 },
-        { "search": "tomato", "gramsPerUnit": 40 }
+        { "search": "chicken thigh cooked roasted", "gramsPerUnit": 150, "displayName": "Chicken thigh" },
+        { "search": "pita bread", "gramsPerUnit": 65, "displayName": "Pita bread" },
+        { "search": "tomatoes red ripe raw", "gramsPerUnit": 40, "displayName": "Tomato" }
       ]
     },
     {
@@ -312,9 +319,9 @@
       "unit": "serving",
       "defaultCount": 1,
       "components": [
-        { "search": "chicken breast cooked", "gramsPerUnit": 150, "preparation": "cooked" },
-        { "search": "tomato cream sauce", "gramsPerUnit": 120 },
-        { "search": "rice white cooked", "gramsPerUnit": 150 }
+        { "search": "chicken breast cooked roasted", "gramsPerUnit": 150, "displayName": "Chicken breast" },
+        { "search": "coconut milk canned", "gramsPerUnit": 120, "displayName": "Coconut milk" },
+        { "search": "rice white long grain regular enriched cooked", "gramsPerUnit": 150, "displayName": "White rice" }
       ]
     },
     {
@@ -324,7 +331,7 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "tomato soup", "gramsPerUnit": 244 }
+        { "search": "soup tomato canned prepared with equal volume water", "gramsPerUnit": 244, "displayName": "Tomato soup" }
       ]
     },
     {
@@ -334,9 +341,9 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "chicken cooked", "gramsPerUnit": 60, "preparation": "cooked" },
-        { "search": "pasta noodle cooked", "gramsPerUnit": 80 },
-        { "search": "chicken broth", "gramsPerUnit": 200 }
+        { "search": "chicken breast meat only cooked stewed", "gramsPerUnit": 60, "displayName": "Chicken" },
+        { "search": "egg noodles cooked", "gramsPerUnit": 80, "displayName": "Noodles" },
+        { "search": "broth chicken ready to serve", "gramsPerUnit": 200, "displayName": "Chicken broth" }
       ]
     },
     {
@@ -346,7 +353,7 @@
       "unit": "bowl",
       "defaultCount": 1,
       "components": [
-        { "search": "oatmeal cooked oats", "gramsPerUnit": 234 }
+        { "search": "oatmeal", "gramsPerUnit": 234, "displayName": "Oatmeal" }
       ]
     },
     {
@@ -356,9 +363,9 @@
       "unit": "smoothie",
       "defaultCount": 1,
       "components": [
-        { "search": "banana", "gramsPerUnit": 100 },
-        { "search": "milk whole", "gramsPerUnit": 240 },
-        { "search": "protein powder whey", "gramsPerUnit": 30 }
+        { "search": "banana", "gramsPerUnit": 100, "displayName": "Banana" },
+        { "search": "milk whole", "gramsPerUnit": 240, "displayName": "Whole milk" },
+        { "search": "protein powder whey", "gramsPerUnit": 30, "displayName": "Protein powder" }
       ]
     }
   ]

@@ -594,6 +594,28 @@ struct BarcodeNotFoundView: View {
     /// meal that counts for nothing. We offer to scan the label first, but never hard-block: the user
     /// can still choose "Remember it anyway".
     @State private var showingEmptyMacroNudge = false
+    /// A second gentle nudge (fix 1.14) shown when the scanned panel's numbers CONTRADICT each other —
+    /// calories that don't match the macros, a fat breakdown bigger than the total fat, a decimal point
+    /// the OCR lost — or, more softly, when a value trips the outer ceiling guard. Same contract as
+    /// the empty-macro nudge: offer a rescan, never hard-block.
+    @State private var showingPlausibilityReview = false
+    /// Set by a dialog button that wants the label scanner, and consumed once the dialog has actually
+    /// gone away. Assigning `showingLabelScanner` from INSIDE a dismissing confirmation dialog is this
+    /// project's documented covered-destination trap: the push is swallowed and the button does
+    /// nothing. Both nudges route through this flag rather than setting the destination directly.
+    ///
+    /// - Note: NOT covered by a UI test, and the reason is structural rather than an oversight.
+    ///   `BarcodeNotFoundView` is a navigation destination reached only after a live camera scan
+    ///   returns an unrecognised payload, which XCUITest cannot synthesise on a simulator. The one
+    ///   place it is constructed with an injectable `prefilledScan` is `FoodView.swift`, and every
+    ///   route to it on launch would need a new `FernletSheet` case presented from there or from
+    ///   `ContentView` — both outside this change. The follow-up is small and specific: add a
+    ///   `FERNLET_UI_TEST_OPEN_BARCODE_NOT_FOUND` hook to `UITestSupport` in the same shape as
+    ///   `shouldOpenJournalEditor`, present `BarcodeNotFoundView(prefilledScan:)` from it with a
+    ///   contradictory synthetic scan, and assert that "Rescan the nutrition label" reaches the
+    ///   label camera. Until then the handoff above is order-independent by construction rather
+    ///   than by test.
+    @State private var pendingLabelScan = false
     /// Once the food is saved we show the "Remembered" (11c) confirmation and hold the item; the
     /// user's "Done" tap fires `onCreated`, so the create logic itself is unchanged — we only give
     /// the confirmation its moment before the flow dismisses.
@@ -627,29 +649,35 @@ struct BarcodeNotFoundView: View {
 
     // MARK: Naming screen (11b)
 
+    /// The scrolling half of the naming screen: header, name field, label-scan row, macro rings.
+    /// Split out of ``namingScreen`` so both stay inside the 60-line body budget (R4).
+    private var namingFormBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                namingHeader
+
+                Text("Give it a name and it'll be here next time you scan.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+
+                SheetField("What should we call it?") {
+                    TextField("Hazelnut oat bar", text: $name)
+                        .sheetTextInput()
+                }
+
+                labelScanButton
+
+                macroSection
+            }
+            .padding(20)
+            .padding(.bottom, 10)
+        }
+    }
+
     private var namingScreen: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    namingHeader
-
-                    Text("Give it a name and it'll be here next time you scan.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-
-                    SheetField("What should we call it?") {
-                        TextField("Hazelnut oat bar", text: $name)
-                            .sheetTextInput()
-                    }
-
-                    labelScanButton
-
-                    macroSection
-                }
-                .padding(20)
-                .padding(.bottom, 10)
-            }
+            namingFormBody
 
             if let saveNotice {
                 Text(saveNotice)
@@ -666,6 +694,10 @@ struct BarcodeNotFoundView: View {
                 // log a meal that counts for nothing. Nudge to add macros first — softly, not a wall.
                 if macrosAreEmpty {
                     showingEmptyMacroNudge = true
+                } else if !reviewFindings.isEmpty {
+                    // The numbers are present but disagree with each other (fix 1.14). Same softness:
+                    // offer a rescan, and let "Remember it anyway" through untouched.
+                    showingPlausibilityReview = true
                 } else {
                     rememberFood()
                 }
@@ -677,12 +709,32 @@ struct BarcodeNotFoundView: View {
             isPresented: $showingEmptyMacroNudge,
             titleVisibility: .visible
         ) {
-            Button("Scan the nutrition label") { showingLabelScanner = true }
+            Button("Scan the nutrition label") { pendingLabelScan = true }
             Button("Remember it anyway") { rememberFood() }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later.")
+            Text(verbatim: emptyMacroMessage)
         }
+        .confirmationDialog(
+            reviewTitle,
+            isPresented: $showingPlausibilityReview,
+            titleVisibility: .visible
+        ) {
+            Button("Rescan the nutrition label") { pendingLabelScan = true }
+            Button("Remember it anyway") { rememberFood() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            // Already-localized copy from the gate's findings, so it goes through verbatim rather
+            // than being looked up a second time as a key.
+            Text(verbatim: reviewMessage)
+        }
+        // Both nudges hand the label scanner over through `pendingLabelScan`, consumed once the
+        // dialog is gone — see the flag's declaration. All three bindings are watched because
+        // whichever of "the action ran" and "the dialog dismissed" happens second is what completes
+        // the handoff.
+        .onChange(of: pendingLabelScan) { _, _ in consumePendingLabelScan() }
+        .onChange(of: showingEmptyMacroNudge) { _, _ in consumePendingLabelScan() }
+        .onChange(of: showingPlausibilityReview) { _, _ in consumePendingLabelScan() }
         .navigationDestination(isPresented: $showingLabelScanner) {
             NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 scanResult = result
@@ -800,16 +852,118 @@ struct BarcodeNotFoundView: View {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The fix-1.14 plausibility + completeness report for the current scan, computed over the OCR
+    /// result with its optionals INTACT — a label line the scanner never read stays `nil` here
+    /// instead of becoming a claim that the product contains none of that nutrient.
+    private var plausibility: NutritionPlausibilityReport {
+        Self.plausibility(ofScan: scanResult)
+    }
+
+    /// The same report for a scan that MAY NOT HAVE HAPPENED YET, which on this screen is the
+    /// ordinary case rather than the edge one.
+    ///
+    /// The nil branch substitutes an EMPTY `NutritionLabelResult` rather than a `.clean` report, and
+    /// the difference is the whole point. `.clean` names no missing fields, so the "Still missing: …"
+    /// line vanished in the dominant trigger of the empty-macro nudge: this screen has no manual
+    /// macro entry, so "nothing scanned yet" IS the four-silent-zeros case the nudge exists to warn
+    /// about. An empty result reports every core field as missing, which is the truth. Nothing is
+    /// reported, so no arithmetic finding can fire either way — which is exactly why the regression
+    /// was invisible, and why it is pinned by a test rather than left to review.
+    ///
+    /// No food name is passed, deliberately. The name would resolve the 21 CFR 101.9(j)(4)
+    /// insignificant-nutrient exemption, and that exemption is for a food bearing no nutrition
+    /// information — a barcoded packaged product with a Nutrition Facts panel is outside it by
+    /// definition. Its home is the hand-typed custom-food seam, not this screen.
+    static func plausibility(ofScan scan: NutritionLabelResult?) -> NutritionPlausibilityReport {
+        (scan ?? NutritionLabelResult()).plausibilityReport()
+    }
+
+    /// The findings the review dialog speaks about. Arithmetic contradictions outrank the outer
+    /// ceiling guard, so they are shown alone when present; a ceiling on its own gets the softer
+    /// wording instead. (`allReportedValuesZero` never reaches here — every reported value being
+    /// zero implies empty macros, which `macrosAreEmpty` catches first with copy written for it.)
+    private var reviewFindings: [NutritionPlausibilityFinding] {
+        let contradictions = plausibility.contradictions.filter { $0 != .allReportedValuesZero }
+        return contradictions.isEmpty ? plausibility.advisories : contradictions
+    }
+
+    /// The dialog's title, which must match the CLASS of finding being shown: a curve-fitted ceiling
+    /// is a "have another look", never a claim that the user's arithmetic is broken.
+    private var reviewTitle: LocalizedStringKey {
+        reviewFindings.contains(where: { !$0.isAdvisory })
+            ? "These numbers don't add up"
+            : "Worth a second look"
+    }
+
+    /// Up to three findings (with an honest "and N more" tail), plus the completeness line naming
+    /// what was never filled in.
+    private var reviewMessage: String {
+        [NutritionPlausibilityReport.message(for: reviewFindings, limit: 3), missingMacrosMessage]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
+    }
+
+    /// The empty-macro nudge's copy, plus the same completeness line — so the user is TOLD which
+    /// values are about to be stored as zero before they choose "Remember it anyway".
+    private var emptyMacroMessage: String {
+        let lead = String(localized: "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later.")
+        guard let missingMacrosMessage else { return lead }
+        return lead + "\n\n" + missingMacrosMessage
+    }
+
+    /// "Still missing: …" for the fields this screen can meaningfully name.
+    ///
+    /// Calories are dropped: this screen states outright that it deals in grams and shows no calorie
+    /// figure, and Fernlet derives energy from the macros anyway, so naming it would point at a box
+    /// that does not exist here. Serving size and the three macros are exactly the values that would
+    /// otherwise be stored as a silent zero, which is what §26 asks to be named.
+    private var missingMacrosMessage: String? {
+        Self.missingMacrosMessage(forScan: scanResult)
+    }
+
+    /// The same line for an arbitrary (possibly absent) scan, so the copy the user actually reads is
+    /// reachable from a test — including the no-scan case, where it must name serving size and all
+    /// three macros rather than saying nothing at all.
+    static func missingMacrosMessage(forScan scan: NutritionLabelResult?) -> String? {
+        NutritionPlausibilityReport.missingFieldsMessage(
+            for: plausibility(ofScan: scan).missingFields.filter { $0 != .calories }
+        )
+    }
+
     /// True when nothing has filled in the macros yet (no label scanned, or a scan that read all
     /// zeros) — the case where remembering-and-logging would contribute nothing to the day.
+    ///
+    /// - Note: no insignificant-nutrient exemption here, and that is deliberate. Wiring 21 CFR
+    ///   101.9(j)(4) into this screen was wrong twice over: the exemption is for a food that bears no
+    ///   nutrition information, which a barcoded product is not, and keying it off the typed name
+    ///   silently disabled this nudge for anyone who happened to call their unscanned product
+    ///   "coffee" — saving 0 g with no warning at all.
     private var macrosAreEmpty: Bool {
         (scanResult?.protein ?? 0) == 0 && (scanResult?.carbs ?? 0) == 0 && (scanResult?.fat ?? 0) == 0
+    }
+
+    /// Pushes the label scanner once the flag is set AND no nudge dialog is still on screen.
+    ///
+    /// Deliberately order-independent: SwiftUI does not promise whether a confirmation dialog's
+    /// button action runs before or after its `isPresented` binding flips, so this is watched from
+    /// all three bindings and simply fires on whichever change makes both conditions true.
+    private func consumePendingLabelScan() {
+        guard pendingLabelScan, !showingEmptyMacroNudge, !showingPlausibilityReview else { return }
+        pendingLabelScan = false
+        showingLabelScanner = true
     }
 
     /// Persist the named product as a user `FoodItem` and hand off to the "Remembered" confirmation
     /// (whose "Done" fires `onCreated`, logging the meal). Shared by the save bar and the empty-macro
     /// "Remember it anyway" path so the create logic stays in one place.
     private func rememberFood() {
+        // The `?? 0`s below are the collapse the gate exists to warn about — and they stay, because
+        // `ManualRecipeIngredientInput` and `Macros` store the macros as non-optional `Int` and this
+        // round does not change that schema. What the gate buys is that the collapse is no longer
+        // SILENT: whichever nudge applies has already named the fields about to be stored as zero
+        // (`missingMacrosMessage`) and the user chose "Remember it anyway". Naming-then-storing is
+        // what §26 asks for; making absence representable all the way to disk is a schema question
+        // for the ledger, not a change to make behind a save button.
         let micros = scanResult?.micronutrients()
         let input = ManualRecipeIngredientInput(
             name: trimmedName,

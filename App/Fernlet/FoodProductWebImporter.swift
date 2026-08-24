@@ -38,15 +38,26 @@ struct ProductPagePreview: Equatable {
 /// ``shouldSearch(for:foodItems:)`` to decide whether a typed description is a specific branded
 /// product (and not already imported) before offering the web route.
 enum FoodProductWebSearch {
+    /// Retailer/grocer names treated as a specific-branded-product signal. Hoisted out of
+    /// `shouldSearch` into a named, shareable constant (research §26 fix 1.5) so
+    /// `DishTemplateLexicon` can reuse this SAME list to surface a discarded retailer token as an
+    /// unmatched item instead of maintaining a second, silently-diverging copy — the fix's location
+    /// column names this exact list as the term source to reuse, not duplicate.
+    ///
+    /// Deliberately a separate list from ``FoodBrandLexicon``'s restaurant-CHAIN set (which
+    /// `shouldSearch` also consults below): these are stores/grocers a product was bought AT
+    /// ("Kirkland" trail mix from Costco), not a chain that MADE the food. Frozen matching-input
+    /// English, never localized.
+    static let retailerTerms = [
+        "costco", "kirkland", "trader joe", "whole foods", "aldi", "walmart",
+        "target", "starbucks", "sandwich bros"
+    ]
+
     /// Whether `description` names a specific retail/branded product worth a web lookup: it must
     /// carry a retailer/brand signal, have at least two meaningful tokens, and not already match a
     /// previously web-imported (`aiResolved`) food item.
     static func shouldSearch(for description: String, foodItems: [FoodItem]) -> Bool {
         let normalized = FoodItemSearch.normalized(description)
-        let retailerTerms = [
-            "costco", "kirkland", "trader joe", "whole foods", "aldi", "walmart",
-            "target", "starbucks", "sandwich bros"
-        ]
         let isSpecificProduct = normalized.contains(" from ")
             || retailerTerms.contains(where: normalized.contains)
             || FoodBrandLexicon.queryContainsBrandToken(description)
@@ -143,11 +154,20 @@ enum FoodProductWebSearch {
         return url
     }
 
+    /// Words ignored when counting "meaningful tokens" for `shouldSearch`'s two-token gate: every
+    /// individual word ``retailerTerms`` is made of, DERIVED by splitting it rather than hand-copied
+    /// (research §26 fix 1.5's adversarial review, finding F4: this list used to be a separate
+    /// hand-maintained word-split of `retailerTerms` — "trader joe" → "trader", "joe" — already one
+    /// unsynchronized edit away from silently diverging, e.g. adding a retailer term without also
+    /// adding its words here would leave `shouldSearch` requiring an extra unrelated token). "from",
+    /// "count", "pack" are general stopwords, not retailer names, and stay listed by hand.
+    private static let ignoredMeaningfulTokens: Set<String> = {
+        let retailerWords = retailerTerms.flatMap { $0.split(separator: " ").map(String.init) }
+        return Set(retailerWords).union(["from", "count", "pack"])
+    }()
+
     private static func meaningfulTokens(in normalizedText: String) -> Set<String> {
-        let ignored: Set<String> = [
-            "from", "costco", "kirkland", "trader", "joe", "whole", "foods", "aldi",
-            "walmart", "target", "starbucks", "sandwich", "bros", "count", "pack"
-        ]
+        let ignored = ignoredMeaningfulTokens
         return Set(normalizedText.split(separator: " ").map(String.init).filter {
             $0.count >= 3 && Double($0) == nil && !ignored.contains($0)
         })
@@ -725,6 +745,14 @@ enum FoodProductWebImporter {
     /// Whether an OCR'd label scan is complete enough to trust from an arbitrary web image: serving
     /// size, calories, and all three macros must all be present. Guards the image tier against
     /// accepting a partial read off a lifestyle photo.
+    ///
+    /// - Note: deliberately calibrated apart from the fix-1.14 gate
+    ///   (`NutritionLabelResult.plausibilityReport(foodName:)`), whose completeness half checks the
+    ///   same five fields but only WARNS. The difference is who is watching: this path imports a
+    ///   photo nobody identified, with no user in the loop, so a partial read is rejected outright;
+    ///   the gate advises a user about a scan they took themselves and must never block them. Keep
+    ///   the field list here in step with `NutritionPlausibility.coreFields`, and if either
+    ///   threshold moves, look at the other.
     static func isCompleteNutritionLabelScan(_ result: NutritionLabelResult) -> Bool {
         guard let servingSize = result.servingSize?.trimmingCharacters(in: .whitespacesAndNewlines),
               servingSize.isEmpty == false,

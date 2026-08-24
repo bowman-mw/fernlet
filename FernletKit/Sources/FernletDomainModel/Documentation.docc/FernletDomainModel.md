@@ -175,9 +175,36 @@ non-exhaustive switches and ship corrupted binaries.
 - ``FoodDataType``
 - ``FoodItemSource``
 - ``FoodBarcode``
+``FoodItemSearch``'s comparator has one per-user input, research §26 fix 1.9's
+``FoodSearchHistory``: the foods this person has logged, weighted by frequency and recency, read as
+its TOP ranking key. It defaults to ``FoodSearchHistory/empty`` on every entry point and
+``FoodItemSearch/scoredResults(for:in:limit:stripsStopwords:)`` has no parameter for it at all — so
+every confidence gate that reads a score is cold by construction, and the profile can only re-rank
+rows the match gate and both floors already admitted. It is derived, never stored: `DiaryStore`
+computes it from `recentMeals`.
+
 - ``FoodItemSearch``
+- ``FoodSearchHistory``
 - ``FoodBrandLexicon``
 - ``CustomIngredientUpsert``
+
+### Food plausibility and completeness
+
+Five internal-consistency checks plus a completeness check, run over ONE food record on the device
+that holds it — custom foods and scanned labels alike. Pure functions, no persisted surface. The
+input type keeps *absent* distinct from *zero*, which is the whole point: a nutrient the scanner
+never read must not reach the diary as a claim that the food contains none of it. Every threshold
+traces to a published source (Atwater / 21 CFR 101.9, FAO/INFOODS 2012, USDA ARS QC, Rand et al.
+1991, Greenfield & Southgate 2003); the file header records which rule came from where, and states
+the design boundary that these checks must never be combined with cross-device aggregation of
+user-created food records.
+
+- ``NutritionFacts``
+- ``NutritionPlausibility``
+- ``NutritionPlausibilityReport``
+- ``NutritionPlausibilityFinding``
+- ``NutrientField``
+- ``NutrientSignificanceExemption``
 
 ### Recipes
 

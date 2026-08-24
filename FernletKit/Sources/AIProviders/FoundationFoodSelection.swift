@@ -130,6 +130,18 @@ public enum FoundationFoodSelectionModel {
     /// Resolves one split item to at most ONE catalog food (the bind-floor-clearing best), with a
     /// default unit and quantity — the deterministic counterpart of the model's per-item ingredient
     /// picks.
+    ///
+    /// **LOAD-BEARING, do not "simplify" the re-search away.** This rebuilds its own candidate set
+    /// and its own `FoodItemSearch.Index` over `candidates`' foods rather than reusing the pool's
+    /// ORDER, and that re-filter is what firewalls research §26 fix 1.10's correction memory out of
+    /// the bind path. A correction promotes the user's chosen row to rank 1 of `FoodCatalog.results`
+    /// — and therefore into the pool `MealResolutionService` hands here — WITHOUT it having passed
+    /// retrieval. Everything below re-derives from the item's own text against an ALIAS-FREE index
+    /// (`FoodCatalog` is not consulted), so a promoted row that carries none of the typed tokens
+    /// scores nothing, fails ``candidatesClearingBindFloor(_:itemName:foodItems:)``, and is never
+    /// bound. Reusing the pool order here — or scoring through the catalog — would let one correction
+    /// silently bind and auto-commit a food for a query it does not match.
+    /// `FoodSearchCorrectionResolverFirewallTests` pins the outcome.
     private static func deterministicIngredients(for itemName: String, candidates: [FoodSelectionCandidate]) -> [FoodSelectionIngredient] {
         let foodItems = candidates.map(\.foodItem)
         // Pull a wider set (not just 4) so the candidate builder's prepared-dish demotion has a raw
@@ -177,14 +189,31 @@ public enum FoundationFoodSelectionModel {
         foodItems: [FoodItem]
     ) -> [FoodSelectionCandidate] {
         guard itemCandidates.isEmpty == false, foodItems.isEmpty == false else { return itemCandidates }
+        let bestScore = bestSubPhraseScores(for: itemName, foodItems: foodItems)
+        return itemCandidates.filter { (bestScore[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
+    }
+
+    /// The best score each food achieves over ANY sub-phrase of `itemName`, scored against an index
+    /// built here from `foodItems`.
+    ///
+    /// Public because the same question — "did this row reach this item on its own retrieval merit?"
+    /// — is asked one layer up by `MealResolutionService`'s AI-selection tier, and two answers to it
+    /// would drift. **The index is built HERE, from the plain food list**: it never runs through
+    /// `FoodCatalog`, so a research §26 fix 1.10 correction alias cannot promote a row past this
+    /// floor. A row absent from the map (or below `FoodItemSearch.minimumBindScore`) matched only via
+    /// category/tags, or not at all.
+    public static func bestSubPhraseScores(for itemName: String, foodItems: [FoodItem]) -> [UUID: Int] {
+        guard foodItems.isEmpty == false else { return [:] }
         let index = FoodItemSearch.Index(foodItems: foodItems)
         var bestScore: [UUID: Int] = [:]
+        // R2: bounded by `searchPhrases`, which emits a fixed 3/2/1-word decomposition of one item name.
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: itemName) {
-            for scored in FoodItemSearch.scoredResults(for: phrase, in: index, limit: foodItems.count) {
+            // `stripsStopwords: false` — sub-phrases from `searchPhrases`, not a typed query.
+            for scored in FoodItemSearch.scoredResults(for: phrase, in: index, limit: foodItems.count, stripsStopwords: false) {
                 bestScore[scored.item.id] = max(bestScore[scored.item.id] ?? Int.min, scored.score)
             }
         }
-        return itemCandidates.filter { (bestScore[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
+        return bestScore
     }
 
     /// Picks the unit for a deterministic bind: sandwich bread/cheese counts as `.each`, an explicit
@@ -241,19 +270,13 @@ public enum FoundationFoodSelectionModel {
 
     /// The first measurement unit the person spelled out ("100 g", "2 cups", "3 slices"), mapped to a
     /// `RecipeUnit`, or nil when the text carries no unit token (a bare count like "2 eggs", or no
-    /// number at all). `piece` / `slice` map to `.each`; every other token defers to
-    /// `RecipeUnit.normalized`.
+    /// number at all). `piece` and `slice` retain their distinct source-backed count meanings.
     private static func explicitUnit(in itemName: String) -> RecipeUnit? {
-        for token in FoodItemSearch.normalized(itemName).split(separator: " ") {
+        let normalized = FoodItemSearch.normalized(itemName)
+        if normalized.contains("fl oz") || normalized.contains("fluid ounce") { return .fluidOunce }
+        for token in normalized.split(separator: " ") {
             let word = String(token)
-            switch word {
-            case "piece", "pieces", "slice", "slices":
-                return .each
-            default:
-                if let unit = RecipeUnit.normalized(word) {
-                    return unit
-                }
-            }
+            if let unit = RecipeUnit.normalized(word) { return unit }
         }
         return nil
     }
@@ -285,9 +308,8 @@ private struct FoundationMealSelection {
             let validIngredients = item.ingredients.compactMap { ingredient -> FoodSelectionIngredient? in
                 guard let candidate = candidates.first(where: { $0.id == ingredient.candidateNumber }) else { return nil }
                 let normalizedUnitStr = normalizedUnit(ingredient.unit, fallback: candidate.foodItem.preferredRecipeUnit.rawValue)
-                let isWeightOrVolume = [RecipeUnit.gram.rawValue, RecipeUnit.milliliter.rawValue,
-                                        RecipeUnit.ounce.rawValue, RecipeUnit.pound.rawValue,
-                                        RecipeUnit.cup.rawValue].contains(normalizedUnitStr)
+                let isWeightOrVolume = RecipeUnit.normalized(normalizedUnitStr)?.dimension != nil
+                    && RecipeUnit.normalized(normalizedUnitStr)?.isCount == false
                 let quantityCap = isWeightOrVolume ? 1500.0 : 20.0
                 return FoodSelectionIngredient(
                     candidateId: candidate.id,
@@ -318,29 +340,7 @@ private struct FoundationMealSelection {
     }
 
     private func normalizedUnit(_ unit: String, fallback: String) -> String {
-        let normalized = FoodItemSearch.normalized(unit)
-        switch normalized {
-        case "g", "gram", "grams":
-            return RecipeUnit.gram.rawValue
-        case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
-            return RecipeUnit.milliliter.rawValue
-        case "oz", "ounce", "ounces":
-            return RecipeUnit.ounce.rawValue
-        case "lb", "lbs", "pound", "pounds":
-            return RecipeUnit.pound.rawValue
-        case "cup", "cups":
-            return RecipeUnit.cup.rawValue
-        case "tbsp", "tablespoon", "tablespoons":
-            return RecipeUnit.tablespoon.rawValue
-        case "tsp", "teaspoon", "teaspoons":
-            return RecipeUnit.teaspoon.rawValue
-        case "each", "unit", "units", "item", "items":
-            return RecipeUnit.each.rawValue
-        case "serving", "servings":
-            return RecipeUnit.serving.rawValue
-        default:
-            return fallback
-        }
+        RecipeUnit.normalized(FoodItemSearch.normalized(unit))?.rawValue ?? fallback
     }
 }
 

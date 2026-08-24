@@ -160,6 +160,10 @@ struct PrivacyDataSettingsView: View {
     @State private var cloudCountsUnavailable = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
+    /// How many corrected searches this device remembers (research §26 fix 1.10), read on appear and
+    /// after a forget so the row can state the count and hide itself when there is nothing to forget.
+    /// A snapshot rather than a live read: `body` must not touch `UserDefaults` on every render.
+    @State private var rememberedSearchCorrections = 0
     /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
     @State private var showDeleteEverything = false
     private let cloudDataService: any PrivacyCloudDataManaging
@@ -307,6 +311,9 @@ struct PrivacyDataSettingsView: View {
         // card stays as the RETRY state after a cancel or failure, which is when it has something
         // to say. Arriving here from a search result used to cost hub → result → Verify → Face ID.
         if shouldVerifyOnAppear { verifyFreshAccess() }
+        // One read of the correction-memory count per visit (research §26 fix 1.10) — the row states
+        // it and hides itself at zero. Read here, not in `body`, so rendering never touches defaults.
+        rememberedSearchCorrections = store?.foodSearchCorrectionCount ?? 0
         await loadCloudCountsIfNeeded()
     }
 
@@ -552,11 +559,60 @@ struct PrivacyDataSettingsView: View {
             .disabled(isBuildingExport)
             .accessibilityIdentifier("privacy.export")
 
+            forgetSearchCorrectionsRow
+
             operationErrorLine(.export)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The one-line escape hatch for the local correction memory (research §26 fix 1.10, review
+    /// finding M7).
+    ///
+    /// A correction is learned from a single tap in "Adjust meal", is listed nowhere, and has no
+    /// per-entry undo — so without this row the only way to unlearn a mistaken one was to delete
+    /// everything. Deliberately NOT terracotta: the two reds on this page are still the two deletes
+    /// (5f), and this forgets a ranking preference, not content. It still routes through
+    /// ``DestructiveConfirmation`` like every other data-destroying control, and hides itself entirely
+    /// when there is nothing remembered.
+    @ViewBuilder private var forgetSearchCorrectionsRow: some View {
+        if rememberedSearchCorrections > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                // Phrased so the count never has to agree with a noun: "1 corrected food searches"
+                // is the plural bug an interpolated count invites, and the fix that avoids adding an
+                // inflected string-catalog key while the catalog sync is deliberately deferred.
+                Text("Fernlet remembers the food searches you've corrected on this device (\(rememberedSearchCorrections)), so a search you fixed once stays fixed.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Button {
+                    presentForgetSearchCorrectionsConfirmation()
+                } label: {
+                    Text("Forget corrected searches")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("privacy.forgetSearchCorrections")
+            }
+        }
+    }
+
+    private func presentForgetSearchCorrectionsConfirmation() {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Forget corrected searches?",
+            message: "Fernlet will stop putting the foods you picked at the top of those searches. "
+                + "Your meals, recipes and everything else stay exactly as they are.",
+            confirmLabel: "Forget",
+            auditEvent: "privacy.searchCorrections.forgetConfirmed"
+        ) {
+            store?.forgetAllFoodSearchCorrections()
+            rememberedSearchCorrections = store?.foodSearchCorrectionCount ?? 0
+        }
     }
 
     private func runExport() {

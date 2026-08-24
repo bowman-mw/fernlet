@@ -13,6 +13,10 @@ ODRAssets/FoodCatalogBranded.sqlite
 FoodDataSource/BrandedFoodItems.json
 FoodDataSource/BrandedODRFoodItems.json
 
+# Food catalog data-only rebuild output. The committed catalog is intentionally never replaced by
+# the generator; every SQLite/report/log artifact lands below this ignored directory.
+.food-catalog-build/
+
 # Agent instruction files — local tooling context, not part of the shipped project
 CLAUDE.md
 AGENTS.md

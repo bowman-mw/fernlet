@@ -186,7 +186,7 @@ struct FernletTests {
         }
     }
 
-    @Test func volumeRecipeUnitsScaleAgainstMilliliterServings() {
+    @Test func volumeRecipeUnitsScaleAgainstMilliliterServings() throws {
         let oil = FoodItem(
             name: "Olive oil",
             brandSource: nil,
@@ -203,9 +203,9 @@ struct FernletTests {
         let teaspoon = RecipeIngredient(foodItemId: oil.id, quantity: 1, unit: RecipeUnit.teaspoon.rawValue)
         let milliliters = RecipeIngredient(foodItemId: oil.id, quantity: 30, unit: RecipeUnit.milliliter.rawValue)
 
-        #expect(tablespoon.scaledMacros(using: oil).fat == 15)
-        #expect(teaspoon.scaledMacros(using: oil).fat == 5)
-        #expect(milliliters.scaledMacros(using: oil).fat == 30)
+        #expect(try #require(tablespoon.servingConversion(using: oil)).scaledMacros(for: oil).fat == 15)
+        #expect(try #require(teaspoon.servingConversion(using: oil)).scaledMacros(for: oil).fat == 5)
+        #expect(try #require(milliliters.servingConversion(using: oil)).scaledMacros(for: oil).fat == 30)
     }
 
     @Test func milliliterFoodItemsPreferTablespoonForOilEntry() {
@@ -285,8 +285,9 @@ struct FernletTests {
 
         let savedIngredient = try #require(recipe.ingredients.first)
         #expect(savedIngredient.foodItemId == chicken.id)
-        #expect(savedIngredient.scaledMacros(using: chicken).protein == 47)
-        #expect(savedIngredient.scaledMicronutrients(using: chicken).potassium == 384)
+        let conversion = try #require(savedIngredient.servingConversion(using: chicken))
+        #expect(conversion.scaledMacros(for: chicken).protein == 47)
+        #expect(conversion.scaledMicronutrients(for: chicken).potassium == 384)
         #expect(store.foodItems.isEmpty)
     }
 
@@ -406,20 +407,26 @@ struct FernletTests {
         let componentItems = [
             surveyComponentFood(name: "Cooked beef ground cooked", tags: ["cooked", "beef", "ground"]),
             surveyComponentFood(name: "Tortilla corn", tags: ["tortilla", "corn"]),
-            surveyComponentFood(name: "Cheese shredded", tags: ["cheese", "shredded"]),
-            surveyComponentFood(name: "Lettuce", tags: ["lettuce"])
+            // Research §26 fix 1.3 repaired taco's cheese/lettuce search strings ("cheese shredded" →
+            // "cheese cheddar" bound the wrong food, "lettuce" → "lettuce iceberg raw"); these fixture
+            // names are the exact matches for the NEW queries.
+            surveyComponentFood(name: "Cheese cheddar", tags: ["cheese", "cheddar"]),
+            surveyComponentFood(name: "Lettuce iceberg raw", tags: ["lettuce", "iceberg", "raw"])
         ]
 
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource([surveyTaco] + componentItems))
-        let meals = try #require(DishTemplateLexicon.resolve(
+        let resolved = try #require(DishTemplateLexicon.resolve(
             description: "taco",
             mealType: nil,
             catalog: catalog
         ))
-        let meal = try #require(meals.first)
+        let meal = try #require(resolved.meals.first)
 
         #expect(meal.componentSnapshots.count >= 4)
         #expect(!meal.componentSnapshots.contains { $0.name == surveyTaco.name })
+        // Every component here is an exact name match, so the bind-quality derivation (research §26
+        // fix 1.1) still yields `.high` — a clean template resolution keeps auto-committing.
+        #expect(resolved.confidence == .high)
     }
 
     @MainActor

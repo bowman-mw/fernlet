@@ -802,6 +802,12 @@
     "Add by hand" : {
 
     },
+    "Add its macros below, then save the custom ingredient." : {
+
+    },
+    "Add macros for this custom food." : {
+
+    },
     "Add personal details" : {
 
     },
@@ -1155,6 +1161,9 @@
     "Change passcode" : {
 
     },
+    "Change selection" : {
+
+    },
     "Change what's included under Sharing settings, below." : {
 
     },
@@ -1399,6 +1408,12 @@
 
     },
     "Create" : {
+
+    },
+    "Create custom food" : {
+
+    },
+    "Create custom ingredient" : {
 
     },
     "Create recipe" : {
@@ -1974,6 +1989,9 @@
     "Fernlet records metadata only: which feature asked, where the call went, when, how it turned out, and the names of the fields that were sent — never your words, your entries, or the model's reply." : {
 
     },
+    "Fernlet remembers the food searches you've corrected on this device (%lld), so a search you fixed once stays fixed." : {
+
+    },
     "Fernlet removed everything it stored on this device." : {
 
     },
@@ -2031,6 +2049,9 @@
           }
         }
       }
+    },
+    "Forget corrected searches" : {
+
     },
     "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
       "localizations" : {
@@ -2376,6 +2397,9 @@
 
     },
     "Keep Fernlet data out of device backups?" : {
+
+    },
+    "Keep editing" : {
 
     },
     "Keep going" : {
@@ -2829,6 +2853,9 @@
 
     },
     "No biometric authentication available on this device." : {
+
+    },
+    "No catalog matches." : {
 
     },
     "No connection sessions recorded." : {
@@ -3756,7 +3783,13 @@
     "Save as new recipe" : {
 
     },
+    "Save anyway" : {
+
+    },
     "Save changes" : {
+
+    },
+    "Save custom food" : {
 
     },
     "Save custom ingredient" : {
@@ -4412,9 +4445,6 @@
     "These are optional except age. Fernlet never asks for weight goals." : {
 
     },
-    "These aren't counted in the macros below. Adjust the numbers to include them, or log the meal without them." : {
-
-    },
     "These body photos sit behind your Fernlet lock. Unlock to see your timeline." : {
 
     },
@@ -4424,7 +4454,13 @@
     "These don't match what you told Fernlet you avoid or have. Turn one off to leave it out." : {
 
     },
+    "These numbers don't add up" : {
+
+    },
     "These only ever grow, in their own time. There's nothing to keep up with here." : {
+
+    },
+    "These words weren't matched to a food, so they aren't counted below. Check the matched items or adjust the numbers before logging." : {
 
     },
     "They're recovering — scan their next code" : {
@@ -4816,6 +4852,9 @@
 
     },
     "Worry text" : {
+
+    },
+    "Worth a second look" : {
 
     },
     "Write another" : {

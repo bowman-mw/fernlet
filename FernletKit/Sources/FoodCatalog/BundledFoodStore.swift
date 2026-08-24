@@ -120,8 +120,16 @@ public nonisolated enum FoodCatalogSchema {
 public nonisolated protocol BundledFoodSource: Sendable {
     /// All rows whose name/category/tags satisfy the search gate for `query` (every query token must
     /// match an indexed token by equality or prefix). May return more than the caller needs — the
-    /// scorer trims and ranks.
-    func candidates(forQuery query: String) -> [FoodItem]
+    /// scorer trims and ranks, and since research §26 fix 1.8 it also applies a NAME-only floor on
+    /// top, so a row retrieved on a category/tag hit alone is fetched here and then not presented.
+    /// Retrieval is deliberately the wider of the two on THAT axis: narrowing the FTS side would give
+    /// the scorer no way to reconsider.
+    ///
+    /// - Parameter stripsStopwords: Must be the SAME value the scorer will use for this query (see
+    ///   `FoodItemSearch.results(for:in:limit:stripsStopwords:)`). It is a parameter rather than an
+    ///   assumption because the two sides silently disagreeing is a measured hazard, not a
+    ///   hypothetical — see ``SQLiteBundledFoodSource/candidates(forQuery:stripsStopwords:)``.
+    func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem]
     func item(id: UUID) -> FoodItem?
     func items(ids: [UUID]) -> [FoodItem]
     func exactMatch(normalizedName: String) -> FoodItem?
@@ -129,6 +137,14 @@ public nonisolated protocol BundledFoodSource: Sendable {
     /// file predates the v2 `gtin_upc` column (the shipped v1 database) or carries no barcode data.
     func item(barcode: String) -> FoodItem?
     var count: Int { get }
+}
+
+public extension BundledFoodSource {
+    /// The typed-query form: stopwords stripped, matching `FoodItemSearch`'s own default.
+    /// Protocol requirements cannot carry default arguments, so the default lives here.
+    func candidates(forQuery query: String) -> [FoodItem] {
+        candidates(forQuery: query, stripsStopwords: true)
+    }
 }
 
 // MARK: - SQLite-backed source
@@ -215,10 +231,31 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// All rows whose indexed name/category/tags pass the FTS5 prefix-AND gate for `query`, hydrated
     /// up to the candidate cap in data-type-priority order (see the in-body comments for the
     /// de-bias rationale).
-    public func candidates(forQuery query: String) -> [FoodItem] {
-        let tokens = FoodItemSearch.searchTokens(in: query)
+    /// - Parameter stripsStopwords: Passed straight to `FoodItemSearch.searchTokens`, so the MATCH
+    ///   expression is built from the SAME token set the scorer will gate on.
+    ///
+    ///   **This was a defect and the numbers are why it is now a parameter.** `searchTokens` used to
+    ///   be called here unconditionally, so on the resolver path — every `stripsStopwords: false`
+    ///   caller — retrieval STRIPPED quantity words while the scorer KEPT them. Retrieval for the
+    ///   sub-phrase "piece chicken" fetched the 5,270 rows matching `chicken*` alone, where the
+    ///   scorer wanted the 12 matching `piece* AND chicken*`; "slice cheese" fetched 8,982 against a
+    ///   wanted 182.
+    ///
+    ///   Over-fetching is normally harmless because the scorer trims — but not against a CAP. The
+    ///   branded On-Demand-Resource source attaches ~364k rows with `candidateCap = 600` and
+    ///   `skipPriorityOrder: true`, which means no `ORDER BY` at all and truncation in rowid order:
+    ///   an 8,982-row fetch capped at 600 keeps whichever rows happen to have low `food_id`, and the
+    ///   rows carrying BOTH typed words survive only by accident, while the 182-row AND set would
+    ///   have fitted with room to spare. Fix 2.3 (indexing `brand_source`) pushes thousands more
+    ///   branded rows through the same gate and makes the arithmetic worse.
+    public func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] {
+        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
         guard !tokens.isEmpty else { return [] }
-        // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly. Each token expands
+        // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly — including the
+        // stopword rules, which live inside `searchTokens` so both sides inherit them from one place
+        // AND take the same `stripsStopwords` (sharing the function was necessary and, as the
+        // parameter's doc records, not sufficient). FTS5 has no built-in stopword support, so a
+        // stripped term simply is never emitted. Each token expands
         // to its singular/plural match variants (`FoodItemSearch.matchVariants`) so the FTS surfaces
         // the same rows the scorer will accept — a plural query reaches the singular canonical food.
         // The variants are OR'd (a token passes on any form) and the tokens AND'd, matching the gate's
@@ -397,7 +434,9 @@ public nonisolated struct InMemoryBundledFoodSource: BundledFoodSource, @uncheck
 
     public init(_ items: [FoodItem] = []) { self.items = items }
 
-    public func candidates(forQuery query: String) -> [FoodItem] { items }
+    /// Everything, at any `stripsStopwords` — the scorer applies the real gate over the same set,
+    /// so the in-memory path cannot drift from the SQLite one the way an FTS expression can.
+    public func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] { items }
 
     public func item(id: UUID) -> FoodItem? { items.first { $0.id == id } }
 

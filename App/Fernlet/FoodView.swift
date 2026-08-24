@@ -424,12 +424,11 @@ struct FoodView: View {
     /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
     /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
     private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
-        let meal: Meal
         if isSaved {
-            meal = store.logSavedRecipe(recipe, mealType: mealType)
-        } else {
-            meal = store.logRecipe(recipe, mealType: mealType)
+            onMealsLogged([store.logSavedRecipe(recipe, mealType: mealType)])
+            return
         }
+        guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
     }
 
@@ -1601,15 +1600,17 @@ struct RecipeSheet: View {
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ingredients.contains { !$0.trimmedName.isEmpty }
+        let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
+        return !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        ingredients.contains { !$0.trimmedName.isEmpty } &&
+        ingredients.filter { !$0.trimmedName.isEmpty }.allSatisfy { $0.hasResolvedMacros(foodItems: resolved) }
     }
 
     private var perServingTotals: MacroTotals {
         let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
         let totals = ingredients.reduce(into: MacroTotals()) { partial, ingredient in
-            guard !ingredient.trimmedName.isEmpty else { return }
-            let macros = ingredient.resolvedMacros(foodItems: resolved)
+            guard !ingredient.trimmedName.isEmpty,
+                  let macros = ingredient.resolvedMacros(foodItems: resolved) else { return }
             partial.protein += macros.protein
             partial.carbs += macros.carbs
             partial.fat += macros.fat
@@ -1815,17 +1816,20 @@ private struct CollapsedIngredientRow: View {
     var onExpand: () -> Void
     var onRemove: () -> Void
 
-    private var macros: Macros {
+    private var macros: Macros? {
         ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))
     }
 
-    private var calories: Int {
-        macros.calories
+    private var calories: Int? {
+        macros?.calories
     }
 
     private var summaryLine: String {
+        guard let macros else {
+            return "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · Conversion unavailable"
+        }
         var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(macros.protein)g C\(macros.carbs)g F\(macros.fat)g"
-        if showCalories {
+        if showCalories, let calories {
             line += " · \(calories) cal"
         }
         return line
@@ -1882,11 +1886,46 @@ enum CatalogTypeahead {
         }
         // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
         let hits = await Task.detached { [catalog] in
-            catalog.results(for: trimmed)
+            catalog.results(for: trimmed, context: .userTyped)
         }.value
         // Drop the result if this task was superseded while the query was running.
         guard !Task.isCancelled else { return nil }
         return hits
+    }
+}
+
+/// A query-bound typeahead snapshot. Cached rows are visible and selectable only while they answer
+/// the field's current normalized query; editing the field makes an older snapshot inert immediately.
+nonisolated struct CatalogTypeaheadResultSet {
+    private(set) var settledQuery = ""
+    private(set) var items: [FoodItem] = []
+
+    mutating func clear() {
+        settledQuery = ""
+        items = []
+    }
+
+    mutating func bind(_ items: [FoodItem], to query: String) {
+        settledQuery = Self.normalized(query)
+        self.items = items
+    }
+
+    func visibleMatches(for query: String) -> [FoodItem] {
+        guard isSettled(for: query) else { return [] }
+        return items
+    }
+
+    func selectable(_ foodItem: FoodItem, for query: String) -> FoodItem? {
+        visibleMatches(for: query).first(where: { $0.id == foodItem.id })
+    }
+
+    func isSettled(for query: String) -> Bool {
+        let normalized = Self.normalized(query)
+        return !normalized.isEmpty && settledQuery == normalized
+    }
+
+    private static func normalized(_ query: String) -> String {
+        FoodItemSearch.normalized(query)
     }
 }
 
@@ -1896,35 +1935,71 @@ enum CatalogTypeahead {
 /// so a suggestion reads identically wherever it appears (FOOD-05).
 private struct CatalogSuggestionRow: View {
     var foodItem: FoodItem
-    var onSelect: () -> Void
+    var trailingSystemImage = "plus.circle"
+    var onSelect: (() -> Void)?
+
+    @ViewBuilder
+    var body: some View {
+        if let onSelect {
+            Button(action: onSelect) { rowContent }
+                .buttonStyle(.plain)
+        } else {
+            rowContent.accessibilityAddTraits(.isSelected)
+        }
+    }
+
+    private var rowContent: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(foodItem.name)
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                    Text(foodItem.dataSourceLabel)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Color.parchment, in: Capsule())
+                }
+                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+            Image(systemName: trailingSystemImage)
+                .foregroundStyle(Color.moss)
+        }
+        .padding(10)
+        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// The shared settled-miss card for catalog searches.
+///
+/// The action stack is deliberately its own seam: a later recipe-description drafting affordance
+/// can join a recipe composer's miss state without changing typeahead state or displacing today's
+/// deterministic manual path. This increment adds no AI control or behavior.
+private struct CatalogSearchEmptyState: View {
+    var actionTitle: LocalizedStringKey
+    var action: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(foodItem.name)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                        Text(foodItem.dataSourceLabel)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Color.parchment, in: Capsule())
-                    }
-                    Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer()
-                Image(systemName: "plus.circle")
+        VStack(spacing: 10) {
+            EmptyState(text: "No catalog matches.", systemImage: "magnifyingglass")
+            Button(action: action) {
+                Label(actionTitle, systemImage: "plus.circle")
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .padding(10)
-            .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(12)
+        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityIdentifier("catalogSearch.empty")
     }
 }
 
@@ -1948,19 +2023,22 @@ private struct RecipeIngredientEditor: View {
     /// Typeahead matches, computed off the main thread and debounced (see `.task` below).
     /// The `catalog.results(for:)` call does real work (SQLite + hydrate + index + score) and the
     /// catalog is growing toward ~482k rows, so it must never run synchronously in `body`.
-    @State private var matchingFoodItems: [FoodItem] = []
+    @State private var typeaheadResults = CatalogTypeaheadResultSet()
+    /// True after the user takes the explicit create-it escape from a settled catalog miss.
+    @State private var isCreatingCustomIngredient = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             searchHeaderRow
             suggestionList
-            saveCustomIngredientButton
             quantityUnitRow
             macroSection
+            saveCustomIngredientButton
             removeIngredientButton
         }
         .padding(.vertical, 6)
         .onChange(of: ingredient.name) { _, newValue in
+            typeaheadResults.clear()
             syncSelection(for: newValue)
         }
         // Recompute the typeahead once per settled keystroke, off the main actor.
@@ -1986,6 +2064,7 @@ private struct RecipeIngredientEditor: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .textContentType(.none)
+                    .accessibilityIdentifier("recipeIngredient.search")
             }
             if let onCollapse, !ingredient.trimmedName.isEmpty {
                 Button("Done", action: onCollapse)
@@ -2011,12 +2090,27 @@ private struct RecipeIngredientEditor: View {
     }
 
     @ViewBuilder private var suggestionList: some View {
-        if !matchingFoodItems.isEmpty && selectedFoodItem == nil {
+        let visibleMatches = typeaheadResults.visibleMatches(for: ingredient.name)
+        if !visibleMatches.isEmpty && selectedFoodItem == nil {
             VStack(spacing: 4) {
-                ForEach(matchingFoodItems) { foodItem in
-                    CatalogSuggestionRow(foodItem: foodItem) { select(foodItem) }
+                ForEach(visibleMatches) { foodItem in
+                    CatalogSuggestionRow(foodItem: foodItem) {
+                        guard let current = typeaheadResults.selectable(foodItem, for: ingredient.name) else { return }
+                        select(current)
+                    }
                 }
             }
+            .accessibilityIdentifier("recipeIngredient.catalogResults")
+        } else if showsSettledMiss && !isCreatingCustomIngredient {
+            CatalogSearchEmptyState(actionTitle: "Create custom ingredient") {
+                isCreatingCustomIngredient = true
+            }
+            .accessibilityIdentifier("recipeIngredient.catalogMiss")
+        } else if isCreatingCustomIngredient {
+            Text("Add its macros below, then save the custom ingredient.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
         }
     }
 
@@ -2063,11 +2157,24 @@ private struct RecipeIngredientEditor: View {
     /// item; the three editable macro rows when it isn't.
     @ViewBuilder private var macroSection: some View {
         if let selectedFoodItem {
-            LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))) {
-                ingredient.selectedFoodItemId = nil
-                ingredient.protein = selectedFoodItem.macros.protein
-                ingredient.carbs = selectedFoodItem.macros.carbs
-                ingredient.fat = selectedFoodItem.macros.fat
+            if let macros = ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient)) {
+                LockedMacroSummary(foodItem: selectedFoodItem, macros: macros) {
+                    ingredient.selectedFoodItemId = nil
+                    ingredient.protein = selectedFoodItem.macros.protein
+                    ingredient.carbs = selectedFoodItem.macros.carbs
+                    ingredient.fat = selectedFoodItem.macros.fat
+                }
+            } else {
+                Text("This amount needs an exact serving basis or one source-backed portion.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.sun)
+                Button("Use manual nutrition") {
+                    ingredient.selectedFoodItemId = nil
+                    ingredient.protein = selectedFoodItem.macros.protein
+                    ingredient.carbs = selectedFoodItem.macros.carbs
+                    ingredient.fat = selectedFoodItem.macros.fat
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         } else {
             MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0...250)
@@ -2083,12 +2190,18 @@ private struct RecipeIngredientEditor: View {
         let text = ingredient.trimmedName
         // Mirror the render gating: nothing to show when a food is chosen or the field is empty.
         guard selectedFoodItem == nil, !text.isEmpty else {
-            matchingFoodItems = []
+            typeaheadResults.clear()
             return
         }
         // nil = superseded by a newer keystroke: keep the current list rather than a stale one.
         guard let hits = await CatalogTypeahead.matches(for: text, catalog: catalog) else { return }
-        matchingFoodItems = hits
+        typeaheadResults.bind(hits, to: text)
+    }
+
+    private var showsSettledMiss: Bool {
+        selectedFoodItem == nil
+            && typeaheadResults.isSettled(for: ingredient.name)
+            && typeaheadResults.visibleMatches(for: ingredient.name).isEmpty
     }
 
     private var selectedFoodItem: FoodItem? {
@@ -2109,6 +2222,7 @@ private struct RecipeIngredientEditor: View {
         ingredient.protein = foodItem.macros.protein
         ingredient.carbs = foodItem.macros.carbs
         ingredient.fat = foodItem.macros.fat
+        isCreatingCustomIngredient = false
     }
 
     private func syncSelection(for name: String) {
@@ -2120,6 +2234,7 @@ private struct RecipeIngredientEditor: View {
         if let selectedFoodItem, selectedFoodItem.name != name {
             ingredient.selectedFoodItemId = nil
         }
+        isCreatingCustomIngredient = false
     }
 }
 
@@ -2192,6 +2307,12 @@ struct MealSheet: View {
     var captureRouter = FoodCaptureRouter()
     #endif
     @State private var description = ""
+    /// Query-bound typeahead rows for the primary composer field (research fix 1.11).
+    @State private var catalogResults = CatalogTypeaheadResultSet()
+    /// The exact row the user chose. Save logs this identity directly; it never re-resolves its name.
+    @State private var selectedCatalogFood: FoodItem?
+    /// Toggled by the explicit Change selection action to re-run the unchanged selected name.
+    @State private var catalogSearchRestart = false
     @State private var mealType: MealType?
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
@@ -2522,18 +2643,22 @@ struct MealSheet: View {
     private var mealContent: some View {
         VStack(spacing: 0) {
             ScrollView {
-                // FOOD-08 order: field → meal-type chips DIRECTLY under it → the capture row —
-                // type, slot, Save, without a drag. The title lives in the pinned template header
-                // (the draft guard below), not in the scroll.
+                // FOOD-08 order: field/search results → meal-type chips DIRECTLY after it →
+                // capture helpers. At larger text the ScrollView keeps the later chips and
+                // helpers recoverable; Save stays pinned. The title lives in the template header.
                 VStack(alignment: .leading, spacing: 22) {
                     photoAndIdentifySection
 
                     SheetField("What did you eat?") {
-                        // A one-line log is the common case, so Return saves instead of inserting a
-                        // line break; the field still grows to four lines for a longer description.
-                        SheetGrowingTextField(text: $description, placeholder: "scrambled eggs and toast") {
-                            guard canSaveTypedMeal else { return }
-                            saveTapped()
+                        VStack(alignment: .leading, spacing: 8) {
+                            // A one-line log is the common case, so Return saves instead of inserting a
+                            // line break; the field still grows to four lines for a longer description.
+                            SheetGrowingTextField(text: $description, placeholder: "scrambled eggs and toast") {
+                                guard canSaveTypedMeal else { return }
+                                saveTapped()
+                            }
+                            .accessibilityIdentifier("mealComposer.search")
+                            mealCatalogSearchState
                         }
                     }
 
@@ -2564,6 +2689,14 @@ struct MealSheet: View {
             }
         }
         .background(Color.parchment)
+        .onChange(of: description) { _, newValue in
+            catalogResults.clear()
+            guard selectedCatalogFood?.name != newValue else { return }
+            selectedCatalogFood = nil
+        }
+        .task(id: MealCatalogSearchTaskID(query: description, restart: catalogSearchRestart)) {
+            await refreshMealCatalogMatches()
+        }
         // Two reasons a swipe must not take this sheet away, folded into one guard:
         //  - a resolve in flight (the unstructured Task isn't cancelled on dismiss, so an interactive
         //    dismiss mid-"Matching" could commit a meal the user meant to cancel), and
@@ -2589,6 +2722,84 @@ struct MealSheet: View {
     /// disabled state uses, so Return can never save a form the pill would refuse.
     private var canSaveTypedMeal: Bool {
         !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResolvingMeal
+    }
+
+    /// Transient search content between the composer field and FOOD-08's chip row. The settled miss
+    /// keeps today's deterministic by-hand route prominent; its dedicated action stack is the clean
+    /// layout seam a future description-to-draft affordance may join, with no AI UI in this round.
+    @ViewBuilder private var mealCatalogSearchState: some View {
+        if let selectedCatalogFood {
+            VStack(spacing: 4) {
+                CatalogSuggestionRow(
+                    foodItem: selectedCatalogFood,
+                    trailingSystemImage: "checkmark.circle.fill"
+                )
+                .accessibilityIdentifier("mealComposer.selectedCatalogFood")
+                Button("Change selection", action: changeCatalogSelection)
+                    .buttonStyle(.plain)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("mealComposer.changeCatalogSelection")
+            }
+        } else if !visibleMealCatalogMatches.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(visibleMealCatalogMatches) { foodItem in
+                    CatalogSuggestionRow(foodItem: foodItem) {
+                        guard let current = catalogResults.selectable(foodItem, for: description) else { return }
+                        selectCatalogFood(current)
+                    }
+                }
+            }
+            .accessibilityIdentifier("mealComposer.catalogResults")
+        } else if showsMealCatalogMiss {
+            CatalogSearchEmptyState(actionTitle: "Enter macros by hand") {
+                isEnteringMacrosByHand = true
+            }
+            .accessibilityIdentifier("mealComposer.catalogMiss")
+        }
+    }
+
+    private var showsMealCatalogMiss: Bool {
+        catalogResults.isSettled(for: description) && visibleMealCatalogMatches.isEmpty
+    }
+
+    private var visibleMealCatalogMatches: [FoodItem] {
+        catalogResults.visibleMatches(for: description)
+    }
+
+    private var trimmedDescription: String {
+        description.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func selectCatalogFood(_ foodItem: FoodItem) {
+        description = foodItem.name
+        selectedCatalogFood = foodItem
+        catalogResults.clear()
+    }
+
+    private func changeCatalogSelection() {
+        selectedCatalogFood = nil
+        catalogResults.clear()
+        catalogSearchRestart.toggle()
+    }
+
+    private func refreshMealCatalogMatches() async {
+        let query = trimmedDescription
+        guard selectedCatalogFood == nil, !query.isEmpty else {
+            catalogResults.clear()
+            return
+        }
+        guard let hits = await CatalogTypeahead.matches(for: query, catalog: store.foodCatalog) else { return }
+        catalogResults.bind(hits, to: query)
+    }
+
+    /// Cancels on text edits and can deliberately re-run an unchanged query after Change selection.
+    private struct MealCatalogSearchTaskID: Hashable {
+        let query: String
+        let restart: Bool
     }
 
     /// The pinned header's trailing Done for the photo-failed state (meal logged, sheet
@@ -2771,6 +2982,10 @@ struct MealSheet: View {
             logHandEnteredMeal(macros)
             return
         }
+        if let selectedCatalogFood {
+            logSelectedCatalogFood(selectedCatalogFood)
+            return
+        }
         let mealDescription = description
         let selectedMealType = mealType
         if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
@@ -2805,6 +3020,24 @@ struct MealSheet: View {
     /// seal can never be answered with a second Save that logs the meal twice.
     private func logHandEnteredMeal(_ macros: Macros) {
         let meal = store.logHandEnteredMacroMeal(description: description, mealType: mealType, macros: macros)
+        #if canImport(UIKit)
+        let photoAttached = attachPhoto(mealPhoto, data: mealPhotoData, to: [meal])
+        #else
+        let photoAttached = true
+        #endif
+        onLogged([meal])
+        if photoAttached {
+            dismiss()
+        } else {
+            didLogMeal = true
+            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        }
+    }
+
+    /// Logs the exact typeahead row the user picked, preserving its catalog identity and reference
+    /// serving instead of feeding its display name back through the free-text resolver.
+    private func logSelectedCatalogFood(_ foodItem: FoodItem) {
+        let meal = store.logCatalogFoodItem(foodItem, mealType: mealType)
         #if canImport(UIKit)
         let photoAttached = attachPhoto(mealPhoto, data: mealPhotoData, to: [meal])
         #else
@@ -3100,6 +3333,7 @@ struct MealSheet: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
+                .accessibilityIgnoresInvertColors()
                 .frame(maxWidth: .infinity)
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -3313,6 +3547,9 @@ private struct FoodProductPageImportView: View {
         HStack(spacing: 10) {
             ProgressView()
                 .tint(Color.moss)
+                // The adjacent status text carries the changing, localized operation. Hiding this
+                // otherwise-bare glyph avoids an unlabeled duplicate progress element.
+                .accessibilityHidden(true)
             Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
                 .font(.fernlet(.body))
                 .italic()
@@ -3851,17 +4088,18 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
     /// through the catalog at the food item's own reference serving. A new item has no captured
     /// meal base to scale from, so its base IS that reference — macros and micronutrients scaled
     /// exactly as `MealBuilder`'s component snapshots are, never invented.
-    static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput {
+    static func fresh(from foodItem: FoodItem) -> MealComponentCorrectionInput? {
         let unit = foodItem.preferredRecipeUnit
         let quantity = foodItem.defaultRecipeQuantity(for: unit)
         let ingredient = RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit.rawValue)
+        guard let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
         return MealComponentCorrectionInput(snapshot: MealComponentSnapshot(
             foodItemId: foodItem.id,
             name: foodItem.name,
-            quantity: quantity,
-            unit: unit.rawValue,
-            macros: ingredient.scaledMacros(using: foodItem),
-            micronutrients: ingredient.scaledMicronutrients(using: foodItem)
+            quantity: conversion.componentQuantity,
+            unit: conversion.componentUnit,
+            macros: conversion.scaledMacros(for: foodItem),
+            micronutrients: conversion.scaledMicronutrients(for: foodItem)
         ))
     }
 }
@@ -3885,6 +4123,10 @@ struct MealCorrectionSheet: View {
     @State private var carbs: Int
     @State private var fat: Int
     @State private var components: [MealComponentCorrectionInput]
+    /// Research §26 fix 1.10: the search-text → chosen-food pairs this sheet's Replace picks have
+    /// produced, held until Save. Held rather than written at the pick because a correction the user
+    /// CANCELS out of must teach the app nothing — see ``FoodSearchCorrectionDraft``.
+    @State private var correctionDraft = FoodSearchCorrectionDraft()
     /// Ids outlined as "Probably not what you meant", decided ONCE at open over the ORIGINAL
     /// matched items — never over items the user adds or swaps in here.
     private let lowConfidenceComponentIDs: Set<UUID>
@@ -3927,8 +4169,10 @@ struct MealCorrectionSheet: View {
                         SheetField("Matched items") {
                             MealCorrectionItemsEditor(
                                 components: $components,
+                                correctionDraft: $correctionDraft,
                                 lowConfidenceComponentIDs: lowConfidenceComponentIDs,
-                                catalog: store.foodCatalog
+                                catalog: store.foodCatalog,
+                                onSaveCustomIngredient: { store.saveCustomIngredient($0) }
                             )
                         }
                     }
@@ -3949,6 +4193,10 @@ struct MealCorrectionSheet: View {
                     // here made the store keep the old snapshots and resurrect the removals.
                     componentSnapshots: meal.componentSnapshots.isEmpty ? nil : components.map(\.snapshot)
                 )
+                // Fix 1.10, after the correction is committed: the searches this save corrected are
+                // remembered on THIS device only, so the same search answers with the user's own pick
+                // first next time. A no-op when nothing was replaced.
+                store.rememberFoodSearchCorrections(correctionDraft.corrections)
                 dismiss()
             }
         }
@@ -4023,9 +4271,14 @@ struct MealCorrectionSheet: View {
 /// the user's to edit.
 private struct MealCorrectionItemsEditor: View {
     @Binding var components: [MealComponentCorrectionInput]
+    /// Research §26 fix 1.10: the corrections this sheet has made, recorded here at each Replace pick
+    /// and written by the owning sheet's Save (never here — see ``MealCorrectionSheet``).
+    @Binding var correctionDraft: FoodSearchCorrectionDraft
     /// Ids outlined in sun with the Replace affordance (decided at open by the owning sheet).
     let lowConfidenceComponentIDs: Set<UUID>
     var catalog: FoodCatalog
+    /// Persists a custom food through the store's one de-duplicating upsert seam.
+    var onSaveCustomIngredient: (ManualRecipeIngredientInput) -> FoodItem?
     /// True while the "Add an item" typeahead is revealed (mutually exclusive with Replace).
     @State private var isAddingItem = false
     /// The component whose Replace typeahead is open, if any.
@@ -4131,12 +4384,20 @@ private struct MealCorrectionItemsEditor: View {
     }
 
     /// The Replace typeahead, prefilled with the suspect match's name. A pick swaps the item for
-    /// a FRESH catalog resolution (`MealComponentCorrectionInput.fresh`).
+    /// a FRESH catalog resolution (`MealComponentCorrectionInput.fresh`) and records the correction
+    /// (fix 1.10) for the owning sheet to save.
     private func replaceField(for component: MealComponentCorrectionInput) -> some View {
-        MealItemSearchField(catalog: catalog, prompt: "Search the catalog", initialText: component.name) { foodItem in
-            if let index = components.firstIndex(where: { $0.id == component.id }) {
-                components[index] = .fresh(from: foodItem)
+        MealItemSearchField(
+            catalog: catalog,
+            prompt: "Search the catalog",
+            initialText: component.name,
+            onCreate: onSaveCustomIngredient
+        ) { foodItem, searchText in
+            if let index = components.firstIndex(where: { $0.id == component.id }),
+               let fresh = MealComponentCorrectionInput.fresh(from: foodItem) {
+                components[index] = fresh
             }
+            correctionDraft.record(searchText: searchText, prefilledWith: component.name, foodItemID: foodItem.id)
             replacingComponentID = nil
         }
     }
@@ -4172,9 +4433,18 @@ private struct MealCorrectionItemsEditor: View {
         }
         .buttonStyle(.plain)
         if isAddingItem {
-            MealItemSearchField(catalog: catalog, prompt: "sourdough toast", initialText: "") { foodItem in
-                components.append(.fresh(from: foodItem))
-                isAddingItem = false
+            // Deliberately NOT a fix-1.10 write site: adding an item is not correcting a wrong match,
+            // and §26 scopes the correction memory to the Replace path. The pick's query is ignored here.
+            MealItemSearchField(
+                catalog: catalog,
+                prompt: "sourdough toast",
+                initialText: "",
+                onCreate: onSaveCustomIngredient
+            ) { foodItem, _ in
+                if let fresh = MealComponentCorrectionInput.fresh(from: foodItem) {
+                    components.append(fresh)
+                    isAddingItem = false
+                }
             }
         }
     }
@@ -4200,27 +4470,42 @@ private struct MealCorrectionItemsEditor: View {
 /// the recipe editor's search mechanics (``CatalogTypeahead``) and suggestion rows
 /// (``CatalogSuggestionRow``), reusable outside the ingredient editor's binding model.
 ///
-/// Picks hand back the raw `FoodItem`; the owner decides what to build from it. The query never
-/// runs in `body` — the `.task(id:)` keystroke cancellation is what keeps stale results out.
+/// Picks hand back the raw `FoodItem` AND the text that was in the field when it was picked; the
+/// owner decides what to build from either. (The query rides along for research §26 fix 1.10's
+/// correction memory, whose key is what the user searched — a caller that does not learn from picks
+/// ignores it.) The query never runs in `body` — the `.task(id:)` keystroke cancellation is what
+/// keeps stale results out.
 private struct MealItemSearchField: View {
     var catalog: FoodCatalog
     /// The field's placeholder (authored copy).
     var prompt: LocalizedStringKey
     /// Seed text — the suspect match's name on the Replace path, empty for Add.
     var initialText: String
-    var onPick: (FoodItem) -> Void
+    /// Persists the custom-food escape through the same upsert as recipe ingredients.
+    var onCreate: (ManualRecipeIngredientInput) -> FoodItem?
+    /// Fires with the picked food and the field's text at the moment of the pick.
+    var onPick: (FoodItem, String) -> Void
     @State private var searchText: String
-    @State private var matches: [FoodItem] = []
+    @State private var typeaheadResults = CatalogTypeaheadResultSet()
+    @State private var isCreatingCustomFood = false
 
-    init(catalog: FoodCatalog, prompt: LocalizedStringKey, initialText: String, onPick: @escaping (FoodItem) -> Void) {
+    init(
+        catalog: FoodCatalog,
+        prompt: LocalizedStringKey,
+        initialText: String,
+        onCreate: @escaping (ManualRecipeIngredientInput) -> FoodItem?,
+        onPick: @escaping (FoodItem, String) -> Void
+    ) {
         self.catalog = catalog
         self.prompt = prompt
         self.initialText = initialText
+        self.onCreate = onCreate
         self.onPick = onPick
         _searchText = State(initialValue: initialText)
     }
 
     var body: some View {
+        let visibleMatches = typeaheadResults.visibleMatches(for: searchText)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
@@ -4230,17 +4515,162 @@ private struct MealItemSearchField: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .textContentType(.none)
+                    .accessibilityIdentifier("mealCorrection.catalogSearch")
             }
-            ForEach(matches) { foodItem in
-                CatalogSuggestionRow(foodItem: foodItem) { onPick(foodItem) }
+            if !visibleMatches.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(visibleMatches) { foodItem in
+                        CatalogSuggestionRow(foodItem: foodItem) {
+                            guard let current = typeaheadResults.selectable(foodItem, for: searchText) else { return }
+                            onPick(current, searchText)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("mealCorrection.catalogResults")
             }
+            if showsSettledMiss && !isCreatingCustomFood {
+                CatalogSearchEmptyState(actionTitle: "Create custom food") {
+                    isCreatingCustomFood = true
+                }
+            }
+            if isCreatingCustomFood {
+                CatalogCustomFoodEditor(name: trimmedQuery, onSave: onCreate) { foodItem in
+                    onPick(foodItem, searchText)
+                }
+            }
+        }
+        .onChange(of: searchText) { _, _ in
+            typeaheadResults.clear()
+            isCreatingCustomFood = false
         }
         // One settled-keystroke query at a time, off the main actor — the same contract as the
         // recipe editor's typeahead (see `CatalogTypeahead.matches`).
         .task(id: searchText) {
-            guard let hits = await CatalogTypeahead.matches(for: searchText, catalog: catalog) else { return }
-            matches = hits
+            let query = trimmedQuery
+            guard !query.isEmpty else {
+                typeaheadResults.clear()
+                return
+            }
+            guard let hits = await CatalogTypeahead.matches(for: query, catalog: catalog) else { return }
+            typeaheadResults.bind(hits, to: query)
         }
+    }
+
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var showsSettledMiss: Bool {
+        typeaheadResults.isSettled(for: searchText)
+            && typeaheadResults.visibleMatches(for: searchText).isEmpty
+    }
+}
+
+/// The existing custom-ingredient plausibility policy reduced to the editor's save-or-review choice.
+nonisolated enum CatalogCustomFoodSaveGate {
+    /// Either persists immediately or requires the existing plausibility review before persistence.
+    enum Decision: Equatable {
+        case save
+        case review(NutritionPlausibilityReport)
+    }
+
+    static func decision(for input: ManualRecipeIngredientInput) -> Decision {
+        let report = CustomIngredientUpsert.plausibility(of: input)
+        return report.needsReview ? .review(report) : .save
+    }
+}
+
+/// Inline custom-food editor shown only after an Adjust-meal catalog miss.
+///
+/// It captures the three values the existing custom-ingredient model can represent and persists
+/// through the injected store seam. Growth is fixed: three bounded fields and one save action.
+private struct CatalogCustomFoodEditor: View {
+    var name: String
+    var onSave: (ManualRecipeIngredientInput) -> FoodItem?
+    var onCreated: (FoodItem) -> Void
+    @State private var protein = 0
+    @State private var carbs = 0
+    @State private var fat = 0
+    @State private var showingPlausibilityReview = false
+    @State private var pendingReviewInput: ManualRecipeIngredientInput?
+    @State private var reviewReport = NutritionPlausibilityReport.clean
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Add macros for this custom food.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+            MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0...300)
+            MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0...500)
+            MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0...300)
+            Button("Save custom food", action: attemptSave)
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .disabled(!canSave)
+                .accessibilityIdentifier("catalogSearch.saveCustomFood")
+        }
+        .padding(12)
+        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+        .confirmationDialog(
+            reviewTitle,
+            isPresented: $showingPlausibilityReview,
+            titleVisibility: .visible
+        ) {
+            Button("Save anyway", action: savePendingReview)
+            Button("Keep editing", role: .cancel) { }
+        } message: {
+            Text(verbatim: reviewMessage)
+        }
+    }
+
+    private var canSave: Bool {
+        !name.isEmpty && (protein > 0 || carbs > 0 || fat > 0)
+    }
+
+    private func attemptSave() {
+        guard canSave else { return }
+        let input = currentInput
+        switch CatalogCustomFoodSaveGate.decision(for: input) {
+        case .save:
+            persist(input)
+        case .review(let report):
+            pendingReviewInput = input
+            reviewReport = report
+            showingPlausibilityReview = true
+        }
+    }
+
+    private var currentInput: ManualRecipeIngredientInput {
+        ManualRecipeIngredientInput(
+            name: name,
+            quantity: 1,
+            unit: RecipeUnit.serving.rawValue,
+            protein: protein,
+            carbs: carbs,
+            fat: fat
+        )
+    }
+
+    private var reviewFindings: [NutritionPlausibilityFinding] {
+        reviewReport.contradictions.isEmpty ? reviewReport.advisories : reviewReport.contradictions
+    }
+
+    private var reviewTitle: LocalizedStringKey {
+        reviewReport.contradictions.isEmpty ? "Worth a second look" : "These numbers don't add up"
+    }
+
+    private var reviewMessage: String {
+        NutritionPlausibilityReport.message(for: reviewFindings, limit: 3) ?? ""
+    }
+
+    private func savePendingReview() {
+        guard let input = pendingReviewInput else { return }
+        persist(input)
+    }
+
+    private func persist(_ input: ManualRecipeIngredientInput) {
+        guard let foodItem = onSave(input) else { return }
+        pendingReviewInput = nil
+        onCreated(foodItem)
     }
 }
 
@@ -4607,7 +5037,7 @@ private struct MealReviewSheet: View {
                             .overlay(Capsule().stroke(Color.goldenrod.opacity(0.5), lineWidth: 1))
                     }
                 }
-                Text("These aren't counted in the macros below. Adjust the numbers to include them, or log the meal without them.")
+                Text("These words weren't matched to a food, so they aren't counted below. Check the matched items or adjust the numbers before logging.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -4662,6 +5092,7 @@ private struct MealPhotoThumb: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .accessibilityIgnoresInvertColors()
                     .frame(width: 54, height: 54)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if presence == .onOtherDevice {
@@ -5090,6 +5521,7 @@ struct RecipeDetailView: View {
                 Image(uiImage: photo)
                     .resizable()
                     .scaledToFill()
+                    .accessibilityIgnoresInvertColors()
                     .frame(height: 210)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -6156,12 +6588,11 @@ struct RecipeBookSheet: View {
     /// reports the committed meal to the host's toast path (`onMealsLogged`, FLOW-15). A nil
     /// `mealType` (a slotless legacy plan entry) falls back to the store's by-time "Auto" rule.
     private func logRecipe(_ recipe: RecipeDefinition, mealType: MealType?, isSaved: Bool) {
-        let meal: Meal
         if isSaved {
-            meal = store.logSavedRecipe(recipe, mealType: mealType)
-        } else {
-            meal = store.logRecipe(recipe, mealType: mealType)
+            onMealsLogged([store.logSavedRecipe(recipe, mealType: mealType)])
+            return
         }
+        guard let meal = store.logRecipe(recipe, mealType: mealType) else { return }
         onMealsLogged([meal])
     }
 

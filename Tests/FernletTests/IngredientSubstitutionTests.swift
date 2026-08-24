@@ -197,7 +197,7 @@ import FernletDomainModel
         #expect(qty == margarine.defaultRecipeQuantity(for: .gram)) // 100 (serving grams), not a gram-match
     }
 
-    @Test func substitutedIngredientBindsToSubstituteFood() {
+    @Test func substitutedIngredientBindsToSubstituteFood() throws {
         let butter = food(name: "Butter", servingUnit: "g", macros: Macros(protein: 1, carbs: 0, fat: 81))
         let margarine = food(name: "Margarine", servingUnit: "g", macros: Macros(protein: 0, carbs: 1, fat: 60))
         let original = RecipeIngredient(foodItemId: butter.id, quantity: 50, unit: "g")
@@ -205,7 +205,9 @@ import FernletDomainModel
         #expect(replacement.foodItemId == margarine.id) // macros will recompute from THIS food, not carried over
         #expect(replacement.id != original.id)
         // Macros are derived from the bound food, never copied from the original ingredient.
-        #expect(replacement.scaledMacros(using: margarine) != original.scaledMacros(using: butter))
+        let replacementMacros = try #require(replacement.servingConversion(using: margarine)).scaledMacros(for: margarine)
+        let originalMacros = try #require(original.servingConversion(using: butter)).scaledMacros(for: butter)
+        #expect(replacementMacros != originalMacros)
     }
 
     // MARK: - Fork provenance + source immutability

@@ -130,6 +130,14 @@ struct PrivacyWipeCoverageTests {
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
         "RecipeWebImageAttemptMemory.clearAll",
+        // The local food-search correction memory (research §26 fix 1.10). Two tokens, because the
+        // surface has two live copies: the defaults sidecar AND the `FoodCatalog`'s in-memory alias
+        // snapshot. Clearing only the first leaves every corrected query still answering with the
+        // user's remembered pick for the rest of the session. The second call is spelled INLINE in
+        // `resetAll` rather than behind the store's `publishFoodSearchCorrectionAliases()` helper, so
+        // the bounded scan can see it (an internal helper's body is not scanned).
+        "FoodSearchCorrectionMemory.clearAll",
+        "foodCatalog.setSearchAliases",
         // The workout tombstone ring. Not only privacy: a surviving tombstone tells the workout
         // observer to DELETE a still-existing app-authored Health sample on the next re-enable,
         // which would override an explicit "keep my Health samples" answer at the wipe.

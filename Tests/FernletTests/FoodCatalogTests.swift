@@ -100,25 +100,38 @@ struct FoodCatalogTests {
         let catalog = FoodCatalog(source: try buildSQLiteSource(items))
 
         for query in ["chicken", "egg", "brown rice", "breast", "roasted chicken", "oats"] {
-            let viaCatalog = catalog.results(for: query, limit: 6).map(\.id)
+            let viaCatalog = catalog.results(for: query, limit: 6, context: .userTyped).map(\.id)
             let inMemory = FoodItemSearch.results(for: query, in: FoodItemSearch.Index(foodItems: items), limit: 6).map(\.id)
             #expect(viaCatalog == inMemory, "ranking diverged for query \(query)")
         }
     }
 
-    /// FTS indexes name + category + tags, so a query that only hits a tag still surfaces the item —
-    /// matching the scorer's searchable text.
-    @Test func searchMatchesViaTagOnly() throws {
-        let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
-        let results = catalog.results(for: "breakfast", limit: 6)
-        #expect(results.contains { $0.name == "Rolled oats" })
+    /// A tag-only hit is RETRIEVED and then not PRESENTED — research §26 fix 1.8's floor.
+    ///
+    /// This test used to assert the opposite ("a query that only hits a tag still surfaces the
+    /// item"), and the flip is the fix, not a casualty of it. FTS still indexes name + category +
+    /// tags, which is right for retrieval, but in the shipped catalog `tags` is derived from the
+    /// CATEGORY — `["cheese"]`, `["chips","pretzels","snacks"]`, `["branded"]` on 50,000 rows — so a
+    /// row that reached the gate without a name hit is a category match wearing a food's name, and
+    /// §9(b)/§9(c) measure what that looks like on screen: `chilis` returning five rows scoring 0
+    /// (Beans & Franks, Beans & Wieners, Beef Goulash) with no distinction from a real hit. The
+    /// retrieval half is unchanged and still asserted below.
+    @Test func tagOnlyMatchesAreRetrievedButNotPresented() throws {
+        let source = try buildSQLiteSource(sampleItems)
+        let catalog = FoodCatalog(source: source)
+        #expect(source.candidates(forQuery: "breakfast").contains { $0.name == "Rolled oats" },
+                "the FTS gate still indexes tags — retrieval is unchanged")
+        #expect(catalog.results(for: "breakfast", limit: 6, context: .userTyped).isEmpty,
+                "…but a row whose NAME does not carry the query is no longer presented")
+        #expect(!FoodItemSearch.nameCarriesQuery("Rolled oats", query: "breakfast"))
+        #expect(FoodItemSearch.nameCarriesQuery("Rolled oats", query: "oats"))
     }
 
     @Test func formSpecificityBiasSurvivesSQLitePath() throws {
         // "egg" should prefer whole egg over "egg white" — the scorer's form bias still applies
         // because ranking happens in Swift over the hydrated candidates.
         let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
-        let top = try #require(catalog.results(for: "egg", limit: 2).first)
+        let top = try #require(catalog.results(for: "egg", limit: 2, context: .userTyped).first)
         #expect(top.name == "Egg, whole, raw")
     }
 
@@ -129,7 +142,7 @@ struct FoodCatalogTests {
         let custom = Self.sampleItem(name: "House protein blend", source: .manual, dataType: .branded, tags: ["protein"])
         catalog.setUserItems([custom])
 
-        let results = catalog.results(for: "house protein", limit: 6)
+        let results = catalog.results(for: "house protein", limit: 6, context: .userTyped)
         #expect(results.contains { $0.id == custom.id })
     }
 
@@ -161,7 +174,7 @@ struct FoodCatalogTests {
         let catalog = FoodCatalog(source: InMemoryBundledFoodSource())
         let custom = Self.sampleItem(name: "Homemade granola", source: .manual, tags: ["granola"])
         catalog.setUserItems([custom])
-        #expect(catalog.results(for: "granola", limit: 6).contains { $0.id == custom.id })
+        #expect(catalog.results(for: "granola", limit: 6, context: .userTyped).contains { $0.id == custom.id })
         #expect(catalog.bundledCount == 0)
     }
 
@@ -175,16 +188,16 @@ struct FoodCatalogTests {
         catalog.attachBrandedSource(InMemoryBundledFoodSource([brandedOnly]))
         #expect(catalog.hasBrandedSource)
         #expect(catalog.bundledCount == sampleItems.count + 1)
-        #expect(catalog.results(for: "galaxy granola", limit: 6).contains { $0.id == brandedOnly.id })
+        #expect(catalog.results(for: "galaxy granola", limit: 6, context: .userTyped).contains { $0.id == brandedOnly.id })
         // The base catalog keeps answering while branded is attached.
-        #expect(catalog.results(for: "chicken", limit: 6).contains { $0.name.contains("Chicken") })
+        #expect(catalog.results(for: "chicken", limit: 6, context: .userTyped).contains { $0.name.contains("Chicken") })
 
         catalog.detachBrandedSource()
         #expect(!catalog.hasBrandedSource)
         #expect(catalog.bundledCount == sampleItems.count)
-        #expect(!catalog.results(for: "galaxy granola", limit: 6).contains { $0.id == brandedOnly.id })
+        #expect(!catalog.results(for: "galaxy granola", limit: 6, context: .userTyped).contains { $0.id == brandedOnly.id })
         // Base survives the detach.
-        #expect(catalog.results(for: "chicken", limit: 6).contains { $0.name.contains("Chicken") })
+        #expect(catalog.results(for: "chicken", limit: 6, context: .userTyped).contains { $0.name.contains("Chicken") })
     }
 
     @Test func baseAndBrandedItemsBothSurfaceWhenBrandedAttached() throws {
@@ -192,7 +205,7 @@ struct FoodCatalogTests {
         let brandedChicken = Self.sampleItem(name: "Brand X Chicken Nuggets", dataType: .branded, tags: ["chicken"])
         catalog.attachBrandedSource(InMemoryBundledFoodSource([brandedChicken]))
 
-        let ids = catalog.results(for: "chicken", limit: 10).map(\.id)
+        let ids = catalog.results(for: "chicken", limit: 10, context: .userTyped).map(\.id)
         #expect(ids.contains(sampleItems[0].id))   // base "Chicken breast, roasted"
         #expect(ids.contains(brandedChicken.id))    // branded nuggets
     }

@@ -248,7 +248,7 @@ split is by concern, not alphabetical.
 | `correctedNutrition(macros:componentSnapshots:)` | Uses component totals when component snapshots exist; otherwise keeps manual macros. |
 | `applyMealCorrection(...)` | Updates meal nutrition, note, confidence, fallback flag, and quality. |
 | `attachMealPhoto(mealID:photoID:)`, `mealPhotoData(for:)`, `saveMealPhoto(_:)` | Bridge meal photo attachment and storage through `MealPhotoStore`. |
-| `logRecipe(_:)`, `logSavedRecipe(_:)`, `logWebImportedFoodProduct(_:)` | Convert local recipes, saved URL recipes, or imported products into logged meals. |
+| `logCatalogFoodItem(_:)`, `logRecipe(_:)`, `logSavedRecipe(_:)`, `logWebImportedFoodProduct(_:)` | Convert an exact catalog pick (as one editable serving), local recipe, saved URL recipe, or imported product into a logged meal. |
 | Saved recipe wrappers | Delegate share text, add, update, and delete to `SavedRecipeService`. |
 | `addWorkout(_:date:)` | Appends a workout, invalidates summaries, persists, and saves to HealthKit when appropriate. |
 | `refreshWorkoutsFromHealth()` / `backfillWorkoutsFromHealthIfNeeded(defaults:)` | Delegate HealthKit import/backfill to `WorkoutHealthKitSync`. |
@@ -264,6 +264,7 @@ split is by concern, not alphabetical.
 | `addRecipe(...)`, `updateRecipe(...)`, `deleteRecipe(_:)` | Create, edit, and remove local recipes while resolving custom ingredients. |
 | `saveCustomIngredient(_:)` | Upserts one manual ingredient into the custom food catalog. |
 | `cachedWebImportedFoodProduct(for:)` / `saveWebImportedFoodProduct(_:)` | Reuse or upsert imported branded food products by normalized query/name. |
+| `rememberFoodSearchCorrections(_:)` / `publishFoodSearchCorrectionAliases()` | Research §26 fix 1.10's local correction memory: record the search-text → chosen-food pairs a SAVED "Adjust meal" replace produced (`FoodSearchCorrectionMemory`, a device-local `UserDefaults` sidecar, never synced between devices, capped at 200), and republish the alias map into `FoodCatalog.setSearchAliases` — at launch, after every write, and (as an empty map) on the wipe path. `forgetAllFoodSearchCorrections()` is the user-facing clear behind Privacy & data's "Forget corrected searches" row (returns the count it forgot); `foodSearchCorrectionCount` drives that row's text. |
 | `macroTotals(for:)` / `micronutrientTotals(for:)` | Compute local recipe nutrition from current food catalog data. |
 | `recipeShareText(for:)`, `proximityRecipeSharePayload(for:)` | Build share text or proximity payloads through `RecipeShareCodec`. |
 | `importProximityRecipeShare(_:)` / `importRecipe(from:)` | Import local or saved recipes from proximity/share payloads, creating ingredients and saved recipes as needed. |

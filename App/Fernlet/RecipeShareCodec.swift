@@ -76,8 +76,9 @@ struct RecipeShareCodec {
             servings: recipe.servings,
             notes: recipe.notes,
             ingredients: recipe.ingredients.compactMap { ingredient in
-                guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return nil }
-                let macros = ingredient.scaledMacros(using: foodItem)
+                guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }),
+                      let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
+                let macros = conversion.scaledMacros(for: foodItem)
                 return SharedRecipeIngredient(
                     name: foodItem.name,
                     quantity: ingredient.quantity,

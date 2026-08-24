@@ -1,0 +1,83 @@
+{
+  "evidenceVersion": 2,
+  "generatedOn": "2026-08-24",
+  "sourceManifest": "FoodDataSource/FoodCatalogSourceManifest.json",
+  "catalogSchemaVersion": 3,
+  "currentToolingSchemaVersion": 4,
+  "artifactStatus": "Historical experimental schema-v3 artifact. Task 1 source-fidelity changes require a later, separately approved replacement build before this artifact can validate against the current manifest.",
+  "outputPolicy": "Local validation artifact only. Never commit or bundle this SQLite file.",
+  "output": {
+    "relativePath": ".food-catalog-build/FoodCatalog.sqlite",
+    "bytes": 449552384,
+    "sha256": "4b148d2ec162d2ad071a5d804133933e6426b008c2b59d5a2b63e2ffeebf828e",
+    "foods": 66581,
+    "nutrientValues": 1745863,
+    "portions": 86682,
+    "fnddsIngredientRelations": 18584,
+    "fnddsIngredientNutrientValues": 275535
+  },
+  "sourceCounts": {
+    "usdaFdcSurveyFndds": 5432,
+    "usdaFdcSrLegacy": 7793,
+    "usdaFdcFoundation": 469,
+    "usdaBrandedCurated": 50000,
+    "ukCofid": 2887
+  },
+  "preservationChecks": {
+    "sqliteIntegrity": "ok",
+    "foreignKeyViolations": 0,
+    "cofidNutrientDefinitions": 275,
+    "cofidNutrientValues": 235152,
+    "cofidTraceValues": 30225,
+    "cofidPresentUnknownValues": 11927,
+    "cofidBlankCells": 558773,
+    "cofidFactors": 5188,
+    "cofidDuplicate13669StableIDs": [
+      "uk_cofid:13-669#198615dc8ced",
+      "uk_cofid:13-669#80c4d8f2ad38"
+    ],
+    "ftsRows": 66581,
+    "brandSourceCostcoHits": 21,
+    "ingredientMolassesHits": 8
+  },
+  "validationFixtures": {
+    "surveyFoods": 5432,
+    "surveyRelations": 18584,
+    "surveyParentScopedPortions": 22194,
+    "surveyLegacyPortionParentAssociationDrifts": 148,
+    "surveyAmountPrecisionRepresentations": 550,
+    "surveyIngredientWeightBinaryTailRepresentations": 3544,
+    "srLegacyFoods": 7793
+  },
+  "sizeArithmetic": {
+    "committedCatalogBytes": 59748352,
+    "committedCatalogFoods": 118317,
+    "generatedCatalogDeltaBytes": 389804032,
+    "generatedCatalogSizeRatio": 7.5240967985,
+    "generatedCatalogFoodDelta": -51736,
+    "existingOdrFoods": 364457,
+    "currentBasePlusOdrFoods": 482774,
+    "generatedBasePlusUnchangedOdrFoods": 431038
+  },
+  "committedCatalogGuard": {
+    "sha256Before": "822fb87a1443d3ce7b651231aa855bebfcb12a53f18529050fd05ceb99540b61",
+    "sha256After": "822fb87a1443d3ce7b651231aa855bebfcb12a53f18529050fd05ceb99540b61",
+    "touched": false
+  },
+  "verification": {
+    "generatorContractTests": 9,
+    "generatorContractFailures": 0,
+    "committedFoodCatalogAndCorpusTests": 34,
+    "committedFoodCatalogAndCorpusFailures": 0,
+    "runtimeCorpusResultFlips": 0,
+    "powerOfTenFilesScanned": 385,
+    "powerOfTenViolations": 0,
+    "spmWallStrictBuild": "passed with zero warnings"
+  },
+  "runNotes": [
+    "The final build materialized the output atomically, then its integrated validator rejected a full scan of the contentless FTS5 table.",
+    "The validator was corrected to count indexed documents with fts5vocab; the same unchanged output then passed the standalone validator.",
+    "No generation rerun was performed after that validator-only correction.",
+    "The runtime app and committed catalog were not changed, so this phase intentionally has no runtime corpus-result flips."
+  ]
+}

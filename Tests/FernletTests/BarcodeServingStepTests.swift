@@ -105,6 +105,26 @@ struct BarcodeServingStepTests {
         #expect(webMeal.macros == item.macros)
     }
 
+    @MainActor
+    @Test func catalogPickPreservesExactIdentityAsOneEditableServing() throws {
+        let store = makeTestStore()
+        let item = Self.sampleItem(name: "Sliced Pizza, Cheese", barcode: nil)
+
+        let meal = store.logCatalogFoodItem(item, mealType: .dinner)
+        let component = try #require(meal.componentSnapshots.first)
+
+        #expect(meal.name == item.name)
+        #expect(meal.mealType == .dinner)
+        #expect(meal.macros == item.macros)
+        #expect(meal.micronutrientSnapshot == item.micronutrients)
+        #expect(meal.confidence == MealConfidence.foodMatch.token)
+        #expect(meal.source == MealLogSource.manual)
+        #expect(component.foodItemId == item.id)
+        #expect(component.quantity == 1)
+        #expect(component.unit == RecipeUnit.serving.rawValue)
+        #expect(store.day.meals.last?.id == meal.id)
+    }
+
     // MARK: - Per-GTIN last-used memory (part c / part e)
 
     @Test func servingMemoryRoundTripsAndNormalizesGTIN() throws {

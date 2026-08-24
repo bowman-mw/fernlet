@@ -159,6 +159,19 @@ func uniqueSensitiveVisibilityDefaults() -> UserDefaults {
     UserDefaults(suiteName: "fernlet.tests.sensitiveVisibility.\(UUID().uuidString)") ?? .standard
 }
 
+/// A fresh throwaway defaults suite for ONE test store's food-search correction memory (research §26
+/// fix 1.10).
+///
+/// Same axis as `uniqueAIQuotaDefaults()`, and needed for the same reason: the sidecar's identity is a
+/// SUITE, and `FernletStore` READS it during init (`finishCommonWiring` publishes the alias map into
+/// the food catalog). On `.standard` a correction planted by any test — or left in the simulator
+/// container by a previous RUN — changes what an uninjected store's search returns, silently and
+/// across runs. Pass the SAME suite to two stores when a test deliberately simulates a relaunch on the
+/// same device.
+func uniqueFoodSearchCorrectionDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.foodCorrections.\(UUID().uuidString)") ?? .standard
+}
+
 /// A fresh, never-shared queue file for ONE test store's share-extension recipe inbox.
 ///
 /// A FILE, not a directory: the queue owns exactly one, and it lives in a different app-group
@@ -181,7 +194,12 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
 /// All data is discarded when the store is deallocated.
 ///
 /// `bundledFoodItems` seeds an in-memory food catalog (the SQLite-backed bundle is not loaded in
-/// tests), so tests stay deterministic — pass the specific USDA items a test needs.
+/// tests), so tests stay deterministic — pass the specific USDA items a test needs. A test that must
+/// exercise the SHIPPED catalog (the dish-template bind audit replays the real 118,317 rows) passes
+/// `foodCatalog: FoodCatalog.bundled()` instead; it is opt-in precisely because it is not
+/// deterministic in the same way. The two are mutually exclusive — an explicit `foodCatalog` REPLACES
+/// the seeded items rather than adding to them, so passing both traps rather than silently dropping
+/// the seed.
 ///
 /// `photoDocumentsDirectory` defaults to a fresh `uniquePhotoDirectory()`; pass an explicit one only
 /// to give two stores a SHARED photo corpus (e.g. simulating a relaunch over the same photos). The
@@ -192,23 +210,27 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
 func makeTestStore(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
+    foodCatalog: FoodCatalog? = nil,
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL()
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
         bundledFoodItems: bundledFoodItems,
+        foodCatalog: foodCatalog,
         appGroupDirectory: appGroupDirectory,
         photoDocumentsDirectory: photoDocumentsDirectory,
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
         aiQuotaDefaults: aiQuotaDefaults,
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
+        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
         sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL
     ).store
 }
@@ -224,15 +246,21 @@ func makeTestStore(
 func makeTestStoreWithRepositories(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
+    foodCatalog: FoodCatalog? = nil,
     appGroupDirectory: URL = uniqueAppGroupDirectory(),
     photoDocumentsDirectory: URL = uniquePhotoDirectory(),
     proximitySupportDirectory: URL = uniqueProximityDirectory(),
     heartDropKeychainService: String = uniqueHeartDropKeychainService(),
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
+    foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
+    precondition(
+        foodCatalog == nil || bundledFoodItems.isEmpty,
+        "pass bundledFoodItems OR an explicit foodCatalog — an explicit catalog replaces the seeded items"
+    )
     let controller = PersistenceController(inMemory: true)
     // Use a non-existent temp path so the legacy migration returns an empty database.
     let legacyURL = FileManager.default.temporaryDirectory
@@ -269,7 +297,7 @@ func makeTestStoreWithRepositories(
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
-        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
+        foodCatalog: foodCatalog ?? FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
         // The period/intimacy visibility resolution AND the age verdict share one defaults SUITE, and
         // `resetAll` clears both — see `uniqueSensitiveVisibilityDefaults()`.
         sensitiveVisibilityDefaults: sensitiveVisibilityDefaults,
@@ -288,7 +316,10 @@ func makeTestStoreWithRepositories(
         // service — see `uniqueHeartDropKeychainService()`.
         heartDropKeychainService: heartDropKeychainService,
         // The AI-call counter's identity is a defaults SUITE — see `uniqueAIQuotaDefaults()`.
-        aiQuotaDefaults: aiQuotaDefaults
+        aiQuotaDefaults: aiQuotaDefaults,
+        // The food-search correction memory, READ AT INIT — see
+        // `uniqueFoodSearchCorrectionDefaults()`.
+        foodSearchCorrectionDefaults: foodSearchCorrectionDefaults
     )
     return (store, repository, journalNarrativeRepository)
 }

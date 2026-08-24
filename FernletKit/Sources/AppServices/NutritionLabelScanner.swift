@@ -176,6 +176,59 @@ public struct NutritionLabelResult: Equatable, Hashable {
             omega3: omega3
         )
     }
+
+    /// This scan as gate input, with **absent kept absent**.
+    ///
+    /// The single most valuable property of this conversion is what it does NOT do: it never
+    /// substitutes `0` for a line the OCR failed to read. `NutritionLabelResult` already keeps every
+    /// field optional for exactly that reason, and ``NutritionFacts`` keeps the same discipline, so
+    /// an unread calories line reaches the gate as *missing* (named by the completeness half) rather
+    /// than as a claim that the food has no energy. Anything that collapses these optionals with
+    /// `?? 0` before the gate runs defeats the check it most needs to pass.
+    ///
+    /// Poly/mono-unsaturated fat are absent because the panel parser does not read them; the fat
+    /// inequality sums only the fractions actually reported, so their absence is correct, not a gap.
+    public var nutritionFacts: NutritionFacts {
+        NutritionFacts(
+            calories: calories.map(Double.init),
+            protein: protein.map(Double.init),
+            carbs: carbs.map(Double.init),
+            fat: fat.map(Double.init),
+            saturatedFat: saturatedFat,
+            transFat: transFat,
+            fiber: fiber,
+            sugar: sugar,
+            sodium: sodium,
+            cholesterol: cholesterol,
+            hasServingSize: servingSize?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        )
+    }
+
+    /// The plausibility + completeness report for this scan (fix 1.14).
+    ///
+    /// This is the seam where BOTH halves of the gate are meaningful, because the optionals are
+    /// still intact: the arithmetic checks run, and the completeness half can honestly say which
+    /// panel lines were never read.
+    ///
+    /// `foodName` resolves the insignificant-nutrient exemption. Callers on a packaged-product path
+    /// should leave it empty: 21 CFR 101.9(j)(4) applies to a food bearing no nutrition information,
+    /// so a barcoded product with a panel is outside it by definition, and passing a name there
+    /// would silence a warning the regulation does not excuse.
+    ///
+    /// The report WARNS; it never authorizes dropping or rewriting the user's scan.
+    ///
+    /// - Note: a second, stricter completeness rule already exists for one narrow path —
+    ///   `FoodProductWebImporter.isCompleteNutritionLabelScan`, which HARD-REJECTS a scan lifted off
+    ///   an arbitrary web image unless serving size, calories and all three macros are present. The
+    ///   two are calibrated independently on purpose: that one guards against importing a
+    ///   misidentified photo with no user in the loop, this one warns a user about a scan they took
+    ///   themselves. If either changes, look at the other.
+    public func plausibilityReport(foodName: String = "") -> NutritionPlausibilityReport {
+        NutritionPlausibility.report(
+            for: nutritionFacts,
+            exemption: NutritionPlausibility.exemption(forFoodNamed: foodName)
+        )
+    }
 }
 
 /// Returned when the label has two side-by-side columns (e.g. "dry mix" vs "as prepared").
