@@ -1,6 +1,33 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld" : {
+
+    },
+    "%lld coins" : {
+
+    },
+    "Anything you've typed here won't be saved." : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Discard" : {
+
+    },
+    "Discard your changes?" : {
+
+    },
+    "Done" : {
+
+    },
+    "Keep editing" : {
+
+    },
+    "Save" : {
+
+    },
     "ui.action.cancel" : {
       "comment" : "Button. Leaves the current sheet or dialog without saving anything.",
       "extractionState" : "extracted_with_value",

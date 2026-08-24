@@ -947,6 +947,9 @@
     "Adds bottles of water to today's Fernlet diary." : {
 
     },
+    "Adds one bottle of water to today's Fernlet diary." : {
+
+    },
     "Adds two things above: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in." : {
 
     },
@@ -2170,6 +2173,9 @@
     "Fernlet companion" : {
 
     },
+    "Fernlet companion, %@" : {
+
+    },
     "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
       "localizations" : {
         "en" : {
@@ -2228,6 +2234,9 @@
     "Fernlet will hide intimacy logging and stop reading it. Your notes are kept — turn this back on any time to see them again.\n\nAnything you've saved in Apple Health stays in Apple Health." : {
 
     },
+    "Fernlet will stop putting the foods you picked at the top of those searches. Your meals, recipes and everything else stay exactly as they are." : {
+
+    },
     "Fewer sets" : {
 
     },
@@ -2279,6 +2288,9 @@
     "Force" : {
 
     },
+    "Forget" : {
+
+    },
     "Forget %lld memor%@ matching \"%@\"?" : {
       "localizations" : {
         "en" : {
@@ -2290,6 +2302,9 @@
       }
     },
     "Forget corrected searches" : {
+
+    },
+    "Forget corrected searches?" : {
 
     },
     "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
@@ -2786,6 +2801,9 @@
     "Log & save" : {
 
     },
+    "Log a bottle of water" : {
+
+    },
     "Log a meal" : {
 
     },
@@ -2834,6 +2852,9 @@
           }
         }
       }
+    },
+    "Logged a bottle of water." : {
+
     },
     "Logged once" : {
 
@@ -3242,6 +3263,9 @@
 
     },
     "No worries — you can add a photo of the barcode, or just enter it by hand." : {
+
+    },
+    "None" : {
 
     },
     "None logged" : {
@@ -4779,6 +4803,9 @@
 
     },
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
+
+    },
+    "Tap to interact. Press and hold to edit." : {
 
     },
     "Tap to log it again with today's time." : {
