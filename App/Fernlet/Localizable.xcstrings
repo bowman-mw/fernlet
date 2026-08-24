@@ -7,6 +7,130 @@
     " " : {
 
     },
+    "- %@" : {
+
+    },
+    "--" : {
+
+    },
+    "…" : {
+
+    },
+    "· %lld servings" : {
+
+    },
+    "“%@” logged to today." : {
+
+    },
+    "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
+
+    },
+    "%@ - %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ - %2$@"
+          }
+        }
+      }
+    },
+    "%@ — pick up where you left off." : {
+
+    },
+    "%@ — step %lld of %lld. Pick up where you left off." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — step %2$lld of %3$lld. Pick up where you left off."
+          }
+        }
+      }
+    },
+    "%@ — you're resting between sets." : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ %@ reference" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ %3$@ reference"
+          }
+        }
+      }
+    },
+    "%@ · %lld items" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld items"
+          }
+        }
+      }
+    },
+    "%@ · %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld min"
+          }
+        }
+      }
+    },
+    "%@ · %lld more" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld more"
+          }
+        }
+      }
+    },
+    "%@ · built for a %@ day" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · built for a %2$@ day"
+          }
+        }
+      }
+    },
+    "%@ · P %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · P %2$lldg"
+          }
+        }
+      }
+    },
+    "%@ · P %lldg · C %lldg · F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · P %2$lldg · C %3$lldg · F %4$lldg"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -33,16 +157,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$lld of %3$lld grams"
-          }
-        }
-      }
-    },
-    "%@ - %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ - %2$@"
           }
         }
       }
@@ -101,112 +215,6 @@
         }
       }
     },
-    "%@ · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
-    "%@ · %@ %@ reference" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@ %3$@ reference"
-          }
-        }
-      }
-    },
-    "%@ · %lld items" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld items"
-          }
-        }
-      }
-    },
-    "%@ · %lld min" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld min"
-          }
-        }
-      }
-    },
-    "%@ · %lld more" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld more"
-          }
-        }
-      }
-    },
-    "%@ · P %lldg" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · P %2$lldg"
-          }
-        }
-      }
-    },
-    "%@ · P %lldg · C %lldg · F %lldg" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · P %2$lldg · C %3$lldg · F %4$lldg"
-          }
-        }
-      }
-    },
-    "%@ · built for a %@ day" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · built for a %2$@ day"
-          }
-        }
-      }
-    },
-    "%@ — %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ — %2$@"
-          }
-        }
-      }
-    },
-    "%@ — pick up where you left off." : {
-
-    },
-    "%@ — step %lld of %lld. Pick up where you left off." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ — step %2$lld of %3$lld. Pick up where you left off."
-          }
-        }
-      }
-    },
-    "%@ — you're resting between sets." : {
-
-    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -226,9 +234,6 @@
           }
         }
       }
-    },
-    "%@. Back to this month" : {
-
     },
     "%@: %@" : {
       "localizations" : {
@@ -250,24 +255,17 @@
         }
       }
     },
-    "%@h" : {
+    "%@. Back to this month" : {
 
     },
     "%@’s shop" : {
 
     },
-    "%lld" : {
+    "%@h" : {
 
     },
-    "%lld %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld %2$@"
-          }
-        }
-      }
+    "%lld" : {
+
     },
     "%lld / %lld" : {
       "localizations" : {
@@ -285,6 +283,26 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld / %2$lld cal"
+          }
+        }
+      }
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld → %lld cal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld → %2$lld cal"
           }
         }
       }
@@ -425,6 +443,16 @@
         }
       }
     },
+    "%lld of %lld · %lld min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
     "%lld of %lld done" : {
       "localizations" : {
         "en" : {
@@ -441,16 +469,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld of %2$lld kinds shared"
-          }
-        }
-      }
-    },
-    "%lld of %lld · %lld min left" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld · %3$lld min left"
           }
         }
       }
@@ -540,32 +558,6 @@
     "%lld tracked" : {
 
     },
-    "%lld → %lld cal" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld → %2$lld cal"
-          }
-        }
-      }
-    },
-    "%lld%%" : {
-
-    },
-    "%lld%% wound" : {
-
-    },
-    "%lld%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%2$@"
-          }
-        }
-      }
-    },
     "%lld. %@" : {
       "localizations" : {
         "en" : {
@@ -586,13 +578,29 @@
         }
       }
     },
-    "%lld/1000" : {
-
-    },
     "%lld/240" : {
 
     },
     "%lld/800" : {
+
+    },
+    "%lld/1000" : {
+
+    },
+    "%lld%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%2$@"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "%lld%% wound" : {
 
     },
     "%lldg" : {
@@ -611,13 +619,16 @@
         }
       }
     },
+    "•" : {
+
+    },
+    "• %@" : {
+
+    },
+    "^[%lld tasks](inflect: true)" : {
+
+    },
     "+%lld" : {
-
-    },
-    "- %@" : {
-
-    },
-    "--" : {
 
     },
     "1 bottle" : {
@@ -653,22 +664,10 @@
     "2" : {
 
     },
-    "250" : {
-
-    },
     "3" : {
 
     },
     "3.0" : {
-
-    },
-    "30" : {
-
-    },
-    "30 lb" : {
-
-    },
-    "45" : {
 
     },
     "5.5 mph" : {
@@ -684,6 +683,18 @@
 
     },
     "8-12" : {
+
+    },
+    "30" : {
+
+    },
+    "30 lb" : {
+
+    },
+    "45" : {
+
+    },
+    "250" : {
 
     },
     "A couple of readings looked close. Pick the one that fits." : {
@@ -725,16 +736,10 @@
     "A small record of being." : {
 
     },
+    "a soft tap on each turn" : {
+
+    },
     "A word about this one — optional" : {
-
-    },
-    "AI" : {
-
-    },
-    "AI & data sources" : {
-
-    },
-    "AI activity log" : {
 
     },
     "Accept" : {
@@ -839,13 +844,19 @@
     "Adjusting…" : {
 
     },
-    "Advanced" : {
-
-    },
     "Age" : {
 
     },
     "Age: %lld" : {
+
+    },
+    "AI" : {
+
+    },
+    "AI & data sources" : {
+
+    },
+    "AI activity log" : {
 
     },
     "All done" : {
@@ -943,6 +954,9 @@
     "Areas to work around" : {
 
     },
+    "as of %@" : {
+
+    },
     "Ask an AI for a plan" : {
 
     },
@@ -1009,6 +1023,9 @@
     "Best: %@" : {
 
     },
+    "black bean bowls" : {
+
+    },
     "Block" : {
 
     },
@@ -1045,13 +1062,19 @@
     "Body signals" : {
 
     },
-    "Body signals needs Apple Health. Turn on “Share with Health” under Settings › Health to feed it." : {
-
-    },
     "Body signals — how Fernlet reads this" : {
 
     },
+    "Body signals needs Apple Health. Turn on “Share with Health” under Settings › Health to feed it." : {
+
+    },
+    "bottle" : {
+
+    },
     "Bottle: %lld oz" : {
+
+    },
+    "bottles" : {
 
     },
     "Bottles: %lld" : {
@@ -1216,6 +1239,9 @@
     "Cloud records" : {
 
     },
+    "cm" : {
+
+    },
     "Color" : {
 
     },
@@ -1226,6 +1252,9 @@
 
     },
     "Companion, wardrobe, coins" : {
+
+    },
+    "completed" : {
 
     },
     "Completed" : {
@@ -1261,6 +1290,9 @@
     "Connected" : {
 
     },
+    "Connection details" : {
+
+    },
     "Connection History" : {
 
     },
@@ -1268,9 +1300,6 @@
 
     },
     "Connection Inspector captures proximity pairing diagnostics for local troubleshooting." : {
-
-    },
-    "Connection details" : {
 
     },
     "Connection log" : {
@@ -1297,16 +1326,13 @@
     "Cooking in progress" : {
 
     },
-    "Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying." : {
-
-    },
     "Copied — copy again" : {
 
     },
-    "Copy" : {
+    "Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying." : {
 
     },
-    "Copy URL" : {
+    "Copy" : {
 
     },
     "Copy summary + prompt" : {
@@ -1366,6 +1392,9 @@
     "Couldn't save those changes" : {
 
     },
+    "covered" : {
+
+    },
     "Craft" : {
 
     },
@@ -1414,22 +1443,13 @@
     "Cycles tracked: %lld" : {
 
     },
-    "D11: LPLinkMetadata" : {
-
-    },
-    "DELETE" : {
-      "comment" : "The word the user must type to arm the delete confirmations. Keep it short and uppercase; the 'Type … to confirm' prompts insert this same word."
-    },
-    "DETECTED VALUES" : {
-
-    },
     "Daily check-in" : {
 
     },
-    "Daily check-in off" : {
+    "Daily check-in · %@" : {
 
     },
-    "Daily check-in · %@" : {
+    "Daily check-in off" : {
 
     },
     "Daily score" : {
@@ -1489,6 +1509,9 @@
     },
     "Delete" : {
 
+    },
+    "DELETE" : {
+      "comment" : "The word the user must type to arm the delete confirmations. Keep it short and uppercase; the 'Type … to confirm' prompts insert this same word."
     },
     "Delete %@" : {
 
@@ -1576,16 +1599,22 @@
     "Design your first item" : {
 
     },
+    "designed by %@" : {
+
+    },
     "Designed by %@" : {
+
+    },
+    "designed by you" : {
 
     },
     "Details" : {
 
     },
-    "Develop & finish" : {
+    "DETECTED VALUES" : {
 
     },
-    "Developer tools" : {
+    "Develop & finish" : {
 
     },
     "Discard" : {
@@ -1637,6 +1666,21 @@
 
     },
     "Duress password" : {
+
+    },
+    "e.g. basketball, soccer, climbing" : {
+
+    },
+    "e.g. kettlebells, mobility, running" : {
+
+    },
+    "e.g. sore left knee, short on time" : {
+
+    },
+    "e.g. swap the squat, 30 minutes, no barbell" : {
+
+    },
+    "e.g. Upper strength" : {
 
     },
     "Each exercise as logged, most recent first." : {
@@ -1702,9 +1746,6 @@
     "End" : {
 
     },
-    "End Session" : {
-
-    },
     "End activity" : {
 
     },
@@ -1715,6 +1756,9 @@
 
     },
     "End session" : {
+
+    },
+    "End Session" : {
 
     },
     "End session?" : {
@@ -2040,6 +2084,9 @@
     "From recipe" : {
 
     },
+    "gap" : {
+
+    },
     "Give access" : {
 
     },
@@ -2052,10 +2099,10 @@
     "Goal" : {
 
     },
-    "Goal & nutrition" : {
+    "Goal · %@" : {
 
     },
-    "Goal · %@" : {
+    "Goal & nutrition" : {
 
     },
     "Goal, %@" : {
@@ -2071,6 +2118,9 @@
 
     },
     "Good vibes from %@. Tap to tuck away." : {
+
+    },
+    "grams — no calories here" : {
 
     },
     "Grounding" : {
@@ -2154,16 +2204,19 @@
     "Home widgets" : {
 
     },
+    "host" : {
+
+    },
     "Hours (e.g. 7.5)" : {
 
     },
     "Hours (optional)" : {
 
     },
-    "How Fernlet estimates this" : {
+    "How are you feeling?" : {
 
     },
-    "How are you feeling?" : {
+    "How Fernlet estimates this" : {
 
     },
     "How friends will see you" : {
@@ -2229,10 +2282,10 @@
     "Import recipe" : {
 
     },
-    "Imported products" : {
+    "Imported · free-text ingredients" : {
 
     },
-    "Imported · free-text ingredients" : {
+    "Imported products" : {
 
     },
     "Importing URL" : {
@@ -2277,6 +2330,9 @@
     "Interests" : {
 
     },
+    "intervals, distance, notes" : {
+
+    },
     "Intimacy" : {
 
     },
@@ -2316,10 +2372,10 @@
     "Journal, cycle, worry box" : {
 
     },
-    "Keep Fernlet data out of device backups?" : {
+    "Keep both" : {
 
     },
-    "Keep both" : {
+    "Keep Fernlet data out of device backups?" : {
 
     },
     "Keep going" : {
@@ -2380,6 +2436,9 @@
     "Lets friends see you're around. Hearts and vibe need this on." : {
 
     },
+    "letting it go…" : {
+
+    },
     "Letting it go…" : {
 
     },
@@ -2428,13 +2487,13 @@
     "Log" : {
 
     },
+    "Log & save" : {
+
+    },
     "Log %@" : {
 
     },
     "Log %@ again" : {
-
-    },
-    "Log & save" : {
 
     },
     "Log a bottle of water" : {
@@ -2479,6 +2538,9 @@
     "Log workout" : {
 
     },
+    "logged" : {
+
+    },
     "Logged %lld times · first on %@" : {
       "localizations" : {
         "en" : {
@@ -2504,10 +2566,10 @@
     "Looking for nearby people..." : {
 
     },
-    "MACROS" : {
+    "Macros" : {
 
     },
-    "Macros" : {
+    "MACROS" : {
 
     },
     "Macros today" : {
@@ -2557,6 +2619,12 @@
 
     },
     "Matching" : {
+
+    },
+    "max %@" : {
+
+    },
+    "meal" : {
 
     },
     "Meal" : {
@@ -2622,6 +2690,9 @@
     "Milestones. %@" : {
 
     },
+    "min %@" : {
+
+    },
     "Mindfulness" : {
 
     },
@@ -2682,10 +2753,10 @@
     "Narrative" : {
 
     },
-    "Nearby Friends is off" : {
+    "Nearby friends" : {
 
     },
-    "Nearby friends" : {
+    "Nearby Friends is off" : {
 
     },
     "Nearby hearts" : {
@@ -2748,16 +2819,13 @@
     "Nicely done" : {
 
     },
-    "No AI calls have been made from this device." : {
-
-    },
-    "No Fernlet iCloud records were found." : {
-
-    },
     "No active session" : {
 
     },
     "No activities yet — start one above, or wait for a nearby friend to invite you." : {
+
+    },
+    "No AI calls have been made from this device." : {
 
     },
     "No biometric authentication available on this device." : {
@@ -2779,6 +2847,9 @@
 
     },
     "No exercises logged yet." : {
+
+    },
+    "No Fernlet iCloud records were found." : {
 
     },
     "No fields were recorded for this call." : {
@@ -2883,7 +2954,10 @@
     "None of this plan is logged yet, so you can still rebuild it — adjust your intensity, notes, or equipment." : {
 
     },
-    "Not Now" : {
+    "none yet" : {
+
+    },
+    "not done yet" : {
 
     },
     "Not enough coins yet" : {
@@ -2896,6 +2970,9 @@
 
     },
     "Not now" : {
+
+    },
+    "Not Now" : {
 
     },
     "Not recorded" : {
@@ -2967,16 +3044,19 @@
     "Nutrition web search" : {
 
     },
-    "OK" : {
+    "Observations" : {
 
     },
-    "Observations" : {
+    "of %lldg" : {
 
     },
     "Off" : {
       "comment" : "Health-access count when the master switch is off"
     },
     "Off in Settings" : {
+
+    },
+    "OK" : {
 
     },
     "On" : {
@@ -3030,31 +3110,31 @@
     "Open Moments" : {
 
     },
-    "Open Settings" : {
-
-    },
     "Open page" : {
 
     },
     "Open saved recipe" : {
 
     },
-    "Open the Creation Studio" : {
+    "Open Settings" : {
 
     },
     "Open the closet" : {
 
     },
+    "Open the Creation Studio" : {
+
+    },
     "Opens %@ straight away" : {
+
+    },
+    "Opens calm tools: breathing, grounding, and the worry box" : {
 
     },
     "Opens Fernlet to a new journal entry." : {
 
     },
     "Opens Fernlet to log a meal." : {
-
-    },
-    "Opens calm tools: breathing, grounding, and the worry box" : {
 
     },
     "Opens where you train" : {
@@ -3064,6 +3144,9 @@
 
     },
     "Optional" : {
+
+    },
+    "optional — we'll read the macros for you" : {
 
     },
     "Options for %@" : {
@@ -3118,16 +3201,10 @@
         }
       }
     },
-    "PER SERVING" : {
-
-    },
     "Partial nutrition data — some meals were logged without micronutrients." : {
 
     },
     "Partly shared" : {
-
-    },
-    "Paste URL" : {
 
     },
     "Paste a plan" : {
@@ -3137,6 +3214,9 @@
 
     },
     "Paste the reply" : {
+
+    },
+    "Paste URL" : {
 
     },
     "Pasted in by you — Fernlet can't check who wrote this, so read it before you accept." : {
@@ -3152,6 +3232,9 @@
 
     },
     "Per serving" : {
+
+    },
+    "PER SERVING" : {
 
     },
     "Per serving: %@" : {
@@ -3277,6 +3360,9 @@
     "Price" : {
 
     },
+    "Privacy & data" : {
+
+    },
     "Privacy & Data" : {
 
     },
@@ -3286,13 +3372,10 @@
     "Privacy & Data needs a fresh Face ID or device passcode check before it can show you anything." : {
 
     },
-    "Privacy & data" : {
+    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
 
     },
     "Privacy Policy" : {
-
-    },
-    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
 
     },
     "Private database sync for daily logs across your Fernlet devices." : {
@@ -3352,15 +3435,6 @@
     "Quick-log shortcuts" : {
 
     },
-    "REPS" : {
-
-    },
-    "RPE %.1g" : {
-
-    },
-    "RPE (1–10)" : {
-
-    },
     "Re-import from source" : {
 
     },
@@ -3382,10 +3456,10 @@
     "Reading what you caught…" : {
 
     },
-    "Reads Apple Watch workouts and daily activity, writes yours back." : {
+    "Reads and writes cycle observations, like flow and temperature." : {
 
     },
-    "Reads and writes cycle observations, like flow and temperature." : {
+    "Reads Apple Watch workouts and daily activity, writes yours back." : {
 
     },
     "Ready" : {
@@ -3582,6 +3656,9 @@
     "Reps" : {
 
     },
+    "REPS" : {
+
+    },
     "Rescan the nutrition label" : {
 
     },
@@ -3661,7 +3738,10 @@
     "Room for a little more" : {
 
     },
-    "SERVING SIZE" : {
+    "RPE (1–10)" : {
+
+    },
+    "RPE %.1g" : {
 
     },
     "Safety & reporting" : {
@@ -3734,22 +3814,22 @@
     "Say hello" : {
 
     },
-    "Scaled from %lld serving%@ for this view only — your saved recipe is unchanged, and logging still records one serving." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Scaled from %1$lld serving%2$@ for this view only — your saved recipe is unchanged, and logging still records one serving."
-          }
-        }
-      }
-    },
     "Scaled from %lld serving%@ — amounts below adjust to match. Logging still records one serving." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Scaled from %1$lld serving%2$@ — amounts below adjust to match. Logging still records one serving."
+          }
+        }
+      }
+    },
+    "Scaled from %lld serving%@ for this view only — your saved recipe is unchanged, and logging still records one serving." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scaled from %1$lld serving%2$@ for this view only — your saved recipe is unchanged, and logging still records one serving."
           }
         }
       }
@@ -3862,6 +3942,9 @@
     "Sent to" : {
 
     },
+    "SERVING SIZE" : {
+
+    },
     "Serving: %@" : {
 
     },
@@ -3941,13 +4024,13 @@
     "Share summary…" : {
 
     },
-    "Share with Health" : {
-
-    },
     "Share with a nearby Fernlet." : {
 
     },
     "Share with a trainer" : {
+
+    },
+    "Share with Health" : {
 
     },
     "Share your training" : {
@@ -3959,6 +4042,9 @@
     "Shared" : {
 
     },
+    "Shared — the file has been removed from Fernlet." : {
+
+    },
     "Shared by %@" : {
 
     },
@@ -3966,12 +4052,6 @@
 
     },
     "Shared recipe text" : {
-
-    },
-    "Shared — the file has been removed from Fernlet." : {
-
-    },
-    "Share…" : {
 
     },
     "Sharing in person with a coach who uses Fernlet Coach is coming soon." : {
@@ -3987,6 +4067,9 @@
 
     },
     "Shopping list" : {
+
+    },
+    "shoulder issues, hotel gyms only" : {
 
     },
     "Show calories" : {
@@ -4067,6 +4150,9 @@
     "Source date" : {
 
     },
+    "sourdough toast" : {
+
+    },
     "Space & equipment" : {
 
     },
@@ -4088,9 +4174,6 @@
     "Start %@ timer" : {
 
     },
-    "Start Fernlet" : {
-
-    },
     "Start activity" : {
 
     },
@@ -4098,6 +4181,9 @@
 
     },
     "Start date" : {
+
+    },
+    "Start Fernlet" : {
 
     },
     "Start from a preset" : {
@@ -4173,6 +4259,9 @@
     "Strength" : {
 
     },
+    "strength, running, mobility" : {
+
+    },
     "Suggest" : {
 
     },
@@ -4221,9 +4310,6 @@
     "Sync to iCloud" : {
 
     },
-    "TWO-COLUMN LABEL DETECTED" : {
-
-    },
     "Take a photo" : {
 
     },
@@ -4248,7 +4334,13 @@
     "Tap to log it again with today's time." : {
 
     },
+    "tap to tuck away" : {
+
+    },
     "Targets: %@" : {
+
+    },
+    "tempo, form note" : {
 
     },
     "That code didn't match" : {
@@ -4413,10 +4505,10 @@
     "Today" : {
 
     },
-    "Today key: %@" : {
+    "Today · %@" : {
 
     },
-    "Today · %@" : {
+    "Today key: %@" : {
 
     },
     "Today's intent" : {
@@ -4464,12 +4556,6 @@
     "Turn on" : {
 
     },
-    "Turn on Nearby Friends to send hearts" : {
-
-    },
-    "Turn on Nearby Friends?" : {
-
-    },
     "Turn on camera in Settings" : {
 
     },
@@ -4477,6 +4563,12 @@
 
     },
     "Turn on iCloud sync?" : {
+
+    },
+    "Turn on Nearby Friends to send hearts" : {
+
+    },
+    "Turn on Nearby Friends?" : {
 
     },
     "Turn the flash off" : {
@@ -4488,6 +4580,9 @@
     "Turning this off stops every kind below" : {
 
     },
+    "TWO-COLUMN LABEL DETECTED" : {
+
+    },
     "Type %@ to confirm" : {
 
     },
@@ -4495,9 +4590,6 @@
 
     },
     "Type to find a replacement food." : {
-
-    },
-    "USDA macros" : {
 
     },
     "Unblock" : {
@@ -4534,6 +4626,9 @@
 
     },
     "Updating storage settings…" : {
+
+    },
+    "USDA macros" : {
 
     },
     "Use my other device's key" : {
@@ -4605,13 +4700,13 @@
     "Wellbeing score" : {
 
     },
-    "What Fernlet shows, reads, and protects." : {
-
-    },
     "What did you catch?" : {
 
     },
     "What did you eat?" : {
+
+    },
+    "What Fernlet shows, reads, and protects." : {
 
     },
     "What it does" : {
@@ -4635,10 +4730,10 @@
     "What's included" : {
 
     },
-    "When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there." : {
+    "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
 
     },
-    "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
+    "When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there." : {
 
     },
     "When off, your local Fernlet data is excluded from iOS and iCloud device backups." : {
@@ -4679,6 +4774,9 @@
 
     },
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
+
+    },
+    "woke up twice..." : {
 
     },
     "Workout" : {
@@ -4777,6 +4875,9 @@
     "You will stop sharing with everyone in this session." : {
 
     },
+    "You: %@" : {
+
+    },
     "You'll need to meet in person to add them again." : {
 
     },
@@ -4806,9 +4907,6 @@
 
     },
     "You've saved %lld locations — remove one to add another." : {
-
-    },
-    "You: %@" : {
 
     },
     "Your app lock" : {
@@ -4928,130 +5026,7 @@
     "Your split" : {
 
     },
-    "^[%lld tasks](inflect: true)" : {
-
-    },
-    "a soft tap on each turn" : {
-
-    },
-    "as of %@" : {
-
-    },
-    "black bean bowls" : {
-
-    },
-    "bottle" : {
-
-    },
-    "bottles" : {
-
-    },
-    "cm" : {
-
-    },
-    "completed" : {
-
-    },
-    "covered" : {
-
-    },
-    "designed by %@" : {
-
-    },
-    "designed by you" : {
-
-    },
-    "e.g. Upper strength" : {
-
-    },
-    "e.g. basketball, soccer, climbing" : {
-
-    },
-    "e.g. kettlebells, mobility, running" : {
-
-    },
-    "e.g. sore left knee, short on time" : {
-
-    },
-    "e.g. swap the squat, 30 minutes, no barbell" : {
-
-    },
-    "gap" : {
-
-    },
-    "grams — no calories here" : {
-
-    },
-    "host" : {
-
-    },
-    "intervals, distance, notes" : {
-
-    },
-    "letting it go…" : {
-
-    },
-    "logged" : {
-
-    },
-    "max %@" : {
-
-    },
-    "meal" : {
-
-    },
-    "min %@" : {
-
-    },
-    "none yet" : {
-
-    },
-    "not done yet" : {
-
-    },
-    "of %lldg" : {
-
-    },
-    "optional — we'll read the macros for you" : {
-
-    },
-    "shoulder issues, hotel gyms only" : {
-
-    },
-    "sourdough toast" : {
-
-    },
-    "strength, running, mobility" : {
-
-    },
-    "tap to tuck away" : {
-
-    },
-    "tempo, form note" : {
-
-    },
-    "woke up twice..." : {
-
-    },
     "z" : {
-
-    },
-    "· %lld servings" : {
-
-    },
-    "“%@” logged to today." : {
-
-    },
-    "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
-
-    },
-    "•" : {
-
-    },
-    "• %@" : {
-
-    },
-    "…" : {
 
     }
   },

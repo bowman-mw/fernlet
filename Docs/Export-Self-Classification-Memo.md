@@ -154,7 +154,7 @@ memorandum completes that step; publicly-available status attaches afterwards.
 | CCATS / classification request | **Not required** — self-classification eligible (§5) |
 | BIS annual self-classification report | **Not required** as a recurring obligation. §740.17(e)(3) was amended 2021-03-29 to cover encryption *components* and *"executable software"*, which expressly excludes complete binary images of software running on an end item. One filing may be made once as a conservative measure; it is not annual. |
 | §742.15(b)(2) notification | **Not required** — that notification applies only to published source performing non-standard cryptography (§5). Being sent voluntarily to `crypt@bis.doc.gov` and `enc@nsa.gov` with the repository URL, as a dated record that the source is published. |
-| `ITSAppUsesNonExemptEncryption` | **`YES`** — the application uses encryption that is not *exempt* under the Apple/EAR exemption list. "Not subject to the EAR" (§6) is a distinct status and is not an exemption; this key remains `YES`. |
+| `ITSAppUsesNonExemptEncryption` | **`NO`** — App Store Connect's completed 2026-08-23 declaration required no document for the current non-France distribution. This is Apple's documentation-exempt result, not a statement that the app has no encryption. |
 | App Store Connect encryption documentation | None required, except the French declaration below |
 | France / ANSSI declaration | **Required if France is a release country** — triggered by the linked third-party scrypt implementation rather than by Apple OS cryptography. A separate regime; no BIS filing satisfies it. |
 | Country restrictions | 5D992.c is AT-controlled only. No licence is required for export other than to Country Group E:1 embargoed destinations, which App Store distribution settings must exclude. |
@@ -203,6 +203,5 @@ This memorandum must be re-issued if any of the following changes:
 
 ---
 
-**Signature** ______________________________  **Date** ______________
-
-*Retain with export records for five years past the last export (15 CFR §762.6(a)).*
+**Signature** Michael Bowman Olay  
+**Date** 08/23/2026

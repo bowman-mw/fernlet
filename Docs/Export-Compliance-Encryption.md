@@ -1,6 +1,6 @@
 # Export Compliance — Encryption Documentation
 
-**Status:** determination 2026-08-13, **materially revised 2026-08-19**. Supersedes the one-paragraph
+**Status:** determination 2026-08-13, **materially revised 2026-08-19 and 2026-08-23**. Supersedes the one-paragraph
 "Encryption" section in [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md) and the
 compliance bullet in [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §1.
 
@@ -19,6 +19,12 @@ compliance bullet in [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) 
 >
 > Every exemption in §4 was separately re-audited against the shipping code. All five, plus Note 4,
 > remain unavailable; the reasoning in §4 is now tighter but the answers are unchanged.
+
+> **2026-08-23 App Store Connect outcome.** The completed App Encryption Documentation flow returned
+> **“you don't need to upload any documents.”** France was answered **No**. The app therefore declares
+> `ITSAppUsesNonExemptEncryption = NO` in both configurations, and has no
+> `ITSEncryptionExportComplianceCode`. This is an Apple documentation determination, not a claim that
+> Fernlet has no cryptography. It supersedes this document's prior `YES` guidance.
 
 > Not legal advice. Export classification is the developer's own responsibility — Apple explicitly
 > disclaims it, and a wrong classification is a customs/BIS matter, not an App Review matter. The
@@ -94,8 +100,9 @@ Rather than answering per submission, the answer can live in the build:
 
 In this project the key is set from the build settings, not the `Info.plist` file — currently
 `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` in both the Debug and Release configurations of the
-`Fernlet` target ([App/Fernlet.xcodeproj/project.pbxproj:528](../App/Fernlet.xcodeproj/project.pbxproj#L528)
-and `:585`). Neither extension target sets it.
+`Fernlet` target ([App/Fernlet.xcodeproj/project.pbxproj:531](../App/Fernlet.xcodeproj/project.pbxproj#L531)
+and `:588`). There is no `ITSEncryptionExportComplianceCode` setting, because App Store Connect did not
+require a document or issue a code for the current distribution.
 
 ---
 
@@ -157,7 +164,7 @@ Positive case for **5D992.c**:
 
 | Item | Answer |
 |---|---|
-| `ITSAppUsesNonExemptEncryption` | **`YES`** — shipped in commit `4802416` |
+| `ITSAppUsesNonExemptEncryption` | **`NO`** — App Store Connect's 2026-08-23 no-document outcome for the current, non-France distribution |
 | CCATS / classification request to BIS | **Not required** (see §7 caveat) |
 | Documents to upload to App Store Connect | None, except the French declaration if France is a release country (§8) |
 | `ITSEncryptionExportComplianceCode` | Not applicable (Apple only issues one after a document review) |
@@ -166,31 +173,29 @@ Positive case for **5D992.c**:
 
 ---
 
-## 5. Why `ITSAppUsesNonExemptEncryption` must flip to `YES`
+## 5. Why `ITSAppUsesNonExemptEncryption` is `NO` for this release
 
-> **Done.** Both configurations of the `Fernlet` target now read `YES` (commit `4802416`).
+> **Done 2026-08-23.** Both configurations of the `Fernlet` target read `NO`.
 
-The key's meaning is precisely "does the app use encryption that is **not exempt** from the
-documentation requirements". `NO` is correct only when the app uses no encryption at all, or only
-exempt forms. Fernlet uses non-exempt (albeit standard, self-classifiable) encryption, so `NO` was a
-misstatement in the shipped binary.
+`NO` does not mean that Fernlet has no encryption. Apple defines it to cover an app that uses no
+encryption **or only encryption exempt from its export-documentation requirement**. The completed App
+Store Connect questionnaire produced that outcome for Fernlet's present distribution: standard,
+published algorithms; no proprietary/non-standard algorithm; and no distribution in France.
 
-Note that "publicly available / not subject to the EAR" (§6A) is a **different legal status** from
-"exempt", and is **not** on Apple's exemption list. Becoming publicly available does not let this key
-go back to `NO`.
+Fernlet still uses CryptoKit and the third-party CryptoSwift scrypt implementation (§3). The latter
+means it is not in the “Apple OS encryption only” row, but Apple's documentation table requires an
+additional document for standard non-Apple encryption only when the app is distributed in France. With
+France excluded, App Store Connect required no document and issued no compliance code.
 
-Practically: answering `YES` and having no proprietary algorithms leads App Store Connect to the
-"standard algorithms, self-classified" path — which requires no upload at all outside France. So this
-change costs nothing at submission time and makes the declaration truthful.
-
-The edit, in both Debug and Release configurations of the `Fernlet` target:
+The build setting is therefore:
 
 ```
-INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 ```
 
-Consider setting it on `FernletWidgets` and `FernletShareExtension` too — they are separate bundles;
-the share extension in particular touches the sealed recipe-import path.
+Before changing this setting or the App Store Connect declaration, re-run the questionnaire if Fernlet
+is made available in France or if the app adds proprietary or unpublished cryptography. A French
+declaration or CCATS outcome would change the release requirements.
 
 ---
 
@@ -407,13 +412,13 @@ fallback. This is a one-time filing, not annual.
 
 ## 9. Action checklist
 
-**Revised 2026-08-19.** The controlling deadline is the **first non-US distribution — including the
-first overseas TestFlight tester** — not App Store launch. Nothing is owed to any government today.
+**Revised 2026-08-23.** The controlling deadline is the **first non-US distribution — including the
+first overseas TestFlight tester** — not App Store launch. Nothing is owed to Apple for the current
+non-France distribution, but the separate BIS assessment remains the developer's responsibility.
 
-- [x] **Code:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES` in both configurations of the
-      `Fernlet` target — done in commit `4802416`. Still open: decide whether to mirror it on
-      `FernletWidgets` and `FernletShareExtension` (separate bundles; the share extension touches the
-      sealed recipe-import path).
+- [x] **Code:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` in both configurations of the
+      `Fernlet` target — set after the 2026-08-23 App Store Connect no-document determination. Do
+      not add `ITSEncryptionExportComplianceCode`: Apple did not issue one.
 - [x] **Docs:** the "Encryption" section of [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md)
       now points here rather than asserting the old exemption — done in commit `4802416`.
 - [x] **Write the self-classification memo** — drafted at
@@ -425,12 +430,11 @@ first overseas TestFlight tester** — not App Store launch. Nothing is owed to 
       what keeps the beta out of 5D002/EI territory.
 - [ ] **Send the §742.15(b)(2) notification** to `crypt@bis.doc.gov` and `enc@nsa.gov` with the
       repository URL (§6A.3). Not required on this determination; one email; highest value per minute.
-- [ ] **App Store Connect:** walk the App Encryption Documentation flow once. Expected answers: uses
-      cryptography **Yes** → qualifies for an exemption **No** → proprietary / non-standard algorithms
-      **No** → standard algorithms beyond the OS **Yes**.
-- [ ] **France:** prepare/submit the ANSSI declaration if France stays in the release countries.
-      Triggered by CryptoSwift's scrypt being a linked third-party implementation rather than an Apple
-      OS API. Separate regime — nothing filed with BIS satisfies it.
+- [x] **App Store Connect:** the completed 2026-08-23 flow required no document. Retain the recorded
+      outcome and use `NO` in the build setting rather than adding a fabricated compliance code.
+- [ ] **France:** prepare/submit the ANSSI declaration before adding France as a release country.
+      CryptoSwift's scrypt is a linked third-party implementation rather than an Apple OS API.
+      Re-run the App Store Connect flow first; nothing filed with BIS satisfies the French regime.
 - [ ] **BIS Supplement No. 8:** **one** filing, once, only if non-US distribution occurred — then
       never again (§6.3). Use the corrected 12-column row in §10.5.
 - [ ] **Legal:** the §7 protocol question and the §7 "easily changed by the user" counter-risk are the
@@ -450,9 +454,10 @@ first overseas TestFlight tester** — not App Store launch. Nothing is owed to 
 
 ## 10. Ready-to-paste descriptions
 
-App Store Connect will not assess encryption documentation until the **App Description** field is
-populated, and the ANSSI declaration and the BIS report both want a plain-language description of the
-product and of what the cryptography does. These are written for those forms — factual, no marketing.
+The completed App Store Connect flow accepted the concise §10.3 description and required no document
+for the current distribution. The ANSSI declaration and any BIS follow-up still need a plain-language
+description of the product and of what the cryptography does. These are written for those forms —
+factual, no marketing.
 
 ### 10.1 One line
 
@@ -466,20 +471,11 @@ product and of what the cryptography does. These are written for those forms —
 > that daily care. All data stays on the user's own devices or their personal iCloud account — there
 > is no developer server, no account, no advertising and no analytics.
 
-### 10.3 Longer description (~130 words) — for the App Store Connect App Description field
+### 10.3 App Encryption Documentation description (237 characters; 300-character limit)
 
-> Fernlet is a gentle, privacy-first wellbeing companion. Instead of streaks and optimisation, it
-> gives you a small creature that reflects how you've been caring for yourself: what you've eaten,
-> how you've moved and slept, how you've been feeling, and the small daily things that are easy to
-> let slip.
->
-> You can log meals and recipes, track workouts, keep a private journal and worry box, follow your
-> cycle, and set gentle goals. Health data is read from and written to Apple Health with your
-> permission. Nearby friends can share recipes and photos directly device-to-device.
->
-> Fernlet is free, has no ads, no tracking and no accounts. There is no developer server: your data
-> lives on your devices and, if you choose, your own iCloud. Sensitive entries are encrypted with a
-> passcode only you know.
+> Fernlet is a private iPhone wellness companion for tracking food, movement, sleep, hygiene,
+> journaling, and optional cycle information. It is not a medical device. Sensitive content is
+> encrypted on device, with optional iCloud backup and nearby sharing.
 
 ### 10.4 Description of the cryptography — for ANSSI / BIS / any Apple follow-up
 
