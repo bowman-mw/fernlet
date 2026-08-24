@@ -68,7 +68,9 @@ final class MealResolutionService {
         if let exact = host.foodCatalog.exactNameMatch(forNormalized: normalizedName), exact.micronutrients.hasAnyValue {
             return exact.micronutrients
         }
-        if let best = host.foodCatalog.results(for: description, limit: 1).first, best.micronutrients.hasAnyValue {
+        if let best = host.foodCatalog.results(
+            for: description, limit: 1, context: .machineGenerated
+        ).first, best.micronutrients.hasAnyValue {
             return best.micronutrients
         }
         return Micronutrients()

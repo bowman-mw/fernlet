@@ -1,6 +1,14 @@
 import Foundation
 import FernletDomainModel
 
+/// Whether a catalog query came directly from a person's search field or was synthesized by code.
+/// History is a personalization signal for the former only; token filtering is an independent
+/// retrieval choice and must never stand in for this context.
+public nonisolated enum FoodSearchContext: Sendable, Equatable {
+    case userTyped
+    case machineGenerated
+}
+
 /// The app's food lookup surface — search, point lookups, and resolver candidate pools over the
 /// bundled USDA/curated foods plus the user's own items.
 ///
@@ -24,10 +32,16 @@ import FernletDomainModel
 /// holds no nutrition data of its own, and is empty on every catalog the app has not hydrated — so
 /// the measured cold path (`Tests/FernletTests/FoodSearchCorpusTests`) is untouched by it.
 ///
+/// A fourth, added for research §26 fix 1.9, is the **history profile**: the foods this user has
+/// actually logged, weighted by frequency and recency (``setSearchHistory(_:)``). It is the top key
+/// of the search comparator on ``results(for:limit:stripsStopwords:context:)`` for a TYPED query only, is
+/// derived from `DiaryStore.recentMeals` rather than persisted anywhere new, and — like the alias
+/// snapshot — is empty on any catalog the app has not hydrated.
+///
 /// Thread-safe: the SQLite source serializes its own access, and the user-items snapshot, the
-/// correction-alias snapshot and the branded-source slot are guarded by one lock, so the catalog can
-/// be queried from any actor (the AI meal-resolution path runs off the main actor) — hence the
-/// nonisolated `@unchecked Sendable` class.
+/// correction-alias snapshot, the history profile and the branded-source slot are guarded by one
+/// lock, so the catalog can be queried from any actor (the AI meal-resolution path runs off the main
+/// actor) — hence the nonisolated `@unchecked Sendable` class.
 public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
@@ -41,6 +55,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// device-local memory in via ``setSearchAliases(_:)``, which is what keeps every catalog built
     /// in a test (or before hydration) on the cold, alias-free path.
     private var _searchAliases: [String: UUID] = [:]
+    /// Research §26 fix 1.9's snapshot: the weighted foods this user has actually logged. Guarded by
+    /// the SAME `lock` as `_userItems`; ``FoodSearchHistory/empty`` until `DiaryStore` publishes one,
+    /// which is what keeps every catalog built in a test (or before hydration) on the cold path.
+    private var _searchHistory: FoodSearchHistory = .empty
 
     /// Creates a catalog over `source` with an empty user-items snapshot and no branded source.
     public init(source: BundledFoodSource) {
@@ -70,6 +88,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return _searchAliases
     }
 
+    private var searchHistory: FoodSearchHistory {
+        lock.lock(); defer { lock.unlock() }
+        return _searchHistory
+    }
+
     /// Keeps the catalog's view of user-added foods in sync with `FernletStore.foodItems`.
     public func setUserItems(_ items: [FoodItem]) {
         lock.lock(); _userItems = items; lock.unlock()
@@ -88,6 +111,23 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// bounded by that cap. Nothing here re-caps a map it did not author.
     public func setSearchAliases(_ aliases: [String: UUID]) {
         lock.lock(); _searchAliases = aliases; lock.unlock()
+    }
+
+    /// Publishes this user's meal history as a ranking input (research §26 fix 1.9).
+    ///
+    /// Replaces the snapshot wholesale, exactly like ``setUserItems(_:)`` and ``setSearchAliases(_:)``.
+    /// `DiaryStore` owns the derivation and republishes on every `recentMeals` write — including the
+    /// `recentMeals = []` inside `resetDiary()`, which is how a wipe empties the live catalog's copy
+    /// instead of leaving it promoting the deleted meals' foods until the app relaunches.
+    ///
+    /// **No durable copy lives here or anywhere else.** The profile is derived from `recentMeals`,
+    /// which is already in the synced snapshot; fix 1.9 adds no persisted surface of its own. See
+    /// ``FoodSearchHistory``'s header for why that divergence from §26's data note was taken.
+    ///
+    /// **Bounded growth (Power-of-10 R3) is the WRITER's job**, as it is for `setUserItems`:
+    /// `FoodSearchHistory.from(recentMeals:)` reads at most its own meal and component caps.
+    public func setSearchHistory(_ history: FoodSearchHistory) {
+        lock.lock(); _searchHistory = history; lock.unlock()
     }
 
     /// Attaches the optional branded catalog (e.g. once the On-Demand Resource has downloaded).
@@ -129,10 +169,45 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// ``promotingCorrection(_:for:limit:)``. `candidates(for:limit:)` inherits it by construction,
     /// because it draws its pool from this method; ``scoredResults(for:limit:stripsStopwords:)``
     /// deliberately does NOT (see its doc).
+    ///
+    /// **A fourth difference, research §26 fix 1.9: the history tier applies to a TYPED query only.**
+    /// ``FoodSearchContext`` is the explicit discriminator; `stripsStopwords` remains solely a token-
+    /// retrieval policy. `candidates(for:limit:)` passes `.machineGenerated` and gets cold ranking.
+    /// That is a deliberate narrowing of §26's "add a tier to the comparator", for three measured
+    /// reasons. (1) A sub-phrase is a FRAGMENT of a description, so promoting on it applies a
+    /// whole-food signal to one word: an alias-style promotion on the sub-phrase `cheese` of
+    /// `cheese pizza slice` is a cheese the user likes shouldering into a pizza decomposition. (2) The
+    /// promotion DISPLACES — fix 1.10 measured one evicted row per fired phrase in an 18-row pool —
+    /// and history is orders of magnitude denser than corrections (dozens of foods versus a handful),
+    /// so the resolver pool would be substantially rewritten by it. (3) Keeping the pool cold means
+    /// the resolver's bind firewall needs no new proof: `deterministicIngredients`' alias-free
+    /// re-search, `bindConfidence`'s re-score and `retrievalGatedConfidence`'s cap are all measuring a
+    /// pool this fix never touched.
+    ///
+    /// **Precedence, when a query has BOTH a correction and history (fix 1.10 vs fix 1.9): the
+    /// correction wins**, structurally — history re-ranks inside `FoodItemSearch`, and
+    /// `promotingCorrection` then prepends. That ordering is the intended one: a correction is an
+    /// explicit statement ("when I type this, I mean that food") made by a person who was looking at
+    /// the wrong answer, while history is an inference from behaviour. An inference must not overrule
+    /// a statement. `FoodSearchHistoryCatalogTests` pins it rather than leaving it to code order.
     /// - Parameter stripsStopwords: See `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
-    ///   `false` only for a SUB-PHRASE; every typed-query caller leaves it alone.
-    public func results(for query: String, limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
-        let ranked = FoodItemSearch.results(for: query, in: index(for: query, stripsStopwords: stripsStopwords), limit: limit, stripsStopwords: stripsStopwords)
+    /// - Parameter context: `.userTyped` enables history; synthesized resolver/import queries pass
+    ///   `.machineGenerated`. Required so every caller states which surface it serves.
+    public func results(
+        for query: String,
+        limit: Int = 6,
+        stripsStopwords: Bool = true,
+        context: FoodSearchContext
+    ) -> [FoodItem] {
+        let rankingNow = Date()
+        let ranked = FoodItemSearch.results(
+            for: query,
+            in: index(for: query, stripsStopwords: stripsStopwords),
+            limit: limit,
+            stripsStopwords: stripsStopwords,
+            history: context == .userTyped ? searchHistory : .empty,
+            now: rankingNow
+        )
         return promotingCorrection(ranked, for: query, limit: limit)
     }
 
@@ -156,13 +231,16 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// re-scoring the whole item name through fix 1.8's `carries` floor. The AI-selection tier, which
     /// has neither, is capped by `MealResolutionService.retrievalGatedConfidence`.
     ///
-    /// **Two ungated consumers of `results(for:limit: 1)` remain, both by design.**
+    /// **Two ungated machine consumers of `results(for:limit: 1)` remain, both by design.**
     /// `MealResolutionService.fallbackMicronutrients` borrows the top row's micronutrient profile for a
     /// keyword-parsed meal — an ESTIMATE on a meal that is already `.low`/reviewed, where the user's
     /// own correction is a better guess than the scorer's — and
     /// `RecipeWebImporter.estimateMacrosFromIngredients` binds imported ingredient lines the same way,
     /// on a recipe the user reviews before saving.
     /// Neither gates auto-commit, so neither needs the floor above.
+    ///
+    /// Research §26 fix 1.9's history tier does NOT reach those consumers: resolver and importer
+    /// callers explicitly pass `.machineGenerated`. Whether they strip stopwords is independent.
     public func scoredResults(for query: String, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
         FoodItemSearch.scoredResults(for: query, in: index(for: query, stripsStopwords: stripsStopwords), limit: limit, stripsStopwords: stripsStopwords)
     }
@@ -222,9 +300,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     public func candidates(for description: String, limit: Int = 18) -> [FoodSelectionCandidate] {
         var selected: [FoodItem] = []
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: description) {
-            // `stripsStopwords: false`: these are SUB-PHRASES, not typed queries — see
-            // `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
-            for match in results(for: phrase, limit: 4, stripsStopwords: false) where !selected.contains(where: { $0.id == match.id }) {
+            // These are synthesized SUB-PHRASES: keep quantity tokens and keep history cold.
+            for match in results(
+                for: phrase, limit: 4, stripsStopwords: false, context: .machineGenerated
+            ) where !selected.contains(where: { $0.id == match.id }) {
                 selected.append(match)
                 if selected.count >= limit { break }
             }

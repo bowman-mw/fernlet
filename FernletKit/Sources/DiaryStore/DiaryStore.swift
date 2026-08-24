@@ -68,7 +68,17 @@ public final class DiaryStore {
     public var settings: FernletSettings
     /// Rolling newest-first window of recently logged meals (capped at 50 by
     /// ``appendMeal(_:date:)``) that powers quick re-logging.
-    public var recentMeals: [Meal]
+    ///
+    /// The `didSet` re-derives research §26 fix 1.9's history profile and mirrors it into
+    /// ``foodCatalog``, so a food the user just logged ranks first the next time they search for it.
+    /// Deliberately on the PROPERTY rather than in `appendMeal`: the same one line then covers the
+    /// wipe (`resetDiary` sets `recentMeals = []`, publishing an empty profile so a wipe cannot leave
+    /// the live catalog promoting deleted meals' foods) and a remote sync (`applyDiarySlice`), which
+    /// three separate call-site writes would each have had to remember. `foodItems` above uses the
+    /// same seam for the same reason. Nothing durable is written — see ``FoodSearchHistory``.
+    public var recentMeals: [Meal] {
+        didSet { foodCatalog.setSearchHistory(FoodSearchHistory.from(recentMeals: recentMeals)) }
+    }
     /// Journal entries carried over from earlier days. The facade owns sealing/unsealing of
     /// their text; this store only holds the rows.
     public var previousJournals: [JournalEntry]
@@ -212,6 +222,10 @@ public final class DiaryStore {
         self.dailyScores = Self.boundedDailyScores(snapshot.dailyScores)
         self.companionThought = nil
         foodCatalog.setUserItems(foodItems)
+        // A `didSet` does not fire for the assignment in an initializer, so both mirrors are published
+        // by hand here — otherwise the first search of a launched session would rank cold and only
+        // warm up after the first meal write of the session (fix 1.9).
+        foodCatalog.setSearchHistory(FoodSearchHistory.from(recentMeals: recentMeals))
     }
 
     // MARK: - Scoring
@@ -680,9 +694,7 @@ public final class DiaryStore {
     ///   would have it silently overwritten by a classification of the meal's NAME.
     @discardableResult public func copyMeal(_ meal: Meal, mealType: MealType? = nil) -> Meal {
         let copiedMeal = meal.copyForToday(mealType: mealType)
-        batchSnapshotPersistence {
-            day.meals.append(copiedMeal)
-        }
+        appendMeal(copiedMeal, date: todayKey)
         return copiedMeal
     }
 

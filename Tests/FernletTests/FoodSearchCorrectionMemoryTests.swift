@@ -243,11 +243,11 @@ struct FoodSearchCorrectionCatalogTests {
         let cold = try Self.catalog()
         for bankCase in Self.bank {
             let corrected = try Self.correctedItem(bankCase.correctedTopName, in: cold)
-            let coldTop = cold.results(for: bankCase.query, limit: 6).first?.name
+            let coldTop = cold.results(for: bankCase.query, limit: 6, context: .userTyped).first?.name
             #expect(coldTop == bankCase.coldTopName, "the COLD answer moved for \"\(bankCase.query)\" — that is a corpus regression, not a fix-1.10 one")
 
             let warm = try Self.catalog(aliases: [FoodItemSearch.normalized(bankCase.query): corrected.id])
-            let warmTop = warm.results(for: bankCase.query, limit: 6).first
+            let warmTop = warm.results(for: bankCase.query, limit: 6, context: .userTyped).first
             #expect(warmTop?.id == corrected.id, "one correction did not self-heal \"\(bankCase.query)\" — \(bankCase.note)")
             #expect(warmTop?.name == bankCase.correctedTopName)
         }
@@ -258,11 +258,11 @@ struct FoodSearchCorrectionCatalogTests {
     /// independent of whatever this device has learned.
     @Test func aFreshCatalogIsColdSoTheCorpusStaysDeterministic() throws {
         let first = try Self.catalog(aliases: ["mozzarella cheese": Self.correctedItem("Mozzarella Cheese", in: try Self.catalog()).id])
-        #expect(first.results(for: "mozzarella cheese", limit: 1).first?.name == "Mozzarella Cheese")
+        #expect(first.results(for: "mozzarella cheese", limit: 1, context: .userTyped).first?.name == "Mozzarella Cheese")
         // A SECOND, independently built catalog — the shape every corpus test uses — is unaffected.
         let fresh = FoodCatalog.bundled()
         try #require(fresh.bundledCount == Self.shippedRowCount)
-        #expect(fresh.results(for: "mozzarella cheese", limit: 1).first?.name == "DENNY'S, mozzarella cheese sticks",
+        #expect(fresh.results(for: "mozzarella cheese", limit: 1, context: .userTyped).first?.name == "DENNY'S, mozzarella cheese sticks",
                 "a correction planted in one catalog leaked into another — the corpus is no longer deterministic")
     }
 
@@ -271,9 +271,9 @@ struct FoodSearchCorrectionCatalogTests {
     @Test func correctionReRanksWithoutLengtheningOrDuplicating() throws {
         let cold = try Self.catalog()
         let corrected = try Self.correctedItem("Mozzarella Cheese", in: cold)
-        let coldRows = cold.results(for: "mozzarella cheese", limit: 6)
+        let coldRows = cold.results(for: "mozzarella cheese", limit: 6, context: .userTyped)
         let warm = try Self.catalog(aliases: ["mozzarella cheese": corrected.id])
-        let warmRows = warm.results(for: "mozzarella cheese", limit: 6)
+        let warmRows = warm.results(for: "mozzarella cheese", limit: 6, context: .userTyped)
 
         #expect(warmRows.count == coldRows.count, "the promotion grew the result list past the caller's limit")
         #expect(warmRows.filter { $0.id == corrected.id }.count == 1, "the promoted row is also present further down — a caller would render it twice")
@@ -283,7 +283,7 @@ struct FoodSearchCorrectionCatalogTests {
 
         // A limit of 1 still returns exactly one row — the caller's contract, and the one
         // `MealResolutionService.fallbackMicronutrients` relies on.
-        #expect(warm.results(for: "mozzarella cheese", limit: 1).count == 1)
+        #expect(warm.results(for: "mozzarella cheese", limit: 1, context: .userTyped).count == 1)
     }
 
     /// The correction reaches the RESOLVER's candidate pool too, because `candidates(for:)` draws it
@@ -322,22 +322,22 @@ struct FoodSearchCorrectionCatalogTests {
     @Test func inertAliasesChangeNothing() throws {
         let cold = try Self.catalog()
         let corrected = try Self.correctedItem("Mozzarella Cheese", in: cold)
-        let coldRows = cold.results(for: "mozzarella cheese", limit: 6).map(\.id)
+        let coldRows = cold.results(for: "mozzarella cheese", limit: 6, context: .userTyped).map(\.id)
 
         // 1. An alias for a DIFFERENT query.
         let elsewhere = try Self.catalog(aliases: ["black coffee": corrected.id])
-        #expect(elsewhere.results(for: "mozzarella cheese", limit: 6).map(\.id) == coldRows)
+        #expect(elsewhere.results(for: "mozzarella cheese", limit: 6, context: .userTyped).map(\.id) == coldRows)
 
         // 2. An alias whose food no longer resolves (a purged branded ODR row, a deleted user item).
         let dangling = try Self.catalog(aliases: ["mozzarella cheese": UUID()])
-        #expect(dangling.results(for: "mozzarella cheese", limit: 6).map(\.id) == coldRows,
+        #expect(dangling.results(for: "mozzarella cheese", limit: 6, context: .userTyped).map(\.id) == coldRows,
                 "a dangling correction must fall through to the normal ranking, not blank the results")
 
         // 3. A key below `minimumQueryLength`, which the searcher itself refuses to answer. The
         // memory cannot mint one (`FoodSearchCorrection` rejects it), so this pins the catalog's own
         // floor against a hand-written or migrated map.
         let tooShort = try Self.catalog(aliases: ["ab": corrected.id])
-        #expect(tooShort.results(for: "ab", limit: 6).isEmpty,
+        #expect(tooShort.results(for: "ab", limit: 6, context: .userTyped).isEmpty,
                 "a two-character alias resolved to a food, which the search floor forbids")
     }
 }
@@ -383,16 +383,16 @@ struct FoodSearchCorrectionWipeTests {
 
         // A query whose tokens appear in no catalog name, so cold search cannot answer it.
         let query = "quaffle brunch nonsense"
-        #expect(store.foodCatalog.results(for: query, limit: 3).isEmpty, "precondition: the query must be unanswerable cold")
+        #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty, "precondition: the query must be unanswerable cold")
         store.rememberFoodSearchCorrections([FoodSearchCorrection(searchText: query, foodItemID: food.id)].compactMap { $0 })
-        #expect(store.foodCatalog.results(for: query, limit: 3).first?.id == food.id, "precondition: the correction was not learned")
+        #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).first?.id == food.id, "precondition: the correction was not learned")
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(FoodSearchCorrectionMemory.aliases(defaults: defaults).isEmpty,
                 "delete everything left the correction memory on disk — the searches this person corrected outlived the wipe")
         #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil)
-        #expect(store.foodCatalog.results(for: query, limit: 3).isEmpty,
+        #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty,
                 "the wipe cleared the sidecar but left the catalog's live copy answering — 'deleted but still there' until relaunch")
     }
 
@@ -412,7 +412,7 @@ struct FoodSearchCorrectionWipeTests {
 
         // The publish path (launch, and after every write) must not re-mint what the wipe removed.
         store.publishFoodSearchCorrectionAliases()
-        #expect(store.foodCatalog.results(for: query, limit: 3).isEmpty)
+        #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty)
         // An empty save is a no-op rather than a re-write.
         store.rememberFoodSearchCorrections([])
         #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil)
@@ -420,7 +420,7 @@ struct FoodSearchCorrectionWipeTests {
         // A relaunch over the same device sidecar: a second store hydrating from the same suite —
         // through the INIT, which is where the real launch reads it.
         let relaunched = makeTestStore(bundledFoodItems: [food], foodSearchCorrectionDefaults: defaults)
-        #expect(relaunched.foodCatalog.results(for: query, limit: 3).isEmpty,
+        #expect(relaunched.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty,
                 "a relaunched store re-learned a correction the wipe deleted")
     }
 
@@ -445,7 +445,7 @@ struct FoodSearchCorrectionWipeTests {
         let store = makeTestStore(bundledFoodItems: [food])
         #expect(store.foodSearchCorrectionCount == 0,
                 "an uninjected test store read the shared `.standard` suite — one test's correction is now every test's")
-        #expect(store.foodCatalog.results(for: query, limit: 3).isEmpty,
+        #expect(store.foodCatalog.results(for: query, limit: 3, context: .userTyped).isEmpty,
                 "a correction planted in `.standard` changed an uninjected store's search results")
     }
 
@@ -467,12 +467,12 @@ struct FoodSearchCorrectionWipeTests {
         #expect(draft.corrections.count == 2, "precondition: the draft did not record the picks")
         #expect(defaults.object(forKey: FoodSearchCorrectionMemory.defaultsKey) == nil,
                 "recording a pick wrote to storage — a CANCELLED correction would now teach the app")
-        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3).isEmpty)
+        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3, context: .userTyped).isEmpty)
 
         // Save — the one call the sheet's Save bar makes.
         store.rememberFoodSearchCorrections(draft.corrections)
         #expect(store.foodSearchCorrectionCount == 2)
-        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3).first?.id == food.id)
+        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3, context: .userTyped).first?.id == food.id)
     }
 
     /// Review finding M6: a pick made without editing the PREFILL is not a search the user typed.
@@ -535,7 +535,7 @@ struct FoodSearchCorrectionWipeTests {
 
         #expect(forgotten == 1, "the row reports what it forgot; a wrong count is a claim the user cannot check")
         #expect(store.foodSearchCorrectionCount == 0)
-        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3).isEmpty,
+        #expect(store.foodCatalog.results(for: "quaffle brunch nonsense", limit: 3, context: .userTyped).isEmpty,
                 "forgetting cleared the sidecar but left the catalog answering")
         #expect(store.day.meals.count == mealsBefore,
                 "\"forget corrected searches\" destroyed something other than the corrections")

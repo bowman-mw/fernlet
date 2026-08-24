@@ -135,7 +135,7 @@ struct BarcodeScanTests {
         // return nil (not fail) for barcode lookups.
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount > 0, "bundled FoodCatalog.sqlite missing from the test host")
-        #expect(catalog.results(for: "chicken", limit: 3).isEmpty == false)
+        #expect(catalog.results(for: "chicken", limit: 3, context: .userTyped).isEmpty == false)
         #expect(catalog.item(forBarcode: "0012345678905") == nil)
     }
 

@@ -49,7 +49,7 @@ struct BrandedODRCatalogTests {
         #expect(scanned.barcode != nil)
 
         // All-searchable: branded products surface in text search too.
-        #expect(!catalog.results(for: "granola").isEmpty)
+        #expect(!catalog.results(for: "granola", context: .userTyped).isEmpty)
 
         // Detach → graceful fallback to the base floor; the ODR-only product no longer resolves.
         catalog.detachBrandedSource()

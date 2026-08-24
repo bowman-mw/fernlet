@@ -18,10 +18,10 @@ normalized GTIN barcode, by recipe ingredient set) resolve straight from SQLite,
 ``FoodCatalog/candidates(for:limit:)`` builds the capped candidate pool the deterministic
 and AI meal resolvers draw from.
 
-Search carries one piece of per-user state, added for research §26 fix 1.10: the **local
-correction memory**. `FoodCatalog.setSearchAliases(_:)` publishes a normalized query →
+Search carries two pieces of per-user state. The first, added for research §26 fix 1.10, is the
+**local correction memory**. `FoodCatalog.setSearchAliases(_:)` publishes a normalized query →
 food-id map — the searches this person corrected once in "Adjust meal" — and
-``FoodCatalog/results(for:limit:stripsStopwords:)`` puts that food first, ahead of the FTS
+``FoodCatalog/results(for:limit:stripsStopwords:context:)`` puts that food first, ahead of the FTS
 gate rather than through it, so a query the gate answers wrongly (or not at all) can be
 taught. The map holds no nutrition data, is empty on any catalog the app has not hydrated
 (which is what keeps the measured cold pipeline deterministic), and deliberately does NOT
@@ -31,6 +31,24 @@ sheet. The durable copy lives in the app target (`FoodSearchCorrectionMemory`, a
 device-local `UserDefaults` sidecar that never enters the synced snapshot or CloudKit, though
 it does ride an encrypted device backup, and is cleared by "Delete everything"), so this
 module stores only the snapshot it is handed.
+
+The second, added for research §26 fix 1.9, is the **history profile** —
+``FoodSearchHistory``, published by `FoodCatalog.setSearchHistory(_:)`. It weights the foods
+this person has actually logged by `log(1 + count)` and an exponential recency decay, and
+`FoodItemSearch` reads it as the TOP key of its comparator, above source and data-type
+priority: your own food first, then everything else in the order it already had. Three
+properties make it safe to sit that high. It **re-ranks and never injects** — every row it
+moves already passed the FTS gate and both of fix 1.8's floors, which is the structural
+difference from the correction alias above, and it means a stale profile can only reorder
+right answers, never surface a wrong one. It applies to a **TYPED query only**, expressed by
+``FoodSearchContext/userTyped`` rather than inferred from stopword policy, so
+``FoodCatalog/candidates(for:limit:)`` and recipe-import estimation explicitly use
+``FoodSearchContext/machineGenerated`` and keep cold ranking. The profile retains count/latest-use
+statistics and calculates decay once per query, so it cannot go stale while the diary is idle. And it
+has **no durable copy anywhere**: `DiaryStore` derives it from `recentMeals` (already in the
+synced snapshot) on every write and at init, so a wipe of the diary is a wipe of the feature.
+When a query has both a correction and a history weight, the **correction wins** — an explicit
+statement outranks an inference.
 
 A second, much larger branded catalog (~364k products) is delivered as a purgeable
 On-Demand Resource and attached at runtime as an additional ``BundledFoodSource``

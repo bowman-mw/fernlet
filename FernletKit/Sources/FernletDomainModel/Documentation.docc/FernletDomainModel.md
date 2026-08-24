@@ -175,7 +175,16 @@ non-exhaustive switches and ship corrupted binaries.
 - ``FoodDataType``
 - ``FoodItemSource``
 - ``FoodBarcode``
+``FoodItemSearch``'s comparator has one per-user input, research §26 fix 1.9's
+``FoodSearchHistory``: the foods this person has logged, weighted by frequency and recency, read as
+its TOP ranking key. It defaults to ``FoodSearchHistory/empty`` on every entry point and
+``FoodItemSearch/scoredResults(for:in:limit:stripsStopwords:)`` has no parameter for it at all — so
+every confidence gate that reads a score is cold by construction, and the profile can only re-rank
+rows the match gate and both floors already admitted. It is derived, never stored: `DiaryStore`
+computes it from `recentMeals`.
+
 - ``FoodItemSearch``
+- ``FoodSearchHistory``
 - ``FoodBrandLexicon``
 - ``CustomIngredientUpsert``
 

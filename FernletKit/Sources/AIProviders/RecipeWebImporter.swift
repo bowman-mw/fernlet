@@ -858,7 +858,9 @@ public enum RecipeWebImporter {
 
         for text in ingredients {
             guard let parsed = parseIngredient(text),
-                  let match = catalog.results(for: parsed.name, limit: 1).first else { continue }
+                  let match = catalog.results(
+                    for: parsed.name, limit: 1, context: .machineGenerated
+                  ).first else { continue }
             let ri = RecipeIngredient(foodItemId: match.id, quantity: parsed.quantity, unit: parsed.unit)
             let macros = ri.scaledMacros(using: match)
             totalProtein += Double(macros.protein)

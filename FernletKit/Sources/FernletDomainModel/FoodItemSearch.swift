@@ -111,9 +111,18 @@ public nonisolated enum FoodBrandLexicon {
 ///
 /// **Ranking, in the order the keys are applied.** Research §26's coupled increment (fixes
 /// 1.6/1.7a/1.8) changed steps 1 and 4 and added step 5; steps 2 and 3 are byte-unchanged, which is
-/// what keeps this option (a) — data type still outranks the score everywhere.
+/// what keeps this option (a) — data type still outranks the score everywhere. Fix 1.9 then added
+/// step 1a ABOVE all of them, and only for callers that hand in a non-empty ``FoodSearchHistory``.
 /// 1. the hard match gate — every *search token* must equal-or-prefix some indexed token, where the
 ///    search tokens are stopword-filtered by position (fix 1.6, see ``searchTokens(in:)``);
+/// 1a. **the history tier** — a food this person has logged outranks one they have not, and among
+///    logged foods the `log(1 + count)` × recency-decayed weight orders them (fix 1.9, see
+///    ``FoodSearchHistory``). It sits above `sourcePriority`, which is §14's published hierarchy
+///    ("From History" is tier 1, above Custom and Common). It **re-ranks only**: the key is read
+///    after the gate and both of fix 1.8's floors have already rejected everything they reject, so a
+///    history weight can never present a row the cold pipeline refused. `history` defaults to
+///    ``FoodSearchHistory/empty`` on every entry point, and ``scoredResults(for:in:limit:stripsStopwords:)``
+///    has no parameter for it at all — so every confidence gate is cold by construction;
 /// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score;
 /// 3. the relevance score (exact/prefix/substring name hits, per-token coverage, length penalty,
 ///    preparation and form-specificity biases), then the name as a final tie-break;
@@ -176,29 +185,43 @@ public nonisolated enum FoodItemSearch {
         /// is assigned once in `init`, so the constant is concurrency-safe by construction.
         public static let empty = Index(foodItems: [])
 
-        fileprivate func matches(_ query: SearchQuery, limit: Int) -> [FoodItem] {
-            scoredMatches(query, limit: limit).map(\.foodItem)
+        fileprivate func matches(_ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date) -> [FoodItem] {
+            scoredMatches(query, limit: limit, history: history, now: now).map(\.foodItem)
         }
 
         /// Scores, ranks, floors and demotes — steps 1–5 of the ordering documented on
         /// ``FoodItemSearch``. `query` carries both the stopword-stripped tokens the gate and the
         /// scorer use and the full normalized text the brand lexicon and the dish heuristic read.
-        fileprivate func scoredMatches(_ query: SearchQuery, limit: Int) -> [(foodItem: FoodItem, score: Int)] {
+        ///
+        /// `history` has NO default here on purpose (fix 1.9): both call sites state which path they
+        /// are on, so `scoredResults`' cold guarantee is visible at the call site rather than inferred
+        /// from an omitted argument.
+        fileprivate func scoredMatches(
+            _ query: SearchQuery,
+            limit: Int,
+            history: FoodSearchHistory,
+            now: Date
+        ) -> [(foodItem: FoodItem, score: Int)] {
             let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(query.normalized)
             // Fix 1.8's BOTH floors, applied as part of scoring so a floored row never enters the
             // ranking: name-substring carriage (`carries`) and the score floor at `minimumBindScore`. Fix
             // 1.7a then reorders a bounded window of what survives (see `demotionWindow`), before
             // `limit`, so demotion can surface a row from below the fold.
+            // Fix 1.9's weight is resolved ONCE PER ROW here, not inside the comparator. A broad prefix
+            // hydrates up to `candidateFetchLimit` (10,000) rows, so a lookup inside `ranksAhead` would
+            // run O(n log n) times — a six-figure count of dictionary probes on a per-keystroke path —
+            // to answer a question with only n distinct answers.
             let ranked = entries
-                .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
+                .compactMap { entry -> (foodItem: FoodItem, score: Int, history: Int)? in
                     guard FoodItemSearch.carries(query.tokens, nameTokens: entry.nameTokens, name: entry.normalizedName),
                           let score = FoodItemSearch.score(entry, query: query),
                           score >= FoodItemSearch.minimumBindScore else { return nil }
-                    return (entry.foodItem, score)
+                    return (entry.foodItem, score, history.weight(for: entry.foodItem.id, now: now))
                 }
                 .sorted { first, second in
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
+                .map { (foodItem: $0.foodItem, score: $0.score) }
             let window = ranked.prefix(max(limit, FoodItemSearch.demotionWindow))
             let ordered = PreparedDishHeuristic.demotingDishes(scored: Array(window), forQuery: query.normalized)
             return Array(ordered.prefix(limit))
@@ -270,8 +293,18 @@ public nonisolated enum FoodItemSearch {
         )
     }
 
-    public static func results(for query: String, in foodItems: [FoodItem], limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
-        results(for: query, in: Index(foodItems: foodItems), limit: limit, stripsStopwords: stripsStopwords)
+    public static func results(
+        for query: String,
+        in foodItems: [FoodItem],
+        limit: Int = 6,
+        stripsStopwords: Bool = true,
+        history: FoodSearchHistory = .empty,
+        now: Date = Date()
+    ) -> [FoodItem] {
+        results(
+            for: query, in: Index(foodItems: foodItems), limit: limit,
+            stripsStopwords: stripsStopwords, history: history, now: now
+        )
     }
 
     /// - Parameter stripsStopwords: Whether fix 1.6's position-based stopword filter applies.
@@ -282,11 +315,21 @@ public nonisolated enum FoodItemSearch {
     ///   measured to reintroduce §29's hazard on the resolver surface: the sub-phrase "slices pizza"
     ///   became "pizza", and `two slices of pizza` lost every sliced-pizza row from its candidate
     ///   pool. Callers that pass a sub-phrase pass `false`.
-    public static func results(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [FoodItem] {
+    /// - Parameter history: research §26 fix 1.9's history tier. Defaults to
+    ///   ``FoodSearchHistory/empty``, so a caller that says nothing measures the cold pipeline.
+    ///   `FoodCatalog` passes a real profile ONLY on the typed-query surface — see its `results`.
+    public static func results(
+        for query: String,
+        in index: Index,
+        limit: Int = 6,
+        stripsStopwords: Bool = true,
+        history: FoodSearchHistory = .empty,
+        now: Date = Date()
+    ) -> [FoodItem] {
         // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
         // is answered with no results.
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.matches(prepared, limit: limit)
+        return index.matches(prepared, limit: limit, history: history, now: now)
     }
 
     /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item
@@ -296,9 +339,17 @@ public nonisolated enum FoodItemSearch {
     /// ``nameCarriesQuery(_:query:)``), so a caller's own `minimumBindScore` check now sits on top of
     /// a name-signal guarantee rather than being the only thing standing between a tag-only match and
     /// a logged meal.
+    ///
+    /// **There is deliberately NO `history` parameter (research §26 fix 1.9).** Every caller of this
+    /// method spends its output on a confidence decision — `MealResolutionService.bindConfidence`
+    /// re-scores whole item names through it, `FoundationFoodSelectionModel.deterministicIngredients`
+    /// re-derives binds through it, `DishTemplateLexicon` gates components on it. Those are the
+    /// mechanisms that decide whether a meal auto-commits or opens the review sheet, and the absence
+    /// of the parameter is what proves fix 1.9 cannot reach them: not a convention and not an omitted
+    /// argument, but a signature that will not accept the profile.
     public static func scoredResults(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.scoredMatches(prepared, limit: limit)
+        return index.scoredMatches(prepared, limit: limit, history: .empty, now: Date())
             .map { (item: $0.foodItem, score: $0.score) }
     }
 
@@ -332,16 +383,35 @@ public nonisolated enum FoodItemSearch {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The comparator: source priority, then brand-aware data-type priority, then score, then name.
+    /// The comparator: **history weight**, then source priority, then brand-aware data-type priority,
+    /// then score, then name.
     ///
-    /// Extracted from `scoredMatches` unchanged — data type still outranks the score, which is
-    /// research §26 fix 1.7 **option (b)**, NOT taken here. Fix 1.7a leaves this ordering alone and
+    /// The four lower keys are byte-unchanged — data type still outranks the score, which is
+    /// research §26 fix 1.7 **option (b)**, NOT taken here. Fix 1.7a leaves that ordering alone and
     /// reorders afterwards, so no search surface silently changes its provenance preference.
+    ///
+    /// **Fix 1.9 added the top key**, and its position is §14's published hierarchy: "From History"
+    /// is tier 1, above Custom and Common, because "most people frequently eat a lot of the same
+    /// foods". A single `Int` carries both halves of §26's prescription — membership (any weight > 0
+    /// beats weight 0) and ordering within the tier (`log(1 + count)` × recency decay, see
+    /// ``FoodSearchHistory/scaledWeight(count:lastLoggedAt:now:)``). Equal weights — including the
+    /// overwhelmingly common 0 vs 0 — fall straight through to the old first key, so an empty profile
+    /// makes this function behave exactly as it did before the fix.
+    ///
+    /// **Two rows can only reach this comparator by passing the gate and both of fix 1.8's floors**,
+    /// so history reorders answers; it never invents one. What history CANNOT do is reach a row
+    /// retrieval never fetched (fix 1.10's alias promotion can, by id, and that asymmetry is why the
+    /// two need different defences — see `FoodCatalog.promotingCorrection`).
+    ///
+    /// Each row arrives with its history weight already resolved (`history`, 0 for a food never
+    /// logged) rather than with the profile to look it up in — see `scoredMatches`, which resolves it
+    /// once per row instead of once per comparison.
     private static func ranksAhead(
-        _ first: (foodItem: FoodItem, score: Int),
-        _ second: (foodItem: FoodItem, score: Int),
+        _ first: (foodItem: FoodItem, score: Int, history: Int),
+        _ second: (foodItem: FoodItem, score: Int, history: Int),
         isBrandQuery: Bool
     ) -> Bool {
+        if first.history != second.history { return first.history > second.history }
         if first.foodItem.source != second.foodItem.source {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }

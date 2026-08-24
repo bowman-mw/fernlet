@@ -498,7 +498,7 @@ struct FoodSearchCorpusTests {
 
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
-        let empties = Self.corpus.filter { catalog.results(for: $0.query, limit: 1).isEmpty }
+        let empties = Self.corpus.filter { catalog.results(for: $0.query, limit: 1, context: .userTyped).isEmpty }
         #expect(empties.count == counts.zeroResults, "measured zero-result count: \(empties.count)")
         #expect(Set(empties.map(\.query)) == Set(Self.corpus.filter { $0.verdict == .zeroResults }.map(\.query)))
     }
@@ -740,7 +740,7 @@ struct FoodSearchCorpusTests {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
         for entry in Self.reviewBattery {
-            let top = catalog.results(for: entry.query, limit: 1).first?.name
+            let top = catalog.results(for: entry.query, limit: 1, context: .userTyped).first?.name
             #expect(top == entry.top, "top-1 moved for \"\(entry.query)\"")
         }
     }
@@ -871,14 +871,14 @@ struct FoodSearchCorpusTests {
         for (query, name) in [("grilled cheese", "Grilled cheese sandwich, NFS"),
                               ("chicken burrito bowl", "Burrito bowl, chicken")] {
             #expect(!PreparedDishHeuristic.queryWantsDish(query), "\"\(query)\" reads as an ingredient query")
-            let top = try #require(catalog.results(for: query, limit: 1).first)
+            let top = try #require(catalog.results(for: query, limit: 1, context: .userTyped).first)
             #expect(top.name == name)
             #expect(PreparedDishHeuristic.isPreparedDish(top), "…and it is a prepared dish, kept only by the score guard")
         }
 
         // Demoted: the dish scored no better than the ingredients under it, so it sank.
         for (query, sunk) in [("peanut butter", "Peanut butter and jelly sandwich"), ("avocado", "Sushi roll")] {
-            let top6 = catalog.results(for: query, limit: 6)
+            let top6 = catalog.results(for: query, limit: 6, context: .userTyped)
             #expect(!(top6.first.map(PreparedDishHeuristic.isPreparedDish) ?? true), "\"\(query)\" now leads with an ingredient")
             #expect(top6.first?.name.contains(sunk) == false)
         }
@@ -1003,13 +1003,13 @@ struct FoodSearchCorpusTests {
         let searchIsEmptyButResolverIsNot = ["chiken breast", "costco cheese pizza slice",
                                             "quest protein bar", "grilled salmon fillet"]
         for query in searchIsEmptyButResolverIsNot {
-            let searchCount = catalog.results(for: query, limit: 6).count
+            let searchCount = catalog.results(for: query, limit: 6, context: .userTyped).count
             let resolverCount = catalog.candidates(for: query, limit: 18).count
             #expect(searchCount == 0, "\"\(query)\" should still return nothing from search")
             #expect(resolverCount > 0, "\"\(query)\" should still return a resolver pool")
         }
         for query in ["chicken burrito bowl", "low fat greek yogurt"] {
-            let searchTop = catalog.results(for: query, limit: 1).first?.name
+            let searchTop = catalog.results(for: query, limit: 1, context: .userTyped).first?.name
             let resolverTop = catalog.candidates(for: query, limit: 18).first?.foodItem.name
             #expect(searchTop != resolverTop, "\"\(query)\": the two surfaces should still pick different foods")
         }
@@ -1021,7 +1021,7 @@ struct FoodSearchCorpusTests {
         // right trade, since the alternative cost `two slices of pizza` every sliced-pizza row in its
         // pool. The SEARCH surface still answers all three correctly.
         for query in ["peanut butter"] {
-            let searchTop = catalog.results(for: query, limit: 1).first?.name
+            let searchTop = catalog.results(for: query, limit: 1, context: .userTyped).first?.name
             let resolverTop = catalog.candidates(for: query, limit: 18).first?.foodItem.name
             #expect(searchTop != nil, "\"\(query)\" no longer returns nothing from search")
             #expect(searchTop == resolverTop, "\"\(query)\": the two surfaces now agree")
@@ -1029,7 +1029,7 @@ struct FoodSearchCorpusTests {
         // Not a count of the literal above (that would assert nothing): the corpus queries whose two
         // surfaces still disagree, computed live.
         let stillDiverging = Self.corpus.filter { corpusCase in
-            let searchTop = catalog.results(for: corpusCase.query, limit: 1).first?.name
+            let searchTop = catalog.results(for: corpusCase.query, limit: 1, context: .userTyped).first?.name
             let resolverTop = catalog.candidates(for: corpusCase.query, limit: 18).first?.foodItem.name
             return searchTop != resolverTop
         }
@@ -1138,9 +1138,9 @@ struct FoodSearchCorpusTests {
         // Without this guard all three assertions below would pass against the empty-catalog fallback.
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
-        #expect(catalog.results(for: "costco cheese pizza slice", limit: 6).isEmpty)
-        #expect(catalog.results(for: "kirkland protein bar", limit: 6).isEmpty)
-        #expect(catalog.results(for: "whole foods rotisserie chicken", limit: 6).isEmpty)
+        #expect(catalog.results(for: "costco cheese pizza slice", limit: 6, context: .userTyped).isEmpty)
+        #expect(catalog.results(for: "kirkland protein bar", limit: 6, context: .userTyped).isEmpty)
+        #expect(catalog.results(for: "whole foods rotisserie chicken", limit: 6, context: .userTyped).isEmpty)
     }
 
     /// The candidate set the SHIPPED source hands the scorer, per query — the pipeline's own half of

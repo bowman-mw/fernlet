@@ -1885,7 +1885,7 @@ enum CatalogTypeahead {
         }
         // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
         let hits = await Task.detached { [catalog] in
-            catalog.results(for: trimmed)
+            catalog.results(for: trimmed, context: .userTyped)
         }.value
         // Drop the result if this task was superseded while the query was running.
         guard !Task.isCancelled else { return nil }

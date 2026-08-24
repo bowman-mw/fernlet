@@ -111,6 +111,23 @@ repository purge runs late, widget files after that, then the proximity identity
 store's compaction last of all (before the preference reset, so the app's own preference-driven
 container reload cannot race it). See the numbered commentary inside `deleteAllData`.
 
+**One surface is deliberately absent from this table, and the auditor should know why: research §26
+fix 1.9's food-search history profile.** It ranks the foods this person has logged above everything
+else in the typed food search, so it looks like exactly the kind of per-user residue this document
+tracks — and §26's own risk column assumed it would be a stored per-`foodItemId` usage ledger needing
+a row here. It is not stored. `FoodSearchHistory` is DERIVED from `DiaryStore.recentMeals` — already
+in the synced snapshot, already cleared by the day-rows/blob row below — and held only as an
+in-memory snapshot inside the live `FoodCatalog`. There is no `UserDefaults` key, no field of its
+own, nothing on disk, and therefore no independent clear call to register in `wipeManifest`. The
+live in-memory copy is emptied by the `didSet` on `recentMeals`: `resetDiary()` assigns `[]`, which
+re-derives and republishes the empty profile in the same statement, closing the same "deleted but
+still there until relaunch" hazard the correction memory's explicit `setSearchAliases([:])` line
+closes — without a second call site that could drift out of step with the first. Two tests hold that
+shape: `FoodSearchHistoryStoreTests.aWipeCoolsTheCatalogInTheSameProcess` proves the live catalog
+really does stop promoting after a wipe, and `historyIsDerivedNotStored` pins the derivation/publisher
+topology plus the exact proposed `foodSearchHistory` defaults-key spelling. It is deliberately not a
+general proof against arbitrarily renamed storage.
+
 | Surface | Where it lives | Wiped by (token) |
 | --- | --- | --- |
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
