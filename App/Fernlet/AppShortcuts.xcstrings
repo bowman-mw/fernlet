@@ -209,6 +209,72 @@
           }
         }
       }
+    },
+    "Prepare my training summary in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepare my training summary in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Prepare a trainer summary in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepare a trainer summary in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Copy my training summary and prompt in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy my training summary and prompt in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Copy my trainer prompt in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy my trainer prompt in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Paste my workout plan in ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste my workout plan in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Bring my trainer plan into ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring my trainer plan into ${applicationName}"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

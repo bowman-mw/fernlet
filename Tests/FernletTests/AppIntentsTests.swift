@@ -30,6 +30,13 @@ final class AppIntentsTests {
         PendingIntentSheet.request(.journal)
         #expect(PendingIntentSheet.consume() == .journal)
         #expect(PendingIntentSheet.consume() == nil)
+
+        PendingIntentSheet.request(.trainerPrepareSummary)
+        #expect(PendingIntentSheet.consume() == .trainerPrepareSummary)
+        PendingIntentSheet.request(.trainerCopySummaryAndPrompt)
+        #expect(PendingIntentSheet.consume() == .trainerCopySummaryAndPrompt)
+        PendingIntentSheet.request(.trainerPastePlan)
+        #expect(PendingIntentSheet.consume() == .trainerPastePlan)
     }
 
     /// A token stranded past the expiry window (onboarding still up, app killed under a covering sheet,
@@ -89,6 +96,20 @@ final class AppIntentsTests {
         for phrase in phrases {
             #expect(phrase.contains("\\(.applicationName)"), "phrase omits the app name: \(phrase)")
         }
+    }
+
+    /// The IDE does not synchronize AppShortcuts.xcstrings, so every source phrase must be mirrored
+    /// by hand using the catalog's `${applicationName}` placeholder spelling.
+    @Test func appShortcutPhraseCatalogMatchesTheProvider() throws {
+        let source = try RepoRoot.source(Self.shortcutsSourcePath)
+        let expected = Set(Self.phraseLiterals(in: source).map {
+            $0.replacingOccurrences(of: "\\(.applicationName)", with: "${applicationName}")
+        })
+        let data = try Data(contentsOf: RepoRoot.url(Self.shortcutsCatalogPath))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try #require(json["strings"] as? [String: Any])
+        #expect(Set(strings.keys) == expected,
+                "AppShortcuts.xcstrings must contain exactly the provider's phrases")
     }
 
     /// `LogWaterIntent` gained a `bottles` parameter so a Voice Control or Shortcuts user can log a
@@ -181,6 +202,8 @@ final class AppIntentsTests {
 
     private static let shortcutsSourcePath = "App/Fernlet/FernletShortcuts.swift"
 
+    private static let shortcutsCatalogPath = "App/Fernlet/AppShortcuts.xcstrings"
+
     private static let intentsSourcePath = "App/Fernlet/FernletAppIntents.swift"
 
     private static let guidedIntentsSourcePath =
@@ -217,7 +240,8 @@ final class AppIntentsTests {
     private static let expectedIntentNames = [
         "LogWaterIntent", "LogMealIntent", "OpenJournalIntent",
         "NextCookingStepIntent", "RepeatCookingStepIntent",
-        "GuidedWorkoutMarkSetDoneIntent", "GuidedWorkoutSkipRestIntent"
+        "GuidedWorkoutMarkSetDoneIntent", "GuidedWorkoutSkipRestIntent",
+        "PrepareTrainerSummaryIntent", "CopyTrainerSummaryPromptIntent", "PasteTrainerPlanIntent"
     ]
 
     /// The type name from each `intent: SomeIntent(),` line. `AppShortcut` exposes no stored

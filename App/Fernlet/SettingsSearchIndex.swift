@@ -43,6 +43,7 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case privacyPolicy
     case safetyReporting
     case appLock
+    case sharing
     case nearbyFriends
     case periodSensitive
 }
@@ -469,16 +470,24 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: "Privacy & Data › Your data",
             route: .privacyData
         ),
-        // The coach toggles live on the trainer screen itself now (Move tab › Share, SETT-14).
-        // The route stays `.privacyData`: search can only push Settings destinations, the frozen
-        // "export" keyword pins every export hit to `.privacyData` (SettingsSearchIndexTests), and
-        // Privacy & Data still holds the neighbouring "Export my data" card. The breadcrumb tells
-        // the user where the feature actually lives.
+        // Sharing settings
         SettingsSearchEntry(
             title: "Share with a trainer",
-            keywords: ["trainer", "coach", "share", "nutritionist", "trainer export", "export"],
-            breadcrumb: "Move tab › Share with a trainer",
-            route: .privacyData
+            keywords: ["trainer", "coach", "share", "nutritionist", "trainer summary"],
+            breadcrumb: "Sharing settings",
+            route: .sharing
+        ),
+        SettingsSearchEntry(
+            title: "Manual plan exchange",
+            keywords: ["copy prompt", "paste plan", "ai plan", "coach exchange", "manual exchange"],
+            breadcrumb: "Sharing settings",
+            route: .sharing
+        ),
+        SettingsSearchEntry(
+            title: "Also include in trainer summaries",
+            keywords: ["summary contents", "goal", "sleep", "sickness", "wellbeing", "trainer options"],
+            breadcrumb: "Sharing settings",
+            route: .sharing
         ),
         SettingsSearchEntry(
             title: "Delete everything",

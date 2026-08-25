@@ -19,6 +19,7 @@ import FernletUI
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
+    @Binding var trainerExportLaunchAction: TrainerExportLaunchAction?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @State private var path = NavigationPath()
@@ -29,6 +30,9 @@ struct MoveView: View {
     // because it is now two-way — a plan comes back through it — and a plan belongs next to the
     // plans, not next to the data-export controls.
     @State private var showingTrainerShare = false
+    /// Captured before clearing the root handoff so the presented trainer view receives one stable
+    /// action for its lifetime.
+    @State private var presentedTrainerAction: TrainerExportLaunchAction?
     @State private var progressPhotos: [ProgressPhotoRecord] = []
     // Surfaced when a progress-photo capture couldn't be sealed to disk (fail-closed store returned nil):
     // the photo would otherwise vanish silently. A clear per-capture alert, never a silent drop.
@@ -124,7 +128,10 @@ struct MoveView: View {
                 // beside planning one, not in the tab header. The header slot it freed
                 // goes to the trainer/coach handoff, which is the tab's other top-level
                 // action and previously sat in a card halfway down the scroll.
-                HeaderActionButton(title: "Share") { showingTrainerShare = true }
+                HeaderActionButton(title: "Share") {
+                    presentedTrainerAction = nil
+                    showingTrainerShare = true
+                }
                     .accessibilityIdentifier("move.trainerShare")
                     .accessibilityLabel("Share with a trainer")
                     // T2-12: the label is longer than the drawn word, so Voice Control's spoken
@@ -392,6 +399,7 @@ struct MoveView: View {
             refreshAllDays()
             progressPhotos = store.progressPhotoRecords()
             store.reconcileGuidedRunFromAppGroup()
+            openRequestedTrainerExportIfNeeded()
         }
         .alert("Couldn't save this photo", isPresented: $showPhotoSaveFailedAlert) {
             Button("OK", role: .cancel) {}
@@ -409,8 +417,10 @@ struct MoveView: View {
             // calendar and "Today's movement" read from the `allDays` snapshot — refresh or the
             // new days stay invisible until some other mutation happens to bump it.
             refreshAllDays()
+            presentedTrainerAction = nil
+            openRequestedTrainerExportIfNeeded()
         }) {
-            TrainerExportView(store: store)
+            TrainerExportView(store: store, initialAction: presentedTrainerAction)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -433,7 +443,17 @@ struct MoveView: View {
         }
         .onChange(of: store.day.workouts.count) { refreshAllDays() }
         .onChange(of: store.day.plannedWorkouts.count) { refreshAllDays() }
+        .onChange(of: trainerExportLaunchAction?.rawValue) { openRequestedTrainerExportIfNeeded() }
         .onChange(of: scenePhase) { _, phase in handleSceneActive(phase) }
+    }
+
+    /// Consumes a root Shortcut handoff only when this view can present it. A request arriving while
+    /// Share is already open remains pending and is picked up by that sheet's on-dismiss path.
+    private func openRequestedTrainerExportIfNeeded() {
+        guard !showingTrainerShare, let action = trainerExportLaunchAction else { return }
+        trainerExportLaunchAction = nil
+        presentedTrainerAction = action
+        showingTrainerShare = true
     }
 }
 

@@ -66,6 +66,9 @@ struct ContentView: View {
     @State private var tabBarReservedHeight: CGFloat = 0
     @State private var tabResetTokens: [FernletTab: Int] = Dictionary(uniqueKeysWithValues: FernletTab.allCases.map { ($0, 0) })
     @State private var activeSheet: FernletSheet?
+    /// Foreground trainer Shortcuts hand their requested first action to Move's existing local
+    /// presenter, preserving its post-import calendar refresh.
+    @State private var trainerExportLaunchAction: TrainerExportLaunchAction?
     @State private var mealLogNotification: MealLogNotification?
     /// The just-logged meal the toast's "Adjust" action opens the correction sheet for — a local
     /// `.sheet(item:)` slot beside the `activeSheet` router (the toast fires only after the logging
@@ -459,6 +462,9 @@ struct ContentView: View {
             switch target {
             case .meal: activeSheet = .meal
             case .journal: activeSheet = .journal
+            case .trainerPrepareSummary: openTrainerExport(.prepareSummary)
+            case .trainerCopySummaryAndPrompt: openTrainerExport(.copySummaryAndPrompt)
+            case .trainerPastePlan: openTrainerExport(.pastePlan)
             }
             return
         }
@@ -469,6 +475,12 @@ struct ContentView: View {
         case "firstAid": activeSheet = .firstAid(nil)
         default: break
         }
+    }
+
+    /// Lands foreground trainer Shortcuts on Move and presents the same handoff UI as its Share pill.
+    private func openTrainerExport(_ action: TrainerExportLaunchAction) {
+        selectedTab = .move
+        trainerExportLaunchAction = action
     }
 
     private func resetTokenBinding(for tab: FernletTab) -> Binding<Int> {
@@ -629,7 +641,13 @@ struct ContentView: View {
             .tabPage(.home)
             FoodView(store: store, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
                 .tabPage(.food)
-            MoveView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .move))
+            MoveView(
+                store: store,
+                activeSheet: $activeSheet,
+                trainerExportLaunchAction: $trainerExportLaunchAction,
+                isTabBarCompact: $isHomeTabBarCompact,
+                tabResetToken: resetTokenBinding(for: .move)
+            )
                 .tabPage(.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tabPage(.social)

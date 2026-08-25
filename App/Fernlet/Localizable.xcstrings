@@ -947,9 +947,6 @@
     "Adds bottles of water to today's Fernlet diary." : {
 
     },
-    "Adds one bottle of water to today's Fernlet diary." : {
-
-    },
     "Adds two things above: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in." : {
 
     },
@@ -1321,6 +1318,9 @@
     "Change selection" : {
 
     },
+    "Change what's included in Settings › Sharing." : {
+
+    },
     "Change what's included under Sharing settings, below." : {
 
     },
@@ -1510,6 +1510,9 @@
     "Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying." : {
 
     },
+    "Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything." : {
+
+    },
     "Copied — copy again" : {
 
     },
@@ -1520,6 +1523,9 @@
 
     },
     "Copy summary + prompt" : {
+
+    },
+    "Copy training summary and prompt" : {
 
     },
     "Copy your training summary?" : {
@@ -2170,16 +2176,10 @@
     "Fernlet can also delete the entries it wrote to Apple Health — that's the second button below. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app." : {
 
     },
-    "Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on." : {
-
-    },
     "Fernlet can't undo this." : {
 
     },
     "Fernlet companion" : {
-
-    },
-    "Fernlet companion, %@" : {
 
     },
     "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
@@ -2747,6 +2747,9 @@
     "Lets friends see you're around. Hearts and vibe need this on." : {
 
     },
+    "Lets you copy a training summary and prompt for an AI assistant, then paste its workout plan back into Fernlet." : {
+
+    },
     "Letting it go…" : {
 
     },
@@ -2810,9 +2813,6 @@
     "Log & save" : {
 
     },
-    "Log a bottle of water" : {
-
-    },
     "Log a meal" : {
 
     },
@@ -2861,9 +2861,6 @@
           }
         }
       }
-    },
-    "Logged a bottle of water." : {
-
     },
     "Logged once" : {
 
@@ -2921,6 +2918,9 @@
 
     },
     "Manual plan exchange" : {
+
+    },
+    "Manual plan exchange is off" : {
 
     },
     "Mark %@ complete" : {
@@ -3274,9 +3274,6 @@
     "No worries — you can add a photo of the barcode, or just enter it by hand." : {
 
     },
-    "None" : {
-
-    },
     "None logged" : {
 
     },
@@ -3460,10 +3457,19 @@
     "Opens %@ straight away" : {
 
     },
+    "Opens Fernlet and prepares a trainer summary for sharing." : {
+
+    },
     "Opens Fernlet to a new journal entry." : {
 
     },
+    "Opens Fernlet to confirm copying a training summary and prompt." : {
+
+    },
     "Opens Fernlet to log a meal." : {
+
+    },
+    "Opens Fernlet to paste and review a workout plan." : {
 
     },
     "Opens calm tools: breathing, grounding, and the worry box" : {
@@ -3564,6 +3570,9 @@
 
     },
     "Paste the reply" : {
+
+    },
+    "Paste workout plan" : {
 
     },
     "Pasted in by you — Fernlet can't check who wrote this, so read it before you accept." : {
@@ -3729,6 +3738,9 @@
 
     },
     "Prepare summary" : {
+
+    },
+    "Prepare training summary" : {
 
     },
     "Preparing the plan review" : {
@@ -4817,9 +4829,6 @@
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
 
     },
-    "Tap to interact. Press and hold to edit." : {
-
-    },
     "Tap to log it again with today's time." : {
 
     },
@@ -4910,10 +4919,10 @@
     "These are optional except age. Fernlet never asks for weight goals." : {
 
     },
-    "These aren't counted in the macros below. Adjust the numbers to include them, or log the meal without them." : {
+    "These body photos sit behind your Fernlet lock. Unlock to see your timeline." : {
 
     },
-    "These body photos sit behind your Fernlet lock. Unlock to see your timeline." : {
+    "These choices apply to every summary prepared from Move or Shortcuts." : {
 
     },
     "These choices apply to every summary this screen prepares." : {
@@ -5085,6 +5094,12 @@
     "Train here" : {
 
     },
+    "Trainer summaries" : {
+
+    },
+    "Trainer summaries and manual plan exchange" : {
+
+    },
     "Training here" : {
 
     },
@@ -5101,6 +5116,9 @@
 
     },
     "Tucked away." : {
+
+    },
+    "Turn it on in Settings › Sharing to copy a summary or paste a plan." : {
 
     },
     "Turn off" : {

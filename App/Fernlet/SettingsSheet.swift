@@ -313,6 +313,8 @@ struct SettingsSheet: View {
                 .environment(lockService)
                 .fernletLockGate(scope: .appLockSettings, active: lockService.state != .notConfigured)
                 .environment(lockService)
+        case .sharing:
+            settingsDestination(title: "Sharing settings") { sharingSettingsTab }
         case .nearbyFriends:
             NearbyFriendsSettingsView(store: store)
         case .periodSensitive:
@@ -434,6 +436,8 @@ struct SettingsSheet: View {
         Section {
             hubLink("Privacy & Data", subtitle: Text("Storage, backups, export, delete"), .privacyData)
                 .accessibilityIdentifier("settings.row.privacyData")
+            hubLink("Sharing settings", subtitle: Text("Trainer summaries and manual plan exchange"), .sharing)
+                .accessibilityIdentifier("settings.row.sharing")
             hubLink("App lock", .appLock)
                 .accessibilityIdentifier("settings.row.appLock")
             hubLink("Safety & reporting", .safetyReporting)
@@ -1091,6 +1095,59 @@ struct SettingsSheet: View {
             bodyAndPreferencesSection
             hydrationSection
             remindersSection
+        }
+    }
+
+    /// Trainer-summary contents and the manual clipboard/paste exchange gate. These settings moved
+    /// out of Move › Share so the action screen stays focused on preparing and transferring data.
+    private var sharingSettingsTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Manual plan exchange")
+            manualPlanExchangeCard
+            SectionLabel("Trainer summaries")
+            trainerSummaryOptionsCard
+        }
+    }
+
+    private var manualPlanExchangeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            hubToggle("Manual plan exchange", isOn: settingsBinding(\.coachExchangeEnabled))
+            Text("Lets you copy a training summary and prompt for an AI assistant, then paste its workout plan back into Fernlet.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Text("Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
+    }
+
+    private var trainerSummaryOptionsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Also include in trainer summaries")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+            trainerSummaryToggles
+            Text("These choices apply to every summary prepared from Move or Shortcuts.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
+    }
+
+    @ViewBuilder
+    private var trainerSummaryToggles: some View {
+        Group {
+            hubToggle("Your goal", isOn: settingsBinding(\.trainerExportIncludesGoal))
+            hubToggle("Hydration", isOn: settingsBinding(\.trainerExportIncludesHydration))
+            hubToggle("Sleep summaries", isOn: settingsBinding(\.trainerExportIncludesSleep))
+            hubToggle("Days you were unwell", isOn: settingsBinding(\.trainerExportIncludesSickness))
+            hubToggle("Wellbeing score", isOn: settingsBinding(\.trainerExportIncludesWellbeing))
         }
     }
 

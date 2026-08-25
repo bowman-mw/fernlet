@@ -173,6 +173,48 @@ struct OpenJournalIntent: AppIntent {
     }
 }
 
+/// Opens the trainer handoff and prepares its temporary summary file. The file remains inside
+/// Fernlet until the user explicitly opens the system share sheet.
+struct PrepareTrainerSummaryIntent: AppIntent {
+    static let title: LocalizedStringResource = "Prepare training summary"
+    static let description = IntentDescription("Opens Fernlet and prepares a trainer summary for sharing.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        PendingIntentSheet.request(.trainerPrepareSummary)
+        return .result()
+    }
+}
+
+/// Opens the trainer handoff at its existing clipboard privacy confirmation. The intent never writes
+/// health data to the pasteboard in the background.
+struct CopyTrainerSummaryPromptIntent: AppIntent {
+    static let title: LocalizedStringResource = "Copy training summary and prompt"
+    static let description = IntentDescription("Opens Fernlet to confirm copying a training summary and prompt.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        PendingIntentSheet.request(.trainerCopySummaryAndPrompt)
+        return .result()
+    }
+}
+
+/// Opens the foreground paste-and-review flow. Import remains impossible until the user supplies a
+/// plan and approves its safety review in the app.
+struct PasteTrainerPlanIntent: AppIntent {
+    static let title: LocalizedStringResource = "Paste workout plan"
+    static let description = IntentDescription("Opens Fernlet to paste and review a workout plan.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        PendingIntentSheet.request(.trainerPastePlan)
+        return .result()
+    }
+}
+
 /// A tiny persisted deep-link for foreground intents: the intent records which sheet it wants, the app
 /// reads and clears it when it becomes active.
 ///
@@ -191,6 +233,9 @@ nonisolated enum PendingIntentSheet {
     enum Target: String {
         case meal
         case journal
+        case trainerPrepareSummary
+        case trainerCopySummaryAndPrompt
+        case trainerPastePlan
     }
 
     /// Posted right after `request(_:)` writes the token, so a resident ContentView consumes it on the

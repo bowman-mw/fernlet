@@ -8,7 +8,7 @@ import AppIntents
 ///
 /// **The system caps a provider at 10 shortcuts** and fails the extras at *runtime*, not build
 /// time — `AppIntentsTests` pins the count, the intent list, and the phrase shape, so a silent
-/// de-registration can never ship. Seven of ten are used today.
+/// de-registration can never ship. All ten slots are used today.
 ///
 /// **Every registration is written out literally in ``appShortcuts``, and must stay that way** — but
 /// not for the reason an earlier version of this comment gave. The measured behaviour (probed
@@ -44,43 +44,35 @@ struct FernletShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: LogWaterIntent(),
-            phrases: ["Log water in \(.applicationName)",
-                      "Log a bottle of water in \(.applicationName)",
+            phrases: ["Log water in \(.applicationName)", "Log a bottle of water in \(.applicationName)",
                       "Add water to \(.applicationName)"],
-            shortTitle: "Log water",
-            systemImageName: "drop.fill"
+            shortTitle: "Log water", systemImageName: "drop.fill"
         )
         AppShortcut(
             intent: LogMealIntent(),
             phrases: ["Log a meal in \(.applicationName)",
                       "Log food in \(.applicationName)"],
-            shortTitle: "Log a meal",
-            systemImageName: "fork.knife"
+            shortTitle: "Log a meal", systemImageName: "fork.knife"
         )
         AppShortcut(
             intent: OpenJournalIntent(),
             phrases: ["Write in my \(.applicationName) journal",
                       "Open my \(.applicationName) journal"],
-            shortTitle: "Write in journal",
-            systemImageName: "book.closed"
+            shortTitle: "Write in journal", systemImageName: "book.closed"
         )
         // F5 cooking mode — the hands-free voice path for the recipe walker, so a cook with messy
         // hands can advance or re-fire the step timer without touching the phone.
         AppShortcut(
             intent: NextCookingStepIntent(),
-            phrases: ["Next step in \(.applicationName)",
-                      "Next cooking step in \(.applicationName)",
+            phrases: ["Next step in \(.applicationName)", "Next cooking step in \(.applicationName)",
                       "\(.applicationName) next step"],
-            shortTitle: "Next cooking step",
-            systemImageName: "chevron.right"
+            shortTitle: "Next cooking step", systemImageName: "chevron.right"
         )
         AppShortcut(
             intent: RepeatCookingStepIntent(),
-            phrases: ["Repeat step in \(.applicationName)",
-                      "Repeat cooking step in \(.applicationName)",
+            phrases: ["Repeat step in \(.applicationName)", "Repeat cooking step in \(.applicationName)",
                       "Restart my \(.applicationName) timer"],
-            shortTitle: "Repeat cooking step",
-            systemImageName: "arrow.counterclockwise"
+            shortTitle: "Repeat cooking step", systemImageName: "arrow.counterclockwise"
         )
         // Guided workout (T2-9) — the same hands-free argument the cooking pair was accepted on.
         // Someone mid-set, or anyone who cannot reliably hit a small button on a Lock Screen that
@@ -88,19 +80,35 @@ struct FernletShortcuts: AppShortcutsProvider {
         // GuidedWorkoutIntentRunner, so a phrase spoken in the wrong phase is a harmless no-op.
         AppShortcut(
             intent: GuidedWorkoutMarkSetDoneIntent(),
-            phrases: ["Done set in \(.applicationName)",
-                      "Mark my \(.applicationName) set done",
+            phrases: ["Done set in \(.applicationName)", "Mark my \(.applicationName) set done",
                       "Finish my set in \(.applicationName)"],
-            shortTitle: "Done set",
-            systemImageName: "checkmark"
+            shortTitle: "Done set", systemImageName: "checkmark"
         )
         AppShortcut(
             intent: GuidedWorkoutSkipRestIntent(),
-            phrases: ["Skip rest in \(.applicationName)",
-                      "Skip my \(.applicationName) rest",
+            phrases: ["Skip rest in \(.applicationName)", "Skip my \(.applicationName) rest",
                       "\(.applicationName) skip rest"],
-            shortTitle: "Skip rest",
-            systemImageName: "forward.fill"
+            shortTitle: "Skip rest", systemImageName: "forward.fill"
+        )
+        // Trainer handoff — foreground-only so summary creation, clipboard consent, paste, and plan
+        // review all stay behind the app's existing visible privacy boundary.
+        AppShortcut(
+            intent: PrepareTrainerSummaryIntent(),
+            phrases: ["Prepare my training summary in \(.applicationName)",
+                      "Prepare a trainer summary in \(.applicationName)"],
+            shortTitle: "Prepare summary", systemImageName: "doc.badge.plus"
+        )
+        AppShortcut(
+            intent: CopyTrainerSummaryPromptIntent(),
+            phrases: ["Copy my training summary and prompt in \(.applicationName)",
+                      "Copy my trainer prompt in \(.applicationName)"],
+            shortTitle: "Copy summary + prompt", systemImageName: "doc.on.doc"
+        )
+        AppShortcut(
+            intent: PasteTrainerPlanIntent(),
+            phrases: ["Paste my workout plan in \(.applicationName)",
+                      "Bring my trainer plan into \(.applicationName)"],
+            shortTitle: "Paste a plan", systemImageName: "square.and.arrow.down"
         )
     }
 }

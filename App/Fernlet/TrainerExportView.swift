@@ -7,11 +7,17 @@ import UIKit
 import UniformTypeIdentifiers
 #endif
 
+/// The actions a foreground App Shortcut can request when it opens the trainer handoff.
+nonisolated enum TrainerExportLaunchAction: String {
+    case prepareSummary
+    case copySummaryAndPrompt
+    case pastePlan
+}
+
 /// The Trainer / Nutritionist export screen (Phase 7), and — when the manual coach exchange is switched
 /// on — the two-way coach handoff. The user prepares a curated summary to hand to a trainer or
-/// nutritionist; the optional categories and the coach-exchange gate are configured right here, in
-/// the Sharing settings card (relocated from Settings › Goal & nutrition in the 2026-08-21
-/// restructure, SETT-14). Nothing leaves the device until the user shares it.
+/// nutritionist; the optional categories and the coach-exchange gate live in Settings › Sharing.
+/// Nothing leaves the device until the user shares it.
 ///
 /// A coach is NOT a friend, so this deliberately does NOT ride the friend mesh. In-person sharing
 /// over the dedicated `fernlet-coach` trainer channel (to a coach running the separate coaching app)
@@ -23,6 +29,7 @@ import UniformTypeIdentifiers
 /// the coach mesh ships, the transport under them changes and this screen's consent model doesn't.
 struct TrainerExportView: View {
     var store: FernletStore
+    var initialAction: TrainerExportLaunchAction? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var preparedFile: URL?
@@ -42,6 +49,10 @@ struct TrainerExportView: View {
     /// the second sheet silently never appears; handing off in `onDismiss` serializes them.
     @State private var pendingPlan: CoachPlan?
     @State private var importResult: CoachPlanImportResult?
+    /// Prevents a Shortcut-requested action from firing again when a child sheet dismisses and this
+    /// view appears a second time.
+    @State private var didRunInitialAction = false
+    @State private var showCoachExchangeDisabled = false
 
     /// Every sheet this screen presents, as ONE `.sheet(item:)`.
     ///
@@ -111,9 +122,7 @@ struct TrainerExportView: View {
         )
     }
 
-    /// The scrolling body of the screen: intro, prepare/share, the coach-exchange cards, and the
-    /// sharing settings that used to hide under Settings › Goal & nutrition (SETT-14: the toggles
-    /// now live on the surface they govern).
+    /// The scrolling body of the screen: intro, prepare/share, and the optional coach-exchange cards.
     private var sections: some View {
         VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
             intro
@@ -122,7 +131,6 @@ struct TrainerExportView: View {
                 aiCoachCard
                 importCard
             }
-            sharingSettingsCard
             comingSoonNote
         }
         .padding(20)
@@ -157,12 +165,7 @@ struct TrainerExportView: View {
                     // it — on both the shared and cancelled paths — rather than letting it linger
                     // until the next sweep. A failed delete keeps the file on screen so it can be
                     // retried. Only THIS file: a full data export may be in flight in Privacy & Data.
-                    onShareFinished: { url in
-                        if discardExportedFile(at: url) {
-                            preparedFile = nil
-                            didShare = true
-                        }
-                    },
+                    onShareFinished: handleShareFinished,
                     onDecoded: { plan in pendingPlan = plan },
                     onImported: { result in importResult = result }
                 )
@@ -187,13 +190,45 @@ struct TrainerExportView: View {
             .onAppear { refreshPreviewCount() }
             // Settings changed elsewhere → the prepared file no longer matches what this screen would
             // export, so delete it rather than leaving a stale plaintext summary shareable.
-            .onChange(of: trainerExportOptions) { _, _ in
-                discardPreparedFile()
-                refreshPreviewCount()
-            }
+            .onChange(of: trainerExportOptions) { _, _ in handleExportOptionsChange() }
             .alert("Couldn't prepare the summary", isPresented: $prepareError) {
                 Button("OK", role: .cancel) {}
             } message: { Text("Please try again.") }
+            .alert("Manual plan exchange is off", isPresented: $showCoachExchangeDisabled) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Turn it on in Settings › Sharing to copy a summary or paste a plan.")
+            }
+            .task { runInitialActionIfNeeded() }
+        }
+    }
+
+    private func handleShareFinished(_ url: URL) {
+        guard discardExportedFile(at: url) else { return }
+        preparedFile = nil
+        didShare = true
+    }
+
+    private func handleExportOptionsChange() {
+        discardPreparedFile()
+        refreshPreviewCount()
+    }
+
+    /// Runs the one action requested by Shortcuts after the foreground sheet has mounted. Copying
+    /// still stops at the existing confirmation, and the two manual-exchange actions never bypass
+    /// their Settings gate.
+    private func runInitialActionIfNeeded() {
+        guard !didRunInitialAction, let initialAction else { return }
+        didRunInitialAction = true
+        switch initialAction {
+        case .prepareSummary:
+            prepareSummary()
+        case .copySummaryAndPrompt:
+            guard coachExchangeEnabled else { showCoachExchangeDisabled = true; return }
+            showCopyConfirm = true
+        case .pastePlan:
+            guard coachExchangeEnabled else { showCoachExchangeDisabled = true; return }
+            sheet = .paste
         }
     }
 
@@ -215,6 +250,15 @@ struct TrainerExportView: View {
             return false
         }
         return true
+    }
+
+    /// Builds the same temporary plaintext file as the visible Prepare summary button.
+    private func prepareSummary() {
+        guard let url = store.writeTrainerExportFile(options: trainerExportOptions) else {
+            prepareError = true
+            return
+        }
+        preparedFile = url
     }
 
     /// Puts the prompt + data blob on the clipboard, after the user has confirmed the alert.
@@ -303,11 +347,7 @@ struct TrainerExportView: View {
                 .accessibilityIdentifier("trainer.share")
             } else {
                 Button {
-                    if let url = store.writeTrainerExportFile(options: trainerExportOptions) {
-                        preparedFile = url
-                    } else {
-                        prepareError = true
-                    }
+                    prepareSummary()
                 } label: {
                     // "Share again" after a completed share: the button reverting to its untouched
                     // label read as the summary having been lost, when what happened is that the
@@ -363,9 +403,7 @@ struct TrainerExportView: View {
                     ForEach(includedLines, id: \.self) { line in
                         bullet(line)
                     }
-                    // The include toggles moved onto THIS screen (Sharing settings, below) in the
-                    // 2026-08-21 restructure — no more pointing at a Settings page.
-                    Text("Change what's included under Sharing settings, below.")
+                    Text("Change what's included in Settings › Sharing.")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
@@ -452,67 +490,6 @@ struct TrainerExportView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("trainer.pastePlan")
         }
-    }
-
-    /// The relocated Coach settings (2026-08-21, SETT-14): the manual-plan-exchange gate, its two
-    /// honesty disclosures, and the five optional trainer-summary categories — hosted on the
-    /// surface they govern instead of under a nutrition heading in Settings. Every toggle writes
-    /// through ``settingsBinding(_:)`` so the change is durable the moment it is made.
-    private var sharingSettingsCard: some View {
-        card {
-            cardTitle("Sharing settings")
-            Toggle("Manual plan exchange", isOn: settingsBinding(\.coachExchangeEnabled))
-                .font(.fernlet(.label))
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-                .accessibilityIdentifier("trainer.coachExchangeToggle")
-            Text("Adds two things above: copying your training summary as text so you can paste it to an AI assistant, and pasting a workout plan back in.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-            // Said plainly and unprompted. A pasted plan carries no signature, so the review
-            // screen is the only thing standing between it and the user's week — and the copy
-            // step puts plaintext health data into another app's hands by design.
-            Text("Copied text leaves Fernlet the moment you paste it elsewhere, and a pasted plan isn't from a verified coach — Fernlet shows you every day of it before adding anything. This is an early feature; sharing in person with the Fernlet Coach app will replace the copying.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-            Divider().overlay(Color.bark.opacity(0.08))
-            Text("Also include in trainer summaries")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
-            includeToggles
-            Text("These choices apply to every summary this screen prepares.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// The five optional summary categories.
-    @ViewBuilder
-    private var includeToggles: some View {
-        Group {
-            Toggle("Your goal", isOn: settingsBinding(\.trainerExportIncludesGoal))
-            Toggle("Hydration", isOn: settingsBinding(\.trainerExportIncludesHydration))
-            Toggle("Sleep summaries", isOn: settingsBinding(\.trainerExportIncludesSleep))
-            Toggle("Days you were unwell", isOn: settingsBinding(\.trainerExportIncludesSickness))
-            Toggle("Wellbeing score", isOn: settingsBinding(\.trainerExportIncludesWellbeing))
-        }
-        .font(.fernlet(.label))
-        .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-    }
-
-    /// A binding onto one settings field that also **schedules the save** — `FernletSettings` has
-    /// no `didSet`, so a bare keypath binding would mutate the blob and wait for some other change
-    /// to persist it (the SettingsSheet precedent).
-    private func settingsBinding<Value>(_ keyPath: WritableKeyPath<FernletSettings, Value>) -> Binding<Value> {
-        Binding(
-            get: { store.settings[keyPath: keyPath] },
-            set: { newValue in
-                store.settings[keyPath: keyPath] = newValue
-                store.scheduleSnapshotSave()
-            }
-        )
     }
 
     private var comingSoonNote: some View {
