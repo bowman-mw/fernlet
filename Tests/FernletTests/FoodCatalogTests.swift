@@ -127,6 +127,41 @@ struct FoodCatalogTests {
         #expect(FoodItemSearch.nameCarriesQuery("Rolled oats", query: "oats"))
     }
 
+    // MARK: - Bounded typed partial matching
+
+    @Test func partialFallbackIsTypedOnlyAndDoesNotReachConfidence() throws {
+        let chicken = Self.sampleItem(name: "Chicken breast, roasted", category: "Poultry", tags: ["chicken"])
+        let catalog = FoodCatalog(source: try buildSQLiteSource([chicken]))
+        let query = "chicken kumquat"
+
+        // Normal prefix-AND has no result. The typed surface may relax one token, but no machine
+        // consumer or confidence caller can treat the relaxed result as a bindable match.
+        #expect(catalog.results(for: query, limit: 6, context: .userTyped).map(\.id) == [chicken.id])
+        #expect(catalog.results(for: query, limit: 6, context: .machineGenerated).isEmpty)
+        #expect(catalog.scoredResults(for: query).isEmpty)
+    }
+
+    @Test func partialFallbackNeverDisplacesAnExactANDResult() throws {
+        let exact = Self.sampleItem(name: "Chicken kumquat", category: "Poultry", tags: ["chicken"])
+        let chicken = Self.sampleItem(name: "Chicken breast, roasted", category: "Poultry", tags: ["chicken"])
+        let catalog = FoodCatalog(source: try buildSQLiteSource([chicken, exact]))
+
+        #expect(catalog.results(for: "chicken kumquat", limit: 6, context: .userTyped).map(\.id) == [exact.id])
+    }
+
+    @Test func partialFallbackVariantsAndSourceFetchesAreBounded() throws {
+        #expect(FoodItemSearch.partialQueryVariants(in: "chicken kumquat").count == 2)
+        #expect(FoodItemSearch.partialQueryVariants(in: "chicken kumquat roasted").count == 3)
+        #expect(FoodItemSearch.partialQueryVariants(in: "chicken kumquat roasted fresh").isEmpty)
+        #expect(FoodItemSearch.partialQueryVariants(in: "chicken").isEmpty)
+
+        let chickens = (0..<30).map { index in
+            Self.sampleItem(name: "Chicken sample \(index)", category: "Poultry", tags: ["chicken"])
+        }
+        let source = try buildSQLiteSource(chickens)
+        #expect(source.candidates(forQuery: "chicken", stripsStopwords: true, limit: 24).count == 24)
+    }
+
     @Test func formSpecificityBiasSurvivesSQLitePath() throws {
         // "egg" should prefer whole egg over "egg white" — the scorer's form bias still applies
         // because ranking happens in Swift over the hydrated candidates.

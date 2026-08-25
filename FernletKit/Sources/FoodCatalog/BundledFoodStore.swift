@@ -130,6 +130,9 @@ public nonisolated protocol BundledFoodSource: Sendable {
     ///   assumption because the two sides silently disagreeing is a measured hazard, not a
     ///   hypothetical — see ``SQLiteBundledFoodSource/candidates(forQuery:stripsStopwords:)``.
     func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem]
+    /// The bounded form used only by partial matching. SQLite overrides it so a fallback variant
+    /// cannot hydrate the normal 10,000-row cap before the scorer trims it.
+    func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem]
     func item(id: UUID) -> FoodItem?
     func items(ids: [UUID]) -> [FoodItem]
     func exactMatch(normalizedName: String) -> FoodItem?
@@ -144,6 +147,11 @@ public extension BundledFoodSource {
     /// Protocol requirements cannot carry default arguments, so the default lives here.
     func candidates(forQuery query: String) -> [FoodItem] {
         candidates(forQuery: query, stripsStopwords: true)
+    }
+
+    func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
+        guard limit > 0 else { return [] }
+        return Array(candidates(forQuery: query, stripsStopwords: stripsStopwords).prefix(limit))
     }
 }
 
@@ -249,6 +257,11 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     ///   have fitted with room to spare. Fix 2.3 (indexing `brand_source`) pushes thousands more
     ///   branded rows through the same gate and makes the arithmetic worse.
     public func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] {
+        candidates(forQuery: query, stripsStopwords: stripsStopwords, limit: candidateCap)
+    }
+
+    public func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
+        guard limit > 0 else { return [] }
         let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
         guard !tokens.isEmpty else { return [] }
         // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly — including the
@@ -282,10 +295,11 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         // applies the final, brand-aware ranking over the hydrated candidates.
         let priorityOrder = skipPriorityOrder ? "" :
             "ORDER BY CASE data_type WHEN 'foundation' THEN 5 WHEN 'survey' THEN 4 WHEN 'srLegacy' THEN 3 WHEN 'branded' THEN 2 WHEN 'restaurant' THEN 1 ELSE 0 END DESC, food_id ASC "
+        let boundedLimit = min(limit, candidateCap)
         let sql = """
         SELECT \(selectColumns) FROM food \
         WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
-        \(priorityOrder)LIMIT \(candidateCap);
+        \(priorityOrder)LIMIT \(boundedLimit);
         """
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }
     }
@@ -437,6 +451,11 @@ public nonisolated struct InMemoryBundledFoodSource: BundledFoodSource, @uncheck
     /// Everything, at any `stripsStopwords` — the scorer applies the real gate over the same set,
     /// so the in-memory path cannot drift from the SQLite one the way an FTS expression can.
     public func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] { items }
+
+    public func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
+        guard limit > 0 else { return [] }
+        return Array(items.prefix(limit))
+    }
 
     public func item(id: UUID) -> FoodItem? { items.first { $0.id == id } }
 

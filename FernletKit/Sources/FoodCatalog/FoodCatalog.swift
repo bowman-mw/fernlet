@@ -59,6 +59,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// the SAME `lock` as `_userItems`; ``FoodSearchHistory/empty`` until `DiaryStore` publishes one,
     /// which is what keeps every catalog built in a test (or before hydration) on the cold path.
     private var _searchHistory: FoodSearchHistory = .empty
+    /// The fallback visits at most three variants × 24 rows × two bundled sources, plus this many
+    /// user rows. It is intentionally smaller than the normal FTS cap: partial matching is a
+    /// zero-result aid.
+    private static let partialUserCandidateLimit = 72
 
     /// Creates a catalog over `source` with an empty user-items snapshot and no branded source.
     public init(source: BundledFoodSource) {
@@ -200,7 +204,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         context: FoodSearchContext
     ) -> [FoodItem] {
         let rankingNow = Date()
-        let ranked = FoodItemSearch.results(
+        let normal = FoodItemSearch.results(
             for: query,
             in: index(for: query, stripsStopwords: stripsStopwords),
             limit: limit,
@@ -208,6 +212,19 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             history: context == .userTyped ? searchHistory : .empty,
             now: rankingNow
         )
+        let ranked: [FoodItem]
+        if normal.isEmpty, context == .userTyped {
+            ranked = FoodItemSearch.partialResults(
+                for: query,
+                in: partialIndex(for: query, stripsStopwords: stripsStopwords),
+                limit: limit,
+                stripsStopwords: stripsStopwords,
+                history: searchHistory,
+                now: rankingNow
+            )
+        } else {
+            ranked = normal
+        }
         return promotingCorrection(ranked, for: query, limit: limit)
     }
 
@@ -323,6 +340,31 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let candidates = source.candidates(forQuery: query, stripsStopwords: stripsStopwords)
             + (branded?.candidates(forQuery: query, stripsStopwords: stripsStopwords) ?? [])
         return FoodItemSearch.Index(foodItems: candidates + userItems)
+    }
+
+    /// Fetches only leave-one-out AND variants after normal retrieval produced no presented rows.
+    /// Source and scorer share ``FoodItemSearch/partialQueryVariants(in:stripsStopwords:)``; no
+    /// single-token OR query exists, and every source fetch is bounded before hydration.
+    private func partialIndex(for query: String, stripsStopwords: Bool) -> FoodItemSearch.Index {
+        let variants = FoodItemSearch.partialQueryVariants(in: query, stripsStopwords: stripsStopwords)
+        let branded = brandedSource
+        var selected: [FoodItem] = []
+        for variant in variants {
+            let base = source.candidates(
+                forQuery: variant, stripsStopwords: stripsStopwords,
+                limit: FoodItemSearch.partialMatchCandidateLimit)
+            let brandedItems = branded?.candidates(
+                forQuery: variant, stripsStopwords: stripsStopwords,
+                limit: FoodItemSearch.partialMatchCandidateLimit) ?? []
+            for item in base + brandedItems where !selected.contains(where: { $0.id == item.id }) {
+                selected.append(item)
+            }
+        }
+        for item in userItems.prefix(Self.partialUserCandidateLimit)
+        where !selected.contains(where: { $0.id == item.id }) {
+            selected.append(item)
+        }
+        return FoodItemSearch.Index(foodItems: selected)
     }
 
     // MARK: - Resolution

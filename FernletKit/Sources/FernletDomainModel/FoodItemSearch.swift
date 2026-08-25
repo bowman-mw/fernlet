@@ -152,6 +152,12 @@ public nonisolated enum FoodItemSearch {
     /// retrieval or ranking; it rejects corrupt or foreign values before they imply a real match.
     nonisolated public static let maximumStoredBindScore = 10_000
 
+    /// Partial matching is a last resort for a typed multi-word query. At most this many token
+    /// variants may be queried, which keeps a misspelling from becoming an unbounded OR search.
+    nonisolated public static let partialMatchMaximumVariants = 3
+    /// A fallback may hydrate only this many rows per leave-one-out variant before ranking.
+    nonisolated public static let partialMatchCandidateLimit = 24
+
     /// How many ranked rows the prepared-dish demotion considers before the caller's
     /// `limit` is applied.
     ///
@@ -167,7 +173,7 @@ public nonisolated enum FoodItemSearch {
     /// Build once per catalog snapshot and reuse across queries — construction does the per-item
     /// normalization so each query only normalizes itself.
     public struct Index: Sendable {
-        private let entries: [Entry]
+        fileprivate let entries: [Entry]
 
         public init(foodItems: [FoodItem]) {
             self.entries = foodItems.map { foodItem in
@@ -333,6 +339,60 @@ public nonisolated enum FoodItemSearch {
         // is answered with no results.
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
         return index.matches(prepared, limit: limit, history: history, now: now)
+    }
+
+    /// Bounded leave-one-out fallback for a typed query whose normal AND result was empty.
+    ///
+    /// This deliberately does NOT feed ``scoredResults`` or resolver candidates: a row missing a
+    /// token is a discovery aid, not evidence strong enough to bind or auto-commit. Callers must
+    /// first run the ordinary gate and pass only the fetched fallback candidates here.
+    public static func partialResults(
+        for query: String,
+        in index: Index,
+        limit: Int,
+        stripsStopwords: Bool,
+        history: FoodSearchHistory,
+        now: Date
+    ) -> [FoodItem] {
+        guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords),
+              partialQueryVariants(for: prepared).isEmpty == false else { return [] }
+        let requiredMatches = prepared.tokens.count - 1
+        let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(prepared.normalized)
+        let ranked = index.entries.compactMap { entry -> (foodItem: FoodItem, score: Int, history: Int)? in
+            let nameMatches = prepared.tokens.filter { token in
+                carries([token], nameTokens: entry.nameTokens, name: entry.normalizedName)
+            }
+            guard nameMatches.count >= requiredMatches else { return nil }
+            let score = nameMatches.count * 100 + phraseScore(
+                name: entry.normalizedName, phrase: nameMatches.joined(separator: " ")
+            )
+            return (entry.foodItem, score, history.weight(for: entry.foodItem.id, now: now))
+        }
+        .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
+        .map { (foodItem: $0.foodItem, score: $0.score) }
+        let window = ranked.prefix(max(limit, demotionWindow))
+        return PreparedDishHeuristic.demotingDishes(
+            scored: Array(window), forQuery: prepared.normalized
+        ).prefix(limit).map(\.foodItem)
+    }
+
+    /// Exact, bounded queries the source may run after the full AND query returns zero. A one-word
+    /// query can never enter this path, and a long phrase cannot fan out past three source queries.
+    nonisolated public static func partialQueryVariants(in query: String, stripsStopwords: Bool = true) -> [String] {
+        guard let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
+        return partialQueryVariants(for: prepared)
+    }
+
+    private static func partialQueryVariants(for query: SearchQuery) -> [String] {
+        guard query.tokens.count >= 2, query.tokens.count <= partialMatchMaximumVariants else { return [] }
+        var variants: [String] = []
+        for index in query.tokens.indices {
+            let variant = query.tokens.enumerated().compactMap { offset, token in
+                offset == index ? nil : token
+            }.joined(separator: " ")
+            if !variant.isEmpty, !variants.contains(variant) { variants.append(variant) }
+        }
+        return variants
     }
 
     /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item

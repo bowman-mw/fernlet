@@ -316,8 +316,9 @@ struct FoodSearchCorpusTests {
     /// predicted stopword recoveries. Four remain, and the split is exactly the causal one §8 drew:
     /// every recovered query was a natural-phrasing failure, and every survivor is a brand-index
     /// failure (`costco`/`kirkland`/`whole foods` live in the unindexed `brand_source`, → fix 2.3) or
-    /// the typo (`chiken`, → an edit-distance fallback, §30 row 16). Nothing in this increment could
-    /// have moved those four, and nothing in it did.
+    /// the typo (`chiken`, → an edit-distance fallback, §30 row 16). The later typed-only partial
+    /// fallback may offer a discovery row for two of these, but leaves this strict scorer baseline
+    /// and every automatic consumer unchanged.
     static let reportNamedZeroResultQueries: [FoodSearchCorpusCase] = [
         FoodSearchCorpusCase("bowl of oatmeal", .reportNamedZeroResult, .defensible, "Oatmeal, NFS", 810),
         FoodSearchCorpusCase("two scrambled eggs", .reportNamedZeroResult, .defensible,
@@ -498,9 +499,19 @@ struct FoodSearchCorpusTests {
 
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
-        let empties = Self.corpus.filter { catalog.results(for: $0.query, limit: 1, context: .userTyped).isEmpty }
+        // The corpus's zero-result verdict pins the normal prefix-AND gate and its confidence-safe
+        // scorer. A typed discovery fallback is intentionally outside that baseline.
+        let empties = Self.corpus.filter { catalog.scoredResults(for: $0.query, limit: 1).isEmpty }
         #expect(empties.count == counts.zeroResults, "measured zero-result count: \(empties.count)")
         #expect(Set(empties.map(\.query)) == Set(Self.corpus.filter { $0.verdict == .zeroResults }.map(\.query)))
+
+        let partialQueries = [
+            "chiken breast", "grilled salmon fillet", "kirkland protein bar", "quest protein bar"
+        ]
+        let partialHits = partialQueries.filter {
+            catalog.results(for: $0, limit: 6, context: .userTyped).isEmpty == false
+        }
+        #expect(partialHits == partialQueries, "typed partial-match population moved: \(partialHits)")
     }
 
     // MARK: - §9's named measurements
@@ -992,16 +1003,15 @@ struct FoodSearchCorpusTests {
     /// count of 10 was over the resolver bank only, so the two are not comparable and this one is
     /// stated as what it is.
     ///
-    /// Four queries return NOTHING from search while the resolver's phrase splitter reaches rows
-    /// anyway (→ fix 2.3 for the brand ones, an edit-distance fallback for `chiken`, §30 row 16's
-    /// partial-match fallback for `grilled salmon fillet`). The rest pick different foods because
+    /// `costco cheese pizza slice` remains empty on both the normal AND scorer and the typed
+    /// fallback (four meaningful tokens exceed the fallback's three-token cap), while the resolver's
+    /// phrase splitter reaches rows. The rest pick different foods because
     /// `searchPhrases` searches sub-phrases a single AND gate never forms — which is the resolver's
     /// entire purpose, and why fix 1.6 is confined to the typed-query surface.
     @Test func searchAndResolverSurfacesStillDisagree() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
-        let searchIsEmptyButResolverIsNot = ["chiken breast", "costco cheese pizza slice",
-                                            "quest protein bar", "grilled salmon fillet"]
+        let searchIsEmptyButResolverIsNot = ["costco cheese pizza slice"]
         for query in searchIsEmptyButResolverIsNot {
             let searchCount = catalog.results(for: query, limit: 6, context: .userTyped).count
             let resolverCount = catalog.candidates(for: query, limit: 18).count
@@ -1033,7 +1043,7 @@ struct FoodSearchCorpusTests {
             let resolverTop = catalog.candidates(for: corpusCase.query, limit: 18).first?.foodItem.name
             return searchTop != resolverTop
         }
-        #expect(stillDiverging.count == 18, "divergences: \(stillDiverging.map(\.query))")
+        #expect(stillDiverging.count == 14, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)
@@ -1120,9 +1130,10 @@ struct FoodSearchCorpusTests {
     }
 
     /// The brand-index failure of §8, pinned from both sides: the retailer rows are IN the file and
-    /// are NOT reachable, because `brand_source` is indexed nowhere. Fix 2.3's instrument — when it
-    /// lands, the zero-result queries flip and these counts become searchable hits.
-    @Test func brandSourceRowsExistButAreUnsearchable() throws {
+    /// are NOT reachable through the strict scorer, because `brand_source` is indexed nowhere. The
+    /// typed partial fallback may offer a related discovery row, but cannot create a scored result or
+    /// an automatic bind. Fix 2.3's instrument — when it lands, these strict misses flip.
+    @Test func brandSourceRowsRemainUnsearchableByStrictGate() throws {
         let probe = try #require(FoodCatalogFileProbe(url: FoodCatalogFileProbe.shippedCatalogURL))
         #expect(probe.scalar("SELECT COUNT(*) FROM food WHERE brand_source LIKE '%costco%'") == 31)
         #expect(probe.scalar("SELECT COUNT(*) FROM food WHERE brand_source LIKE '%whole foods%'") == 679)
@@ -1138,9 +1149,9 @@ struct FoodSearchCorpusTests {
         // Without this guard all three assertions below would pass against the empty-catalog fallback.
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
-        #expect(catalog.results(for: "costco cheese pizza slice", limit: 6, context: .userTyped).isEmpty)
-        #expect(catalog.results(for: "kirkland protein bar", limit: 6, context: .userTyped).isEmpty)
-        #expect(catalog.results(for: "whole foods rotisserie chicken", limit: 6, context: .userTyped).isEmpty)
+        #expect(catalog.scoredResults(for: "costco cheese pizza slice").isEmpty)
+        #expect(catalog.scoredResults(for: "kirkland protein bar").isEmpty)
+        #expect(catalog.scoredResults(for: "whole foods rotisserie chicken").isEmpty)
     }
 
     /// The candidate set the SHIPPED source hands the scorer, per query — the pipeline's own half of
