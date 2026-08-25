@@ -12,7 +12,7 @@
 // component that bound to the wrong food auto-committed to the diary with no review sheet. That is
 // the "costco cheese pizza slice" bug: the pizza template's `mozzarella cheese` component used to bind
 // *Mozzarella sticks, breaded, baked, or fried* at score **58**, against
-// `FoodItemSearch.confidentBindScore = 250`, while a correct mozzarella row sat unreached in the same
+// `FoodItemSearch.confidentBindScore = 368`, while a correct mozzarella row sat unreached in the same
 // catalog.
 //
 // So this suite replays EVERY component of EVERY template against the shipped
@@ -33,7 +33,7 @@
 //     GLUTINOUS (mochi) rice, not the long-grain rice a person means by "rice" (26% fewer calories per
 //     gram); `tomato soup` bound double-strength CONDENSED soup, not the prepared-to-eat row (~1.9×
 //     real calories); `burger`/`cheeseburger`'s hamburger-bun search was picked because its SCORE
-//     cleared 250, not because it was the food-correct generic row over an equally-plausible neighbor.
+//     cleared the old 250 floor, not because it was the food-correct generic row over an equally-plausible neighbor.
 //     Repairing those (documented per-pin below, and in `confidentDescriptions`' doc comment) is what
 //     this suite now pins — 95 pins (`fried rice` collapsed from 3 components to 1 in the same round;
 //     see `burgerNoLongerDropsAnyComponent`; a SECOND adversarial-review pass then gave `vegetable
@@ -92,9 +92,9 @@
 //     risk (a brand chip AND the same item's whole raw text both landing in `unmatchedItems`) is closed
 //     by construction: the brand check is now recorded only on the successful-assembly path.
 //
-// THE FLOOR IS NOT RELAXED TO MAKE THIS GREEN. `confidentBindScore` stays 250; genuinely weak-but-
-// correct binds are still pinned weak and their templates still pinned as not-auto-committing.
-// Confidence only rose where a component's search string was repaired to actually name the right food.
+// THE FLOOR IS CALIBRATED, NOT RELAXED TO MAKE THIS GREEN. `confidentBindScore` is 368; genuinely
+// weak-but-correct binds remain weak and their templates remain reviewed. Confidence only rises where
+// a component's search string actually names the right food strongly enough for the cold panel.
 //
 // WHAT THIS FIX DOES NOT YET KEEP, IN ONE NAMED CASE. Everything the template tier declines lands on
 // the candidate-constrained plan in `MealResolutionService.highConfidenceResolution`, which hardcodes
@@ -117,7 +117,7 @@
 // every one to clear `confidentBindScore` with nothing left unmatched. What that does and does not
 // close is pinned at `planTierConfidenceNowFollowsItsBinds` and — for the case this note originally
 // named — `planTierStillCommitsBurgerAndFriesAtHighConfidence`, which records that `burger and fries`
-// still resolves `.high` because both of its binds clear 250 on the +250 substring bonus alone.
+// now resolves `.low`: a +250 substring bonus alone no longer clears the calibrated floor.
 //
 // COSTCO CHEESE PIZZA SLICE, DIRECT TEMPLATE AUDIT POST-1.5: fix 1.3 alone reopened auto-commit for
 // the template result (`.high`, no review) — a genuine improvement over 1.1/1.2's ACCIDENTAL safety
@@ -332,7 +332,7 @@ struct DishTemplateBindAuditTests {
     /// The descriptions whose every component clears `confidentBindScore` — the set allowed to
     /// resolve at `.high` and auto-commit. Derived from `pins`, asserted live.
     ///
-    /// **It is twenty of the thirty-one, up from two before fix 1.3.** Fix 1.1/1.2 (the prior
+    /// **It is fourteen of the thirty-one, up from two before fix 1.3.** Fix 1.1/1.2 (the prior
     /// increment) only changed how a bad bind is HANDLED — it never made a wrong bind right, so only
     /// `sashimi` and `smoothie` (already-clean templates) auto-committed. Fix 1.3's FIRST pass repaired
     /// the wrongFood/noCatalogRow binds to defensible food — including `pizza`, the round's origin
@@ -342,7 +342,7 @@ struct DishTemplateBindAuditTests {
     /// binds masquerading as fine — `nigiri`/`sushi roll`/`poke bowl`/`burrito`/`burrito
     /// bowl`/`stir fry`/`bibimbap`/`curry`'s shared rice search bound the GLUTINOUS (mochi) variety, a
     /// distinct food scoring 26% fewer calories per gram than the plain long-grain rice a person means
-    /// by "rice"; `burger`/`cheeseburger`'s bun bind was picked because the SCORE happened to clear 250,
+    /// by "rice"; `burger`/`cheeseburger`'s bun bind was picked because the SCORE happened to clear the old 250 floor,
     /// not because it was the right generic row; `tomato soup` bound the double-strength CONDENSED
     /// product (committing ~1.9× real calories) instead of the prepared-to-eat one — repairing those
     /// (without loosening the floor) newly cleared `nigiri`, `sushi roll`, `poke bowl`, `stir fry` and
@@ -356,7 +356,7 @@ struct DishTemplateBindAuditTests {
     /// description; `chicken`/`shrimp fried rice` have no catalog row of their own and stay on the
     /// generic bind honestly (item-13 dependency), so they are not separately audited descriptions.
     ///
-    /// Every remaining pin is a genuinely correct food that simply does not clear the 250 floor (a
+    /// Every remaining pin is a genuinely correct food that simply does not clear the 368 floor (a
     /// generic SR-Legacy row like "Tortilla, blue corn, Sakwavikaviki (Hopi)" scores low on relevance
     /// even though it is the right food) — see `bindFloorPopulationsAreMeasuredNotInherited`, where the
     /// wrongFood/noCatalogRow verdict populations both fall to zero.
@@ -420,8 +420,10 @@ struct DishTemplateBindAuditTests {
     /// see the file header), over the 95 component binds of the 31 audited descriptions (94 after round
     /// one; 96 before round one dropped fried rice from 3 components to 1), and RE-measured after
     /// §26 fixes 1.6/1.7a/1.8 and their adversarial review: **zero match no catalog row, zero bind
-    /// below `minimumBindScore`, 14 bind weakly (1–249, but to the RIGHT food), and 81 bind
-    /// confidently (≥ 250)** — the same populations as before the increment. Fix 1.8's floor exposed
+    /// below `minimumBindScore`, 27 bind weakly (1–367, but to the RIGHT food), and 68 bind
+    /// confidently (≥ 368)**. The calibrated floor deliberately adds the weaker correct binds to the
+    /// review path rather than relying on a score shape that also confidently admits known wrong rows.
+    /// Fix 1.8's floor exposed
     /// one latent data defect on the way (`chicken noodle soup`'s noodle component had been reaching
     /// its row through the category, with no "noodle" in the name); that string was repaired in
     /// `DishTemplates.json` rather than the floor being weakened.
@@ -433,8 +435,8 @@ struct DishTemplateBindAuditTests {
         #expect(Self.pins.count == 95, "95 component binds across the 31 audited descriptions")
         #expect(noRow.count == 0, "search strings that match nothing: \(noRow.map(\.query))")
         #expect(dropped.count == 0, "binds below the drop floor: \(dropped.map(\.query))")
-        #expect(weak.count == 14)
-        #expect(confident.count == 81)
+        #expect(weak.count == 27)
+        #expect(confident.count == 68)
         #expect(noRow.count + dropped.count + weak.count + confident.count == Self.pins.count)
 
         // The verdicts, likewise derived. Fix 1.3's whole job was to repair every wrongFood/noCatalogRow
@@ -454,10 +456,9 @@ struct DishTemplateBindAuditTests {
         let confidentlyWrong = Self.pins.filter { $0.verdict == .wrongFood && $0.isConfident }
         #expect(confidentlyWrong.count == 0, "confident-but-wrong binds: \(confidentlyWrong.map(\.query))")
         #expect(Self.confidentDescriptions == [
-            "nigiri", "sashimi", "sushi roll", "poke bowl", "grilled cheese", "tuna sandwich", "tuna melt",
-            "BLT", "burger", "cheeseburger", "quesadilla", "stir fry", "fried rice", "vegetable fried rice",
-            "caesar salad", "pizza", "curry", "tomato soup", "oatmeal", "smoothie"
-        ], "twenty descriptions now bind cleanly enough to auto-commit")
+            "BLT", "burger", "cheeseburger", "curry", "fried rice", "grilled cheese", "oatmeal", "quesadilla",
+            "smoothie", "stir fry", "tomato soup", "tuna melt", "tuna sandwich", "vegetable fried rice"
+        ], "fourteen descriptions now bind cleanly enough to auto-commit")
     }
 
     /// The behavioural pin for fix 1.1: a description resolves `.high` if and only if every component
@@ -517,8 +518,8 @@ struct DishTemplateBindAuditTests {
         }
         #expect(alreadyReviewed.isEmpty,
                 "no safely buildable description was already caught by the old calorie gate: \(alreadyReviewed.sorted())")
-        #expect(newlyReviewed.count == 10, "newly routed to review by fix 1.1: \(newlyReviewed.sorted())")
-        #expect(Self.confidentDescriptions.count == 20)
+        #expect(newlyReviewed.count == 16, "newly routed to review by the calibrated bind floor: \(newlyReviewed.sorted())")
+        #expect(Self.confidentDescriptions.count == 14)
         #expect(Self.fallThroughDescriptions.count == 0)
     }
 
@@ -1091,17 +1092,17 @@ struct DishTemplateBindAuditTests {
         #expect(template?.name == "taco", "lexicographic tie-break: \"taco\" > \"poke\"")
     }
 
-    /// Plain "cheese pizza" — a query that genuinely IS the template, no brand token involved — now
-    /// resolves confidently. This is the round's origin story closing: the mozzarella component that
-    /// used to bind *Mozzarella sticks, breaded, baked, or fried* at 58 now binds *Cheese, mozzarella,
-    /// low moisture, part-skim* at 360, comfortably above `confidentBindScore`.
-    @Test func plainCheesePizzaNowResolvesConfidently() throws {
+    /// Plain "cheese pizza" now binds the correct mozzarella instead of fried sticks, but its 360
+    /// score stays below the calibrated 368 floor. The repair remains useful; review is the honest
+    /// result until ranking/form evidence can distinguish pizza from pizza-flavoured products.
+    @Test func plainCheesePizzaRoutesToReviewAtTheCalibratedFloor() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
         let resolved = try #require(DishTemplateLexicon.resolve(description: "cheese pizza", mealType: nil, catalog: catalog))
-        #expect(resolved.confidence == .high)
+        #expect(resolved.confidence == .low)
         let mozzarella = catalog.scoredResults(for: "low moisture part skim mozzarella cheese", limit: 1).first
-        #expect((mozzarella?.score ?? 0) >= FoodItemSearch.confidentBindScore, "the component that used to cause the downgrade")
+        #expect((mozzarella?.score ?? 0) == 360)
+        #expect((mozzarella?.score ?? 0) < FoodItemSearch.confidentBindScore)
         #expect(mozzarella?.item.name == "Cheese, mozzarella, low moisture, part-skim")
     }
 

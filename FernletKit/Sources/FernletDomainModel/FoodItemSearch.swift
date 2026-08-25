@@ -147,9 +147,11 @@ public nonisolated enum FoodItemSearch {
     /// Minimum score for a query to be allowed to *bind* to a catalog item. Below this the top
     /// hit matched only via category/tags (no real name signal) and is treated as no match.
     nonisolated public static let minimumBindScore = 1
-    /// At or above this score a single-item bind is considered confident (exact/prefix/substring
-    /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
-    nonisolated public static let confidentBindScore = 250
+    /// At or above this score a single-item bind is considered confident. The 57-query cold panel
+    /// fixes this at 368: it caps confidently-wrong top rows at 13 (from 19 at 250), preserves the
+    /// source-backed whole-description acceptance boundary, and leaves 68 of 95 audited template
+    /// components high. Between `minimumBindScore` and this, the bind is kept but reviewed.
+    nonisolated public static let confidentBindScore = 368
 
     /// How many ranked rows the prepared-dish demotion considers before the caller's
     /// `limit` is applied.

@@ -140,4 +140,47 @@ struct RecentIngredientSpecializationTests {
         #expect(meal?.componentSnapshots.first?.unit == RecipeUnit.gram.rawValue)
         #expect(meal?.macros == basmati.macros)
     }
+
+    /// Task 9's predeclared personalized panel: history may select an admitted whole-phrase row, but
+    /// its cold score alone still decides review. A tied history remains cold, and a weak row stays
+    /// weak even when it is the user's most recent matching food.
+    @Test func personalizationCannotMintConfidenceOrResolveAnAmbiguousTie() {
+        let generic = Self.food("Rice"), basmati = Self.food("Basmati Rice"), jasmine = Self.food("Jasmine Rice")
+        let candidates = Self.candidates([generic, basmati, jasmine])
+        let clear = FoodIngredientPersonalization(
+            corrections: [:], history: FoodSearchHistory(weights: [basmati.id: 693])
+        )
+        let clearPlan = FoundationFoodSelectionModel.deterministicPlan(
+            description: "rice", candidates: candidates, fallbackType: .lunch, personalization: clear
+        )
+        guard let clearPlan else {
+            Issue.record("personalized whole-phrase plan must resolve")
+            return
+        }
+        #expect(clearPlan.items.first?.ingredients.first?.candidateId == 2)
+        #expect(MealResolutionService.bindConfidence(for: clearPlan, candidates: candidates) == .low)
+
+        let tied = FoodIngredientPersonalization(
+            corrections: [:], history: FoodSearchHistory(weights: [basmati.id: 693, jasmine.id: 693])
+        )
+        #expect(Self.selectedIngredient("rice", candidates: candidates, personalization: tied)?.candidateId == 1)
+
+        let weak = Self.food("Shredded blend of cheddar and cheese")
+        let weakCandidates = Self.candidates([weak])
+        let weakPlan = FoundationFoodSelectionModel.deterministicPlan(
+            description: "cheese cheddar", candidates: weakCandidates, fallbackType: .lunch,
+            personalization: FoodIngredientPersonalization(
+                corrections: [:], history: FoodSearchHistory(weights: [weak.id: 693])
+            )
+        )
+        let score = FoodItemSearch.scoredResults(
+            for: "cheese cheddar", in: FoodItemSearch.Index(foodItems: [weak]), limit: 1
+        ).first?.score ?? 0
+        guard let weakPlan else {
+            Issue.record("weak personalized whole-phrase plan must resolve")
+            return
+        }
+        #expect(score < FoodItemSearch.confidentBindScore)
+        #expect(MealResolutionService.bindConfidence(for: weakPlan, candidates: weakCandidates) == .low)
+    }
 }
