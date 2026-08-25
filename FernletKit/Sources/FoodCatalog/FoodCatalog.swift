@@ -130,6 +130,14 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         lock.lock(); _searchHistory = history; lock.unlock()
     }
 
+    /// Captures the existing correction and derived-history inputs for one deterministic resolver
+    /// pass. The snapshot is intentionally read-only: `DiaryStore.recentMeals` remains the only
+    /// source of history and `FoodSearchCorrectionMemory` remains the only correction store.
+    public func recentIngredientPersonalization() -> FoodIngredientPersonalization {
+        lock.lock(); defer { lock.unlock() }
+        return FoodIngredientPersonalization(corrections: _searchAliases, history: _searchHistory)
+    }
+
     /// Attaches the optional branded catalog (e.g. once the On-Demand Resource has downloaded).
     /// Replaces any previously attached source. Every read unions base + branded + user items.
     public func attachBrandedSource(_ source: BundledFoodSource) {
