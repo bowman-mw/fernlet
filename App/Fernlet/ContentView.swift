@@ -524,17 +524,6 @@ struct ContentView: View {
                 \.fernletTabBarClearance,
                 isDisposableCameraSessionActive ? 0 : tabBarReservedHeight + 8
             )
-            .overlay(alignment: .bottom) {
-                if !isDisposableCameraSessionActive {
-                    LinearGradient(
-                        colors: [Color.parchment.opacity(0), Color.parchment],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 26)
-                    .allowsHitTesting(false)
-                }
-            }
             // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, inside the tab-bar
             // `safeAreaInset` boundary below, so the bar's inset pushes it up — the toast and the
             // bar never cover each other. Attached after the scrim overlay so the toast draws over it.
