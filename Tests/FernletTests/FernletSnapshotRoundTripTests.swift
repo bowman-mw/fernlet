@@ -327,12 +327,22 @@ struct FernletSnapshotRoundTripTests {
 
     private func meal(id: UUID, name: String, type: MealType, protein: Int, carbs: Int, fat: Int, loggedAt: Date) -> Meal {
         let macros = Macros(protein: protein, carbs: carbs, fat: fat)
+        let component = MealComponentSnapshot(
+            foodItemId: UUID(),
+            name: name,
+            quantity: 1,
+            unit: "serving",
+            macros: macros,
+            micronutrients: Micronutrients(fiber: 4, sodium: 220),
+            bindScore: FoodItemSearch.confidentBindScore
+        )
         return Meal(
             id: id,
             name: name,
             mealType: type,
             macros: macros,
             micronutrientSnapshot: Micronutrients(fiber: 4, sodium: 220),
+            componentSnapshots: [component],
             mealSource: .manual,
             isAIFallback: false,
             quality: .good,

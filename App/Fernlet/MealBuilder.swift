@@ -248,7 +248,8 @@ struct MealBuilder {
                 quantity: conversion.componentQuantity,
                 unit: conversion.componentUnit,
                 macros: conversion.scaledMacros(for: resolvedIngredient.1),
-                micronutrients: conversion.scaledMicronutrients(for: resolvedIngredient.1)
+                micronutrients: conversion.scaledMicronutrients(for: resolvedIngredient.1),
+                bindScore: resolvedIngredient.0.bindScore
             ))
         }
         return snapshots

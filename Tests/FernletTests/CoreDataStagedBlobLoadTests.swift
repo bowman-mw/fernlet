@@ -31,13 +31,14 @@ struct CoreDataStagedBlobLoadTests {
     private func snapshot(
         bottleCount: Int,
         todayKey: String = "2026-05-16",
-        memories: [MemoryNote] = []
+        memories: [MemoryNote] = [],
+        meals: [Meal] = []
     ) -> FernletSnapshot {
         FernletSnapshot(
             todayKey: todayKey,
-            day: FernletDay(date: todayKey, bottleCount: bottleCount),
+            day: FernletDay(date: todayKey, meals: meals, bottleCount: bottleCount),
             settings: FernletSettings(),
-            recentMeals: [],
+            recentMeals: meals,
             previousJournals: [],
             memories: memories,
             goals: [],
@@ -60,6 +61,29 @@ struct CoreDataStagedBlobLoadTests {
         #expect(asyncLoaded.day.bottleCount == 4)
         #expect(syncLoaded.day.bottleCount == asyncLoaded.day.bottleCount)
         #expect(repository.isInReadOnlyRecovery == false)
+    }
+
+    @Test func cloudMirroredSnapshotRetainsComponentBindScore() {
+        let component = MealComponentSnapshot(
+            foodItemId: UUID(), name: "Eggs", quantity: 1, unit: "each",
+            macros: Macros(protein: 6, carbs: 0, fat: 5), micronutrients: Micronutrients(),
+            bindScore: FoodItemSearch.confidentBindScore
+        )
+        let meal = Meal(
+            name: "Eggs", mealType: .breakfast, macros: component.macros,
+            componentSnapshots: [component], quality: .good, confidence: MealConfidence.foodMatch.token,
+            note: "Fixture", source: MealLogSource.manual
+        )
+        let repository = CoreDataFernletRepository(
+            controller: PersistenceController(inMemory: true),
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("bind-score"))
+        )
+        #expect(repository.saveSnapshot(snapshot(bottleCount: 1, meals: [meal])))
+
+        repository.invalidateCache()
+        let reloaded = repository.loadSnapshot(todayKey: "2026-05-16")
+        #expect(reloaded.day.meals.first?.componentSnapshots.first?.bindScore == FoodItemSearch.confidentBindScore)
+        #expect(reloaded.recentMeals.first?.componentSnapshots.first?.hasConfidentBind == true)
     }
 
     /// The `.missing` stage from the async side: no Core Data record yet, so the legacy JSON store is

@@ -157,7 +157,8 @@ public enum FoundationFoodSelectionModel {
         // with no real name signal ("broccoli slaw" bound to "burger patties") — is dropped rather than
         // logged. With ~50k branded foods in the catalog these weak binds are common; without a floor
         // the deterministic tier commits them at high confidence.
-        let cleared = candidatesClearingBindFloor(itemCandidates, itemName: itemName, foodItems: foodItems)
+        let bestScores = bestSubPhraseScores(for: itemName, foodItems: foodItems)
+        let cleared = candidatesClearingBindFloor(itemCandidates, bestScores: bestScores)
         // One food per split item. Taking the top 3 for any "composite"-looking token (e.g. "burger
         // patties") bound unrelated look-alikes — a branded "double hamburger on wheat bun, 2 large
         // patties" — into a bogus multi-ingredient recipe. Genuine composite DISHES are handled upstream
@@ -172,7 +173,8 @@ public enum FoundationFoodSelectionModel {
                 candidateId: candidate.id,
                 foodName: candidate.foodItem.name,
                 quantity: quantity,
-                unit: unit.rawValue
+                unit: unit.rawValue,
+                bindScore: bestScores[localCandidate.foodItem.id]
             )
         }
     }
@@ -185,12 +187,10 @@ public enum FoundationFoodSelectionModel {
     /// composite matches (found via a shorter sub-phrase) score well above it and survive.
     private static func candidatesClearingBindFloor(
         _ itemCandidates: [FoodSelectionCandidate],
-        itemName: String,
-        foodItems: [FoodItem]
+        bestScores: [UUID: Int]
     ) -> [FoodSelectionCandidate] {
-        guard itemCandidates.isEmpty == false, foodItems.isEmpty == false else { return itemCandidates }
-        let bestScore = bestSubPhraseScores(for: itemName, foodItems: foodItems)
-        return itemCandidates.filter { (bestScore[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
+        guard itemCandidates.isEmpty == false else { return [] }
+        return itemCandidates.filter { (bestScores[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
     }
 
     /// The best score each food achieves over ANY sub-phrase of `itemName`, scored against an index
@@ -202,7 +202,7 @@ public enum FoundationFoodSelectionModel {
     /// `FoodCatalog`, so a research §26 fix 1.10 correction alias cannot promote a row past this
     /// floor. A row absent from the map (or below `FoodItemSearch.minimumBindScore`) matched only via
     /// category/tags, or not at all.
-    public static func bestSubPhraseScores(for itemName: String, foodItems: [FoodItem]) -> [UUID: Int] {
+    nonisolated public static func bestSubPhraseScores(for itemName: String, foodItems: [FoodItem]) -> [UUID: Int] {
         guard foodItems.isEmpty == false else { return [:] }
         let index = FoodItemSearch.Index(foodItems: foodItems)
         var bestScore: [UUID: Int] = [:]
@@ -305,6 +305,11 @@ private struct FoundationMealSelection {
         // that this plan does not carry, so it leaves as `unmatchedItems` (see the deterministic tier).
         var droppedItemNames: [String] = []
         let validItems = items.compactMap { item -> FoodSelectionMealItem? in
+            let trimmedItemName = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let scoreText = trimmedItemName.isEmpty ? fallbackDescription : trimmedItemName
+            let bindScores = FoundationFoodSelectionModel.bestSubPhraseScores(
+                for: scoreText, foodItems: candidates.map(\.foodItem)
+            )
             let validIngredients = item.ingredients.compactMap { ingredient -> FoodSelectionIngredient? in
                 guard let candidate = candidates.first(where: { $0.id == ingredient.candidateNumber }) else { return nil }
                 let normalizedUnitStr = normalizedUnit(ingredient.unit, fallback: candidate.foodItem.preferredRecipeUnit.rawValue)
@@ -315,10 +320,10 @@ private struct FoundationMealSelection {
                     candidateId: candidate.id,
                     foodName: candidate.foodItem.name,
                     quantity: min(max(ingredient.quantity, 0.01), quantityCap),
-                    unit: normalizedUnitStr
+                    unit: normalizedUnitStr,
+                    bindScore: bindScores[candidate.foodItem.id]
                 )
             }
-            let trimmedItemName = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard validIngredients.isEmpty == false else {
                 if !trimmedItemName.isEmpty { droppedItemNames.append(trimmedItemName) }
                 return nil

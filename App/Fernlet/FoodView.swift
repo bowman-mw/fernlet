@@ -4059,6 +4059,7 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
     let baseQuantity: Double
     let baseMacros: Macros
     let baseMicronutrients: Micronutrients
+    let bindScore: Int?
 
     init(snapshot: MealComponentSnapshot) {
         id = snapshot.id
@@ -4069,6 +4070,7 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
         baseQuantity = max(snapshot.quantity, 0.01)
         baseMacros = snapshot.macros
         baseMicronutrients = snapshot.micronutrients
+        bindScore = snapshot.bindScore
     }
 
     var snapshot: MealComponentSnapshot {
@@ -4080,7 +4082,8 @@ private nonisolated struct MealComponentCorrectionInput: Identifiable {
             quantity: quantity,
             unit: unit,
             macros: baseMacros.scaled(by: scale),
-            micronutrients: baseMicronutrients.scaled(by: scale)
+            micronutrients: baseMicronutrients.scaled(by: scale),
+            bindScore: bindScore
         )
     }
 
@@ -4228,35 +4231,13 @@ struct MealCorrectionSheet: View {
 
     /// Component ids to outline as "Probably not what you meant" (FOOD-05).
     ///
-    /// Heuristic, honestly so: there is no stored per-item match score, so the mismatch is
-    /// reconstructed from the names — a component is suspect when more than half of its
-    /// meaningful tokens have nothing to do with what the user typed ("French toast sticks"
-    /// against "Scrambled eggs and toast" leaves french/sticks unexplained). Single-token names
-    /// are never flagged; one shared word is how they matched at all.
+    /// The captured bind score is the only confidence signal used here. Missing scores are
+    /// intentionally reviewable: a legacy, manual, or invalid snapshot cannot masquerade as a
+    /// confident automatic match.
     private static func lowConfidenceComponentIDs(for meal: Meal) -> Set<UUID> {
-        let mealTokens = meaningfulTokens(in: meal.name)
-        guard !mealTokens.isEmpty else { return [] }
-        var flagged = Set<UUID>()
-        for component in meal.componentSnapshots {
-            let componentTokens = meaningfulTokens(in: component.name)
-            guard componentTokens.count > 1 else { continue }
-            let unexplained = componentTokens.subtracting(mealTokens).count
-            if unexplained * 2 > componentTokens.count {
-                flagged.insert(component.id)
-            }
-        }
-        return flagged
-    }
-
-    /// Tokens worth comparing: lowercased words of length ≥ 3, non-numeric (mirrors
-    /// `MealBuilder`'s matching tokens).
-    private static func meaningfulTokens(in text: String) -> Set<String> {
-        Set(
-            text.lowercased()
-                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-                .map(String.init)
-                .filter { $0.count >= 3 && Double($0) == nil }
-        )
+        Set(meal.componentSnapshots.compactMap { component in
+            component.hasConfidentBind ? nil : component.id
+        })
     }
 }
 

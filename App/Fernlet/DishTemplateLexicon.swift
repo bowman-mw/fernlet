@@ -634,7 +634,8 @@ enum DishTemplateLexicon {
                 candidateId: 0,
                 foodName: match.item.name,
                 quantity: grams,
-                unit: RecipeUnit.gram.rawValue
+                unit: RecipeUnit.gram.rawValue,
+                bindScore: match.score
             )
             ingredients.append((ingredient, match.item))
         }

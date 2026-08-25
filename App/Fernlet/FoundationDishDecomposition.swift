@@ -238,7 +238,8 @@ enum MealDecompositionResolver {
                 candidateId: 0,
                 foodName: foodItem.name,
                 quantity: clampedGrams,
-                unit: RecipeUnit.gram.rawValue
+                unit: RecipeUnit.gram.rawValue,
+                bindScore: match.score
             )
             binding.pairs.append((ingredient, foodItem))
         }
@@ -277,6 +278,7 @@ enum MealDecompositionResolver {
             if let existing = merged[foodItem.id] {
                 var combined = existing.0
                 combined.quantity = min(1500, existing.0.quantity + ingredient.quantity)
+                combined.bindScore = combinedBindScore(existing.0.bindScore, ingredient.bindScore)
                 merged[foodItem.id] = (combined, existing.1)
             } else {
                 merged[foodItem.id] = (ingredient, foodItem)
@@ -284,6 +286,14 @@ enum MealDecompositionResolver {
             }
         }
         return order.compactMap { merged[$0] }
+    }
+
+    /// A merged component is only as verified as every source component. Losing either score must
+    /// remain `nil`; otherwise a later confident match could hide an older unknown bind.
+    @available(iOS 26.0, *)
+    private static func combinedBindScore(_ first: Int?, _ second: Int?) -> Int? {
+        guard let first, let second else { return nil }
+        return min(first, second)
     }
 
     /// Combines the model's self-reported confidence with how strongly each ingredient bound to the

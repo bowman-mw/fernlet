@@ -119,6 +119,19 @@ struct DeleteAllDataTests {
         )
     }
 
+    private func scoredMeal() -> Meal {
+        let component = MealComponentSnapshot(
+            foodItemId: UUID(), name: "Eggs", quantity: 1, unit: "each",
+            macros: Macros(protein: 6, carbs: 0, fat: 5), micronutrients: Micronutrients(),
+            bindScore: FoodItemSearch.confidentBindScore
+        )
+        return Meal(
+            name: "Eggs", mealType: .breakfast, macros: component.macros,
+            componentSnapshots: [component], quality: .good, confidence: MealConfidence.foodMatch.token,
+            note: "Fixture", source: MealLogSource.manual
+        )
+    }
+
     /// The headline regression: purging must clear the PERSISTED store, not just memory.
     ///
     /// Drives the repository directly rather than through a live `FernletStore`: the store's snapshot
@@ -142,6 +155,21 @@ struct DeleteAllDataTests {
         // that has nothing to do with deletion. A surviving past day is the actual bug this guards.
         #expect(repository.loadAllDays()[todayKey] == nil, "the purged day survived")
         #expect(repository.loadSnapshot(todayKey: todayKey).day.bottleCount == 0, "the purged day's content survived")
+    }
+
+    @Test func purgingRemovesPersistedComponentBindScoresWithMeals() {
+        let todayKey = "2026-07-03"
+        let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-bind-score"))
+        var recorded = snapshot(todayKey: todayKey, bottles: 1)
+        let meal = scoredMeal()
+        recorded.day.meals = [meal]
+        recorded.recentMeals = [meal]
+        #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(recorded, sealedJournalIDs: [])))
+        #expect(repository.loadSnapshot(todayKey: todayKey).day.meals.first?.componentSnapshots.first?.bindScore == FoodItemSearch.confidentBindScore)
+
+        #expect(repository.purgeAllPersistedData())
+        #expect(repository.loadSnapshot(todayKey: todayKey).day.meals.isEmpty)
+        #expect(repository.loadSnapshot(todayKey: todayKey).recentMeals.isEmpty)
     }
 
     /// A purge must not leave the repository unable to save — the user keeps using the app afterwards.
@@ -238,6 +266,25 @@ struct DeleteAllDataTests {
 
         #expect(store.day.bottleCount == 0)
         #expect(store.day.meals.isEmpty)
+    }
+
+    @Test func deleteAllDataRemovesComponentBindScoresWithMeals() async {
+        let store = makeStore("delete-all-component-bind-score")
+        let component = MealComponentSnapshot(
+            foodItemId: UUID(), name: "Eggs", quantity: 1, unit: "each",
+            macros: Macros(protein: 6, carbs: 0, fat: 5), micronutrients: Micronutrients(),
+            bindScore: FoodItemSearch.confidentBindScore
+        )
+        store.day.meals.append(Meal(
+            name: "Eggs", mealType: .breakfast, macros: component.macros,
+            componentSnapshots: [component], quality: .good, confidence: MealConfidence.foodMatch.token,
+            note: "Fixture", source: MealLogSource.manual
+        ))
+        #expect(store.day.meals.first?.componentSnapshots.first?.bindScore == FoodItemSearch.confidentBindScore)
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+        #expect(store.day.meals.isEmpty)
+        #expect(store.recentMeals.isEmpty)
     }
 
     /// THE regression test for the original bug: a wipe must survive a relaunch.

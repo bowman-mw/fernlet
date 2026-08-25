@@ -122,6 +122,24 @@ struct MealBuilderTests {
         #expect(meal.name == "Banana")
     }
 
+    @Test func resolvedIngredientScoreIsFrozenWithTheComponent() throws {
+        let eggs = foodItem(name: "Eggs", source: .manual, macros: Macros(protein: 12, carbs: 1, fat: 10))
+        let scored = FoodSelectionIngredient(
+            candidateId: 1,
+            foodName: eggs.name,
+            quantity: 1,
+            unit: RecipeUnit.serving.rawValue,
+            bindScore: FoodItemSearch.confidentBindScore
+        )
+        let meal = try #require(MealBuilder.mealFromIngredients(
+            itemName: "eggs",
+            resolvedIngredients: [(scored, eggs)],
+            mealType: .breakfast
+        ))
+
+        #expect(meal.componentSnapshots.map(\.bindScore) == [FoodItemSearch.confidentBindScore])
+    }
+
     @Test func numericRecipeTokenDoesNotReplaceReviewedProductMatch() throws {
         let chickenMelt = foodItem(
             name: "Sandwich Bros Chicken Melts",

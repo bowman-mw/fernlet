@@ -218,6 +218,9 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
     public var unit: String
     public var macros: Macros
     public var micronutrients: Micronutrients
+    /// `nil` means this snapshot predates score persistence, was added manually, or carried an
+    /// invalid foreign value. It must never be treated as a confident automatic bind.
+    public var bindScore: Int?
 
     public init(
         id: UUID = UUID(),
@@ -226,7 +229,8 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
         quantity: Double,
         unit: String,
         macros: Macros,
-        micronutrients: Micronutrients
+        micronutrients: Micronutrients,
+        bindScore: Int? = nil
     ) {
         self.id = id
         self.foodItemId = foodItemId
@@ -235,6 +239,61 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
         self.unit = unit
         self.macros = macros
         self.micronutrients = micronutrients
+        self.bindScore = Self.validBindScore(bindScore)
+    }
+
+    public var hasConfidentBind: Bool {
+        guard let bindScore = Self.validBindScore(bindScore) else { return false }
+        return bindScore >= FoodItemSearch.confidentBindScore
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, foodItemId, name, quantity, unit, macros, micronutrients, bindScore
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        foodItemId = try container.decodeIfPresent(UUID.self, forKey: .foodItemId)
+        name = try container.decode(String.self, forKey: .name)
+        quantity = try container.decode(Double.self, forKey: .quantity)
+        unit = try container.decode(String.self, forKey: .unit)
+        macros = try container.decode(Macros.self, forKey: .macros)
+        micronutrients = try container.decode(Micronutrients.self, forKey: .micronutrients)
+        bindScore = Self.decodedBindScore(from: container)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(foodItemId, forKey: .foodItemId)
+        try container.encode(name, forKey: .name)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(unit, forKey: .unit)
+        try container.encode(macros, forKey: .macros)
+        try container.encode(micronutrients, forKey: .micronutrients)
+        try container.encodeIfPresent(Self.validBindScore(bindScore), forKey: .bindScore)
+    }
+
+    private static func validBindScore(_ score: Int?) -> Int? {
+        guard let score,
+              score >= FoodItemSearch.minimumBindScore,
+              score <= FoodItemSearch.maximumStoredBindScore else { return nil }
+        return score
+    }
+
+    private static func decodedBindScore(from container: KeyedDecodingContainer<CodingKeys>) -> Int? {
+        do {
+            guard let score = try container.decodeIfPresent(Double.self, forKey: .bindScore),
+                  score.isFinite,
+                  score.rounded(.towardZero) == score,
+                  score >= Double(FoodItemSearch.minimumBindScore),
+                  score <= Double(FoodItemSearch.maximumStoredBindScore) else { return nil }
+            return Int(score)
+        } catch {
+            // A newer/foreign snapshot remains readable, but its bad score is unverified.
+            return nil
+        }
     }
 }
 
@@ -1283,13 +1342,16 @@ public nonisolated struct FoodSelectionIngredient: Identifiable, Equatable {
     public var foodName: String
     public var quantity: Double
     public var unit: String
+    /// The cold-search score used to bind this automated ingredient, if there was one.
+    public var bindScore: Int?
 
-    public init(id: UUID = UUID(), candidateId: Int, foodName: String, quantity: Double, unit: String) {
+    public init(id: UUID = UUID(), candidateId: Int, foodName: String, quantity: Double, unit: String, bindScore: Int? = nil) {
         self.id = id
         self.candidateId = candidateId
         self.foodName = foodName
         self.quantity = quantity
         self.unit = unit
+        self.bindScore = bindScore
     }
 }
 

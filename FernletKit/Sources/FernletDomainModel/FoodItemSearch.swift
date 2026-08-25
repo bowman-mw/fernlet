@@ -148,6 +148,9 @@ public nonisolated enum FoodItemSearch {
     /// At or above this score a single-item bind is considered confident (exact/prefix/substring
     /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
     nonisolated public static let confidentBindScore = 250
+    /// Storage-only upper bound for a persisted component bind score. It does not participate in
+    /// retrieval or ranking; it rejects corrupt or foreign values before they imply a real match.
+    nonisolated public static let maximumStoredBindScore = 10_000
 
     /// How many ranked rows the prepared-dish demotion considers before the caller's
     /// `limit` is applied.

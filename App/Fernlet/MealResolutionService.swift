@@ -212,7 +212,8 @@ final class MealResolutionService {
             candidateId: 1,
             foodName: probe.item.name,
             quantity: probe.ingredientQuantity,
-            unit: probe.ingredientUnit
+            unit: probe.ingredientUnit,
+            bindScore: probe.score
         )
         guard let meal = MealBuilder.mealFromIngredients(
             itemName: description,
