@@ -32,7 +32,7 @@ struct WholeDescriptionFoodProbeTests {
     ]
 
     @Test func measuredHighFloorAndCompleteFiredPopulationArePinned() throws {
-        #expect(FoodItemSearch.confidentBindScore == 250, "the shared floor is explicitly unchanged")
+        #expect(FoodItemSearch.confidentBindScore == 368, "the shared calibrated floor matches the probe boundary")
         #expect(WholeDescriptionFoodProbe.acceptanceScore == 368, "narrow probe floor")
         #expect(FoodSearchCorpusTests.corpus.count == 57)
         #expect(FoodSearchCorpusTests.resolverBank.count == 32)

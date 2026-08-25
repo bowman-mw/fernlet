@@ -123,7 +123,9 @@ public nonisolated enum FoodBrandLexicon {
 ///    history weight can never present a row the cold pipeline refused. `history` defaults to
 ///    ``FoodSearchHistory/empty`` on every entry point, and ``scoredResults(for:in:limit:stripsStopwords:)``
 ///    has no parameter for it at all — so every confidence gate is cold by construction;
-/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score;
+/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score.
+///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
+///    supplier is only stored in `brandSource`; an explicit recognized restaurant cue is the exception;
 /// 3. the relevance score (exact/prefix/substring name hits, per-token coverage, length penalty,
 ///    preparation and form-specificity biases), then the name as a final tie-break;
 /// 4. **the search floor** — a row whose NAME does not carry every search token is dropped rather
@@ -145,9 +147,11 @@ public nonisolated enum FoodItemSearch {
     /// Minimum score for a query to be allowed to *bind* to a catalog item. Below this the top
     /// hit matched only via category/tags (no real name signal) and is treated as no match.
     nonisolated public static let minimumBindScore = 1
-    /// At or above this score a single-item bind is considered confident (exact/prefix/substring
-    /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
-    nonisolated public static let confidentBindScore = 250
+    /// At or above this score a single-item bind is considered confident. The 57-query cold panel
+    /// fixes this at 368: it caps confidently-wrong top rows at 13 (from 19 at 250), preserves the
+    /// source-backed whole-description acceptance boundary, and leaves 68 of 95 audited template
+    /// components high. Between `minimumBindScore` and this, the bind is kept but reviewed.
+    nonisolated public static let confidentBindScore = 368
     /// Storage-only upper bound for a persisted component bind score. It does not participate in
     /// retrieval or ranking; it rejects corrupt or foreign values before they imply a real match.
     nonisolated public static let maximumStoredBindScore = 10_000

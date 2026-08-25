@@ -62,11 +62,10 @@ enum WholeDescriptionFoodProbe {
 
     /// Corpus-calibrated high floor for this more powerful pre-decomposition short-circuit.
     ///
-    /// The shared 250 floor remains necessary but is not sufficient here: the owning 57-query corpus
-    /// and 32-query resolver bank contain portion-compatible wrong answers at 308–309 (`piece of
-    /// chicken`, `slice of toast`, `cup of coffee`). The prescribed pizza target's first compatible
-    /// row scores 368. Choosing that target score is the highest conservative floor that still admits
-    /// the acceptance case; the population test pins all three exclusions and every query that fires.
+    /// The shared 368 floor matches this narrower gate: the owning 57-query corpus and 32-query
+    /// resolver bank contain portion-compatible wrong answers at 308–309 (`piece of chicken`, `slice
+    /// of toast`, `cup of coffee`). The prescribed pizza target's first compatible row also scores
+    /// 368, so this accepts the target while excluding all three measured wrong portions.
     static let acceptanceScore = 368
 
     /// Count words are frozen English matching inputs, not display text. Numeric counts use the

@@ -71,6 +71,18 @@ public nonisolated struct FoodSearchHistory: Sendable, Equatable {
     /// this read-side cap protects derivation from an oversized restored or hand-edited snapshot.
     public static let maximumComponentsPerMeal = 100
 
+    /// The resolver considers no more than this many already-admitted rows when looking for one
+    /// recent specialization. It matches the deterministic binder's bounded candidate window.
+    public static let maximumIngredientSpecializationCandidates = 12
+
+    /// The minimum history-weight lead required to specialize a complete ingredient phrase.
+    ///
+    /// This is calibrated against the labelled specialization bank: one current log is 693 versus
+    /// an unlogged row (must specialize), a one-day tie is 693 versus 660 (must stay ambiguous),
+    /// and two current logs are 1,099 versus 693 (must specialize). `250` separates those cases
+    /// without turning a marginal recency difference into a silent food substitution.
+    public static let minimumIngredientSpecializationLead = 250
+
     /// Clamp on the decay's age term. Nothing in a 50-meal window is realistically this old, so this
     /// exists only to keep `exp` and the `Int` conversion in a range that can never produce a
     /// non-finite value or an overflow — Power-of-10's "no silent traps".
@@ -114,6 +126,36 @@ public nonisolated struct FoodSearchHistory: Sendable, Equatable {
         if let exact = exactWeights[foodItemID] { return exact }
         guard let entry = usage[foodItemID] else { return 0 }
         return Self.scaledWeight(count: entry.count, lastLoggedAt: entry.lastLoggedAt, now: now)
+    }
+
+    /// Returns one recent, name-compatible specialization, or `nil` when history is absent or
+    /// ambiguous. The caller supplies only rows that already passed retrieval and binding gates.
+    ///
+    /// `completePhrase` is deliberately never decomposed here. Stopword/leading-measure handling is
+    /// the normal whole-query search policy, not a resolver sub-phrase; thus `rice pudding` cannot
+    /// acquire a Basmati-rice preference merely because its resolver happened to search `rice`.
+    public func preferredRecentIngredientID(
+        forCompletePhrase completePhrase: String,
+        among candidates: [FoodItem],
+        now: Date = Date()
+    ) -> UUID? {
+        guard FoodItemSearch.searchTokens(in: completePhrase).isEmpty == false else { return nil }
+        var seen = Set<UUID>(), leader: (id: UUID, weight: Int)?, runnerUp = 0
+        for candidate in candidates.prefix(Self.maximumIngredientSpecializationCandidates) {
+            guard seen.insert(candidate.id).inserted,
+                  FoodItemSearch.nameCarriesQuery(candidate.name, query: completePhrase) else { continue }
+            let candidateWeight = weight(for: candidate.id, now: now)
+            guard candidateWeight > 0 else { continue }
+            if candidateWeight > leader?.weight ?? 0 {
+                runnerUp = leader?.weight ?? runnerUp
+                leader = (candidate.id, candidateWeight)
+            } else {
+                runnerUp = max(runnerUp, candidateWeight)
+            }
+        }
+        guard let leader,
+              leader.weight - runnerUp >= Self.minimumIngredientSpecializationLead else { return nil }
+        return leader.id
     }
 
     /// Derives the profile from the meal history — the ONLY production constructor.

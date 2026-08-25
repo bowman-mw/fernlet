@@ -989,6 +989,9 @@
     "Allow" : {
 
     },
+    "Allow web lookup" : {
+
+    },
     "Already did this — log it" : {
 
     },
@@ -1481,6 +1484,9 @@
 
     },
     "Continue" : {
+
+    },
+    "Continue locally" : {
 
     },
     "Contrast %@:1" : {
@@ -2232,6 +2238,9 @@
 
     },
     "Fernlet will hide intimacy logging and stop reading it. Your notes are kept — turn this back on any time to see them again.\n\nAnything you've saved in Apple Health stays in Apple Health." : {
+
+    },
+    "Fernlet will send the typed product search to DuckDuckGo’s private HTML search. It sends no account identifier, cookies, or health data. Fernlet may then open a product page from the result to read its nutrition label. You can revoke this in Settings at any time. Each web lookup is recorded only on this device in Connection history." : {
 
     },
     "Fernlet will stop putting the foods you picked at the top of those searches. Your meals, recipes and everything else stay exactly as they are." : {
@@ -4361,6 +4370,9 @@
     "Search the catalog" : {
 
     },
+    "Search the web for nutrition?" : {
+
+    },
     "Search workout type" : {
 
     },
@@ -5314,6 +5326,9 @@
 
     },
     "When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only." : {
+
+    },
+    "When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Turn it off here at any time to revoke permission." : {
 
     },
     "Where you train" : {

@@ -107,11 +107,18 @@ public enum FoundationFoodSelectionModel {
     /// Split items that bind to nothing are NOT silently dropped: they are carried out as
     /// ``FoodSelectionPlan/unmatchedItems`` so the caller can demote the resolution and the review
     /// sheet can name them ("2 eggs and toast" that matched only the toast).
-    public static func deterministicPlan(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) -> FoodSelectionPlan? {
+    public static func deterministicPlan(
+        description: String,
+        candidates: [FoodSelectionCandidate],
+        fallbackType: MealType?,
+        personalization: FoodIngredientPersonalization = .empty
+    ) -> FoodSelectionPlan? {
         var items: [FoodSelectionMealItem] = []
         var unmatched: [String] = []
         for itemName in MealItemSplitter.items(from: description) {
-            let ingredients = deterministicIngredients(for: itemName, candidates: candidates)
+            let ingredients = deterministicIngredients(
+                for: itemName, candidates: candidates, personalization: personalization
+            )
             if ingredients.isEmpty {
                 unmatched.append(itemName.capitalized)
             } else {
@@ -142,7 +149,11 @@ public enum FoundationFoodSelectionModel {
     /// bound. Reusing the pool order here — or scoring through the catalog — would let one correction
     /// silently bind and auto-commit a food for a query it does not match.
     /// `FoodSearchCorrectionResolverFirewallTests` pins the outcome.
-    private static func deterministicIngredients(for itemName: String, candidates: [FoodSelectionCandidate]) -> [FoodSelectionIngredient] {
+    private static func deterministicIngredients(
+        for itemName: String,
+        candidates: [FoodSelectionCandidate],
+        personalization: FoodIngredientPersonalization
+    ) -> [FoodSelectionIngredient] {
         let foodItems = candidates.map(\.foodItem)
         // Pull a wider set (not just 4) so the candidate builder's prepared-dish demotion has a raw
         // ingredient to surface before we bind the single best food below — otherwise a top-4 that is
@@ -164,19 +175,20 @@ public enum FoundationFoodSelectionModel {
         // patties" — into a bogus multi-ingredient recipe. Genuine composite DISHES are handled upstream
         // by DishTemplateLexicon with real components; this deterministic fallback resolves each split
         // item to its single best food, and the caller merges the items into one meal.
-        let candidateLimit = 1
-        return cleared.prefix(candidateLimit).compactMap { localCandidate in
-            guard let candidate = candidates.first(where: { $0.foodItem.id == localCandidate.foodItem.id }) else { return nil }
-            let unit = defaultUnit(for: candidate.foodItem, itemName: itemName)
-            let quantity = defaultQuantity(for: candidate.foodItem, itemName: itemName, unit: unit)
-            return FoodSelectionIngredient(
-                candidateId: candidate.id,
-                foodName: candidate.foodItem.name,
-                quantity: quantity,
-                unit: unit.rawValue,
-                bindScore: bestScores[localCandidate.foodItem.id]
-            )
-        }
+        let preferredID = personalization.preferredFoodID(
+            forCompletePhrase: itemName, among: cleared.map(\.foodItem)
+        )
+        let localCandidate = cleared.first(where: { $0.foodItem.id == preferredID }) ?? cleared.first
+        guard let localCandidate,
+              let candidate = candidates.first(where: { $0.foodItem.id == localCandidate.foodItem.id }) else { return [] }
+        let unit = defaultUnit(for: candidate.foodItem, itemName: itemName)
+        let quantity = defaultQuantity(for: candidate.foodItem, itemName: itemName, unit: unit)
+        // The persisted bind score rides along whichever row personalization settled on, so a
+        // remembered pick is auditable at exactly the same confidence as a cold one.
+        return [FoodSelectionIngredient(
+            candidateId: candidate.id, foodName: candidate.foodItem.name, quantity: quantity,
+            unit: unit.rawValue, bindScore: bestScores[localCandidate.foodItem.id]
+        )]
     }
 
     /// Keeps only the candidates that clear `FoodItemSearch.minimumBindScore`, preserving the builder's

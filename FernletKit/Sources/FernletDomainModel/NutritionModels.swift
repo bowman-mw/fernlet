@@ -247,6 +247,9 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
         return bindScore >= FoodItemSearch.confidentBindScore
     }
 
+    /// Frozen persisted field names for the snapshot — they ride in the synced blob and the local
+    /// JSON store, so a rename drops rows on decode. `bindScore` is the newest and is optional on
+    /// the way in, which is what lets an older row decode without it.
     private enum CodingKeys: String, CodingKey {
         case id, foodItemId, name, quantity, unit, macros, micronutrients, bindScore
     }

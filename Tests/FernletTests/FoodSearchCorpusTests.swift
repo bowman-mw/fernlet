@@ -659,7 +659,7 @@ struct FoodSearchCorpusTests {
     /// every one and still removes everything §9(c) complains about.
     @Test func bothHalvesOfTheFloorAreLoadBearing() throws {
         #expect(FoodItemSearch.minimumBindScore == 1)
-        #expect(FoodItemSearch.confidentBindScore == 250)
+        #expect(FoodItemSearch.confidentBindScore == 368)
         #expect(FoodItemSearch.minimumQueryLength == 3)
 
         // The floor stated as an invariant over the whole corpus rather than as a row list: every
@@ -756,32 +756,24 @@ struct FoodSearchCorpusTests {
         }
     }
 
-    /// **An owner calibration question, measured and pinned rather than shipped quietly.**
-    ///
-    /// `confidentBindScore = 250` was calibrated against a search path with NO floor, where the top-1
-    /// was routinely a low-scoring row. Fix 1.8 removes exactly those rows, so top-1 scores rise by
-    /// construction and more binds present as CONFIDENT — the inversion this suite already pins for
-    /// one orphaned string at ``mozzarellaIsStillNotTheCheeseRow``, here counted as a population.
-    ///
-    /// Across the 57-query corpus, top-1 scores at or above `confidentBindScore` went from **28 to
-    /// 38**. Ten queries crossed: four that already returned rows (`cheese pizza` 58→368,
-    /// `chicken noodle soup` 60→428, `slice of toast` 107→309, `cup of coffee` 115→309) and six that
-    /// returned nothing at all before, so they had no bind to be confident about.
-    ///
-    /// **Six of the ten now present a WRONG top-1 at confident scores** — `cheese pizza`,
-    /// `slice of toast`, `cup of coffee`, `glass of milk`, `piece of chicken`, `bowl of cereal`.
-    /// That is the calibration question: a floor that removes bad rows also removes the low score
-    /// that used to FLAG the survivor as weak. It is a threshold decision, not a bug, so it is
-    /// reported rather than silently retuned.
-    @Test func confidentBindPopulationIsPinnedForCalibration() throws {
+    /// The predeclared cold calibration panel. The prior 250 floor labelled 38 results confident,
+    /// including 19 recorded wrong top rows. At 368, 29 clear and 13 are wrong; the ceiling is
+    /// explicit rather than inferred from a passing count. This is a bounded-risk threshold, not an
+    /// assurance that every accepted row is food-correct: the remaining category and form defects
+    /// require later ranking work rather than an unmeasured lower score floor.
+    @Test func confidentBindPopulationMeetsTheColdFalseConfidentCeiling() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount)
         let confident = Self.corpus.filter { corpusCase in
             (catalog.scoredResults(for: corpusCase.query, limit: 1).first?.score ?? 0) >= FoodItemSearch.confidentBindScore
         }
-        #expect(confident.count == 38, "confident top-1s: \(confident.count) of 57")
-        let confidentlyWrong = confident.filter { $0.verdict == .wrongTopOne }
-        #expect(confidentlyWrong.count == 19, "confident AND wrong: \(confidentlyWrong.map(\.query))")
+        let confidentlyWrong = Set(confident.filter { $0.verdict == .wrongTopOne }.map(\.query))
+        #expect(confident.count == 29, "confident top-1s: \(confident.count) of 57")
+        #expect(confidentlyWrong == Set([
+            "apple", "bowl of cereal", "brown rice", "cheese pizza", "chickpeas", "chipotle chicken bowl",
+            "glass of milk", "low fat greek yogurt", "piece of chicken", "salmon", "spaghetti", "sweet potato", "whole milk"
+        ]))
+        #expect(confidentlyWrong.count <= 13, "cold false-confident ceiling: \(confidentlyWrong.sorted())")
     }
 
     /// The three stopword sets are **frozen English matching inputs** and this is their freeze pin.

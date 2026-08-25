@@ -181,7 +181,7 @@ final class MealResolutionService {
         // fries at `.high` and `unmatchedItems == []`, more confident and less disclosed than the
         // partial the template tier would have produced.
         let candidates = host.foodCatalog.candidates(for: description)
-        if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
+        if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type, personalization: host.foodCatalog.recentIngredientPersonalization()),
            let resolution = builtResolution(from: plan, candidates: candidates, confidence: Self.bindConfidence(for: plan, candidates: candidates)) {
             return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
