@@ -2,7 +2,7 @@
 
 This index maps the main project files to their responsibilities. It is intended as a quick orientation guide for app navigation, feature work, tests, and documentation.
 
-Last updated: 2026-08-20 (this pass rebuilt the Documentation table from the actual contents of `Docs/`, added the twenty-five test files and three scripts that had no row, and added the Localization section below). Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/App/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/Tests/FernletTests/…` etc. are the sibling test/extension targets.
+Last updated: 2026-08-24 (the 2026-08-20 pass rebuilt the Documentation table from the actual contents of `Docs/`, added the twenty-five test files and three scripts that had no row, and added the Localization section below; this pass adds the food-catalog runtime/ODR decision record). Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/App/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/Tests/FernletTests/…` etc. are the sibling test/extension targets.
 
 ## FernletKit Package (Module Map)
 
@@ -328,6 +328,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Scripts/food-catalog/` | Offline, standard-library preservation pipeline for the approved FDC/FNDDS/curated-branded/CoFID source set; builds only ignored validation artifacts and never replaces the shipping catalog. Its README is the reproducibility and corrective-workflow contract. |
 | `Fernlet/FoodDataSource/FoodCatalogSourceManifest.json` | Immutable source/version/hash/license/attribution contract, strict FDC allowlist, and explicit CNF/NEVO exclusions for the offline preservation pipeline. |
 | `Fernlet/FoodDataSource/FoodCatalogGenerationEvidence.json` | Compact measured validation, FTS, preservation, size/ODR arithmetic, and committed-catalog checksum evidence for the historical schema-v3 local generation; current schema-v4 reproducibility results are recorded in the round ledger. Contains no raw data or SQLite payload. |
+| `Fernlet/Docs/Food-Catalog-Runtime-ODR-Options-2026-08-24.md` | Measured base/ODR/preservation distribution options, P0/P1/P2 projection boundary, and the owner decision required before any runtime catalog or ODR integration. |
 | `Fernlet/FoodDataSource/USDAFoodItems.json` | Source USDA food item dataset consumed by the build-time DB generator (not bundled at runtime). |
 | `Fernlet/FernletKit/Sources/FoodCatalog/Resources/FoodCatalog.sqlite` | The shipped read-only SQLite food catalog (FTS5), generated from `FoodDataSource/` and loaded via `Bundle.module`. |
 | `Fernlet/App/Fernlet/WorkoutExercises.json` | Bundled exercise dataset consumed by the workout system. |

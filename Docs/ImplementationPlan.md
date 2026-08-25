@@ -91,6 +91,7 @@ Food knowledge base and recipes:
 - Recipe ingredient search uses an in-memory `FoodItemSearch.Index`, normalized token matching, and a 3-character minimum before results show.
 - Manual recipe creation is implemented with USDA search, selected-item read-only macros, unmatched manual macro entry, quantity/unit controls, and live per-serving totals.
 - Unit selection uses a picker (`g`, `oz`, `cup`, `tbsp`, `tsp`, `each`, `serving`). USDA portion gram weights are used first for conversion; generic conversions are fallback only.
+- Runtime catalog distribution remains an owner decision: the measured base + branded ODR pair is 226.64 MiB installed, while the historical preservation artifact is 428.73 MiB alone. The recommended future shape is a separately generated P0 runtime projection with optional P1/P2 ODR, never an implicit reuse of preservation; see [Food-Catalog-Runtime-ODR-Options-2026-08-24.md](Food-Catalog-Runtime-ODR-Options-2026-08-24.md).
 - Saved recipes are editable, searchable by recipe or ingredient text, and have optional notes.
 - Recipe export is implemented via `ShareLink` as readable text with an embedded `fernlet.recipe` JSON payload. Import is intentionally deferred to the next pass.
 - URL recipe import exists through `RecipeWebImporter`/`SavedRecipe` as a separate SwiftData-backed flow; it can log imported recipes as meals, but it is not yet merged with the local `RecipeDefinition` builder/import path.
