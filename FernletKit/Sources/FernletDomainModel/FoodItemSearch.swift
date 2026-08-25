@@ -123,7 +123,9 @@ public nonisolated enum FoodBrandLexicon {
 ///    history weight can never present a row the cold pipeline refused. `history` defaults to
 ///    ``FoodSearchHistory/empty`` on every entry point, and ``scoredResults(for:in:limit:stripsStopwords:)``
 ///    has no parameter for it at all — so every confidence gate is cold by construction;
-/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score;
+/// 2. `sourcePriority` (manual > USDA > AI), then brand-aware `dataTypePriority`, ABOVE the score.
+///    A plain ingredient query therefore keeps generic USDA rows above commercial titles whose
+///    supplier is only stored in `brandSource`; an explicit recognized restaurant cue is the exception;
 /// 3. the relevance score (exact/prefix/substring name hits, per-token coverage, length penalty,
 ///    preparation and form-specificity biases), then the name as a final tie-break;
 /// 4. **the search floor** — a row whose NAME does not carry every search token is dropped rather

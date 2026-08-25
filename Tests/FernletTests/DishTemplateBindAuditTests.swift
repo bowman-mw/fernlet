@@ -461,16 +461,20 @@ struct DishTemplateBindAuditTests {
     }
 
     /// The behavioural pin for fix 1.1: a description resolves `.high` if and only if every component
-    /// `resolve` binds for it cleared the floor. Replayed for all 31 audited descriptions against the
-    /// shipped catalog — including `cheeseburger`, which binds a component `burger` never does.
+    /// `resolve` binds for it cleared the floor and its declared units have source-backed conversions.
+    /// An unsupported household measure must fall through instead of inheriting an unsafe scale.
     @Test func templateConfidenceFollowsItsWeakestBind() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
         #expect(Self.fallThroughDescriptions == [], "fix 1.3 leaves no description without a bindable component")
+        let rejected = Set(Self.auditedDescriptions.filter {
+            DishTemplateLexicon.resolve(description: $0, mealType: nil, catalog: catalog) == nil
+        })
+        #expect(rejected == ["ramen"], "unsupported household units must fall through: \(rejected)")
         for description in Self.auditedDescriptions {
             let resolved = DishTemplateLexicon.resolve(description: description, mealType: nil, catalog: catalog)
-            guard Self.fallThroughDescriptions.contains(description) == false else {
-                #expect(resolved == nil, "\(description) has no bindable component left — the tier must fall through")
+            guard rejected.contains(description) == false else {
+                #expect(resolved == nil, "\(description) has no safe conversion — the tier must fall through")
                 continue
             }
             guard let resolved else {
@@ -490,10 +494,8 @@ struct DishTemplateBindAuditTests {
     /// already downgraded some template resolutions to `.low` while the tier was still asserting
     /// `.high` — so "11 of the 31 non-confident descriptions newly pause at review" would have
     /// over-claimed fix 1.1's effect. This replays the PRE-fix path (hardcoded `.high` → merge → gate)
-    /// for every audited description and pins the split. `ramen` is the one still-already-gated
-    /// description: its total still runs well past 4,000 kcal, a serving-unit defect
-    /// (`RecipeIngredient.scale`'s identity fallback, research fix 2.5) recorded for order-12 — fix 1.3
-    /// repairing ramen's food-correctness did not repair its portion math, which is a different bug.
+    /// for every safely buildable audited description and pins the split. `ramen` now falls through
+    /// before this historical comparison: its unsupported bowl measure has no source-backed conversion.
     @MainActor
     @Test func preFixReviewRoutingIsAttributedCorrectly() throws {
         let catalog = FoodCatalog.bundled()
@@ -513,9 +515,8 @@ struct DishTemplateBindAuditTests {
             )
             if preFix.needsReview { alreadyReviewed.append(description) } else { newlyReviewed.append(description) }
         }
-        #expect(alreadyReviewed.sorted() == [
-            "ramen"
-        ], "already caught by the 4,000-kcal gate before this fix: \(alreadyReviewed.sorted())")
+        #expect(alreadyReviewed.isEmpty,
+                "no safely buildable description was already caught by the old calorie gate: \(alreadyReviewed.sorted())")
         #expect(newlyReviewed.count == 10, "newly routed to review by fix 1.1: \(newlyReviewed.sorted())")
         #expect(Self.confidentDescriptions.count == 20)
         #expect(Self.fallThroughDescriptions.count == 0)
@@ -758,18 +759,12 @@ struct DishTemplateBindAuditTests {
             candidates: candidates) == .low)
     }
 
-    /// **What deriving tier-2 confidence does NOT close, measured rather than assumed.**
+    /// A candidate-constrained plan cannot use an unsafe household conversion to mint a high-confidence meal.
     ///
-    /// The file header parked `burger and fries` here as the case a score-gated confidence would
-    /// catch. It does not, and the pin records why: the plan tier binds *Hamburger (Burger King)* and
-    /// *Potato, french fries, with chili*, and each clears `confidentBindScore` on the +250 substring
-    /// bonus alone — a row merely CONTAINING the typed word. The stamp is now honest about bind
-    /// QUALITY and the binds really are, by this codebase's definition, good; what is wrong is that
-    /// one of them is chili fries. That is the confident-but-wrong-VARIETY category this suite's
-    /// header already names, and it needs a relevance fix (§26 fix 1.7 option (b), or a
-    /// `formSpecificityBias` that knows "with chili" is an extraneous qualifier), not a confidence one.
+    /// The selected fries row has no source-backed conversion for the plan's household unit, so the
+    /// plan construction fails closed and the fallback remains reviewable rather than inventing a scale.
     @MainActor
-    @Test func planTierStillCommitsBurgerAndFriesAtHighConfidence() async throws {
+    @Test func planTierRoutesBurgerAndFriesToReviewWithoutUnsafeConversion() async throws {
         let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
         try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs under test")
         try #require(store.foodCatalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
@@ -777,9 +772,9 @@ struct DishTemplateBindAuditTests {
                      "the template tier still declines this description by design")
 
         let resolved = await store.resolveMeals(from: "burger and fries")
-        #expect(resolved.confidence == .high, "still high — and the note above is why")
-        #expect(resolved.unmatchedItems.isEmpty, "still undisclosed: both items produced something, so neither is 'unmatched'")
-        #expect(resolved.meals.first?.name.contains("chili") == true, "the fries bind is chili fries")
+        #expect(resolved.confidence == .low, "an unconvertible plan must not claim high confidence")
+        #expect(resolved.needsReview)
+        #expect(resolved.meals.first?.name.contains("chili") == false, "the unsafe chili-fries bind must not survive")
     }
 
     /// An item the lexicon does not know at all still hands the WHOLE description to the next tier,
@@ -809,8 +804,8 @@ struct DishTemplateBindAuditTests {
         #expect(tester.needsReview == true)
         #expect(tester.meals.first?.componentSnapshots.count == 1, "the portion-bearing row preempts decomposition")
         #expect(tester.meals.first?.componentSnapshots.first?.name == "PIZZA HUT 12\" Cheese Pizza, Pan Crust")
-        #expect(tester.meals.first?.componentSnapshots.first?.quantity == 100)
-        #expect(tester.meals.first?.componentSnapshots.first?.unit == RecipeUnit.gram.rawValue)
+        #expect(tester.meals.first?.componentSnapshots.first?.quantity == 1)
+        #expect(tester.meals.first?.componentSnapshots.first?.unit == RecipeUnit.slice.rawValue)
         #expect(tester.meals.first?.confidence == MealConfidence.roughEstimate.token,
                 "review finding F6: the MEAL's own persisted stamp must also reflect the brand flag")
 

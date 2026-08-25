@@ -135,6 +135,46 @@ struct FoodCatalogTests {
         #expect(top.name == "Egg, whole, raw")
     }
 
+    /// A commercial catalog title can look exactly like a basic ingredient while its actual brand
+    /// lives only in `brandSource`. Plain ingredient search must keep the generic USDA food first;
+    /// the title alone is not an implicit brand request.
+    @Test func plainIngredientSearchKeepsGenericFoodAboveCommercialTitle() throws {
+        let generic = Self.sampleItem(
+            name: "Beef, ground, 90% lean, raw",
+            category: "Beef",
+            protein: 20,
+            fat: 10,
+            dataType: .foundation,
+            tags: ["beef", "ground"]
+        )
+        var commercial = Self.sampleItem(
+            name: "Ground Beef",
+            category: "Beef",
+            protein: 20,
+            fat: 10,
+            dataType: .branded,
+            tags: ["beef", "ground"]
+        )
+        commercial.brandSource = "Example Market"
+        let catalog = FoodCatalog(source: try buildSQLiteSource([generic, commercial]))
+
+        let top = try #require(catalog.results(for: "ground beef", limit: 1, context: .userTyped).first)
+        #expect(top.id == generic.id)
+        #expect(FoodItemSearch.dataTypePriority(.foundation, brandQuery: false) >
+                FoodItemSearch.dataTypePriority(.branded, brandQuery: false))
+    }
+
+    /// The bundled catalogue must preserve the user-visible version of the same contract for the
+    /// basic ingredients that exposed this regression: plural eggs and ground beef.
+    @Test func bundledBasicIngredientQueriesLeadWithGenericFood() throws {
+        let catalog = FoodCatalog.bundled()
+        for query in ["eggs", "ground beef"] {
+            let top = try #require(catalog.results(for: query, limit: 1, context: .userTyped).first)
+            #expect(top.dataType != .branded, "\(query) promoted a commercial title: \(top.name)")
+            #expect(top.dataType != .restaurant, "\(query) promoted a restaurant item: \(top.name)")
+        }
+    }
+
     // MARK: - User-item merging
 
     @Test func searchMergesUserAndBundledItems() throws {
