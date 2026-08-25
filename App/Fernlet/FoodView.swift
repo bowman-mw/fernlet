@@ -2316,6 +2316,8 @@ struct MealSheet: View {
     @State private var mealType: MealType?
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
+    /// The typed product query held while the user reads the one-time egress disclosure.
+    @State private var pendingWebNutritionLookup: String?
     @State private var isResolvingMeal = false
     /// True while the by-hand macro fields (FOOD-24) are revealed. With any nonzero value typed,
     /// Save logs those numbers directly instead of running the resolve cascade.
@@ -2487,6 +2489,12 @@ struct MealSheet: View {
             }) {
                 recentMealsSurface
             }
+            .alert("Search the web for nutrition?", isPresented: webNutritionConsentPresented) {
+                Button("Continue locally", role: .cancel, action: declineWebNutritionLookup)
+                Button("Allow web lookup", action: acceptWebNutritionLookup)
+            } message: {
+                Text("Fernlet will send the typed product search to DuckDuckGo’s private HTML search. It sends no account identifier, cookies, or health data. Fernlet may then open a product page from the result to read its nutrition label. You can revoke this in Settings at any time. Each web lookup is recorded only on this device in Connection history.")
+            }
         #if canImport(UIKit)
             .sheet(item: $captureChooser) { context in
                 captureChooserSheet(context)
@@ -2502,6 +2510,29 @@ struct MealSheet: View {
                 servingStepSheet(pending)
             }
         #endif
+    }
+
+    private var webNutritionConsentPresented: Binding<Bool> {
+        Binding(
+            get: { pendingWebNutritionLookup != nil },
+            set: { isPresented in
+                if !isPresented { pendingWebNutritionLookup = nil }
+            }
+        )
+    }
+
+    private func acceptWebNutritionLookup() {
+        guard let query = pendingWebNutritionLookup else { return }
+        pendingWebNutritionLookup = nil
+        store.acceptWebNutritionLookupConsent()
+        path.append(.productSearch(query))
+    }
+
+    private func declineWebNutritionLookup() {
+        guard let query = pendingWebNutritionLookup else { return }
+        pendingWebNutritionLookup = nil
+        store.declineWebNutritionLookupConsent()
+        resolveTypedMeal(query, type: mealType)
     }
 
     /// The dedicated Recent surface (FOOD-07), configured to file the repeat for NOW: the sheet's
@@ -3001,6 +3032,10 @@ struct MealSheet: View {
                 // Recording at this navigation would double-log and pre-stamp `.succeeded` on a
                 // lookup that hasn't happened yet.
                 path.append(.productSearch(mealDescription))
+                return
+            }
+            if store.shouldOfferWebNutritionLookupConsent {
+                pendingWebNutritionLookup = mealDescription
                 return
             }
         }

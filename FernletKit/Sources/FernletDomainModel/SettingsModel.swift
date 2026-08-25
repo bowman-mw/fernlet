@@ -63,7 +63,29 @@ public nonisolated struct FernletSettings: Codable {
     }
     /// Unknown `aiStatus` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
     public var unknownAIStatusToken: String? = nil
+    /// The user may ask to use the web-nutrition lane, but the lane is still closed until an
+    /// informed, affirmative consent decision is recorded. Keeping the request and consent
+    /// separate prevents a legacy Settings toggle from becoming retroactive consent.
     public var webNutritionLookupEnabled: Bool = false
+    public var webNutritionLookupConsent: WebNutritionLookupConsent = .undecided {
+        didSet { unknownWebNutritionLookupConsentToken = nil }
+    }
+    /// Future consent tokens must not turn into permission on an older build. Park and re-emit
+    /// them while treating the lane as closed until a build that understands the token can decide.
+    public var unknownWebNutritionLookupConsentToken: String? = nil
+
+    /// The sole permit for the packaged-food web lane. This is intentionally fail-closed for an
+    /// absent, rejected, revoked, or future-build consent token.
+    public var allowsWebNutritionLookup: Bool {
+        webNutritionLookupEnabled && webNutritionLookupConsent == .accepted && aiStatus != .off
+    }
+
+    /// A first-use prompt is appropriate only before a decision, or after the user explicitly
+    /// re-requests the feature in Settings. A decline/revocation stays quiet and local by default.
+    public var shouldOfferWebNutritionLookupConsent: Bool {
+        guard aiStatus != .off else { return false }
+        return webNutritionLookupConsent == .undecided || webNutritionLookupEnabled
+    }
     /// Opt-in: weather-aware gentle recovery prompts (requests coarse location only when enabled).
     public var weatherPromptsEnabled: Bool = false
     public var showCalories: Bool = false
@@ -328,6 +350,11 @@ public nonisolated struct FernletSettings: Codable {
     /// The feature flags, the onboarding marker, and the sensitive-surface visibility gate.
     private mutating func decodeFlagsAndSensitiveGate(from container: KeyedDecodingContainer<CodingKeys>) throws {
         webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
+        let webConsentSplit = try container.decodeTolerantEnum(
+            WebNutritionLookupConsent.self, forKey: .webNutritionLookupConsent,
+            parkedTokenKey: .unknownWebNutritionLookupConsentToken, default: .undecided)
+        webNutritionLookupConsent = webConsentSplit.value
+        unknownWebNutritionLookupConsentToken = webConsentSplit.parkedToken
         weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
@@ -529,7 +556,8 @@ public nonisolated struct FernletSettings: Codable {
              unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
              localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
              unknownSelectedGoalToken, sickDays, intentDismissedDays, nutrientBubbleDismissedUntil,
-             aiStatus, unknownAIStatusToken, webNutritionLookupEnabled, weatherPromptsEnabled,
+             aiStatus, unknownAIStatusToken, webNutritionLookupEnabled, webNutritionLookupConsent,
+             unknownWebNutritionLookupConsentToken, weatherPromptsEnabled,
              showCalories, hasCompletedOnboarding, periodTrackingVisible, didMigratePeriodVisibility,
              intimacyTrackingVisible, hidePredictions, hideFertileWindow, periodAwareScoringEnabled,
              periodContextPrimerSeen, stressAwarenessEnabled, userProfile, nutritionPreferences,
@@ -595,6 +623,8 @@ public nonisolated struct FernletSettings: Codable {
     /// Mirror of `decodeFlagsAndSensitiveGate(from:)`.
     private func encodeFlagsAndSensitiveGate(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(webNutritionLookupEnabled, forKey: .webNutritionLookupEnabled)
+        try container.encode(webNutritionLookupConsent, forKey: .webNutritionLookupConsent)
+        try container.encodeIfPresent(unknownWebNutritionLookupConsentToken, forKey: .unknownWebNutritionLookupConsentToken)
         try container.encode(weatherPromptsEnabled, forKey: .weatherPromptsEnabled)
         try container.encode(showCalories, forKey: .showCalories)
         try container.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
@@ -776,6 +806,15 @@ public extension FernletSettings {
         }
         return (reconciled, resolution, settingsChanged)
     }
+}
+
+/// The local user's last explicit decision about the web-nutrition lane. It is part of settings so
+/// a device restored from the synced snapshot cannot silently prompt or egress with an old choice.
+public nonisolated enum WebNutritionLookupConsent: String, Codable, Sendable, CaseIterable {
+    case undecided
+    case accepted
+    case declined
+    case revoked
 }
 
 /// The companion-voiced AI availability state shown in Settings (ready/sleepy/resting/off).

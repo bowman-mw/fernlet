@@ -12,7 +12,7 @@ public enum AIDestination: String, Codable, Sendable, CaseIterable {
     /// On-device Apple Foundation Models — the always-available floor. Never leaves the device.
     case onDeviceFoundationModels
     /// The web nutrition search path (chain/packaged-food lookup). Sends the user's meal description
-    /// to a search provider; gated by `FernletSettings.webNutritionLookupEnabled`.
+    /// to a search provider; gated by an explicit first-use `FernletSettings` consent decision.
     case webNutritionLookup
     /// Apple Private Cloud Compute — the default deep tier (iOS 27, first-use consent).
     /// Resolves UNAVAILABLE on the installed SDK; see `FernletModelRouter` for the slot-in point.

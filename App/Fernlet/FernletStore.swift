@@ -128,6 +128,36 @@ final class FernletStore {
     }
     var webImportedFoodItems: [FoodItem] { diary.webImportedFoodItems }
     var allowsWebNutritionLookup: Bool { diary.allowsWebNutritionLookup }
+    var shouldOfferWebNutritionLookupConsent: Bool { settings.shouldOfferWebNutritionLookupConsent }
+
+    /// Records an affirmative, informed decision immediately before the first eligible lookup.
+    func acceptWebNutritionLookupConsent() {
+        settings.webNutritionLookupEnabled = true
+        settings.webNutritionLookupConsent = .accepted
+        scheduleSnapshotSave()
+    }
+
+    /// A rejection keeps the normal local resolution path available and suppresses repeat prompts
+    /// until the user explicitly re-requests the lane from Settings.
+    func declineWebNutritionLookupConsent() {
+        settings.webNutritionLookupEnabled = false
+        settings.webNutritionLookupConsent = .declined
+        scheduleSnapshotSave()
+    }
+
+    /// Disabling this setting is revocation, not merely a cosmetic switch: the gate closes before
+    /// any future dispatch and a later request must ask for consent again.
+    func revokeWebNutritionLookupConsent() {
+        settings.webNutritionLookupEnabled = false
+        settings.webNutritionLookupConsent = .revoked
+        scheduleSnapshotSave()
+    }
+
+    /// Settings may request a new first-use prompt, but may never grant consent itself.
+    func requestWebNutritionLookupConsent() {
+        settings.webNutritionLookupEnabled = true
+        scheduleSnapshotSave()
+    }
     var recipes: [RecipeDefinition] {
         get { diary.recipes }
         set { diary.recipes = newValue }

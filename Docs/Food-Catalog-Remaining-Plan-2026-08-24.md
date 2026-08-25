@@ -111,8 +111,9 @@ test bank rather than chosen by intuition.
    signal and the precedence/ambiguity contract above.
 8. **Recalibrate `confidentBindScore`.** Calibrate after items 17 and 9d against a predeclared corpus,
    emphasizing false-confident personalized and cold matches.
-9. **Implement item 14 persisted bind score**, then item 15 explicit web consent, then item 16 partial
-   matching last.
+9. **Complete item 16 partial matching last.** Item 14's persisted bind score and item 15's explicit
+   web consent are implemented; keep the AND gate, scorer parity, and review-confidence guarantees
+   intact when adding the bounded fallback.
 10. **Design the compact runtime/ODR projection.** Present measured options before changing the
     shipping catalog or ODR configuration.
 11. **Consider future food-item improvements** only through the prioritization below; no new data

@@ -85,7 +85,7 @@ public struct MealDecompositionPayload: AIContextPayload {
 /// Fields allowed for web nutrition lookup.
 ///
 /// The one payload whose destination LEAVES the device today: the meal description is sent to a
-/// search provider, so this path is opt-in, settings-gated, and audited at DISPATCH time (see
+/// search provider, so this path requires explicit first-use consent and is audited at DISPATCH time (see
 /// ``AIAuditLog``'s dispatch-then-update contract). Built by the app's food view flow.
 public struct WebNutritionLookupPayload: AIContextPayload {
     /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;

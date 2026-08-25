@@ -100,10 +100,10 @@ public final class DiaryStore {
     public var webImportedFoodItems: [FoodItem] {
         foodItems.filter { $0.tags.contains("web-import") }
     }
-    /// Whether the web nutrition lookup may run: requires the explicit settings opt-in AND
-    /// AI not being switched off.
+    /// Whether the web nutrition lookup may run. The settings model owns the fail-closed consent
+    /// predicate so every caller sees the same result after a rejection or revocation.
     public var allowsWebNutritionLookup: Bool {
-        settings.webNutritionLookupEnabled && settings.aiStatus != .off
+        settings.allowsWebNutritionLookup
     }
     /// The user's recipe book, newest-first; mutated only through the add/update/insert/delete
     /// recipe methods.

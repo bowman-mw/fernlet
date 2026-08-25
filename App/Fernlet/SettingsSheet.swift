@@ -1205,9 +1205,9 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.bark)
             }
             Divider().overlay(Color.bark.opacity(0.08))
-            Toggle("Web nutrition lookup", isOn: settingsBinding(\.webNutritionLookupEnabled))
+            Toggle("Web nutrition lookup", isOn: webNutritionLookupBinding)
                 .disabled(store.settings.aiStatus == .off)
-            Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
+            Text("When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Turn it off here at any time to revoke permission.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -1238,6 +1238,19 @@ struct SettingsSheet: View {
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var webNutritionLookupBinding: Binding<Bool> {
+        Binding(
+            get: { store.settings.webNutritionLookupEnabled },
+            set: { enabled in
+                if enabled {
+                    store.requestWebNutritionLookupConsent()
+                } else {
+                    store.revokeWebNutritionLookupConsent()
+                }
+            }
+        )
     }
 
     /// Reflects the EFFECTIVE status (intent overlaid with today's local budget): off shows the
