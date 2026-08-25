@@ -533,6 +533,11 @@ struct ContentView: View {
                 if !isDisposableCameraSessionActive {
                     customTabBar
                         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCustomTabBarCompact)
+                        // Keep the safe-area inset at the largest measured tab-bar height while the
+                        // bar compacts. Without this floor, the viewport itself grew and shrank during
+                        // a drag, which made otherwise smooth scrolling visibly jump. A minimum (not
+                        // fixed) height still permits Dynamic Type to establish a larger reservation.
+                        .frame(minHeight: tabBarReservedHeight, alignment: .bottom)
                         // Keep the floating tab bar pinned to the physical bottom (behind the
                         // keyboard) instead of riding up above it. Scoping the keyboard-safe-area
                         // ignore to the bar ONLY changes how safeAreaInset anchors the bar — the

@@ -1124,6 +1124,10 @@ public struct FernletLockView: View {
     /// an empty closure because it disappears reactively, while sheet presenters use it
     /// to dismiss.
     var onUnlocked: () -> Void
+    /// Whether appearing should consume the lock session's one automatic biometric opportunity.
+    /// Callers that were not reached through an explicit unlock action can leave the biometric
+    /// button available without presenting the system prompt on navigation alone.
+    var automaticallyPromptsBiometrics: Bool
     /// Invoked when the user taps "Reset app lock" on the reset-required card; the
     /// presenting context owns the destructive confirmation. When nil, no reset button
     /// is offered.
@@ -1162,10 +1166,18 @@ public struct FernletLockView: View {
     ///   - onUnlocked: Called after a successful passcode or biometric unlock.
     ///   - onResetRequested: Optional handler for the reset-required card's destructive
     ///     reset button; omit it to hide the button.
-    public init(scope: FernletLockScope, onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+    ///   - automaticallyPromptsBiometrics: Whether appearing consumes the session's automatic
+    ///     biometric opportunity. The manual biometric button remains available when false.
+    public init(
+        scope: FernletLockScope,
+        onUnlocked: @escaping () -> Void,
+        onResetRequested: (() -> Void)? = nil,
+        automaticallyPromptsBiometrics: Bool = true
+    ) {
         self.scope = scope
         self.onUnlocked = onUnlocked
         self.onResetRequested = onResetRequested
+        self.automaticallyPromptsBiometrics = automaticallyPromptsBiometrics
     }
 
     public var body: some View {
@@ -1182,7 +1194,7 @@ public struct FernletLockView: View {
         }
         .onAppear {
             refreshCooldown()
-            autoPromptBiometricIfEligible()
+            if automaticallyPromptsBiometrics { autoPromptBiometricIfEligible() }
         }
         // Toward an error only, never away from one: an arriving failure takes the cursor, and
         // clearing the message at the start of the next attempt leaves it where the user put it.

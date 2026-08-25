@@ -299,7 +299,12 @@ private struct ProgressPhotoUnlockSheet: View {
         // unrecoverable card never renders here. Offering a destructive app-lock reset from the
         // photo strip would be the wrong place for it; the Private Hub gate and Settings → App
         // lock both carry it.
-        FernletLockView(scope: .progressPhotos, onUnlocked: { dismiss() }, onResetRequested: nil)
+        FernletLockView(
+            scope: .progressPhotos,
+            onUnlocked: { dismiss() },
+            onResetRequested: nil,
+            automaticallyPromptsBiometrics: true
+        )
             .environment(lockService)
             .onChange(of: lockService.state) { _, newState in
                 if newState.isUnlocked(for: .progressPhotos) { dismiss() }
@@ -483,7 +488,12 @@ struct ProgressPhotoDetailView: View {
         // Sharing the strip's scope is what lets `shouldLockOnDisappear` keep one unlock across
         // strip → detail → pop-back instead of costing a fresh Face ID per photo (see the property
         // doc above).
-        .fernletLockGate(scope: .progressPhotos, active: gateActive, shouldLockOnDisappear: shouldLockOnDisappear)
+        .fernletLockGate(
+            scope: .progressPhotos,
+            active: gateActive,
+            automaticallyPromptsBiometrics: false,
+            shouldLockOnDisappear: shouldLockOnDisappear
+        )
     }
 
     /// The photo itself, or the calm placeholder while it is still sealed/decoding.

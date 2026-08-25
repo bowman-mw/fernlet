@@ -126,6 +126,9 @@ struct FernletLockGateModifier: ViewModifier {
     /// Whether the gate is enforced; when `false` the content passes through unmodified
     /// and no lifecycle handling (overlays or disappear re-locks) occurs.
     let active: Bool
+    /// Whether creating this gate's unlock overlay may automatically present biometrics.
+    /// False keeps the manual biometric affordance but makes navigation alone prompt-free.
+    let automaticallyPromptsBiometrics: Bool
     /// Consulted at the moment the gated view disappears; returning false skips the viewDisappeared
     /// re-lock entirely (no deferred pending lock either). For the case where the gate is popped back
     /// to an ALSO-GATED, still-visible parent (the progress-photo detail returning to the timeline
@@ -381,7 +384,8 @@ struct FernletLockGateModifier: ViewModifier {
             FernletLockView(
                 scope: scope,
                 onUnlocked: { },
-                onResetRequested: { showReset = true }
+                onResetRequested: { showReset = true },
+                automaticallyPromptsBiometrics: automaticallyPromptsBiometrics
             )
             .environment(lockService)
         }
@@ -483,6 +487,8 @@ public extension View {
     ///     itself rather than silently inherit another surface's unlock.
     ///   - active: Whether the gate is enforced at all; pass `false` to render the content
     ///     ungated (e.g. while a UI-test bypass flag is set).
+    ///   - automaticallyPromptsBiometrics: Whether the unlock overlay may automatically present
+    ///     biometrics when it appears. The manual biometric button remains available when false.
     ///   - shouldLockOnDisappear: Consulted at the moment the gated view disappears;
     ///     returning `false` skips that re-lock entirely so one unlock session can span a
     ///     push onto — and pop back from — a child screen whose parent is also gated.
@@ -490,8 +496,14 @@ public extension View {
     func fernletLockGate(
         scope: FernletLockScope,
         active: Bool = true,
+        automaticallyPromptsBiometrics: Bool = true,
         shouldLockOnDisappear: @escaping () -> Bool = { true }
     ) -> some View {
-        modifier(FernletLockGateModifier(scope: scope, active: active, shouldLockOnDisappear: shouldLockOnDisappear))
+        modifier(FernletLockGateModifier(
+            scope: scope,
+            active: active,
+            automaticallyPromptsBiometrics: automaticallyPromptsBiometrics,
+            shouldLockOnDisappear: shouldLockOnDisappear
+        ))
     }
 }
