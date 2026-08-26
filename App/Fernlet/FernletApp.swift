@@ -68,6 +68,9 @@ struct FernletApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // App Intents resolve this dependency before any scene exists. Registering it at process
+        // startup gives background file exchange the same main-process store access as the UI.
+        ExchangeIntentService.registerAppDependency()
         // Install the concrete HealthKit cache cleaner before any HealthKitService is
         // constructed. The gateway module has NO default cleaner (WI-2: defaultCacheClearer
         // is nil, so disableIntegration() fails closed rather than silently skipping the
@@ -174,6 +177,7 @@ struct FernletApp: App {
                 guard !shouldOpenPrivacyDataForUITest else { return }
                 await loader.startIfNeeded()
             }
+            .onOpenURL { _ = FernletMessagesRecipeImportRequest.request(from: $0) }
             // Relock on background and on device lock
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background {

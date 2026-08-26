@@ -403,7 +403,7 @@ final class FernletStore {
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
-        onAfterSave: { [weak self] in self?.handleAfterSnapshotSave() }
+        onAfterSave: { [weak self] didPersist in self?.handleAfterSnapshotSave(didPersist: didPersist) }
     )
     /// Read-only SQLite-backed bundled food store + user-item snapshot. Replaces the old in-memory
     /// `bundledFoodItems` array; see FoodCatalog.swift. Forwarded to DiaryStore (it owns it).
@@ -460,6 +460,9 @@ final class FernletStore {
     /// queue, so on the process-wide container any wiping test destroyed all of it for every
     /// concurrently-live store — and `GuidedWorkoutRunStoreTests` reads that very file.
     @ObservationIgnored nonisolated let appGroupDirectory: URL?
+    /// Optional direct Messages-catalog directory for tests. Production resolves the distinct
+    /// `<group.MBO.Fernlet>/FernletMessages/` directory only when the catalog is activated.
+    @ObservationIgnored nonisolated let messagesCatalogDirectory: URL?
     /// Defaults suite backing THIS store's device-local AI-call counter. `.standard` in production.
     ///
     /// The identity here is a UserDefaults SUITE, not a path — the same lesson the heart-drop seal
@@ -570,6 +573,9 @@ final class FernletStore {
     /// so unit tests stay hermetic — no app-group writes/WidgetCenter pokes unless a test injects
     /// its own mirror). Publishes the benign snapshot after every persisted save.
     @ObservationIgnored var widgetSnapshotMirror: WidgetSnapshotMirror?
+    /// Nil until the loaded app explicitly activates the Messages composer catalog. This keeps
+    /// tests and headless imports from touching App Group storage without an intentional seam.
+    @ObservationIgnored var messagesCatalogPublisher: FernletMessagesCatalogPublisher?
     /// Inbound queue of widget App-Intent actions (injectable directory for tests).
     @ObservationIgnored lazy var pendingWidgetActionQueue =
         PendingWidgetActionQueue(directory: appGroupDirectory)
@@ -685,13 +691,14 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
         self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
+        self.messagesCatalogDirectory = messagesCatalogDirectory
         // A different app-group subdirectory from the one above, so it gets its own seam. Nil resolves
         // to the real `SharedRecipeImports/PendingRecipeURLs.json` — see `sharedRecipeImportQueue`.
         self.sharedRecipeImportQueue = SharedRecipeImportQueue(fileURL: sharedRecipeImportQueueFileURL)
@@ -841,6 +848,9 @@ final class FernletStore {
         // The share extension is the same separate-process argument as the widget: it hand-copies its
         // own path resolution, so an app anywhere else strands every shared-in recipe.
         self.appGroupDirectory = nil
+        // Same real app-group path as the designated initializer, for the same widget/share-extension
+        // separate-process reason as `appGroupDirectory` above: nil resolves to the real catalog location.
+        self.messagesCatalogDirectory = nil
         self.sharedRecipeImportQueue = SharedRecipeImportQueue()
         self.aiQuotaDefaults = .standard
         // `.standard` on the launch path for the same reason as the sidecars above: this is the
@@ -849,6 +859,9 @@ final class FernletStore {
         self.foodSearchCorrectionDefaults = .standard
         self.sensitiveVisibilityDefaults = .standard
         self.ageAssurance = AgeAssuranceStore(defaults: .standard)
+        // No test-injected audit sink on the launch path; `aiAuditLogStore` falls back to the real
+        // file-backed store lazily.
+        self.injectedAuditLogStore = nil
         self.savedRecipeService = savedRecipeService
         self.customItemService = customItemService
         self.coinLedgerService = coinLedgerService
@@ -4529,7 +4542,10 @@ final class FernletStore {
         RecipeStepSanitizer.sanitized(steps)
     }
 
-    @discardableResult func importRecipe(from text: String) throws -> RecipeDefinition {
+    @discardableResult func importRecipe(
+        from text: String,
+        id importedRecipeID: UUID? = nil
+    ) throws -> RecipeDefinition {
         let payload = try RecipeShareCodec.decodePayload(from: text)
         let trimmedName = payload.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty, payload.servings > 0, !payload.ingredients.isEmpty else {
@@ -4570,6 +4586,7 @@ final class FernletStore {
             }
 
             let recipe = RecipeDefinition(
+                id: importedRecipeID ?? UUID(),
                 name: trimmedName,
                 servings: payload.servings,
                 ingredients: recipeIngredients,
@@ -5088,6 +5105,12 @@ final class FernletStore {
         if !sharedRecipeImportQueue.clear() {
             outcome.incompleteStores.append("shared recipe inbox")
         }
+        // A Messages card only puts its validated packet in this separate App Group inbox until the
+        // containing app presents its review. Leaving either queue behind would resurrect a recipe
+        // or workout plan after the canonical store has been wiped.
+        if !clearMessagesImportInboxes() {
+            outcome.incompleteStores.append("Messages import inbox")
+        }
 
         // 6. The plaintext "export my data" dump. `writeDataExportFile()` writes the user's whole
         // decrypted dataset — day logs, meals, journal, recipes, wardrobe, friends — UNENCRYPTED to a
@@ -5110,6 +5133,11 @@ final class FernletStore {
         presenceManager.stop()
     }
 
+    private func clearMessagesImportInboxes() -> Bool {
+        let directory = messagesCatalogDirectory?.appendingPathComponent("Inbox", isDirectory: true)
+        return FernletMessagesRecipeInboxCoordinator(directory: directory).clear()
+    }
+
     /// Wipe leg 10: the widget's app-group files and the device-local AI ledgers (call quota + audit
     /// log). Runs after the funnel's second `cancelPending`, so no debounced save can rewrite them.
     private func clearDeviceLocalLedgers(into outcome: inout DeleteAllOutcome) async {
@@ -5118,6 +5146,11 @@ final class FernletStore {
         // score, water and macros keep rendering on the Home and Lock Screen.
         if let widgetSnapshotMirror, !widgetSnapshotMirror.clear() {
             outcome.incompleteStores.append("widget data")
+        }
+        // The Messages catalog carries recipe and planned-workout metadata in the same App Group.
+        // It is activated by the loaded app, so clear it only when this store has opened it.
+        if let messagesCatalogPublisher, !messagesCatalogPublisher.clear() {
+            outcome.incompleteStores.append("Messages catalog")
         }
         // The pending widget-action queue (a "+1 cup" tapped from the widget/Siri before the wipe)
         // drains on the next foreground and re-creates a day record. `clear()` now reports a failed
@@ -5312,6 +5345,11 @@ final class FernletStore {
             incompleteStores.append("your milestone history")
         }
         aiRetryQueueService.reset()
+        do {
+            try ExchangeImportLedger.shared.reset()
+        } catch {
+            incompleteStores.append("your exchange import history")
+        }
         proximityTrustVault.apply(peers: [], audit: [])
         // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
         // must not leave clinical derivatives behind. `!= true` like the sealed hooks below: a nil
@@ -5419,12 +5457,14 @@ final class FernletStore {
     /// catch-up so a milestone award lands the moment the triggering log persists (journal saved,
     /// meal logged, water target met…). Today-only keeps the per-save cost O(today's entries); the
     /// full-history reconcile runs at the coin-ledger trigger points (launch/foreground/sync/buy).
-    private func handleAfterSnapshotSave() {
+    private func handleAfterSnapshotSave(didPersist: Bool) {
         rebuildDerivedSignals()
         reconcileMilestones(days: [todayKey: day])
+        guard didPersist else { return }
         // Mirror the benign widget snapshot on the same flush path every mutation funnels through
         // (SnapshotSaveCoordinator.schedule()/flushPending() → performSnapshotSave → here).
         publishWidgetSnapshot()
+        publishMessagesCatalog()
     }
 
     // MARK: - Widget bridge (FernletWidgets extension)
@@ -5445,6 +5485,15 @@ final class FernletStore {
             }
         }
         processPendingWidgetActions()
+    }
+
+    /// Wires the privacy-filtered Messages picker catalog after the loaded app becomes ready.
+    /// Future publications arrive only through the durable-save branch above.
+    func activateMessagesCatalog() {
+        if messagesCatalogPublisher == nil {
+            messagesCatalogPublisher = FernletMessagesCatalogPublisher(directory: messagesCatalogDirectory)
+        }
+        publishMessagesCatalog()
     }
 
     /// Advances the store to the current wall-clock day when the app has crossed local midnight while
@@ -5536,6 +5585,14 @@ final class FernletStore {
             dateKey: todayKey,
             computedAt: Date()
         ))
+    }
+
+    /// Publishes bounded packet metadata for the Messages extension. A failed App Group write is
+    /// non-authoritative: the canonical repository remains intact and the prior catalog stays.
+    func publishMessagesCatalog() {
+        guard let messagesCatalogPublisher else { return }
+        guard !messagesCatalogPublisher.publish(from: self) else { return }
+        FernletAuditLog.log("messagesCatalog.publish.unavailable", context: [:])
     }
 
     func deferredPostLaunchTasks() {
@@ -5648,8 +5705,8 @@ final class FernletStore {
         return outcome
     }
 
-    func flushPendingSnapshotSave() {
-        snapshotSaveCoordinator.flushPending()
+    @discardableResult func flushPendingSnapshotSave() -> Bool {
+        let snapshotSaved = snapshotSaveCoordinator.flushPending()
         // Custom items persist on a separate debounce (their own per-row store). Flush it in lockstep so
         // a newly-designed item can't be lost when its equip reference (in the snapshot) is force-saved
         // on background but the item row's yield-debounced write hasn't run yet.
@@ -5663,6 +5720,7 @@ final class FernletStore {
         // Same for the milestone ledger — a just-counted care event (or a breathing/worry live hook)
         // must survive backgrounding.
         milestoneLedgerService.flushPendingSave()
+        return snapshotSaved
     }
 
     private func reloadFromRepository() async {

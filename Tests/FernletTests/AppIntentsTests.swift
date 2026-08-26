@@ -71,16 +71,13 @@ final class AppIntentsTests {
                 "\(declared) AppShortcut( in the source but \(registered) registered")
     }
 
-    /// The two guided-workout `LiveActivityIntent`s are the whole point of T2-9: they already backed
-    /// the Lock Screen buttons and simply were not surfaced to Siri. The list is asserted whole, so
-    /// this also catches the other direction — a background intent quietly added to the provider.
+    /// Cooking/workout controls are consolidated at the provider boundary. The original live-activity
+    /// types remain discoverable, but promoting either original type again would spend a reserved slot.
     /// Nothing here may write sealed journal / cycle / intimacy data: a background write would land
     /// outside the app-lock gate, which is a security decision rather than an accessibility one.
-    @Test func guidedWorkoutIntentsAreRegisteredAndNothingUnexpectedIs() throws {
+    @Test func promotedIntentListIsExactlyTheRebalancedAllocation() throws {
         let source = try RepoRoot.source(Self.shortcutsSourcePath)
         let names = Self.registeredIntentNames(in: source)
-        #expect(names.contains("GuidedWorkoutMarkSetDoneIntent"))
-        #expect(names.contains("GuidedWorkoutSkipRestIntent"))
         #expect(names.sorted() == Self.expectedIntentNames.sorted(),
                 "provider intents changed: \(names)")
     }
@@ -239,9 +236,9 @@ final class AppIntentsTests {
     /// Every intent the provider is allowed to surface, as written at the `intent:` label.
     private static let expectedIntentNames = [
         "LogWaterIntent", "LogMealIntent", "OpenJournalIntent",
-        "NextCookingStepIntent", "RepeatCookingStepIntent",
-        "GuidedWorkoutMarkSetDoneIntent", "GuidedWorkoutSkipRestIntent",
-        "PrepareTrainerSummaryIntent", "CopyTrainerSummaryPromptIntent", "PasteTrainerPlanIntent"
+        "ControlCookingIntent", "ControlWorkoutIntent",
+        "ExportRecipeIntent", "ImportRecipeIntent",
+        "ExportWorkoutPlanIntent", "ImportWorkoutPlanIntent"
     ]
 
     /// The type name from each `intent: SomeIntent(),` line. `AppShortcut` exposes no stored

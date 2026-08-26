@@ -56,11 +56,9 @@ final class FernletStoreLoader {
 
     private func loadStore() async {
         do {
-            let store = try await FernletStore.load { [weak self] message in
+            let store = try await ExchangeIntentService.shared.loadStoreForUI { [weak self] message in
                 self?.statusMessage = message
             }
-            statusMessage = "Loading food catalog..."
-            await store.loadBundledFoodItemsForLaunch()
             statusMessage = "Getting Fernlet ready..."
             phase = .ready(store)
             // Pull any sealed iCloud backup into local stores on a fresh install. Detached and

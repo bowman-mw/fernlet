@@ -78,200 +78,145 @@
         }
       }
     },
-    "Next step in ${applicationName}": {
+    "Control cooking in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Next step in ${applicationName}"
+            "value": "Control cooking in ${applicationName}"
           }
         }
       }
     },
-    "Next cooking step in ${applicationName}": {
+    "Change a cooking step in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Next cooking step in ${applicationName}"
+            "value": "Change a cooking step in ${applicationName}"
           }
         }
       }
     },
-    "${applicationName} next step": {
+    "Control workout in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "${applicationName} next step"
+            "value": "Control workout in ${applicationName}"
           }
         }
       }
     },
-    "Repeat step in ${applicationName}": {
+    "Change my workout in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repeat step in ${applicationName}"
+            "value": "Change my workout in ${applicationName}"
           }
         }
       }
     },
-    "Repeat cooking step in ${applicationName}": {
+    "Export a recipe from ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repeat cooking step in ${applicationName}"
+            "value": "Export a recipe from ${applicationName}"
           }
         }
       }
     },
-    "Restart my ${applicationName} timer": {
+    "Share a recipe file from ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restart my ${applicationName} timer"
+            "value": "Share a recipe file from ${applicationName}"
           }
         }
       }
     },
-    "Done set in ${applicationName}": {
+    "Import a recipe into ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Done set in ${applicationName}"
+            "value": "Import a recipe into ${applicationName}"
           }
         }
       }
     },
-    "Mark my ${applicationName} set done": {
+    "Open a recipe file in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mark my ${applicationName} set done"
+            "value": "Open a recipe file in ${applicationName}"
           }
         }
       }
     },
-    "Finish my set in ${applicationName}": {
+    "Export a workout plan from ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finish my set in ${applicationName}"
+            "value": "Export a workout plan from ${applicationName}"
           }
         }
       }
     },
-    "Skip rest in ${applicationName}": {
+    "Share a workout plan file from ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Skip rest in ${applicationName}"
+            "value": "Share a workout plan file from ${applicationName}"
           }
         }
       }
     },
-    "Skip my ${applicationName} rest": {
+    "Import a workout plan into ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Skip my ${applicationName} rest"
+            "value": "Import a workout plan into ${applicationName}"
           }
         }
       }
     },
-    "${applicationName} skip rest": {
+    "Open a workout plan file in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "${applicationName} skip rest"
+            "value": "Open a workout plan file in ${applicationName}"
           }
         }
       }
     },
-    "Prepare my training summary in ${applicationName}": {
+    "Open a workout plan file in ${applicationName}": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prepare my training summary in ${applicationName}"
-          }
-        }
-      }
-    },
-    "Prepare a trainer summary in ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prepare a trainer summary in ${applicationName}"
-          }
-        }
-      }
-    },
-    "Copy my training summary and prompt in ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy my training summary and prompt in ${applicationName}"
-          }
-        }
-      }
-    },
-    "Copy my trainer prompt in ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy my trainer prompt in ${applicationName}"
-          }
-        }
-      }
-    },
-    "Paste my workout plan in ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paste my workout plan in ${applicationName}"
-          }
-        }
-      }
-    },
-    "Bring my trainer plan into ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bring my trainer plan into ${applicationName}"
+            "value": "Open a workout plan file in ${applicationName}"
           }
         }
       }

@@ -1,6 +1,7 @@
 import ProximityKit
 import Foundation
 import FernletDomainModel
+import FernletExchange
 import FernletFoundation
 #if canImport(UIKit)
 import UIKit
@@ -71,26 +72,7 @@ struct RecipeShareCodec {
     /// against `foodItems` and flattened to name + quantity + scaled macros (ingredients whose food
     /// item can't be resolved are dropped), with ordered steps riding along.
     static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
-        SharedRecipePayload(
-            name: recipe.name,
-            servings: recipe.servings,
-            notes: recipe.notes,
-            ingredients: recipe.ingredients.compactMap { ingredient in
-                guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }),
-                      let conversion = ingredient.servingConversion(using: foodItem) else { return nil }
-                let macros = conversion.scaledMacros(for: foodItem)
-                return SharedRecipeIngredient(
-                    name: foodItem.name,
-                    quantity: ingredient.quantity,
-                    unit: ingredient.unit,
-                    protein: macros.protein,
-                    carbs: macros.carbs,
-                    fat: macros.fat
-                )
-            },
-            // F5: carry ordered steps on the wire (optional key, version stays 1 — old peers ignore it).
-            steps: recipe.steps
-        )
+        ExchangeRecipePayloadBuilder.payload(for: recipe, foodItems: foodItems)
     }
 
     /// Builds the over-the-wire proximity payload for any recipe. Web-imported recipes (those with a
@@ -170,35 +152,18 @@ struct RecipeShareCodec {
               let payload = try? JSONDecoder().decode(SharedRecipePayload.self, from: data) else {
             throw RecipeImportError.invalidPayload
         }
-        guard payload.format == "fernlet.recipe", payload.version == 1 else {
-            throw RecipeImportError.unsupportedFormat
-        }
         try validate(payload)
         return payload
     }
 
-    /// Entry validation for a decoded share payload (Power-of-10 R3/R5): the ``RecipeLimits`` growth
-    /// caps plus the value ranges nothing downstream re-checks — a negative macro, a non-finite or
-    /// absurd quantity, or an unbounded step timer would otherwise persist verbatim.
-    /// - Throws: `RecipeImportError.invalidPayload` when any bound is broken.
+    /// Maps the shared portable validator's failures onto this older app-facing error vocabulary.
+    /// The actual bounds live with the packet builder so Files, Shortcuts, and Messages agree.
     private static func validate(_ payload: SharedRecipePayload) throws {
-        guard payload.servings >= 1, payload.servings <= RecipeLimits.maxServings,
-              payload.name.count <= RecipeLimits.maxNameLength,
-              payload.notes.count <= RecipeLimits.maxNotesLength,
-              payload.ingredients.count <= RecipeLimits.maxIngredients,
-              (payload.steps?.count ?? 0) <= RecipeLimits.maxSteps else {
-            throw RecipeImportError.invalidPayload
-        }
-        let ingredientsValid = payload.ingredients.allSatisfy { ingredient in
-            ingredient.quantity.isFinite && ingredient.quantity > 0
-                && ingredient.quantity <= RecipeLimits.maxQuantity
-                && ingredient.protein >= 0 && ingredient.carbs >= 0 && ingredient.fat >= 0
-        }
-        let stepsValid = (payload.steps ?? []).allSatisfy { step in
-            step.text.count <= RecipeLimits.maxStepTextLength
-                && (step.durationSeconds ?? 0) <= RecipeLimits.maxStepDurationSeconds
-        }
-        guard ingredientsValid, stepsValid else {
+        do {
+            try ExchangeRecipePayloadValidator.validate(payload)
+        } catch ExchangePacketError.unsupportedFormat {
+            throw RecipeImportError.unsupportedFormat
+        } catch {
             throw RecipeImportError.invalidPayload
         }
     }

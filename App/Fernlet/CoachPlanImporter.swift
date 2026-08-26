@@ -121,7 +121,11 @@ struct CoachPlanImportResult {
 }
 
 /// How to handle days that already have planned workouts (spec D4).
-enum CoachPlanCollisionPolicy {
+enum CoachPlanCollisionPolicy: Equatable {
+    /// Preserve a colliding day's planned workouts and skip the incoming sessions for that day.
+    case keepExisting
+    /// Replace collisions on the current or a future day, preserving collisions in the past.
+    case replaceFutureConflicts
     /// Remove the existing planned workouts on colliding days, then write the plan's.
     case replace
     /// Keep what's there and add the plan's alongside it.
@@ -608,9 +612,8 @@ extension FernletStore {
         // user struck every exercise, the loops below would delete their existing planned workouts
         // (under `.replace`), write nothing in their place, and then return nil — so the UI would say
         // "nothing was changed" over real data loss. Bail before any mutation instead.
-        let writesSomething = plan.days.contains { day in
-            !day.isRestDay && day.sessions.contains(where: filter.prescribesSomething)
-        }
+        let writesSomething = planWritesAnything(plan, startingOn: startDayKey, filter: filter,
+                                                  collisionPolicy: collisionPolicy)
         // An edits-only plan writes no new days and is still a real import — but only edits that
         // survive the strikes count, or a fully-struck edit set would mutate the catalog first.
         let survivingEdits = review.resolvedEdits.filter(filter.survives)
@@ -732,6 +735,7 @@ extension FernletStore {
                                collisionPolicy: CoachPlanCollisionPolicy) -> (planned: Int, dayKeys: [String]) {
         var plannedCount = 0
         var dayKeys: [String] = []
+        let today = FernletDate.dayKey(for: Date())
         for day in plan.days.sorted(by: { $0.dayIndex < $1.dayIndex }) {
             guard !day.isRestDay, !day.sessions.isEmpty else { continue }
             guard let dayKey = Self.dayKey(startingOn: startDayKey, offsetBy: day.dayIndex - 1) else { continue }
@@ -742,11 +746,19 @@ extension FernletStore {
             let sessions = day.sessions.filter(filter.prescribesSomething)
             guard !sessions.isEmpty else { continue }
 
-            if collisionPolicy == .replace {
+            let existing = loadDay(for: dayKey).plannedWorkouts
+            let preservesCollision = collisionPolicy == .keepExisting
+                || (collisionPolicy == .replaceFutureConflicts && dayKey < today)
+            if preservesCollision, !existing.isEmpty {
+                continue
+            }
+
+            if collisionPolicy == .replace
+                || (collisionPolicy == .replaceFutureConflicts && dayKey >= today) {
                 // Only planned rows are cleared — never logged workouts. A plan arriving must not be
                 // able to erase what someone actually did.
-                for existing in loadDay(for: dayKey).plannedWorkouts {
-                    deletePlannedWorkout(existing, date: dayKey)
+                for workout in existing {
+                    deletePlannedWorkout(workout, date: dayKey)
                 }
             }
 
@@ -758,6 +770,23 @@ extension FernletStore {
             dayKeys.append(dayKey)
         }
         return (plannedCount, dayKeys)
+    }
+
+    /// Mirrors the new-day half of `applyPlanDays` before custom exercises or edits are mutated.
+    /// A keep-existing import with only collisions must be a true no-op, not a catalog-only write.
+    private func planWritesAnything(_ plan: CoachPlan,
+                                    startingOn startDayKey: String,
+                                    filter: CoachPlanStrikeFilter,
+                                    collisionPolicy: CoachPlanCollisionPolicy) -> Bool {
+        let today = FernletDate.dayKey(for: Date())
+        for day in plan.days {
+            guard !day.isRestDay, day.sessions.contains(where: filter.prescribesSomething),
+                  let dayKey = Self.dayKey(startingOn: startDayKey, offsetBy: day.dayIndex - 1) else { continue }
+            let preserve = collisionPolicy == .keepExisting
+                || (collisionPolicy == .replaceFutureConflicts && dayKey < today)
+            if !preserve || loadDay(for: dayKey).plannedWorkouts.isEmpty { return true }
+        }
+        return false
     }
 
     /// Stamps an edited row so its origin survives in the row's own text, like a newly imported one.

@@ -13,7 +13,8 @@ import FernletPersistence
 /// write always serializes current state, never state captured when the save was scheduled — and
 /// hands the resulting `SanitizedSnapshot` (the privacy-stripped aggregate that is the ONLY input
 /// `FernletRepository.saveSnapshot` accepts) to the repository. A failed save is audit-logged
-/// (`snapshot.save.failed`) and `onAfterSave` still runs, so post-save bookkeeping is never skipped.
+/// (`snapshot.save.failed`) and `onAfterSave` still runs with the durable-write result, so callers
+/// can keep retry-safe bookkeeping while publishing external mirrors only after a real save.
 ///
 /// The reverse direction: when the repository also conforms to `RemoteChangePublishingRepository`
 /// (the CloudKit-backed one does), ``subscribeRemote(remoteReloadDebounce:handler:)`` coalesces its
@@ -32,8 +33,8 @@ public final class SnapshotSaveCoordinator {
     private let debounce: Duration
     /// Invoked on the main actor at save-fire time to serialize the CURRENT app state.
     private let buildSnapshot: @MainActor () -> SanitizedSnapshot
-    /// Runs after every save attempt, success or failure alike.
-    private let onAfterSave: @MainActor () -> Void
+    /// Runs after every save attempt, carrying whether it reached durable persistence.
+    private let onAfterSave: @MainActor (Bool) -> Void
 
     /// The single pending debounced save, if any — rescheduling cancels and replaces it, so at most
     /// one save is ever in flight.
@@ -49,12 +50,12 @@ public final class SnapshotSaveCoordinator {
     ///   - repository: The active persistence backend (local JSON or Core Data + CloudKit).
     ///   - debounce: How long a scheduled save waits for further mutations before firing.
     ///   - buildSnapshot: Called at fire time, on the main actor, to mint the sanitized snapshot.
-    ///   - onAfterSave: Post-save hook, run whether or not the write succeeded.
+    ///   - onAfterSave: Post-save hook, run whether or not the write succeeded with its result.
     public init(
         repository: FernletRepository,
         debounce: Duration = .seconds(1),
         buildSnapshot: @escaping @MainActor () -> SanitizedSnapshot,
-        onAfterSave: @escaping @MainActor () -> Void
+        onAfterSave: @escaping @MainActor (Bool) -> Void
     ) {
         self.repository = repository
         self.debounce = debounce
@@ -85,11 +86,11 @@ public final class SnapshotSaveCoordinator {
     /// Fires the pending save immediately, if one is scheduled; a no-op otherwise (unlike the
     /// per-row services there is no failed-write queue here — no scheduled task means nothing to
     /// write). Called when the app is about to lose its chance to save (backgrounding, teardown).
-    public func flushPending() {
-        guard snapshotSaveTask != nil else { return }
+    @discardableResult public func flushPending() -> Bool {
+        guard snapshotSaveTask != nil else { return true }
         snapshotSaveTask?.cancel()
         snapshotSaveTask = nil
-        performSnapshotSave()
+        return performSnapshotSave()
     }
 
     /// Drops a pending debounced save WITHOUT writing it — the delete-everything counterpart to
@@ -130,13 +131,14 @@ public final class SnapshotSaveCoordinator {
     }
 
     /// Mints the sanitized snapshot NOW and writes it, audit-logging a failed save before running
-    /// `onAfterSave` unconditionally.
-    private func performSnapshotSave() {
+    /// `onAfterSave` unconditionally with the result.
+    @discardableResult private func performSnapshotSave() -> Bool {
         let saved = repository.saveSnapshot(buildSnapshot())
         if !saved {
             FernletAuditLog.log("snapshot.save.failed", context: [:])
         }
-        onAfterSave()
+        onAfterSave(saved)
+        return saved
     }
 
     /// Debounces the remote-reload handler — each fresh remote-change notification cancels the

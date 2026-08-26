@@ -16,7 +16,7 @@ struct SnapshotSaveCoordinatorTests {
             repository: repository,
             debounce: .seconds(10),
             buildSnapshot: { snapshot.forTestingSanitized },
-            onAfterSave: { afterSaveCount += 1 }
+            onAfterSave: { _ in afterSaveCount += 1 }
         )
 
         coordinator.schedule()
@@ -36,7 +36,7 @@ struct SnapshotSaveCoordinatorTests {
             repository: repository,
             debounce: .milliseconds(20),
             buildSnapshot: { snapshot.forTestingSanitized },
-            onAfterSave: { afterSaveCount += 1 }
+            onAfterSave: { _ in afterSaveCount += 1 }
         )
 
         coordinator.schedule()
@@ -56,7 +56,7 @@ struct SnapshotSaveCoordinatorTests {
             repository: repository,
             debounce: .milliseconds(20),
             buildSnapshot: { makeSnapshot(dateKey: "2026-05-26").forTestingSanitized },
-            onAfterSave: {}
+            onAfterSave: { _ in }
         )
 
         coordinator.subscribeRemote(remoteReloadDebounce: .milliseconds(20)) {
@@ -66,6 +66,24 @@ struct SnapshotSaveCoordinatorTests {
         await waitUntil { handlerCalls == 1 }
 
         #expect(handlerCalls == 1)
+    }
+
+    @Test func failedSaveReportsThatDurabilityWasNotReached() {
+        let repository = SnapshotSaveTestRepository()
+        repository.shouldSave = false
+        var didPersist: Bool?
+        let coordinator = SnapshotSaveCoordinator(
+            repository: repository,
+            debounce: .seconds(10),
+            buildSnapshot: { makeSnapshot(dateKey: "2026-05-26").forTestingSanitized },
+            onAfterSave: { didPersist = $0 }
+        )
+
+        coordinator.schedule()
+
+        #expect(!coordinator.flushPending())
+        #expect(didPersist == false)
+        #expect(repository.savedSnapshots.isEmpty)
     }
 
     private func makeSnapshot(dateKey: String) -> FernletSnapshot {
@@ -111,6 +129,7 @@ struct SnapshotSaveCoordinatorTests {
 private final class SnapshotSaveTestRepository: RemoteChangePublishingRepository {
     let remoteChangeSubject = PassthroughSubject<Void, Never>()
     private(set) var savedSnapshots: [FernletSnapshot] = []
+    var shouldSave = true
 
     var remoteChangePublisher: AnyPublisher<Void, Never> {
         remoteChangeSubject.eraseToAnyPublisher()
@@ -130,6 +149,7 @@ private final class SnapshotSaveTestRepository: RemoteChangePublishingRepository
     }
 
     @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool {
+        guard shouldSave else { return false }
         savedSnapshots.append(snapshot.snapshot)
         return true
     }

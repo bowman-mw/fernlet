@@ -41,7 +41,7 @@ struct GuidedWorkoutMarkSetDoneIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Done set"
     static let description = IntentDescription("Marks the current set done and starts your rest timer.")
     // Advance in the background — no need to bring the app forward for a set/rest transition.
-    static let openAppWhenRun = false
+    static let supportedModes: IntentModes = [.background]
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let outcome = await GuidedWorkoutIntentRunner.markSetDone()
@@ -59,7 +59,7 @@ struct GuidedWorkoutMarkSetDoneIntent: LiveActivityIntent {
 struct GuidedWorkoutSkipRestIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Skip rest"
     static let description = IntentDescription("Ends the current rest early and moves to your next set.")
-    static let openAppWhenRun = false
+    static let supportedModes: IntentModes = [.background]
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let outcome = await GuidedWorkoutIntentRunner.skipRest()

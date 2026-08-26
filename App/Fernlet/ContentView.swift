@@ -10,6 +10,7 @@ import CloudKitSync
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import FernletExchange
 import FernletLock
 import PrivateHealthStore
 import PrivateMemoryStore
@@ -76,6 +77,12 @@ struct ContentView: View {
     @State private var adjustingLoggedMeal: Meal?
     @State private var editingRecipeFromHome: RecipeDefinition?
     @State private var editingSavedRecipeFromHome: RecipeDefinition?
+    /// A Messages packet survives here only while Fernlet's review sheet is visible; its protected
+    /// App Group inbox record remains available until the user saves it or it expires.
+    @State private var messagesRecipeImport: FernletMessagesInboxRecord?
+    @State private var messagesWorkoutPlanImport: FernletMessagesWorkoutInboxRecord?
+    @State private var messagesRecipeImportError: String?
+    private let messagesRecipeInbox = FernletMessagesRecipeInboxCoordinator()
     /// Set by the stress explainer's First Aid link; consumed by `handleActiveSheetDismiss`
     /// (the same dismiss-then-represent chaining the recipe editors use).
     @State private var pendingFirstAidAfterDismiss = false
@@ -143,6 +150,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: PendingIntentSheet.requestNotification)) { _ in
                 consumePendingNotificationSheet()
             }
+            .onReceive(NotificationCenter.default.publisher(for: FernletMessagesRecipeImportRequest.requestNotification)) { _ in
+                consumePendingMessagesRecipeImport()
+            }
             .onChange(of: store.settings.allowNearbyPresence) { _, _ in
                 // Enabling in Settings (or via the first-friend prompt) starts the radio right
                 // away; disabling is already stopped by the setter — this keeps both in sync
@@ -206,6 +216,23 @@ struct ContentView: View {
                 MealCorrectionSheet(store: store, meal: meal)
                     .fernletSheetChrome(anchor: "sheet.mealCorrection", detents: [.large])
             }
+            .sheet(item: $messagesRecipeImport, onDismiss: handleMessagesRecipeImportDismiss) { record in
+                MessagesRecipeImportReviewSheet(record: record, inbox: messagesRecipeInbox) {
+                    messagesRecipeImport = nil
+                }
+                .fernletSheetChrome(anchor: "sheet.messagesRecipeImport", detents: [.medium, .large])
+            }
+            .sheet(item: $messagesWorkoutPlanImport, onDismiss: handleMessagesRecipeImportDismiss) { record in
+                MessagesWorkoutPlanImportReviewSheet(record: record, inbox: messagesRecipeInbox) {
+                    messagesWorkoutPlanImport = nil
+                }
+                .fernletSheetChrome(anchor: "sheet.messagesWorkoutPlanImport", detents: [.medium, .large])
+            }
+            .alert("Couldn't open Messages item", isPresented: messagesRecipeImportErrorBinding) {
+                Button("OK", role: .cancel) { messagesRecipeImportError = nil }
+            } message: {
+                Text(messagesRecipeImportError ?? "")
+            }
     }
 
     /// One-time "first kept friend" presence offer (Phase 4a), driven by observable store state.
@@ -213,6 +240,13 @@ struct ContentView: View {
         Binding(
             get: { store.presenceEnablePromptRequested },
             set: { if !$0 { store.presenceEnablePromptRequested = false } }
+        )
+    }
+
+    private var messagesRecipeImportErrorBinding: Binding<Bool> {
+        Binding(
+            get: { messagesRecipeImportError != nil },
+            set: { if !$0 { messagesRecipeImportError = nil } }
         )
     }
 
@@ -443,6 +477,11 @@ struct ContentView: View {
         // Widget bridge: wire the mirror, drain "+1 water" taps queued while the app was
         // closed, and publish the first snapshot (store is fully loaded by this point).
         store.activateWidgetBridge()
+        // The Messages extension receives only this bounded, privacy-filtered packet catalog.
+        // It never opens Fernlet's canonical repositories directly.
+        store.activateMessagesCatalog()
+        _ = messagesRecipeInbox.purgeExpired()
+        consumePendingMessagesRecipeImport()
         await store.processSharedRecipeImportQueue()
         await loadPeriodEntriesIfPossible()
         settlePeriodEntriesAfterLoad()
@@ -455,7 +494,7 @@ struct ContentView: View {
         guard launcher.isDone else { return }
         // A sheet is already open — leave the request PENDING (don't clear it) so it isn't silently
         // dropped; `handleActiveSheetDismiss` re-consumes it once the covering sheet closes.
-        guard activeSheet == nil else { return }
+        guard activeSheet == nil, messagesRecipeImport == nil, messagesWorkoutPlanImport == nil else { return }
         // A foreground App Intent (#6, e.g. "Log a meal in Fernlet") records which sheet it wants; honor
         // it before the notification path so a Siri/Shortcuts open lands on the right screen.
         if let target = PendingIntentSheet.consume() {
@@ -474,6 +513,31 @@ struct ContentView: View {
         case "journal": activeSheet = .journal
         case "firstAid": activeSheet = .firstAid(nil)
         default: break
+        }
+    }
+
+    /// Resolves an opaque containing-app deep link after the launch shell and any existing sheet
+    /// have yielded. The URL holds only an ID; the validated packet remains in the App Group inbox.
+    private func consumePendingMessagesRecipeImport() {
+        guard launcher.isDone, !rootSheetIsCoveringTabs,
+              let target = FernletMessagesRecipeImportRequest.consume() else { return }
+        do {
+            switch target.destination {
+            case .recipe:
+                guard let record = try messagesRecipeInbox.record(id: target.inboxID) else {
+                    messagesRecipeImportError = "This recipe review is no longer available."
+                    return
+                }
+                messagesRecipeImport = record
+            case .workoutPlan:
+                guard let record = try messagesRecipeInbox.workoutRecord(id: target.inboxID) else {
+                    messagesRecipeImportError = "This workout-plan review is no longer available."
+                    return
+                }
+                messagesWorkoutPlanImport = record
+            }
+        } catch {
+            messagesRecipeImportError = "Fernlet couldn't read this review. Unlock your iPhone and try again."
         }
     }
 
@@ -624,6 +688,8 @@ struct ContentView: View {
             || store.showConnectionInspector
             || store.recipeShareManager.pendingRecipeShares.first != nil
             || adjustingLoggedMeal != nil
+            || messagesRecipeImport != nil
+            || messagesWorkoutPlanImport != nil
     }
 
     private var tabPages: some View {
@@ -1438,7 +1504,15 @@ struct ContentView: View {
             // A notification tap that arrived while a sheet was open left its request pending — now
             // that the sheet has closed, honor it (no-op if there was nothing pending).
             consumePendingNotificationSheet()
+            consumePendingMessagesRecipeImport()
         }
+    }
+
+    private func handleMessagesRecipeImportDismiss() {
+        messagesRecipeImport = nil
+        messagesWorkoutPlanImport = nil
+        consumePendingNotificationSheet()
+        consumePendingMessagesRecipeImport()
     }
 
     private func updateRecipeShareListener() {

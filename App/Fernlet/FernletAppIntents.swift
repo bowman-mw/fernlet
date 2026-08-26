@@ -28,7 +28,7 @@ struct LogWaterIntent: AppIntent {
     static let title: LocalizedStringResource = "Log water"
     static let description = IntentDescription("Adds bottles of water to today's Fernlet diary.")
     // Runs in the background — no need to bring the app forward for a one-tap log.
-    static let openAppWhenRun = false
+    static let supportedModes: IntentModes = [.background]
 
     /// Floor on one invocation. Below this there is nothing to log, so ``perform()`` declines and
     /// says so rather than inventing a bottle nobody asked for.
@@ -149,7 +149,7 @@ struct LogWaterIntent: AppIntent {
 struct LogMealIntent: AppIntent {
     static let title: LocalizedStringResource = "Log a meal"
     static let description = IntentDescription("Opens Fernlet to log a meal.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -164,7 +164,7 @@ struct LogMealIntent: AppIntent {
 struct OpenJournalIntent: AppIntent {
     static let title: LocalizedStringResource = "Write in my journal"
     static let description = IntentDescription("Opens Fernlet to a new journal entry.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -173,12 +173,79 @@ struct OpenJournalIntent: AppIntent {
     }
 }
 
+/// The closed action vocabulary keeps one promoted cooking shortcut while the two original
+/// `LiveActivityIntent` types remain available to existing user-created shortcuts.
+enum CookingShortcutAction: String, AppEnum {
+    case nextStep
+    case repeatStep
+
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Cooking action")
+    static let caseDisplayRepresentations: [CookingShortcutAction: DisplayRepresentation] = [
+        .nextStep: "Next step",
+        .repeatStep: "Repeat step"
+    ]
+}
+
+/// The promoted background cooking control. It delegates to the same app-group runner used by the
+/// original Live Activity actions, so it cannot diverge from a saved user-created shortcut.
+struct ControlCookingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Control cooking"
+    static let description = IntentDescription("Moves to the next cooking step or repeats the current step.")
+    static let supportedModes: IntentModes = [.background]
+
+    @Parameter(title: "Action", default: .nextStep)
+    var action: CookingShortcutAction
+
+    func perform() async throws -> some IntentResult {
+        switch action {
+        case .nextStep: await CookingIntentRunner.advance()
+        case .repeatStep: await CookingIntentRunner.repeatStep()
+        }
+        return .result()
+    }
+}
+
+/// The closed action vocabulary keeps one promoted workout shortcut while retaining the two
+/// original Live Activity actions for existing user-created shortcuts.
+enum WorkoutShortcutAction: String, AppEnum {
+    case finishSet
+    case skipRest
+
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Workout action")
+    static let caseDisplayRepresentations: [WorkoutShortcutAction: DisplayRepresentation] = [
+        .finishSet: "Finish set",
+        .skipRest: "Skip rest"
+    ]
+}
+
+/// The promoted background workout control. It shares the phase-checked runner and spoken result
+/// of the original Live Activity actions.
+struct ControlWorkoutIntent: AppIntent {
+    static let title: LocalizedStringResource = "Control workout"
+    static let description = IntentDescription("Finishes the current set or skips a rest period.")
+    static let supportedModes: IntentModes = [.background]
+
+    @Parameter(title: "Action", default: .finishSet)
+    var action: WorkoutShortcutAction
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        switch action {
+        case .finishSet:
+            let outcome = await GuidedWorkoutIntentRunner.markSetDone()
+            return .result(dialog: GuidedWorkoutIntentRunner.markSetDoneDialog(for: outcome))
+        case .skipRest:
+            let outcome = await GuidedWorkoutIntentRunner.skipRest()
+            return .result(dialog: GuidedWorkoutIntentRunner.skipRestDialog(for: outcome))
+        }
+    }
+}
+
 /// Opens the trainer handoff and prepares its temporary summary file. The file remains inside
 /// Fernlet until the user explicitly opens the system share sheet.
 struct PrepareTrainerSummaryIntent: AppIntent {
     static let title: LocalizedStringResource = "Prepare training summary"
     static let description = IntentDescription("Opens Fernlet and prepares a trainer summary for sharing.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -192,7 +259,7 @@ struct PrepareTrainerSummaryIntent: AppIntent {
 struct CopyTrainerSummaryPromptIntent: AppIntent {
     static let title: LocalizedStringResource = "Copy training summary and prompt"
     static let description = IntentDescription("Opens Fernlet to confirm copying a training summary and prompt.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -203,10 +270,14 @@ struct CopyTrainerSummaryPromptIntent: AppIntent {
 
 /// Opens the foreground paste-and-review flow. Import remains impossible until the user supplies a
 /// plan and approves its safety review in the app.
-struct PasteTrainerPlanIntent: AppIntent {
+struct PasteTrainerPlanIntent: AppIntent, DeprecatedAppIntent {
     static let title: LocalizedStringResource = "Paste workout plan"
     static let description = IntentDescription("Opens Fernlet to paste and review a workout plan.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
+    static let deprecation = IntentDeprecation(
+        message: "Use Import workout plan to review a Fernlet plan file.",
+        replacedBy: ImportWorkoutPlanIntent.self
+    )
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -239,8 +310,8 @@ nonisolated enum PendingIntentSheet {
     }
 
     /// Posted right after `request(_:)` writes the token, so a resident ContentView consumes it on the
-    /// WARM path too. With `openAppWhenRun`, the system foregrounds an already-running app (scene goes
-    /// `.active`) BEFORE `perform()` writes the token, so nothing would otherwise read it. This mirrors
+    /// WARM path too. A foreground intent can activate an already-running scene BEFORE `perform()`
+    /// writes the token, so nothing would otherwise read it. This mirrors
     /// `FernletNotificationDelegate.pendingSheetRequestNotification`; cold launches still consume the
     /// token from ContentView's startup task.
     static let requestNotification = Notification.Name("fernlet.intent.pendingSheetRequest")

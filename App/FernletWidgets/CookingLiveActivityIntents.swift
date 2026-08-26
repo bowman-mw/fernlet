@@ -38,7 +38,7 @@ struct NextCookingStepIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Next cooking step"
     static let description = IntentDescription("Moves to the next step of the recipe you're cooking.")
     // Advance in the background — no need to bring the app forward for a step transition.
-    static let openAppWhenRun = false
+    static let supportedModes: IntentModes = [.background]
 
     func perform() async throws -> some IntentResult {
         await CookingIntentRunner.advance()
@@ -54,7 +54,7 @@ struct NextCookingStepIntent: LiveActivityIntent {
 struct RepeatCookingStepIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Repeat cooking step"
     static let description = IntentDescription("Restarts the timer on the current cooking step.")
-    static let openAppWhenRun = false
+    static let supportedModes: IntentModes = [.background]
 
     func perform() async throws -> some IntentResult {
         await CookingIntentRunner.repeatStep()

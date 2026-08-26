@@ -28,11 +28,10 @@ let package = Package(
         .iOS(.v26),
     ],
     products: [
-        // Single umbrella product: the app and test targets link this ONE product
-        // and can then `import` ANY target listed here. Each later module is added
-        // to this `targets:` list (and gets its own `.target` below) with NO further
-        // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
+        // The app and its tests link the umbrella product. An extension that needs only a portable
+        // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
+        .library(name: "FernletExchange", targets: ["FernletExchange"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -89,6 +88,13 @@ let package = Package(
         .target(
             name: "FernletDomainModel",
             dependencies: ["FernletFoundation"]
+        ),
+        // Portable packets, card metadata, and serverless Messages envelopes. This explicit product
+        // is the only FernletKit dependency the Messages extension receives: Foundation, CryptoKit,
+        // and FernletDomainModel only — never store, sync, HealthKit, Proximity, or private modules.
+        .target(
+            name: "FernletExchange",
+            dependencies: ["FernletDomainModel"]
         ),
         // Layer 1 — scoring/goal-weight/meal-parse/workout-plan engine + the
         // abstract period-scoring SIGNAL types that scoring consumes (the raw→

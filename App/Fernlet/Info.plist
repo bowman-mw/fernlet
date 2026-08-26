@@ -2,6 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>MBO.Fernlet.Messages</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fernlet</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_fernlet-coach._tcp</string>
@@ -12,6 +23,43 @@
 		<string>_fernlet-recipe._udp</string>
 		<string>_fernlet-near._tcp</string>
 		<string>_fernlet-near._udp</string>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Fernlet Recipe</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.mbo.fernlet.recipe</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>fernletrecipe</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Fernlet Workout Plan</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.mbo.fernlet.workout-plan</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>fernletplan</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 	<key>UIAppFonts</key>
 	<array>
