@@ -27,9 +27,10 @@ public nonisolated struct FernletMessagesInboxRecord: Codable, Equatable, Identi
     }
 
     fileprivate func validate() throws {
-        let data = try packet.encodedData()
+        let decoded = try RecipeExchangePacket.decode(packet.encodedData())
+        let data = try decoded.encodedData()
+        guard decoded == packet else { throw ExchangePacketError.invalidPayload }
         guard data.count <= FernletMessagesInboxLimits.maxPacketBytes else { throw ExchangePacketError.tooLarge }
-        guard !packet.includesNotes, packet.recipe.notes.isEmpty else { throw ExchangePacketError.invalidPayload }
     }
 }
 

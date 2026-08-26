@@ -136,6 +136,9 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
         let expected = try hash(format: packet.format, version: packet.formatVersion, packetID: packet.packetID,
                                 originContentID: packet.originContentID, includesNotes: packet.includesNotes, recipe: packet.recipe)
         guard packet.contentHash == expected else { throw ExchangePacketError.invalidHash }
+        guard packet.includesNotes == !packet.recipe.notes.isEmpty else {
+            throw ExchangePacketError.invalidPayload
+        }
         try ExchangeRecipePayloadValidator.validate(packet.recipe)
         return packet
     }

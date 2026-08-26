@@ -176,7 +176,7 @@ struct FernletExchangeTests {
         }
     }
 
-    @Test func catalogEnforcesCountsAndNeverPublishesRecipeNotes() throws {
+    @Test func catalogEnforcesCountsForRecipesWithoutNotes() throws {
         let entry = try FernletMessagesRecipeCatalogEntry(packet: recipePacket())
         let catalog = try FernletMessagesCatalog(recipes: [entry], workouts: [])
         let overLimit = Array(repeating: entry, count: FernletMessagesCatalogLimits.maxRecipes + 1)
@@ -187,6 +187,27 @@ struct FernletExchangeTests {
         #expect(throws: ExchangePacketError.unsupportedFormat) {
             try FernletMessagesCatalog(recipes: overLimit, workouts: [])
         }
+    }
+
+    @Test func messagesCatalogAndInboxRetainRecipeNotes() throws {
+        let packet = try recipePacket(includesNotes: true)
+        let entry = try FernletMessagesRecipeCatalogEntry(packet: packet)
+        let catalog = try FernletMessagesCatalog(recipes: [entry], workouts: [])
+        let catalogData = try catalog.encodedData()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let inbox = FernletMessagesInboxStore(directory: directory)
+        let envelope = try ExchangeMessageEnvelope(recipe: packet)
+
+        #expect(packet.includesNotes)
+        #expect(packet.recipe.notes == "Serve warm.")
+        #expect((String(data: catalogData, encoding: .utf8) ?? "").contains("Serve warm."))
+        guard case .recipe(let received) = try ExchangeMessageEnvelope.decode(messageURL: envelope.messageURL()).validatedPayload() else {
+            Issue.record("Expected a recipe packet.")
+            return
+        }
+        let record = try inbox.enqueue(received)
+        #expect(try inbox.record(id: record.id)?.packet.recipe.notes == "Serve warm.")
     }
 
     @Test func cardStringBoundsRejectAnOversizedTitle() throws {
@@ -245,7 +266,7 @@ struct FernletExchangeTests {
         #expect(try workouts.record(id: workout.id) == nil)
     }
 
-    private func recipePacket(name: String = "Training oats") throws -> RecipeExchangePacket {
+    private func recipePacket(name: String = "Training oats", includesNotes: Bool = false) throws -> RecipeExchangePacket {
         let foodID = UUID()
         let recipeID = UUID()
         let food = FoodItem(
@@ -270,7 +291,7 @@ struct FernletExchangeTests {
             updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
             steps: [RecipeStep(text: "Warm the oats.")]
         )
-        return try RecipeExchangePacket(recipe: recipe, foodItems: [food], includesNotes: false)
+        return try RecipeExchangePacket(recipe: recipe, foodItems: [food], includesNotes: includesNotes)
     }
 
     private func workoutPacket() throws -> WorkoutPlanExchangePacket {

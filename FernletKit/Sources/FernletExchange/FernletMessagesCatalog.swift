@@ -120,7 +120,8 @@ public nonisolated struct FernletMessagesCatalog: Codable, Equatable, Sendable {
     }
 }
 
-/// A recipe the Messages extension may display and insert. Notes are always excluded in V1.
+/// A recipe the Messages extension may display and insert. Its signed packet carries recipe notes
+/// when present, so the catalog and recipient review preserve the sender's chosen instructions.
 public nonisolated struct FernletMessagesRecipeCatalogEntry: Codable, Equatable, Sendable {
     public var packet: RecipeExchangePacket
     public var card: ExchangeCardMetadata
@@ -134,8 +135,7 @@ public nonisolated struct FernletMessagesRecipeCatalogEntry: Codable, Equatable,
     fileprivate func validate() throws {
         let decoded = try RecipeExchangePacket.decode(packet.encodedData())
         let expectedCard = try ExchangeCardMetadata.recipe(from: decoded)
-        guard !decoded.includesNotes, decoded.recipe.notes.isEmpty,
-              card == expectedCard else {
+        guard decoded == packet, card == expectedCard else {
             throw ExchangePacketError.invalidPayload
         }
     }

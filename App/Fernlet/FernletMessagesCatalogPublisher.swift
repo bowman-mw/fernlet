@@ -62,7 +62,7 @@ struct FernletMessagesCatalogPublisher {
         for recipe in recipes.prefix(remaining) {
             guard recipeIDs.insert(recipe.id).inserted else { continue }
             let foods = store.foodCatalog.items(forRecipe: recipe)
-            let packet = try RecipeExchangePacket(recipe: recipe, foodItems: foods, includesNotes: false)
+            let packet = try RecipeExchangePacket(recipe: recipe, foodItems: foods, includesNotes: true)
             entries.append(try FernletMessagesRecipeCatalogEntry(packet: packet))
         }
     }

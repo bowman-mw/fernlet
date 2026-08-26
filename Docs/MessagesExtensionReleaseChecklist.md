@@ -26,8 +26,8 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 
 - [ ] Send while the receiving phone is locked. The extension must not bypass protected storage;
   Fernlet should ask the user to unlock before it can review the inbox record.
-- [ ] Tap **Review in Fernlet** for a recipe: inspect serving, ingredient, and step counts and
-  confirm notes/photos are absent.
+- [ ] Tap **Review in Fernlet** for a recipe with cooking notes: inspect serving, ingredient, and
+  step counts, confirm the notes match the sent recipe, and confirm photos are absent.
 - [ ] Tap **Review in Fernlet** for a workout: change the start date and each collision policy;
   confirm the calendar preview, safety flags, and add/change/remove counts refresh before save.
 - [ ] Change the recipient calendar while the workout review is open. Confirm the action requires

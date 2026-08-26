@@ -50,8 +50,19 @@ struct MessagesRecipeImportReviewSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(record.packet.recipe.name).font(.title2.weight(.semibold))
             Text("\(record.packet.recipe.servings) servings · \(record.packet.recipe.ingredients.count) ingredients")
-            Text("\(record.packet.recipe.steps?.count ?? 0) steps · No notes")
+            Text("\(record.packet.recipe.steps?.count ?? 0) steps · \(notesStatus)")
+            if record.packet.includesNotes, !record.packet.recipe.notes.isEmpty {
+                Text("Notes")
+                    .font(.headline)
+                Text(record.packet.recipe.notes)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private var notesStatus: String {
+        record.packet.includesNotes ? "Notes included" : "No notes"
     }
 
     private var duplicatePolicyNote: some View {
