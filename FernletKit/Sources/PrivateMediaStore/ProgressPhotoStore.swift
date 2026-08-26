@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FernletCrypto
 import FernletFoundation
 
 /// One entry in the user's gym progress-photo timeline: a stored photo, when it was taken, and an
@@ -92,7 +93,8 @@ public struct ProgressPhotoStore {
             ),
             keyProvider: keyProvider,
             allowsLegacyPlaintextUpgrade: false,
-            legacyKeyProvider: legacyKeyProvider
+            legacyKeyProvider: legacyKeyProvider,
+            purpose: FernletCryptoPurpose.AEAD.progressPhotoV2
         )
         self.indexURL = directory.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName)
         let enc = JSONEncoder()
@@ -369,17 +371,22 @@ public struct ProgressPhotoStore {
     /// the legacy generation on first read rather than on the next mutation.
     private func readIndex() -> IndexState {
         guard let stored = try? Data(contentsOf: indexURL), !stored.isEmpty else { return .absent }
-        if let opened = keyProvider.gcmOpen(stored),
+        if let opened = keyProvider.gcmOpen(stored, purpose: FernletCryptoPurpose.AEAD.progressPhotoIndexV2),
            let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) {
             return .records(records)
         }
         if let legacyKeyProvider,
-           let opened = legacyKeyProvider.gcmOpen(stored),
+           let opened = legacyKeyProvider.gcmOpen(stored, purpose: FernletCryptoPurpose.AEAD.progressPhotoIndexV2),
            let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) {
             // Re-seal in place under the current (own) key; a failed write just leaves the index
             // legacy for the migration pass to retry, which is the fail-closed direction — now
             // audit-logged instead of silently discarded.
-            keyProvider.sealAndWriteBestEffort(opened, to: indexURL, reason: "progressIndexUpgrade")
+            keyProvider.sealAndWriteBestEffort(
+                opened,
+                to: indexURL,
+                purpose: FernletCryptoPurpose.AEAD.progressPhotoIndexV2,
+                reason: "progressIndexUpgrade"
+            )
             return .records(records)
         }
         return .undecodable
@@ -405,6 +412,10 @@ public struct ProgressPhotoStore {
     /// records can't be encoded, no key is available, or sealing/writing fails.
     private func persist(_ records: [ProgressPhotoRecord]) -> Bool {
         guard let plaintext = try? encoder.encode(records) else { return false }
-        return keyProvider.sealAndWrite(plaintext, to: indexURL)
+        return keyProvider.sealAndWrite(
+            plaintext,
+            to: indexURL,
+            purpose: FernletCryptoPurpose.AEAD.progressPhotoIndexV2
+        )
     }
 }

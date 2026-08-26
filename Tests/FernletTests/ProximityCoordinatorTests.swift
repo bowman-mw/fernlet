@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletCrypto
 import Testing
 import FernletFoundation
 import Foundation
@@ -813,7 +814,8 @@ struct ProximityCoordinatorTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try identity.sign(canonicalBytes(for: env))
+        env.signature = try identity.sign(canonicalBytes(for: env),
+                                          purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2)
         return env
     }
 

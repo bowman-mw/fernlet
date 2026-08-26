@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import ImageIO
 import CryptoKit
+import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
 
@@ -29,6 +30,9 @@ import FernletFoundation
 public struct MealPhotoStore {
     private let directory: URL
     private let keyProvider: PrivateMediaKeyProviding
+    /// Separates meal, recipe, and progress image boxes even when their reusable at-rest keys
+    /// share the same keychain role during a migration.
+    private let atRestPurpose: CryptographicPurpose
     /// Optional PRE-SPLIT key, tried on read when the own key can't open a file — the dual-open
     /// safety net for the window in which `OwnPhotoKeyMigrator`'s eager pass has not yet re-sealed
     /// everything (a crash, a locked keychain, a corpus larger than one launch's work).
@@ -86,12 +90,14 @@ public struct MealPhotoStore {
         directory: URL,
         keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
         allowsLegacyPlaintextUpgrade: Bool = true,
-        legacyKeyProvider: PrivateMediaKeyProviding? = nil
+        legacyKeyProvider: PrivateMediaKeyProviding? = nil,
+        purpose: CryptographicPurpose = FernletCryptoPurpose.AEAD.mealPhotoV2
     ) {
         self.directory = directory
         self.keyProvider = keyProvider
         self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
         self.legacyKeyProvider = legacyKeyProvider
+        self.atRestPurpose = purpose
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
@@ -117,7 +123,7 @@ public struct MealPhotoStore {
         guard data.count <= Self.maxIncomingPhotoBytes else { return nil }
         guard let normalized = Self.normalizedJPEG(from: data) else { return nil }
         let id = UUID()
-        guard keyProvider.sealAndWrite(normalized, to: url(for: id)) else { return nil }
+        guard keyProvider.sealAndWrite(normalized, to: url(for: id), purpose: atRestPurpose) else { return nil }
         return id
     }
 
@@ -133,7 +139,7 @@ public struct MealPhotoStore {
     public func save(_ data: Data, forID id: UUID) -> Bool {
         guard data.count <= Self.maxIncomingPhotoBytes else { return false }
         guard let normalized = Self.normalizedJPEG(from: data) else { return false }
-        return keyProvider.sealAndWrite(normalized, to: url(for: id))
+        return keyProvider.sealAndWrite(normalized, to: url(for: id), purpose: atRestPurpose)
     }
 
     /// Returns the decrypted photo bytes for `id`, or nil when there is no file, no key, or the
@@ -150,7 +156,7 @@ public struct MealPhotoStore {
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).
-        if let opened = keyProvider.gcmOpen(stored) {
+        if let opened = keyProvider.gcmOpen(stored, purpose: atRestPurpose) {
             return opened
         }
         // Dual-open safety net: a file the eager migration pass has not reached yet is still sealed
@@ -159,8 +165,9 @@ public struct MealPhotoStore {
         // A failed re-seal is deliberately non-fatal: the user still sees their photo, and the file
         // stays legacy (so the migration latch stays closed — which is exactly the fail-closed
         // signal that binding must not proceed yet).
-        if let legacyKeyProvider, let opened = legacyKeyProvider.gcmOpen(stored) {
-            keyProvider.sealAndWriteBestEffort(opened, to: url(for: id), reason: "dualOpenUpgrade")
+        if let legacyKeyProvider, let opened = legacyKeyProvider.gcmOpen(stored, purpose: atRestPurpose) {
+            keyProvider.sealAndWriteBestEffort(
+                opened, to: url(for: id), purpose: atRestPurpose, reason: "dualOpenUpgrade")
             return opened
         }
         // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for
@@ -170,7 +177,8 @@ public struct MealPhotoStore {
         // Stores with NO legacy plaintext generation (body/recipe photos) skip this branch entirely:
         // an unsealed file that merely parses as an image is refused, not trusted and re-sealed.
         if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) {
-            keyProvider.sealAndWriteBestEffort(stored, to: url(for: id), reason: "legacyPlaintextUpgrade")
+            keyProvider.sealAndWriteBestEffort(
+                stored, to: url(for: id), purpose: atRestPurpose, reason: "legacyPlaintextUpgrade")
             return stored
         }
         return nil
@@ -195,7 +203,7 @@ public struct MealPhotoStore {
     public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
         guard normalizedJPEG.count <= Self.maxIncomingPhotoBytes else { return false }
         guard PrivateMediaStore.isWithinSafePixelBounds(normalizedJPEG) else { return false }
-        return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id))
+        return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id), purpose: atRestPurpose)
     }
 
     /// The ids this store currently holds files for, parsed from the flat `<uuid>.jpg` file names.
@@ -281,8 +289,8 @@ public struct MealPhotoStore {
             sawFile = true
             guard let stored = try? Data(contentsOf: url) else { return false }
             guard !stored.isEmpty else { continue }
-            if keyProvider.gcmOpen(stored) != nil { return false }
-            if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored) != nil { return false }
+            if keyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return false }
+            if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return false }
             if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) { return false }
         }
         return sawFile

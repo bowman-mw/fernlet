@@ -6,6 +6,7 @@
 // so tests never touch each other's state and never reach the production service.
 
 import ProximityKit
+import FernletCrypto
 import Foundation
 import FernletFoundation
 import Testing
@@ -79,10 +80,11 @@ struct IdentityServiceTests {
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
-        let data = Data("hello world".utf8)
-        let sig  = try svc.sign(data)
+        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let data = purpose.data + Data("hello world".utf8)
+        let sig  = try svc.sign(data, purpose: purpose)
 
-        #expect(IdentityService.verify(sig, of: data, by: svc.localSigningPublicKey))
+        #expect(IdentityService.verify(sig, of: data, by: svc.localSigningPublicKey, purpose: purpose))
     }
 
     @Test func verifyRejectsTamperedData() throws {
@@ -90,13 +92,14 @@ struct IdentityServiceTests {
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
-        let data = Data("hello world".utf8)
-        let sig  = try svc.sign(data)
+        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let data = purpose.data + Data("hello world".utf8)
+        let sig  = try svc.sign(data, purpose: purpose)
 
         var tampered = data
         tampered[0] ^= 0xFF
 
-        #expect(!IdentityService.verify(sig, of: tampered, by: svc.localSigningPublicKey))
+        #expect(!IdentityService.verify(sig, of: tampered, by: svc.localSigningPublicKey, purpose: purpose))
     }
 
     @Test func verifyRejectsWrongPublicKey() throws {
@@ -108,10 +111,11 @@ struct IdentityServiceTests {
         defer { cleanup(id2) }
         try svc2.ensureProvisioned()
 
-        let data = Data("hello".utf8)
-        let sig  = try svc1.sign(data)
+        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let data = purpose.data + Data("hello".utf8)
+        let sig  = try svc1.sign(data, purpose: purpose)
 
-        #expect(!IdentityService.verify(sig, of: data, by: svc2.localSigningPublicKey))
+        #expect(!IdentityService.verify(sig, of: data, by: svc2.localSigningPublicKey, purpose: purpose))
     }
 
     // MARK: - Fingerprint

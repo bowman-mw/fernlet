@@ -6,6 +6,7 @@
 
 import ProximityKit
 import Foundation
+import FernletCrypto
 import FernletFoundation
 import Testing
 import FernletDomainModel
@@ -677,7 +678,8 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try sender.sign(legacyCanonicalBytes(for: env))
+        env.signature = try sender.sign(legacyCanonicalBytes(for: env),
+                                        purpose: FernletCryptoPurpose.Signature.identityEnvelopeLegacyV1)
         return env
     }
 
@@ -772,7 +774,10 @@ struct FernletIdentityEnvelopeTests {
             admitterSigningPublicKey: admitter.localSigningPublicKey,
             admitterSignature: Data()
         )
-        legacyToken.admitterSignature = try admitter.sign(legacyCanonicalBytes(for: legacyToken))
+        legacyToken.admitterSignature = try admitter.sign(
+            legacyCanonicalBytes(for: legacyToken),
+            purpose: FernletCryptoPurpose.Signature.meshAdmissionTokenLegacyV1
+        )
         try legacyToken.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
                                expectedMeshID: meshID,
                                expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
@@ -855,7 +860,8 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try sender.sign(canonicalBytes(for: env))
+        env.signature = try sender.sign(canonicalBytes(for: env),
+                                        purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2)
         return env
     }
 
@@ -980,7 +986,8 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try alice.sign(legacyCanonicalBytes(for: env))
+        env.signature = try alice.sign(legacyCanonicalBytes(for: env),
+                                       purpose: FernletCryptoPurpose.Signature.identityEnvelopeLegacyV1)
 
         #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == Data())
     }

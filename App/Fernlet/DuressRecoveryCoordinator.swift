@@ -19,6 +19,7 @@
 
 import CryptoKit
 import Foundation
+import FernletCrypto
 import FernletFoundation
 import FernletLock
 import ProximityKit
@@ -96,10 +97,10 @@ struct DuressRecoveryReply: Codable, Equatable, Sendable {
 /// `ProximityVerifySignature` in ProximityKit.
 enum DuressRecoveryTranscript {
     /// Domain separator for the primary → custodian request.
-    static let requestDomain = Data("fernlet.duress.recovery.request.v1".utf8)
+    static let requestDomain = FernletCryptoPurpose.Signature.duressRecoveryRequestV1.data
     /// Domain separator for the custodian → primary reply. Distinct from ``requestDomain`` so a
     /// signature over one can never be replayed as a signature over the other.
-    static let replyDomain = Data("fernlet.duress.recovery.reply.v1".utf8)
+    static let replyDomain = FernletCryptoPurpose.Signature.duressRecoveryReplyV1.data
     /// Nonce length, matching `ProximityVerifySignature.nonceByteCount`.
     static let nonceByteCount = ProximityVerifySignature.nonceByteCount
     /// Raw Curve25519 public-key length, matching `ProximityVerifySignature.publicKeyByteCount`.
@@ -370,7 +371,7 @@ final class DuressRecoveryCoordinator {
             challengeNonce: payload.challengeNonce,
             qrNonce: payload.qrNonce
         )
-        guard let signature = try? identity.sign(message) else {
+        guard let signature = try? identity.sign(message, purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1) else {
             FernletAuditLog.log("mesh.verifyQR.signFailed")
             return nil
         }
@@ -521,7 +522,7 @@ final class DuressRecoveryCoordinator {
             custodianKeyAgreementPublicKey: round.peerKeyAgreementPublicKey,
             recoveryBlob: blob
         )
-        guard let signature = try? identity.sign(transcript) else {
+        guard let signature = try? identity.sign(transcript, purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1) else {
             throw DuressRecoveryError.cryptoFailed
         }
         let request = DuressRecoveryRequest(
@@ -594,7 +595,8 @@ final class DuressRecoveryCoordinator {
             decision: reply.decision,
             contentKey: reply.contentKey
         )
-        guard IdentityService.verify(reply.signature, of: transcript, by: enrolledSigning) else {
+        guard IdentityService.verify(reply.signature, of: transcript, by: enrolledSigning,
+                                     purpose: FernletCryptoPurpose.Signature.duressRecoveryReplyV1) else {
             FernletAuditLog.log("mesh.verifyQR.badReplySignature")
             throw DuressRecoveryError.signatureRejected
         }
@@ -664,7 +666,8 @@ final class DuressRecoveryCoordinator {
             custodianKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
             recoveryBlob: request.recoveryBlob
         )
-        guard IdentityService.verify(request.signature, of: transcript, by: request.requesterSigningPublicKey) else {
+        guard IdentityService.verify(request.signature, of: transcript, by: request.requesterSigningPublicKey,
+                                     purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1) else {
             FernletAuditLog.log("mesh.verifyQR.badPayloadSignature")
             throw DuressRecoveryError.signatureRejected
         }
@@ -706,7 +709,7 @@ final class DuressRecoveryCoordinator {
             decision: decision,
             contentKey: contentKey
         )
-        guard let signature = try? identity.sign(transcript) else {
+        guard let signature = try? identity.sign(transcript, purpose: FernletCryptoPurpose.Signature.duressRecoveryReplyV1) else {
             throw DuressRecoveryError.cryptoFailed
         }
         let reply = DuressRecoveryReply(
@@ -772,7 +775,8 @@ final class DuressRecoveryCoordinator {
             challengeNonce: round.challengeNonce,
             qrNonce: round.qrNonce
         )
-        guard IdentityService.verify(response.signature, of: message, by: round.peerSigningPublicKey) else {
+        guard IdentityService.verify(response.signature, of: message, by: round.peerSigningPublicKey,
+                                     purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1) else {
             pendingRound = nil
             FernletAuditLog.log("mesh.verifyQR.badResponseSignature")
             throw DuressRecoveryError.challengeResponseRejected

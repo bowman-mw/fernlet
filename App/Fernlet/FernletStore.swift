@@ -5,6 +5,7 @@ import FernletLock
 import LocalPersistence
 import AIProviders
 import FernletFoundation
+import FernletCrypto
 import HealthKit
 import Observation
 import SwiftUI
@@ -535,7 +536,8 @@ final class FernletStore {
         keyProvider: FernletStore.ownPhotoKeyProvider(),
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
         allowsLegacyPlaintextUpgrade: false,
-        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider(),
+        purpose: FernletCryptoPurpose.AEAD.recipePhotoV2
     )
     /// Backing store for ``RecipeWebImageAttemptMemory`` — the device-local "one automatic
     /// web-image attempt per device" bookkeeping (the synced half of that contract is

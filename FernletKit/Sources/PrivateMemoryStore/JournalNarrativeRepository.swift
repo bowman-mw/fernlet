@@ -121,7 +121,7 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring, @uncheck
     private let context: NSManagedObjectContext
     /// Column sealer bound to the `"journal-narrative"` HKDF label — the label is part of the
     /// at-rest format and must never change.
-    private let crypto = ColumnCrypto(label: "journal-narrative")
+    private let crypto = ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1)
 
     /// R5: upper bound on the caller-supplied day-key list of
     /// ``narratives(forDayKeys:contentKey:)``, which becomes a `dayKey IN %@` predicate.

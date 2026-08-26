@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FernletCrypto
 
 /// The on-disk layout of the user's OWN photo corpora, in ONE place.
 ///
@@ -324,6 +325,7 @@ public struct OwnPhotoKeyMigrator {
         var indeterminate = scan.unreadableDirectories
 
         for url in scan.urls {
+            let purpose = purpose(for: url)
             let stored: Data
             do {
                 stored = try Data(contentsOf: url)
@@ -344,7 +346,7 @@ public struct OwnPhotoKeyMigrator {
                 unopenable += 1
                 continue
             }
-            if ownKeyProvider.gcmOpen(stored) != nil {
+            if ownKeyProvider.gcmOpen(stored, purpose: purpose) != nil {
                 alreadyOwnKey += 1
                 continue
             }
@@ -352,11 +354,11 @@ public struct OwnPhotoKeyMigrator {
                 indeterminate += 1
                 continue
             }
-            guard let plaintext = legacyKeyProvider.gcmOpen(stored) else {
+            guard let plaintext = legacyKeyProvider.gcmOpen(stored, purpose: purpose) else {
                 unopenable += 1
                 continue
             }
-            if ownKeyProvider.sealAndWrite(plaintext, to: url) {
+            if ownKeyProvider.sealAndWrite(plaintext, to: url, purpose: purpose) {
                 resealed += 1
             } else {
                 resealFailures += 1
@@ -371,6 +373,23 @@ public struct OwnPhotoKeyMigrator {
             unopenable: unopenable,
             indeterminate: indeterminate
         )
+    }
+
+    /// Maps the fixed, app-owned corpus layout to the purpose its store uses. A test-only path
+    /// outside that layout defaults to the original meal corpus; untrusted file names never select
+    /// or construct a purpose.
+    private func purpose(for url: URL) -> CryptographicPurpose {
+        let components = Set(url.pathComponents)
+        if url.lastPathComponent == OwnPhotoCorpusLayout.progressIndexFileName {
+            return FernletCryptoPurpose.AEAD.progressPhotoIndexV2
+        }
+        if components.contains(OwnPhotoCorpusLayout.progressPhotosDirectoryName) {
+            return FernletCryptoPurpose.AEAD.progressPhotoV2
+        }
+        if components.contains(OwnPhotoCorpusLayout.recipePhotosDirectoryName) {
+            return FernletCryptoPurpose.AEAD.recipePhotoV2
+        }
+        return FernletCryptoPurpose.AEAD.mealPhotoV2
     }
 
     /// One directory sweep's output: the files to examine plus how many existing directories could

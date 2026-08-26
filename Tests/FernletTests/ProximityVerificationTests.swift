@@ -10,6 +10,7 @@
 import Foundation
 import Testing
 import CryptoKit
+import FernletCrypto
 import MultipeerConnectivity
 @testable import ProximityKit
 import FernletDomainModel
@@ -98,8 +99,9 @@ struct ProximityVerificationTests {
             challengeNonce: challengeNonce,
             qrNonce: qrNonce
         )
-        let signature = try displayer.sign(message)
-        #expect(IdentityService.verify(signature, of: message, by: displayer.localSigningPublicKey))
+        let purpose = FernletCryptoPurpose.Signature.proximityQRResponseV1
+        let signature = try displayer.sign(message, purpose: purpose)
+        #expect(IdentityService.verify(signature, of: message, by: displayer.localSigningPublicKey, purpose: purpose))
 
         // Any transcript substitution breaks it: different scanner, nonce, or signer.
         let otherScannerMessage = ProximityVerifySignature.message(
@@ -107,14 +109,14 @@ struct ProximityVerificationTests {
             challengeNonce: challengeNonce,
             qrNonce: qrNonce
         )
-        #expect(!IdentityService.verify(signature, of: otherScannerMessage, by: displayer.localSigningPublicKey))
+        #expect(!IdentityService.verify(signature, of: otherScannerMessage, by: displayer.localSigningPublicKey, purpose: purpose))
         let otherNonceMessage = ProximityVerifySignature.message(
             scannerKeyAgreementPublicKey: scanner.localKeyAgreementPublicKey,
             challengeNonce: qrNonce,
             qrNonce: challengeNonce
         )
-        #expect(!IdentityService.verify(signature, of: otherNonceMessage, by: displayer.localSigningPublicKey))
-        #expect(!IdentityService.verify(signature, of: message, by: scanner.localSigningPublicKey))
+        #expect(!IdentityService.verify(signature, of: otherNonceMessage, by: displayer.localSigningPublicKey, purpose: purpose))
+        #expect(!IdentityService.verify(signature, of: message, by: scanner.localSigningPublicKey, purpose: purpose))
     }
 
     // MARK: - Ceremony state machine (MeshNetworkManager)
@@ -416,7 +418,7 @@ struct ProximityVerificationTests {
             scannerKeyAgreementPublicKey: manager.localKeyAgreementPublicKey,
             challengeNonce: challengeNonce,
             qrNonce: bobQR.nonce
-        ))
+        ), purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1)
         try deliverResponse(to: manager, on: bobSlot.coordinator, from: bob,
                             challengeNonce: challengeNonce, signature: signature)
         await waitForCommit(bobSlot.coordinator)
@@ -451,7 +453,7 @@ struct ProximityVerificationTests {
             scannerKeyAgreementPublicKey: manager.localKeyAgreementPublicKey,
             challengeNonce: challengeNonce,
             qrNonce: bobQR.nonce
-        ))
+        ), purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1)
         try deliverResponse(to: manager, on: bobSlot.coordinator, from: bob,
                             challengeNonce: challengeNonce, signature: signature)
         await settle()

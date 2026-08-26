@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+import FernletCrypto
 import Security
 import FernletDomainModel
 import FernletFoundation
@@ -86,6 +87,10 @@ public struct PendingNarrativePayload: Codable {
 /// Concurrency: a plain nonisolated, non-`Sendable` class with no internal locking; correctness
 /// relies on the single lock-service-owned instance being driven from the main actor.
 public final class PendingNarrativeBuffer {
+
+    /// Current whole-file format prefix. v1 began directly with a ChaChaPoly box and had no AAD;
+    /// keep that path only to drain old entries safely, then all later writes become v2.
+    private static let sealedFormatV2 = Data("FNB2".utf8)
 
     /// The buffer's storage identity — file directory and keychain service as one value. Two
     /// instances share on-disk and keychain state exactly when their scopes are equal.
@@ -174,8 +179,19 @@ public final class PendingNarrativeBuffer {
         guard !encrypted.isEmpty else { return [] }
 
         let key = try bufferKey()
-        let sealedBox = try ChaChaPoly.SealedBox(combined: encrypted)
-        let plaintext = try ChaChaPoly.open(sealedBox, using: key)
+        let isV2 = encrypted.starts(with: Self.sealedFormatV2)
+        let combined = isV2 ? encrypted.dropFirst(Self.sealedFormatV2.count) : encrypted
+        let sealedBox = try ChaChaPoly.SealedBox(combined: combined)
+        let plaintext: Data
+        if isV2 {
+            plaintext = try ChaChaPoly.open(
+                sealedBox,
+                using: key,
+                authenticating: FernletCryptoPurpose.AEAD.pendingNarrativeBufferV2.data
+            )
+        } else {
+            plaintext = try ChaChaPoly.open(sealedBox, using: key) // cryptographic-domain: legacy-read
+        }
         return try JSONDecoder().decode([PendingNarrativePayload].self, from: plaintext)
     }
 
@@ -184,8 +200,12 @@ public final class PendingNarrativeBuffer {
     private func saveEntries(_ entries: [PendingNarrativePayload]) throws {
         let plaintext = try JSONEncoder().encode(entries)
         let key = try bufferKey()
-        let sealedBox = try ChaChaPoly.seal(plaintext, using: key)
-        let encrypted = sealedBox.combined
+        let sealedBox = try ChaChaPoly.seal(
+            plaintext,
+            using: key,
+            authenticating: FernletCryptoPurpose.AEAD.pendingNarrativeBufferV2.data
+        )
+        let encrypted = Self.sealedFormatV2 + sealedBox.combined
 
         try ensureDirectoryExists()
         let url = bufferFileURL

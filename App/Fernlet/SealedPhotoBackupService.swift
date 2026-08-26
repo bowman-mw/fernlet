@@ -1,5 +1,6 @@
 import ProximityKit
 import CryptoKit
+import FernletCrypto
 import Foundation
 import FernletFoundation
 import CloudKitSync
@@ -145,7 +146,7 @@ enum SealedPhotoCrypto {
         generation: Int64,
         updatedAt: Date
     ) -> Data {
-        var aad = Data("fernlet.sealed-photo.aad.v3".utf8) + Data([0])
+        var aad = FernletCryptoPurpose.AEAD.sealedPhotoBackupV3.data + Data([0])
         aad += Data(corpus.rawValue.utf8) + Data([0])
         aad += signingPublicKey + Data([0])
         aad += Data(slot.recordNameSuffix.utf8) + Data([0])
@@ -593,7 +594,7 @@ final class SealedPhotoBackupService {
             if let limitedTo, !limitedTo.contains(entry.id) { continue }
             guard let record = try? await cloudDataService.sealedPhoto(corpus: corpus, slot: .photo(entry.id)),
                   let plaintext = try? SealedPhotoCrypto.open(record, identityService: identityService),
-                  Self.contentHash(plaintext) == entry.contentHash,
+                  Self.contentHashMatches(plaintext, expected: entry.contentHash),
                   write(entry.id, plaintext) else {
                 summary.failed.append(entry.id)
                 continue
@@ -677,10 +678,18 @@ final class SealedPhotoBackupService {
         try await cloudDataService.saveSealedPhoto(record)
     }
 
-    /// SHA-256 of a photo's plaintext — what the manifest commits per id, and what a restore
-    /// re-computes before trusting the bytes it opened.
+    /// Domain-separated SHA-256 of a photo's plaintext — what new manifest entries commit per id
+    /// and what a restore re-computes before trusting the bytes it opened. The matching helper
+    /// below also accepts v1's bare digest so existing manifests remain restorable.
     static func contentHash(_ plaintext: Data) -> Data {
-        Data(SHA256.hash(data: plaintext))
+        Data(SHA256.hash(data: FernletCryptoPurpose.Hash.sealedPhotoContentV2.data + plaintext))
+    }
+
+    /// Accepts the current purpose-bound digest first, then the pre-domain v1 digest solely for
+    /// read compatibility. A normal reconcile rewrites a legacy entry with the v2 digest.
+    static func contentHashMatches(_ plaintext: Data, expected: Data) -> Bool {
+        if contentHash(plaintext) == expected { return true }
+        return Data(SHA256.hash(data: plaintext)) == expected // cryptographic-domain: legacy-read
     }
 
     /// Mints one write's HKDF salt: 32 CSPRNG bytes from `SystemRandomNumberGenerator`

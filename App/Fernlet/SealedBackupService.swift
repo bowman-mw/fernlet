@@ -1,5 +1,6 @@
 import ProximityKit
 import CryptoKit
+import FernletCrypto
 import Foundation
 import FernletDomainModel
 import FernletFoundation
@@ -212,7 +213,7 @@ enum SealedBackupCrypto {
         generation: Int64,
         updatedAt: Date
     ) -> Data {
-        var aad = Data("fernlet.sealed-backup.aad.v2".utf8) + Data([0])
+        var aad = FernletCryptoPurpose.AEAD.sealedBackupV2.data + Data([0])
         aad += Data(payloadType.rawValue.utf8) + Data([0])
         aad += signingPublicKey + Data([0])
         aad += Data("\(chunkIndex)/\(chunkCount)".utf8) + Data([0])

@@ -166,7 +166,7 @@ let package = Package(
         // CoreData container), matching its prior app-target behaviour.
         .target(
             name: "PrivateStoreCore",
-            dependencies: ["FernletFoundation", "FernletDomainModel"]
+            dependencies: ["FernletCrypto", "FernletFoundation", "FernletDomainModel"]
         ),
         // Layer 3 — sealed cycle/intimacy store (S3). PeriodTrackerStore (@Observable),
         // CyclePredictionEngine, MenstrualNarrativeRepository, IntimacyLogRepository +
@@ -203,7 +203,7 @@ let package = Package(
         // lives in ProximityKit's UI/ folder.
         .target(
             name: "PrivateMediaStore",
-            dependencies: ["FernletFoundation", "FernletDomainModel"]
+            dependencies: ["FernletCrypto", "FernletFoundation", "FernletDomainModel"]
         ),
         // Layer 4 — sanctioned egress. Converts RAW cycle data (CyclePhase, from
         // PrivateHealthStore) into the ABSTRACT period signals the scoring layer
@@ -334,7 +334,7 @@ let package = Package(
         // are marked nonisolated within.
         .target(
             name: "FernletLock",
-            dependencies: ["FernletFoundation", "FernletDomainModel", "PrivateStoreCore", "PrivateHealthStore", "CryptoSwift"],
+            dependencies: ["FernletCrypto", "FernletFoundation", "FernletDomainModel", "PrivateStoreCore", "PrivateHealthStore", "CryptoSwift"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
@@ -375,7 +375,7 @@ let package = Package(
         ),
         .target(
             name: "ProximityKit",
-            dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation", "FernletUI"],
+            dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation", "FernletUI"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).

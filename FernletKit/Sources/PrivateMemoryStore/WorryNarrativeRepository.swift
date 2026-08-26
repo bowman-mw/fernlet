@@ -86,7 +86,7 @@ public final class WorryNarrativeRepository: WorryStoring, Sendable {
     private let context: NSManagedObjectContext
     /// Column sealer bound to the `"worry-box"` HKDF label — part of the at-rest format,
     /// isolated from the journal label even under the same content key.
-    private let crypto = ColumnCrypto(label: "worry-box")
+    private let crypto = ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.worryNarrativeLegacyV1)
 
     /// R3: cap on the display fetch, which decrypts every row it returns. Worry rows grow purely
     /// from repeated user actions and there is no paged alternative here.

@@ -792,7 +792,7 @@ struct DuressRecoveryCeremonyTests {
         let challenge = try pair.primary.beginCustodianEnrollment(scannedURL: url)
         let forged = VerifyResponsePayload(
             challengeNonce: challenge.challengeNonce,
-            signature: try interloper.sign(Data("anything".utf8))
+            signature: Data(repeating: 0, count: 64)
         )
 
         await #expect(throws: DuressRecoveryError.challengeResponseRejected) {
@@ -889,7 +889,7 @@ struct DuressRecoveryCeremonyTests {
             challengeNonce: response.challengeNonce,
             decision: .destroy,
             contentKey: Data(),
-            signature: try interloper.sign(Data("whatever".utf8))
+            signature: Data(repeating: 0, count: 64)
         )
         let sealed = try interloper.seal(
             try JSONEncoder().encode(forged),

@@ -94,7 +94,7 @@ public nonisolated enum MenstrualNarrativeRangeError: Error, Equatable {
 /// would break the invariant and must not happen.
 public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable {
     private let context: NSManagedObjectContext
-    private let crypto = ColumnCrypto(label: "menstrual-narrative")
+    private let crypto = ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.menstrualNarrativeLegacyV1)
 
     /// R5: widest range ``narratives(in:contentKey:)`` will enumerate into day keys — the store's
     /// 240-day load window plus headroom.

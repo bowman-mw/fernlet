@@ -21,6 +21,7 @@
 
 import ProximityKit
 import Foundation
+import FernletCrypto
 import FernletFoundation
 import Testing
 import FernletDomainModel
@@ -92,7 +93,12 @@ struct ProximityWireOffMainDecodeTests {
                 return false
             }
             let canon = canonicalBytes(for: decoded)
-            return IdentityService.verify(decoded.signature, of: canon, by: signerKey)
+            return IdentityService.verify(
+                decoded.signature,
+                of: canon,
+                by: signerKey,
+                purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2
+            )
         }.value
 
         #expect(verified)
@@ -132,7 +138,12 @@ struct ProximityWireOffMainDecodeTests {
             guard let decoded = try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: json) else {
                 return false
             }
-            return IdentityService.verify(decoded.signature, of: canonicalBytes(for: decoded), by: signerKey)
+            return IdentityService.verify(
+                decoded.signature,
+                of: canonicalBytes(for: decoded),
+                by: signerKey,
+                purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2
+            )
         }.value
 
         #expect(verified == false)

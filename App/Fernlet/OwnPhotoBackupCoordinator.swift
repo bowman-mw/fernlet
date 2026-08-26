@@ -1,6 +1,7 @@
 import ProximityKit
 import CloudKitSync
 import FernletFoundation
+import FernletCrypto
 import Foundation
 import PrivateMediaStore
 
@@ -146,7 +147,10 @@ final class OwnPhotoBackupCoordinator {
             // Recipe photos were born sealed; meal photos have a genuine pre-sealing plaintext
             // generation. Mirrors `FernletStore`'s construction exactly.
             allowsLegacyPlaintextUpgrade: !recipe,
-            legacyKeyProvider: legacyKeyProvider()
+            legacyKeyProvider: legacyKeyProvider(),
+            purpose: recipe
+                ? FernletCryptoPurpose.AEAD.recipePhotoV2
+                : FernletCryptoPurpose.AEAD.mealPhotoV2
         )
     }
 

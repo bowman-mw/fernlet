@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import ImageIO
 import CryptoKit
+import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
 
@@ -166,7 +167,10 @@ public struct PrivateMediaStore {
             // is still saved and the photo rehydrates from the mesh on demand. Deliberately
             // two-step (seal, then best-effort write) rather than `sealAndWrite`: a failed image
             // write still proceeds to the thumbnail write, while a nil key skips both.
-            guard let sealedImage = keyProvider.gcmSeal(imageData) else { continue }
+            guard let sealedImage = keyProvider.gcmSeal(
+                imageData,
+                purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2
+            ) else { continue }
             do {
                 try sealedImage.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
             } catch {
@@ -178,7 +182,12 @@ public struct PrivateMediaStore {
                 )
             }
             if let thumbnailData = Self.safeThumbnailData(from: imageData) {
-                keyProvider.sealAndWriteBestEffort(thumbnailData, to: thumbnailURL(for: photo.id), reason: "thumbnail")
+                keyProvider.sealAndWriteBestEffort(
+                    thumbnailData,
+                    to: thumbnailURL(for: photo.id),
+                    purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
+                    reason: "thumbnail"
+                )
             }
         }
         // NEVER sweep against an index that was not committed: the on-disk index still names the
@@ -203,7 +212,10 @@ public struct PrivateMediaStore {
     /// - Returns: whether the index was committed; ``save(_:)``'s orphan sweep depends on it.
     private func writeSealedIndex(_ capped: [FriendPhotoPayload]) -> Bool {
         guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return false }
-        guard let sealed = keyProvider.gcmSeal(data) else {
+        guard let sealed = keyProvider.gcmSeal(
+            data,
+            purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
+        ) else {
             FernletAuditLog.log(
                 "privateMedia.indexSealSkipped",
                 context: ["reason": "noKey", "recovery": "orphanSweepSkipped"]
@@ -254,12 +266,17 @@ public struct PrivateMediaStore {
     public func imageData(for photo: FriendPhotoPayload) -> Data? {
         if let inMemory = photo.imageData { return inMemory }
         guard let stored = try? Data(contentsOf: imageURL(for: photo.id)) else { return nil }
-        switch openSealed(stored) {
+        switch openSealed(stored, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2) {
         case .opened(let data):
             return data
         case .legacyPlaintext(let data):
             // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
-            keyProvider.sealAndWriteBestEffort(data, to: imageURL(for: photo.id), reason: "legacyPlaintextUpgrade")
+            keyProvider.sealAndWriteBestEffort(
+                data,
+                to: imageURL(for: photo.id),
+                purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2,
+                reason: "legacyPlaintextUpgrade"
+            )
             return data
         case .unreadable:
             return nil
@@ -273,11 +290,16 @@ public struct PrivateMediaStore {
     /// access. Returns nil only when neither a thumbnail nor the full image can be opened.
     public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
         if let stored = try? Data(contentsOf: thumbnailURL(for: photo.id)) {
-            switch openSealed(stored) {
+            switch openSealed(stored, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2) {
             case .opened(let data):
                 return data
             case .legacyPlaintext(let data):
-                keyProvider.sealAndWriteBestEffort(data, to: thumbnailURL(for: photo.id), reason: "legacyThumbnailUpgrade")
+                keyProvider.sealAndWriteBestEffort(
+                    data,
+                    to: thumbnailURL(for: photo.id),
+                    purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
+                    reason: "legacyThumbnailUpgrade"
+                )
                 return data
             case .unreadable:
                 break  // corrupt/unopenable thumbnail — regenerate from the full image below
@@ -285,7 +307,12 @@ public struct PrivateMediaStore {
         }
         guard let data = imageData(for: photo),
               let thumbnailData = Self.safeThumbnailData(from: data) else { return nil }
-        keyProvider.sealAndWriteBestEffort(thumbnailData, to: thumbnailURL(for: photo.id), reason: "regeneratedThumbnail")
+        keyProvider.sealAndWriteBestEffort(
+            thumbnailData,
+            to: thumbnailURL(for: photo.id),
+            purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
+            reason: "regeneratedThumbnail"
+        )
         return thumbnailData
     }
 
@@ -343,7 +370,10 @@ public struct PrivateMediaStore {
     /// left behind by a failed delete is stale by construction and must never be preferred.
     private func readIndex() -> IndexReadResult {
         if let stored = try? Data(contentsOf: sealedIndexURL), !stored.isEmpty {
-            guard let opened = keyProvider.gcmOpen(stored),
+            guard let opened = keyProvider.gcmOpen(
+                stored,
+                purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
+            ),
                   let photos = try? decoder.decode([FriendPhotoPayload].self, from: opened) else {
                 // No key at all is transient (the row is `AfterFirstUnlock`); a key that is present
                 // and still does not open these bytes is not.
@@ -381,11 +411,11 @@ public struct PrivateMediaStore {
     /// file resolves to `.unreadable` (treated as missing) rather than handing ciphertext/garbage
     /// back as if it were a photo. Files that predate encryption passed the same pixel-bounds gate
     /// at save time, so they are recognised as `.legacyPlaintext` and upgraded on access.
-    private func openSealed(_ stored: Data) -> OpenResult {
+    private func openSealed(_ stored: Data, purpose: CryptographicPurpose) -> OpenResult {
         // The explicit nil-key guard is load-bearing: without a key NOTHING opens — a legacy
         // plaintext file is `.unreadable` here, never handed back as a photo.
         guard keyProvider.mediaKey() != nil else { return .unreadable }
-        if let plaintext = keyProvider.gcmOpen(stored) {
+        if let plaintext = keyProvider.gcmOpen(stored, purpose: purpose) {
             return .opened(plaintext)
         }
         return Self.isWithinSafePixelBounds(stored) ? .legacyPlaintext(stored) : .unreadable

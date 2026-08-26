@@ -3,13 +3,10 @@ import Foundation
 
 /// Shared ChaChaPoly column-encryption helper for the sealed private-store repositories.
 ///
-/// Each repository creates one instance with its own HKDF label so journal, worry,
-/// menstrual, and intimacy ciphertexts remain isolated even under the same content
-/// key: `JournalNarrativeRepository` ("journal-narrative") and `WorryNarrativeRepository`
-/// ("worry-box") in `PrivateMemoryStore`, plus `MenstrualNarrativeRepository`
-/// ("menstrual-narrative") and `IntimacyLogRepository` ("intimacy-log") in
-/// `PrivateHealthStore`. Every call derives a per-column subkey from the
-/// caller-supplied content key via HKDF-SHA256 (with `label` as the `info` input)
+/// Each repository creates one instance with its own typed HKDF purpose so journal, worry,
+/// menstrual, and intimacy ciphertexts remain isolated even under the same content key.
+/// Every call derives a per-column subkey from the caller-supplied content key via HKDF-SHA256
+/// (with that purpose as the `info` input)
 /// and seals or opens the value with ChaCha20-Poly1305, reading and writing the
 /// sealed box's `combined` representation (nonce ‖ ciphertext ‖ tag) as one `Data` blob.
 ///
@@ -17,8 +14,8 @@ import Foundation
 /// it originates from `FernletLockService` (the keychain-backed app lock in the
 /// `FernletLock` module), which exposes it only while the private area is unlocked —
 /// the repositories fail closed when it is `nil`. Because HKDF is deterministic,
-/// the label is part of the at-rest format: changing a repository's label orphans
-/// every ciphertext already sealed under the old label.
+/// the purpose is part of the at-rest format: changing a repository's purpose orphans
+/// every ciphertext already sealed under the old purpose.
 ///
 /// **At-rest format (two coexisting generations).** *Legacy:* the sealed box's raw
 /// `combined` bytes, no AAD. *Device-bound v2* (all new writes when a binding ID is
@@ -41,7 +38,7 @@ import Foundation
 /// context. MainActor isolation here would make those synchronous calls illegal.
 /// `Sendable` for the same reason: `performAndWait` takes a `@Sendable` closure, and the
 /// repositories that hold an instance are themselves `Sendable`; the only stored state is
-/// the immutable `label`, so the conformance is compiler-checked, not `@unchecked`.
+/// the immutable typed purpose, so the conformance is compiler-checked, not `@unchecked`.
 ///
 /// Failure modes: sealing rethrows CryptoKit errors; opening throws when the blob is
 /// truncated, tampered with, or sealed under a different content key or label
@@ -52,26 +49,40 @@ import Foundation
 /// "data corrupted". The `Codable` variants additionally rethrow JSON
 /// encoding/decoding errors.
 public nonisolated struct ColumnCrypto: Sendable {
-    /// HKDF `info` string that domain-separates this instance's derived column key
+    /// HKDF `info` purpose that domain-separates this instance's derived column key
     /// from every other column sealed under the same content key.
-    let label: String
+    let purpose: CryptographicPurpose
 
     /// Version tag prefixed to device-bound (v2) sealed blobs. Part of the at-rest
     /// format: changing it orphans every v2 ciphertext already written (the open path
     /// would stop recognizing the prefix and misparse the blob as legacy).
-    static let deviceBoundFormatVersion: UInt8 = 0x02
+    static let deviceBoundFormatVersionV2: UInt8 = 0x02
+    static let deviceBoundFormatVersionV3: UInt8 = 0x03
 
-    /// Creates a helper bound to one column label.
+    /// Creates a helper bound to one reviewed column purpose.
     ///
-    /// - Parameter label: The HKDF domain-separation label for this column
-    ///   (e.g. "journal-narrative"). Must stay stable for the life of the data —
-    ///   ciphertext sealed under one label cannot be opened under another.
+    /// - Parameter purpose: The immutable HKDF purpose for this column.
+    public init(purpose: CryptographicPurpose) {
+        self.purpose = purpose
+    }
+
+    /// Test/fixture compatibility bridge for the four legacy labels. Production repositories use
+    /// the typed initializer above; unknown labels deliberately fail closed instead of deriving a
+    /// silently orphaned key.
     public init(label: String) {
-        // R5(2): a programmer-error invariant, asserted side-effect-free. An empty label collapses
-        // the HKDF domain separation — every column would derive the same subkey from one content
-        // key. Every caller passes a compile-time literal, so this can only fail in development.
-        assert(!label.isEmpty, "ColumnCrypto label must be non-empty: it is the HKDF domain-separation input")
-        self.label = label
+        switch label {
+        case FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1.rawValue:
+            purpose = FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1
+        case FernletCryptoPurpose.KeyDerivation.worryNarrativeLegacyV1.rawValue:
+            purpose = FernletCryptoPurpose.KeyDerivation.worryNarrativeLegacyV1
+        case FernletCryptoPurpose.KeyDerivation.menstrualNarrativeLegacyV1.rawValue:
+            purpose = FernletCryptoPurpose.KeyDerivation.menstrualNarrativeLegacyV1
+        case FernletCryptoPurpose.KeyDerivation.intimacyLogLegacyV1.rawValue:
+            purpose = FernletCryptoPurpose.KeyDerivation.intimacyLogLegacyV1
+        default:
+            assertionFailure("Unknown legacy column purpose")
+            purpose = FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1
+        }
     }
 
     // MARK: - String
@@ -136,21 +147,22 @@ public nonisolated struct ColumnCrypto: Sendable {
 
     // MARK: - Device-bound format core
 
-    /// Seals plaintext in the newest format this install supports: device-bound v2
-    /// (version byte + `combined`, with this install's ``DeviceBindingID`` as AAD)
+    /// Seals plaintext in the newest format this install supports: device-bound v3
+    /// (version byte + `combined`, with the column purpose + ``DeviceBindingID`` as AAD)
     /// when a durable binding ID exists, else the legacy unbound `combined` blob.
     private func sealPlaintext(_ plaintext: Data, contentKey: SymmetricKey) throws -> Data {
         let key = columnKey(from: contentKey)
         guard let binding = DeviceBindingID.current() else {
-            return try ChaChaPoly.seal(plaintext, using: key).combined
+            return try ChaChaPoly.seal(plaintext, using: key).combined // cryptographic-domain: purpose-derived legacy-write
         }
-        let combined = try ChaChaPoly.seal(plaintext, using: key, authenticating: binding).combined
-        return Data([Self.deviceBoundFormatVersion]) + combined
+        let aad = purpose.data + binding
+        let combined = try ChaChaPoly.seal(plaintext, using: key, authenticating: aad).combined
+        return Data([Self.deviceBoundFormatVersionV3]) + combined
     }
 
-    /// Opens a sealed blob of either at-rest generation: tries the device-bound v2
-    /// parse (version byte + AAD) first when the blob carries the version tag, then
-    /// falls back to the legacy no-AAD open of the whole blob — which keeps every
+    /// Opens a sealed blob of every at-rest generation: tries device-bound v3 (purpose + binding),
+    /// then v2 (binding only), then falls back to the legacy no-AAD open of the whole blob.
+    /// This keeps every
     /// pre-binding row readable AND resolves the rare legacy blob whose first
     /// ciphertext byte happens to equal the version tag.
     ///
@@ -166,7 +178,18 @@ public nonisolated struct ColumnCrypto: Sendable {
     private func openBlob(_ data: Data, contentKey: SymmetricKey) throws -> Data {
         let key = columnKey(from: contentKey)
         var bindingReadError: (any Error)?
-        if data.first == Self.deviceBoundFormatVersion {
+        if data.first == Self.deviceBoundFormatVersionV3 {
+            do {
+                if let binding = try DeviceBindingID.currentForOpen(),
+                   let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
+                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: purpose.data + binding) {
+                    return plaintext
+                }
+            } catch {
+                bindingReadError = error
+            }
+        }
+        if data.first == Self.deviceBoundFormatVersionV2 {
             do {
                 if let binding = try DeviceBindingID.currentForOpen(),
                    let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
@@ -178,7 +201,7 @@ public nonisolated struct ColumnCrypto: Sendable {
             }
         }
         do {
-            return try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key)
+            return try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key) // cryptographic-domain: legacy-read
         } catch {
             throw bindingReadError ?? error
         }
@@ -187,9 +210,9 @@ public nonisolated struct ColumnCrypto: Sendable {
     // MARK: - Key derivation
 
     /// Derives a purpose-bound subkey from the content key via salt-free HKDF-SHA256,
-    /// with `info` as the domain-separating label.
+    /// with the typed purpose as the domain-separating `info` input.
     ///
-    /// This is THE column-key derivation every sealed ciphertext depends on: the label
+    /// This is THE column-key derivation every sealed ciphertext depends on: the purpose
     /// and the derivation are part of the at-rest format, so any change here orphans
     /// all existing sealed columns. Module-internal (least privilege, per the WI-7
     /// precedent) — production code reaches it only through the sealing methods above,
@@ -198,19 +221,28 @@ public nonisolated struct ColumnCrypto: Sendable {
     ///
     /// - Parameters:
     ///   - contentKey: The unlocked content key used as the HKDF input key material.
-    ///   - info: The domain-separation label (the HKDF `info` input, UTF-8 encoded).
+    ///   - purpose: The typed domain-separation value (the HKDF `info` input, UTF-8 encoded).
     ///   - outputByteCount: The derived-key length in bytes (32 for ChaCha20 column keys).
     /// - Returns: The deterministically derived subkey.
+    static func deriveColumnKey(
+        contentKey: SymmetricKey,
+        purpose: CryptographicPurpose,
+        outputByteCount: Int
+    ) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: purpose.data, outputByteCount: outputByteCount)
+    }
+
     static func deriveColumnKey(contentKey: SymmetricKey, info: String, outputByteCount: Int) -> SymmetricKey {
-        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data(info.utf8), outputByteCount: outputByteCount)
+        let purpose = ColumnCrypto(label: info).purpose
+        return deriveColumnKey(contentKey: contentKey, purpose: purpose, outputByteCount: outputByteCount)
     }
 
     // MARK: - Private
 
     /// Derives this column's 32-byte ChaCha20 subkey from the content key via
-    /// ``deriveColumnKey(contentKey:info:outputByteCount:)``, using `label`
+    /// ``deriveColumnKey(contentKey:purpose:outputByteCount:)``, using `purpose`
     /// as the domain-separating `info` input.
     private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
-        Self.deriveColumnKey(contentKey: contentKey, info: label, outputByteCount: 32)
+        Self.deriveColumnKey(contentKey: contentKey, purpose: purpose, outputByteCount: 32)
     }
 }

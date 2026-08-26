@@ -109,7 +109,7 @@ public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable, Sendabl
 /// would break the invariant and must not happen.
 public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     private let context: NSManagedObjectContext
-    private let crypto = ColumnCrypto(label: "intimacy-log")
+    private let crypto = ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.intimacyLogLegacyV1)
 
     /// R3: cap on the display fetch, which decrypts every row it returns and holds the plaintext
     /// notes for as long as the caller keeps them. Older rows stay reachable through the paged

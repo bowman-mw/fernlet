@@ -5,6 +5,7 @@
 // Memory-hard KDF, no PBKDF2 fallback.
 
 import Foundation
+import FernletCrypto
 import FernletFoundation
 import CryptoKit
 import Security
@@ -326,6 +327,8 @@ enum FernletLockCrypto {
     nonisolated static let saltLength: Int = 16
     nonisolated static let aeadNonceLength: Int = 12
     nonisolated static let aeadTagLength: Int = 16
+    private nonisolated static let wrappedContentKeyFormatV2 = Data("FLW2".utf8)
+    private nonisolated static let verifierFormatV2 = Data("FLV2".utf8)
 
     /// Derives the 32-byte scrypt key for a passcode and salt, off the main actor.
     ///
@@ -382,14 +385,29 @@ enum FernletLockCrypto {
     /// returning the combined (nonce + ciphertext + tag) blob stored in the keychain.
     nonisolated static func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
-        return try ChaChaPoly.seal(contentKey, using: wrappingKey).combined
+        let combined = try ChaChaPoly.seal(
+            contentKey,
+            using: wrappingKey,
+            authenticating: FernletCryptoPurpose.AEAD.lockContentKeyWrapV2.data
+        ).combined
+        return wrappedContentKeyFormatV2 + combined
     }
 
     /// Opens a ChaChaPoly-wrapped content key; throws on tampering or a wrong wrapping key.
     nonisolated static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
+        if wrappedContentKey.starts(with: wrappedContentKeyFormatV2) {
+            let sealedBox = try ChaChaPoly.SealedBox(
+                combined: wrappedContentKey.dropFirst(wrappedContentKeyFormatV2.count)
+            )
+            return try ChaChaPoly.open(
+                sealedBox,
+                using: wrappingKey,
+                authenticating: FernletCryptoPurpose.AEAD.lockContentKeyWrapV2.data
+            )
+        }
         let sealedBox = try ChaChaPoly.SealedBox(combined: wrappedContentKey)
-        return try ChaChaPoly.open(sealedBox, using: wrappingKey)
+        return try ChaChaPoly.open(sealedBox, using: wrappingKey) // cryptographic-domain: legacy-read
     }
 
     /// The at-rest passcode verifier is the SHA-256 digest of the scrypt-derived key — NOT the derived
@@ -399,6 +417,13 @@ enum FernletLockCrypto {
     /// unwrap the content key. The raw derived key remains the wrapping key, used in memory only and
     /// never written to disk. (Security hardening — see the verifier/wrapping-key split.)
     nonisolated static func verifierDigest(of derivedKey: Data) -> Data {
+        verifierFormatV2 + Data(SHA256.hash(
+            data: FernletCryptoPurpose.Hash.lockVerifierV2.data + derivedKey
+        ))
+    }
+
+    /// The digest form used before purpose separation. It is read only by the migration gate.
+    nonisolated static func legacyVerifierDigest(of derivedKey: Data) -> Data {
         Data(SHA256.hash(data: derivedKey))
     }
 }
@@ -2243,7 +2268,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// key. Safe to persist: SHA-256 of a uniformly random 256-bit key is neither invertible nor
     /// grindable.
     private nonisolated static func recoveryContentKeyDigest(of contentKey: Data) -> Data {
-        Data(SHA256.hash(data: Data("fernlet.lock.recovery.contentkey.v1".utf8) + contentKey))
+        Data(SHA256.hash(data: FernletCryptoPurpose.Hash.recoveryContentKeyV1.data + contentKey))
     }
 
     /// Configures — or replaces — the single duress PIN and the one response it triggers.
@@ -3363,6 +3388,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// rejected during the one-time migration window.
     private func verifierMatch(computedVerifier: Data, storedVerifier: Data) -> VerifierMatch {
         if constantTimeEqual(FernletLockCrypto.verifierDigest(of: computedVerifier), storedVerifier) { return .current }
+        if constantTimeEqual(FernletLockCrypto.legacyVerifierDigest(of: computedVerifier), storedVerifier) {
+            return .legacy
+        }
         if constantTimeEqual(computedVerifier, storedVerifier) { return .legacy }
         return .none
     }
