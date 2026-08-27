@@ -31,6 +31,20 @@
 #                                  to report the same BUILD_DIR the build wrote to, or
 #                                  the .stringsdata search below finds nothing.
 #
+#                                  DO NOT point this at the DerivedData you run tests
+#                                  from. This script's action is `build`; a test run's is
+#                                  `build-for-testing`, and interleaving the two in ONE
+#                                  DerivedData leaves the test bundle and the app linked
+#                                  against different copies of the same modules. Measured
+#                                  2026-08-27: ~22 failures across 11 untouched suites,
+#                                  every one of them the duplicate-type-identity tell —
+#                                    expected error ".missingPayload" of type RecipeImportError,
+#                                    but ".missingPayload" of type RecipeImportError was thrown
+#                                  Expected X, got X is never a real assertion failure. A
+#                                  clean rebuild into a fresh path clears it; do not bisect.
+#                                  Give this script its own path:
+#                                    FERNLET_DERIVED_DATA=/tmp/dd-sync Scripts/sync-string-catalogs.sh
+#
 # `--check` NEVER writes: `xcstringstool sync` has no dry-run, so the check syncs for
 # real and restores the file afterwards. That restore is trap-backed (see `cleanup`)
 # because `set -e` would otherwise strand a mutated catalog on any non-zero status in
