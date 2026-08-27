@@ -90,7 +90,14 @@ public final class PendingNarrativeBuffer {
 
     /// Current whole-file format prefix. v1 began directly with a ChaChaPoly box and had no AAD;
     /// keep that path only to drain old entries safely, then all later writes become v2.
-    private static let sealedFormatV2 = Data("FNB2".utf8)
+    ///
+    /// Module-visible rather than `private` so ``PendingNarrativeBufferFormatCensus`` classifies
+    /// files against THIS constant instead of a second copy of the same four bytes. A census with
+    /// its own copy would keep reporting "v2" after a change here, which is precisely the proof the
+    /// crypto-standardization plan's Phase 0 must not be able to fake. Still internal: nothing
+    /// outside this module needs the raw constant (the census re-exports it as
+    /// ``PendingNarrativeBufferFormatCensus/versionTwoMarker``).
+    static let sealedFormatV2 = Data("FNB2".utf8)
 
     /// The buffer's storage identity — file directory and keychain service as one value. Two
     /// instances share on-disk and keychain state exactly when their scopes are equal.

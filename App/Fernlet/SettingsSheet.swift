@@ -99,6 +99,20 @@ struct SettingsSheet: View {
     @State private var settingsSearch = ""
     // Debug tab only: tier-2 records load post-render (repository decodes the whole DB per read).
     @State private var debugTierTwoMemories: [TierTwoMemoryRecord]?
+    #if DEBUG
+    // Debug tab only: the Phase-0 cryptographic format census, loaded post-render for the same
+    // reason — it scans the sealed store, both media roots, a keychain row and five sidecar files.
+    // Nil until the scan returns; see `cryptoFormatCensusSection`. `#if DEBUG` because
+    // `CryptoFormatCensus` itself is compiled out of Release — the whole surface is absent there,
+    // not merely unreachable.
+    @State private var cryptoFormatCensus: CryptoFormatCensusReport?
+    /// One in-flight census at a time (R3). Unlike the reschedule/sync tasks below this is not a
+    /// debounce: the scan blocks a cooperative worker for its whole run and ignores cancellation
+    /// (see ``CryptoFormatCensus``), so a push → pop → push before it returns would stack a SECOND
+    /// full sweep of the sealed store and both media roots behind the first. Held here — on the
+    /// sheet, which outlives each destination push — so re-entry re-awaits the running scan.
+    @State private var cryptoFormatCensusTask: Task<Void, Never>?
+    #endif
     /// One in-flight reminder reschedule at a time (R3): the DatePicker emits a change per wheel
     /// tick, and they all write the same notification identifier.
     @State private var checkInRescheduleTask: Task<Void, Never>?
@@ -1668,6 +1682,10 @@ struct SettingsSheet: View {
             tierTwoMemorySection
 
             derivedSignalsSection
+
+            #if DEBUG
+            cryptoFormatCensusSection
+            #endif
         }
     }
 
@@ -1788,6 +1806,84 @@ struct SettingsSheet: View {
         .padding(12)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
     }
+
+    #if DEBUG
+    /// The Phase-0 cryptographic format census (Docs/Plan-Crypto-Standardization-2026-08-27.md):
+    /// how many stored blobs on this device are still in a legacy at-rest format, per surface.
+    ///
+    /// Loads post-render via its own `.task`, exactly like ``tierTwoMemorySection`` and for a
+    /// heavier version of the same reason: the pass reads the sealed Core Data store, both media
+    /// roots, a keychain row and five sidecar files. ``CryptoFormatCensus/run(inputs:)`` does all of
+    /// that on a detached utility task; this view only renders what comes back.
+    ///
+    /// The `.task` re-entry guard is two-part, and the second half is the one that matters. Once a
+    /// report is in hand `cryptoFormatCensus != nil` short-circuits every later push; WHILE a scan
+    /// is running there is no report yet, so `cryptoFormatCensusTask` stands in for it and a
+    /// re-push awaits the scan already underway instead of launching another. SwiftUI cancels this
+    /// `.task` on disappear, but the detached scan inside does not observe cancellation — without
+    /// the handle, a push → pop → push would leave two full sweeps racing to assign the same state.
+    private var cryptoFormatCensusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Crypto format census (test-only view)")
+            Text("Counts stored blobs by their format MARKER BYTES only — nothing is decrypted, and nothing is written or saved. One row per cryptographic surface; a surface that cannot be counted shows a dash and says why, never a zero.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
+            if let report = cryptoFormatCensus {
+                ForEach(report.rows) { row in
+                    cryptoFormatCensusRow(row)
+                }
+            } else {
+                FernletCard { EmptyState(text: "Counting every sealed surface…") }
+            }
+        }
+        // One pass per SHEET, after the first frame — see the comment above.
+        .task {
+            guard cryptoFormatCensus == nil else { return }
+            let scan: Task<Void, Never>
+            if let inFlight = cryptoFormatCensusTask {
+                scan = inFlight  // a re-push during the first scan: wait on it, never start a second
+            } else {
+                scan = Task {
+                    cryptoFormatCensus = await CryptoFormatCensus.run(inputs: .production(for: store))
+                }
+                cryptoFormatCensusTask = scan
+            }
+            await scan.value
+        }
+    }
+
+    /// One census row: the surface, its legacy count (or a dash), the per-bucket detail, and the
+    /// caveat that says what the number is worth. The dash and the terracotta caveat are the whole
+    /// point — an unavailable count must never render as "0 legacy blobs".
+    private func cryptoFormatCensusRow(_ row: CryptoFormatCensusRow) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(row.displayName)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Spacer()
+                Text("legacy \(row.legacyCountText)")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(row.hasCount ? Color.bark : Color.terracotta)
+            }
+            Text(row.detail)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            if let caveat = row.caveat {
+                Text(caveat)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.terracotta)
+                    .fernletWrappingText()
+            }
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+    #endif
 
     private var connectionInspectorTab: some View {
         VStack(alignment: .leading, spacing: 18) {

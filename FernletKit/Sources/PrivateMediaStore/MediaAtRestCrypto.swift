@@ -3,6 +3,29 @@ import CryptoKit
 import FernletCrypto
 import FernletFoundation
 
+/// The at-rest box FORMAT, addressable without a key.
+///
+/// The marker bytes used to live only as a `private` member of the ``PrivateMediaKeyProviding``
+/// extension below, which put them out of reach of anything that is not a key provider — including
+/// ``MediaAtRestFormatCensus``, which must recognise the format precisely because it holds no key.
+/// So the bytes live here, in one place, and the extension's own alias reads them from here.
+/// `internal`, not `public`: the census shares this constant so the two can never disagree, while
+/// the test suites deliberately re-spell the marker themselves (see
+/// `OwnPhotoKeyMigrationTests.opens`) — a fixture that asked production what the format is could
+/// never notice production changing it.
+///
+/// Concurrency: `nonisolated` namespace of pure constants; no state.
+enum MediaAtRestFormat {
+    /// The four ASCII bytes `FMA2`, written in the CLEAR at offset 0 of every box the current
+    /// writers produce. Cleartext on purpose: it is a format tag, carries nothing about the
+    /// plaintext, and is what makes the two generations tellable apart without a key.
+    static var v2Marker: Data { Data("FMA2".utf8) }
+
+    /// Length of ``v2Marker`` — derived from it rather than spelled again, so a marker change
+    /// cannot leave a stale length behind.
+    static var v2MarkerByteCount: Int { v2Marker.count }
+}
+
 /// Shared AES-256-GCM at-rest helpers for the module's media stores.
 ///
 /// Every sealed store here (``PrivateMediaStore``, ``MealPhotoStore``, ``ProgressPhotoStore``)
@@ -18,7 +41,11 @@ import FernletFoundation
 extension PrivateMediaKeyProviding {
     /// Prefix on purpose-authenticated at-rest boxes. Previous boxes began directly with the GCM
     /// nonce and remain read-compatible so upgrade-on-read can rewrite them in this format.
-    private static var atRestFormatV2: Data { Data("FMA2".utf8) }
+    ///
+    /// A local alias for ``MediaAtRestFormat/v2Marker``, which is where the bytes actually live: a
+    /// static member of a protocol extension cannot be named without a conforming type, and the
+    /// format census must recognise the marker holding no key provider at all.
+    private static var atRestFormatV2: Data { MediaAtRestFormat.v2Marker }
 
     /// Seals `plaintext` with AES-256-GCM under ``mediaKey()``, returning the combined
     /// (nonce + ciphertext + tag) representation, or nil when no key is available or sealing fails.

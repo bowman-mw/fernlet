@@ -19,6 +19,7 @@ Concurrency: the target declares `defaultIsolation(MainActor.self)` in `Package.
 ### Column sealing
 
 - ``ColumnCrypto``
+- ``ColumnCryptoStoredFormat``
 
 ### Device binding
 

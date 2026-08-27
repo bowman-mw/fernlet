@@ -327,7 +327,14 @@ enum FernletLockCrypto {
     nonisolated static let saltLength: Int = 16
     nonisolated static let aeadNonceLength: Int = 12
     nonisolated static let aeadTagLength: Int = 16
-    private nonisolated static let wrappedContentKeyFormatV2 = Data("FLW2".utf8)
+    /// The four-byte cleartext marker every V2 wrap carries at offset 0 — stamped by
+    /// ``wrapContentKey(_:using:)`` and matched by ``unwrapContentKey(_:using:)``.
+    ///
+    /// Module-internal rather than `private` so ``LockWrapFormatCensus`` classifies a stored wrap
+    /// against the SAME bytes the writer stamps. A census carrying its own copy of the marker would
+    /// keep reporting "no legacy wraps" on the day the marker changed — and that report is what
+    /// gates deleting the legacy reader (Docs/Plan-Crypto-Standardization-2026-08-27.md, Phase 0/3).
+    nonisolated static let wrappedContentKeyFormatV2 = Data("FLW2".utf8)
     private nonisolated static let verifierFormatV2 = Data("FLV2".utf8)
 
     /// Derives the 32-byte scrypt key for a passcode and salt, off the main actor.

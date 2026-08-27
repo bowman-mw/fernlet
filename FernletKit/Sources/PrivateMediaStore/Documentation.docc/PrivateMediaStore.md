@@ -215,6 +215,15 @@ provider instance across isolation domains.
 - ``OwnPhotoKeyMigrationResult``
 - ``OwnPhotoMigrationLatch``
 
+### At-rest format census (Phase 0)
+
+- ``MediaAtRestFormatCensus``
+- ``MediaAtRestFormatClass``
+- ``MediaAtRestFormatTally``
+- ``MediaAtRestFormatLocationCensus``
+- ``MediaAtRestFormatCensusReport``
+- ``FriendWallCorpusLayout``
+
 ### Own-photo device binding
 
 - ``OwnPhotoKeyBinder``

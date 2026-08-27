@@ -49,3 +49,13 @@ Concurrency: the target compiles nonisolated (no `defaultIsolation(MainActor.sel
 - ``PendingNarrativeBuffer``
 - ``PendingNarrativePayload``
 - ``PendingNarrativeStorageScope``
+
+### At-rest format census (Phase 0)
+
+- ``SealedColumnFormatCensus``
+- ``SealedColumnIdentifier``
+- ``SealedEntityColumns``
+- ``SealedColumnFormatTally``
+- ``SealedColumnReadOutcome``
+- ``SealedColumnFormatCensusResult``
+- ``PendingNarrativeBufferFormatCensus``

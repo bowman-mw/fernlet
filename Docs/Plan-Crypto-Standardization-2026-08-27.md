@@ -1,6 +1,6 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status:** PLAN ONLY. Nothing here is built.
+**Status:** Phase 0 (the census) is BUILT — see §4. Phases 1–5 are still plan only.
 **Goal (owner, 2026-08-27):** review the domain-separation work and update everything so there is no
 "legacy" code — one standardized format per cryptographic surface.
 **Baseline:** main `def4726`. Prerequisite work already landed: `91c3956` (domain separation),
@@ -67,15 +67,52 @@ that number is known and observed to reach zero.** This is Phase 0 and it gates 
 
 ## 4. Phases
 
-### Phase 0 — Census (read-only, ships first, no behavior change)
+### Phase 0 — Census (read-only, no behavior change) — **BUILT**
 
-Add a per-surface format census: for each Class-A surface, count blobs by format version. Read-only,
-bounded, DEBUG-surfaced (Connection Inspector or a Settings diagnostic row). Deliverable: a number
-per surface, on a real device with real tester data.
+Five per-surface censuses plus the app-target aggregator (`App/Fernlet/CryptoFormatCensus.swift`),
+rendered as six rows in Settings → Debug (DEBUG builds only). Every one classifies by **marker bytes
+only**: nothing decrypts, nothing fetches a key (asking would mint one), nothing writes. The
+aggregator persists nothing either — no latch, deliberately: a stored "clean" reading has a shelf
+life nobody can see (below), and a new key would owe `Docs/PrivacyWipeCoverage.md` a disposition row.
+
+| Surface | How the count is produced | What the number is worth |
+|---|---|---|
+| `ColumnCrypto` (`SealedColumnFormatCensus`) | paged fetch over the four sealed entities' seven ciphertext columns, classifying `data.first`, refaulting each row (external blobs fault whole) | `definitelyLegacy` (unprefixed) is **exact**; `v3Marked`/`v2Marked` are **upper bounds** — a legacy nonce's first byte hits a marker ~1/256 each, and only a keyed pass that opens each blob can resolve that sliver. Truncation at the row cap is reported, not absorbed. |
+| `PendingNarrativeBuffer` | first four bytes of the one `pending-narratives.bin` per scope vs `FNB2` | 0 or 1, exactly as the reader would decide. `absent`/`empty` are earned zeros; `unreadable` (data protection, device locked) counts `nil`, never 0. Corrupt bytes land in legacy — the safe direction. |
+| `MediaAtRestCrypto` | first four bytes of every file across the two roots' eight locations (own meal/recipe/progress + progress index; wall photos/thumbnails + sealed index + the pre-sealing plaintext index) vs `FMA2`, plus a JPEG sniff | the unprefixed bucket is legacy **or** unrecognised — an upper bound on true legacy, since bytes alone cannot separate them. Unreadable files, unlistable directories and a capped sweep are reported as blind spots that make the count a lower bound. |
+| `FernletLockService` wrap | one `SecItemCopyMatching` on `wrappedContentKey`, prefix vs `FLW2` | 0 or 1. `absent` is an earned zero with three readings (no lock, enclave-bound, or a missing wrap); `malformedEmpty` and `unreadable(OSStatus)` count `nil` — collapsing "could not read" into "not there" is what would license Phase 3 to lock a user out of every corpus. |
+| `HeartDropSidecarKey` | the four known sidecar names, prefix vs `FSC2`/`FSC1` | exact for those names; `unreadable` makes it a lower bound, and unmarked files (v0 plaintext or garbage) are reported beside the count because they too block a clean verdict. |
+| `SealedPhotoBackupService` | — | **no count exists.** See the exception below. |
+
+Two caveats belong beside every reading. **The number can go up:** `ColumnCrypto.sealPlaintext`
+still fails open, writing an unprefixed legacy blob whenever `DeviceBindingID.current()` is `nil`, so
+shipping builds still create legacy rows — a zero is a moment, not a latch, until Phase 3 closes that
+branch. And **`definitelyLegacy == 0` is necessary, not sufficient**: the collided sliver in the
+marked buckets is invisible to any byte-only classifier.
+
+**Exception — `SealedPhotoBackupService` STOPs at Phase 0.** Its count cannot be produced:
+`contentHash` is an unversioned digest, distinguishing pre-images requires the plaintext (so
+classifying one entry means decrypting the sealed manifest *and* pulling that photo's body from
+iCloud), entries whose body record has vanished are unclassifiable at any price, and no completed-pass
+latch exists — nor would one prove zero: a full pass skips unreadable local photos and never heals
+another device's carried-forward entries. Phase 2 item 1's "already self-heals on reconcile; likely
+the cheapest" is right about the mechanism and wrong about the consequence: Phase 3's delete here is
+blocked on **Phase 1 adding a `hashVersion` marker to manifest entries** (default 1 on decode;
+manifest-level minimum computed at write; self-propagating, since the manifest is re-encoded wholesale
+each pass) — not on a census. The census row for this surface is static text saying so.
+
+**Phase 3 cascade hazard on that surface.** Deleting the legacy digest branch while one legacy entry
+remains does not merely fail that entry: it sends it to `summary.failed` → `.deferredTransient`, the
+repair ledger never clears, and that corpus re-runs the doomed repair on every launch with
+`routeCommitted` pinned false — on any device that ever entered a restore. The delete is not a
+one-entry loss, it is a permanent failing loop.
 
 Exit: the census reports for all six surfaces on a device that has upgraded from a pre-`91c3956`
-build. **If any count cannot be produced, stop** — a surface whose legacy rows cannot be counted
-cannot be proven migrated.
+build — every row renders something explicit, and a row that could not look says so
+(`CryptoFormatCensusReport.allSurfacesReported`, with `rowsWithoutACount` naming the gaps; `nil` is
+never rendered as `0`). **If any count cannot be produced, stop** — a surface whose legacy rows
+cannot be counted cannot be proven migrated. Still owed: a reading from a real tester device with
+real upgraded data. Simulator numbers do not discharge this.
 
 ### Phase 1 — Generalize the migrator that already works
 

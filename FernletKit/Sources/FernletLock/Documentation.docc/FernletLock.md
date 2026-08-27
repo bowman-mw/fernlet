@@ -59,6 +59,12 @@ Concurrency: the target builds with `defaultIsolation(MainActor.self)`, so the s
 
 - ``LockKeychainKey``
 
+### At-rest format census (Phase 0)
+
+- ``LockWrapFormatCensus``
+- ``LockWrapFormatState``
+- ``LockWrapFormatCensusReport``
+
 ### Time providers (test seams)
 
 - ``FernletDateProviding``
