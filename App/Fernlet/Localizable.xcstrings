@@ -7,148 +7,11 @@
     " " : {
 
     },
-    "- %@" : {
-
-    },
-    "--" : {
-
-    },
-    "…" : {
-
-    },
-    "· %lld servings" : {
-
-    },
     "\"%@\"\n\nFernlet forgets it for good. Your journal entry stays." : {
-
-    },
-    "“%@” and any photo attached to it are removed from this device. Fernlet can't undo this." : {
-
-    },
-    "“%@” logged to today." : {
-
-    },
-    "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
 
     },
     "%@" : {
 
-    },
-    "%@ - %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ - %2$@"
-          }
-        }
-      }
-    },
-    "%@ – %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ – %2$@"
-          }
-        }
-      }
-    },
-    "%@ — pick up where you left off." : {
-
-    },
-    "%@ — step %lld of %lld. Pick up where you left off." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ — step %2$lld of %3$lld. Pick up where you left off."
-          }
-        }
-      }
-    },
-    "%@ — you're resting between sets." : {
-
-    },
-    "%@ · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
-    "%@ · %@ %@ reference" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@ %3$@ reference"
-          }
-        }
-      }
-    },
-    "%@ · %lld items" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld items"
-          }
-        }
-      }
-    },
-    "%@ · %lld min" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld min"
-          }
-        }
-      }
-    },
-    "%@ · %lld more" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld more"
-          }
-        }
-      }
-    },
-    "%@ · built for a %@ day" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · built for a %2$@ day"
-          }
-        }
-      }
-    },
-    "%@ · P %lldg" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · P %2$lldg"
-          }
-        }
-      }
-    },
-    "%@ · P %lldg · C %lldg · F %lldg" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · P %2$lldg · C %3$lldg · F %4$lldg"
-          }
-        }
-      }
     },
     "%@ %@" : {
       "localizations" : {
@@ -176,6 +39,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$lld of %3$lld grams"
+          }
+        }
+      }
+    },
+    "%@ - %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ - %2$@"
           }
         }
       }
@@ -233,6 +106,122 @@
           }
         }
       }
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ %@ reference" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ %3$@ reference"
+          }
+        }
+      }
+    },
+    "%@ · %lld items" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld items"
+          }
+        }
+      }
+    },
+    "%@ · %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld min"
+          }
+        }
+      }
+    },
+    "%@ · %lld more" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld more"
+          }
+        }
+      }
+    },
+    "%@ · P %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · P %2$lldg"
+          }
+        }
+      }
+    },
+    "%@ · P %lldg · C %lldg · F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · P %2$lldg · C %3$lldg · F %4$lldg"
+          }
+        }
+      }
+    },
+    "%@ · built for a %@ day" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · built for a %2$@ day"
+          }
+        }
+      }
+    },
+    "%@ – %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ – %2$@"
+          }
+        }
+      }
+    },
+    "%@ — %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — %2$@"
+          }
+        }
+      }
+    },
+    "%@ — pick up where you left off." : {
+
+    },
+    "%@ — step %lld of %lld. Pick up where you left off." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — step %2$lld of %3$lld. Pick up where you left off."
+          }
+        }
+      }
+    },
+    "%@ — you're resting between sets." : {
+
     },
     "%@, %@" : {
       "localizations" : {
@@ -349,6 +338,9 @@
     "%@, predicted, no period expected, intimacy logged" : {
 
     },
+    "%@. Back to this month" : {
+
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -369,17 +361,24 @@
         }
       }
     },
-    "%@. Back to this month" : {
+    "%@h" : {
 
     },
     "%@’s shop" : {
 
     },
-    "%@h" : {
-
-    },
     "%lld" : {
 
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
     },
     "%lld / %lld" : {
       "localizations" : {
@@ -397,26 +396,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld / %2$lld cal"
-          }
-        }
-      }
-    },
-    "%lld %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld %2$@"
-          }
-        }
-      }
-    },
-    "%lld → %lld cal" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld → %2$lld cal"
           }
         }
       }
@@ -449,6 +428,18 @@
     },
     "%lld cal" : {
 
+    },
+    "%lld calendar collisions · %@" : {
+      "comment" : "A summary of a workout plan import preview, showing the number of calendar collisions and the selected collision policy. The argument is the string “Keep existing workouts”, the string “Add alongside”, or the string “Replace future conflicts”.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld calendar collisions · %2$@"
+          }
+        }
+      }
     },
     "%lld coins" : {
 
@@ -600,16 +591,6 @@
         }
       }
     },
-    "%lld of %lld · %lld min left" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld · %3$lld min left"
-          }
-        }
-      }
-    },
     "%lld of %lld done" : {
       "localizations" : {
         "en" : {
@@ -626,6 +607,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld of %2$lld kinds shared"
+          }
+        }
+      }
+    },
+    "%lld of %lld · %lld min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld · %3$lld min left"
           }
         }
       }
@@ -696,9 +687,6 @@
     "%lld selected" : {
 
     },
-    "%lld serving(s)" : {
-
-    },
     "%lld serving%@" : {
       "localizations" : {
         "en" : {
@@ -708,6 +696,9 @@
           }
         }
       }
+    },
+    "%lld serving(s)" : {
+
     },
     "%lld servings" : {
 
@@ -741,6 +732,32 @@
     "%lld tracked" : {
 
     },
+    "%lld → %lld cal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld → %2$lld cal"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "%lld%% wound" : {
+
+    },
+    "%lld%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld%2$@"
+          }
+        }
+      }
+    },
     "%lld. %@" : {
       "localizations" : {
         "en" : {
@@ -761,29 +778,13 @@
         }
       }
     },
+    "%lld/1000" : {
+
+    },
     "%lld/240" : {
 
     },
     "%lld/800" : {
-
-    },
-    "%lld/1000" : {
-
-    },
-    "%lld%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%2$@"
-          }
-        }
-      }
-    },
-    "%lld%%" : {
-
-    },
-    "%lld%% wound" : {
 
     },
     "%lldg" : {
@@ -802,16 +803,13 @@
         }
       }
     },
-    "•" : {
-
-    },
-    "• %@" : {
-
-    },
-    "^[%lld tasks](inflect: true)" : {
-
-    },
     "+%lld" : {
+
+    },
+    "- %@" : {
+
+    },
+    "--" : {
 
     },
     "1 bottle" : {
@@ -853,10 +851,22 @@
     "2" : {
 
     },
+    "250" : {
+
+    },
     "3" : {
 
     },
     "3.0" : {
+
+    },
+    "30" : {
+
+    },
+    "30 lb" : {
+
+    },
+    "45" : {
 
     },
     "5.5 mph" : {
@@ -872,18 +882,6 @@
 
     },
     "8-12" : {
-
-    },
-    "30" : {
-
-    },
-    "30 lb" : {
-
-    },
-    "45" : {
-
-    },
-    "250" : {
 
     },
     "A couple of readings looked close. Pick the one that fits." : {
@@ -925,10 +923,16 @@
     "A small record of being." : {
 
     },
-    "a soft tap on each turn" : {
+    "A word about this one — optional" : {
 
     },
-    "A word about this one — optional" : {
+    "AI" : {
+
+    },
+    "AI & data sources" : {
+
+    },
+    "AI activity log" : {
 
     },
     "Accept" : {
@@ -1030,6 +1034,14 @@
     "Add who was involved and any details you want to remember. This note stays encrypted on this device." : {
 
     },
+    "Add workout plan" : {
+      "comment" : "A button to add a workout plan.",
+      "isCommentAutoGenerated" : true
+    },
+    "Adding workout plan…" : {
+      "comment" : "A button label for importing a workout plan.",
+      "isCommentAutoGenerated" : true
+    },
     "Adds bottles of water to today's Fernlet diary." : {
 
     },
@@ -1048,19 +1060,13 @@
     "Adjusting…" : {
 
     },
+    "Advanced" : {
+
+    },
     "Age" : {
 
     },
     "Age: %lld" : {
-
-    },
-    "AI" : {
-
-    },
-    "AI & data sources" : {
-
-    },
-    "AI activity log" : {
 
     },
     "All done" : {
@@ -1167,9 +1173,6 @@
     "Areas to work around" : {
 
     },
-    "as of %@" : {
-
-    },
     "Ask an AI for a plan" : {
 
     },
@@ -1192,6 +1195,9 @@
 
     },
     "Assign recipes to your week, then build one shopping list." : {
+
+    },
+    "Authenticated heartbeats" : {
 
     },
     "Auto" : {
@@ -1218,6 +1224,9 @@
     "Back up your photos?" : {
 
     },
+    "Background continuation" : {
+
+    },
     "Backgrounds" : {
 
     },
@@ -1240,9 +1249,6 @@
 
     },
     "Best: %@" : {
-
-    },
-    "black bean bowls" : {
 
     },
     "Block" : {
@@ -1281,19 +1287,16 @@
     "Body signals" : {
 
     },
-    "Body signals — how Fernlet reads this" : {
-
-    },
     "Body signals needs Apple Health. Turn on “Share with Health” under Settings › Health to feed it." : {
 
     },
-    "bottle" : {
+    "Body signals — how Fernlet reads this" : {
+
+    },
+    "Bonjour candidates" : {
 
     },
     "Bottle: %lld oz" : {
-
-    },
-    "bottles" : {
 
     },
     "Bottles" : {
@@ -1431,6 +1434,10 @@
     "Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation." : {
 
     },
+    "Check these against your limits" : {
+      "comment" : "A heading for a list of workout plan import safety flags.",
+      "isCommentAutoGenerated" : true
+    },
     "Check this meal" : {
 
     },
@@ -1438,6 +1445,9 @@
 
     },
     "Checking iCloud for Fernlet data" : {
+
+    },
+    "Checking your workout calendar…" : {
 
     },
     "Choose a different swap" : {
@@ -1503,9 +1513,6 @@
     "Cloud records" : {
 
     },
-    "cm" : {
-
-    },
     "Code captured" : {
 
     },
@@ -1531,9 +1538,6 @@
 
     },
     "Complete" : {
-
-    },
-    "completed" : {
 
     },
     "Completed" : {
@@ -1569,9 +1573,6 @@
     "Connected" : {
 
     },
-    "Connection details" : {
-
-    },
     "Connection History" : {
 
     },
@@ -1579,6 +1580,9 @@
 
     },
     "Connection Inspector captures proximity pairing diagnostics for local troubleshooting." : {
+
+    },
+    "Connection details" : {
 
     },
     "Connection log" : {
@@ -1605,6 +1609,9 @@
     "Control cooking" : {
 
     },
+    "Control stream pending" : {
+
+    },
     "Control workout" : {
 
     },
@@ -1623,16 +1630,22 @@
     "Cooking in progress" : {
 
     },
-    "cooking notes, substitutions, tips" : {
+    "Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything." : {
 
     },
     "Copied — copy again" : {
 
     },
-    "Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything." : {
+    "Copies debug-only transport state and local events. It contains no user content." : {
 
     },
     "Copy" : {
+
+    },
+    "Copy URL" : {
+
+    },
+    "Copy diagnostic report" : {
 
     },
     "Copy summary + prompt" : {
@@ -1683,6 +1696,10 @@
     "Couldn't log that just now — please try again in a moment." : {
 
     },
+    "Couldn't open Messages item" : {
+      "comment" : "A title for a dialog that appears when a Messages recipe import fails.",
+      "isCommentAutoGenerated" : true
+    },
     "Couldn't prepare the summary" : {
 
     },
@@ -1696,9 +1713,6 @@
 
     },
     "Couldn't update your workout just now — please try again in a moment." : {
-
-    },
-    "covered" : {
 
     },
     "Craft" : {
@@ -1752,211 +1766,28 @@
     "Cycle tracking" : {
 
     },
-    "cycle.flow.heavy" : {
-      "comment" : "Menstrual flow level: heavy",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Heavy"
-          }
-        }
-      }
-    },
-    "cycle.flow.light" : {
-      "comment" : "Menstrual flow level: light",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Light"
-          }
-        }
-      }
-    },
-    "cycle.flow.medium" : {
-      "comment" : "Menstrual flow level: medium",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Medium"
-          }
-        }
-      }
-    },
-    "cycle.flow.noFlow" : {
-      "comment" : "Shown for a day with no menstrual-flow sample at all, as opposed to a sample recording no flow.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "No flow"
-          }
-        }
-      }
-    },
-    "cycle.flow.none" : {
-      "comment" : "Menstrual flow recorded as explicitly none for that day (a sample exists and says no flow).",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "None"
-          }
-        }
-      }
-    },
-    "cycle.flow.unspecified" : {
-      "comment" : "Menstrual flow recorded without a level — the sample exists but says nothing about how heavy.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Unspecified"
-          }
-        }
-      }
-    },
-    "cycle.mucus.creamy" : {
-      "comment" : "Cervical mucus quality recorded for a cycle day: creamy",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Creamy"
-          }
-        }
-      }
-    },
-    "cycle.mucus.dry" : {
-      "comment" : "Cervical mucus quality recorded for a cycle day: dry",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Dry"
-          }
-        }
-      }
-    },
-    "cycle.mucus.eggWhite" : {
-      "comment" : "Cervical mucus quality recorded for a cycle day: egg white (stretchy and clear)",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Egg white"
-          }
-        }
-      }
-    },
-    "cycle.mucus.sticky" : {
-      "comment" : "Cervical mucus quality recorded for a cycle day: sticky",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Sticky"
-          }
-        }
-      }
-    },
-    "cycle.mucus.watery" : {
-      "comment" : "Cervical mucus quality recorded for a cycle day: watery",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Watery"
-          }
-        }
-      }
-    },
-    "cycle.observation.none" : {
-      "comment" : "Value shown for a cervical-mucus or ovulation-test row when nothing was observed that day.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "None"
-          }
-        }
-      }
-    },
-    "cycle.ovulationTest.indeterminate" : {
-      "comment" : "Result of an at-home ovulation test: indeterminate — the test ran but says nothing either way",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Indeterminate"
-          }
-        }
-      }
-    },
-    "cycle.ovulationTest.negative" : {
-      "comment" : "Result of an at-home ovulation test: negative",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Negative"
-          }
-        }
-      }
-    },
-    "cycle.ovulationTest.positive" : {
-      "comment" : "Result of an at-home ovulation test: positive (an LH surge was detected)",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Positive"
-          }
-        }
-      }
-    },
-    "cycle.sample.unknownValue" : {
-      "comment" : "Shown in place of a cycle sample's value when the recorded value is one Fernlet has no wording for.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Unknown"
-          }
-        }
-      }
-    },
     "Cycles tracked: %lld" : {
 
     },
-    "Daily check-in" : {
+    "D11: LPLinkMetadata" : {
 
     },
-    "Daily check-in · %@" : {
+    "DELETE" : {
+      "comment" : "The word the user must type to arm the delete confirmations. Keep it short and uppercase; the 'Type … to confirm' prompts insert this same word."
+    },
+    "DETECTED VALUES" : {
+
+    },
+    "Daily check-in" : {
 
     },
     "Daily check-in off" : {
 
     },
     "Daily check-in reminders are on." : {
+
+    },
+    "Daily check-in · %@" : {
 
     },
     "Daily score" : {
@@ -1969,6 +1800,9 @@
 
     },
     "Data & sources" : {
+
+    },
+    "Datagram pending" : {
 
     },
     "Date" : {
@@ -2031,12 +1865,6 @@
 
     },
     "Delete" : {
-
-    },
-    "DELETE" : {
-      "comment" : "The word the user must type to arm the delete confirmations. Keep it short and uppercase; the 'Type … to confirm' prompts insert this same word."
-    },
-    "Delete “%@”?" : {
 
     },
     "Delete %@" : {
@@ -2102,131 +1930,14 @@
     "Delete your data" : {
 
     },
+    "Delete “%@”?" : {
+
+    },
     "Delete, and from Health" : {
 
     },
     "Delete, keep Health" : {
 
-    },
-    "deleteAll.failure" : {
-      "comment" : "Shown when a delete-everything wipe came back incomplete. The argument is the list of stores that failed. Deliberately does NOT promise a retry fixes everything — records already gone from the outbox cannot be reached again.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet deleted everything it could, but couldn't finish: %@. Anything named there may still exist. Trying again can help for anything still on this phone."
-          }
-        }
-      }
-    },
-    "deleteAll.health.integrationOff" : {
-      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is off but Fernlet previously wrote samples.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is still in Apple Health, and Fernlet can still delete it — you don't have to turn Health back on. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app. If you've taken Fernlet's Health access away since, it will say so instead of claiming it's gone."
-          }
-        }
-      }
-    },
-    "deleteAll.health.integrationOn" : {
-      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is on.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet can also delete the entries it wrote to Apple Health. It can only ever delete its own — everything else in Apple Health is yours to delete in the Health app."
-          }
-        }
-      }
-    },
-    "deleteAll.health.nothingAuthored" : {
-      "comment" : "Health paragraph of the delete-everything dialog when Fernlet has no record of authoring any Health samples.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app."
-          }
-        }
-      }
-    },
-    "deleteAll.keptOnPurpose" : {
-      "comment" : "Third paragraph of the delete-everything dialog: exactly what survives the wipe, and the consequences of the new identity. Every clause here is load-bearing — see the code comment above it before changing any of them.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Kept on purpose: your shared photos — both the ones friends sent you and the ones you shared with them — and any restriction on sharing your own designs. You remove photos one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: you'll need to add each other again in person, and anyone you blocked will no longer be blocked — block them again if you meet."
-          }
-        }
-      }
-    },
-    "deleteAll.multiDeviceCaveat" : {
-      "comment" : "Second paragraph of the delete-everything dialog, shown only when an iCloud day copy exists. Discloses that an actively-used second device can re-upload recent days after the wipe.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has."
-          }
-        }
-      }
-    },
-    "deleteAll.scope.base" : {
-      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins."
-          }
-        }
-      }
-    },
-    "deleteAll.scope.icloudCopy" : {
-      "comment" : "Appended to the delete-everything scope only when a day-record copy exists in iCloud.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Your iCloud copy goes too."
-          }
-        }
-      }
-    },
-    "deleteAll.scope.noUndo" : {
-      "comment" : "Closing line of the delete-everything scope. Deliberately NOT an absolute permanence claim — an iOS device backup taken earlier can still restore local data.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet can't undo this."
-          }
-        }
-      }
-    },
-    "deleteAll.scope.sealedBackups" : {
-      "comment" : "Appended to the delete-everything scope only when the user has sealed encrypted backups in iCloud.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Any encrypted iCloud backups go too."
-          }
-        }
-      }
     },
     "Deleting everything…" : {
 
@@ -2266,22 +1977,19 @@
     "Design your first item" : {
 
     },
-    "designed by %@" : {
-
-    },
     "Designed by %@" : {
-
-    },
-    "designed by you" : {
 
     },
     "Details" : {
 
     },
-    "DETECTED VALUES" : {
+    "Develop & finish" : {
 
     },
-    "Develop & finish" : {
+    "Developer tools" : {
+
+    },
+    "Device-only probe" : {
 
     },
     "Discard" : {
@@ -2339,21 +2047,6 @@
 
     },
     "Duress password" : {
-
-    },
-    "e.g. basketball, soccer, climbing" : {
-
-    },
-    "e.g. kettlebells, mobility, running" : {
-
-    },
-    "e.g. sore left knee, short on time" : {
-
-    },
-    "e.g. swap the squat, 30 minutes, no barbell" : {
-
-    },
-    "e.g. Upper strength" : {
 
     },
     "Each exercise as logged, most recent first." : {
@@ -2428,6 +2121,9 @@
     "End" : {
 
     },
+    "End Session" : {
+
+    },
     "End activity" : {
 
     },
@@ -2438,9 +2134,6 @@
 
     },
     "End session" : {
-
-    },
-    "End Session" : {
 
     },
     "End session?" : {
@@ -2571,29 +2264,6 @@
     "Exercise results" : {
 
     },
-    "exercise.search.resultCount" : {
-      "comment" : "Spoken count of exercise search results, e.g. '8 exercises'. Needs a plural variation per language; English also needs the one-exercise form.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld exercise"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld exercises"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "Experience" : {
 
     },
@@ -2645,6 +2315,9 @@
     "Fernlet" : {
 
     },
+    "Fernlet QR code for the other phone to scan" : {
+
+    },
     "Fernlet asks at first use where practical, so you can start without granting everything now." : {
 
     },
@@ -2673,6 +2346,10 @@
     "Fernlet couldn't open" : {
 
     },
+    "Fernlet couldn't prepare this plan for import." : {
+      "comment" : "A message displayed when a workout plan can't be imported.",
+      "isCommentAutoGenerated" : true
+    },
     "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts." : {
 
     },
@@ -2695,9 +2372,6 @@
 
     },
     "Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data." : {
-
-    },
-    "Fernlet QR code for the other phone to scan" : {
 
     },
     "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week." : {
@@ -2855,9 +2529,6 @@
     "From recipe" : {
 
     },
-    "gap" : {
-
-    },
     "Give access" : {
 
     },
@@ -2870,10 +2541,10 @@
     "Goal" : {
 
     },
-    "Goal · %@" : {
+    "Goal & nutrition" : {
 
     },
-    "Goal & nutrition" : {
+    "Goal · %@" : {
 
     },
     "Goal, %@" : {
@@ -2892,9 +2563,6 @@
 
     },
     "Good vibes from %@. Tap to tuck away." : {
-
-    },
-    "grams — no calories here" : {
 
     },
     "Ground" : {
@@ -2987,19 +2655,16 @@
     "Home widgets" : {
 
     },
-    "host" : {
-
-    },
     "Hours (e.g. 7.5)" : {
 
     },
     "Hours (optional)" : {
 
     },
-    "How are you feeling?" : {
+    "How Fernlet estimates this" : {
 
     },
-    "How Fernlet estimates this" : {
+    "How are you feeling?" : {
 
     },
     "How friends will see you" : {
@@ -3041,9 +2706,6 @@
     "I'm unwell today. Scoring goes gentle until tomorrow." : {
 
     },
-    "iCloud copy" : {
-
-    },
     "Identify from photo" : {
 
     },
@@ -3057,6 +2719,12 @@
 
     },
     "If things feel heavy" : {
+
+    },
+    "If this exact recipe is already in Fernlet, it will stay a single copy." : {
+
+    },
+    "If workouts collide" : {
 
     },
     "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has." : {
@@ -3080,10 +2748,10 @@
     "Import workout plan" : {
 
     },
-    "Imported · free-text ingredients" : {
+    "Imported products" : {
 
     },
-    "Imported products" : {
+    "Imported · free-text ingredients" : {
 
     },
     "Importing URL" : {
@@ -3128,36 +2796,10 @@
     "Intensity %lld" : {
 
     },
-    "intent.water.logged" : {
-      "comment" : "Siri confirmation after logging water. The number is how many bottles were logged; needs a plural variation per language, and English also needs the one-bottle form.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Logged a bottle of water."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Logged %lld bottles of water."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "Interests" : {
 
     },
     "Intermenstrual bleeding" : {
-
-    },
-    "intervals, distance, notes" : {
 
     },
     "Intimacy" : {
@@ -3211,6 +2853,9 @@
     "Journal, cycle, worry box" : {
 
     },
+    "Keep Fernlet data out of device backups?" : {
+
+    },
     "Keep another copy" : {
 
     },
@@ -3221,9 +2866,6 @@
 
     },
     "Keep existing workouts" : {
-
-    },
-    "Keep Fernlet data out of device backups?" : {
 
     },
     "Keep going" : {
@@ -3248,6 +2890,9 @@
 
     },
     "Kind" : {
+
+    },
+    "Last heartbeat" : {
 
     },
     "Last seen %@" : {
@@ -3290,9 +2935,6 @@
     "Lets you copy a training summary and prompt for an AI assistant, then paste its workout plan back into Fernlet." : {
 
     },
-    "letting it go…" : {
-
-    },
     "Letting it go…" : {
 
     },
@@ -3315,6 +2957,9 @@
 
     },
     "Local backup" : {
+
+    },
+    "Local events" : {
 
     },
     "Local signals from your logs — worked out on this device." : {
@@ -3347,13 +2992,13 @@
     "Log" : {
 
     },
-    "Log & save" : {
-
-    },
     "Log %@" : {
 
     },
     "Log %@ again" : {
+
+    },
+    "Log & save" : {
 
     },
     "Log a meal" : {
@@ -3395,9 +3040,6 @@
     "Log workout" : {
 
     },
-    "logged" : {
-
-    },
     "Logged %lld times · first on %@" : {
       "localizations" : {
         "en" : {
@@ -3423,10 +3065,10 @@
     "Looking for nearby people..." : {
 
     },
-    "Macros" : {
+    "MACROS" : {
 
     },
-    "MACROS" : {
+    "Macros" : {
 
     },
     "Macros today" : {
@@ -3484,12 +3126,6 @@
     "Matching" : {
 
     },
-    "max %@" : {
-
-    },
-    "meal" : {
-
-    },
     "Meal" : {
 
     },
@@ -3535,6 +3171,12 @@
     "Memory context: %lld characters" : {
 
     },
+    "Mesh feasibility" : {
+
+    },
+    "Mesh network feasibility" : {
+
+    },
     "Message" : {
 
     },
@@ -3554,9 +3196,6 @@
 
     },
     "Milestones. %@" : {
-
-    },
-    "min %@" : {
 
     },
     "Mindfulness" : {
@@ -3601,53 +3240,6 @@
     "Move closer so the label fills the frame." : {
 
     },
-    "move.goal.notSet" : {
-      "comment" : "Spoken in place of the movement goal when the user has not set one. Reads inside the sentence 'Goal, …'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "not set"
-          }
-        }
-      }
-    },
-    "move.goalCount" : {
-      "comment" : "Goal count in the Move header's goal segment, e.g. '3 goals'. Needs a plural variation per language; English also needs the one-goal form.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld goal"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld goals"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "move.space.accessibilityValue" : {
-      "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, %2$lld items"
-          }
-        }
-      }
-    },
     "Movement" : {
 
     },
@@ -3675,10 +3267,10 @@
     "Narrative" : {
 
     },
-    "Nearby friends" : {
+    "Nearby Friends is off" : {
 
     },
-    "Nearby Friends is off" : {
+    "Nearby friends" : {
 
     },
     "Nearby hearts" : {
@@ -3744,13 +3336,16 @@
     "Nicely done" : {
 
     },
+    "No AI calls have been made from this device." : {
+
+    },
+    "No Fernlet iCloud records were found." : {
+
+    },
     "No active session" : {
 
     },
     "No activities yet — start one above, or wait for a nearby friend to invite you." : {
-
-    },
-    "No AI calls have been made from this device." : {
 
     },
     "No biometric authentication available on this device." : {
@@ -3775,9 +3370,6 @@
 
     },
     "No exercises logged yet." : {
-
-    },
-    "No Fernlet iCloud records were found." : {
 
     },
     "No fields were recorded for this call." : {
@@ -3888,10 +3480,7 @@
     "None of this plan is logged yet, so you can still rebuild it — adjust your intensity, notes, or equipment." : {
 
     },
-    "none yet" : {
-
-    },
-    "not done yet" : {
+    "Not Now" : {
 
     },
     "Not enough coins yet" : {
@@ -3907,9 +3496,6 @@
 
     },
     "Not now" : {
-
-    },
-    "Not Now" : {
 
     },
     "Not recorded" : {
@@ -3987,19 +3573,19 @@
     "Nutrition web search" : {
 
     },
+    "OK" : {
+
+    },
     "Observations" : {
 
     },
-    "of %lldg" : {
+    "Observed checks" : {
 
     },
     "Off" : {
       "comment" : "Health-access count when the master switch is off"
     },
     "Off in Settings" : {
-
-    },
-    "OK" : {
 
     },
     "On" : {
@@ -4056,25 +3642,22 @@
     "Open Moments" : {
 
     },
+    "Open Settings" : {
+
+    },
     "Open page" : {
 
     },
     "Open saved recipe" : {
 
     },
-    "Open Settings" : {
+    "Open the Creation Studio" : {
 
     },
     "Open the closet" : {
 
     },
-    "Open the Creation Studio" : {
-
-    },
     "Opens %@ straight away" : {
-
-    },
-    "Opens calm tools: breathing, grounding, and the worry box" : {
 
     },
     "Opens Fernlet and prepares a trainer summary for sharing." : {
@@ -4092,6 +3675,9 @@
     "Opens Fernlet to paste and review a workout plan." : {
 
     },
+    "Opens calm tools: breathing, grounding, and the worry box" : {
+
+    },
     "Opens where you train" : {
 
     },
@@ -4099,9 +3685,6 @@
 
     },
     "Optional" : {
-
-    },
-    "optional — we'll read the macros for you" : {
 
     },
     "Options for %@" : {
@@ -4165,205 +3748,19 @@
         }
       }
     },
-    "Pain, form issues, stopped early..." : {
+    "PER SERVING" : {
 
     },
-    "palette.bark" : {
-      "comment" : "Design-canvas colour name: the app's dark brown",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Bark"
-          }
-        }
-      }
-    },
-    "palette.cream" : {
-      "comment" : "Design-canvas colour name: the app's off-white card colour",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cream"
-          }
-        }
-      }
-    },
-    "palette.deepSlate" : {
-      "comment" : "Design-canvas colour name: a dark blue-grey",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Deep slate"
-          }
-        }
-      }
-    },
-    "palette.emerald" : {
-      "comment" : "Design-canvas colour name: a deep green",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Emerald"
-          }
-        }
-      }
-    },
-    "palette.fern" : {
-      "comment" : "Design-canvas colour name: a lighter green",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fern"
-          }
-        }
-      }
-    },
-    "palette.moss" : {
-      "comment" : "Design-canvas colour name: the app's green",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Moss"
-          }
-        }
-      }
-    },
-    "palette.nearBlack" : {
-      "comment" : "Design-canvas colour name: the darkest swatch, spoken by VoiceOver",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Near-black"
-          }
-        }
-      }
-    },
-    "palette.parchment" : {
-      "comment" : "Design-canvas colour name: the app's background off-white",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Parchment"
-          }
-        }
-      }
-    },
-    "palette.plum" : {
-      "comment" : "Design-canvas colour name: dark purple",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Plum"
-          }
-        }
-      }
-    },
-    "palette.red" : {
-      "comment" : "Design-canvas colour name: red",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Red"
-          }
-        }
-      }
-    },
-    "palette.rose" : {
-      "comment" : "Design-canvas colour name: pink",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Rose"
-          }
-        }
-      }
-    },
-    "palette.slateBlue" : {
-      "comment" : "Design-canvas colour name: a muted blue",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Slate blue"
-          }
-        }
-      }
-    },
-    "palette.sun" : {
-      "comment" : "Design-canvas colour name: yellow",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Sun"
-          }
-        }
-      }
-    },
-    "palette.taupe" : {
-      "comment" : "Design-canvas colour name: a soft grey-brown",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Taupe"
-          }
-        }
-      }
-    },
-    "palette.terracotta" : {
-      "comment" : "Design-canvas colour name: the app's warm orange-red",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Terracotta"
-          }
-        }
-      }
-    },
-    "palette.white" : {
-      "comment" : "Design-canvas colour name: pure white",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "White"
-          }
-        }
-      }
+    "Pain, form issues, stopped early..." : {
+
     },
     "Partial nutrition data — some meals were logged without micronutrients." : {
 
     },
     "Partly shared" : {
+
+    },
+    "Paste URL" : {
 
     },
     "Paste a Fernlet recipe share here" : {
@@ -4378,9 +3775,6 @@
     "Paste the reply" : {
 
     },
-    "Paste URL" : {
-
-    },
     "Paste workout plan" : {
 
     },
@@ -4390,6 +3784,9 @@
     "Pasted plan" : {
 
     },
+    "Path policy" : {
+
+    },
     "Pattern" : {
 
     },
@@ -4397,9 +3794,6 @@
 
     },
     "Per serving" : {
-
-    },
-    "PER SERVING" : {
 
     },
     "Per serving: %@" : {
@@ -4555,9 +3949,6 @@
     "Preferences" : {
 
     },
-    "prep notes, substitutions, storage" : {
-
-    },
     "Prepare summary" : {
 
     },
@@ -4597,9 +3988,6 @@
     "Price" : {
 
     },
-    "Privacy & data" : {
-
-    },
     "Privacy & Data" : {
 
     },
@@ -4609,59 +3997,14 @@
     "Privacy & Data needs a fresh Face ID or device passcode check before it can show you anything." : {
 
     },
-    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
+    "Privacy & data" : {
 
     },
     "Privacy Policy" : {
 
     },
-    "privacy.error.adoptBackupKey" : {
-      "comment" : "Shown and spoken when adopting the sealed-backup key written by another device fails.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Couldn't switch to your other device's backup key. Check iCloud and try again."
-          }
-        }
-      }
-    },
-    "privacy.error.enablePhotoBackup" : {
-      "comment" : "Shown and spoken when enabling the encrypted photo backup fails.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again."
-          }
-        }
-      }
-    },
-    "privacy.error.enableSealedBackup" : {
-      "comment" : "Shown and spoken when enabling a sealed iCloud backup fails. The argument is the noun for the data kind (period, journal, …), localized by SealedBackupPayloadType.displayNoun.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Couldn't turn on the encrypted %@ backup. Check that iCloud sync is on and try again."
-          }
-        }
-      }
-    },
-    "privacy.error.export" : {
-      "comment" : "Shown and spoken when building the privacy data export fails.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Couldn't prepare your export. Please try again."
-          }
-        }
-      }
+    "Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them." : {
+
     },
     "Private database sync for daily logs across your Fernlet devices." : {
 
@@ -4714,6 +4057,9 @@
     "Proximity debug tools" : {
 
     },
+    "QUIC datagram verified" : {
+
+    },
     "Qty" : {
 
     },
@@ -4724,6 +4070,15 @@
 
     },
     "Quick-log shortcuts" : {
+
+    },
+    "REPS" : {
+
+    },
+    "RPE %.1g" : {
+
+    },
+    "RPE (1–10)" : {
 
     },
     "Re-import" : {
@@ -4753,10 +4108,10 @@
     "Reading what you caught…" : {
 
     },
-    "Reads and writes cycle observations, like flow and temperature." : {
+    "Reads Apple Watch workouts and daily activity, writes yours back." : {
 
     },
-    "Reads Apple Watch workouts and daily activity, writes yours back." : {
+    "Reads and writes cycle observations, like flow and temperature." : {
 
     },
     "Ready" : {
@@ -4980,9 +4335,6 @@
     "Reps" : {
 
     },
-    "REPS" : {
-
-    },
     "Rescan the nutrition label" : {
 
     },
@@ -5065,6 +4417,10 @@
     "Review plan" : {
 
     },
+    "Review workout plan" : {
+      "comment" : "A title for a sheet that previews a workout plan for import.",
+      "isCommentAutoGenerated" : true
+    },
     "Reviews and imports a Fernlet workout plan file." : {
 
     },
@@ -5074,10 +4430,7 @@
     "Room for a little more" : {
 
     },
-    "RPE (1–10)" : {
-
-    },
-    "RPE %.1g" : {
+    "SERVING SIZE" : {
 
     },
     "Safety & reporting" : {
@@ -5159,18 +4512,12 @@
         }
       }
     },
+    "Saving recipe…" : {
+      "comment" : "A button label that appears when importing a recipe.",
+      "isCommentAutoGenerated" : true
+    },
     "Say hello" : {
 
-    },
-    "Scaled from %lld serving%@ — amounts below adjust to match. Logging still records one serving." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Scaled from %1$lld serving%2$@ — amounts below adjust to match. Logging still records one serving."
-          }
-        }
-      }
     },
     "Scaled from %lld serving%@ for this view only — your saved recipe is unchanged, and logging still records one serving." : {
       "localizations" : {
@@ -5178,6 +4525,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Scaled from %1$lld serving%2$@ for this view only — your saved recipe is unchanged, and logging still records one serving."
+          }
+        }
+      }
+    },
+    "Scaled from %lld serving%@ — amounts below adjust to match. Logging still records one serving." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scaled from %1$lld serving%2$@ — amounts below adjust to match. Logging still records one serving."
           }
         }
       }
@@ -5203,9 +4560,6 @@
     "Scoring goes gentle until tomorrow" : {
 
     },
-    "scrambled eggs and toast" : {
-
-    },
     "Sealed backup for intimate logs" : {
 
     },
@@ -5229,54 +4583,6 @@
     },
     "Sealed notes never leave this device. Samples live in Apple Health, under its protections." : {
 
-    },
-    "sealedBackup.noun.intimacyLogs" : {
-      "comment" : "Mid-sentence noun for the sealed backup of intimate-activity logs.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "intimate log"
-          }
-        }
-      }
-    },
-    "sealedBackup.noun.journalNarratives" : {
-      "comment" : "Mid-sentence noun for the sealed backup of journal entries.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "journal"
-          }
-        }
-      }
-    },
-    "sealedBackup.noun.periodData" : {
-      "comment" : "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "period"
-          }
-        }
-      }
-    },
-    "sealedBackup.noun.sensitiveNotes" : {
-      "comment" : "Mid-sentence noun for the sealed backup of the user's private notes, e.g. 'the encrypted private notes backup'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "private notes"
-          }
-        }
-      }
     },
     "Search again" : {
 
@@ -5345,9 +4651,6 @@
 
     },
     "Sent to %@." : {
-
-    },
-    "SERVING SIZE" : {
 
     },
     "Serving: %@" : {
@@ -5420,29 +4723,6 @@
     "Settings" : {
 
     },
-    "settings.search.resultCount" : {
-      "comment" : "Spoken count of settings search results, e.g. '6 settings'. Needs a plural variation per language; English also needs the one-setting form.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld setting"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld settings"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "Share" : {
 
     },
@@ -5461,13 +4741,13 @@
     "Share summary…" : {
 
     },
+    "Share with Health" : {
+
+    },
     "Share with a nearby Fernlet." : {
 
     },
     "Share with a trainer" : {
-
-    },
-    "Share with Health" : {
 
     },
     "Share your training" : {
@@ -5479,9 +4759,6 @@
     "Shared" : {
 
     },
-    "Shared — the file has been removed from Fernlet." : {
-
-    },
     "Shared by %@" : {
 
     },
@@ -5489,6 +4766,12 @@
 
     },
     "Shared recipe text" : {
+
+    },
+    "Shared — the file has been removed from Fernlet." : {
+
+    },
+    "Share…" : {
 
     },
     "Sharing in person with a coach who uses Fernlet Coach is coming soon." : {
@@ -5509,9 +4792,6 @@
     "Shorter rest" : {
 
     },
-    "shoulder issues, hotel gyms only" : {
-
-    },
     "Show calories" : {
 
     },
@@ -5528,6 +4808,9 @@
 
     },
     "Signals" : {
+
+    },
+    "Signed control stream verified" : {
 
     },
     "Six tiles on Home" : {
@@ -5593,9 +4876,6 @@
     "Source date" : {
 
     },
-    "sourdough toast" : {
-
-    },
     "Space" : {
 
     },
@@ -5620,6 +4900,9 @@
     "Start %@ timer" : {
 
     },
+    "Start Fernlet" : {
+
+    },
     "Start activity" : {
 
     },
@@ -5627,9 +4910,6 @@
 
     },
     "Start date" : {
-
-    },
-    "Start Fernlet" : {
 
     },
     "Start from a preset" : {
@@ -5694,6 +4974,9 @@
     "Steps (optional)" : {
 
     },
+    "Stop" : {
+
+    },
     "Stop cooking" : {
 
     },
@@ -5709,6 +4992,9 @@
     "Stop syncing, keep iCloud data" : {
 
     },
+    "Stop the probe before changing its path policy." : {
+
+    },
     "Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on." : {
 
     },
@@ -5719,9 +5005,6 @@
 
     },
     "Strength" : {
-
-    },
-    "strength, running, mobility" : {
 
     },
     "Suggest" : {
@@ -5775,65 +5058,8 @@
     "Sync to iCloud" : {
 
     },
-    "tab.food" : {
-      "comment" : "Tab bar: meals, recipes and nutrition",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Food"
-          }
-        }
-      }
-    },
-    "tab.home" : {
-      "comment" : "Tab bar: the daily companion / overview tab",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Home"
-          }
-        }
-      }
-    },
-    "tab.move" : {
-      "comment" : "Tab bar: workouts and movement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Move"
-          }
-        }
-      }
-    },
-    "tab.personal" : {
-      "comment" : "Tab bar: the locked tab — journal, cycle, intimacy, worry box",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Private"
-          }
-        }
-      }
-    },
-    "tab.social" : {
-      "comment" : "Tab bar: in-person friends and shared photos",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Friends"
-          }
-        }
-      }
+    "TWO-COLUMN LABEL DETECTED" : {
+
     },
     "Take a photo" : {
 
@@ -5856,16 +5082,10 @@
     "Tap to log it again with today's time." : {
 
     },
-    "tap to tuck away" : {
-
-    },
     "Target" : {
 
     },
     "Targets: %@" : {
-
-    },
-    "tempo, form note" : {
 
     },
     "That code didn't match" : {
@@ -6075,10 +5295,25 @@
     "Today" : {
 
     },
+    "Today key: %@" : {
+
+    },
     "Today · %@" : {
 
     },
-    "Today key: %@" : {
+    "Today's intent" : {
+
+    },
+    "Today's movement" : {
+
+    },
+    "Today's readiness suggests %@." : {
+
+    },
+    "Today's session" : {
+
+    },
+    "Today's workout" : {
 
     },
     "Today, day %lld" : {
@@ -6095,21 +5330,6 @@
       }
     },
     "Today, day %lld, has data" : {
-
-    },
-    "Today's intent" : {
-
-    },
-    "Today's movement" : {
-
-    },
-    "Today's readiness suggests %@." : {
-
-    },
-    "Today's session" : {
-
-    },
-    "Today's workout" : {
 
     },
     "Together, in person." : {
@@ -6151,13 +5371,13 @@
     "Turn off" : {
 
     },
+    "Turn off Health integration?" : {
+
+    },
     "Turn off encrypted %@ backup?" : {
 
     },
     "Turn off encrypted photo backup?" : {
-
-    },
-    "Turn off Health integration?" : {
 
     },
     "Turn off iCloud sync?" : {
@@ -6172,6 +5392,12 @@
     "Turn on" : {
 
     },
+    "Turn on Nearby Friends to send hearts" : {
+
+    },
+    "Turn on Nearby Friends?" : {
+
+    },
     "Turn on camera in Settings" : {
 
     },
@@ -6179,12 +5405,6 @@
 
     },
     "Turn on iCloud sync?" : {
-
-    },
-    "Turn on Nearby Friends to send hearts" : {
-
-    },
-    "Turn on Nearby Friends?" : {
 
     },
     "Turn the flash off" : {
@@ -6199,9 +5419,6 @@
     "Turning this off stops every kind below" : {
 
     },
-    "TWO-COLUMN LABEL DETECTED" : {
-
-    },
     "Type %@ to confirm" : {
 
     },
@@ -6209,6 +5426,9 @@
 
     },
     "Type to find a replacement food." : {
+
+    },
+    "USDA macros" : {
 
     },
     "Unblock" : {
@@ -6250,16 +5470,25 @@
     "Updating storage settings…" : {
 
     },
-    "USDA macros" : {
+    "Usable datagram frame" : {
 
     },
     "Use Import workout plan to review a Fernlet plan file." : {
+
+    },
+    "Use infrastructure Wi-Fi" : {
 
     },
     "Use manual nutrition" : {
 
     },
     "Use my other device's key" : {
+
+    },
+    "Use peer-to-peer" : {
+
+    },
+    "Use the Simulator lane for infrastructure checks, then use two devices for the required gate." : {
 
     },
     "Use the flashlight in dim lighting." : {
@@ -6287,6 +5516,9 @@
 
     },
     "Visibility, gating, app lock" : {
+
+    },
+    "Waiting for a listener that has finished advertising." : {
 
     },
     "Waiting for another participant to second this decision." : {
@@ -6328,13 +5560,13 @@
     "Wellbeing score" : {
 
     },
+    "What Fernlet shows, reads, and protects." : {
+
+    },
     "What did you catch?" : {
 
     },
     "What did you eat?" : {
-
-    },
-    "What Fernlet shows, reads, and protects." : {
 
     },
     "What happened today?" : {
@@ -6355,9 +5587,6 @@
     "What to do" : {
 
     },
-    "what to do in this step" : {
-
-    },
     "What's available?" : {
 
     },
@@ -6367,10 +5596,10 @@
     "What's included" : {
 
     },
-    "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
+    "When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there." : {
 
     },
-    "When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there." : {
+    "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later." : {
 
     },
     "When off, your local Fernlet data is excluded from iOS and iCloud device backups." : {
@@ -6425,9 +5654,6 @@
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
 
     },
-    "woke up twice..." : {
-
-    },
     "Workout" : {
 
     },
@@ -6478,42 +5704,6 @@
     },
     "Worry text" : {
 
-    },
-    "worryBox.error.compose" : {
-      "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "The box couldn't quite close just now — your words are still here."
-          }
-        }
-      }
-    },
-    "worryBox.error.gentleClose" : {
-      "comment" : "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "The box couldn't quite close just now. Your words are still here — try once more in a moment."
-          }
-        }
-      }
-    },
-    "worryBox.error.release" : {
-      "comment" : "Shown and spoken when releasing (deleting) a saved worry fails.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "That one didn't quite lift just now — try again in a moment."
-          }
-        }
-      }
     },
     "Worth a second look" : {
 
@@ -6575,9 +5765,6 @@
     "You will stop sharing with everyone in this session." : {
 
     },
-    "You: %@" : {
-
-    },
     "You'll need to meet in person to add them again." : {
 
     },
@@ -6613,6 +5800,9 @@
 
     },
     "You've saved %lld locations — remove one to add another." : {
+
+    },
+    "You: %@" : {
 
     },
     "Your app lock" : {
@@ -6744,9 +5934,974 @@
     "Your verification code, as a QR code for %@ to scan" : {
 
     },
+    "^[%lld tasks](inflect: true)" : {
+
+    },
+    "a soft tap on each turn" : {
+
+    },
+    "as of %@" : {
+
+    },
+    "black bean bowls" : {
+
+    },
+    "bottle" : {
+
+    },
+    "bottles" : {
+
+    },
+    "cm" : {
+
+    },
+    "completed" : {
+
+    },
+    "cooking notes, substitutions, tips" : {
+
+    },
+    "covered" : {
+
+    },
+    "cycle.flow.heavy" : {
+      "comment" : "Menstrual flow level: heavy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heavy"
+          }
+        }
+      }
+    },
+    "cycle.flow.light" : {
+      "comment" : "Menstrual flow level: light",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "cycle.flow.medium" : {
+      "comment" : "Menstrual flow level: medium",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Medium"
+          }
+        }
+      }
+    },
+    "cycle.flow.noFlow" : {
+      "comment" : "Shown for a day with no menstrual-flow sample at all, as opposed to a sample recording no flow.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No flow"
+          }
+        }
+      }
+    },
+    "cycle.flow.none" : {
+      "comment" : "Menstrual flow recorded as explicitly none for that day (a sample exists and says no flow).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "cycle.flow.unspecified" : {
+      "comment" : "Menstrual flow recorded without a level — the sample exists but says nothing about how heavy.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unspecified"
+          }
+        }
+      }
+    },
+    "cycle.mucus.creamy" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: creamy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Creamy"
+          }
+        }
+      }
+    },
+    "cycle.mucus.dry" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: dry",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dry"
+          }
+        }
+      }
+    },
+    "cycle.mucus.eggWhite" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: egg white (stretchy and clear)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Egg white"
+          }
+        }
+      }
+    },
+    "cycle.mucus.sticky" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: sticky",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sticky"
+          }
+        }
+      }
+    },
+    "cycle.mucus.watery" : {
+      "comment" : "Cervical mucus quality recorded for a cycle day: watery",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Watery"
+          }
+        }
+      }
+    },
+    "cycle.observation.none" : {
+      "comment" : "Value shown for a cervical-mucus or ovulation-test row when nothing was observed that day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.indeterminate" : {
+      "comment" : "Result of an at-home ovulation test: indeterminate — the test ran but says nothing either way",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indeterminate"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.negative" : {
+      "comment" : "Result of an at-home ovulation test: negative",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Negative"
+          }
+        }
+      }
+    },
+    "cycle.ovulationTest.positive" : {
+      "comment" : "Result of an at-home ovulation test: positive (an LH surge was detected)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Positive"
+          }
+        }
+      }
+    },
+    "cycle.sample.unknownValue" : {
+      "comment" : "Shown in place of a cycle sample's value when the recorded value is one Fernlet has no wording for.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "deleteAll.failure" : {
+      "comment" : "Shown when a delete-everything wipe came back incomplete. The argument is the list of stores that failed. Deliberately does NOT promise a retry fixes everything — records already gone from the outbox cannot be reached again.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet deleted everything it could, but couldn't finish: %@. Anything named there may still exist. Trying again can help for anything still on this phone."
+          }
+        }
+      }
+    },
+    "deleteAll.health.integrationOff" : {
+      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is off but Fernlet previously wrote samples.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is still in Apple Health, and Fernlet can still delete it — you don't have to turn Health back on. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app. If you've taken Fernlet's Health access away since, it will say so instead of claiming it's gone."
+          }
+        }
+      }
+    },
+    "deleteAll.health.integrationOn" : {
+      "comment" : "Health paragraph of the delete-everything dialog when the Health integration is on.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can also delete the entries it wrote to Apple Health. It can only ever delete its own — everything else in Apple Health is yours to delete in the Health app."
+          }
+        }
+      }
+    },
+    "deleteAll.health.nothingAuthored" : {
+      "comment" : "Health paragraph of the delete-everything dialog when Fernlet has no record of authoring any Health samples.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app."
+          }
+        }
+      }
+    },
+    "deleteAll.keptOnPurpose" : {
+      "comment" : "Third paragraph of the delete-everything dialog: exactly what survives the wipe, and the consequences of the new identity. Every clause here is load-bearing — see the code comment above it before changing any of them.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept on purpose: your shared photos — both the ones friends sent you and the ones you shared with them — and any restriction on sharing your own designs. You remove photos one at a time from the photo itself; there's no bulk delete. Your app lock stays set up. This phone gets a brand-new Fernlet identity, so friends' phones won't recognize it: you'll need to add each other again in person, and anyone you blocked will no longer be blocked — block them again if you meet."
+          }
+        }
+      }
+    },
+    "deleteAll.multiDeviceCaveat" : {
+      "comment" : "Second paragraph of the delete-everything dialog, shown only when an iCloud day copy exists. Discloses that an actively-used second device can re-upload recent days after the wipe.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.base" : {
+      "comment" : "First sentence of the delete-everything dialog. Enumerates every kind of user content the wipe removes; never shorten to a bare 'photos'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This deletes your logged days, meals and their photos, gym progress photos, journal entries, cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.icloudCopy" : {
+      "comment" : "Appended to the delete-everything scope only when a day-record copy exists in iCloud.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your iCloud copy goes too."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.noUndo" : {
+      "comment" : "Closing line of the delete-everything scope. Deliberately NOT an absolute permanence claim — an iOS device backup taken earlier can still restore local data.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can't undo this."
+          }
+        }
+      }
+    },
+    "deleteAll.scope.sealedBackups" : {
+      "comment" : "Appended to the delete-everything scope only when the user has sealed encrypted backups in iCloud.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Any encrypted iCloud backups go too."
+          }
+        }
+      }
+    },
+    "designed by %@" : {
+
+    },
+    "designed by you" : {
+
+    },
+    "e.g. Upper strength" : {
+
+    },
+    "e.g. basketball, soccer, climbing" : {
+
+    },
+    "e.g. kettlebells, mobility, running" : {
+
+    },
+    "e.g. sore left knee, short on time" : {
+
+    },
+    "e.g. swap the squat, 30 minutes, no barbell" : {
+
+    },
+    "exercise.search.resultCount" : {
+      "comment" : "Spoken count of exercise search results, e.g. '8 exercises'. Needs a plural variation per language; English also needs the one-exercise form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld exercise"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld exercises"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gap" : {
+
+    },
+    "grams — no calories here" : {
+
+    },
+    "host" : {
+
+    },
+    "iCloud copy" : {
+
+    },
+    "intent.water.logged" : {
+      "comment" : "Siri confirmation after logging water. The number is how many bottles were logged; needs a plural variation per language, and English also needs the one-bottle form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Logged a bottle of water."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Logged %lld bottles of water."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "intervals, distance, notes" : {
+
+    },
+    "letting it go…" : {
+
+    },
+    "logged" : {
+
+    },
+    "max %@" : {
+
+    },
+    "meal" : {
+
+    },
+    "min %@" : {
+
+    },
+    "move.goal.notSet" : {
+      "comment" : "Spoken in place of the movement goal when the user has not set one. Reads inside the sentence 'Goal, …'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "not set"
+          }
+        }
+      }
+    },
+    "move.goalCount" : {
+      "comment" : "Goal count in the Move header's goal segment, e.g. '3 goals'. Needs a plural variation per language; English also needs the one-goal form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld goal"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld goals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.space.accessibilityValue" : {
+      "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld items"
+          }
+        }
+      }
+    },
+    "none yet" : {
+
+    },
+    "not done yet" : {
+
+    },
+    "of %lldg" : {
+
+    },
+    "optional — we'll read the macros for you" : {
+
+    },
+    "palette.bark" : {
+      "comment" : "Design-canvas colour name: the app's dark brown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bark"
+          }
+        }
+      }
+    },
+    "palette.cream" : {
+      "comment" : "Design-canvas colour name: the app's off-white card colour",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cream"
+          }
+        }
+      }
+    },
+    "palette.deepSlate" : {
+      "comment" : "Design-canvas colour name: a dark blue-grey",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deep slate"
+          }
+        }
+      }
+    },
+    "palette.emerald" : {
+      "comment" : "Design-canvas colour name: a deep green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Emerald"
+          }
+        }
+      }
+    },
+    "palette.fern" : {
+      "comment" : "Design-canvas colour name: a lighter green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern"
+          }
+        }
+      }
+    },
+    "palette.moss" : {
+      "comment" : "Design-canvas colour name: the app's green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moss"
+          }
+        }
+      }
+    },
+    "palette.nearBlack" : {
+      "comment" : "Design-canvas colour name: the darkest swatch, spoken by VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Near-black"
+          }
+        }
+      }
+    },
+    "palette.parchment" : {
+      "comment" : "Design-canvas colour name: the app's background off-white",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Parchment"
+          }
+        }
+      }
+    },
+    "palette.plum" : {
+      "comment" : "Design-canvas colour name: dark purple",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plum"
+          }
+        }
+      }
+    },
+    "palette.red" : {
+      "comment" : "Design-canvas colour name: red",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Red"
+          }
+        }
+      }
+    },
+    "palette.rose" : {
+      "comment" : "Design-canvas colour name: pink",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
+    "palette.slateBlue" : {
+      "comment" : "Design-canvas colour name: a muted blue",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slate blue"
+          }
+        }
+      }
+    },
+    "palette.sun" : {
+      "comment" : "Design-canvas colour name: yellow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "palette.taupe" : {
+      "comment" : "Design-canvas colour name: a soft grey-brown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Taupe"
+          }
+        }
+      }
+    },
+    "palette.terracotta" : {
+      "comment" : "Design-canvas colour name: the app's warm orange-red",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Terracotta"
+          }
+        }
+      }
+    },
+    "palette.white" : {
+      "comment" : "Design-canvas colour name: pure white",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "White"
+          }
+        }
+      }
+    },
+    "prep notes, substitutions, storage" : {
+
+    },
+    "privacy.error.adoptBackupKey" : {
+      "comment" : "Shown and spoken when adopting the sealed-backup key written by another device fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't switch to your other device's backup key. Check iCloud and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.enablePhotoBackup" : {
+      "comment" : "Shown and spoken when enabling the encrypted photo backup fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.enableSealedBackup" : {
+      "comment" : "Shown and spoken when enabling a sealed iCloud backup fails. The argument is the noun for the data kind (period, journal, …), localized by SealedBackupPayloadType.displayNoun.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't turn on the encrypted %@ backup. Check that iCloud sync is on and try again."
+          }
+        }
+      }
+    },
+    "privacy.error.export" : {
+      "comment" : "Shown and spoken when building the privacy data export fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't prepare your export. Please try again."
+          }
+        }
+      }
+    },
+    "scrambled eggs and toast" : {
+
+    },
+    "sealedBackup.noun.intimacyLogs" : {
+      "comment" : "Mid-sentence noun for the sealed backup of intimate-activity logs.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "intimate log"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.journalNarratives" : {
+      "comment" : "Mid-sentence noun for the sealed backup of journal entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.periodData" : {
+      "comment" : "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "period"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.sensitiveNotes" : {
+      "comment" : "Mid-sentence noun for the sealed backup of the user's private notes, e.g. 'the encrypted private notes backup'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "private notes"
+          }
+        }
+      }
+    },
+    "settings.search.resultCount" : {
+      "comment" : "Spoken count of settings search results, e.g. '6 settings'. Needs a plural variation per language; English also needs the one-setting form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld setting"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld settings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shoulder issues, hotel gyms only" : {
+
+    },
+    "sourdough toast" : {
+
+    },
+    "strength, running, mobility" : {
+
+    },
+    "tab.food" : {
+      "comment" : "Tab bar: meals, recipes and nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food"
+          }
+        }
+      }
+    },
+    "tab.home" : {
+      "comment" : "Tab bar: the daily companion / overview tab",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home"
+          }
+        }
+      }
+    },
+    "tab.move" : {
+      "comment" : "Tab bar: workouts and movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        }
+      }
+    },
+    "tab.personal" : {
+      "comment" : "Tab bar: the locked tab — journal, cycle, intimacy, worry box",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private"
+          }
+        }
+      }
+    },
+    "tab.social" : {
+      "comment" : "Tab bar: in-person friends and shared photos",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        }
+      }
+    },
+    "tap to tuck away" : {
+
+    },
+    "tempo, form note" : {
+
+    },
+    "what to do in this step" : {
+
+    },
+    "woke up twice..." : {
+
+    },
+    "worryBox.error.compose" : {
+      "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The box couldn't quite close just now — your words are still here."
+          }
+        }
+      }
+    },
+    "worryBox.error.gentleClose" : {
+      "comment" : "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+          }
+        }
+      }
+    },
+    "worryBox.error.release" : {
+      "comment" : "Shown and spoken when releasing (deleting) a saved worry fails.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That one didn't quite lift just now — try again in a moment."
+          }
+        }
+      }
+    },
     "z" : {
+
+    },
+    "· %lld servings" : {
+
+    },
+    "“%@” and any photo attached to it are removed from this device. Fernlet can't undo this." : {
+
+    },
+    "“%@” logged to today." : {
+
+    },
+    "“System” follows your phone's Light/Dark setting, the way onboarding already does." : {
+
+    },
+    "•" : {
+
+    },
+    "• %@" : {
+
+    },
+    "• %@: %@" : {
+      "comment" : "A warning message for a workout plan import. The first argument is the name of the exercise. The second argument is the reason for the warning.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "• %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "…" : {
 
     }
   },
-  "version" : "1.0"
+  "version" : "1.1"
 }
