@@ -31,6 +31,26 @@ struct ColumnCryptoDeviceBindingTests {
         }
     }
 
+    /// Produces a genuine v2 blob byte-for-byte the way the pre-purpose-separation sealer did:
+    /// the v2 version tag, then `combined`, sealed under the column key with the install binding
+    /// ALONE as additional authenticated data — where v3 authenticates the column purpose *and*
+    /// the binding. Nothing else in the suite can make one, because `sealString` has written v3
+    /// exclusively since the format split, so the v2 open path would otherwise go unexercised.
+    ///
+    /// The HKDF is spelled out here instead of calling `ColumnCrypto.deriveColumnKey`: a
+    /// compatibility fixture must not move when the production derivation moves. Pinned this way,
+    /// a change to the column-key derivation fails these tests — which is the alarm we want, since
+    /// it would equally stop the real v2 rows on disk from opening.
+    private func sealV2(_ value: String, label: String, binding: Data) throws -> Data {
+        let key = HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: contentKey,
+            info: Data(label.utf8),
+            outputByteCount: 32
+        )
+        let combined = try ChaChaPoly.seal(Data(value.utf8), using: key, authenticating: binding).combined
+        return Data([ColumnCrypto.deviceBoundFormatVersionV2]) + combined
+    }
+
     // MARK: Proves a device-bound seal round-trips and carries the current version tag.
     @Test func deviceBoundSealRoundTripsAndIsVersionTagged() throws {
         let sealed = try seal("a private thought", label: "journal-narrative", override: .identifier(installA))
@@ -92,6 +112,58 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(throws: (any Error).self) {
             _ = try self.open(rebound, label: "journal-narrative", override: .identifier(self.installB))
         }
+    }
+
+    // MARK: V2 COMPATIBILITY: proves a genuine v2 blob — the pre-purpose generation, binding-only
+    // AAD — still opens on the install that sealed it. Fresh seals are v3, so without the
+    // hand-built fixture the v2 arm of the open path is dead code no test reaches.
+    @Test func v2BlobOpensOnTheSealingInstall() throws {
+        let value = "sealed before purposes existed"
+        let v2Sealed = try sealV2(value, label: "journal-narrative", binding: installA)
+        // v2 layout: version byte + nonce(12) + ciphertext + tag(16) — one byte longer than legacy.
+        #expect(v2Sealed.first == ColumnCrypto.deviceBoundFormatVersionV2)
+        #expect(v2Sealed.count == 1 + 12 + value.utf8.count + 16)
+        #expect(try open(v2Sealed, label: "journal-narrative", override: .identifier(installA)) == value)
+    }
+
+    // MARK: Proves the v2 binding property survived the format split: a v2 blob sealed on install A
+    // still refuses to open on install B, and on an install with no binding row at all — the
+    // legacy fallback must not quietly rescue a blob whose AAD cannot be reproduced.
+    @Test func v2BlobRefusesToOpenOnAnotherInstall() throws {
+        let v2Sealed = try sealV2("bound to install A", label: "intimacy-log", binding: installA)
+        #expect(throws: (any Error).self) {
+            _ = try self.open(v2Sealed, label: "intimacy-log", override: .identifier(self.installB))
+        }
+        #expect(throws: (any Error).self) {
+            _ = try self.open(v2Sealed, label: "intimacy-log", override: .unavailable)
+        }
+    }
+
+    // MARK: V2 → V3 MIGRATION: the same routine re-seal that rebinds legacy rows also upgrades a v2
+    // row to v3 (purpose + binding AAD) — the path that progressively drains the v2 generation —
+    // and the upgraded row stays bound to this install.
+    @Test func routineReSealMigratesAV2BlobToV3() throws {
+        let v2Sealed = try sealV2("migrate me to v3", label: "worry-box", binding: installA)
+        let plaintext = try #require(try open(v2Sealed, label: "worry-box", override: .identifier(installA)))
+        let migrated = try seal(plaintext, label: "worry-box", override: .identifier(installA))
+        #expect(migrated.first == ColumnCrypto.deviceBoundFormatVersionV3)
+        #expect(try open(migrated, label: "worry-box", override: .identifier(installA)) == "migrate me to v3")
+        #expect(throws: (any Error).self) {
+            _ = try self.open(migrated, label: "worry-box", override: .identifier(self.installB))
+        }
+    }
+
+    // MARK: RESILIENCE, v2 arm: the v2 open path keeps its own binding-read-error branch, so a
+    // transient keychain outage over a v2 row must also surface as the retryable ReadError rather
+    // than an authentication failure that reads like corruption — and the row must open unchanged
+    // once the keychain recovers.
+    @Test func v2BlobSurfacesATransientBindingReadErrorAsRetryable() throws {
+        let v2Sealed = try sealV2("retry my v2 row", label: "menstrual-narrative", binding: installA)
+        #expect(throws: DeviceBindingID.ReadError.self) {
+            _ = try self.open(v2Sealed, label: "menstrual-narrative", override: .readError)
+        }
+        let opened = try open(v2Sealed, label: "menstrual-narrative", override: .identifier(installA))
+        #expect(opened == "retry my v2 row")
     }
 
     // MARK: Proves the Codable seal/open pair speaks the same two-generation format as the
