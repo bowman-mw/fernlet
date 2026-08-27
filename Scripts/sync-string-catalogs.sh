@@ -67,6 +67,7 @@ TARGETS=(
     "Fernlet:App/Fernlet/Localizable.xcstrings"
     "FernletWidgets:App/FernletWidgets/Localizable.xcstrings"
     "FernletShareExtension:App/FernletShareExtension/Localizable.xcstrings"
+    "FernletMessagesExtension:App/FernletMessagesExtension/Localizable.xcstrings"
     "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
     "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
     "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"

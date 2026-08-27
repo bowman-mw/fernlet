@@ -48,9 +48,17 @@ struct PowerOfTenBoundaryTests {
 
     // MARK: - Scope, floors, and constants mirrored from the canonical scanner
 
-    /// The four shipping roots — exactly the scanner's `SHIPPING_ROOTS`. Test targets are excluded on
+    /// The five shipping roots — exactly the scanner's `SHIPPING_ROOTS`. Test targets are excluded on
     /// purpose (tests trap on purpose); ``constantsMatchTheCanonicalScanner()`` pins the two lists equal.
-    static let shippingRoots = ["FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension"]
+    ///
+    /// `App/FernletMessagesExtension` was added on 2026-08-27. It had been missing since `a814ac4`
+    /// shipped the target — an embedded, user-facing appex that this wall simply never looked at,
+    /// the same omission that left it with no string catalog. It carried zero enforced violations
+    /// when it was finally scanned, which is the point: nobody knew that, because nothing checked.
+    static let shippingRoots = [
+        "FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension",
+        "App/FernletMessagesExtension",
+    ]
 
     /// Floor for the shipping scan (366 files at the time of writing). Set below the real count so
     /// ordinary churn never trips it, but a root that stops resolving does.

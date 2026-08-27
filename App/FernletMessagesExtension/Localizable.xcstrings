@@ -1,0 +1,770 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "messages.action.browseLibrary": {
+      "comment": "Button expanding the compact composer, shown before the catalog has loaded and so before the kind of item is known. The two kind-specific forms are messages.action.browseRecipes and messages.action.browseWorkouts.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Browse your library"
+          }
+        }
+      }
+    },
+    "messages.action.browseRecipes": {
+      "comment": "Button expanding the compact composer to the full recipe list. A whole sentence rather than 'Browse your %@' on purpose: the noun cannot be spliced into a possessive in every language.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Browse your recipes"
+          }
+        }
+      }
+    },
+    "messages.action.browseWorkouts": {
+      "comment": "Button expanding the compact composer to the full workout list. Sibling of messages.action.browseRecipes — see that comment for why the noun is not interpolated.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Browse your workouts"
+          }
+        }
+      }
+    },
+    "messages.action.review": {
+      "comment": "Button on a RECEIVED item. It opens the Fernlet app to look the item over before saving — it does not save anything by itself, and must not be translated as 'Save' or 'Import'.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Review in Fernlet"
+          }
+        }
+      }
+    },
+    "messages.action.share": {
+      "comment": "Button inserting the selected item into the Messages conversation. The ↗ arrow is decorative and may be dropped if it reads badly in this language.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share ↗"
+          }
+        }
+      }
+    },
+    "messages.brand": {
+      "comment": "Wordmark above the composer title. 'Fernlet' is the product name and must NOT be translated; the ⌁ glyph and the two spaces are the mark's fixed typography. Translate only if the product ships under a different name in this language.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "⌁  FERNLET"
+          }
+        }
+      }
+    },
+    "messages.card.notesIncluded": {
+      "comment": "Trailing caption on the sent recipe card, telling the recipient a written note travels with it. Keep it short — Messages truncates this corner hard.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Notes included"
+          }
+        }
+      }
+    },
+    "messages.card.plan": {
+      "comment": "Trailing caption on a sent workout card when the sender set no display name of their own. Keep it short — Messages truncates this corner hard.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet plan"
+          }
+        }
+      }
+    },
+    "messages.card.recipe": {
+      "comment": "Trailing caption on a sent recipe card carrying no note. Keep it short — Messages truncates this corner hard.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet recipe"
+          }
+        }
+      }
+    },
+    "messages.card.selected": {
+      "comment": "VoiceOver value spoken for the currently chosen catalog card. Spoken after the card's name, as a state — not a button label.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Selected"
+          }
+        }
+      }
+    },
+    "messages.card.summaryText": {
+      "comment": "The card's accessibility/notification summary — what Messages reads aloud and shows in a notification preview. %@ is the item's own title.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet: %@"
+          }
+        }
+      }
+    },
+    "messages.card.wordmark.recipe": {
+      "comment": "Wordmark DRAWN INTO the card artwork the recipient sees in the conversation. Rendered at 28pt into a 1200×630 image, so a much longer translation will not fit; upper case matches the mark. 'Fernlet' is the product name and must not be translated.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "FERNLET RECIPE"
+          }
+        }
+      }
+    },
+    "messages.card.wordmark.workout": {
+      "comment": "Workout counterpart of messages.card.wordmark.recipe — same 28pt width limit and the same untranslated product name.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "FERNLET WORKOUT"
+          }
+        }
+      }
+    },
+    "messages.error.openRecipe": {
+      "comment": "Shown when the recipe reached the hand-off inbox but the Fernlet app would not open. Distinct from messages.error.prepareRecipe: here the item IS waiting, and opening the app by hand will find it.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't open this recipe for review."
+          }
+        }
+      }
+    },
+    "messages.error.openWorkout": {
+      "comment": "Workout counterpart of messages.error.openRecipe — the plan IS waiting in the hand-off inbox.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't open this workout plan for review."
+          }
+        }
+      }
+    },
+    "messages.error.prepareItem": {
+      "comment": "Shown when the review button is pressed but neither a recipe nor a workout is held — the kind is unknown, hence the generic 'item'.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't prepare this item for review."
+          }
+        }
+      }
+    },
+    "messages.error.prepareRecipe": {
+      "comment": "Shown when the received recipe could not be written to the hand-off inbox the app reads. Nothing was saved.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't prepare this recipe for review."
+          }
+        }
+      }
+    },
+    "messages.error.prepareWorkout": {
+      "comment": "Workout counterpart of messages.error.prepareRecipe. Nothing was saved.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't prepare this workout plan for review."
+          }
+        }
+      }
+    },
+    "messages.hint.browse": {
+      "comment": "VoiceOver hint on the browse button. 'Bounded' is meaningful: the extension can only ever see a capped catalog the app prepared, never the whole library.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Shows the full bounded Fernlet Messages catalog."
+          }
+        }
+      }
+    },
+    "messages.hint.insert": {
+      "comment": "VoiceOver hint on the share button. It adds the item to the conversation's draft; it does not send the message.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Adds the selected Fernlet item to this Messages conversation."
+          }
+        }
+      }
+    },
+    "messages.hint.review": {
+      "comment": "VoiceOver hint on the review button. 'Before saving' is the point — nothing is saved until the person confirms inside the Fernlet app.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Opens Fernlet to review this item before saving it."
+          }
+        }
+      }
+    },
+    "messages.invalid.preview": {
+      "comment": "Reassurance under messages.invalid.status. The extension never writes anything on the failure path, and this says so.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "No item was saved or imported."
+          }
+        }
+      }
+    },
+    "messages.invalid.status": {
+      "comment": "Status line under messages.invalid.title, naming the two causes: a format this build does not understand, or damaged bytes.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "The message data is unsupported or invalid."
+          }
+        }
+      }
+    },
+    "messages.invalid.title": {
+      "comment": "Heading shown for a received card whose payload failed to decode — a corrupted, truncated, or foreign message. Deliberately not alarming: it is almost always a version mismatch.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "This Fernlet item can't be opened"
+          }
+        }
+      }
+    },
+    "messages.mode.recipes": {
+      "comment": "First segment of the two-way picker choosing what kind of Fernlet item to share. Plural noun, as a category name.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Recipes"
+          }
+        }
+      }
+    },
+    "messages.mode.workouts": {
+      "comment": "Second segment of the two-way picker choosing what kind of Fernlet item to share. Plural noun, as a category name.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Workouts"
+          }
+        }
+      }
+    },
+    "messages.probe.error.invalidPayload": {
+      "comment": "Phase-0 device-probe failure: the probe URL was not a probe URL, or its base64 did not decode. Developer-facing — the probe has no shipping call site.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't read the Messages transport check."
+          }
+        }
+      }
+    },
+    "messages.probe.error.invalidURL": {
+      "comment": "Phase-0 device-probe failure: the probe payload could not be packed into a data: URL. Developer-facing — the probe has no shipping call site.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't prepare the Messages transport check."
+          }
+        }
+      }
+    },
+    "messages.probe.error.tooLarge": {
+      "comment": "Phase-0 device-probe failure: the probe payload exceeded the 2 KiB cap. Developer-facing — the probe has no shipping call site.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "The Messages transport check is too large."
+          }
+        }
+      }
+    },
+    "messages.received.chooseDate": {
+      "comment": "Shown instead of a start day when the sender proposed none, so the recipient picks one in the app.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Choose a date in Fernlet"
+          }
+        }
+      }
+    },
+    "messages.received.recipe": {
+      "comment": "Status line under the title of a received recipe that carries no note.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet recipe"
+          }
+        }
+      }
+    },
+    "messages.received.recipeWithNote": {
+      "comment": "Status line under the title of a received recipe that carries the sender's note.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet recipe · note included"
+          }
+        }
+      }
+    },
+    "messages.received.scheduled": {
+      "comment": "Says which day a received workout plan is proposed to start on. %@ is a calendar day key (ISO yyyy-MM-dd), not a sentence.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Scheduled %@"
+          }
+        }
+      }
+    },
+    "messages.received.workoutPlan": {
+      "comment": "Status line under the title of a received workout plan whose sender set no display name.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet workout plan"
+          }
+        }
+      }
+    },
+    "messages.received.workoutPlanFrom": {
+      "comment": "Status line under the title of a received workout plan. %@ is the sender's chosen display name, which they typed and which is shown verbatim.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet workout plan · %@"
+          }
+        }
+      }
+    },
+    "messages.recipe.ingredientCount": {
+      "comment": "Ingredient count in a recipe card's subtitle, e.g. '9 ingredients'. Needs a plural variation per language; English also needs the one-ingredient form.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ingredient"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ingredients"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages.recipe.notePreview": {
+      "comment": "Preview line quoting the sender's recipe note. %@ is the note itself, truncated to 120 characters by the caller.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Note: %@"
+          }
+        }
+      }
+    },
+    "messages.recipe.previewNoNote": {
+      "comment": "Preview line for a selected recipe the sender chose NOT to attach a note to. %@ is the servings/ingredients/steps summary.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%@ · No recipe note"
+          }
+        }
+      }
+    },
+    "messages.recipe.servingCount": {
+      "comment": "Serving count in a recipe card's subtitle, e.g. '4 servings'. Needs a plural variation per language; English also needs the one-serving form.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld serving"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld servings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages.recipe.stepCount": {
+      "comment": "Step count in a recipe card's subtitle, e.g. '6 steps'. Needs a plural variation per language; English also needs the one-step form.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld step"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld steps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages.recipe.subtitleWithNote": {
+      "comment": "Recipe card subtitle when the sender's own note travels with the recipe. %@ is the servings/ingredients/steps summary.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%@ · Note included"
+          }
+        }
+      }
+    },
+    "messages.search.recipesPlaceholder": {
+      "comment": "Placeholder in the search field while the recipe segment is selected.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Search recipes"
+          }
+        }
+      }
+    },
+    "messages.search.workoutsPlaceholder": {
+      "comment": "Placeholder in the search field while the workout segment is selected. 'Workout plans' is the multi-session plan, not a single session.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Search workout plans"
+          }
+        }
+      }
+    },
+    "messages.status.catalogUnreadable": {
+      "comment": "Shown when the App Group container exists but the catalog file is missing or corrupt. Opening the app rewrites it, which is why the second sentence is the remedy.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't read your Messages catalog. Open Fernlet and try again."
+          }
+        }
+      }
+    },
+    "messages.status.chooseRecipe": {
+      "comment": "Shown when the share button is pressed with no recipe card selected.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Choose a recipe to share."
+          }
+        }
+      }
+    },
+    "messages.status.chooseWorkout": {
+      "comment": "Shown when the share button is pressed with no workout card selected.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Choose a workout plan to share."
+          }
+        }
+      }
+    },
+    "messages.status.emptyCatalog": {
+      "comment": "Shown when the catalog read fine but holds nothing yet. The app publishes the catalog; the extension never builds one.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Open Fernlet to prepare items for Messages."
+          }
+        }
+      }
+    },
+    "messages.status.insertFailed": {
+      "comment": "Shown when Messages itself refused the prepared card. Nothing was added to the conversation.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet couldn't insert this item."
+          }
+        }
+      }
+    },
+    "messages.status.openFernletToReview": {
+      "comment": "Shown when the system declined to open the Fernlet app, so the person must open it themselves. The item is already waiting in the hand-off inbox.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Open Fernlet to review this item."
+          }
+        }
+      }
+    },
+    "messages.status.openingFernlet": {
+      "comment": "Shown while the Fernlet app is being brought to the front. Keep the trailing ellipsis if this language uses one.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Opening Fernlet for review…"
+          }
+        }
+      }
+    },
+    "messages.status.recipeInserted": {
+      "comment": "Confirms the recipe card is now in the conversation's draft. It has NOT been sent — the person still presses Messages' own send button.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Recipe inserted."
+          }
+        }
+      }
+    },
+    "messages.status.recipeTooLarge": {
+      "comment": "Shown when the recipe will not fit in the envelope a Messages card can carry. 'Export a Fernlet recipe file' names the app's own export, the working alternative.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "This recipe is too large for a Messages card. Export a Fernlet recipe file instead."
+          }
+        }
+      }
+    },
+    "messages.status.sharedStorageUnavailable": {
+      "comment": "Shown when the App Group container cannot be resolved at all, so the extension has nowhere to read the catalog from. A device/configuration fault, not something the person did.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Fernlet shared storage isn't available."
+          }
+        }
+      }
+    },
+    "messages.status.workoutInserted": {
+      "comment": "Confirms the workout card is now in the conversation's draft. Not sent yet — see messages.status.recipeInserted.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Workout plan inserted."
+          }
+        }
+      }
+    },
+    "messages.status.workoutTooLarge": {
+      "comment": "Shown when the workout plan will not fit in a Messages card. 'Export workout plan' is the name of a Shortcuts action and of the Files export — translate it the same way it is translated there.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "This plan is too large for Messages. Use Export workout plan in Shortcuts or Files."
+          }
+        }
+      }
+    },
+    "messages.title.shareFernletRecipe": {
+      "comment": "Composer heading shown when NO catalog could be read, so the app name is spelled out to explain which app is asking. 'Fernlet' is the product name and must not be translated.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share a Fernlet recipe"
+          }
+        }
+      }
+    },
+    "messages.title.shareFernletWorkout": {
+      "comment": "Workout counterpart of messages.title.shareFernletRecipe, shown when no catalog could be read.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share a Fernlet workout"
+          }
+        }
+      }
+    },
+    "messages.title.shareRecipe": {
+      "comment": "Composer heading while the recipe segment is selected and the catalog has loaded.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share a recipe"
+          }
+        }
+      }
+    },
+    "messages.title.shareWorkout": {
+      "comment": "Composer heading while the workout segment is selected and the catalog has loaded.",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share a workout"
+          }
+        }
+      }
+    },
+    "messages.workout.sessionCount": {
+      "comment": "Number of sessions in a shared workout plan, e.g. '3 workouts'. Needs a plural variation per language; English also needs the one-workout form.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld workout"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld workouts"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

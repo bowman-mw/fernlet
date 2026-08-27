@@ -50,8 +50,11 @@
 // typo and reads as compliant to any "is there a bundle argument" test; a bare sentence returned
 // from a `LocalizedError`'s `errorDescription` / `failureReason` / `recoverySuggestion`, in either
 // root, in every shape the sweep measured — implicit return, explicit return, stored property, or a
-// literal laundered through a `let`; and — through the pinned lists — a revert of any member THIS
-// round forked, or of any key it put in a catalog.
+// literal laundered through a `let`; a bare literal ASSIGNED to a UIKit display or accessibility
+// property, in either root, including through `??` and through a ternary wrapped onto its own
+// lines; ANY uncatalogued letter-bearing literal in `App/FernletMessagesExtension`, the one UIKit
+// target; and — through the pinned lists — a revert of any member THIS round forked, or of any key
+// it put in a catalog.
 //
 // What they CANNOT catch, and never will:
 //   * A HEAD NOT ON THE LIST. `displayInitializers`/`displayModifiers` are enumerations. A literal
@@ -93,7 +96,11 @@
 //     `Bundle.module`; redo it whenever a module gains its first real translation.
 //
 // UNCATALOGUED DISPLAY COPY — the named deferred class. Several modules ship strings a person reads
-// that reach no catalog at all, and they are deferred rather than forgotten. None is a bug today
+// that reach no catalog at all, and they are deferred rather than forgotten. The largest entry this
+// list ever carried was never on it: `App/FernletMessagesExtension` shipped 57 uncatalogued
+// sentences for a whole round without anyone writing them down, because no rule scanned the target
+// and no inventory covered it. Rules H1/H2 closed it, and this paragraph is the reminder that the
+// inventory below is only ever as good as the sweep that produced it. None is a bug today
 // (no non-English locale ships); each becomes one the day a translation lands, which is when it is
 // hardest to find, so the inventory lives here rather than in a status report nobody can grep.
 //
@@ -118,10 +125,13 @@
 //     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
 //     two cycle sites. The memory category is the remaining one.
 //
-// Two sentences are exempt rather than deferred, and part G's allowlist is where that is argued:
-// `MessageTransportProbe`'s three (dead code in a target with no catalog), and everything inside
-// `#if DEBUG` (skipped structurally — copy that is not in the shipping binary cannot be read in the
-// wrong language). `FernletLockError.invalidCredential`'s pass-through carries no literal at all.
+// Part G's allowlist is now EMPTY, and that is the finished state. It held `MessageTransportProbe`'s
+// three sentences on the argument that their target owned no catalog; rule H2 gave the Messages
+// extension one, which retired the argument rather than answering it. Everything inside `#if DEBUG`
+// is still exempt, skipped structurally rather than by list — copy that is not in the shipping
+// binary cannot be read in the wrong language. `FernletLockError.invalidCredential`'s pass-through
+// carries no literal at all. The one live allowlist is H2's token inventory: five symbol names,
+// defaults keys and wire strings that translating would BREAK, each with that argument attached.
 //
 // Nothing in this file enforces the deferred list — a grep cannot tell a display string from a token
 // without knowing what the string is FOR, which is the whole reason the localization wall is a
@@ -150,6 +160,10 @@ import PrivateHealthStore
 ///   phrases that six call sites string-compare (D).
 /// - ``accessibilityCopyIsNeverTypedString()`` and ``localizedErrorCopyIsNeverABareLiteral()`` — the
 ///   two display surfaces whose type or shape hides them from every other rule (F, G).
+/// - ``uikitDisplayCopyIsNeverABareLiteral()`` and
+///   ``everyMessagesExtensionLiteralIsCataloguedOrAnArguedToken()`` — the UIKit surface, which
+///   ASSIGNS its copy rather than declaring it and so is invisible to F, and the one UIKit target,
+///   held shut whole because an assignment rule reaches only a fifth of it (H).
 ///
 /// Concurrency: the scans are pure functions over `String`s read off disk; the two tests that touch
 /// app-target types are `@MainActor` because the app target builds with
@@ -2353,29 +2367,13 @@ struct LocalizationBoundaryTests {
     ///
     /// `#if DEBUG` copy needs no entry — ``debugOnlyLineFlags(in:)`` skips it structurally, because
     /// a sentence that is not in the shipping binary cannot be read in any language.
-    static let localizedErrorExceptions: [LocalizedErrorException] = [
-        LocalizedErrorException(
-            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
-            literal: "Fernlet couldn't prepare the Messages transport check.",
-            reason: """
-                `MessageTransportProbe` is a Phase-0 physical-device probe with ZERO call sites \
-                outside its own file — nothing throws this, so nothing displays it. Its target also \
-                owns no `Localizable.xcstrings`, and standing one up plus a `TARGETS` line in \
-                `Scripts/sync-string-catalogs.sh` to catalogue three unreachable sentences buys a \
-                translator nothing. Delete the probe or wire it up; either way these entries go.
-                """
-        ),
-        LocalizedErrorException(
-            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
-            literal: "Fernlet couldn't read the Messages transport check.",
-            reason: "Second of the three unreachable probe sentences — see the entry above."
-        ),
-        LocalizedErrorException(
-            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
-            literal: "The Messages transport check is too large.",
-            reason: "Third of the three unreachable probe sentences — see the first entry."
-        ),
-    ]
+    /// Empty, and that is the finished state. It held three `MessageTransportProbe` sentences whose
+    /// argument was "its target owns no catalog, so cataloguing them buys a translator nothing".
+    /// Rule H2 gave the Messages extension a catalog and a `TARGETS` line, which retired the
+    /// argument rather than answering it — the three sentences are now keyed like every other one,
+    /// at a cost of nine lines. The probe itself is still dead code with zero call sites; deleting
+    /// it remains the right cleanup, and now costs three catalog keys rather than a rule change.
+    static let localizedErrorExceptions: [LocalizedErrorException] = []
 
     /// A sentence returned from `errorDescription` / `failureReason` / `recoverySuggestion` as a
     /// plain literal never reaches a catalog, so it renders English in every language forever.
@@ -2862,6 +2860,486 @@ struct LocalizationBoundaryTests {
             }
         }
         return (literals, filesScanned)
+    }
+
+    // MARK: - H. UIKit display copy: the assignment shape, and the one UIKit target
+
+    /// Roots scanned by part H1: shipping source in both the app target and the package — the same
+    /// two as F and G, for the same reason. The defect is not about bundles.
+    static let uikitAssignmentScanRoots = ["App", "FernletKit/Sources"]
+
+    /// Floor for the part-H1 scan (408 `.swift` files across both roots at the time of writing).
+    static let minimumUIKitAssignmentFilesScanned = 320
+
+    /// UIKit properties whose value a person reads or hears.
+    ///
+    /// Deliberately NOT `title`: `UIButton.Configuration.title`, `UINavigationItem.title` and
+    /// `MSMessage`'s own layout all use it, but so does every value type in the tree with a `title`
+    /// field — a recipe, a workout card, a catalog entry — and those are data, not display copy set
+    /// on a view. Including it made the rule report the model layer. The button titles this round
+    /// fixed reach their `Configuration` through a function argument, which H1 could not see either
+    /// way; H2 is what actually caught them.
+    static let uikitDisplayProperties = [
+        "text", "attributedText", "placeholder", "summaryText",
+        "caption", "subcaption", "trailingCaption",
+        "accessibilityLabel", "accessibilityValue", "accessibilityHint",
+    ]
+
+    /// A UIKit display or accessibility property assigned a bare literal.
+    struct UIKitDisplayAssignment: Hashable, Sendable {
+        /// Repo-relative path.
+        let path: String
+        /// 1-based line of the assignment.
+        let line: Int
+        /// The property assigned, e.g. `accessibilityHint`.
+        let property: String
+        /// The literal's text, with any interpolation collapsed to `{}`.
+        let literal: String
+
+        /// `path:line: <property> = "<literal>"` — pasteable straight into a search.
+        var report: String { "\(path):\(line): \(property) = \"\(literal)\"" }
+    }
+
+    /// A UIKit display property set to a bare literal never reaches a catalog.
+    ///
+    /// This is the shape rule F cannot see. F is a TYPE check over `var` / `func` DECLARATIONS —
+    /// `var accessibilityHint: String` — and it is the right rule for SwiftUI, where copy is
+    /// declared before it is handed to a modifier. UIKit declares nothing: it ASSIGNS, on an object
+    /// it does not own, to a property whose type is fixed by the framework at `String?`. There is no
+    /// declaration to check and no `Text` to declare instead, so F's signal cannot fire and F's
+    /// remedy is not available. `String(localized:)` is the only form that reaches a catalog here,
+    /// exactly as in rule G, so — exactly as in rule G — the check is whether it is there.
+    ///
+    /// Measured over both roots the day it was written, this found 12 assignments, all in
+    /// `FernletMessagesViewController`, and no false positive.
+    ///
+    /// LIMIT, and it is the load-bearing one: 12 was a small fraction of that file's real surface of
+    /// 57. The rest reached the screen as function arguments, `UIButton.Configuration` titles,
+    /// initializer arguments and helper returns — the "INDIRECTION THROUGH A TYPE" ceiling this file
+    /// documents, which no assignment-shaped rule can close. H1 generalizes to any UIKit file added
+    /// later; ``everyMessagesExtensionLiteralIsCataloguedOrAnArguedToken()`` is what actually holds
+    /// today's one UIKit target shut. Neither substitutes for the other.
+    ///
+    /// Literals with no letters are ignored: `""` is a sentinel and `" · "` is punctuation. That is
+    /// what lets the fixed code join plural-ruled counts with a separator instead of keying it.
+    @Test func uikitDisplayCopyIsNeverABareLiteral() throws {
+        let (assignments, filesScanned) = try Self.scanForBareUIKitDisplayAssignments()
+
+        #expect(
+            filesScanned >= Self.minimumUIKitAssignmentFilesScanned,
+            """
+            Scanned only \(filesScanned) Swift files under \(Self.uikitAssignmentScanRoots.joined(separator: ", ")) \
+            (floor \(Self.minimumUIKitAssignmentFilesScanned)) — a root moved or the enumerator broke, \
+            and this wall is now passing without looking at anything.
+            """
+        )
+
+        #expect(
+            assignments.isEmpty,
+            """
+            \(assignments.count) UIKit display/accessibility propert(ies) are assigned a bare string \
+            literal. Nothing harvests them, so they are in no catalog for a translator to see and \
+            they render English in every language. Wrap each in \
+            `String(localized:defaultValue:comment:)` with a dotted-namespace key, or — if the \
+            target already has a copy vault, as `FernletMessagesExtension` does — add a member there \
+            and assign that. App-target source takes NO `bundle:` argument; package source takes \
+            `bundle: .module`:
+            \(assignments.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Fixture: the assignment rule fires on each shape that must fail and stays silent on each
+    /// shape that must pass.
+    ///
+    /// Both directions are planted, because H1 is expected to report zero forever from the day it
+    /// lands — and a matcher nobody has proven is indistinguishable from one that never fires.
+    @Test func uikitAssignmentScannerSeesTheDisplayShapes() {
+        // MUST TRIP — the shapes measured in FernletMessagesViewController before the fix.
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        statusLabel.text = "Fernlet couldn't prepare this item.""#).count == 1,
+                "the plain label assignment is the commonest shape")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        browseButton.accessibilityHint = "Shows the catalog.""#).count == 1,
+                "an accessibility hint is display copy too")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        message.summaryText = "Fernlet: \(title)""#).count == 1,
+                "interpolation does not make a literal catalogued")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        layout.trailingCaption = "Fernlet recipe""#).count == 1,
+                "the Messages card captions are display copy")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        label.text = value ?? "Open Fernlet.""#).count == 1,
+                "a literal reached through `??` is still the fallback a person reads")
+        #expect(Self.bareUIKitDisplayAssignments(in: """
+                    searchBar.placeholder = isRecipes
+                        ? "Search recipes"
+                        : "Search plans"
+            """).count == 2, "a ternary wrapped onto its own lines hides two literals, not zero")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        label.accessibilityValue = on ? "Selected" : """#).count == 1,
+                "the empty arm is a sentinel; only the spoken arm counts")
+
+        // MUST NOT TRIP.
+        #expect(Self.bareUIKitDisplayAssignments(in: """
+                label.text = String(localized: "messages.brand", defaultValue: "⌁  FERNLET",
+                                    comment: "Wordmark above the composer title.")
+            """).isEmpty, "a localized call is the catalogued form — its own literals must not count")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        label.text = FernletMessagesCopy.brand"#).isEmpty,
+                "a copy-vault member is already keyed")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        searchBar.text = """#).isEmpty,
+                "clearing a field is not copy")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        label.text = [a, b].joined(separator: " · ")"#).isEmpty,
+                "a separator carries no letters, so it is punctuation, not a sentence")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        if entry.text == "done" { return }"#).isEmpty,
+                "a comparison is not an assignment")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        card.title = "Weeknight pasta""#).isEmpty,
+                "`title` is excluded on purpose — it is a model field far more often than a view's")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        // label.text = "an old note about the label""#).isEmpty,
+                "a commented-out assignment ships nothing")
+        #expect(Self.bareUIKitDisplayAssignments(in: #"        label.text = url ?? "see https://fernlet.com for help""#).count == 1,
+                "the `//` inside a URL literal is not a comment — truncating there would hide the sentence")
+        #expect(Self.bareUIKitDisplayAssignments(in: """
+            #if DEBUG
+                    label.text = "seeded"
+            #endif
+            """).isEmpty, "copy that is not in the shipping binary cannot be read in the wrong language")
+    }
+
+    // MARK: - H2. The one UIKit target, held shut whole
+
+    /// The only target in the repo whose views are UIKit rather than SwiftUI.
+    ///
+    /// `FernletShareExtension` also has a `ShareViewController`, but it renders no copy of its own —
+    /// its three sentences are `LocalizedError` cases, which rule G already owns.
+    static let uikitTargetRoot = "App/FernletMessagesExtension"
+
+    /// Floor for the part-H2 scan: the target's three Swift files. Small on purpose — this root is
+    /// one directory, so the floor's job is to notice the directory moving, not churn.
+    static let minimumUIKitTargetFilesScanned = 3
+
+    /// A literal in the UIKit target that is a protocol or system TOKEN rather than copy.
+    struct UIKitTargetToken: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The literal's exact text.
+        let literal: String
+        /// Why this is a token and not a sentence.
+        let reason: String
+    }
+
+    /// Every literal in `App/FernletMessagesExtension` that is not display copy.
+    ///
+    /// Keep this list honest rather than short: it is the target's complete token inventory, and
+    /// each entry is the argument for why translating it would BREAK something.
+    static let uikitTargetTokens: [UIKitTargetToken] = [
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
+            literal: "fork.knife",
+            reason: """
+                SF Symbol name, resolved by `UIImage(systemName:)` against Apple's fixed catalogue. \
+                Translating it returns nil and the card loses its glyph.
+                """
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
+            literal: "dumbbell.fill",
+            reason: "SF Symbol name — see the `fork.knife` entry."
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
+            literal: "figure.strengthtraining.traditional",
+            reason: "SF Symbol name — see the `fork.knife` entry."
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
+            literal: "FernletMessages.lastRecipeID",
+            reason: """
+                `UserDefaults` key. It is written on selection and read back on the next launch, so \
+                a spelling that varied by language would lose the person's last choice every time \
+                they changed the device language — the exact silent-data-loss failure the \
+                token/display separation exists to prevent.
+                """
+        ),
+        UIKitTargetToken(
+            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
+            literal: "data:application/vnd.fernlet.message-probe;base64,",
+            reason: """
+                Wire prefix of the probe's data URL. It is written by `url(for:)` and matched with \
+                `hasPrefix` by `payload(from:)`, so the two halves stop agreeing the moment it is \
+                translated.
+                """
+        ),
+    ]
+
+    /// Every string a person reads in the one UIKit target is catalogued, or is an argued token.
+    ///
+    /// WHY A WHOLE-TARGET RULE and not just H1. `a814ac4` added a complete user-facing target, and
+    /// every wall in this repo looked straight past it: rules A and E read `FernletKit/Sources`;
+    /// rule F checks declarations, and UIKit assigns; rule G reads `LocalizedError` members. The
+    /// target had no `Localizable.xcstrings` and no `TARGETS` line in
+    /// `Scripts/sync-string-catalogs.sh`, so writing `String(localized:)` there would have harvested
+    /// nothing either — the surface was not merely unswept, it was unsweepable. Fifty-seven
+    /// sentences shipped frozen in English, and no test in the repo could have gone red.
+    ///
+    /// H1 is the general shape rule and it found 12 of those 57. This is the rule that finds the
+    /// other 45, and it can be this blunt precisely because the target is three files: anything with
+    /// a letter in it is either keyed or listed above with a reason. It is the same instrument as
+    /// `S3BoundaryTests`'s per-file inventories — cheap because the surface is small, and exact
+    /// because it does not try to be clever about which shape the string reached the screen through.
+    ///
+    /// It does NOT generalize: pointed at `App/Fernlet` it would report thousands of legitimate
+    /// tokens. It is scoped to the one directory whose entire job is presentation.
+    @Test func everyMessagesExtensionLiteralIsCataloguedOrAnArguedToken() throws {
+        let (literals, filesScanned) = try Self.scanUIKitTargetForBareLiterals()
+
+        #expect(
+            filesScanned >= Self.minimumUIKitTargetFilesScanned,
+            """
+            Scanned only \(filesScanned) Swift files under \(Self.uikitTargetRoot) \
+            (floor \(Self.minimumUIKitTargetFilesScanned)) — the target moved or the enumerator \
+            broke, and this wall is now passing without looking at anything.
+            """
+        )
+
+        let offenders = literals.filter { literal in
+            !Self.uikitTargetTokens.contains { Self.matches($0, literal) }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) bare string literal(s) in \(Self.uikitTargetRoot) are neither \
+            catalogued nor listed as tokens. If a person reads it, add a member to \
+            `FernletMessagesCopy` and use that (no `bundle:` argument — an appex's `Bundle.main` is \
+            its own bundle). If it is a symbol name, a defaults key or a wire string, add it to \
+            `uikitTargetTokens` WITH the argument for why translating it would break something:
+            \(offenders.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+
+        let unused = Self.uikitTargetTokens.filter { entry in
+            !literals.contains { Self.matches(entry, $0) }
+        }
+        #expect(
+            unused.isEmpty,
+            """
+            \(unused.count) allowlisted token(s) match nothing any more. Delete them — a stale entry \
+            is a hole nobody is watching:
+            \(unused.map { "\($0.path): \($0.literal)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Exact path AND exact literal — never a path-only match, so an entry cannot turn its file into
+    /// an exempt file.
+    static func matches(_ entry: UIKitTargetToken, _ literal: LocalizedErrorLiteral) -> Bool {
+        literal.path == entry.path && literal.literal == entry.literal
+    }
+
+    /// The Messages extension's catalog and its `TARGETS` line must both keep existing.
+    ///
+    /// Two files, one change, and the missing half is silent in both directions: without the
+    /// catalog every `String(localized:)` in the target quietly returns its `defaultValue`; without
+    /// the `TARGETS` line the catalog stops learning about new keys and `--check` cannot notice,
+    /// because it only checks targets it was told about. This is the pin that would have failed on
+    /// the day `a814ac4` landed.
+    @Test func theMessagesExtensionCatalogIsWiredIntoTheSyncScript() throws {
+        let catalog = RepoRoot.url("App/FernletMessagesExtension/Localizable.xcstrings")
+        #expect(
+            FileManager.default.fileExists(atPath: catalog.path),
+            """
+            App/FernletMessagesExtension/Localizable.xcstrings is gone. Its absence is SILENT — \
+            every String(localized:) in the extension keeps compiling and keeps returning its \
+            English defaultValue. Restore it rather than deleting this pin.
+            """
+        )
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        #expect(
+            script.contains("\"FernletMessagesExtension:App/FernletMessagesExtension/Localizable.xcstrings\""),
+            """
+            The Messages extension has a Localizable.xcstrings that Scripts/sync-string-catalogs.sh \
+            never syncs. The target emits .stringsdata nobody reads, so its catalog silently stops \
+            tracking the code. Restore its line in the TARGETS array.
+            """
+        )
+    }
+
+    /// Fixture: the whole-target scan separates catalogued copy from bare copy.
+    @Test func uikitTargetScannerSeparatesCataloguedCopyFromBareCopy() {
+        #expect(Self.bareLettersBearingLiterals(in: #"    static let prefix = "data:application/probe;base64,""#).count == 1,
+                "an un-keyed literal is reported; the allowlist is what argues it away, not the scan")
+        #expect(Self.bareLettersBearingLiterals(in: """
+                String(localized: "messages.brand", defaultValue: "⌁  FERNLET",
+                       comment: "Wordmark above the composer title.")
+            """).isEmpty, "a localized call swallows its own defaultValue and comment")
+        #expect(Self.bareLettersBearingLiterals(in: #"        [a, b].joined(separator: " · ")"#).isEmpty,
+                "punctuation carries no letters")
+        #expect(Self.bareLettersBearingLiterals(in: #"        guard !text.isEmpty else { return "" }"#).isEmpty,
+                "an empty sentinel is not a sentence")
+        #expect(Self.bareLettersBearingLiterals(in: #"        // a note mentioning "some copy" in prose"#).isEmpty,
+                "a comment ships nothing")
+        #expect(Self.bareLettersBearingLiterals(in: """
+            #if DEBUG
+                    let seed = "seeded"
+            #endif
+            """).isEmpty, "debug-only copy is not in the shipping binary")
+    }
+
+    // MARK: - H. Discovery and matchers
+
+    /// Scans both shipping roots for UIKit display properties assigned a bare literal.
+    static func scanForBareUIKitDisplayAssignments() throws -> (
+        assignments: [UIKitDisplayAssignment], filesScanned: Int
+    ) {
+        var assignments: [UIKitDisplayAssignment] = []
+        var filesScanned = 0
+        for root in uikitAssignmentScanRoots {
+            let rootURL = RepoRoot.url(root)
+            guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root) — moved or renamed? The UIKit-assignment wall is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                for found in bareUIKitDisplayAssignments(in: source) {
+                    assignments.append(UIKitDisplayAssignment(
+                        path: relativePath, line: found.line, property: found.property, literal: found.literal
+                    ))
+                }
+            }
+        }
+        return (assignments, filesScanned)
+    }
+
+    /// Scans the one UIKit target for any letter-bearing literal that is not inside a localized call.
+    static func scanUIKitTargetForBareLiterals() throws -> (
+        literals: [LocalizedErrorLiteral], filesScanned: Int
+    ) {
+        let rootURL = RepoRoot.url(uikitTargetRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            Issue.record("Could not enumerate \(uikitTargetRoot) — moved or renamed? The UIKit-target wall is unenforced.")
+            return ([], 0)
+        }
+        var literals: [LocalizedErrorLiteral] = []
+        var filesScanned = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            filesScanned += 1
+            let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+            for found in bareLettersBearingLiterals(in: source) {
+                literals.append(LocalizedErrorLiteral(
+                    path: relativePath, line: found.line, literal: found.literal
+                ))
+            }
+        }
+        return (literals, filesScanned)
+    }
+
+    /// Every letter-bearing string literal in `source` that is not part of a `String(localized:)`
+    /// call, skipping comments and `#if DEBUG` branches.
+    ///
+    /// The letter test is what makes a whole-file rule usable: `""`, `" · "` and `"%@"` are
+    /// sentinels, punctuation and format, and reporting them would drown the real finding.
+    static func bareLettersBearingLiterals(in source: String) -> [(line: Int, literal: String)] {
+        let chars = Array(source)
+        let debugOnly = debugOnlyLineFlags(in: source)
+        return bareLiterals(chars, from: 0, to: chars.count, startLine: 1).filter { found in
+            guard found.literal.contains(where: { $0.isLetter }) else { return false }
+            let index = found.line - 1
+            return index < 0 || index >= debugOnly.count || !debugOnly[index]
+        }
+    }
+
+    /// Every UIKit display/accessibility property in `source` assigned a bare literal.
+    ///
+    /// Line-oriented at the top, then a character walk over the assignment's VALUE span — the same
+    /// two-stage shape as ``bareLocalizedErrorLiterals(in:)``, and for the same reason: the value is
+    /// where the literal is, and reading only the value keeps a comparison (`==`) and a
+    /// same-named model field out of the results.
+    static func bareUIKitDisplayAssignments(in source: String) -> [(line: Int, property: String, literal: String)] {
+        let chars = Array(source)
+        let lines = source.components(separatedBy: "\n")
+        let debugOnly = debugOnlyLineFlags(in: source)
+        let starts = lineStartOffsets(in: chars, lineCount: lines.count)
+        var found: [(line: Int, property: String, literal: String)] = []
+        for index in lines.indices {
+            guard !debugOnly[index],
+                  let hit = uikitDisplayAssignment(in: codeOnlyPrefix(of: lines[index])) else { continue }
+            let span = uikitAssignmentValueSpan(
+                chars: chars, lines: lines, starts: starts, from: index, equalsColumn: hit.equalsColumn
+            )
+            for literal in bareLiterals(chars, from: span.start, to: span.end, startLine: index + 1)
+            where literal.literal.contains(where: { $0.isLetter }) {
+                found.append((literal.line, hit.property, literal.literal))
+            }
+        }
+        return found
+    }
+
+    /// `line` up to its first comment, so a commented-out assignment is not read as live code.
+    ///
+    /// Not cosmetic: the value span starts just past the `=`, which for a `// label.text = "…"`
+    /// line is already INSIDE the comment — so the span scan's own comment skipping has nothing
+    /// left to skip and reports the literal. The planted near-miss fixture caught exactly this.
+    /// `skipNonCode` does the walking, so a `//` inside a string literal (`"https://…"`) is not
+    /// mistaken for a comment and a block comment is skipped whole.
+    static func codeOnlyPrefix(of line: String) -> String {
+        let chars = Array(line)
+        var index = 0
+        while index < chars.count {
+            if chars[index] == "/", index + 1 < chars.count, chars[index + 1] == "/" {
+                return String(chars[0..<index])
+            }
+            guard let skip = skipNonCode(chars, from: index) else { index += 1; continue }
+            index = max(skip, index + 1)
+        }
+        return line
+    }
+
+    /// The display property assigned on `line`, and the column just past its `=`.
+    ///
+    /// Requires a `.` before the name (it is a property on something) and rejects `==`, `!=`, `>=`,
+    /// `<=` and the compound assignments, so a comparison never reads as an assignment.
+    static func uikitDisplayAssignment(in line: String) -> (property: String, equalsColumn: Int)? {
+        let chars = Array(line)
+        for property in uikitDisplayProperties {
+            var index = 0
+            while index < chars.count {
+                guard matches(chars, at: index, property), index > 0, chars[index - 1] == "." else {
+                    index += 1
+                    continue
+                }
+                let after = skipWhitespace(chars, from: index + property.count)
+                guard after < chars.count, chars[after] == "=",
+                      after + 1 >= chars.count || chars[after + 1] != "=",
+                      after == 0 || !"=!<>+-*/?".contains(chars[after - 1]) else {
+                    index += 1
+                    continue
+                }
+                return (property, after + 1)
+            }
+        }
+        return nil
+    }
+
+    /// Character range of the value assigned on line `index`, absorbing continuation lines.
+    ///
+    /// A line is absorbed when brackets are still unbalanced (a wrapped call) OR when the next line
+    /// opens with a ternary or coalescing operator (a wrapped ternary, whose brackets balance on
+    /// every line and which `logicalLines` therefore cannot join). That second case is not
+    /// hypothetical: it is how this round's own fixed code formats `searchBar.placeholder`, so a
+    /// rule blind to it would certify the exact shape it was written to guard.
+    static func uikitAssignmentValueSpan(
+        chars: [Character], lines: [String], starts: [Int], from index: Int, equalsColumn: Int
+    ) -> (start: Int, end: Int) {
+        let start = min(starts[index] + equalsColumn, chars.count)
+        var last = index
+        var depth = delimiterBalance(String(Array(lines[index]).dropFirst(equalsColumn)))
+        while last + 1 < lines.count, last - index < maximumDeclarationLines {
+            let next = lines[last + 1].trimmingCharacters(in: .whitespaces)
+            let continues = depth > 0 || next.hasPrefix("?") || next.hasPrefix(":") || next.hasPrefix("??")
+            guard continues else { break }
+            last += 1
+            depth += delimiterBalance(lines[last])
+        }
+        let end = last + 1 < starts.count ? starts[last + 1] : chars.count
+        return (start, end)
     }
 
     // MARK: - Pure matchers

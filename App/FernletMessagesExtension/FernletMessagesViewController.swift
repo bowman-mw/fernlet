@@ -23,7 +23,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private let brandLabel = UILabel()
     private let titleLabel = UILabel()
     private let statusLabel = UILabel()
-    private let modeControl = UISegmentedControl(items: ["Recipes", "Workouts"])
+    private let modeControl = UISegmentedControl(
+        items: [FernletMessagesCopy.modeRecipes, FernletMessagesCopy.modeWorkouts]
+    )
     private let searchBar = UISearchBar()
     private let previewLabel = UILabel()
     private let headerStack = UIStackView()
@@ -99,7 +101,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         } else if let receivedWorkout {
             openWorkoutInFernlet(receivedWorkout)
         } else {
-            statusLabel.text = "Fernlet couldn't prepare this item for review."
+            statusLabel.text = FernletMessagesCopy.prepareItemFailed
         }
     }
 
@@ -124,7 +126,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     }
 
     private func configureLabels() {
-        brandLabel.text = "⌁  FERNLET"
+        brandLabel.text = FernletMessagesCopy.brand
         brandLabel.font = .preferredFont(forTextStyle: .caption1)
         brandLabel.textColor = Palette.moss
         brandLabel.adjustsFontForContentSizeCategory = true
@@ -157,13 +159,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func configureButtons() {
         browseButton.addTarget(self, action: #selector(browseItems), for: .touchUpInside)
-        browseButton.configuration = textButtonConfiguration(title: "Browse your library")
-        browseButton.accessibilityHint = "Shows the full bounded Fernlet Messages catalog."
+        browseButton.configuration = textButtonConfiguration(title: FernletMessagesCopy.browseLibrary)
+        browseButton.accessibilityHint = FernletMessagesCopy.browseHint
         insertButton.addTarget(self, action: #selector(insertSelectedItem), for: .touchUpInside)
-        insertButton.accessibilityHint = "Adds the selected Fernlet item to this Messages conversation."
-        reviewButton.configuration = filledButtonConfiguration(title: "Review in Fernlet")
+        insertButton.accessibilityHint = FernletMessagesCopy.insertHint
+        reviewButton.configuration = filledButtonConfiguration(title: FernletMessagesCopy.reviewInFernlet)
         reviewButton.addTarget(self, action: #selector(openReceivedItemInFernlet), for: .touchUpInside)
-        reviewButton.accessibilityHint = "Opens Fernlet to review this item before saving it."
+        reviewButton.accessibilityHint = FernletMessagesCopy.reviewHint
     }
 
     private func configureHeader() {
@@ -211,7 +213,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private func reloadCatalog() {
         guard let directory = FernletMessagesCatalogFileStore.productionDirectory() else {
             catalog = nil
-            catalogUnavailableMessage = "Fernlet shared storage isn't available."
+            catalogUnavailableMessage = FernletMessagesCopy.sharedStorageUnavailable
             return
         }
         do {
@@ -219,7 +221,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             catalogUnavailableMessage = nil
         } catch {
             catalog = nil
-            catalogUnavailableMessage = "Fernlet couldn't read your Messages catalog. Open Fernlet and try again."
+            catalogUnavailableMessage = FernletMessagesCopy.catalogUnreadable
         }
     }
 
@@ -230,7 +232,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         configureComposerVisibility()
         guard let catalog else {
             titleLabel.text = composerTitle
-            statusLabel.text = catalogUnavailableMessage ?? "Open Fernlet to prepare items for Messages."
+            statusLabel.text = catalogUnavailableMessage ?? FernletMessagesCopy.emptyCatalog
             statusLabel.isHidden = false
             previewLabel.text = ""
             previewLabel.isHidden = true
@@ -252,14 +254,20 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         insertButton.isHidden = false
         reviewButton.isHidden = true
         statusLabel.isHidden = true
-        searchBar.placeholder = catalogMode == .recipes ? "Search recipes" : "Search workout plans"
-        browseButton.configuration = textButtonConfiguration(title: "Browse your \(catalogMode == .recipes ? "recipes" : "workouts")")
-        insertButton.configuration = filledButtonConfiguration(title: "Share ↗")
+        searchBar.placeholder = catalogMode == .recipes
+            ? FernletMessagesCopy.searchRecipesPlaceholder
+            : FernletMessagesCopy.searchWorkoutsPlaceholder
+        // Two whole sentences, not "Browse your %@": the noun cannot be spliced into a
+        // possessive in every language, and a translator cannot reorder around the splice.
+        browseButton.configuration = textButtonConfiguration(
+            title: catalogMode == .recipes ? FernletMessagesCopy.browseRecipes : FernletMessagesCopy.browseWorkouts
+        )
+        insertButton.configuration = filledButtonConfiguration(title: FernletMessagesCopy.share)
     }
 
     private func renderRecipes(in catalog: FernletMessagesCatalog) {
         let entries = visibleRecipeEntries(in: catalog)
-        titleLabel.text = "Share a recipe"
+        titleLabel.text = FernletMessagesCopy.shareRecipeTitle
         setPreviewText(recipePreviewText(for: selectedRecipeEntry()))
         insertButton.isEnabled = selectedRecipeEntry() != nil
         renderButtons(entries.map(recipeButton(for:)))
@@ -267,14 +275,16 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func renderWorkouts(in catalog: FernletMessagesCatalog) {
         let entries = visibleWorkoutEntries(in: catalog)
-        titleLabel.text = "Share a workout"
+        titleLabel.text = FernletMessagesCopy.shareWorkoutTitle
         setPreviewText(workoutPreviewText(for: selectedWorkoutEntry()))
         insertButton.isEnabled = selectedWorkoutEntry() != nil
         renderButtons(entries.map(workoutButton(for:)))
     }
 
     private var composerTitle: String {
-        catalogMode == .recipes ? "Share a Fernlet recipe" : "Share a Fernlet workout"
+        catalogMode == .recipes
+            ? FernletMessagesCopy.shareFernletRecipeTitle
+            : FernletMessagesCopy.shareFernletWorkoutTitle
     }
 
     private func renderButtons(_ buttons: [UIButton]) {
@@ -326,7 +336,10 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func recipeButton(for entry: FernletMessagesRecipeCatalogEntry) -> UIButton {
         let isSelected = entry.packet.originContentID == selectedRecipeID
-        let subtitle = "\(recipeSummary(for: entry.packet))\(entry.packet.includesNotes ? " · Note included" : "")"
+        let summary = recipeSummary(for: entry.packet)
+        let subtitle = entry.packet.includesNotes
+            ? FernletMessagesCopy.recipeSubtitleWithNote(summary: summary)
+            : summary
         let button = catalogButton(title: entry.packet.recipe.name, subtitle: subtitle,
                                    symbol: "fork.knife", isSelected: isSelected)
         button.addAction(UIAction { [weak self] _ in self?.selectRecipe(entry.packet.originContentID) }, for: .touchUpInside)
@@ -362,7 +375,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 138).isActive = true
         button.accessibilityLabel = title
         button.accessibilityHint = subtitle
-        button.accessibilityValue = isSelected ? "Selected" : ""
+        button.accessibilityValue = isSelected ? FernletMessagesCopy.selected : ""
         return button
     }
 
@@ -431,9 +444,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func recipePreviewText(for entry: FernletMessagesRecipeCatalogEntry?) -> String {
         guard let entry else { return "" }
-        guard entry.packet.includesNotes else { return "\(recipeSummary(for: entry.packet)) · No recipe note" }
+        guard entry.packet.includesNotes else {
+            return FernletMessagesCopy.recipePreviewWithoutNote(summary: recipeSummary(for: entry.packet))
+        }
         let note = entry.packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        return note.isEmpty ? recipeSummary(for: entry.packet) : "Note: \(String(note.prefix(120)))"
+        return note.isEmpty
+            ? recipeSummary(for: entry.packet)
+            : FernletMessagesCopy.recipeNotePreview(note: String(note.prefix(120)))
     }
 
     private func workoutPreviewText(for entry: FernletMessagesWorkoutCatalogEntry?) -> String {
@@ -446,42 +463,45 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         previewLabel.isHidden = text.isEmpty
     }
 
+    /// Three separately plural-ruled counts joined by punctuation. One key holding all three
+    /// would give a translator a single form for three independent plurals.
     private func recipeSummary(for packet: RecipeExchangePacket) -> String {
-        let servings = packet.recipe.servings
-        let ingredients = packet.recipe.ingredients.count
-        let steps = packet.recipe.steps?.count ?? 0
-        return "\(servings) servings · \(ingredients) ingredients · \(steps) steps"
+        [
+            FernletMessagesCopy.servingCount(packet.recipe.servings),
+            FernletMessagesCopy.ingredientCount(packet.recipe.ingredients.count),
+            FernletMessagesCopy.stepCount(packet.recipe.steps?.count ?? 0)
+        ].joined(separator: " · ")
     }
 
     private func workoutSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
-        let workouts = entry.packet.plan.sessionCount
-        let unit = workouts == 1 ? "workout" : "workouts"
-        return "\(entry.dayKey) · \(workouts) \(unit)"
+        "\(entry.dayKey) · \(FernletMessagesCopy.workoutCount(entry.packet.plan.sessionCount))"
     }
 
     private func insertSelectedRecipe() {
         guard let conversation = activeConversation, let entry = selectedRecipeEntry() else {
-            showComposerStatus("Choose a recipe to share.")
+            showComposerStatus(FernletMessagesCopy.chooseRecipe)
             return
         }
         do {
             let envelope = try ExchangeMessageEnvelope(recipe: entry.packet)
-            insert(message: try message(for: envelope, layout: recipeLayout(for: entry.packet)), into: conversation, success: "Recipe inserted.")
+            insert(message: try message(for: envelope, layout: recipeLayout(for: entry.packet)),
+                   into: conversation, success: FernletMessagesCopy.recipeInserted)
         } catch {
-            showComposerStatus("This recipe is too large for a Messages card. Export a Fernlet recipe file instead.")
+            showComposerStatus(FernletMessagesCopy.recipeTooLarge)
         }
     }
 
     private func insertSelectedWorkout() {
         guard let conversation = activeConversation, let entry = selectedWorkoutEntry() else {
-            showComposerStatus("Choose a workout plan to share.")
+            showComposerStatus(FernletMessagesCopy.chooseWorkout)
             return
         }
         do {
             let envelope = try ExchangeMessageEnvelope(workoutPlan: entry.packet, scheduledStartDayKey: entry.dayKey)
-            insert(message: try message(for: envelope, layout: workoutLayout(for: entry)), into: conversation, success: "Workout plan inserted.")
+            insert(message: try message(for: envelope, layout: workoutLayout(for: entry)),
+                   into: conversation, success: FernletMessagesCopy.workoutInserted)
         } catch {
-            showComposerStatus("This plan is too large for Messages. Use Export workout plan in Shortcuts or Files.")
+            showComposerStatus(FernletMessagesCopy.workoutTooLarge)
         }
     }
 
@@ -489,13 +509,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         let message = MSMessage()
         message.url = try envelope.messageURL()
         message.layout = layout
-        message.summaryText = "Fernlet: \(envelope.card.title)"
+        message.summaryText = FernletMessagesCopy.messageSummary(title: envelope.card.title)
         return message
     }
 
     private func insert(message: MSMessage, into conversation: MSConversation, success: String) {
         conversation.insert(message) { [weak self] error in
-            self?.showComposerStatus(error == nil ? success : "Fernlet couldn't insert this item.")
+            self?.showComposerStatus(error == nil ? success : FernletMessagesCopy.insertFailed)
         }
     }
 
@@ -509,17 +529,17 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         layout.image = recipePlaceholderImage()
         layout.caption = packet.recipe.name
         layout.subcaption = recipeSummary(for: packet)
-        layout.trailingCaption = packet.includesNotes ? "Notes included" : "Fernlet recipe"
+        layout.trailingCaption = packet.includesNotes ? FernletMessagesCopy.cardNotesIncluded : FernletMessagesCopy.cardRecipe
         return layout
     }
 
     /// Local, high-resolution cards; Messages never fetches or exposes private food photos.
     private func recipePlaceholderImage() -> UIImage {
-        placeholderImage(symbol: "fork.knife", label: "FERNLET RECIPE")
+        placeholderImage(symbol: "fork.knife", label: FernletMessagesCopy.recipeWordmark)
     }
 
     private func workoutPlaceholderImage() -> UIImage {
-        placeholderImage(symbol: "dumbbell.fill", label: "FERNLET WORKOUT")
+        placeholderImage(symbol: "dumbbell.fill", label: FernletMessagesCopy.workoutWordmark)
     }
 
     private func placeholderImage(symbol: String, label: String) -> UIImage {
@@ -563,7 +583,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         layout.image = workoutPlaceholderImage()
         layout.caption = entry.card.title
         layout.subcaption = workoutSummary(for: entry)
-        layout.trailingCaption = entry.card.senderLabel ?? "Fernlet plan"
+        layout.trailingCaption = entry.card.senderLabel ?? FernletMessagesCopy.cardPlan
         return layout
     }
 
@@ -589,21 +609,30 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         receivedRecipe = packet
         receivedWorkout = nil
         let note = packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let preview = note.isEmpty ? recipeSummary(for: packet) : "Note: \(String(note.prefix(120)))"
-        let status = packet.includesNotes ? "Fernlet recipe · note included" : "Fernlet recipe"
+        let preview = note.isEmpty
+            ? recipeSummary(for: packet)
+            : FernletMessagesCopy.recipeNotePreview(note: String(note.prefix(120)))
+        let status = packet.includesNotes
+            ? FernletMessagesCopy.receivedRecipeWithNote
+            : FernletMessagesCopy.receivedRecipe
         showReceived(title: card.title, status: status, preview: preview)
     }
 
     private func showReceivedWorkout(_ packet: WorkoutPlanExchangePacket, dayKey: String?) throws {
         let record = try FernletMessagesWorkoutInboxRecord(packet: packet, suggestedStartDayKey: dayKey)
         let card = try ExchangeCardMetadata.workoutPlan(from: packet, scheduledStartDayKey: dayKey)
-        let schedule = dayKey.map { "Scheduled \($0)" } ?? "Choose a date in Fernlet"
-        let workouts = packet.plan.sessionCount
-        let sender = card.senderLabel.map { " · \($0)" } ?? ""
+        let schedule = dayKey.map { FernletMessagesCopy.scheduled(dayKey: $0) }
+            ?? FernletMessagesCopy.chooseDateInFernlet
+        let status = card.senderLabel.map { FernletMessagesCopy.receivedWorkoutPlan(from: $0) }
+            ?? FernletMessagesCopy.receivedWorkoutPlan
         isShowingReceivedItem = true
         receivedRecipe = nil
         receivedWorkout = record
-        showReceived(title: card.title, status: "Fernlet workout plan\(sender)", preview: "\(schedule) · \(workouts) workouts")
+        showReceived(
+            title: card.title,
+            status: status,
+            preview: "\(schedule) · \(FernletMessagesCopy.workoutCount(packet.plan.sessionCount))"
+        )
     }
 
     private func showReceived(title: String, status: String, preview: String) {
@@ -624,27 +653,29 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         isShowingReceivedItem = true
         receivedRecipe = nil
         receivedWorkout = nil
-        showReceived(title: "This Fernlet item can't be opened", status: "The message data is unsupported or invalid.", preview: "No item was saved or imported.")
+        showReceived(title: FernletMessagesCopy.invalidTitle,
+                     status: FernletMessagesCopy.invalidStatus,
+                     preview: FernletMessagesCopy.invalidPreview)
         reviewButton.isHidden = true
     }
 
     private func openRecipeInFernlet(_ packet: RecipeExchangePacket) {
         guard let directory = FernletMessagesInboxStore.productionDirectory() else {
-            statusLabel.text = "Fernlet couldn't prepare this recipe for review."
+            statusLabel.text = FernletMessagesCopy.prepareRecipeFailed
             return
         }
         do {
             let record = try FernletMessagesInboxStore(directory: directory).enqueue(packet)
             let target = FernletMessagesInboxTarget(destination: .recipe, inboxID: record.id)
-            openFernletReview(target, failure: "Fernlet couldn't open this recipe for review.")
+            openFernletReview(target, failure: FernletMessagesCopy.openRecipeFailed)
         } catch {
-            statusLabel.text = "Fernlet couldn't prepare this recipe for review."
+            statusLabel.text = FernletMessagesCopy.prepareRecipeFailed
         }
     }
 
     private func openWorkoutInFernlet(_ record: FernletMessagesWorkoutInboxRecord) {
         guard let directory = FernletMessagesWorkoutInboxStore.productionDirectory() else {
-            statusLabel.text = "Fernlet couldn't prepare this workout plan for review."
+            statusLabel.text = FernletMessagesCopy.prepareWorkoutFailed
             return
         }
         do {
@@ -652,9 +683,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
                 record.packet, suggestedStartDayKey: record.suggestedStartDayKey
             )
             let target = FernletMessagesInboxTarget(destination: .workoutPlan, inboxID: saved.id)
-            openFernletReview(target, failure: "Fernlet couldn't open this workout plan for review.")
+            openFernletReview(target, failure: FernletMessagesCopy.openWorkoutFailed)
         } catch {
-            statusLabel.text = "Fernlet couldn't prepare this workout plan for review."
+            statusLabel.text = FernletMessagesCopy.prepareWorkoutFailed
         }
     }
 
@@ -664,7 +695,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             return
         }
         extensionContext?.open(url) { [weak self] didOpen in
-            self?.statusLabel.text = didOpen ? "Opening Fernlet for review…" : "Open Fernlet to review this item."
+            self?.statusLabel.text = didOpen
+                ? FernletMessagesCopy.openingFernlet
+                : FernletMessagesCopy.openFernletToReview
         }
     }
 }

@@ -52,7 +52,7 @@ import sys
 DENSITY_FLOOR = 0.68          # ratchet — see Docs/Power-of-10-Swift.md §R5; only ever raise it
 MAX_BODY_LINES = 60           # NASA rule 4: one printed page
 
-SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension")
+SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "App/FernletMessagesExtension")  # noqa: E501 — one line: PowerOfTenBoundaryTests.pythonStringTuple parses a single-line tuple
 
 ALLOWED_IF_TOKENS = ("DEBUG", "canImport", "os", "targetEnvironment", "swift", "compiler", "arch")
 
