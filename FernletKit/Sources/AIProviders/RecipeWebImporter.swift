@@ -103,22 +103,45 @@ public enum RecipeWebImportError: LocalizedError {
     /// instead of burning a finite retry attempt on a state that isn't the page's fault.
     case aiBudgetExhausted
 
+    /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
+    /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "Pasteboard does not contain a valid URL."
+            String(localized: "recipeImport.error.invalidURL",
+                   defaultValue: "Pasteboard does not contain a valid URL.",
+                   bundle: .module,
+                   comment: "Shown when a pasted recipe link is not https, has no host, or resolves to a private address.")
         case .fetchFailed:
-            "Could not fetch that recipe page."
+            String(localized: "recipeImport.error.fetchFailed",
+                   defaultValue: "Could not fetch that recipe page.",
+                   bundle: .module,
+                   comment: "Shown when the network fetch of a recipe page failed, returned a non-2xx status, or was not HTML.")
         case .emptyHTML:
-            "The page did not return readable HTML."
+            String(localized: "recipeImport.error.emptyHTML",
+                   defaultValue: "The page did not return readable HTML.",
+                   bundle: .module,
+                   comment: "Shown when a recipe page loaded but its body decoded to empty or whitespace-only text.")
         case .noRecipeFound:
-            "No recipe could be extracted from that page."
+            String(localized: "recipeImport.error.noRecipeFound",
+                   defaultValue: "No recipe could be extracted from that page.",
+                   bundle: .module,
+                   comment: "Shown when a page carried no structured recipe and on-device extraction was disabled or found nothing.")
         case .modelUnavailable:
-            "On-device recipe extraction is not available on this device."
+            String(localized: "recipeImport.error.modelUnavailable",
+                   defaultValue: "On-device recipe extraction is not available on this device.",
+                   bundle: .module,
+                   comment: "Shown when this device cannot run on-device extraction at all — a permanent limit, not today's budget.")
         case .incompleteRecipe:
-            "The extracted recipe was missing a name or ingredients."
+            String(localized: "recipeImport.error.incompleteRecipe",
+                   defaultValue: "The extracted recipe was missing a name or ingredients.",
+                   bundle: .module,
+                   comment: "Shown when on-device extraction returned something, but without a name or any ingredients.")
         case .aiBudgetExhausted:
-            "The quiet helper is resting for today. I'll try this recipe again tomorrow."
+            String(localized: "recipeImport.error.aiBudgetExhausted",
+                   defaultValue: "The quiet helper is resting for today. I'll try this recipe again tomorrow.",
+                   bundle: .module,
+                   comment: "Shown when today's on-device AI budget is spent. Deliberately gentle and first-person: this clears at midnight and the import retries itself, so it is a reassurance rather than a failure.")
         }
     }
 }

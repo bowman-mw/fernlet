@@ -246,8 +246,14 @@ private enum QueueWriterError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: "Fernlet can only import web recipe URLs."
-        case .urlTooLong: "That link is too long for Fernlet to import."
+        case .invalidURL:
+            String(localized: "shareQueue.error.invalidURL",
+                   defaultValue: "Fernlet can only import web recipe URLs.",
+                   comment: "Shown by the system share UI when the shared item is not an http or https URL.")
+        case .urlTooLong:
+            String(localized: "shareQueue.error.urlTooLong",
+                   defaultValue: "That link is too long for Fernlet to import.",
+                   comment: "Shown by the system share UI when the shared URL is longer than the import queue will persist.")
         }
     }
 }

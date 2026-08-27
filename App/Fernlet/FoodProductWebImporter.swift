@@ -276,17 +276,29 @@ enum FoodProductWebImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "Enter a valid product page URL."
+            String(localized: "productImport.error.invalidURL",
+                   defaultValue: "Enter a valid product page URL.",
+                   comment: "Inline notice on the product-import screen when the typed text is not an https web address.")
         case .fetchFailed:
-            "Could not fetch that product page."
+            String(localized: "productImport.error.fetchFailed",
+                   defaultValue: "Could not fetch that product page.",
+                   comment: "Inline notice when the network fetch of a product page failed or returned a non-2xx status.")
         case .emptyHTML:
-            "The page did not return readable HTML."
+            String(localized: "productImport.error.emptyHTML",
+                   defaultValue: "The page did not return readable HTML.",
+                   comment: "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.")
         case .productNotFound:
-            "Fernlet could not identify a product on that page."
+            String(localized: "productImport.error.productNotFound",
+                   defaultValue: "Fernlet could not identify a product on that page.",
+                   comment: "Inline notice when a product page was readable but carried no recognizable product.")
         case .nutritionNotFound:
-            "Fernlet could not find a complete nutrition label on that page."
+            String(localized: "productImport.error.nutritionNotFound",
+                   defaultValue: "Fernlet could not find a complete nutrition label on that page.",
+                   comment: "Inline notice when a product was identified but its nutrition panel was missing or incomplete.")
         case .modelUnavailable:
-            "The page did not include structured nutrition data, and on-device extraction is not available."
+            String(localized: "productImport.error.modelUnavailable",
+                   defaultValue: "The page did not include structured nutrition data, and on-device extraction is not available.",
+                   comment: "Inline notice when every extraction tier failed and this device cannot run the on-device model fallback.")
         }
     }
 }

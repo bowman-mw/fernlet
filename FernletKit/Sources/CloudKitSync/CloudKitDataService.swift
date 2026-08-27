@@ -121,14 +121,25 @@ public enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
     case confirmationRequired
     case cloudKitOperationFailed(String)
 
+    /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
+    /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
         case .notSignedIn:
-            return "Sign in to iCloud to check or delete Fernlet cloud data."
+            return String(localized: "cloudKit.error.notSignedIn",
+                          defaultValue: "Sign in to iCloud to check or delete Fernlet cloud data.",
+                          bundle: .module,
+                          comment: "Shown when an iCloud data check or deletion is attempted with no iCloud account signed in.")
         case .confirmationRequired:
-            return "Confirm deletion by typing DELETE or using biometric verification again."
+            return String(localized: "cloudKit.error.confirmationRequired",
+                          defaultValue: "Confirm deletion by typing DELETE or using biometric verification again.",
+                          bundle: .module,
+                          comment: "Shown when a destructive iCloud deletion was requested without its confirmation step. DELETE is the word the user types; keep it uppercase and match whatever the confirmation field accepts in this language.")
         case .cloudKitOperationFailed(let message):
-            return "Fernlet could not finish the iCloud operation: \(message)"
+            return String(localized: "cloudKit.error.operationFailed",
+                          defaultValue: "Fernlet could not finish the iCloud operation: \(message)",
+                          bundle: .module,
+                          comment: "Wraps an underlying CloudKit failure so callers show one consistent alert. The argument is Apple's own error message, already localized by the system.")
         }
     }
 }

@@ -31,10 +31,15 @@ public enum StoreCompactionError: Error {
 public enum PersistenceStoreLoadError: LocalizedError, Equatable {
     case primaryStoreUnavailable
 
+    /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
+    /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
         case .primaryStoreUnavailable:
-            return "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again."
+            return String(localized: "persistence.error.primaryStoreUnavailable",
+                          defaultValue: "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again.",
+                          bundle: .module,
+                          comment: "Shown at startup when the local Core Data store will not open. The second sentence is the reassurance and is the most important half — keep it early and unambiguous; the third lists the two usual causes.")
         }
     }
 }

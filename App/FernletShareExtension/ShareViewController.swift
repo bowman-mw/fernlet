@@ -139,6 +139,8 @@ private enum ShareExtensionError: LocalizedError {
     case noURL
 
     var errorDescription: String? {
-        "Fernlet could not find a recipe URL in this share."
+        String(localized: "share.error.noURL",
+               defaultValue: "Fernlet could not find a recipe URL in this share.",
+               comment: "Shown by the system share UI when Fernlet cancels a share that carried no usable recipe URL, in either the attachments or the plain text.")
     }
 }

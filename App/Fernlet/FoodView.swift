@@ -957,7 +957,10 @@ private struct RecipeImportSheet: View {
                 }
                 finishImport(named: importedRecipe.name)
             } catch {
-                notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
+                notice = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "recipeImport.error.fallback",
+                              defaultValue: "Could not import that recipe.",
+                              comment: "Shown when importing a recipe fails and the thrown error carries no description of its own. One key, two call sites — the inline notice on the import screen and the note recorded against a queued share — because the sentence and the situation are the same.")
                 isImportingURL = false
             }
         }
@@ -3713,7 +3716,10 @@ private struct FoodProductPageImportView: View {
                     outcome = .succeeded
                 }
             } catch {
-                notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that product page."
+                notice = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "productImport.error.fallback",
+                              defaultValue: "Could not import that product page.",
+                              comment: "Inline notice when importing a packaged food from a product page fails and the thrown error carries no description of its own.")
             }
             isLoading = false
             await AIAuditLog.shared.updateOutcome(id: auditID, to: outcome)
@@ -5982,7 +5988,10 @@ struct RecipeDetailView: View {
                     reimportNotice = "This recipe was deleted, so there's nothing to refresh."
                 }
             } catch {
-                reimportNotice = (error as? LocalizedError)?.errorDescription ?? "Could not re-import this recipe."
+                reimportNotice = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "recipeImport.error.reimportFallback",
+                              defaultValue: "Could not re-import this recipe.",
+                              comment: "Inline notice when refreshing an imported recipe from its source page fails and the thrown error carries no description of its own.")
             }
             isReimporting = false
         }

@@ -47,8 +47,11 @@
 // literal, or a function return; an accessibility label/value/hint declared `String`, including
 // across a wrapped signature; a `String(localized:)` in package source that does not resolve
 // against `.module` — INCLUDING one that passes `bundle: .main`, which is the app→package migration
-// typo and reads as compliant to any "is there a bundle argument" test; and — through the pinned
-// lists — a revert of any member THIS round forked, or of any key it put in a catalog.
+// typo and reads as compliant to any "is there a bundle argument" test; a bare sentence returned
+// from a `LocalizedError`'s `errorDescription` / `failureReason` / `recoverySuggestion`, in either
+// root, in every shape the sweep measured — implicit return, explicit return, stored property, or a
+// literal laundered through a `let`; and — through the pinned lists — a revert of any member THIS
+// round forked, or of any key it put in a catalog.
 //
 // What they CANNOT catch, and never will:
 //   * A HEAD NOT ON THE LIST. `displayInitializers`/`displayModifiers` are enumerations. A literal
@@ -61,6 +64,11 @@
 //   * INDIRECTION THROUGH A TYPE. A literal assigned to a `String` and passed through two
 //     functions, a struct field, or a dictionary before reaching a display API is a data-flow
 //     question. No line-oriented scan resolves it.
+//   * COPY A `LocalizedError` BUILDS SOMEWHERE ELSE. Rule G reads the three copy members' own
+//     bodies. A conformance whose `errorDescription` returns `Self.copy(for: self)`, or an
+//     associated value that arrived as an English literal from its thrower, is the same data-flow
+//     question — and `FernletLockError.invalidCredential` is a live example of the second, exempt
+//     by design because the pass-through IS its contract.
 //   * WHETHER A KEY IS ANY GOOD. A key can be present, bundled, harvested — and still be spliced
 //     into a sentence a translator cannot reorder, or carry an English plural rule. Reviews find
 //     those; this file cannot.
@@ -84,26 +92,41 @@
 //     This was performed against `FernletUI` for review §4.0 and resolved correctly through
 //     `Bundle.module`; redo it whenever a module gains its first real translation.
 //
-// UNCATALOGUED DISPLAY COPY — the named deferred class. Three modules ship strings a person reads
+// UNCATALOGUED DISPLAY COPY — the named deferred class. Several modules ship strings a person reads
 // that reach no catalog at all, and they are deferred rather than forgotten. None is a bug today
 // (no non-English locale ships); each becomes one the day a translation lands, which is when it is
-// hardest to find, so the inventory lives here rather than in a status report nobody can grep:
+// hardest to find, so the inventory lives here rather than in a status report nobody can grep.
 //
-//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. The hard part is
-//     not the count: several of these strings are ALSO logic tokens that six call sites compare
-//     with `==` (see part D below), so localizing them requires the token/display FORK, not a
-//     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
-//   * `HealthKitGateway` (~10 strings) — status and authorization messages, plus
-//     `HealthKitService.title`. Straightforward forks; no catalog exists in that module yet.
+// The `LocalizedError` sweep changed the SHAPE of this list. Four modules — `AIProviders`,
+// `CloudKitSync`, `FernletFoundation` and `HealthKitGateway` — previously had no
+// `Localizable.xcstrings` at all, so their copy was not merely unswept but had nowhere to go. Each
+// now owns a catalog and a `TARGETS` line in `Scripts/sync-string-catalogs.sh`, so what is left in
+// them is an ordinary `String(localized:bundle:.module)` sweep rather than a blocked one:
+//
+//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. STILL HAS NO
+//     CATALOG. The hard part is not the count: several of these strings are ALSO logic tokens that
+//     six call sites compare with `==` (see part D below), so localizing them requires the
+//     token/display FORK, not a `String(localized:)` sweep. Part D is what stops a sweep from
+//     silently breaking those gates.
+//   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
+//     (7), the settings-row name and the sentence describing what each capability reads and writes.
+//     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
+//     worked example for the rest; these are straightforward forks with a catalog now waiting.
 //   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
 //     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
 //     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
 //     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
 //     two cycle sites. The memory category is the remaining one.
 //
-// Nothing in this file enforces that list — a grep cannot tell a display string from a token
+// Two sentences are exempt rather than deferred, and part G's allowlist is where that is argued:
+// `MessageTransportProbe`'s three (dead code in a target with no catalog), and everything inside
+// `#if DEBUG` (skipped structurally — copy that is not in the shipping binary cannot be read in the
+// wrong language). `FernletLockError.invalidCredential`'s pass-through carries no literal at all.
+//
+// Nothing in this file enforces the deferred list — a grep cannot tell a display string from a token
 // without knowing what the string is FOR, which is the whole reason the localization wall is a
-// token/display discipline and not a lint rule.
+// token/display discipline and not a lint rule. Part G is the one slice that IS enforceable, because
+// `LocalizedError` names its display members for us.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 import Foundation
@@ -116,7 +139,7 @@ import PrivateHealthStore
 
 /// Grep-wall enforcing the token/display separation that makes localization safe.
 ///
-/// Four independent enforcement areas, each with its own planted-token fixtures:
+/// Five independent enforcement areas, each with its own planted-token fixtures:
 /// - ``everyPackageLocalizedStringPassesModuleBundle()`` — the `bundle: .module` rule inside
 ///   `FernletKit/Sources` (A).
 /// - the `frozen…Tokens` tests — literal raw values of every enum whose tokens are persisted,
@@ -125,6 +148,8 @@ import PrivateHealthStore
 ///   contract, which no type system spans (C).
 /// - ``derivedSignalValuesAreTheFrozenLogicVocabulary()`` and its gate pins — the derived-signal
 ///   phrases that six call sites string-compare (D).
+/// - ``accessibilityCopyIsNeverTypedString()`` and ``localizedErrorCopyIsNeverABareLiteral()`` — the
+///   two display surfaces whose type or shape hides them from every other rule (F, G).
 ///
 /// Concurrency: the scans are pure functions over `String`s read off disk; the two tests that touch
 /// app-target types are `@MainActor` because the app target builds with
@@ -2280,6 +2305,563 @@ struct LocalizationBoundaryTests {
             }
         }
         return (declarations, filesScanned)
+    }
+
+    // MARK: - G. `LocalizedError` copy may not be a bare literal
+
+    /// Roots scanned by part G: shipping source in both the app target and the package.
+    ///
+    /// The same two roots as part F, for the same reason — the defect is not about bundles, so the
+    /// app target is exactly as exposed as the package.
+    static let localizedErrorScanRoots = ["App", "FernletKit/Sources"]
+
+    /// Floor for the part-G scan (406 `.swift` files across both roots at the time of writing). Set
+    /// well below the real count so ordinary churn never trips it, but a root that stops resolving
+    /// does — the same house rule as ``minimumPackageFilesScanned``.
+    static let minimumLocalizedErrorFilesScanned = 320
+
+    /// The `LocalizedError` members whose value a person actually reads.
+    ///
+    /// `helpAnchor` is deliberately absent: it names a macOS help-book anchor, which is a token.
+    static let localizedErrorCopyMembers = ["errorDescription", "failureReason", "recoverySuggestion"]
+
+    /// A user-facing sentence sitting in a `LocalizedError` member as a plain literal.
+    struct LocalizedErrorLiteral: Hashable, Sendable {
+        /// Repo-relative path.
+        let path: String
+        /// 1-based line of the literal itself, not of the member that holds it.
+        let line: Int
+        /// The literal's text, with any interpolation collapsed to `{}`.
+        let literal: String
+
+        /// `path:line: "<literal>"` — pasteable straight into a search.
+        var report: String { "\(path):\(line): \"\(literal)\"" }
+    }
+
+    /// A bare literal in a `LocalizedError` member that is nonetheless correct, and why.
+    struct LocalizedErrorException: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The literal's exact text.
+        let literal: String
+        /// Why no key belongs here.
+        let reason: String
+    }
+
+    /// Every allowlisted bare literal. Keep this list short: entries are copy a person could in
+    /// principle read, exempted only because no build that reaches a person contains them.
+    ///
+    /// `#if DEBUG` copy needs no entry — ``debugOnlyLineFlags(in:)`` skips it structurally, because
+    /// a sentence that is not in the shipping binary cannot be read in any language.
+    static let localizedErrorExceptions: [LocalizedErrorException] = [
+        LocalizedErrorException(
+            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
+            literal: "Fernlet couldn't prepare the Messages transport check.",
+            reason: """
+                `MessageTransportProbe` is a Phase-0 physical-device probe with ZERO call sites \
+                outside its own file — nothing throws this, so nothing displays it. Its target also \
+                owns no `Localizable.xcstrings`, and standing one up plus a `TARGETS` line in \
+                `Scripts/sync-string-catalogs.sh` to catalogue three unreachable sentences buys a \
+                translator nothing. Delete the probe or wire it up; either way these entries go.
+                """
+        ),
+        LocalizedErrorException(
+            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
+            literal: "Fernlet couldn't read the Messages transport check.",
+            reason: "Second of the three unreachable probe sentences — see the entry above."
+        ),
+        LocalizedErrorException(
+            path: "App/FernletMessagesExtension/MessageTransportProbe.swift",
+            literal: "The Messages transport check is too large.",
+            reason: "Third of the three unreachable probe sentences — see the first entry."
+        ),
+    ]
+
+    /// A sentence returned from `errorDescription` / `failureReason` / `recoverySuggestion` as a
+    /// plain literal never reaches a catalog, so it renders English in every language forever.
+    ///
+    /// This is a BODY rule, and it has to be: parts A and E read only `FernletKit/Sources`, and part
+    /// F — the one rule that reads `App/` — asserts that display copy is not typed `String`.
+    /// `LocalizedError` mandates `String?`, so F's type signal cannot fire here and its remedy
+    /// (declare it `Text`) is not available. `String(localized:)` inside the body is the only form
+    /// that reaches a catalog, so the only thing left to check is whether it is there.
+    ///
+    /// The check is deliberately blunt: after every `String(localized:)` / `AttributedString(localized:)`
+    /// call in the body is blanked out — which takes its `defaultValue:` and `comment:` literals with
+    /// it — ANY string literal left standing is a violation. Measured over the tree the day it was
+    /// written, that produced exactly the two known-and-argued skips and no false positive at all,
+    /// so a narrower "is this literal in return position" rule would have bought precision nobody
+    /// needed and cost the ability to see a literal spliced in through a `let` or a ternary.
+    ///
+    /// Empty and whitespace-only literals are ignored: `""` is a sentinel, not a sentence.
+    @Test func localizedErrorCopyIsNeverABareLiteral() throws {
+        let (literals, filesScanned) = try Self.scanForBareLocalizedErrorLiterals()
+
+        #expect(
+            filesScanned >= Self.minimumLocalizedErrorFilesScanned,
+            """
+            Scanned only \(filesScanned) Swift files under \(Self.localizedErrorScanRoots.joined(separator: ", ")) \
+            (floor \(Self.minimumLocalizedErrorFilesScanned)) — a root moved or the enumerator broke, \
+            and this wall is now passing without looking at anything.
+            """
+        )
+
+        let offenders = literals.filter { literal in
+            !Self.localizedErrorExceptions.contains { Self.matches($0, literal) }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) `LocalizedError` sentence(s) are plain string literals. Nothing \
+            harvests them, so they are not in any catalog for a translator to see and they render \
+            English in every language — through Shortcuts, the share sheet and system alerts, where \
+            nobody on the team will ever notice. Wrap each in `String(localized:defaultValue:comment:)` \
+            with a dotted-namespace key (`<domain>.error.<case>`), adding `bundle: .module` if and \
+            only if the file is package source:
+            \(offenders.map(\.report).sorted().joined(separator: "\n"))
+            """
+        )
+
+        let unused = Self.localizedErrorExceptions.filter { entry in
+            !literals.contains { Self.matches(entry, $0) }
+        }
+        #expect(
+            unused.isEmpty,
+            """
+            \(unused.count) allowlisted bare `LocalizedError` literal(s) match nothing any more. \
+            Delete them — a stale entry is a hole nobody is watching:
+            \(unused.map { "\($0.path): \($0.literal)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Exact path AND exact literal — never a path-only match, so an entry cannot turn its file into
+    /// an exempt file.
+    static func matches(_ entry: LocalizedErrorException, _ literal: LocalizedErrorLiteral) -> Bool {
+        literal.path == entry.path && literal.literal == entry.literal
+    }
+
+    /// Fixture: the body rule fires on each shape that must fail and stays silent on each shape that
+    /// must pass.
+    ///
+    /// Part G is expected to report zero forever once the sweep lands, so — as everywhere else in
+    /// this file — only a planted violation distinguishes "nothing is wrong" from "the matcher never
+    /// runs". Both directions are planted, because a matcher that fires on everything is as useless
+    /// as one that fires on nothing.
+    @Test func localizedErrorBodyScannerSeesTheLiteralForms() {
+        // MUST TRIP — the shapes the sweep found in the tree.
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                "Could not read that label."
+            }
+            """).count == 1, "a single implicit return is the commonest shape")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            public var errorDescription: String? {
+                switch self {
+                case .a: "First."
+                case .b: return "Second."
+                }
+            }
+            """).count == 2, "implicit and explicit returns are the same defect")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var failureReason: String? { "Why it failed." }
+            """).count == 1, "failureReason is display copy too")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var recoverySuggestion: String? { "Try again." }
+            """).count == 1, "so is recoverySuggestion")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                let prefix = "Keychain "
+                return prefix + operation
+            }
+            """).count == 1, "a literal laundered through a `let` is still uncatalogued copy")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? = "Stored, not computed."
+            """).count == 1, "a stored property satisfies the protocol just as well")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                String(localized: "k", defaultValue: "Fine.", comment: "c") + " and \\("x")"
+            }
+            """).count == 1, "one localized call does not launder a second bare literal beside it")
+
+        // MUST NOT TRIP — the corrected forms and the near misses.
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                String(localized: "camera.error.unavailable",
+                       defaultValue: "Camera access is unavailable.",
+                       comment: "Shown when the camera cannot be opened.")
+            }
+            """).isEmpty, "the whole point: defaultValue and comment are INSIDE the call")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            public var errorDescription: String? {
+                String(localized: "lock.error.locked",
+                       defaultValue: "App lock is locked.",
+                       bundle: .module,
+                       comment: "Shown when the lock is closed.")
+            }
+            """).isEmpty, "package form, with the module bundle")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                switch self {
+                case .invalidCredential(let message): message
+                }
+            }
+            """).isEmpty, "a pass-through of an already-finished sentence holds no literal")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? { nil }
+            """).isEmpty, "no literal, no finding")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                // A note mentioning "a quoted phrase" is documentation.
+                String(localized: "k", defaultValue: "Fine.", comment: "c")
+            }
+            """).isEmpty, "comments are not code — the lesson part A learned the hard way")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? { "" }
+            """).isEmpty, "an empty literal is a sentinel, not a sentence")
+
+        // A READ or an ARGUMENT LABEL is not a declaration — without this discriminator the rule
+        // fires on every `catch` block in the app that unwraps someone else's errorDescription.
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that."
+            """).isEmpty, "a leading dot means a read, not a declaration")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            queue.noteFailure(record, errorDescription: "Could not import that.")
+            """).isEmpty, "an argument label is not a member declaration")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            init(errorDescription: String? = "Default.") { }
+            """).isEmpty, "nor is an initializer parameter")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            /// var errorDescription: String? { "the defect" }
+            """).isEmpty, "documentation naming the pattern is documentation")
+
+        // A neighbouring member's body must not be swallowed into this one.
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            var errorDescription: String? {
+                String(localized: "k", defaultValue: "Fine.", comment: "c")
+            }
+            var debugSummary: String {
+                "Not display copy."
+            }
+            """).isEmpty, "the scan resumes AFTER the body, and debugSummary is not one of the three")
+    }
+
+    /// Fixture: `#if DEBUG` copy is skipped, and only the branch that actually is debug-only.
+    ///
+    /// The carve-out is structural rather than an allowlist entry because it is mechanically true —
+    /// a sentence excluded from the shipping binary cannot be read in the wrong language — and
+    /// because the evasion it appears to open is self-defeating: wrapping real copy in `#if DEBUG`
+    /// removes it from the app along with the finding.
+    @Test func debugOnlyErrorCopyIsSkippedButItsReleaseBranchIsNot() {
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            #if DEBUG
+            var errorDescription: String? { "A probe diagnostic." }
+            #endif
+            """).isEmpty, "DEBUG-only copy never reaches a person")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            #if DEBUG
+            var errorDescription: String? { "A probe diagnostic." }
+            #else
+            var errorDescription: String? { "Shipping copy." }
+            #endif
+            """).count == 1, "the #else of an #if DEBUG is the RELEASE branch and must still be checked")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            #if !DEBUG
+            var errorDescription: String? { "Shipping copy." }
+            #else
+            var errorDescription: String? { "A probe diagnostic." }
+            #endif
+            """).count == 1, "and the sense inverts with the condition")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            #if canImport(UIKit)
+            var errorDescription: String? { "Shipping copy." }
+            #else
+            var errorDescription: String? { "Also shipping copy." }
+            #endif
+            """).count == 2, "an unrelated condition exempts neither branch")
+        #expect(Self.bareLocalizedErrorLiterals(in: """
+            #if DEBUG
+            let probe = 1
+            #endif
+            var errorDescription: String? { "Shipping copy." }
+            """).count == 1, "#endif closes the region — code after it is shipping code again")
+    }
+
+    /// The four package string catalogs this sweep created must keep existing.
+    ///
+    /// Same silent failure as ``theModuleStringCatalogsAddedBySection40StillExist()``, and the
+    /// reason these four are pinned separately: before the sweep they did not exist at all, so the
+    /// 30 keys these four now hold had nowhere to go. Delete one and every
+    /// `String(localized:…, bundle: .module)` in that module keeps compiling and keeps returning its
+    /// English `defaultValue` — no warning, no failing build, no missing symbol.
+    ///
+    /// A catalog is only half of it: a module also needs its line in the `TARGETS` array of
+    /// `Scripts/sync-string-catalogs.sh`, or it emits `.stringsdata` that nothing ever syncs and the
+    /// catalog silently stops tracking the code. That half is checked by
+    /// ``everyLocalizedErrorCatalogIsWiredIntoTheSyncScript()``.
+    @Test func theStringCatalogsAddedByTheLocalizedErrorSweepStillExist() {
+        for module in Self.localizedErrorSweepCatalogModules {
+            let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")
+            #expect(
+                FileManager.default.fileExists(atPath: catalog.path),
+                """
+                FernletKit/Sources/\(module)/Localizable.xcstrings is gone. Its absence is SILENT — \
+                the module's LocalizedError copy keeps compiling and keeps returning English \
+                defaultValues. Restore it (and its line in Scripts/sync-string-catalogs.sh) rather \
+                than deleting this pin.
+                """
+            )
+        }
+    }
+
+    /// The modules that gained their first catalog in the `LocalizedError` sweep.
+    static let localizedErrorSweepCatalogModules = [
+        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway",
+    ]
+
+    /// Every module with a catalog is also named in the sync script's `TARGETS` array.
+    ///
+    /// The catalog and the `TARGETS` line are one change in two files, and the missing half fails
+    /// SILENTLY in the direction nobody checks: the module compiles, `String(localized:)` returns
+    /// its `defaultValue`, and the catalog simply stops learning about new keys. `--check` cannot
+    /// catch it either — a target it was never told about is a target it never looks at.
+    @Test func everyLocalizedErrorCatalogIsWiredIntoTheSyncScript() throws {
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        var unwired: [String] = []
+        for module in Self.localizedErrorSweepCatalogModules {
+            let entry = "\"\(module):FernletKit/Sources/\(module)/Localizable.xcstrings\""
+            if !script.contains(entry) { unwired.append(entry) }
+        }
+        #expect(
+            unwired.isEmpty,
+            """
+            \(unwired.count) module(s) own a Localizable.xcstrings that Scripts/sync-string-catalogs.sh \
+            never syncs. The module emits .stringsdata nobody reads, so its catalog silently stops \
+            tracking the code — and `--check` cannot notice, because it only checks targets it was \
+            told about. Add to the TARGETS array:
+            \(unwired.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Every bare display literal inside a `LocalizedError` copy member in `source`, by line.
+    ///
+    /// Pure + testable, and line-oriented at the top so a member's body can be found without a
+    /// parser: a declaration line, then a brace-balanced (or `=`-terminated) span, then a character
+    /// walk over that span that blanks comments and whole `String(localized:)` calls.
+    static func bareLocalizedErrorLiterals(in source: String) -> [(line: Int, literal: String)] {
+        let chars = Array(source)
+        let lines = source.components(separatedBy: "\n")
+        let debugOnly = debugOnlyLineFlags(in: source)
+        let starts = lineStartOffsets(in: chars, lineCount: lines.count)
+        var found: [(line: Int, literal: String)] = []
+        var index = 0
+        while index < lines.count {
+            guard !debugOnly[index], declaresLocalizedErrorCopy(lines[index]),
+                  let span = localizedErrorValueSpan(chars, lineStart: starts[index]) else {
+                index += 1
+                continue
+            }
+            found += bareLiterals(chars, from: span.start, to: span.end, startLine: index + 1)
+            // Resume AFTER the body, so a member declared inside it is not scanned twice and the
+            // next member's own declaration line is still reached.
+            while index + 1 < starts.count, starts[index + 1] < span.end { index += 1 }
+            index += 1
+        }
+        return found
+    }
+
+    /// Character offset where each 0-based line begins.
+    static func lineStartOffsets(in chars: [Character], lineCount: Int) -> [Int] {
+        var starts = [0]
+        starts.reserveCapacity(lineCount)
+        for (offset, character) in chars.enumerated() where character == "\n" { starts.append(offset + 1) }
+        while starts.count < lineCount { starts.append(chars.count) }
+        return starts
+    }
+
+    /// True when a line DECLARES one of ``localizedErrorCopyMembers``.
+    ///
+    /// The discriminator is the preceding keyword, and it is what separates the ~14 declarations in
+    /// the tree from the far more numerous reads (`(error as? LocalizedError)?.errorDescription`),
+    /// argument labels (`noteFailure(record, errorDescription:)`) and initializer parameters. A
+    /// leading `.` is excluded by ``isIdentifierCharacter(_:)`` counting it as part of an identifier.
+    static func declaresLocalizedErrorCopy(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { return false }
+        let chars = Array(trimmed)
+        var index = 0
+        while index < chars.count {
+            guard chars[index].isLetter || chars[index] == "_" else { index += 1; continue }
+            if index > 0, isIdentifierCharacter(chars[index - 1]) { index += 1; continue }
+            var cursor = index
+            while cursor < chars.count, chars[cursor].isLetter || chars[cursor].isNumber || chars[cursor] == "_" {
+                cursor += 1
+            }
+            if localizedErrorCopyMembers.contains(String(chars[index..<cursor])),
+               declarationKeywordPrecedes(chars, before: index) {
+                return true
+            }
+            index = max(cursor, index + 1)
+        }
+        return false
+    }
+
+    /// True when the identifier starting at `index` is introduced by `var` or `func`.
+    static func declarationKeywordPrecedes(_ chars: [Character], before index: Int) -> Bool {
+        var cursor = index - 1
+        while cursor >= 0, chars[cursor] == " " { cursor -= 1 }
+        let end = cursor + 1
+        while cursor >= 0, chars[cursor].isLetter { cursor -= 1 }
+        let word = String(chars[(cursor + 1)..<max(end, cursor + 1)])
+        return word == "var" || word == "func"
+    }
+
+    /// The span of a copy member's VALUE: a brace-balanced body, or the rest of the statement after
+    /// an `=`.
+    ///
+    /// Both shapes conform to `LocalizedError`, so both are checked. `nil` when the declaration line
+    /// carries neither — a protocol requirement written `{ get }` has a body and simply holds no
+    /// literal, which the walk below reports as the zero findings it is.
+    static func localizedErrorValueSpan(_ chars: [Character], lineStart: Int) -> (start: Int, end: Int)? {
+        var index = lineStart
+        while index < chars.count, chars[index] != "\n" {
+            if let skip = skipNonCode(chars, from: index), skip > index {
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "{" { return (index, endOfBody(chars, openBrace: index)) }
+            if chars[index] == "=" { return (index, endOfStatement(chars, from: index)) }
+            index += 1
+        }
+        return nil
+    }
+
+    /// Index just past the `}` matching `openBrace`, skipping comments and string literals so a brace
+    /// inside a sentence cannot end the body early.
+    static func endOfBody(_ chars: [Character], openBrace: Int) -> Int {
+        var depth = 0
+        var index = openBrace
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index), skip > index {
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "{" { depth += 1 }
+            if chars[index] == "}" {
+                depth -= 1
+                if depth <= 0 { return index + 1 }
+            }
+            index += 1
+        }
+        return chars.count
+    }
+
+    /// Index of the end of the statement starting at `index` — the next newline outside any literal,
+    /// comment or bracket. The stored-property (`= "…"`) counterpart of ``endOfBody(_:openBrace:)``.
+    static func endOfStatement(_ chars: [Character], from index: Int) -> Int {
+        var depth = 0
+        var cursor = index
+        while cursor < chars.count {
+            if let skip = skipNonCode(chars, from: cursor), skip > cursor {
+                cursor = max(skip, cursor + 1)
+                continue
+            }
+            if chars[cursor] == "(" || chars[cursor] == "[" { depth += 1 }
+            if chars[cursor] == ")" || chars[cursor] == "]" { depth -= 1 }
+            if chars[cursor] == "\n", depth <= 0 { return cursor }
+            cursor += 1
+        }
+        return chars.count
+    }
+
+    /// The string literals in `from..<to` that are neither inside a comment nor inside a
+    /// `String(localized:)` call — which is exactly the set that reaches no catalog.
+    static func bareLiterals(
+        _ chars: [Character], from: Int, to: Int, startLine: Int
+    ) -> [(line: Int, literal: String)] {
+        var found: [(line: Int, literal: String)] = []
+        var index = from
+        var line = startLine
+        let end = min(to, chars.count)
+        while index < end {
+            if chars[index] == "\n" { line += 1; index += 1; continue }
+            if chars[index] == "/", let skip = skipNonCode(chars, from: index), skip > index {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            // A localized call swallows its own `defaultValue:` and `comment:` literals, which is
+            // the whole discriminator: those two ARE the catalogued form.
+            if chars[index] == "S", let openParen = localizedCallHead(chars, at: index) {
+                let callEnd = endOfCall(chars, openParen: openParen)
+                line += countNewlines(chars, from: index, to: callEnd)
+                index = max(callEnd, index + 1)
+                continue
+            }
+            guard chars[index] == "\"" else { index += 1; continue }
+            let literal = readStringLiteral(chars, from: index)
+            if !literal.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                found.append((line, literal.text))
+            }
+            line += countNewlines(chars, from: index, to: literal.end)
+            index = max(literal.end, index + 1)
+        }
+        return found
+    }
+
+    /// Whether each 0-based line sits inside a branch that only compiles in DEBUG.
+    ///
+    /// Tracks `#if` / `#elseif` / `#else` / `#endif` as a stack of frames, so a nested directive
+    /// cannot clear an enclosing DEBUG region. `#else` inverts only when the frame's own condition
+    /// was about DEBUG: the `#else` of `#if DEBUG` is the release branch, the `#else` of
+    /// `#if !DEBUG` is the debug branch, and the `#else` of `#if canImport(UIKit)` is neither.
+    static func debugOnlyLineFlags(in source: String) -> [Bool] {
+        var flags: [Bool] = []
+        var stack: [(isDebugBranch: Bool, isAboutDebug: Bool)] = []
+        for raw in source.components(separatedBy: "\n") {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#if") {
+                let condition = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                stack.append((condition == "DEBUG", condition == "DEBUG" || condition == "!DEBUG"))
+            } else if trimmed.hasPrefix("#elseif"), !stack.isEmpty {
+                let condition = String(trimmed.dropFirst(7)).trimmingCharacters(in: .whitespaces)
+                stack[stack.count - 1] = (condition == "DEBUG", condition == "DEBUG" || condition == "!DEBUG")
+            } else if trimmed == "#else", !stack.isEmpty {
+                let frame = stack[stack.count - 1]
+                stack[stack.count - 1] = (frame.isAboutDebug && !frame.isDebugBranch, frame.isAboutDebug)
+            } else if trimmed.hasPrefix("#endif"), !stack.isEmpty {
+                stack.removeLast()
+            }
+            flags.append(stack.contains { $0.isDebugBranch })
+        }
+        return flags
+    }
+
+    /// Scans both shipping roots for bare literals in `LocalizedError` copy members.
+    static func scanForBareLocalizedErrorLiterals() throws -> (
+        literals: [LocalizedErrorLiteral], filesScanned: Int
+    ) {
+        var literals: [LocalizedErrorLiteral] = []
+        var filesScanned = 0
+        for root in localizedErrorScanRoots {
+            let rootURL = RepoRoot.url(root)
+            guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root) — moved or renamed? The LocalizedError-copy wall is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let relativePath = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                for found in bareLocalizedErrorLiterals(in: source) {
+                    literals.append(LocalizedErrorLiteral(
+                        path: relativePath, line: found.line, literal: found.literal
+                    ))
+                }
+            }
+        }
+        return (literals, filesScanned)
     }
 
     // MARK: - Pure matchers

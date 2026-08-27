@@ -1,0 +1,54 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "cloudKit.error.confirmationRequired" : {
+      "comment" : "Shown when a destructive iCloud deletion was requested without its confirmation step. DELETE is the word the user types; keep it uppercase and match whatever the confirmation field accepts in this language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Confirm deletion by typing DELETE or using biometric verification again."
+          }
+        }
+      }
+    },
+    "cloudKit.error.notSignedIn" : {
+      "comment" : "Shown when an iCloud data check or deletion is attempted with no iCloud account signed in.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sign in to iCloud to check or delete Fernlet cloud data."
+          }
+        }
+      }
+    },
+    "cloudKit.error.operationFailed" : {
+      "comment" : "Wraps an underlying CloudKit failure so callers show one consistent alert. The argument is Apple's own error message, already localized by the system.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not finish the iCloud operation: %@"
+          }
+        }
+      }
+    },
+    "persistence.error.primaryStoreUnavailable" : {
+      "comment" : "Shown at startup when the local Core Data store will not open. The second sentence is the reassurance and is the most important half — keep it early and unambiguous; the third lists the two usual causes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -113,9 +113,13 @@ final class CameraCaptureController: NSObject {
         var errorDescription: String? {
             switch self {
             case .cameraUnavailable:
-                return "Camera access is unavailable."
+                return String(localized: "camera.error.cameraUnavailable",
+                              defaultValue: "Camera access is unavailable.",
+                              comment: "Shown by the disposable camera when the capture session is not configured or camera access was denied.")
             case .captureInProgress:
-                return "A photo is already being captured."
+                return String(localized: "camera.error.captureInProgress",
+                              defaultValue: "A photo is already being captured.",
+                              comment: "Shown when the shutter is pressed while the previous shot is still being taken. Capture is single-flight.")
             }
         }
     }

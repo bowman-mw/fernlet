@@ -1,5 +1,42 @@
 {
-  "sourceLanguage": "en",
-  "strings": {},
-  "version": "1.0"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "share.error.noURL" : {
+      "comment" : "Shown by the system share UI when Fernlet cancels a share that carried no usable recipe URL, in either the attachments or the plain text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not find a recipe URL in this share."
+          }
+        }
+      }
+    },
+    "shareQueue.error.invalidURL" : {
+      "comment" : "Shown by the system share UI when the shared item is not an http or https URL.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet can only import web recipe URLs."
+          }
+        }
+      }
+    },
+    "shareQueue.error.urlTooLong" : {
+      "comment" : "Shown by the system share UI when the shared URL is longer than the import queue will persist.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That link is too long for Fernlet to import."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
 }

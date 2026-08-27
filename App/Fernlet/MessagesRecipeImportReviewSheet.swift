@@ -97,7 +97,10 @@ struct MessagesRecipeImportReviewSheet: View {
                 dismiss()
             } catch {
                 isImporting = false
-                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Fernlet couldn't save this recipe."
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "messagesRecipeImport.error.saveFallback",
+                              defaultValue: "Fernlet couldn't save this recipe.",
+                              comment: "Shown in the Messages recipe review sheet when saving fails and the thrown error carries no description of its own.")
             }
         }
     }

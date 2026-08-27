@@ -317,16 +317,30 @@ public enum HealthKitServiceError: LocalizedError {
     /// rather than stored as a nonsense clinical sample under Fernlet's name.
     case invalidMeasurement
 
+    /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
+    /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
         case .healthDataUnavailable:
-            "Health data is not available on this device."
+            String(localized: "health.error.healthDataUnavailable",
+                   defaultValue: "Health data is not available on this device.",
+                   bundle: .module,
+                   comment: "Shown when the device has no Health store, or when a Fernlet Health opt-in gate is closed.")
         case .missingHealthType(let identifier):
-            "Fernlet could not create the HealthKit type for \(identifier)."
+            String(localized: "health.error.missingHealthType",
+                   defaultValue: "Fernlet could not create the HealthKit type for \(identifier).",
+                   bundle: .module,
+                   comment: "Diagnostic shown when HealthKit returns no type object for an identifier. The argument is Apple's untranslated type identifier and must stay verbatim.")
         case .cacheClearerUnavailable:
-            "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again."
+            String(localized: "health.error.cacheClearerUnavailable",
+                   defaultValue: "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again.",
+                   bundle: .module,
+                   comment: "Shown when turning Health off failed. The causal 'so it did not disable' is load-bearing: disabling fails closed rather than leaving opted-out data behind, and the user needs to know it is still on.")
         case .invalidMeasurement:
-            "Those height and weight values do not look right, so Fernlet did not save them to Health."
+            String(localized: "health.error.invalidMeasurement",
+                   defaultValue: "Those height and weight values do not look right, so Fernlet did not save them to Health.",
+                   bundle: .module,
+                   comment: "Shown when an offered body measurement was zero, negative or not finite, so nothing was written to Apple Health.")
         }
     }
 }

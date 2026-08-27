@@ -1,0 +1,186 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "lock.error.biometricFailed" : {
+      "comment" : "Shown when Face ID or Touch ID ran but did not succeed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biometric authentication failed."
+          }
+        }
+      }
+    },
+    "lock.error.biometricNotAvailable" : {
+      "comment" : "Shown when Face ID or Touch ID is absent, not enrolled, or not permitted on this device.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biometric authentication is not available."
+          }
+        }
+      }
+    },
+    "lock.error.contentKeyTemporarilyUnavailable" : {
+      "comment" : "Shown when the Secure Enclave could not be READ at this instant, typically because the device is locked. Must NEVER mention resetting: unlike the unrecoverable case the key is probably intact, and a reset here would destroy data for nothing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't reach this device's secure hardware. Make sure iPhone is unlocked and try again."
+          }
+        }
+      }
+    },
+    "lock.error.contentKeyUnrecoverable" : {
+      "comment" : "Shown when the passcode was CORRECT but this device's Secure Enclave key is gone, so the sealed notes are cryptographically unopenable. Must NOT suggest retrying — nothing about the entry was wrong — and must name the destructive reset as the only way forward.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed data can no longer be opened on this device. Reset app lock to continue."
+          }
+        }
+      }
+    },
+    "lock.error.cooldownHours" : {
+      "comment" : "Shown during the failed-attempt cooldown when over an hour is left. The argument is a whole number of hours; 'h' is the abbreviated unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many attempts. Try again in %lldh."
+          }
+        }
+      }
+    },
+    "lock.error.cooldownMinutes" : {
+      "comment" : "Shown during the failed-attempt cooldown when between one minute and one hour is left. The argument is a whole number of minutes; 'm' is the abbreviated unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many attempts. Try again in %lldm."
+          }
+        }
+      }
+    },
+    "lock.error.cooldownSeconds" : {
+      "comment" : "Shown during the failed-attempt cooldown when under a minute is left. The argument is a whole number of seconds; 's' is the abbreviated unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many attempts. Try again in %llds."
+          }
+        }
+      }
+    },
+    "lock.error.internal" : {
+      "comment" : "Diagnostic wrapper for an unexpected app-lock failure. The argument is an untranslated internal message.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Internal error: %@"
+          }
+        }
+      }
+    },
+    "lock.error.invalidPasscode" : {
+      "comment" : "Shown when an entered app-lock passcode did not match. Distinct from the unrecoverable-key case, where retrying is pointless.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Incorrect passcode."
+          }
+        }
+      }
+    },
+    "lock.error.keychainFailureWithMessage" : {
+      "comment" : "Diagnostic for a failed keychain call. First argument is an untranslated internal operation name ('add', 'read'), second is Apple's own already-localized message, third the raw OSStatus.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keychain %1$@ failed: %2$@ (%3$d)."
+          }
+        }
+      }
+    },
+    "lock.error.keychainFailureWithStatus" : {
+      "comment" : "Diagnostic for a failed keychain call whose OSStatus has no system message. First argument is an untranslated internal operation name ('add', 'read'), second the raw OSStatus.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keychain %1$@ failed with status %2$d."
+          }
+        }
+      }
+    },
+    "lock.error.keychainUnavailable" : {
+      "comment" : "Shown when the keychain is unreachable because the device has no passcode set. The recovery is the actionable half.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keychain is not available. Set a device passcode and try again."
+          }
+        }
+      }
+    },
+    "lock.error.locked" : {
+      "comment" : "Shown when an operation requires the unlocked state and the app lock is currently closed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock is locked."
+          }
+        }
+      }
+    },
+    "lock.error.notConfigured" : {
+      "comment" : "Shown when an operation needs a configured app lock and none has been set up yet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock is not configured."
+          }
+        }
+      }
+    },
+    "lock.error.resetRequired" : {
+      "comment" : "Shown when the failed-attempt budget is exhausted and only a full app-lock reset can proceed. There is no waiting it out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many failed attempts. Please reset app lock."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

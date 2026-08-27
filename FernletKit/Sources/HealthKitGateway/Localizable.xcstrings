@@ -1,0 +1,54 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "health.error.cacheClearerUnavailable" : {
+      "comment" : "Shown when turning Health off failed. The causal 'so it did not disable' is load-bearing: disabling fails closed rather than leaving opted-out data behind, and the user needs to know it is still on.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again."
+          }
+        }
+      }
+    },
+    "health.error.healthDataUnavailable" : {
+      "comment" : "Shown when the device has no Health store, or when a Fernlet Health opt-in gate is closed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health data is not available on this device."
+          }
+        }
+      }
+    },
+    "health.error.invalidMeasurement" : {
+      "comment" : "Shown when an offered body measurement was zero, negative or not finite, so nothing was written to Apple Health.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Those height and weight values do not look right, so Fernlet did not save them to Health."
+          }
+        }
+      }
+    },
+    "health.error.missingHealthType" : {
+      "comment" : "Diagnostic shown when HealthKit returns no type object for an identifier. The argument is Apple's untranslated type identifier and must stay verbatim.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not create the HealthKit type for %@."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

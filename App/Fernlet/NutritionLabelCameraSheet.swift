@@ -411,7 +411,10 @@ struct NutritionLabelCameraSheet: View {
                 scanResult = primary
             } catch {
                 guard !Task.isCancelled else { return }
-                scanError = (error as? LocalizedError)?.errorDescription ?? "Could not read that label."
+                scanError = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "labelScan.error.fallback",
+                              defaultValue: "Could not read that label.",
+                              comment: "Shown in the nutrition-label camera sheet when the scan fails and the thrown error carries no description of its own.")
             }
             isScanning = false
         }

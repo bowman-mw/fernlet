@@ -2607,7 +2607,10 @@ final class FernletStore {
                     "reason": "aiBudgetExhausted"
                 ])
             } catch {
-                let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
+                let description = (error as? LocalizedError)?.errorDescription
+                    ?? String(localized: "recipeImport.error.fallback",
+                              defaultValue: "Could not import that recipe.",
+                              comment: "Shown when importing a recipe fails and the thrown error carries no description of its own. One key, two call sites — the inline notice on the import screen and the note recorded against a queued share — because the sentence and the situation are the same.")
                 noteSharedRecipeQueueRewrite(
                     queue.noteFailure(record, errorDescription: description), operation: "noteFailure"
                 )

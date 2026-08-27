@@ -5952,6 +5952,30 @@
     "bottles" : {
 
     },
+    "camera.error.cameraUnavailable" : {
+      "comment" : "Shown by the disposable camera when the capture session is not configured or camera access was denied.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Camera access is unavailable."
+          }
+        }
+      }
+    },
+    "camera.error.captureInProgress" : {
+      "comment" : "Shown when the shutter is pressed while the previous shot is still being taken. Capture is single-flight.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A photo is already being captured."
+          }
+        }
+      }
+    },
     "cm" : {
 
     },
@@ -6430,6 +6454,18 @@
     "intervals, distance, notes" : {
 
     },
+    "labelScan.error.fallback" : {
+      "comment" : "Shown in the nutrition-label camera sheet when the scan fails and the thrown error carries no description of its own.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not read that label."
+          }
+        }
+      }
+    },
     "letting it go…" : {
 
     },
@@ -6441,6 +6477,18 @@
     },
     "meal" : {
 
+    },
+    "messagesRecipeImport.error.saveFallback" : {
+      "comment" : "Shown in the Messages recipe review sheet when saving fails and the thrown error carries no description of its own.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't save this recipe."
+          }
+        }
+      }
     },
     "min %@" : {
 
@@ -6743,6 +6791,114 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't prepare your export. Please try again."
+          }
+        }
+      }
+    },
+    "productImport.error.emptyHTML" : {
+      "comment" : "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The page did not return readable HTML."
+          }
+        }
+      }
+    },
+    "productImport.error.fallback" : {
+      "comment" : "Inline notice when importing a packaged food from a product page fails and the thrown error carries no description of its own.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not import that product page."
+          }
+        }
+      }
+    },
+    "productImport.error.fetchFailed" : {
+      "comment" : "Inline notice when the network fetch of a product page failed or returned a non-2xx status.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not fetch that product page."
+          }
+        }
+      }
+    },
+    "productImport.error.invalidURL" : {
+      "comment" : "Inline notice on the product-import screen when the typed text is not an https web address.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a valid product page URL."
+          }
+        }
+      }
+    },
+    "productImport.error.modelUnavailable" : {
+      "comment" : "Inline notice when every extraction tier failed and this device cannot run the on-device model fallback.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The page did not include structured nutrition data, and on-device extraction is not available."
+          }
+        }
+      }
+    },
+    "productImport.error.nutritionNotFound" : {
+      "comment" : "Inline notice when a product was identified but its nutrition panel was missing or incomplete.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not find a complete nutrition label on that page."
+          }
+        }
+      }
+    },
+    "productImport.error.productNotFound" : {
+      "comment" : "Inline notice when a product page was readable but carried no recognizable product.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet could not identify a product on that page."
+          }
+        }
+      }
+    },
+    "recipeImport.error.fallback" : {
+      "comment" : "Shown when importing a recipe fails and the thrown error carries no description of its own. One key, two call sites — the inline notice on the import screen and the note recorded against a queued share — because the sentence and the situation are the same.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not import that recipe."
+          }
+        }
+      }
+    },
+    "recipeImport.error.reimportFallback" : {
+      "comment" : "Inline notice when refreshing an imported recipe from its source page fails and the thrown error carries no description of its own.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not re-import this recipe."
           }
         }
       }

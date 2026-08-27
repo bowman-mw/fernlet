@@ -264,12 +264,20 @@ public enum NutritionLabelScanError: LocalizedError {
     case noTextFound
     case imageConversionFailed
 
+    /// Package source, so every lookup passes `bundle: .module`: without it the resolution goes to
+    /// `Bundle.main`, finds nothing, and silently renders the English `defaultValue` forever.
     public var errorDescription: String? {
         switch self {
         case .noTextFound:
-            "Could not read any text from that image. Try a clearer photo of the nutrition label."
+            String(localized: "labelScan.error.noTextFound",
+                   defaultValue: "Could not read any text from that image. Try a clearer photo of the nutrition label.",
+                   bundle: .module,
+                   comment: "Shown when OCR found no text on a nutrition-label photo. The second sentence is the recovery and must stay actionable.")
         case .imageConversionFailed:
-            "Could not process the image. Please try again."
+            String(localized: "labelScan.error.imageConversionFailed",
+                   defaultValue: "Could not process the image. Please try again.",
+                   bundle: .module,
+                   comment: "Shown when a captured image could not be converted for Vision. 'Please try again' is literal — a retry usually works.")
         }
     }
 }
