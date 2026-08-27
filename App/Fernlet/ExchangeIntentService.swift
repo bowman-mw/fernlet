@@ -509,6 +509,11 @@ enum ExchangeIntentLimits {
 /// the reviewed plan is stale) both mean "try again after doing something", while `.notFound` and
 /// `.invalidPacket` mean the input itself is the problem. The case names are internal tokens;
 /// `errorDescription` is the display half.
+///
+/// `LocalizedError` types the display half `String?`, so the usual fork — a frozen token plus a
+/// `LocalizedStringKey` display member — is not available here and `String(localized:)` inside the
+/// body is the only form that reaches a catalog. This is app-target source, so `Bundle.main` is the
+/// right lookup and no `bundle: .module` is passed.
 enum ExchangeIntentServiceError: LocalizedError {
     case deviceLocked
     case storeUnavailable
@@ -519,12 +524,30 @@ enum ExchangeIntentServiceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .deviceLocked: "Unlock your iPhone and try again."
-        case .storeUnavailable: "Fernlet couldn't open your records just now."
-        case .notFound: "That item is no longer in Fernlet."
-        case .invalidPacket: "Fernlet couldn't read that exchange file."
-        case .persistenceFailed: "Fernlet couldn't save that import. Please try again."
-        case .reviewChanged: "Your calendar changed. Review the updated plan and try again."
+        case .deviceLocked:
+            String(localized: "exchange.error.deviceLocked",
+                   defaultValue: "Unlock your iPhone and try again.",
+                   comment: "Shortcuts error when an exchange intent runs before first unlock, so protected data is sealed.")
+        case .storeUnavailable:
+            String(localized: "exchange.error.storeUnavailable",
+                   defaultValue: "Fernlet couldn't open your records just now.",
+                   comment: "Shortcuts error when an exchange intent cannot load the Fernlet store.")
+        case .notFound:
+            String(localized: "exchange.error.notFound",
+                   defaultValue: "That item is no longer in Fernlet.",
+                   comment: "Shortcuts error when the recipe or workout an intent names has since been deleted.")
+        case .invalidPacket:
+            String(localized: "exchange.error.invalidPacket",
+                   defaultValue: "Fernlet couldn't read that exchange file.",
+                   comment: "Shortcuts error when an exchange file is corrupt or not a Fernlet packet.")
+        case .persistenceFailed:
+            String(localized: "exchange.error.persistenceFailed",
+                   defaultValue: "Fernlet couldn't save that import. Please try again.",
+                   comment: "Shortcuts error when an import decodes but cannot be written to disk.")
+        case .reviewChanged:
+            String(localized: "exchange.error.reviewChanged",
+                   defaultValue: "Your calendar changed. Review the updated plan and try again.",
+                   comment: "Shortcuts error when the approved plan no longer matches the calendar, or the approval expired.")
         }
     }
 }

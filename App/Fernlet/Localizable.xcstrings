@@ -6297,6 +6297,78 @@
     "e.g. swap the squat, 30 minutes, no barbell" : {
 
     },
+    "exchange.error.deviceLocked" : {
+      "comment" : "Shortcuts error when an exchange intent runs before first unlock, so protected data is sealed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock your iPhone and try again."
+          }
+        }
+      }
+    },
+    "exchange.error.invalidPacket" : {
+      "comment" : "Shortcuts error when an exchange file is corrupt or not a Fernlet packet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't read that exchange file."
+          }
+        }
+      }
+    },
+    "exchange.error.notFound" : {
+      "comment" : "Shortcuts error when the recipe or workout an intent names has since been deleted.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That item is no longer in Fernlet."
+          }
+        }
+      }
+    },
+    "exchange.error.persistenceFailed" : {
+      "comment" : "Shortcuts error when an import decodes but cannot be written to disk.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't save that import. Please try again."
+          }
+        }
+      }
+    },
+    "exchange.error.reviewChanged" : {
+      "comment" : "Shortcuts error when the approved plan no longer matches the calendar, or the approval expired.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your calendar changed. Review the updated plan and try again."
+          }
+        }
+      }
+    },
+    "exchange.error.storeUnavailable" : {
+      "comment" : "Shortcuts error when an exchange intent cannot load the Fernlet store.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't open your records just now."
+          }
+        }
+      }
+    },
     "exercise.search.resultCount" : {
       "comment" : "Spoken count of exercise search results, e.g. '8 exercises'. Needs a plural variation per language; English also needs the one-exercise form.",
       "localizations" : {
