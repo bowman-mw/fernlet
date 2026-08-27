@@ -176,6 +176,14 @@ public nonisolated struct FernletMessagesWorkoutInboxStore {
     }
 }
 
+/// The on-disk shape of the workout-plan inbox file — a version stamp plus the pending records.
+///
+/// The workout twin of the recipe inbox document, kept as a separate type with its own `format`
+/// token (`fernlet.messages.workout-inbox`) and its own file so the two queues cannot be decoded
+/// into each other even though they share ``FernletMessagesInboxLimits``. `validate()` runs on both
+/// read and write, rejecting a foreign format/version, over-long record lists, duplicate `id`s (the
+/// store's lookup and removal assume at most one match), and any record whose packet no longer
+/// validates.
 private nonisolated struct FernletMessagesWorkoutInboxDocument: Codable {
     static let format = "fernlet.messages.workout-inbox"
     static let formatVersion = 1
@@ -195,6 +203,13 @@ private nonisolated struct FernletMessagesWorkoutInboxDocument: Codable {
     }
 }
 
+/// The JSON encode/decode seam for the workout-plan inbox document.
+///
+/// Same cross-process contract as the recipe inbox coder, kept separate so the two files' encodings
+/// can never drift into each other by a shared edit: `.iso8601` on both sides for `receivedAt` (the
+/// field the seven-day expiry is measured from, floored to whole seconds at construction because
+/// that strategy has second precision), and `.sortedKeys` + `.withoutEscapingSlashes` for
+/// byte-stable rewrites.
 private nonisolated enum FernletMessagesWorkoutInboxCoder {
     static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()

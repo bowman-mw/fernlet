@@ -64,6 +64,15 @@ final class ExchangeImportLedger {
     }
 }
 
+/// One recorded import: "this packet was already applied, and here is what it produced."
+///
+/// The replay key is the **pair** `(packetID, hash)`, never `packetID` alone — an edited packet
+/// keeps its identifier but changes its content hash, so it is correctly treated as a new import
+/// rather than replayed. `resultID` is what makes the retry idempotent: an automation that ran the
+/// write but lost the result gets the original identifier back instead of a duplicate import.
+///
+/// Metadata only, by design — it holds identifiers and a digest, never recipe text, plan contents,
+/// or the file itself, so the ledger stays cheap to keep and safe to reason about in a wipe.
 nonisolated struct ExchangeImportLedgerEntry: Codable, Equatable, Sendable {
     var packetID: UUID
     var hash: String
@@ -72,6 +81,13 @@ nonisolated struct ExchangeImportLedgerEntry: Codable, Equatable, Sendable {
     var importedAt: Date
 }
 
+/// Which import funnel an ``ExchangeImportLedgerEntry`` came from, and therefore how its `resultID`
+/// is interpreted (a recipe UUID string versus a workout-plan import result identifier).
+///
+/// Persisted: these raw values are written into `ExchangeImportLedger.json` and are frozen English
+/// tokens per the localization wall. Renaming a case would silently orphan every prior entry —
+/// decoding fails and the ledger is rejected — turning already-applied imports into replayable
+/// duplicates.
 nonisolated enum ExchangeImportLedgerKind: String, Codable, Sendable {
     case recipe
     case workoutPlan

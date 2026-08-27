@@ -247,6 +247,16 @@ public nonisolated struct FernletMessagesCatalogFileStore {
     }
 }
 
+/// The JSON encode/decode seam for the App Group catalog document.
+///
+/// Pins the encoding the containing app writes and the Messages extension reads — two separate
+/// processes, so the format is a contract rather than an implementation detail: `.sortedKeys` and
+/// `.withoutEscapingSlashes` keep a re-encode of unchanged data byte-stable (no spurious rewrites),
+/// and `.iso8601` is set on *both* sides so `generatedAt` round-trips independently of either
+/// process's locale or of `JSONEncoder`'s default reference-date doubles. That strategy has only
+/// second precision, which is why ``FernletMessagesCatalog`` floors its timestamp at construction —
+/// otherwise a decoded catalog would not compare equal to the document that was written. Distinct
+/// from the exchange-packet coder because the catalog carries a date and the packets do not.
 private nonisolated enum FernletMessagesCatalogCoder {
     static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()

@@ -282,6 +282,15 @@ struct RecipeEntity: AppEntity {
     }
 }
 
+/// Resolves ``RecipeEntity`` for App Intents — the `defaultQuery` behind every Shortcuts recipe
+/// picker and every saved recipe parameter.
+///
+/// Both entry points go through `ExchangeIntentService.shared`, so a Shortcut re-run resolves
+/// against the *current* canonical store rather than the display data Shortcuts cached at authoring
+/// time. `entities(for:)` therefore drops identifiers the user has since deleted (returning fewer
+/// entities than asked for, never a placeholder), and caps the request at
+/// ``ExchangeIntentLimits/maxEntityResults`` so a crafted or runaway Shortcut cannot walk the whole
+/// recipe library one identifier at a time.
 struct RecipeEntityQuery: EntityQuery {
     func entities(for identifiers: [UUID]) async throws -> [RecipeEntity] {
         guard identifiers.count <= ExchangeIntentLimits.maxEntityResults else {
@@ -323,6 +332,15 @@ struct PlannedWorkoutEntity: AppEntity {
     }
 }
 
+/// Resolves ``PlannedWorkoutEntity`` for App Intents — the `defaultQuery` behind every Shortcuts
+/// planned-workout picker.
+///
+/// Keyed by the entity's composite `"dayKey|workoutID"` string rather than a bare UUID, because a
+/// planned workout is identified by its calendar row (see ``PlannedWorkoutEntity``). Suggestions are
+/// gathered forward from today across at most
+/// ``ExchangeIntentLimits/maxPlannedWorkoutDays``, and both paths stop at
+/// ``ExchangeIntentLimits/maxEntityResults``, so a sparsely planned calendar cannot make suggestion
+/// gathering unbounded. Identifiers whose day or workout no longer exists are dropped.
 struct PlannedWorkoutEntityQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [PlannedWorkoutEntity] {
         guard identifiers.count <= ExchangeIntentLimits.maxEntityResults else {
@@ -430,10 +448,29 @@ struct WorkoutPlanImportResultEntity: AppEntity {
     }
 }
 
+/// The required `defaultQuery` for ``WorkoutPlanImportResultEntity``, deliberately resolving nothing.
+///
+/// `AppEntity` mandates a query, but this entity is an intent **output** only: it is never offered
+/// in a picker and never accepted as a parameter, so there is nothing to look back up. Returning an
+/// empty array is the honest answer rather than a stub — an import result is a description of one
+/// past run, not a stored record Shortcuts can re-resolve later. Replay of an already-applied import
+/// is served from ``ExchangeImportLedger`` at `perform()` time, not from here.
 struct WorkoutPlanImportResultQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [WorkoutPlanImportResultEntity] { [] }
 }
 
+/// What a recipe import should do when the incoming packet is byte-identical to one already
+/// imported: skip it, or take a second copy anyway.
+///
+/// Surfaced as a Shortcuts parameter (`ExchangeFileIntents`), defaulting to `.skipExactDuplicate` so
+/// a re-run of the same automation does not quietly grow the library. "Exact" is the operative word:
+/// the skip fires only on an ``ExchangeImportLedger`` hit for this packet's *identifier and content
+/// hash* whose recipe is still present, so an edited packet — or one whose earlier import was since
+/// deleted — imports afresh. The choice also decides the new recipe's identity: skip mode keeps the
+/// packet's `originContentID`, while `.keepAnotherCopy` mints a fresh UUID so the copies coexist.
+///
+/// The raw values are the frozen App Intents tokens Shortcuts persists inside a user's saved
+/// shortcut; only `caseDisplayRepresentations` is user-visible text.
 enum RecipeDuplicatePolicy: String, AppEnum {
     case skipExactDuplicate
     case keepAnotherCopy
@@ -445,12 +482,33 @@ enum RecipeDuplicatePolicy: String, AppEnum {
     ]
 }
 
+/// The bounds every App Intents path in this file works within — Power-of-10 rule 2 in practice:
+/// each of these caps a loop or a returned collection that would otherwise be sized by a Shortcut's
+/// input or by how much the user has planned.
+///
+/// - `maxEntityResults` bounds both entity-query directions (identifiers accepted, entities
+///   returned), so a Shortcut can neither request nor enumerate the whole library in one call.
+/// - `maxPlannedWorkoutDays` bounds the forward calendar walk that gathers workout suggestions,
+///   which would otherwise have no natural end.
+/// - `maxCalendarDays` bounds the day keys folded into a plan's `calendarRevision` fingerprint. It
+///   is derived from `CoachPlanLimits` rather than picked independently, so it can never truncate a
+///   revision for a plan the coach layer would still accept — which would let a real edit hash
+///   identically and slip past the approval check.
 enum ExchangeIntentLimits {
     nonisolated static let maxEntityResults = 100
     nonisolated static let maxPlannedWorkoutDays = 90
     nonisolated static let maxCalendarDays = CoachPlanLimits.maxDays + CoachPlanLimits.maxEdits
 }
 
+/// Every failure the exchange intent surface can report, each carrying the user-facing sentence
+/// Shortcuts shows when an intent throws.
+///
+/// The cases exist to keep distinct recoveries distinct rather than to classify causes:
+/// `.deviceLocked` (protected data unavailable, typically a background launch before first unlock)
+/// and `.reviewChanged` (the approval token no longer matches the live calendar, or it expired, so
+/// the reviewed plan is stale) both mean "try again after doing something", while `.notFound` and
+/// `.invalidPacket` mean the input itself is the problem. The case names are internal tokens;
+/// `errorDescription` is the display half.
 enum ExchangeIntentServiceError: LocalizedError {
     case deviceLocked
     case storeUnavailable

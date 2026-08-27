@@ -720,37 +720,23 @@ public enum AuthoredSampleDeleteOutcome: Sendable {
     case accessRevoked
 }
 
-/// Fernlet's production HealthKit gateway: the single class that talks to `HKHealthStore` for
-/// authorization, observation, daily-context reads, workout/cycle/intimacy/mindfulness writes, and
-/// the fail-closed integration disable.
+/// Bridges one *one-shot* `HKQuery` to `async`/`await`, adding the cancellation HealthKit's
+/// callback API does not provide. Used only by `HealthKitService.executeOneShot(_:)`.
 ///
-/// The concrete ``HealthKitServicing`` conformer, and (via the `PeriodHealthKitServicing`
-/// extension below) the cycle-event seam `PeriodTrackerStore` in the sealed `PrivateHealthStore`
-/// module consumes — the one dependency edge that puts this module on the protected side of the S3
-/// wall's DAG. Several instances coexist at runtime (the app store's, the Privacy settings
-/// screen's, previews'), so cross-instance state deliberately lives outside the instance:
+/// Single-use by construction: `executeOneShot` builds a fresh instance per query, so `run` is
+/// called at most once and the retained `query`/`continuation` describe that one operation.
 ///
-/// - **Gating:** almost every read/write first checks `isIntegrationEnabled`, which re-reads the
-///   `healthKitMasterEnabled` flag live from the keychain-backed `StoragePreferencesStore` (never a
-///   cached copy) so a toggle flipped by a *different* instance takes effect immediately. The
-///   stress and mindfulness paths additionally enforce their per-capability opt-in themselves.
-/// - **Persistence:** query anchors go through ``HealthKitAnchorKeychain``; preferences through
-///   `StoragePreferencesStore`; the one-time workout backfill marker through `UserDefaults`.
-///   Clinical samples live only in HealthKit — this class caches nothing itself.
-/// - **Provenance:** app-authored workout samples are stamped with `fernlet.workoutID` (plus the
-///   sync identifier) via ``makeMetadata(for:)``, which is what lets ``WorkoutHealthKitSync`` and
-///   ``deleteWorkout(fernletWorkoutID:)`` find only Fernlet's own samples later.
-/// - **Fail-closed disable:** ``disableIntegration()`` refuses to run without a
-///   ``HealthKitCacheClearing`` conformer (instance-injected or the app-installed
-///   ``defaultCacheClearer``) so opting out can never leave cached clinical values behind; every
-///   enable/disable step is logged to `FernletAuditLog`.
+/// - **Exactly-once resumption:** `isFinished` guards both `finish(with:)` and `cancel()`, so the
+///   `CheckedContinuation` is resumed exactly once even when HealthKit delivers a result *after*
+///   the task was cancelled (racing the two would otherwise trap on a double resume).
+/// - **The query really stops:** cancellation calls `storeController.stop(_:)` before resuming with
+///   `CancellationError`, so an abandoned read leaves nothing executing in the Health store; `run`
+///   also re-checks cancellation on both sides of the continuation.
 ///
-/// Concurrency: `@MainActor` (query bookkeeping and preferences are main-actor state); HealthKit's
-/// `@Sendable` completion handlers hop back via `Task { @MainActor in … }`, and the pure
-/// type-lookup/metadata statics are `nonisolated`. The target compiles in Swift 5 language mode
-/// specifically to keep those handler captures legal (see `Package.swift`). Failure mode for
-/// closed gates and missing types is ``HealthKitServiceError``; observation callbacks silently
-/// drop query errors (best-effort delivery).
+/// Concurrency: `@MainActor`, matching the query bookkeeping it owns. HealthKit invokes the
+/// completion handler on an arbitrary queue, so both the result path and the `onCancel` handler hop
+/// back via `Task { @MainActor in … }` — meaning `finish`/`cancel` can be enqueued in either order,
+/// which is precisely what the `isFinished` guard exists to absorb.
 @MainActor
 private final class CancellableHealthQuery<Value> {
     private let storeController: any HealthKitStoreControlling
@@ -806,6 +792,37 @@ private final class CancellableHealthQuery<Value> {
     }
 }
 
+/// Fernlet's production HealthKit gateway: the single class that talks to `HKHealthStore` for
+/// authorization, observation, daily-context reads, workout/cycle/intimacy/mindfulness writes, and
+/// the fail-closed integration disable.
+///
+/// The concrete ``HealthKitServicing`` conformer, and (via the `PeriodHealthKitServicing`
+/// extension below) the cycle-event seam `PeriodTrackerStore` in the sealed `PrivateHealthStore`
+/// module consumes — the one dependency edge that puts this module on the protected side of the S3
+/// wall's DAG. Several instances coexist at runtime (the app store's, the Privacy settings
+/// screen's, previews'), so cross-instance state deliberately lives outside the instance:
+///
+/// - **Gating:** almost every read/write first checks `isIntegrationEnabled`, which re-reads the
+///   `healthKitMasterEnabled` flag live from the keychain-backed `StoragePreferencesStore` (never a
+///   cached copy) so a toggle flipped by a *different* instance takes effect immediately. The
+///   stress and mindfulness paths additionally enforce their per-capability opt-in themselves.
+/// - **Persistence:** query anchors go through ``HealthKitAnchorKeychain``; preferences through
+///   `StoragePreferencesStore`; the one-time workout backfill marker through `UserDefaults`.
+///   Clinical samples live only in HealthKit — this class caches nothing itself.
+/// - **Provenance:** app-authored workout samples are stamped with `fernlet.workoutID` (plus the
+///   sync identifier) via ``makeMetadata(for:)``, which is what lets ``WorkoutHealthKitSync`` and
+///   ``deleteWorkout(fernletWorkoutID:)`` find only Fernlet's own samples later.
+/// - **Fail-closed disable:** ``disableIntegration()`` refuses to run without a
+///   ``HealthKitCacheClearing`` conformer (instance-injected or the app-installed
+///   ``defaultCacheClearer``) so opting out can never leave cached clinical values behind; every
+///   enable/disable step is logged to `FernletAuditLog`.
+///
+/// Concurrency: `@MainActor` (query bookkeeping and preferences are main-actor state); HealthKit's
+/// `@Sendable` completion handlers hop back via `Task { @MainActor in … }`, and the pure
+/// type-lookup/metadata statics are `nonisolated`. The target compiles in Swift 5 language mode
+/// specifically to keep those handler captures legal (see `Package.swift`). Failure mode for
+/// closed gates and missing types is ``HealthKitServiceError``; observation callbacks silently
+/// drop query errors (best-effort delivery).
 @MainActor
 public final class HealthKitService: HealthKitServicing {
     /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`

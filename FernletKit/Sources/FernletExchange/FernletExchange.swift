@@ -391,11 +391,26 @@ public nonisolated struct ExchangeMessageEnvelope: Codable, Equatable, Sendable 
     }
 }
 
+/// The decoded, fully validated contents of an ``ExchangeMessageEnvelope``.
+///
+/// Produced only by ``ExchangeMessageEnvelope/validatedPayload()``, which re-decodes the inner
+/// `packetData` through the packet type's own `decode` — so holding a value of this type means the
+/// nested packet already passed its size, format-version, and content-hash checks. The case set
+/// mirrors ``ExchangePacketKind`` one-for-one; adding a kind means adding a case here.
 public nonisolated enum ExchangeMessagePayload: Equatable, Sendable {
     case recipe(RecipeExchangePacket)
     case workoutPlan(WorkoutPlanExchangePacket)
 }
 
+/// The single JSON encode/decode seam for every exchange packet and envelope in this file.
+///
+/// Pins the *canonical* encoding the wire format depends on: `.sortedKeys` makes key order a
+/// function of the key names alone, and `.withoutEscapingSlashes` keeps text byte-identical across
+/// encodes. Both flags are load-bearing rather than cosmetic — `ExchangeHasher` digests the bytes
+/// this produces, so a re-encode of the same value must reproduce them exactly or every previously
+/// issued `contentHash` stops verifying. Dates are deliberately absent from these types, which is
+/// why no date strategy is set here (the Messages inbox/catalog coders, which do carry dates, pin
+/// `.iso8601` themselves).
 private nonisolated enum ExchangeCoder {
     static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
@@ -408,6 +423,13 @@ private nonisolated enum ExchangeCoder {
     }
 }
 
+/// Computes the lowercase-hex SHA-256 `contentHash` both packet types carry.
+///
+/// Integrity, not authentication: an unkeyed digest detects a truncated or edited file, but proves
+/// nothing about who produced it (signing/trust lives in the `Proximity` subtree). The digest is
+/// taken over `ExchangeCoder`'s canonical bytes, so its stability is exactly that encoder's
+/// stability, and the lowercase `%02x` formatting is itself part of the wire value — `contentHash`
+/// is compared as a string on decode.
 private nonisolated enum ExchangeHasher {
     static func hexDigest<T: Encodable>(of value: T) throws -> String {
         let data = try ExchangeCoder.encode(value)
@@ -415,6 +437,14 @@ private nonisolated enum ExchangeHasher {
     }
 }
 
+/// The frozen pre-image of ``RecipeExchangePacket/contentHash``.
+///
+/// A separate type from the packet purely so the hash covers every field *except* the hash itself.
+/// Its field set, names, and types are **frozen**: they are encoded by `ExchangeCoder` and
+/// digested by `ExchangeHasher`, so adding, removing, renaming, or retyping a property here
+/// changes the digest of already-exported `.fernletrecipe` files, which then fail
+/// ``ExchangePacketError/invalidHash`` on decode. Note `version` maps to the packet's
+/// `formatVersion` — that name difference is likewise part of the frozen encoding.
 private nonisolated struct RecipeHashInput: Codable {
     var format: String
     var version: Int
@@ -424,6 +454,12 @@ private nonisolated struct RecipeHashInput: Codable {
     var recipe: SharedRecipePayload
 }
 
+/// The frozen pre-image of ``WorkoutPlanExchangePacket/contentHash``.
+///
+/// Same contract as `RecipeHashInput`: everything the packet carries except `contentHash`, with a
+/// field set frozen because it *is* the hashed encoding. It transitively freezes `CoachPlan`'s own
+/// coding keys too, since the whole plan is nested inside the digest — plan files exported by the
+/// first Shortcut release must keep verifying.
 private nonisolated struct WorkoutPlanHashInput: Codable {
     var format: String
     var version: Int

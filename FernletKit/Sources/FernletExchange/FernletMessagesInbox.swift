@@ -247,6 +247,14 @@ public nonisolated struct FernletMessagesInboxStore {
     }
 }
 
+/// The on-disk shape of the recipe inbox file — a version stamp plus the pending records.
+///
+/// Deliberately not public: the inbox is addressed only by opaque record identifier, so callers get
+/// ``FernletMessagesInboxRecord`` values and never the container. `validate()` is the file's trust
+/// boundary and runs on **both** read and write, so a hand-edited or half-written App Group file can
+/// never enter memory: it rejects a foreign `format`/`formatVersion`, enforces
+/// ``FernletMessagesInboxLimits/maxRecords``, requires `id` uniqueness (the store's lookup and
+/// removal both assume at most one match), and re-validates every record's packet.
 private nonisolated struct FernletMessagesInboxDocument: Codable {
     static let format = "fernlet.messages.recipe-inbox"
     static let formatVersion = 1
@@ -266,6 +274,13 @@ private nonisolated struct FernletMessagesInboxDocument: Codable {
     }
 }
 
+/// The JSON encode/decode seam for the recipe inbox document.
+///
+/// Pins the cross-process format: the Messages extension writes records and the containing app
+/// reads them, so `.iso8601` must be set on both sides for `receivedAt` — the field the seven-day
+/// expiry is measured from — to survive the handoff. That strategy carries only whole seconds,
+/// which is why ``FernletMessagesInboxRecord`` floors `receivedAt` at construction. `.sortedKeys`
+/// plus `.withoutEscapingSlashes` keep the bytes stable across rewrites.
 private nonisolated enum FernletMessagesInboxCoder {
     static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
