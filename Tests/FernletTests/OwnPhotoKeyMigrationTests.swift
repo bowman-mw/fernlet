@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletCrypto
 import Foundation
 import Testing
 import UIKit
@@ -94,9 +95,24 @@ struct OwnPhotoKeyMigrationTests {
         return written
     }
 
+    /// Opens an at-rest media file the way the stores do, in BOTH formats: a `FMA2`-marked box
+    /// authenticates the file's own purpose as AEAD data, while an unmarked box is the
+    /// pre-domain-separation layout these fixtures deliberately seed.
+    ///
+    /// The marker is spelled out rather than read from `PrivateMediaStore`: this suite asserts the
+    /// at-rest FORMAT, and a fixture that asks production what the format is could never notice
+    /// production changing it. The purpose comes from `OwnPhotoCorpusLayout` because the mapping is
+    /// layout, not format — duplicating it here would let the fixture and the stores drift apart.
     private func opens(_ url: URL, under key: SymmetricKey) -> Data? {
-        guard let stored = try? Data(contentsOf: url),
-              let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
+        guard let stored = try? Data(contentsOf: url) else { return nil }
+        let formatV2 = Data("FMA2".utf8)
+        if stored.starts(with: formatV2) {
+            guard let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
+            return try? AES.GCM.open(
+                box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+            )
+        }
+        guard let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
         return try? AES.GCM.open(box, using: key)
     }
 

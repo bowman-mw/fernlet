@@ -75,12 +75,21 @@ struct IdentityServiceTests {
 
     // MARK: - Signing
 
+    /// A signature purpose whose transcripts really are the concatenation `purpose ‖ payload`, which
+    /// is how the three round-trip tests below build their bytes.
+    ///
+    /// It matters which one: these used to name `identityEnvelopeV2`, whose transcripts come out of
+    /// `CanonicalByteWriter` with the domain as a LENGTH-PREFIXED field, not a raw prefix. A
+    /// hand-concatenated transcript under that purpose is mis-framed, and the guard at the signing
+    /// boundary is supposed to reject it — see `signRefusesAMisframedTranscript`.
+    private static let rawPrefixedPurpose = FernletCryptoPurpose.Signature.proximityQRResponseV1
+
     @Test func signAndVerifyRoundTrip() throws {
         let (svc, id) = makeService()
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
-        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let purpose = Self.rawPrefixedPurpose
         let data = purpose.data + Data("hello world".utf8)
         let sig  = try svc.sign(data, purpose: purpose)
 
@@ -92,7 +101,7 @@ struct IdentityServiceTests {
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
-        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let purpose = Self.rawPrefixedPurpose
         let data = purpose.data + Data("hello world".utf8)
         let sig  = try svc.sign(data, purpose: purpose)
 
@@ -111,11 +120,35 @@ struct IdentityServiceTests {
         defer { cleanup(id2) }
         try svc2.ensureProvisioned()
 
-        let purpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let purpose = Self.rawPrefixedPurpose
         let data = purpose.data + Data("hello".utf8)
         let sig  = try svc1.sign(data, purpose: purpose)
 
         #expect(!IdentityService.verify(sig, of: data, by: svc2.localSigningPublicKey, purpose: purpose))
+    }
+
+    /// The signing boundary refuses bytes that do not carry their purpose in that purpose's own
+    /// framing — the property that makes `sign` something other than an unscoped signing oracle.
+    ///
+    /// Pinned here, at the boundary, as well as inside `CryptographicPurpose`: the check is only
+    /// worth anything if it is actually wired into `sign`/`verify`. The transcript below is the
+    /// mistake that is easy to make — the domain concatenated raw under a purpose whose serializer
+    /// length-prefixes it — and it must throw rather than sign.
+    @Test func signRefusesAMisframedTranscript() throws {
+        let (svc, id) = makeService()
+        defer { cleanup(id) }
+        try svc.ensureProvisioned()
+
+        let canonical = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let misframed = canonical.data + Data("hello world".utf8)
+
+        #expect(throws: IdentityError.invalidKeyData) {
+            _ = try svc.sign(misframed, purpose: canonical)
+        }
+        #expect(!IdentityService.verify(
+            Data(repeating: 0, count: 64), of: misframed,
+            by: svc.localSigningPublicKey, purpose: canonical
+        ))
     }
 
     // MARK: - Fingerprint

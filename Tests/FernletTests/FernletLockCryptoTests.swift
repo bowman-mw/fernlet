@@ -166,11 +166,18 @@ struct FernletLockCryptoTests {
     }
 
     // MARK: Proves distinct HKDF info labels derive distinct column keys.
+    //
+    // Both labels are REAL columns. The second used to be an invented `"menstrual-symptoms"`, which
+    // worked while the `info:` bridge passed any string straight to HKDF; the typed-purpose round
+    // narrowed it to the four reviewed labels and made anything else fail closed, so an invented
+    // label now asserts nothing (it resolves to the journal purpose behind an assertion failure).
+    // Two real labels are also the stronger statement: distinctness matters precisely because these
+    // two corpora are sealed side by side under one content key.
     @Test func hkdfDifferentInfoLabelsProduceDifferentKeys() {
         let contentKey = randomData(count: 32)
         let narrative = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
-        let symptoms = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-symptoms", outputByteCount: 32)
-        #expect(narrative != symptoms)
+        let intimacy = derivedColumnKeyData(contentKey: contentKey, info: "intimacy-log", outputByteCount: 32)
+        #expect(narrative != intimacy)
     }
 
     // MARK: Proves HKDF derivation is deterministic for the same content key and label.
@@ -291,9 +298,13 @@ struct FernletLockCryptoTests {
         let salt = try #require(loadKeychainData(account: "com.fernlet.lock.salt", service: service.keychainService))
         let storedVerifier = try #require(loadKeychainData(account: "com.fernlet.lock.verifier", service: service.keychainService))
         let derivedKey = try await verifier(passcode: "123456", salt: salt)
-        // Stored verifier == SHA256(derivedKey), and crucially != the raw derived key (the wrapping key).
+        // Stored verifier == the domain-separated digest of derivedKey, and crucially != the raw
+        // derived key (the wrapping key).
         #expect(storedVerifier == FernletLockCrypto.verifierDigest(of: derivedKey))
-        #expect(storedVerifier == Data(SHA256.hash(data: derivedKey)))
+        // Specifically the v2 digest — NOT the bare `SHA256(derivedKey)` that `legacyVerifierDigest`
+        // still computes for the one-time migration gate. A fresh configure must never write the
+        // pre-domain-separation form, or the gate would keep re-migrating current installs.
+        #expect(storedVerifier != FernletLockCrypto.legacyVerifierDigest(of: derivedKey))
         #expect(storedVerifier != derivedKey)
 
         // The persisted wrap is what this pins, in the state where a scrypt wrap exists at all.

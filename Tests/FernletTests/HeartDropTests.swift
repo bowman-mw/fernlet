@@ -1536,7 +1536,8 @@ struct HeartDropTests {
 
         #expect(service.queueHeart(to: recipientRecord) == .queued)
         let raw = try Data(contentsOf: outboxURL)
-        #expect(raw.starts(with: Data("FSC1".utf8)), "the outbox is ciphertext at rest")
+        // Literal on purpose — see ProtectedSidecarTests. `FSC1` is the read-only legacy prefix.
+        #expect(raw.starts(with: Data("FSC2".utf8)), "the outbox is ciphertext at rest")
         await service.syncOnce()
         #expect(transport.records.count == 1)
 

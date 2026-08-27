@@ -56,8 +56,9 @@ struct MeshEncryptionTests {
         let original = Data(repeating: 0xAB, count: 1024)
 
         let (ciphertext, _) = try MeshNetworkManager.encryptPhoto(original, key: key)
-        // Ciphertext should be plaintext length + 16-byte GCM tag
-        #expect(ciphertext.count == original.count + 16)
+        // `FMGP2` (5) + plaintext length + 16-byte GCM tag. The marker selects the typed AEAD
+        // purpose rather than overloading the unauthenticated nonce field beside it.
+        #expect(ciphertext.count == 5 + original.count + 16)
     }
 
     @Test func photoDecryptFailsWithWrongKey() throws {
@@ -210,7 +211,7 @@ struct MeshEncryptionTests {
         let groupKeyBytes = makeRandomBytes()
 
         let bundle = try sender.encryptGroupKey(groupKeyBytes, for: recipient.localKeyAgreementPublicKey)
-        #expect(bundle.count == 92, "Bundle must be 32 + 12 + 32 + 16 = 92 bytes")
+        #expect(bundle.count == 96, "Bundle must be `FGK2` (4) + 32 + 12 + 32 + 16 = 96 bytes")
 
         let unwrapped = try recipient.decryptGroupKey(bundle)
         #expect(unwrapped == groupKeyBytes)

@@ -235,7 +235,10 @@ struct ProtectedSidecarTests {
         #expect(sidecar.read() == ["v0-plaintext"])
 
         let raw = try Data(contentsOf: url)
-        #expect(raw.starts(with: Data("FSC1".utf8)), "the plaintext file is rewritten sealed on first read")
+        // Literal, not `HeartDropSidecarSeal.magic`: an at-rest format assertion that reads the
+        // constant from production cannot notice production changing the format. `FSC1` is now the
+        // read-only legacy prefix; every new seal writes `FSC2` with an authenticated purpose.
+        #expect(raw.starts(with: Data("FSC2".utf8)), "the plaintext file is rewritten sealed on first read")
         #expect(diskValue(url) == nil, "no plaintext remains")
 
         // A second instance (relaunch) reads the sealed format.

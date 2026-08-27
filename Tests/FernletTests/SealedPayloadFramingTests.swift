@@ -132,8 +132,9 @@ struct SealedPayloadFramingTests {
 
         let payload = Data(#"{"format":"fernlet.proximity.heart","version":1}"#.utf8)
         let sealed = try alice.seal(payload, to: bob.localKeyAgreementPublicKey, format: .wire2)
-        // eph pub (32) + nonce (12) + 256-bucket frame + tag (16): padding is visible on the wire.
-        #expect(sealed.count == 32 + 12 + 256 + 16)
+        // `FPT2` (4) + eph pub (32) + nonce (12) + 256-bucket frame + tag (16): padding is visible
+        // on the wire, behind the transport's v2 format marker.
+        #expect(sealed.count == 4 + 32 + 12 + 256 + 16)
         let opened = try bob.open(sealed, from: alice.localKeyAgreementPublicKey, format: .wire2)
         #expect(opened == payload)
     }
@@ -304,8 +305,10 @@ struct SealedPayloadFramingTests {
 
         let payload = randomBytes(300)
         let sealed = try alice.seal(payload, to: bob.localKeyAgreementPublicKey)
-        // Legacy ciphertext length tracks the plaintext exactly — no framing, no padding.
-        #expect(sealed.count == 32 + 12 + payload.count + 16)
+        // "Legacy" here is `SealedPayloadFormat.legacy` — the UNPADDED body, not the pre-v2
+        // transport. Its length still tracks the plaintext exactly (no framing, no padding) behind
+        // the same `FPT2` (4) marker every current write carries.
+        #expect(sealed.count == 4 + 32 + 12 + payload.count + 16)
         #expect(try bob.open(sealed, from: alice.localKeyAgreementPublicKey) == payload)
     }
 }

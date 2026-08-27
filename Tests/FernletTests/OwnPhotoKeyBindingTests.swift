@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletCrypto
 import Foundation
 import Security
 import Testing
@@ -46,9 +47,24 @@ struct OwnPhotoKeyBindingTests {
 
     /// Opens a sealed file the way the stores do, for the one artifact with no store-level reader
     /// that distinguishes "empty" from "unreadable" (the progress index).
+    /// Opens an at-rest media file the way the stores do, in BOTH formats: a `FMA2`-marked box
+    /// authenticates the file's own purpose as AEAD data, while an unmarked box is the
+    /// pre-domain-separation layout these fixtures deliberately seed.
+    ///
+    /// The marker is spelled out rather than read from `PrivateMediaStore`: this suite asserts the
+    /// at-rest FORMAT, and a fixture that asks production what the format is could never notice
+    /// production changing it. The purpose comes from `OwnPhotoCorpusLayout` because the mapping is
+    /// layout, not format — duplicating it here would let the fixture and the stores drift apart.
     private func opens(_ url: URL, under key: SymmetricKey) -> Data? {
-        guard let stored = try? Data(contentsOf: url),
-              let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
+        guard let stored = try? Data(contentsOf: url) else { return nil }
+        let formatV2 = Data("FMA2".utf8)
+        if stored.starts(with: formatV2) {
+            guard let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
+            return try? AES.GCM.open(
+                box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+            )
+        }
+        guard let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
         return try? AES.GCM.open(box, using: key)
     }
 
@@ -184,14 +200,34 @@ struct OwnPhotoKeyBindingTests {
         let ownKeyBefore = try #require(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
 
         // One legacy-sealed photo in every own corpus, plus the sealed progress index.
+        //
+        // The purpose beside each directory is the one the SHIPPING store is wired with —
+        // `FernletStore`'s recipe store, `ProgressPhotoStore`'s inner store, and `MealPhotoStore`'s
+        // own default. It is spelled out rather than taken from `OwnPhotoCorpusLayout.sealPurpose`
+        // on purpose: reading with the migrator's own mapping would make a migrator that resealed a
+        // corpus under the wrong domain invisible here, which is precisely the stranding this test
+        // exists to catch. The set check keeps the explicit list honest — a fourth corpus fails
+        // loudly instead of being silently skipped.
         let locations = OwnPhotoCorpusLayout.sealedLocations(in: root)
-        var photos: [(directory: URL, id: UUID, plaintext: Data)] = []
-        for directory in locations.directories {
+        let corpora: [(directory: URL, purpose: CryptographicPurpose)] = [
+            (OwnPhotoCorpusLayout.mealPhotosDirectory(in: root), FernletCryptoPurpose.AEAD.mealPhotoV2),
+            (OwnPhotoCorpusLayout.recipePhotosDirectory(in: root), FernletCryptoPurpose.AEAD.recipePhotoV2),
+            (
+                OwnPhotoCorpusLayout.progressPhotosDirectory(in: root).appendingPathComponent(
+                    OwnPhotoCorpusLayout.progressPhotosInnerDirectoryName, isDirectory: true
+                ),
+                FernletCryptoPurpose.AEAD.progressPhotoV2
+            )
+        ]
+        #expect(Set(corpora.map(\.directory)) == Set(locations.directories),
+                "the corpus list here drifted from OwnPhotoCorpusLayout.sealedLocations")
+        var photos: [(directory: URL, purpose: CryptographicPurpose, id: UUID, plaintext: Data)] = []
+        for corpus in corpora {
             let plaintext = jpeg()
             let id = UUID()
             try sealed(plaintext, under: legacyKey)
-                .write(to: directory.appendingPathComponent("\(id.uuidString).jpg"))
-            photos.append((directory, id, plaintext))
+                .write(to: corpus.directory.appendingPathComponent("\(id.uuidString).jpg"))
+            photos.append((corpus.directory, corpus.purpose, id, plaintext))
         }
         let indexURL = try #require(locations.files.first)
         let indexPlaintext = Data("[]".utf8)
@@ -219,7 +255,8 @@ struct OwnPhotoKeyBindingTests {
                 directory: photo.directory,
                 keyProvider: KeychainPrivateMediaKeyProvider(role: .ownPhotos),
                 allowsLegacyPlaintextUpgrade: false,
-                legacyKeyProvider: nil
+                legacyKeyProvider: nil,
+                purpose: photo.purpose
             )
             #expect(store.imageData(for: photo.id) == photo.plaintext,
                     "a \(photo.directory.lastPathComponent) photo became unreadable across the binding flip")

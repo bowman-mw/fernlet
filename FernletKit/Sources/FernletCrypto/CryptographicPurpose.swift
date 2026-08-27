@@ -15,19 +15,60 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
     /// a stable one-byte-per-character representation.
     public var data: Data { Data(rawValue.utf8) }
 
-    /// Whether a signed transcript is required to start with this purpose's bytes. Legacy formats
-    /// that predate an embedded domain keep `false` solely for read compatibility.
-    private let requiresEmbeddedPrefix: Bool
+    /// How a signed transcript carries this purpose's bytes.
+    ///
+    /// Fernlet's transcript builders do not agree on one shape, and they must not be forced to:
+    /// the byte layouts here are already signed by shipped peers, so the CHECK adapts to the
+    /// format rather than the format to the check. Naming the shape per purpose keeps
+    /// ``signingBytes(_:)`` an exact positional match — a substring search would accept a purpose
+    /// buried in attacker-chosen fields, which is the whole property this guard exists to deny.
+    public nonisolated enum TranscriptFraming: Hashable, Sendable {
+        /// The transcript begins with the purpose's bytes verbatim, e.g. `domain ‖ nonce ‖ …`.
+        case rawPrefix
+        /// The purpose is the transcript's first length-prefixed field: an 8-byte big-endian byte
+        /// count, then the bytes. This is what `CanonicalByteWriter` (ProximityKit's canonical
+        /// signing serializer) emits for every variable-length field, the domain included.
+        case lengthPrefixed
+        /// A pre-domain-separation format that embeds no purpose at all. Read compatibility only —
+        /// never the framing of a new write format.
+        case absent
+    }
 
-    fileprivate init(_ rawValue: String, requiresEmbeddedPrefix: Bool = true) {
+    /// The shape this purpose takes inside a signed transcript. Meaningful only for signature
+    /// purposes: a KDF salt, an HKDF `info`, or an AEAD authenticated-data blob never reaches
+    /// ``signingBytes(_:)``, so those registry entries keep the default.
+    private let framing: TranscriptFraming
+
+    fileprivate init(_ rawValue: String, framing: TranscriptFraming = .rawPrefix) {
         self.rawValue = rawValue
-        self.requiresEmbeddedPrefix = requiresEmbeddedPrefix
+        self.framing = framing
+    }
+
+    /// The exact bytes a domain-tagged transcript must begin with under this purpose's framing.
+    /// Empty for ``TranscriptFraming/absent``, which every transcript trivially satisfies.
+    private var expectedTranscriptPrefix: Data {
+        switch framing {
+        case .rawPrefix:
+            return data
+        case .lengthPrefixed:
+            let purposeBytes = data
+            var prefix = Data()
+            // 8-byte big-endian count, shifted out to match `CanonicalByteWriter.appendUInt64`.
+            let count = UInt64(purposeBytes.count)
+            for shift in stride(from: 56, through: 0, by: -8) {
+                prefix.append(UInt8(truncatingIfNeeded: count >> UInt64(shift)))
+            }
+            prefix.append(purposeBytes)
+            return prefix
+        case .absent:
+            return Data()
+        }
     }
 
     /// Validates that a domain-tagged signature transcript begins with its reviewed purpose.
     /// This returns the unmodified bytes so it can sit directly at the raw signing boundary.
     public func signingBytes(_ bytes: Data) -> Data? {
-        guard !requiresEmbeddedPrefix || bytes.starts(with: data) else { return nil }
+        guard bytes.starts(with: expectedTranscriptPrefix) else { return nil }
         return bytes
     }
 }
@@ -39,15 +80,22 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
 /// and a legacy read path at its consumer.
 public nonisolated enum FernletCryptoPurpose {
     /// Domains embedded in Ed25519 signature transcripts.
+    ///
+    /// Every `fernlet.canonical.*` spelling below is serialized by `CanonicalByteWriter`, which
+    /// length-prefixes its fields — so the domain reaches the signing boundary behind its own
+    /// 8-byte count, hence `.lengthPrefixed`. The remaining transcripts concatenate their domain
+    /// raw and keep the default. That split is a property of the SHIPPED byte layouts; do not
+    /// "unify" it by rewriting a serializer, which would invalidate every signature already in
+    /// the field.
     public nonisolated enum Signature {
-        public static let identityEnvelopeV2 = CryptographicPurpose("fernlet.canonical.identity-envelope.v2")
-        public static let identityEnvelopeLegacyV1 = CryptographicPurpose("fernlet.canonical.identity-envelope.v1", requiresEmbeddedPrefix: false)
-        public static let meshAdmissionTokenV2 = CryptographicPurpose("fernlet.canonical.mesh-admission-token.v2")
-        public static let meshAdmissionTokenLegacyV1 = CryptographicPurpose("fernlet.canonical.mesh-admission-token.v1", requiresEmbeddedPrefix: false)
-        public static let activityDescriptorV2 = CryptographicPurpose("fernlet.canonical.activity-descriptor.v2")
-        public static let activityJoinTokenV2 = CryptographicPurpose("fernlet.canonical.activity-join-token.v2")
-        public static let activityRosterSnapshotV2 = CryptographicPurpose("fernlet.canonical.activity-roster-snapshot.v2")
-        public static let moderationReportV2 = CryptographicPurpose("fernlet.canonical.moderation-report.v2")
+        public static let identityEnvelopeV2 = CryptographicPurpose("fernlet.canonical.identity-envelope.v2", framing: .lengthPrefixed)
+        public static let identityEnvelopeLegacyV1 = CryptographicPurpose("fernlet.canonical.identity-envelope.v1", framing: .absent)
+        public static let meshAdmissionTokenV2 = CryptographicPurpose("fernlet.canonical.mesh-admission-token.v2", framing: .lengthPrefixed)
+        public static let meshAdmissionTokenLegacyV1 = CryptographicPurpose("fernlet.canonical.mesh-admission-token.v1", framing: .absent)
+        public static let activityDescriptorV2 = CryptographicPurpose("fernlet.canonical.activity-descriptor.v2", framing: .lengthPrefixed)
+        public static let activityJoinTokenV2 = CryptographicPurpose("fernlet.canonical.activity-join-token.v2", framing: .lengthPrefixed)
+        public static let activityRosterSnapshotV2 = CryptographicPurpose("fernlet.canonical.activity-roster-snapshot.v2", framing: .lengthPrefixed)
+        public static let moderationReportV2 = CryptographicPurpose("fernlet.canonical.moderation-report.v2", framing: .lengthPrefixed)
         /// Debug-only Network.framework feasibility transcript. This is deliberately distinct
         /// from production mesh admissions so the device spike cannot become a signing oracle
         /// for a future shipping protocol.

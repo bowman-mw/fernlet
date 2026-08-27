@@ -73,8 +73,12 @@ struct DuressLockTests {
         #expect(duressSalt != primarySalt)
         let duressVerifier = try #require(duressRow(.duressVerifier, harness))
         #expect(duressRow(.duressMode, harness) == Data([DuressMode.decoy.rawValue]))
-        // Only the digest is persisted, never a derived key that could unwrap anything.
-        #expect(duressVerifier.count == SHA256.byteCount)
+        // Only the digest is persisted, never a derived key that could unwrap anything. The v2
+        // verifier prefixes a format marker to its SHA-256 output, so assert the length production
+        // actually produces rather than a bare digest length — while still pinning that it is a
+        // fixed-length digest and not the scrypt key itself.
+        #expect(duressVerifier.count == FernletLockCrypto.verifierDigest(of: Data(repeating: 0, count: FernletLockCrypto.keyLength)).count)
+        #expect(duressVerifier.count != FernletLockCrypto.keyLength)
     }
 
     @Test func configureDuressRejectsAPINEqualToTheRealPasscode() async throws {
