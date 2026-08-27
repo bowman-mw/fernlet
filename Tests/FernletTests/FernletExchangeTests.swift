@@ -266,6 +266,103 @@ struct FernletExchangeTests {
         #expect(try workouts.record(id: workout.id) == nil)
     }
 
+    // MARK: - Web-imported recipes: a measured defect, pinned rather than fixed
+
+    /// A web-imported recipe shares through Messages with NO ingredients and NO macros, and every
+    /// layer accepts it.
+    ///
+    /// **This test pins a defect. It is not a specification.** It is written as an assertion of the
+    /// current behaviour so the behaviour is visible, attributable, and impossible to change by
+    /// accident — the house pattern from `DishTemplateBindAuditTests`
+    /// (`foodWordCollisionWithAChainNameIsPinnedNotFixed`). Fixing it should turn this test red.
+    ///
+    /// **The mechanism.** A recipe imported from the web — via the share extension, a pasted URL, or
+    /// a mesh-received `.saved` recipe — is built with `ingredients: []` and its real ingredient
+    /// list in `webImport.ingredientLines`, because free-text lines cannot be resolved to
+    /// `foodItemId`s without ambiguity (`RecipeWebImport`'s own doc comment says so).
+    /// `ExchangeRecipePayloadBuilder.payload` resolves ONLY the structured `ingredients`, so for
+    /// these recipes it produces an empty list, and the macros derived from it are all zero.
+    ///
+    /// **Nothing refuses it.** `ingredientsAreValid([])` is `[].allSatisfy { … }`, which is `true`;
+    /// `payload.ingredients.count <= 100` holds at 0; and `ExchangeCardMetadata.countIsValid`
+    /// accepts `ingredientCount: 0` because its floor is `>= 0`. There is no minimum anywhere on the
+    /// path, so the packet, the card, and the catalog entry all validate.
+    ///
+    /// **What makes it a defect rather than a design choice** is that the same recipe shared over
+    /// the mesh arrives COMPLETE. `RecipeShareCodec.proximityPayload` branches on `recipe.webImport`
+    /// and sends the `.saved` kind, carrying the free-text ingredient lines, the precomputed macros,
+    /// the micronutrients and the source URL — and its doc comment explains exactly why that branch
+    /// exists. The Messages path has no such branch. The knowledge is in the codebase, three files
+    /// away; the Messages round did not apply it.
+    ///
+    /// **Reachable in production**, not just here: `FernletMessagesCatalogPublisher.appendRecipes`
+    /// iterates `store.recipes` AND `store.savedRecipes` with no filter, so every web-imported
+    /// recipe is offered in the Messages picker exactly like a complete one. The recipient's card
+    /// reads "N servings · 0 ingredients · M steps".
+    ///
+    /// **Not fixed here** because both available fixes are decisions, not review edits: carrying the
+    /// lines needs a new optional key on `SharedRecipePayload` (feasible without a version bump —
+    /// `steps` is the worked precedent — but it is a wire-format change with three independent
+    /// consumers), and hiding these recipes from the picker silently removes a capability. Either
+    /// is the owner's call.
+    @Test func webImportedRecipesShareWithNoIngredientsAPinnedDefect() throws {
+        let recipe = Self.webImportedRecipe()
+        #expect(!recipe.ingredients.isEmpty == false, "the premise: a web import carries no structured ingredients")
+        #expect(recipe.webImport?.ingredientLines.isEmpty == false, "…while its real ingredients sit here")
+
+        // No layer refuses it.
+        let packet = try RecipeExchangePacket(recipe: recipe, foodItems: [], includesNotes: true)
+        #expect(packet.recipe.ingredients.isEmpty, "DEFECT: the shared payload carries no ingredients at all")
+
+        let card = try ExchangeCardMetadata.recipe(from: packet)
+        #expect(card.ingredientCount == 0, "DEFECT: the card advertises the empty list rather than refusing")
+
+        let entry = try FernletMessagesRecipeCatalogEntry(packet: packet)
+        #expect(entry.card.ingredientCount == 0, "DEFECT: it reaches the Messages picker like any complete recipe")
+
+        // And it survives a full round trip through the envelope, so the recipient sees it too.
+        let envelope = try ExchangeMessageEnvelope(recipe: packet)
+        let recovered = try ExchangeMessageEnvelope.decode(messageURL: envelope.messageURL())
+        guard case .recipe(let received) = try recovered.validatedPayload() else {
+            Issue.record("Expected a recipe packet.")
+            return
+        }
+        #expect(received.recipe.ingredients.isEmpty)
+        #expect(received.recipe.name == recipe.name, "the name and steps DO survive — which is what makes it look complete")
+        #expect(received.recipe.steps?.count == 1)
+    }
+
+    /// The control: a user-built recipe on the same path carries its ingredients, so the test above
+    /// is measuring the web-import branch and not a broken fixture.
+    @Test func userBuiltRecipesStillCarryTheirIngredients() throws {
+        let packet = try recipePacket()
+        #expect(packet.recipe.ingredients.count == 1)
+        #expect(try ExchangeCardMetadata.recipe(from: packet).ingredientCount == 1)
+    }
+
+    /// A recipe shaped the way the share extension, a pasted URL, and a mesh-received `.saved`
+    /// recipe all build one: no structured ingredients, everything real in `webImport`.
+    static func webImportedRecipe() -> RecipeDefinition {
+        RecipeDefinition(
+            id: UUID(),
+            name: "Sheet-pan salmon",
+            servings: 4,
+            ingredients: [],
+            notes: "From a recipe site.",
+            source: MealLogSource.webImport,
+            createdAt: Date(timeIntervalSince1970: 1_779_664_800),
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/salmon",
+                ingredientLines: ["2 salmon fillets", "1 lemon", "2 tbsp olive oil"],
+                macros: Macros(protein: 34, carbs: 6, fat: 21),
+                micronutrients: Micronutrients(),
+                imageURLString: nil
+            ),
+            steps: [RecipeStep(text: "Roast at 200C for 15 minutes.")]
+        )
+    }
+
     private func recipePacket(name: String = "Training oats", includesNotes: Bool = false) throws -> RecipeExchangePacket {
         let foodID = UUID()
         let recipeID = UUID()
