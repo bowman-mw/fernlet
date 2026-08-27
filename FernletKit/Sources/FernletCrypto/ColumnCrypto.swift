@@ -193,7 +193,7 @@ public nonisolated struct ColumnCrypto: Sendable {
             do {
                 if let binding = try DeviceBindingID.currentForOpen(),
                    let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
-                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) {
+                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) { // cryptographic-domain: v2 device-bound read
                     return plaintext
                 }
             } catch {

@@ -179,7 +179,7 @@ enum SealedBackupCrypto {
         candidates: [(publicKey: Data, key: SymmetricKey)]
     ) -> Data? {
         for candidate in candidates {
-            if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
+            if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) { // cryptographic-domain: authenticatedData-bound aad
                 return plaintext
             }
         }

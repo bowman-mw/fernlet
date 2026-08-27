@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 
-/// Pins the device-bound sealed-column format (`ColumnCrypto` v2 + `DeviceBindingID`) and — the
+/// Pins the device-bound sealed-column format (`ColumnCrypto` v2/v3 + `DeviceBindingID`) and — the
 /// migration-safety half — proves that every pre-binding (legacy) blob still opens unchanged.
 ///
 /// The binding overrides use `DeviceBindingID`'s `@TaskLocal` test seam, so each test pins its
@@ -31,10 +31,10 @@ struct ColumnCryptoDeviceBindingTests {
         }
     }
 
-    // MARK: Proves a device-bound seal round-trips and carries the v2 version tag.
+    // MARK: Proves a device-bound seal round-trips and carries the current version tag.
     @Test func deviceBoundSealRoundTripsAndIsVersionTagged() throws {
         let sealed = try seal("a private thought", label: "journal-narrative", override: .identifier(installA))
-        #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersion)
+        #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersionV3)
         let opened = try open(sealed, label: "journal-narrative", override: .identifier(installA))
         #expect(opened == "a private thought")
     }
@@ -49,7 +49,7 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == "written before binding existed")
     }
 
-    // MARK: Proves the binding property itself: a v2 blob sealed on install A does NOT open on
+    // MARK: Proves the binding property itself: a device-bound blob sealed on install A does NOT open on
     // install B even with the correct content key — the ciphertext, not just the key, is bound.
     @Test func deviceBoundBlobRefusesToOpenOnAnotherInstall() throws {
         let sealed = try seal("bound to install A", label: "intimacy-log", override: .identifier(installA))
@@ -62,13 +62,14 @@ struct ColumnCryptoDeviceBindingTests {
         }
     }
 
-    // MARK: Proves the 1-in-256 ambiguity is handled: a LEGACY blob whose first (nonce) byte
-    // happens to equal the v2 version tag still opens via the fallback path.
+    // MARK: Proves the 2-in-256 ambiguity is handled: a LEGACY blob whose first (nonce) byte
+    // happens to equal a recognized version tag still opens via the fallback path.
     @Test func legacyBlobStartingWithTheVersionByteStillOpens() throws {
         var collidingBlob: Data?
-        for _ in 0..<8192 {  // P(miss all) ≈ (255/256)^8192 ≈ 10^-14
+        for _ in 0..<8192 {  // P(miss all) ≈ (254/256)^8192 ≈ 10^-28
             let sealed = try seal("nonce collision", label: "menstrual-narrative", override: .unavailable)
-            if sealed.first == ColumnCrypto.deviceBoundFormatVersion {
+            if sealed.first == ColumnCrypto.deviceBoundFormatVersionV2
+                || sealed.first == ColumnCrypto.deviceBoundFormatVersionV3 {
                 collidingBlob = sealed
                 break
             }
@@ -80,12 +81,12 @@ struct ColumnCryptoDeviceBindingTests {
 
     // MARK: MIGRATION ROUND TRIP: models the routine re-seal (edit / lock-setup migration /
     // restore-on-unhide) that progressively rebinds the legacy corpus — open legacy, re-seal,
-    // and the result is v2 and opens only on this install.
+    // and the result is current-version and opens only on this install.
     @Test func routineReSealRebindsALegacyBlob() throws {
         let legacySealed = try seal("migrate me", label: "journal-narrative", override: .unavailable)
         let plaintext = try #require(try open(legacySealed, label: "journal-narrative", override: .identifier(installA)))
         let rebound = try seal(plaintext, label: "journal-narrative", override: .identifier(installA))
-        #expect(rebound.first == ColumnCrypto.deviceBoundFormatVersion)
+        #expect(rebound.first == ColumnCrypto.deviceBoundFormatVersionV3)
         let reopened = try open(rebound, label: "journal-narrative", override: .identifier(installA))
         #expect(reopened == "migrate me")
         #expect(throws: (any Error).self) {
@@ -102,7 +103,7 @@ struct ColumnCryptoDeviceBindingTests {
         let sealed = try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
             try crypto.seal(value, contentKey: contentKey)
         }
-        #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersion)
+        #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersionV3)
         let opened: [String]? = try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
             try crypto.open(sealed, contentKey: contentKey)
         }
@@ -140,17 +141,18 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == "retry me")
     }
 
-    // MARK: RESILIENCE: during the same read error, legacy blobs — including the 1-in-256 blob
-    // whose first nonce byte collides with the version tag — keep opening; the outage affects
+    // MARK: RESILIENCE: during the same read error, legacy blobs — including the 2-in-256 blob
+    // whose first nonce byte collides with a version tag — keep opening; the outage affects
     // only blobs that genuinely need the binding.
     @Test func legacyBlobsStillOpenDuringABindingReadError() throws {
         let legacy = try seal("still readable", label: "worry-box", override: .unavailable)
         #expect(try open(legacy, label: "worry-box", override: .readError) == "still readable")
 
         var collidingBlob: Data?
-        for _ in 0..<8192 {  // P(miss all) ≈ (255/256)^8192 ≈ 10^-14
+        for _ in 0..<8192 {  // P(miss all) ≈ (254/256)^8192 ≈ 10^-28
             let sealed = try seal("collision", label: "worry-box", override: .unavailable)
-            if sealed.first == ColumnCrypto.deviceBoundFormatVersion {
+            if sealed.first == ColumnCrypto.deviceBoundFormatVersionV2
+                || sealed.first == ColumnCrypto.deviceBoundFormatVersionV3 {
                 collidingBlob = sealed
                 break
             }

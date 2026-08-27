@@ -27,7 +27,7 @@ struct CryptographicPurposeBoundaryTests {
 
     private func sourceFiles() throws -> [URL] {
         let root = RepoRoot.url
-        return try Self.roots.flatMap { relativeRoot in
+        return Self.roots.flatMap { (relativeRoot: String) -> [URL] in
             let directory = root.appendingPathComponent(relativeRoot)
             guard let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else {
                 return []
@@ -37,8 +37,10 @@ struct CryptographicPurposeBoundaryTests {
     }
 
     private func context(around index: Int, in lines: [String]) -> String {
+        // Asymmetric window: a multi-line primitive call names its purpose inside its own
+        // argument list, which sits below the call's opening line — never above it.
         let lower = max(0, index - 3)
-        let upper = min(lines.count - 1, index + 3)
+        let upper = min(lines.count - 1, index + 6)
         return lines[lower...upper].joined(separator: "\n")
     }
 
