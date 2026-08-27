@@ -35,6 +35,19 @@ nonisolated enum FernletMessagesRecipeImportRequest {
         guard let inboxID = UUID(uuidString: legacyID) else { return nil }
         return FernletMessagesInboxTarget(destination: .recipe, inboxID: inboxID)
     }
+
+    /// Drops any un-consumed request for the containing app's delete-everything funnel.
+    ///
+    /// `consume()` already removes these keys on the happy path, but only when the launch shell
+    /// actually gets to present the review. A request that arrived and was never consumed survives
+    /// the wipe as a pointer to an inbox record the funnel has just deleted — so the next launch
+    /// would open a review for content that no longer exists.
+    static func clearPendingRequest() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: destinationDefaultsKey)
+        defaults.removeObject(forKey: inboxIDDefaultsKey)
+        defaults.removeObject(forKey: legacyRecipeIDDefaultsKey)
+    }
 }
 
 /// Narrow app-level gateway for the Messages inbox. It never creates or exposes a Fernlet store.

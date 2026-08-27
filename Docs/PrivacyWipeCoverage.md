@@ -147,6 +147,7 @@ general proof against arbitrarily renamed storage.
 | Progress photos | PrivateMediaStore | `progressPhotoStore.deleteAll` |
 | Recipe photos | PrivateMediaStore | `recipePhotoStore.deleteAll` |
 | Share-extension import queue | App group | `sharedRecipeImportQueue.clear` |
+| Un-consumed Messages deep-link request — `fernlet.messages.pendingInboxDestination`, `fernlet.messages.pendingInboxID` and the legacy `fernlet.messages.pendingRecipeInboxID`: which queue a shared card landed in and the record id inside it. `consume()` removes them once the review is presented; a request that arrived and was never consumed would otherwise outlive the record it points at and have the next launch open a review for deleted content | UserDefaults (`.standard`, device-local) | `FernletMessagesRecipeImportRequest.clearPendingRequest` |
 | Data export files — the "export my data" dump (`Fernlet-data-*.json`) AND the trainer/nutritionist summary (`Fernlet-training-*.json`) | tmp/DataExports (+ legacy tmp/-root strays of both prefixes) | `purgeDataExports` |
 | Connection-history export — the proximity peer-identity dossier (display names, advertised/confirmed fingerprints, signing keys, first/last-seen times) written as `Fernlet-connection-logs-*.json`; builds before this change wrote it flat as lowercase `fernlet-connection-logs-*.json` | tmp/DataExports (+ legacy tmp/-root stray of that lowercase prefix) | `purgeDataExports` |
 | Friends' clothing catalogs (1 h window) | Memory | `clothingShop.clearAll` |
@@ -284,11 +285,18 @@ their tokens: the Health capability ledger (which also left plaintext `UserDefau
 device-only keychain row), the workout tombstone ring, and the companion petting state. The
 discovery wall then found two more of the same class, which is what a discovery floor is for.
 
+**A third generation, 2026-08-27.** Adding `App/FernletMessagesExtension` to `scanRoots` — it holds
+shipping Swift and was outside the wall entirely — surfaced the composer's `FernletMessages.lastRecipeID`
+below, and the same sweep closed the three `fernlet.messages.pending*` keys into the cleared-by
+table. The lesson is the one the scan-root check already encodes: a whole target can be missing from
+the inventory without a single row looking wrong.
+
 | Surface | What actually survives | Why it matters | Severity |
 | --- | --- | --- | --- |
 | **Day-summary backfill day key** — `fernlet.daySummary.lastRunKey` (`LaunchPreparationService`) | One `yyyy-MM-dd` key: the last day the once-per-day summary backfill ran | A date the app was used, surviving the deletion of every day it describes. No content, and its functional effect post-wipe is benign (the backfill simply skips today). Listed for completeness, and because "one harmless date" is how every one of these starts | **Low** |
 | **Past-day journal scrub latch** — `pastDayJournalScrubVersion` (`FernletStore`) | One integer: the version of the one-time historical journal scrub (WI-1) that has completed on this install | *Found 2026-08-20 by the discovery wall.* Unlike the migration latches in the exceptions table, keeping this one is **not** load-bearing: post-wipe the store is empty, so a re-run would scrub nothing and set the flag again. It survives because nothing clears it, which is the definition of this section rather than of "by design" | **Low** |
 | **Past-day journal scrub attempts** — `pastDayJournalScrubAttempts` (`FernletStore`) | A small counter: launches on which the scrub ran but at least one day's seal failed | *Found 2026-08-20 by the discovery wall.* Usually absent — it is removed whenever the scrub reaches a terminal state — but while present it is a trace of app use (and of sealing trouble) that the wipe does not reach. Same class and same fix as the row above | **Low** |
+| **iMessage composer's last recipe** — `FernletMessages.lastRecipeID` (`FernletMessagesViewController`) | One recipe UUID: the card the user last picked in the Messages composer, remembered so the composer re-selects it | *Found 2026-08-27, when `App/FernletMessagesExtension` was added to `scanRoots` — it had been shipping Swift outside the wall since the extension landed.* Different from every row above in KIND: it is written to the extension's own `UserDefaults.standard`, a separate defaults domain from the containing app's, so the funnel cannot reach it at all. Closing it means first moving the key into the shared App Group suite — a decision nobody has made, which is what puts it here rather than in the exceptions table. It is a pointer to a recipe the wipe deletes, not recipe content | **Low** |
 
 Two notes on scope, so this section is not read as bigger or smaller than it is. **The sealed
 corpus is not implicated:** none of these keys holds journal, cycle, intimacy, Worry Box or photo

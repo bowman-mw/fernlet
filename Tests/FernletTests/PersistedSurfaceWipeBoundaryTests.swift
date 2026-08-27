@@ -204,6 +204,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         // Research §26 fix 1.10's local correction memory: normalized query → the food id the user
         // picked when they replaced a wrong match. Device-local, never synced, capped at 200 entries.
         "fernlet.foodSearchCorrections.v1": .cleared(token: "FoodSearchCorrectionMemory.clearAll"),
+        // The un-consumed Messages deep-link request: which queue a shared card landed in, and the
+        // record id inside it. `consume()` removes them on the happy path; this token is the wipe's
+        // unconditional removal, added because the pointer otherwise outlives the record it names.
+        "fernlet.messages.pendingInboxDestination": .cleared(token: "FernletMessagesRecipeImportRequest.clearPendingRequest"),
+        "fernlet.messages.pendingInboxID": .cleared(token: "FernletMessagesRecipeImportRequest.clearPendingRequest"),
+        "fernlet.messages.pendingRecipeInboxID": .cleared(token: "FernletMessagesRecipeImportRequest.clearPendingRequest"),
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
@@ -330,6 +336,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "pastDayJournalScrubAttempts": .openGap(
             reason: "The scrub's retry-budget counter: how many launches sealed at least one day badly. Usually absent (it is removed at every terminal state), but when present it is a trace of app use that the wipe does not reach."
+        ),
+        "FernletMessages.lastRecipeID": .openGap(
+            reason: "The recipe the user last picked in the iMessage composer, remembered so the composer re-selects it. It is written to the MESSAGES EXTENSION's own UserDefaults.standard — a separate defaults domain from the containing app's — so the funnel cannot reach it at all without first moving the key into the shared App Group suite. That move is a decision nobody has made, which is what puts it here rather than in the exceptions table. It is a pointer to a recipe the wipe deletes, not recipe content."
         )
     ]
 
@@ -415,7 +424,14 @@ struct PersistedSurfaceWipeBoundaryTests {
 
     /// The shipping scan roots. `discoveryFloorsHold` derives the `App/` half rather than trusting
     /// this list, so a new target cannot ship outside the frame.
-    static let scanRoots = ["App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "FernletKit/Sources"]
+    static let scanRoots = [
+        "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension",
+        // The iMessage extension is shipping Swift with its own persisted surface, and it writes to
+        // a defaults domain the funnel cannot reach — precisely the thing that must be visible here
+        // rather than outside the wall.
+        "App/FernletMessagesExtension",
+        "FernletKit/Sources"
+    ]
 
     /// Total shipping Swift files the scan must see. The tree carries ~372; a run that finds many
     /// fewer is enumerating the wrong place, and this stops it reporting green for it.

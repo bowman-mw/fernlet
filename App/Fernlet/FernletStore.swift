@@ -5138,6 +5138,9 @@ final class FernletStore {
     }
 
     private func clearMessagesImportInboxes() -> Bool {
+        // The un-consumed deep-link request first: it is a pointer INTO the queues cleared below,
+        // so leaving it behind would have the next launch present a review for a deleted record.
+        FernletMessagesRecipeImportRequest.clearPendingRequest()
         let directory = messagesCatalogDirectory?.appendingPathComponent("Inbox", isDirectory: true)
         return FernletMessagesRecipeInboxCoordinator(directory: directory).clear()
     }

@@ -48,18 +48,6 @@
   "reason": "Adds the AUTHOR. `.combine` gathers a chat bubble's fragments, which are a sender-name caption plus the message text for an INCOMING message and the message text ALONE for an outgoing one — the name caption is drawn only under `if !message.isOutgoing` (:103). So an outgoing bubble combines to the bare sentence with nothing saying who sent it; authorship is carried purely by right-alignment and the terracotta tint, and neither of those is speech. The label restores it ('You: …') and supplies the speaker-to-utterance colon on the incoming branch. This site was invisible to the wall until the 2026-08-23 A1 hardening: `.accessibilityIdentifier(\"session.chat.message\")` sits BETWEEN `.combine` and the label, and the old rule inspected only the immediately-next code line — this is the review's planted evasion #3 (one interleaved modifier) occurring naturally in shipping code, and surfacing it is the hardening working. NOTE: SessionChatPanel.swift is NOT part of this round's diff. The entry pins a PRE-EXISTING shape the tightened rule newly reaches, not a line this batch wrote. The reported text is the bare `.accessibilityLabel(` because the argument wraps to the following lines; this file contains exactly one `.combine` chain, so the entry cannot drift onto a second site."
  },
  {
-  "rule": "A6-INVERT-COLORS",
-  "path": "App/Fernlet/FoodView.swift",
-  "line_contains": "Image(uiImage: image)",
-  "reason": "NOT SAFE — a temporary, defect-bearing exemption, recorded rather than hidden. These are two genuine unfixed T2-10 defects: the meal-photo preview in `mealPhotoPreview(_:)` (~:3103) and the 54pt meal thumbnail (~:4665) are both user PHOTOGRAPHS rendered from `UIImage`, and with Smart Invert on iOS inverts them into colour negatives — a plate of food becomes an unrecognisable blue-green smear for exactly the low-vision users the setting exists for. Every sibling bitmap in the tree (MealPhotoPolaroid, ProgressPhotoTimeline, BarcodeScanView, VerifyQRViews, FriendPhotoReviewSheet, ConnectView, NutritionLabelCameraSheet, DuressRecoveryCeremonyViews, FernletUIComponents) already carries `.accessibilityIgnoresInvertColors()`. The ONLY reason these are exempt is that App/Fernlet/FoodView.swift is fenced by a parallel food workstream in the 2026-08-22/23 round and this batch is forbidden to edit it. The fix is one modifier per site. DELETE THIS ENTRY at reconciliation — if it is still here after the food branch merges, the wall is lying about the tree."
- },
- {
-  "rule": "A6-INVERT-COLORS",
-  "path": "App/Fernlet/FoodView.swift",
-  "line_contains": "Image(uiImage: photo)",
-  "reason": "NOT SAFE — the third of the same temporary, defect-bearing exemption; see the `Image(uiImage: image)` entry above. This is the recipe-detail hero photo in `photoSection` (~:5093), a 210pt user photograph that Smart Invert renders as a colour negative (T2-10). It is a real, open defect, exempted ONLY because App/Fernlet/FoodView.swift is fenced by a parallel food workstream this round and this batch may not edit it; the fix is a single `.accessibilityIgnoresInvertColors()` in the modifier chain. Split from the entry above solely because `line_contains` matches on the raw line text and this site binds `photo` rather than `image` — one entry cannot cover both spellings. DELETE THIS ENTRY at reconciliation."
- },
- {
   "rule": "A1-COMBINE-LABEL",
   "path": "App/Fernlet/MilestonesView.swift",
   "line_contains": ".accessibilityLabel(row.headline)",

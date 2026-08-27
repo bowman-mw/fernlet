@@ -218,8 +218,8 @@ struct FoodSearchCorrectionCatalogTests {
             "the query the research opens with. It returns NOTHING today because `costco` lives in the unindexed `brand_source` column (→ fix 2.3), and §31's '+1.10' row is exactly this: correct it once and it is self-healing"
         ),
         FoodSearchCorrectionCase(
-            "chiken breast", cold: nil, corrected: "Chicken, breast, boneless, skinless, raw",
-            "the corpus's typo query — no edit-distance fallback exists anywhere in the pipeline (§30 row 16). A correction is also a typo memory, at no extra cost"
+            "chiken breast", cold: "Chicken breast, stewed, skin eaten", corrected: "Chicken, breast, boneless, skinless, raw",
+            "the corpus's typo query. It used to return NOTHING; since ab6e573's bounded leave-one-out fallback it returns a row on the surviving `breast` token — a wrong one, because there is still no edit-distance anywhere in the pipeline (§30 row 16) and `chiken` matches nothing. The claim is unchanged and now sharper: the typo reaches an answer the user did not mean, and one correction is also a typo memory, at no extra cost"
         )
     ]
 

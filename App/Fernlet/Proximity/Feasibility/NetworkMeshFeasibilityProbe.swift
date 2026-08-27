@@ -16,6 +16,7 @@ import ProximityKit
 import Security
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Fixed test-only protocol constants. The all-zero mesh ID is never advertised by production
 /// code, so a debug build cannot accidentally reconnect a real mesh during the feasibility spike.
@@ -385,7 +386,12 @@ final class NetworkMeshFeasibilityProbe {
 
     func copyDiagnosticReport() {
         record("Copied mesh feasibility diagnostic report to the pasteboard.")
-        UIPasteboard.general.string = diagnosticReport
+        // `localOnly`, not a bare `.string =` assignment (PB1): the general pasteboard is
+        // Handoff-synced to every device on the same Apple Account, and this report names the
+        // device's peer candidates, endpoints and signing-key state. A debug build is exactly where
+        // that leaves the device — the report is pasted into a bug note on some other machine.
+        UIPasteboard.general.setItems([[UTType.utf8PlainText.identifier: diagnosticReport]],
+                                      options: [.localOnly: true])
     }
 
     var datagramFrameSizeDescription: String {
@@ -1146,6 +1152,20 @@ final class NetworkMeshFeasibilityProbe {
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.backgroundTaskIdentifier)
         record("Cancelled the continuation request; active task=\(backgroundTask != nil).")
         completeBackgroundTask(success: false)
+    }
+
+    /// ML1: the probe is created and released with its debug screen, so its six network tasks must
+    /// not outlive it. Every ordinary exit runs `stopNetworkOperations()`; this covers the path where
+    /// the screen is dismissed without one — the `isolated deinit` shape `MeshNetworkManager` and
+    /// `PresenceManager` use. Cancellation only: the observable state below is going away with the
+    /// object, and publishing changes out of a deinit would be the wrong thing to do.
+    isolated deinit {
+        listenerTask?.cancel()
+        browserTask?.cancel()
+        inboundTunnelTask?.cancel()
+        outboundTunnelTask?.cancel()
+        outboundRetryTask?.cancel()
+        heartbeatTask?.cancel()
     }
 
     private func stopNetworkOperations() {

@@ -96,6 +96,11 @@ struct PrivacyWipeCoverageTests {
         "progressPhotoStore.deleteAll",
         "recipePhotoStore.deleteAll",
         "sharedRecipeImportQueue.clear",
+        // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
+        // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in
+        // `wipeFunctionSignatures`, so its declaration line is inside the scanned text and a token
+        // named after it would satisfy itself (the P1b defect class).
+        "FernletMessagesRecipeImportRequest.clearPendingRequest",
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",
@@ -223,6 +228,11 @@ struct PrivacyWipeCoverageTests {
         "func deleteHealthSamplesIfRequested(",
         "func deletePhotoCorpora(",
         "func clearInboxesAndExports(",
+        // A sub-leg of `clearInboxesAndExports`, not a numbered leg of its own: it holds the
+        // Messages App Group inbox clear. Registered because an unregistered private helper's BODY
+        // is never scanned, so the scan silently shrank when the helper was split out (40743b0) —
+        // the funnel still called it, but a banned call moved inside would have been invisible.
+        "func clearMessagesImportInboxes()",
         "func clearDeviceLocalLedgers(",
         "func rotateProximityIdentityAndPurgeDeadDrop(",
         "func resetAll() -> [String]"
