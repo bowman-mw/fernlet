@@ -1984,6 +1984,22 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "move.goalCount",
                      source: "the Move header's goal count"),
+        // The Messages extension's four counts. All are hand-authored: the recipe subtitle is
+        // three INDEPENDENT plurals ("4 servings · 9 ingredients · 6 steps"), which is why they are
+        // three keys joined by punctuation rather than one key with three `%lld` slots — a single
+        // key offers a translator one plural rule for three different nouns.
+        HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
+                     key: "messages.recipe.servingCount",
+                     source: "a Messages recipe card's serving count"),
+        HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
+                     key: "messages.recipe.ingredientCount",
+                     source: "a Messages recipe card's ingredient count"),
+        HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
+                     key: "messages.recipe.stepCount",
+                     source: "a Messages recipe card's step count"),
+        HarvestedKey(catalog: "App/FernletMessagesExtension/Localizable.xcstrings",
+                     key: "messages.workout.sessionCount",
+                     source: "the session count on a shared workout plan"),
     ]
 
     /// Every count-bearing key carries real plural variations.

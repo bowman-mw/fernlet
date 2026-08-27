@@ -1114,6 +1114,17 @@ struct ContentView: View {
         }
     }
 
+    /// How long a burst of Health change notifications is allowed to accumulate before one refresh
+    /// runs. Named rather than inline so the invariant can be pinned: `269003c` reduced a
+    /// per-sample-type refresh storm to one refresh per batch, and a shortened window (or a dropped
+    /// `cancel()` below) reinstates that churn with nothing failing —
+    /// `HealthKitLifecycleBoundaryTests.theObservedHealthRefreshStaysCoalesced()` is what notices.
+    ///
+    /// 500 ms is chosen to outlast a single `HKHealthStore.save` batch, which delivers its observer
+    /// callbacks within a few tens of milliseconds, while staying short enough that a refresh still
+    /// feels immediate.
+    static let healthChangeCoalescingWindow: Duration = .milliseconds(500)
+
     /// A Health write can notify several sample types in one batch. Newest-wins coalescing turns
     /// that burst into one profile/context refresh and cancellation prevents an older result from
     /// updating state after a newer notification supersedes it.
@@ -1122,7 +1133,7 @@ struct ContentView: View {
         healthRefreshTask?.cancel()
         healthRefreshTask = Task {
             do {
-                try await Task.sleep(for: .milliseconds(500))
+                try await Task.sleep(for: Self.healthChangeCoalescingWindow)
             } catch {
                 return
             }
