@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fernlet Messages — Share refresh</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Serif+Display:ital@0;1&family=Fraunces:opsz,wght@9..144,600&family=Instrument+Serif:ital@0;1&display=swap">
+  <style>
+    :root {
+      --ink: #3d2e1e;
+      --muted: #5c6b78;
+      --paper: #f5efdf;
+      --paper-deep: #ede6d6;
+      --card: #fbf7ee;
+      --moss: #5e844d;
+      --moss-dark: #46683a;
+      --sage: #cad9b9;
+      --sun: #d8a74e;
+      --clay: #c87559;
+      --line: rgba(61, 46, 30, .14);
+      --night: #191714;
+      --font-display: "Fraunces", Georgia, serif;
+      --font-serif: "Instrument Serif", Georgia, serif;
+      --font-ui: "DM Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: #211e1a; }
+
+    body {
+      margin: 0;
+      color: #f5efe0;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(103, 136, 91, .28), transparent 34rem),
+        linear-gradient(145deg, #211e1a, #11100e 65%);
+      font-family: var(--font-ui);
+    }
+
+    button, input { font: inherit; }
+
+    button { -webkit-tap-highlight-color: transparent; }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid #38562c;
+      outline-offset: 2px;
+    }
+
+    .page-head {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 62px 0 36px;
+      display: flex;
+      justify-content: space-between;
+      gap: 28px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: #dbc384;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 600px;
+      margin-bottom: 12px;
+      font: 500 clamp(36px, 5vw, 58px)/.99 var(--font-display);
+      letter-spacing: -.045em;
+    }
+
+    .intro {
+      max-width: 570px;
+      margin: 0;
+      color: #c4b8a4;
+      font: 19px/1.45 var(--font-serif);
+    }
+
+    .pill-note {
+      max-width: 280px;
+      border: 1px solid rgba(226, 213, 188, .19);
+      border-radius: 17px;
+      padding: 15px 16px;
+      color: #c8bca7;
+      background: rgba(255, 255, 255, .045);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .pill-note strong { color: #f1e7d4; }
+
+    .boards {
+      width: min(1760px, calc(100% - 40px));
+      margin: 0 auto;
+      padding-bottom: 76px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 402px));
+      gap: 28px;
+      align-items: start;
+      justify-content: center;
+    }
+
+    .board-label {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 0 0 13px;
+    }
+
+    .board-label b {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      color: #1a160f;
+      background: #d8a74e;
+      border-radius: 9px;
+      font-size: 11px;
+    }
+
+    .board-label span {
+      color: #b6a892;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .phone {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      max-width: 402px;
+      height: 874px;
+      color: var(--ink);
+      background: #d9d2c4;
+      border: 0;
+      border-radius: 44px;
+      box-shadow: 0 2px 8px rgba(61, 46, 30, .10), 0 18px 48px rgba(61, 46, 30, .14);
+    }
+
+    .current-app {
+      color: #222;
+      background: #fff;
+    }
+
+    .current-app .messages-top { box-shadow: 0 1px 1px rgba(0, 0, 0, .04); }
+
+    .current-sheet {
+      position: relative;
+      z-index: 3;
+      min-height: 722px;
+      padding: 20px;
+      background: #fff;
+    }
+
+    .current-sheet h2 {
+      margin: 0 0 10px;
+      color: #111;
+      font-family: var(--font-ui);
+      font-size: 18px;
+      letter-spacing: -.02em;
+    }
+
+    .current-sheet > p {
+      margin: 0 0 13px;
+      color: #333;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .system-segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 13px;
+      padding: 2px;
+      background: #e9e9eb;
+      border-radius: 8px;
+    }
+
+    .system-segment span {
+      padding: 5px 3px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .system-segment span:first-child {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .13);
+    }
+
+    .system-search {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 35px;
+      margin-bottom: 13px;
+      padding: 0 10px;
+      color: #8e8e93;
+      background: #e9e9eb;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .system-preview {
+      margin: 0 0 13px !important;
+      color: #4a4a4a !important;
+      font-size: 13px !important;
+    }
+
+    .system-rows {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .system-row {
+      display: block;
+      padding: 12px;
+      color: #007aff;
+      text-align: left;
+      background: #f3f7fd;
+      border: 0;
+      border-radius: 9px;
+      font-size: 14px;
+    }
+
+    .system-row small {
+      display: block;
+      margin-top: 3px;
+      color: #606060;
+      font-size: 12px;
+    }
+
+    .system-action {
+      width: 100%;
+      padding: 11px;
+      color: #fff;
+      background: #007aff;
+      border: 0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .comparison-note {
+      position: absolute;
+      right: 14px;
+      bottom: 17px;
+      left: 14px;
+      z-index: 3;
+      padding: 10px 11px;
+      color: #5c5145;
+      background: #fbf6eb;
+      border: 1px solid #e9ddcc;
+      border-radius: 11px;
+      font-size: 11px;
+      line-height: 1.38;
+    }
+
+    .island {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      z-index: 4;
+      width: 112px;
+      height: 30px;
+      transform: translateX(-50%);
+      background: #080807;
+      border-radius: 15px;
+    }
+
+    .messages-top {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 82px;
+      padding: 42px 20px 10px;
+      color: #4c4740;
+      background: linear-gradient(to bottom, #d9d2c4 0 36px, rgba(255, 255, 255, .94) 36px);
+      border-bottom: 1px solid rgba(39, 35, 29, .08);
+      border-radius: 44px 44px 0 0;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .back { color: #2684e7; font-size: 20px; line-height: 0; }
+
+    .contact {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .avatar {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      place-items: center;
+      color: #fff;
+      background: #a89784;
+      border-radius: 50%;
+      font-size: 10px;
+    }
+
+    .message-space {
+      position: relative;
+      z-index: 1;
+      height: 70px;
+      padding: 13px 17px;
+      background: #fff;
+    }
+
+    .bubble {
+      display: inline-block;
+      padding: 8px 11px;
+      color: #38312a;
+      background: #e9e9eb;
+      border-radius: 15px 15px 15px 5px;
+      font-size: 12px;
+    }
+
+    .app-sheet {
+      position: relative;
+      z-index: 3;
+      min-height: 722px;
+      padding: 20px 20px 14px;
+      background: var(--paper);
+      border-top: 1px solid rgba(54, 40, 26, .07);
+      font-family: var(--font-ui);
+    }
+
+    .app-heading {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .brand-line {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      margin-bottom: 4px;
+      color: var(--moss);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .leaf {
+      display: grid;
+      width: 21px;
+      height: 21px;
+      place-items: center;
+      color: var(--paper);
+      background: var(--moss);
+      border-radius: 50% 50% 50% 3px;
+      transform: rotate(-25deg);
+      font-size: 12px;
+    }
+
+    .leaf i { font-style: normal; transform: rotate(25deg); }
+
+    .app-heading h2 {
+      margin: 0;
+      font: 600 25px/1.06 var(--font-display);
+      letter-spacing: -.035em;
+    }
+
+    .circle-button {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      color: var(--moss-dark);
+      background: rgba(85, 122, 79, .1);
+      border: 0;
+      border-radius: 50%;
+      font-size: 23px;
+      cursor: pointer;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 196px;
+      gap: 3px;
+      margin-bottom: 14px;
+      padding: 3px;
+      background: rgba(92, 73, 50, .1);
+      border-radius: 13px;
+    }
+
+    .segmented button {
+      min-height: 44px;
+      color: #76634e;
+      background: transparent;
+      border: 0;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .segmented button.active {
+      color: var(--ink);
+      background: #fffaf1;
+      box-shadow: 0 1px 3px rgba(54, 40, 26, .13);
+    }
+
+    .search {
+      position: relative;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .search span {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      color: #988773;
+      transform: translateY(-50%);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .search input {
+      width: 100%;
+      height: 44px;
+      padding: 0 44px 0 39px;
+      color: var(--ink);
+      outline: 0;
+      background: rgba(255, 255, 255, .68);
+      border: 1px solid rgba(61, 46, 30, .14);
+      border-radius: 14px;
+      box-shadow: inset 0 1px 2px rgba(78, 61, 42, .03);
+      font-size: 14px;
+    }
+
+    .search input:focus {
+      border-color: var(--moss-dark);
+      box-shadow: 0 0 0 3px rgba(70, 104, 58, .16);
+    }
+
+    .search button {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      display: none;
+      width: 44px;
+      height: 44px;
+      color: #927e69;
+      transform: translateY(-50%);
+      background: transparent;
+      border: 0;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    .search.has-value button { display: block; }
+
+    .catalog-copy {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 2px 9px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .catalog-copy .privacy {
+      color: var(--moss-dark);
+      font-weight: 750;
+    }
+
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding-bottom: 86px;
+    }
+
+    .catalog-phone .app-sheet {
+      display: flex;
+      flex-direction: column;
+      height: 722px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .catalog-phone .catalog-grid {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: rgba(61, 46, 30, .25) transparent;
+      scrollbar-width: thin;
+    }
+
+    .catalog-card {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0;
+      color: var(--ink);
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 2px 8px rgba(61, 46, 30, .08);
+      cursor: pointer;
+    }
+
+    .catalog-card.selected {
+      border-color: var(--moss-dark);
+      box-shadow: 0 0 0 2px rgba(70, 104, 58, .2), 0 4px 10px rgba(61, 46, 30, .1);
+    }
+
+    .catalog-card.selected::after {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: grid;
+      width: 21px;
+      height: 21px;
+      place-items: center;
+      content: "✓";
+      color: #fff;
+      background: var(--moss);
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .catalog-card.hidden { display: none; }
+
+    .catalog-card img {
+      display: block;
+      width: 100%;
+      height: 94px;
+      object-fit: cover;
+    }
+
+    .card-body {
+      display: block;
+      padding: 10px 12px 12px;
+    }
+
+    .card-title {
+      display: block;
+      overflow: hidden;
+      margin-bottom: 4px;
+      font: 400 18px/1.1 var(--font-serif);
+      letter-spacing: -.012em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-meta {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 7px;
+      color: var(--moss-dark);
+      background: rgba(85, 122, 79, .11);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .share-tray {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 5;
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      min-height: 76px;
+      padding: 12px 20px 16px;
+      background: rgba(251, 247, 238, .94);
+      border-top: 1px solid rgba(61, 46, 30, .18);
+      box-shadow: 0 -8px 24px rgba(61, 46, 30, .08);
+      backdrop-filter: blur(12px);
+    }
+
+    .tray-image {
+      width: 44px;
+      height: 44px;
+      object-fit: cover;
+      background: #ded4c4;
+      border-radius: 11px;
+    }
+
+    .tray-copy { flex: 1; min-width: 0; }
+
+    .tray-kicker {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--moss);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .tray-title {
+      display: block;
+      overflow: hidden;
+      font: 400 17px/1 var(--font-serif);
+      letter-spacing: -.02em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .share-button {
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 0 13px;
+      color: #f5efdf;
+      background: var(--moss-dark);
+      border: 0;
+      border-radius: 22px;
+      box-shadow: 0 2px 5px rgba(47, 75, 46, .22);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .share-button:active { transform: scale(.97); }
+
+    .empty {
+      display: none;
+      grid-column: 1 / -1;
+      padding: 24px 13px;
+      color: var(--muted);
+      text-align: center;
+      background: rgba(255, 255, 255, .42);
+      border: 1px dashed rgba(54, 40, 26, .16);
+      border-radius: 15px;
+      font: 15px/1.35 var(--font-display);
+    }
+
+    .empty.visible { display: block; }
+
+    .small-phone .app-sheet { min-height: 722px; }
+
+    .small-phone .catalog-card img { height: 82px; }
+
+    .message-demo {
+      position: relative;
+      z-index: 3;
+      padding: 15px 14px 14px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .date-stamp {
+      margin: 4px 0 15px;
+      color: #8c8985;
+      text-align: center;
+      font-size: 10px;
+    }
+
+    .outgoing {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 11px;
+    }
+
+    .outgoing span {
+      max-width: 235px;
+      padding: 9px 11px;
+      color: #fff;
+      background: #2381f0;
+      border-radius: 17px 17px 5px 17px;
+      font-size: 12px;
+      line-height: 1.32;
+    }
+
+    .shared-card {
+      overflow: hidden;
+      margin: 0 16px 10px 0;
+      background: #fffaf0;
+      border: 1px solid rgba(37, 31, 25, .12);
+      border-radius: 17px;
+      box-shadow: 0 3px 10px rgba(46, 38, 30, .1);
+    }
+
+    .shared-card img {
+      display: block;
+      width: 100%;
+      height: 168px;
+      object-fit: cover;
+    }
+
+    .shared-content { padding: 12px; }
+
+    .received-line {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+      color: var(--moss);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .received-line b {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      color: #fff;
+      background: var(--moss);
+      border-radius: 50% 50% 50% 3px;
+      font-size: 10px;
+    }
+
+    .shared-content h2 {
+      margin: 0 0 5px;
+      font: 600 24px/.98 var(--font-display);
+      letter-spacing: -.045em;
+    }
+
+    .shared-content p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .shared-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+      color: #6f604e;
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .shared-footer span:last-child { color: var(--moss); }
+
+    .composer {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 4;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 14px 13px;
+      background: #f8f8f8;
+      border-top: 1px solid #e3e3e4;
+    }
+
+    .plus {
+      display: grid;
+      width: 27px;
+      height: 27px;
+      place-items: center;
+      color: #777;
+      border: 1px solid #999;
+      border-radius: 50%;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .text-field {
+      flex: 1;
+      height: 31px;
+      padding: 7px 11px;
+      color: #999;
+      border: 1px solid #c4c4c7;
+      border-radius: 17px;
+      font-size: 12px;
+    }
+
+    .design-notes {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto 72px;
+      padding: 22px;
+      color: #cabda8;
+      background: rgba(255, 255, 255, .045);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 22px;
+    }
+
+    .design-notes h2 {
+      margin-bottom: 14px;
+      color: #f5ede0;
+      font: 500 23px var(--font-display);
+      letter-spacing: -.03em;
+    }
+
+    .design-notes ul {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px 28px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .design-notes li {
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .design-notes b { color: #f2e4c5; }
+
+    .toast {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      z-index: 10;
+      padding: 11px 16px;
+      color: #fffaf1;
+      transform: translate(-50%, 90px);
+      opacity: 0;
+      background: #2c482d;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+      font-size: 13px;
+      font-weight: 700;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+
+    .toast.visible { transform: translate(-50%, 0); opacity: 1; }
+
+    @media (prefers-contrast: more) {
+      :root {
+        --muted: #45535e;
+        --moss: #38562c;
+        --moss-dark: #2f4a25;
+        --line: rgba(61, 46, 30, .30);
+      }
+
+      .catalog-card,
+      .search input,
+      .chips button,
+      .shared-card {
+        border-color: var(--line);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+
+    @media (max-width: 880px) {
+      .boards { grid-template-columns: repeat(auto-fit, minmax(360px, 402px)); }
+      .design-notes ul { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .page-head { display: block; width: min(100% - 28px, 460px); padding-top: 38px; }
+      .pill-note { margin-top: 24px; }
+      .boards { grid-template-columns: minmax(0, 420px); width: min(100% - 28px, 420px); }
+      .boards > :last-child { grid-column: auto; }
+      .design-notes { width: min(100% - 28px, 420px); }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <div>
+      <p class="eyebrow">Fernlet · Messages extension</p>
+      <h1>Care worth passing along.</h1>
+      <p class="intro">An image-led sharing surface that feels like Fernlet inside Messages: soft parchment, a findable catalog, and a clear handoff to a friend.</p>
+    </div>
+    <aside class="pill-note"><strong>Prototype only.</strong> The photo tiles are visual placeholders for a future safe, shareable thumbnail field—never notes, journal entries, or other private data.</aside>
+  </header>
+
+  <main class="boards">
+    <section>
+      <div class="board-label"><b>01</b><span>Current build · expanded</span></div>
+      <article class="phone current-app" aria-label="Current Fernlet Messages composer">
+        <div class="island"></div>
+        <div class="messages-top"><span class="back">‹</span><span class="contact"><i class="avatar">M</i> Maya</span><span>•••</span></div>
+        <div class="message-space"><span class="bubble">That dinner you made looked so good ✨</span></div>
+        <div class="current-sheet">
+          <h2>Browse Fernlet recipes</h2>
+          <p>Notes are excluded from Messages recipes.</p>
+          <div class="system-segment"><span>Recipes</span><span>Workouts</span></div>
+          <div class="system-search"><span>⌕</span><span>Search recipes</span></div>
+          <p class="system-preview">Choose a recipe to preview its servings, ingredients, and steps.</p>
+          <div class="system-rows">
+            <button class="system-row" type="button">Sunlit herb pasta<small>4 servings · 8 ingredients · 5 steps</small></button>
+            <button class="system-row" type="button">Miso salmon bowls<small>2 servings · 10 ingredients · 4 steps</small></button>
+            <button class="system-row" type="button">Crisp citrus salad<small>3 servings · 8 ingredients · 4 steps</small></button>
+          </div>
+          <button class="system-action" type="button">Insert recipe</button>
+        </div>
+        <p class="comparison-note"><b>Today:</b> functional and safely searchable, but text-only rows make a large saved catalog slow to scan and do not bring Fernlet’s visual warmth into Messages.</p>
+      </article>
+    </section>
+
+    <section>
+      <div class="board-label"><b>02</b><span>Recipe picker · refreshed</span></div>
+      <article class="phone catalog-phone" id="recipe-phone">
+        <div class="island"></div>
+        <div class="messages-top"><span class="back">‹</span><span class="contact"><i class="avatar">M</i> Maya</span><span>•••</span></div>
+        <div class="message-space"><span class="bubble">That dinner you made looked so good ✨</span></div>
+        <div class="app-sheet">
+          <div class="app-heading">
+            <div>
+              <div class="brand-line"><i class="leaf"><i>⌁</i></i> Fernlet</div>
+              <h2>Share a recipe</h2>
+            </div>
+            <button class="circle-button" type="button" aria-label="Close mockup">×</button>
+          </div>
+          <nav class="segmented" role="tablist" aria-label="Share content type">
+            <button class="active" type="button" role="tab" aria-selected="true" data-switch="recipe">Recipes</button>
+            <button type="button" role="tab" aria-selected="false" data-switch="workout">Workouts</button>
+          </nav>
+          <label class="search"><span>⌕</span><input type="search" placeholder="Search your recipes" data-search="recipes" aria-label="Search recipes"><button type="button" aria-label="Clear recipe search">×</button></label>
+          <div class="catalog-copy"><span><span data-count="recipes">6</span> recipes ready to share</span><span class="privacy">⌁ notes stay private</span></div>
+          <div class="catalog-grid" data-catalog="recipes">
+            <button class="catalog-card selected" type="button" data-name="Sunlit herb pasta" data-meta="4 servings · 8 ingredients · 5 steps" data-tag="vegetarian recent" data-image="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=900&q=85" alt="Herb pasta in a bowl">
+              <span class="card-body"><span class="card-title">Sunlit herb pasta</span><span class="card-meta">4 servings · 5 steps</span><span class="tag">Vegetarian</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Miso salmon bowls" data-meta="2 servings · 10 ingredients · 4 steps" data-tag="quick recent" data-image="https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=85" alt="Colorful grain bowl">
+              <span class="card-body"><span class="card-title">Miso salmon bowls</span><span class="card-meta">2 servings · 4 steps</span><span class="tag">Quick</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Creamy tomato toast" data-meta="2 servings · 7 ingredients · 3 steps" data-tag="quick vegetarian" data-image="https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=85" alt="Tomato toast">
+              <span class="card-body"><span class="card-title">Creamy tomato toast</span><span class="card-meta">2 servings · 3 steps</span><span class="tag">Quick</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Sunday roast chicken" data-meta="6 servings · 9 ingredients · 6 steps" data-tag="recent" data-image="https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&w=900&q=85" alt="Roast chicken and vegetables">
+              <span class="card-body"><span class="card-title">Sunday roast chicken</span><span class="card-meta">6 servings · 6 steps</span><span class="tag">Family table</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Crisp citrus salad" data-meta="3 servings · 8 ingredients · 4 steps" data-tag="quick vegetarian" data-image="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=85" alt="Bright green salad">
+              <span class="card-body"><span class="card-title">Crisp citrus salad</span><span class="card-meta">3 servings · 4 steps</span><span class="tag">Vegetarian</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Berry oat bake" data-meta="8 servings · 7 ingredients · 4 steps" data-tag="recent vegetarian" data-image="https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?auto=format&fit=crop&w=900&q=85" alt="Berry breakfast bake">
+              <span class="card-body"><span class="card-title">Berry oat bake</span><span class="card-meta">8 servings · 4 steps</span><span class="tag">Weekend</span></span>
+            </button>
+            <p class="empty">Nothing in your recipe book matches that yet.</p>
+          </div>
+          <div class="share-tray">
+            <img class="tray-image" src="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=900&q=85" alt="">
+            <span class="tray-copy"><span class="tray-kicker">Ready to share</span><span class="tray-title">Sunlit herb pasta</span></span>
+            <button class="share-button" type="button">Share ↗</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section>
+      <div class="board-label"><b>03</b><span>Workout picker · refreshed</span></div>
+      <article class="phone small-phone catalog-phone" id="workout-phone">
+        <div class="island"></div>
+        <div class="messages-top"><span class="back">‹</span><span class="contact"><i class="avatar">M</i> Maya</span><span>•••</span></div>
+        <div class="message-space"><span class="bubble">Send me your reset plan when you get a sec?</span></div>
+        <div class="app-sheet">
+          <div class="app-heading">
+            <div>
+              <div class="brand-line"><i class="leaf"><i>⌁</i></i> Fernlet</div>
+              <h2>Share a workout</h2>
+            </div>
+            <button class="circle-button" type="button" aria-label="Close mockup">×</button>
+          </div>
+          <nav class="segmented" role="tablist" aria-label="Share content type">
+            <button type="button" role="tab" aria-selected="false" data-switch="recipe">Recipes</button>
+            <button class="active" type="button" role="tab" aria-selected="true" data-switch="workout">Workouts</button>
+          </nav>
+          <label class="search"><span>⌕</span><input type="search" placeholder="Search workout plans" data-search="workouts" aria-label="Search workout plans"><button type="button" aria-label="Clear workout search">×</button></label>
+          <div class="catalog-copy"><span><span data-count="workouts">6</span> plans ready to share</span><span class="privacy">⌁ date gets checked</span></div>
+          <div class="catalog-grid" data-catalog="workouts">
+            <button class="catalog-card selected" type="button" data-name="Easy strength reset" data-meta="Mon, Aug 31 · 3 sessions" data-tag="strength gentle" data-image="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=900&q=85" alt="Strength training equipment">
+              <span class="card-body"><span class="card-title">Easy strength reset</span><span class="card-meta">Mon, Aug 31 · 3 sessions</span><span class="tag">Strength</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Sunday stretch club" data-meta="Sun, Sep 6 · 1 session" data-tag="gentle outdoors" data-image="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=85" alt="Yoga pose outdoors">
+              <span class="card-body"><span class="card-title">Sunday stretch club</span><span class="card-meta">Sun, Sep 6 · 1 session</span><span class="tag">Gentle</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Fresh air walk" data-meta="Wed, Sep 2 · 4 sessions" data-tag="gentle outdoors" data-image="https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1551632811-561732d1e306?auto=format&fit=crop&w=900&q=85" alt="Person walking on a forest trail">
+              <span class="card-body"><span class="card-title">Fresh air walk</span><span class="card-meta">Wed, Sep 2 · 4 sessions</span><span class="tag">Outdoors</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Steady core" data-meta="Fri, Sep 4 · 2 sessions" data-tag="strength" data-image="https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&w=900&q=85" alt="Kettlebell training">
+              <span class="card-body"><span class="card-title">Steady core</span><span class="card-meta">Fri, Sep 4 · 2 sessions</span><span class="tag">Strength</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Dinner break dance" data-meta="Thu, Sep 3 · 3 sessions" data-tag="gentle" data-image="https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=85" alt="Woman dancing for exercise">
+              <span class="card-body"><span class="card-title">Dinner break dance</span><span class="card-meta">Thu, Sep 3 · 3 sessions</span><span class="tag">Gentle</span></span>
+            </button>
+            <button class="catalog-card" type="button" data-name="Weekend bike loop" data-meta="Sat, Sep 5 · 1 session" data-tag="outdoors" data-image="https://images.unsplash.com/photo-1538805060514-97d9cc17730c?auto=format&fit=crop&w=900&q=85">
+              <img src="https://images.unsplash.com/photo-1538805060514-97d9cc17730c?auto=format&fit=crop&w=900&q=85" alt="Bicycle on a country road">
+              <span class="card-body"><span class="card-title">Weekend bike loop</span><span class="card-meta">Sat, Sep 5 · 1 session</span><span class="tag">Outdoors</span></span>
+            </button>
+            <p class="empty">Nothing in your plans matches that yet.</p>
+          </div>
+          <div class="share-tray">
+            <img class="tray-image" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=900&q=85" alt="">
+            <span class="tray-copy"><span class="tray-kicker">Ready to share</span><span class="tray-title">Easy strength reset</span></span>
+            <button class="share-button" type="button">Share ↗</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section>
+      <div class="board-label"><b>04</b><span>Shared card · recipient</span></div>
+      <article class="phone" aria-label="Recipient Messages mockup">
+        <div class="island"></div>
+        <div class="messages-top"><span class="back">‹</span><span class="contact"><i class="avatar">A</i> Alex</span><span>•••</span></div>
+        <div class="message-demo">
+          <p class="date-stamp">Today 10:42 AM</p>
+          <div class="outgoing"><span>Thought you might like this one. It’s very forgiving 🌿</span></div>
+          <article class="shared-card">
+            <img src="https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1200&q=85" alt="Sunlit herb pasta in a bowl">
+            <div class="shared-content">
+              <div class="received-line"><b>⌁</b> Fernlet recipe</div>
+              <h2>Sunlit herb pasta</h2>
+              <p>4 servings · 8 ingredients · 5 steps</p>
+              <div class="shared-footer"><span>Ready when you are</span><span>Open in Fernlet →</span></div>
+            </div>
+          </article>
+          <div class="outgoing"><span>Saved it. Dinner this week?</span></div>
+        </div>
+        <div class="app-sheet" style="min-height:344px; padding-top:18px;">
+          <div class="app-heading">
+            <div>
+              <div class="brand-line"><i class="leaf"><i>⌁</i></i> Fernlet</div>
+              <h2>A little care, shared</h2>
+            </div>
+          </div>
+          <p style="margin:0 2px 17px; color:var(--muted); font:16px/1.38 var(--font-serif);">The card makes the handoff feel generous, while the import review stays inside Fernlet.</p>
+          <div style="display:flex; gap:10px; align-items:center; padding:16px; background:var(--card); border:1px solid var(--line); border-radius:20px;">
+            <span style="display:grid; width:44px; height:44px; place-items:center; color:var(--moss-dark); background:rgba(94,132,77,.12); border-radius:14px; font-weight:800;">⌁</span>
+            <span style="font-size:11px; line-height:1.4; color:var(--muted);"><b style="color:var(--ink);">Privacy at a glance.</b><br>Personal notes aren’t included in shared recipes.</span>
+          </div>
+        </div>
+        <div class="composer"><i class="plus">+</i><span class="text-field">iMessage</span><span style="font-size:18px; color:#777;">◉</span></div>
+      </article>
+    </section>
+  </main>
+
+  <section class="design-notes">
+    <h2>What this direction adds</h2>
+    <ul>
+      <li><b>Search that feels native.</b> It is always visible in expanded mode and changes its prompt between recipe and workout catalogs.</li>
+      <li><b>Useful visual scanning.</b> Full-bleed thumbnails make familiar food and movement plans recognisable before reading titles.</li>
+      <li><b>One confident handoff.</b> Selection creates a persistent tray, so people can browse without losing the item they plan to send.</li>
+      <li><b>Fernlet’s actual geometry.</b> The refreshed pickers use the redesign’s 20-point gutters, 20-point card corners, parchment/card tokens, and 44-point controls.</li>
+      <li><b>Privacy stays legible.</b> The picker and received card plainly reinforce that recipe notes remain excluded from Messages.</li>
+      <li><b>Accessibility is built in.</b> Focus rings, stateful controls, higher-contrast colors, and reduced-motion support are part of the reference—not a later polish pass.</li>
+    </ul>
+  </section>
+
+  <div class="toast" role="status" aria-live="polite">Ready to place in your conversation.</div>
+
+  <script>
+    const toast = document.querySelector('.toast');
+    let toastTimer;
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('visible');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2400);
+    }
+
+    function updateTray(phone, card) {
+      const trayImage = phone.querySelector('.tray-image');
+      const trayTitle = phone.querySelector('.tray-title');
+      trayImage.src = card.dataset.image;
+      trayTitle.textContent = card.dataset.name;
+    }
+
+    function filterCatalog(phone) {
+      const catalog = phone.querySelector('[data-catalog]');
+      const kind = catalog.dataset.catalog;
+      const query = phone.querySelector(`[data-search="${kind}"]`).value.trim().toLowerCase();
+      const cards = [...catalog.querySelectorAll('.catalog-card')];
+      let visible = 0;
+
+      cards.forEach((card) => {
+        const matchesWords = `${card.dataset.name} ${card.dataset.meta}`.toLowerCase().includes(query);
+        card.classList.toggle('hidden', !matchesWords);
+        visible += matchesWords ? 1 : 0;
+      });
+
+      phone.querySelector(`[data-count="${kind}"]`).textContent = visible;
+      catalog.querySelector('.empty').classList.toggle('visible', visible === 0);
+      phone.querySelector('.search').classList.toggle('has-value', query.length > 0);
+    }
+
+    document.querySelectorAll('.phone').forEach((phone) => {
+      phone.querySelectorAll('.catalog-card').forEach((card) => {
+        card.setAttribute('aria-pressed', card.classList.contains('selected'));
+        card.addEventListener('click', () => {
+          phone.querySelectorAll('.catalog-card').forEach((item) => {
+            item.classList.remove('selected');
+            item.setAttribute('aria-pressed', 'false');
+          });
+          card.classList.add('selected');
+          card.setAttribute('aria-pressed', 'true');
+          updateTray(phone, card);
+        });
+      });
+
+      phone.querySelectorAll('.search input').forEach((input) => {
+        input.addEventListener('input', () => filterCatalog(phone));
+      });
+
+      phone.querySelectorAll('.search button').forEach((button) => {
+        button.addEventListener('click', () => {
+          const input = button.parentElement.querySelector('input');
+          input.value = '';
+          input.focus();
+          filterCatalog(phone);
+        });
+      });
+
+      phone.querySelectorAll('.share-button').forEach((button) => {
+        button.addEventListener('click', () => showToast(`${phone.querySelector('.tray-title').textContent} is ready to share.`));
+      });
+
+      phone.querySelectorAll('[data-switch]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const destination = button.dataset.switch === 'recipe' ? '#recipe-phone' : '#workout-phone';
+          const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+          document.querySelector(destination).scrollIntoView({ behavior, block: 'start' });
+        });
+      });
+    });
+  </script>
+</body>
+</html>
