@@ -2085,10 +2085,9 @@ final class FernletStore {
         diary.setQuickLogItems(items)
     }
 
-    /// G4 — the ambient-read gate. This is the load-bearing one for hiding: the Home tab requests
-    /// EVERY capability on each appearance (see `refreshHealthContextForActiveTab`), so without this
-    /// subtraction Fernlet would keep reading cycle/intimacy samples out of HealthKit on a path no
-    /// view drives and the user cannot see.
+    /// G4 — the ambient-read gate. Launch and observed Health changes request the broad daily
+    /// context, so this subtraction prevents hidden cycle/intimacy samples from being read on a
+    /// path no visible feature drives.
     func allowedHealthCapabilities(from capabilities: Set<HealthCapability>) -> Set<HealthCapability> {
         var allowed = capabilities
         if !isIntimacyTrackingVisible { allowed.remove(.intimateLogging) }
@@ -5999,6 +5998,7 @@ extension FernletStore {
         repository: FernletRepository? = nil,
         savedRecipeRepository: SavedRecipeRepository? = nil,
         persistenceController: PersistenceController? = nil,
+        healthKitService: (any HealthKitServicing)? = nil,
         statusUpdate: @MainActor @escaping (String) -> Void = { _ in }
     ) async throws -> FernletStore {
         let loadSignpostID = StartupTiming.begin("FernletStore.load")
@@ -6061,7 +6061,7 @@ extension FernletStore {
             customItemService: customItemService,
             coinLedgerService: coinLedgerService,
             milestoneLedgerService: milestoneLedgerService,
-            healthKitService: nil
+            healthKitService: healthKitService
         )
     }
 }

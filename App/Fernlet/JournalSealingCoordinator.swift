@@ -74,6 +74,10 @@ final class JournalSealingCoordinator {
     /// reads it so the one-tap mood row appends instead of overwriting a real sealed entry in that
     /// window.
     private var noLockHydrated = false
+    /// Device-key rows are folded at most once per process session unless a new device-key write
+    /// occurs. User-key rows are intentionally undecryptable with that old key; rescanning them on
+    /// every unlock only repeats Core Data fetch/decrypt allocations and the same audit line.
+    private var deviceKeyMigrationPending = true
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by the store's `currentSnapshot()` to strip text before persisting to the cloud blob.
     /// Readable by the store (passed to `FernletSnapshot.forStorage`); mutation stays here.
@@ -185,6 +189,7 @@ final class JournalSealingCoordinator {
         do {
             try narrativeRepository.insert(narrative, contentKey: key)
             sealedJournalIDs.insert(entry.id)
+            if journalContentKey == nil { deviceKeyMigrationPending = true }
         } catch {
             FernletAuditLog.log("journal.seal.failed", context: ["id": entry.id.uuidString])
             // Do NOT add the entry to sealedJournalIDs on failure. Because the id is then absent from
@@ -309,9 +314,9 @@ final class JournalSealingCoordinator {
     /// When the user sets up a lock for the first time, re-encrypts entries that were previously
     /// sealed with the device key so they become protected by the user's content key.
     private func migrateDeviceKeyEntriesToUserKey(userKey: SymmetricKey) {
-        // No device key readable this instant ⇒ nothing can be decrypted to re-key. The rows stay
-        // readable under the device key and this migration re-runs on every `activateSealedJournals`,
-        // so this is a deferral, not a loss — but it is named rather than silent.
+        guard deviceKeyMigrationPending else { return }
+        // No device key readable this instant ⇒ nothing can be decrypted to re-key. Pending remains
+        // true, so a later journal activation retries; this is a deferral, not a loss.
         guard let dKey = deviceJournalKey else {
             FernletAuditLog.log("journal.rekey.failed", context: [:])
             return
@@ -330,14 +335,16 @@ final class JournalSealingCoordinator {
             do {
                 try narrativeRepository.update(narrative, contentKey: userKey)
             } catch {
-                // The row stays decryptable under the DEVICE key (no data loss); this migration runs
-                // again on every `activateSealedJournals`, so the next unlock retries exactly this row.
+                // The row stays decryptable under the DEVICE key (no data loss). `failed` leaves the
+                // pending latch armed, so the next journal activation retries exactly this row.
                 failed += 1
                 FernletAuditLog.log("journal.rekey.failed", context: ["id": narrative.id.uuidString])
             }
         }
         if failed > 0 {
             FernletAuditLog.log("journal.rekey.incomplete", context: ["failed": String(failed)])
+        } else {
+            deviceKeyMigrationPending = false
         }
     }
 

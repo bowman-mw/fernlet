@@ -174,7 +174,50 @@ struct HealthKitScoringTests {
         #expect(score.healthBodyContext?.restingHeartRateBPM == 58)
     }
 
+    @MainActor
+    @Test func identicalHealthRefreshDoesNotScheduleAnotherSnapshotSave() {
+        let host = HealthSyncTestContext()
+        let coordinator = HealthSyncCoordinator(host: host, healthKitService: nil)
+        let firstTimestamp = Date(timeIntervalSince1970: 1_000)
+        let values = HealthActivitySummary(
+            steps: 8_000,
+            activeEnergyKilocalories: 350,
+            exerciseMinutes: 25
+        )
+        coordinator.updateHealthContext(
+            HealthDailyContext(syncedAt: firstTimestamp, activity: values)
+        )
+        #expect(host.snapshotSaveCount == 1)
+
+        host.snapshotSaveCount = 0
+        coordinator.updateHealthContext(
+            HealthDailyContext(
+                syncedAt: Date(timeIntervalSince1970: 2_000),
+                activity: values
+            )
+        )
+
+        #expect(host.snapshotSaveCount == 0)
+        #expect(host.day.healthContext?.syncedAt == firstTimestamp)
+    }
+
     private func temporaryURL(_ name: String) -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("fernlet-hkscoring-\(name)-\(UUID().uuidString).json")
     }
+}
+
+@MainActor
+private final class HealthSyncTestContext: HealthSyncContext {
+    var day = FernletDay(date: "2026-08-26")
+    var snapshotSaveCount = 0
+    var todayKey: String { day.date }
+
+    func scheduleSnapshotSave() { snapshotSaveCount += 1 }
+    func workoutExists(id: UUID) -> Bool { false }
+    func workoutExists(healthKitUUID: UUID) -> Bool { false }
+    func setWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String) { }
+    func upsertWorkout(_ workout: Workout, date: String) { }
+    func isWorkoutTombstoned(fernletWorkoutID: UUID) -> Bool { false }
+    func clearWorkoutTombstone(fernletWorkoutID: UUID) { }
+    func removeWorkoutByHealthKitUUID(_ hkUUID: UUID) { }
 }

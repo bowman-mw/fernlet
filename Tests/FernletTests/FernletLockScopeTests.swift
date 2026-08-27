@@ -16,6 +16,7 @@
 //   3. `contentKey(for:)` is the decrypt seam: only `.privateHub` ever gets the sealed-content key.
 
 import Foundation
+import Observation
 import SwiftUI
 import Testing
 import CryptoKit
@@ -392,5 +393,52 @@ struct FernletLockScopeTests {
         window?.isHidden = true
         window?.rootViewController = nil
         window = nil
+    }
+
+    @MainActor
+    @Test func retainedGateLocksWhenItsExplicitActivityEnds() async throws {
+        let service = freshScopedService()
+        defer { try? service.reset() }
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first else {
+            Issue.record("Expected an active window scene for SwiftUI lifecycle testing")
+            return
+        }
+        try await service.configure(
+            credential: .pin6("135246"),
+            grantingScope: .privateHub
+        )
+        let activity = GateActivityModel()
+        var window: UIWindow? = UIWindow(windowScene: windowScene)
+        window?.rootViewController = UIHostingController(
+            rootView: GateActivityView(activity: activity).environment(service)
+        )
+        window?.makeKeyAndVisible()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(service.isUnlocked(for: .privateHub))
+
+        activity.isActive = false
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!service.isUnlocked(for: .privateHub))
+        #expect(service.contentKey(for: .privateHub) == nil)
+
+        window?.isHidden = true
+        window?.rootViewController = nil
+        window = nil
+    }
+}
+
+@MainActor
+@Observable
+private final class GateActivityModel {
+    var isActive = true
+}
+
+private struct GateActivityView: View {
+    var activity: GateActivityModel
+
+    var body: some View {
+        Text("private hub")
+            .fernletLockGate(scope: .privateHub, active: activity.isActive)
     }
 }

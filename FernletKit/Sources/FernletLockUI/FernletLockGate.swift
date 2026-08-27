@@ -233,6 +233,9 @@ struct FernletLockGateModifier: ViewModifier {
             // gate does not re-appear after an in-place unlock.
             if lockService.hardBindingNoticePending { showHardBindingNotice = true }
         }
+        .onChange(of: active) { wasActive, isActive in
+            handleActivationChange(wasActive: wasActive, isActive: isActive)
+        }
         .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
     }
 
@@ -345,6 +348,21 @@ struct FernletLockGateModifier: ViewModifier {
         lockService.revokeUnlockOutside(scope)
         // If configured + locked -> the overlay will appear automatically via `isLocked`
         // Nothing else to do here; biometric auto-prompt is inside FernletLockView.onAppear
+    }
+
+    /// A retained `TabView` page does not disappear when selection moves elsewhere. Treat the
+    /// explicit active edge as its real lifecycle: leaving locks immediately (sheet coverage does
+    /// not change this flag), while re-entry recreates the overlay and only then permits Face ID.
+    private func handleActivationChange(wasActive: Bool, isActive: Bool) {
+        guard wasActive != isActive else { return }
+        if isActive {
+            handleAppear()
+            return
+        }
+        gateIsActive = false
+        pendingRelock = false
+        guard lockService.isUnlocked(for: scope) else { return }
+        lockService.lock(reason: .viewDisappeared)
     }
 
     /// Re-locks (scrubbing the content key) when the gated view genuinely departs.

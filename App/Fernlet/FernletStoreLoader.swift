@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import HealthKitGateway
 import ProximityKit
 
 /// The observable launch state machine that loads ``FernletStore`` off the first frame.
@@ -35,7 +36,7 @@ final class FernletStoreLoader {
     @ObservationIgnored private var didStart = false
 
     /// Starts the load exactly once per process; safe to call from a re-fired `.task`.
-    func startIfNeeded() async {
+    func startIfNeeded(healthKitService: any HealthKitServicing) async {
         guard !didStart else { return }
         didStart = true
         // Before the store (and its lazily-created proximity managers) exists: end any proximity
@@ -43,20 +44,22 @@ final class FernletStoreLoader {
         // (`didStart`), so the reaper can never run while a manager in this process is live —
         // `retry()` re-enters only from `.failed`, when no store was ever built.
         await ProximityLiveActivityReaper.endOrphans()
-        await loadStore()
+        await loadStore(healthKitService: healthKitService)
     }
 
     /// Resets the one-shot guard and status, returns to `.preparing`, and re-runs the load.
-    func retry() async {
+    func retry(healthKitService: any HealthKitServicing) async {
         didStart = false
         phase = .preparing
         statusMessage = LaunchPreparationService.initialStatusMessage
-        await startIfNeeded()
+        await startIfNeeded(healthKitService: healthKitService)
     }
 
-    private func loadStore() async {
+    private func loadStore(healthKitService: any HealthKitServicing) async {
         do {
-            let store = try await ExchangeIntentService.shared.loadStoreForUI { [weak self] message in
+            let store = try await ExchangeIntentService.shared.loadStoreForUI(
+                healthKitService: healthKitService
+            ) { [weak self] message in
                 self?.statusMessage = message
             }
             statusMessage = "Getting Fernlet ready..."

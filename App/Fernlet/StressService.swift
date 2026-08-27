@@ -77,7 +77,7 @@ final class StressService: StressScoringContextProviding {
         var computedAt: Date?
     }
 
-    /// Minimum spacing between HealthKit refreshes (launch + scene-active are debounced).
+    /// Minimum spacing used to debounce repeated launch-path refresh requests.
     static let refreshInterval: TimeInterval = 30 * 60
     /// Trailing history window: 60 days (the engine's "ideal" baseline; 30 is its minimum).
     static let historyDays = 60
@@ -116,8 +116,8 @@ final class StressService: StressScoringContextProviding {
         self.fetchMetricDays = fetchMetricDays
     }
 
-    /// Debounced refresh for launch / scene-active. When the opt-in is off this still runs
-    /// the (cheap) scrub path immediately rather than waiting out the debounce.
+    /// Debounced refresh for the launch path. When the opt-in is off this still runs the (cheap)
+    /// scrub path immediately rather than waiting out the debounce.
     func refreshIfNeeded(now: Date = .now) async {
         let enabled = store?.settings.stressAwarenessEnabled ?? false
         if enabled, let last = lastRefreshedAt, now.timeIntervalSince(last) < Self.refreshInterval { return }

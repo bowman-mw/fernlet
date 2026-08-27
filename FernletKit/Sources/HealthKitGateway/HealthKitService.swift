@@ -28,6 +28,9 @@ public protocol HealthKitServicing {
     func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome
     /// Current availability + per-type write statuses across every capability, without prompting.
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot
+    /// Whether Fernlet has previously requested this capability and its device-local opt-in remains
+    /// enabled. Long-lived observations must pass this gate before touching HealthKit.
+    func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool
     /// Starts a persistent anchored query for one sample type, delivering adds/deletes since the
     /// keychain-persisted anchor to the handler (on the main actor).
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws
@@ -72,6 +75,14 @@ public protocol HealthKitServicing {
     func enableIntegration() async throws
     /// Deep-links to the Health privacy settings for Fernlet (best effort).
     func openHealthPrivacySettings() async
+}
+
+public extension HealthKitServicing {
+    /// Test-double compatibility: a conformer without Fernlet's request ledger falls back to the
+    /// integration master state. The concrete service overrides this with the full persisted gate.
+    func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool {
+        currentAuthorizationSnapshot().isAvailable
+    }
 }
 
 /// One calendar day of stress-relevant metrics from ``HealthKitService/stressMetricDays(daysBack:referenceDate:)``.
@@ -324,9 +335,8 @@ public enum HealthKitServiceError: LocalizedError {
 ///
 /// Exists so tests can substitute a fake store: `SystemHealthKitStoreController` is the
 /// production conformer (a pure pass-through to `HKHealthStore`), and the disable/delete-all test
-/// suites inject recorders. Note the service still calls `healthStore` directly for some one-shot
-/// sample/statistics queries — only authorization, observation lifecycle, saves, and deletes are
-/// guaranteed to pass through this seam.
+/// suites inject recorders. All `HKQuery` execution passes through this seam so cancellation can
+/// stop the concrete query and tests can verify that lifecycle.
 ///
 /// `@MainActor` is spelled out even though it is this module's default isolation: the seam is
 /// only ever driven by the `@MainActor` ``HealthKitService``, and every conformer (the production
@@ -742,6 +752,61 @@ public enum AuthoredSampleDeleteOutcome: Sendable {
 /// closed gates and missing types is ``HealthKitServiceError``; observation callbacks silently
 /// drop query errors (best-effort delivery).
 @MainActor
+private final class CancellableHealthQuery<Value> {
+    private let storeController: any HealthKitStoreControlling
+    private var query: HKQuery?
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var isFinished = false
+
+    init(storeController: any HealthKitStoreControlling) {
+        self.storeController = storeController
+    }
+
+    func run(
+        makeQuery: (@escaping (Result<Value, Error>) -> Void) -> HKQuery
+    ) async throws -> Value {
+        let value = try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Value, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                self.continuation = continuation
+                let query = makeQuery { [weak self] result in
+                    Task { @MainActor in self?.finish(with: result) }
+                }
+                self.query = query
+                storeController.execute(query)
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.cancel() }
+        }
+        try Task.checkCancellation()
+        return value
+    }
+
+    private func finish(with result: Result<Value, Error>) {
+        guard !isFinished, let continuation else { return }
+        isFinished = true
+        self.continuation = nil
+        query = nil
+        continuation.resume(with: result)
+    }
+
+    private func cancel() {
+        guard !isFinished else { return }
+        isFinished = true
+        if let query { storeController.stop(query) }
+        query = nil
+        let continuation = continuation
+        self.continuation = nil
+        continuation?.resume(throwing: CancellationError())
+    }
+}
+
+@MainActor
 public final class HealthKitService: HealthKitServicing {
     /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`
     /// lives in the app target (it needs CloudKitSync + LocalPersistence), so the app
@@ -752,10 +817,10 @@ public final class HealthKitService: HealthKitServicing {
     /// silently skipping the purge of cached HealthKit-derived clinical values.
     public static var defaultCacheClearer: HealthKitCacheClearing?
 
-    /// The underlying Health store, used directly by the `PeriodHealthKitServicing` conformance and
-    /// a few one-shot queries (bypassing ``HealthKitStoreControlling``).
+    /// The underlying Health store, retained for synchronous characteristic reads, workout-builder
+    /// construction, and HealthKit APIs that are not `HKQuery` operations.
     ///
-    /// R6: `private`, not `public` — every one of those consumers is an extension in THIS file, and
+    /// R6: `private`, not `public` — every consumer is an extension in THIS file, and
     /// same-file extensions can read a private member. Nothing outside the file referenced it, so
     /// exposing the raw store module-wide (and to every app target) bought nothing.
     private let healthStore: HKHealthStore
@@ -790,6 +855,11 @@ public final class HealthKitService: HealthKitServicing {
     /// Registered per-type observation handlers, kept so ``enableIntegration()`` can restart the
     /// anchored queries after a disable/enable cycle.
     private var observationRegistrations: [String: (type: HKSampleType, handler: (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void)] = [:]
+    /// Foreground-only change observers used by the app shell to refresh daily context when Health
+    /// changes. They carry no sample payload, avoiding the retained/unbounded anchored-query replay
+    /// that made tab switching grow memory on a physical device.
+    private var changeQueriesByType: [String: HKObserverQuery] = [:]
+    private var changeObservationRegistrations: [String: (type: HKSampleType, handler: (HKSampleType) -> Void)] = [:]
 
     /// Creates a service over the given (or a fresh) Health store.
     ///
@@ -822,6 +892,32 @@ public final class HealthKitService: HealthKitServicing {
 
     public func isHealthDataAvailable() -> Bool {
         HKHealthStore.isHealthDataAvailable()
+    }
+
+    public func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool {
+        requestedAndEnabledCapabilities(from: [capability]).contains(capability)
+    }
+
+    public func requestedAndEnabledCapabilities(
+        from capabilities: Set<HealthCapability>
+    ) -> Set<HealthCapability> {
+        guard isIntegrationEnabled, !capabilities.isEmpty else { return [] }
+        let preferences = preferencesStore.preferences
+        let requested = HealthCapabilityRequestLedger.requestedCapabilities(
+            keychainService: capabilityLedgerKeychainService,
+            legacyDefaults: capabilityLedgerDefaults
+        )
+        return Set(capabilities.filter { capability in
+            requested.contains(capability)
+                && preferences.healthKitCapabilityEnabled[capability.rawValue] == true
+        })
+    }
+
+    private func executeOneShot<Value>(
+        _ makeQuery: (@escaping (Result<Value, Error>) -> Void) -> HKQuery
+    ) async throws -> Value {
+        let operation = CancellableHealthQuery<Value>(storeController: storeController)
+        return try await operation.run(makeQuery: makeQuery)
     }
 
     /// Presents the system prompt for one capability's share/read types; integration-gated, and
@@ -933,11 +1029,32 @@ public final class HealthKitService: HealthKitServicing {
         startAnchoredQuery(for: type, handler: handler)
     }
 
+    /// Registers one bounded, payload-free foreground observer per sample type represented by the
+    /// requested capabilities. Re-registering replaces the old query instead of accumulating one
+    /// observer per view lifecycle. The callback means only "Health changed"; callers coalesce it
+    /// and perform the one current-value read they need.
+    public func startObservingChanges(
+        for capabilities: Set<HealthCapability>,
+        handler: @escaping (HKSampleType) -> Void
+    ) throws {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        let eligible = requestedAndEnabledCapabilities(from: capabilities)
+        let sampleTypes = try Self.sampleTypes(for: eligible)
+        reconcileChangeObservers(with: sampleTypes)
+        for type in sampleTypes {
+            registerChangeObserverIfNeeded(for: type, handler: handler)
+        }
+    }
+
     /// Starts (replacing any prior) the anchored workout observation limited to the trailing
     /// 30-day backfill window, resuming from the keychain-persisted anchor. Adds/deletes are
     /// delivered to the handler on the main actor and the new anchor is persisted after each batch.
     public func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        guard isCapabilityRequestedAndEnabled(.workoutLogging) else {
+            stopObservingWorkouts()
+            return
+        }
         stopObservingWorkouts()
 
         let workoutType = HKObjectType.workoutType()
@@ -949,12 +1066,20 @@ public final class HealthKitService: HealthKitServicing {
             predicate: predicate,
             anchor: anchor,
             limit: HKObjectQueryNoLimit
-        ) { _, samples, deletedObjects, newAnchor, error in
-            guard Self.isObservationDeliverable(error, type: workoutType.identifier) else { return }
+        ) { [weak self] query, samples, deletedObjects, newAnchor, error in
+            guard self?.isObservationDeliverable(
+                error,
+                type: workoutType.identifier,
+                query: query
+            ) == true else { return }
             Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
-        query.updateHandler = { _, samples, deletedObjects, newAnchor, error in
-            guard Self.isObservationDeliverable(error, type: workoutType.identifier) else { return }
+        query.updateHandler = { [weak self] query, samples, deletedObjects, newAnchor, error in
+            guard self?.isObservationDeliverable(
+                error,
+                type: workoutType.identifier,
+                query: query
+            ) == true else { return }
             Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
         workoutObservationQuery = query
@@ -974,15 +1099,11 @@ public final class HealthKitService: HealthKitServicing {
         let workoutType = HKObjectType.workoutType()
         let predicate = HKQuery.predicateForSamples(withStart: anchorDate, end: nil, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: samples?.compactMap { $0 as? HKWorkout } ?? [])
+        return try await executeOneShot { completion in
+            HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, error in
+                if let error { completion(.failure(error)); return }
+                completion(.success(samples?.compactMap { $0 as? HKWorkout } ?? []))
             }
-            healthStore.execute(query)
         }
     }
 
@@ -1045,26 +1166,22 @@ public final class HealthKitService: HealthKitServicing {
 
     /// One-shot unsorted workout fetch for a predicate (used by the authored-sample delete).
     private func fetchWorkouts(matching predicate: NSPredicate) async throws -> [HKWorkout] {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[HKWorkout], Error>) in
-            let query = HKSampleQuery(
+        try await executeOneShot { completion in
+            HKSampleQuery(
                 sampleType: HKObjectType.workoutType(),
                 predicate: predicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: nil
             ) { _, samples, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: samples?.compactMap { $0 as? HKWorkout } ?? [])
+                if let error { completion(.failure(error)); return }
+                completion(.success(samples?.compactMap { $0 as? HKWorkout } ?? []))
             }
-            healthStore.execute(query)
         }
     }
 
     public func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await executeOneShot { completion in
             let query = HKStatisticsCollectionQuery(
                 quantityType: type,
                 quantitySamplePredicate: nil,
@@ -1073,21 +1190,18 @@ public final class HealthKitService: HealthKitServicing {
                 intervalComponents: interval
             )
             query.initialResultsHandler = { _, collection, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
+                if let error { completion(.failure(error)); return }
                 guard let collection else {
-                    continuation.resume(returning: [])
+                    completion(.success([]))
                     return
                 }
                 var statisticsResults: [HKStatistics] = []
                 collection.enumerateStatistics(from: anchor, to: Date()) { statistics, _ in
                     statisticsResults.append(statistics)
                 }
-                continuation.resume(returning: statisticsResults)
+                completion(.success(statisticsResults))
             }
-            healthStore.execute(query)
+            return query
         }
     }
 
@@ -1095,9 +1209,9 @@ public final class HealthKitService: HealthKitServicing {
     /// rate, sleeping wrist temperature) over the trailing window, one entry per calendar day
     /// (fields nil on days without samples), oldest first.
     ///
-    /// Deliberate scope (Batch A): FOREGROUND PULL ONLY — no `HKObserverQuery`, no
-    /// `enableBackgroundDelivery`, no new entitlement. The caller refreshes on launch and on
-    /// scene-active; a day-grain baseline does not need background wakes.
+    /// Deliberate scope (Batch A): foreground reads only — observer notifications carry no samples,
+    /// and there is no `enableBackgroundDelivery` or new entitlement. The caller reads on launch
+    /// and after an observed Health change; a day-grain baseline does not need background wakes.
     ///
     /// Gating: on top of the master toggle this ALSO enforces the per-capability
     /// `healthKitCapabilityEnabled["bodyContext"]` opt-in (read live from the keychain).
@@ -1110,8 +1224,7 @@ public final class HealthKitService: HealthKitServicing {
     /// statistics queries and the returned array.
     public func stressMetricDays(daysBack: Int = 60, referenceDate: Date = .now) async throws -> [StressMetricDay] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
-        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
-        guard preferences.healthKitCapabilityEnabled[HealthCapability.bodyContext.rawValue] == true else {
+        guard isCapabilityRequestedAndEnabled(.bodyContext) else {
             throw HealthKitServiceError.healthDataUnavailable
         }
 
@@ -1448,47 +1561,35 @@ public final class HealthKitService: HealthKitServicing {
     private func sumQuantity(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, in interval: DateInterval) async throws -> Double? {
         let type = try Self.quantityType(identifier)
         let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: statistics?.sumQuantity()?.doubleValue(for: unit))
+        return try await executeOneShot { completion in
+            HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, error in
+                if let error { completion(.failure(error)); return }
+                completion(.success(statistics?.sumQuantity()?.doubleValue(for: unit)))
             }
-            healthStore.execute(query)
         }
     }
 
     /// One-shot fetch of category samples matching a predicate (sleep, cycle, mindfulness,
     /// intimacy paths).
     private func categorySamples(for type: HKCategoryType, predicate: NSPredicate?) async throws -> [HKCategorySample] {
-        try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: samples?.compactMap { $0 as? HKCategorySample } ?? [])
+        try await executeOneShot { completion in
+            HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error { completion(.failure(error)); return }
+                completion(.success(samples?.compactMap { $0 as? HKCategorySample } ?? []))
             }
-            healthStore.execute(query)
         }
     }
 
     /// Most recent sample's value for one quantity type (any date), in the given unit; nil when
     /// Health has none.
     private func latestQuantityValue(for type: HKQuantityType, unit: HKUnit) async throws -> Double? {
-        try await withCheckedThrowingContinuation { continuation in
+        try await executeOneShot { completion in
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
+            return HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, error in
+                if let error { completion(.failure(error)); return }
                 let value = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: unit)
-                continuation.resume(returning: value)
+                completion(.success(value))
             }
-            healthStore.execute(query)
         }
     }
 
@@ -1524,6 +1625,8 @@ public final class HealthKitService: HealthKitServicing {
             }
             activeQueries.removeAll()
             activeQueriesByType.removeAll()
+            changeQueriesByType.removeAll()
+            changeObservationRegistrations.removeAll()
 
             for type in observedObjectTypes() {
                 try await storeController.disableBackgroundDelivery(for: type)
@@ -1561,6 +1664,9 @@ public final class HealthKitService: HealthKitServicing {
         }
         for registration in observationRegistrations.values {
             startAnchoredQuery(for: registration.type, handler: registration.handler)
+        }
+        for registration in changeObservationRegistrations.values {
+            startChangeObserver(for: registration.type, handler: registration.handler)
         }
         FernletAuditLog.log("healthkit.enable.completed")
     }
@@ -1653,16 +1759,34 @@ public final class HealthKitService: HealthKitServicing {
 
     /// Whether an anchored-query callback carries results worth delivering.
     ///
-    /// R7: a HealthKit query error (authorization revoked mid-session, store unavailable) used to be
-    /// dropped by a bare `guard error == nil`, making a silently dead observation indistinguishable
-    /// from "no new samples". The recovery is unchanged — skip this delivery, the query stays
-    /// registered — but the failure is now named. `nonisolated`: runs on the query's own queue.
-    nonisolated private static func isObservationDeliverable(_ error: Error?, type: String) -> Bool {
+    /// R7: a failed persistent query cannot recover by remaining registered. HealthKit can redeliver
+    /// the same authorization error indefinitely, so the first failure is logged and schedules an
+    /// immediate stop on the main actor. A later permission/settings change can register a fresh one.
+    nonisolated private func isObservationDeliverable(
+        _ error: Error?,
+        type: String,
+        query: HKQuery
+    ) -> Bool {
         guard let error else { return true }
         FernletAuditLog.log("healthkit.observe.failed", context: [
             "type": type, "error": String(describing: error)
         ])
+        Task { @MainActor [weak self] in
+            self?.stopObservationAfterFailure(query, typeIdentifier: type)
+        }
         return false
+    }
+
+    private func stopObservationAfterFailure(_ query: HKQuery, typeIdentifier: String) {
+        storeController.stop(query)
+        activeQueries.removeAll { $0 === query }
+        if workoutObservationQuery === query { workoutObservationQuery = nil }
+        if activeQueriesByType[typeIdentifier] === query {
+            activeQueriesByType[typeIdentifier] = nil
+        }
+        if changeQueriesByType[typeIdentifier] === query {
+            changeQueriesByType[typeIdentifier] = nil
+        }
     }
 
     /// Launches one persistent anchored query for a sample type, resuming from (and persisting) its
@@ -1693,8 +1817,12 @@ public final class HealthKitService: HealthKitServicing {
             predicate: HKQuery.predicateForSamples(withStart: windowStart, end: nil, options: []),
             anchor: savedAnchor,
             limit: HKObjectQueryNoLimit  // see the R3 note above: a limit here is illegal with updateHandler
-        ) { query, samples, deletedObjects, newAnchor, error in
-            guard Self.isObservationDeliverable(error, type: type.identifier) else { return }
+        ) { [weak self] query, samples, deletedObjects, newAnchor, error in
+            guard self?.isObservationDeliverable(
+                error,
+                type: type.identifier,
+                query: query
+            ) == true else { return }
             let samplesCopy = samples ?? []
             let deletedCopy = deletedObjects ?? []
             Task { @MainActor in
@@ -1702,8 +1830,12 @@ public final class HealthKitService: HealthKitServicing {
                 handler(query, samplesCopy, deletedCopy)
             }
         }
-        query.updateHandler = { query, samples, deletedObjects, newAnchor, error in
-            guard Self.isObservationDeliverable(error, type: type.identifier) else { return }
+        query.updateHandler = { [weak self] query, samples, deletedObjects, newAnchor, error in
+            guard self?.isObservationDeliverable(
+                error,
+                type: type.identifier,
+                query: query
+            ) == true else { return }
             let samplesCopy = samples ?? []
             let deletedCopy = deletedObjects ?? []
             Task { @MainActor in
@@ -1716,10 +1848,56 @@ public final class HealthKitService: HealthKitServicing {
         storeController.execute(query)
     }
 
+    private func registerChangeObserverIfNeeded(
+        for type: HKSampleType,
+        handler: @escaping (HKSampleType) -> Void
+    ) {
+        changeObservationRegistrations[type.identifier] = (type, handler)
+        guard changeQueriesByType[type.identifier] == nil else { return }
+        startChangeObserver(for: type, handler: handler)
+    }
+
+    private func reconcileChangeObservers(with sampleTypes: [HKSampleType]) {
+        let retainedIdentifiers = Set(sampleTypes.map(\.identifier))
+        let staleIdentifiers = Set(changeObservationRegistrations.keys)
+            .subtracting(retainedIdentifiers)
+        for identifier in staleIdentifiers {
+            if let query = changeQueriesByType.removeValue(forKey: identifier) {
+                storeController.stop(query)
+                activeQueries.removeAll { $0 === query }
+            }
+            changeObservationRegistrations[identifier] = nil
+        }
+    }
+
+    private func startChangeObserver(
+        for type: HKSampleType,
+        handler: @escaping (HKSampleType) -> Void
+    ) {
+        if let previous = changeQueriesByType[type.identifier] {
+            storeController.stop(previous)
+            activeQueries.removeAll { $0 === previous }
+        }
+        let query = HKObserverQuery(sampleType: type, predicate: nil) {
+            [weak self] query, completion, error in
+            completion()
+            guard self?.isObservationDeliverable(
+                error,
+                type: type.identifier,
+                query: query
+            ) == true else { return }
+            Task { @MainActor in handler(type) }
+        }
+        changeQueriesByType[type.identifier] = query
+        activeQueries.append(query)
+        storeController.execute(query)
+    }
+
     /// Deduplicated union of every registered observation type and every capability's share+read
     /// types — the full set whose background delivery and anchors the disable path must clear.
     private func observedObjectTypes() -> [HKObjectType] {
         var types: [HKObjectType] = observationRegistrations.values.map(\.type)
+        types.append(contentsOf: changeObservationRegistrations.values.map(\.type))
         for capability in HealthCapability.allCases {
             if let capabilityTypes = try? Self.types(for: capability) {
                 types.append(contentsOf: capabilityTypes.share)
@@ -1803,6 +1981,26 @@ public final class HealthKitService: HealthKitServicing {
             let sexualActivity = try categoryType(.sexualActivity)
             return ([sexualActivity], [sexualActivity])
         }
+    }
+
+    /// Deduplicated sample types for the bounded capability set. Characteristic-only reads (age,
+    /// biological sex) cannot be observed and are intentionally omitted; height/weight samples are
+    /// included through the body-profile bundle.
+    nonisolated private static func sampleTypes(
+        for capabilities: Set<HealthCapability>
+    ) throws -> [HKSampleType] {
+        var resultByIdentifier: [String: HKSampleType] = [:]
+        for capability in capabilities {
+            let capabilityTypes = try types(for: capability)
+            for type in capabilityTypes.share {
+                resultByIdentifier[type.identifier] = type
+            }
+            for objectType in capabilityTypes.read {
+                guard let sampleType = objectType as? HKSampleType else { continue }
+                resultByIdentifier[sampleType.identifier] = sampleType
+            }
+        }
+        return resultByIdentifier.values.sorted { $0.identifier < $1.identifier }
     }
 
     /// Builds the `HKWorkoutConfiguration` for a workout save: activity type via
@@ -2279,7 +2477,7 @@ extension HKAuthorizationStatus {
 
 /// Cycle-event read/write conformance for the narrow `PeriodHealthKitServicing` seam owned by
 /// `PeriodTrackerStore` (in the PrivateHealthStore module). The conformance lives here — beside
-/// ``HealthKitService`` — because it reaches into the service's internals (`save`, `healthStore`,
+/// ``HealthKitService`` — because it reaches into the service's internals (`save`,
 /// `categoryType`/`quantityType`); it is the reason this gateway target depends on
 /// PrivateHealthStore, a wall-legal edge (only AIProviders/CloudKitSync are barred from the
 /// sealed stores).
@@ -2306,8 +2504,10 @@ extension HealthKitService: PeriodHealthKitServicing {
         let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
         var allSamples: [HKSample] = []
         for sampleType in try Self.periodSampleTypes() {
+            try Task.checkCancellation()
             allSamples += try await samples(for: sampleType, predicate: predicate)
         }
+        try Task.checkCancellation()
         return allSamples.sorted { $0.startDate < $1.startDate }
     }
 
@@ -2357,11 +2557,10 @@ extension HealthKitService: PeriodHealthKitServicing {
 
     /// One-shot unsorted sample fetch for any sample type (period seam helper).
     private func samples(for type: HKSampleType, predicate: NSPredicate?) async throws -> [HKSample] {
-        try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
-                if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: samples ?? []) }
+        try await executeOneShot { completion in
+            HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error { completion(.failure(error)) } else { completion(.success(samples ?? [])) }
             }
-            healthStore.execute(query)
         }
     }
 }

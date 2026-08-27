@@ -61,6 +61,9 @@ struct CompanionView: View {
     /// happy-arc eyes, a wide soft smile, a warm blush, and a drifting "z". Driven from the
     /// pet-interaction cooldown window — not a mood, never persisted.
     var settled: Bool = false
+    /// Retained root tabs keep their view trees alive. Pausing holds the last frame while this
+    /// companion is offscreen so an invisible animation cannot keep allocating render work.
+    var pausesAnimation: Bool = false
 
     private var showsStressAccent: Bool {
         stressTint && !state.isLowEnergy && !settled
@@ -78,7 +81,7 @@ struct CompanionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { timeline in
+        TimelineView(.animation(paused: reduceMotion || pausesAnimation)) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             // Breath tempo: the tense accent quickens the swell (~3s), the calm accent and the
             // settled pose slow it into a longer, softer cycle (~6.6s). The sine period is 2·tempo.

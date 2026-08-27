@@ -67,6 +67,8 @@ struct CompanionAmbienceLayer: View {
     var phase: CompanionDayPhase
     /// `nil` ⇒ time-of-day tint only (weather off, unauthorized, or unavailable).
     var ambient: WeatherAmbient?
+    /// False while the retaining root `TabView` displays another page.
+    var isActive: Bool = true
 
     /// The app appearance. The sky wash is dialed low either way, but night in particular
     /// wants a touch more presence over the dark theme and a touch less over parchment, so
@@ -111,7 +113,7 @@ struct CompanionAmbienceLayer: View {
                 // 2 · Celestial glow — also always on, mirroring the matrix's "Clear" row
                 //     where the tint alone carries the sun (dawn/day/dusk) or the crescent
                 //     moon + faint stars (night). Weather accents layer over this.
-                TimelineView(.animation(minimumInterval: 0.5, paused: reduceMotion)) { timeline in
+                TimelineView(.animation(minimumInterval: 0.5, paused: reduceMotion || !isActive)) { timeline in
                     Canvas { context, size in
                         Self.drawCelestial(
                             context: &context,
@@ -126,7 +128,7 @@ struct CompanionAmbienceLayer: View {
                 //     deterministic drift driven by wall-clock time; a lazy update interval
                 //     keeps this far cheaper than the companion's own breath loop.
                 if let ambient {
-                    TimelineView(.animation(minimumInterval: 0.25, paused: reduceMotion)) { timeline in
+                    TimelineView(.animation(minimumInterval: 0.25, paused: reduceMotion || !isActive)) { timeline in
                         Canvas { context, size in
                             Self.drawAccents(
                                 context: &context,

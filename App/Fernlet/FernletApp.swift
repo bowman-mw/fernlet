@@ -37,6 +37,7 @@ import FernletUI
 struct FernletApp: App {
     @State private var lockService = FernletLockService()
     @State private var storagePreferencesStore = StoragePreferencesStore()
+    @State private var healthKitService: HealthKitService
     /// App-lifetime owner of the capture-friction triggers (screenshot pulse + capture cover)
     /// behind `captureProtected(surface:)` on the Private-tab surfaces. Injected below in
     /// `readyContent(store:)` and re-injected per sheet case in `ContentView`, never
@@ -77,6 +78,7 @@ struct FernletApp: App {
         // purge); the real cleaner reaches CloudKitSync/LocalPersistence (which the gateway
         // must not depend on) and therefore lives app-side, injected through this static seam.
         HealthKitService.defaultCacheClearer = CoreDataHealthKitCacheCleaner()
+        _healthKitService = State(initialValue: HealthKitService())
 
         // Foreground presentation + tap deep-links for the gentle daily check-in. Must be set
         // before launch finishes so a cold-launch notification tap is delivered; `shared` keeps
@@ -175,7 +177,7 @@ struct FernletApp: App {
             .preferredColorScheme(appearanceMode.colorScheme)
             .task {
                 guard !shouldOpenPrivacyDataForUITest else { return }
-                await loader.startIfNeeded()
+                await loader.startIfNeeded(healthKitService: healthKitService)
             }
             .onOpenURL { _ = FernletMessagesRecipeImportRequest.request(from: $0) }
             // Relock on background and on device lock
@@ -272,7 +274,7 @@ struct FernletApp: App {
                     .transition(.opacity)
             case .failed(let error):
                 LaunchFailureView(error: error) {
-                    Task { await loader.retry() }
+                    Task { await loader.retry(healthKitService: healthKitService) }
                 }
                 .transition(.opacity)
             }
@@ -309,7 +311,7 @@ struct FernletApp: App {
     private func readyContent(store: FernletStore) -> some View {
         Group {
             if hasCompletedOnboarding {
-                ContentView(store: store)
+                ContentView(store: store, healthKitService: healthKitService)
                     .environment(lockService)
                     .environment(storagePreferencesStore)
                     .environment(captureProtection)

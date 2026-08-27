@@ -25,12 +25,13 @@ import FernletUI
 /// long-press — opens `CompanionCustomizationSheet`) and composes ``CompanionAmbienceLayer``
 /// behind it.
 ///
-/// Privacy-relevant detail: `refreshRecentPeriodActivity` owns its own HealthKit client, so it
-/// re-checks `allowedHealthCapabilities` itself and drops its resident answer when cycle tracking
-/// is hidden mid-session. Prior-day rows for "Recent bites" are cached per day rollover rather
-/// than re-decrypted every render.
+/// Privacy-relevant detail: `refreshRecentPeriodActivity` uses the app-lifetime HealthKit client,
+/// re-checks `allowedHealthCapabilities`, and runs only for initial hydration or an actual cycle
+/// setting/log change. Prior-day rows for "Recent bites" are cached per day rollover rather than
+/// re-decrypted every render.
 struct HomeView: View {
     var store: FernletStore
+    var healthKitService: HealthKitService
     @Binding var activeSheet: FernletSheet?
     @Binding var selectedTab: FernletTab
     @Binding var privateHubSection: PrivateHubSection
@@ -40,7 +41,11 @@ struct HomeView: View {
     var periodStore: PeriodTrackerStore? = nil
     /// Shared body-signals service, threaded from ContentView for the (opt-in) stress surfaces.
     var stressService: StressService? = nil
+    /// The root `TabView` retains Home offscreen. Continuous Canvas clocks must pause whenever
+    /// another tab or a root sheet covers Home, otherwise they render forever while invisible.
+    var isActive: Bool = true
     @State private var hasRecentPeriodEvent = false
+    @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
     @State private var isCompanionSheetPresented = false
@@ -122,7 +127,10 @@ struct HomeView: View {
             #endif
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
-            await refreshRecentPeriodActivity()
+            if !didLoadRecentPeriodActivity {
+                didLoadRecentPeriodActivity = true
+                await refreshRecentPeriodActivity()
+            }
             // A notice, not an action: nothing is lost by missing it, so the stretched window only
             // has to be long enough for the cursor to reach and read it.
             let window = FernletDismissalWindow.system.window(
@@ -146,8 +154,8 @@ struct HomeView: View {
             guard store.settings.weatherPromptsEnabled else { return }
             companionAmbient = await WeatherKitService.shared.currentAmbient()
         }
-        .onChange(of: activeSheet?.id) { _, new in
-            if new == nil { scheduleRecentPeriodActivityRefresh() }
+        .onChange(of: activeSheet?.id) { old, new in
+            if old == "logPeriod", new == nil { scheduleRecentPeriodActivityRefresh() }
         }
         // Hiding must drop the resident flag immediately, not wait for the next sheet dismiss.
         .onChange(of: store.isPeriodTrackingVisible) { _, _ in
@@ -486,7 +494,8 @@ struct HomeView: View {
                 equippedItems: store.equippedCustomItems,
                 stressTint: stressTintActive,
                 calmTint: calmTintActive,
-                settled: isCompanionSettled
+                settled: isCompanionSettled,
+                pausesAnimation: !isActive
             )
             .scaleEffect(isCompanionCalmSettling ? 0.98 : 1)
             .contentShape(Rectangle())
@@ -536,7 +545,8 @@ struct HomeView: View {
                 // parchment strip rather than stop at the frame.
                 CompanionAmbienceLayer(
                     phase: .current(),
-                    ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil
+                    ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil,
+                    isActive: isActive
                 )
                 .padding(.horizontal, -FernletMetrics.spaceMd)
                 .padding(.vertical, -FernletMetrics.spaceSm)
@@ -1457,29 +1467,24 @@ struct HomeView: View {
     }
 
     private func refreshRecentPeriodActivity() async {
-        // This owns a SECOND HealthKit client, so it inherits neither the period store's gate nor
-        // `allowedHealthCapabilities` — it must check for itself. Without this it queries 30 days of
-        // menstrual flow on every Home appearance, every cold launch, and every sheet dismiss, while
-        // the user has cycle tracking hidden and while the app is LOCKED, to compute a flag whose only
-        // consumer (the `.logPeriod` tile) is filtered out anyway.
-        //
         // Routed through `allowedHealthCapabilities` rather than re-testing the flags by hand, so this
         // inherits BOTH the visibility gate and the existing lock rule from the one place that defines
         // them. Assigns rather than bails so hiding mid-session drops the resident answer to "has this
         // user bled in the last month" instead of leaving it latched.
-        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking) else {
+        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking),
+              healthKitService.isCapabilityRequestedAndEnabled(.cycleTracking) else {
             hasRecentPeriodEvent = false
             return
         }
-        let service = HealthKitService()
         let start = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date().addingTimeInterval(-30 * 86_400)
         let range = DateInterval(start: start, end: Date())
-        let samples = (try? await service.loadPeriodEvents(in: range)) ?? []
+        let samples = (try? await healthKitService.loadPeriodEvents(in: range)) ?? []
         // Re-check after the await: this task may have been superseded, or the user may have hidden
         // cycle tracking while the query was suspended. A late answer must never re-latch a flag a
         // newer trigger already cleared.
         guard !Task.isCancelled else { return }
-        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking) else {
+        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking),
+              healthKitService.isCapabilityRequestedAndEnabled(.cycleTracking) else {
             hasRecentPeriodEvent = false
             return
         }

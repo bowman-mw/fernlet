@@ -25,6 +25,9 @@ struct MoveView: View {
     @State private var path = NavigationPath()
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
+    /// The outer tab host retains this view. Hydrate its repository/index snapshots once instead of
+    /// rebuilding them on every tab-selection `onAppear`; mutation paths refresh them explicitly.
+    @State private var didLoadInitialSnapshots = false
     @State private var showingLocations = false
     // The trainer / coach handoff screen. It lives here rather than in Settings → Privacy & Data
     // because it is now two-way — a plan comes back through it — and a plan belongs next to the
@@ -103,6 +106,13 @@ struct MoveView: View {
     private func refreshAllDays() {
         allDays = store.loadDays()
         showsCoachPlanSourceTag = Self.hasCoachSourcedPlans(in: allDays, today: store.day)
+    }
+
+    private func loadInitialSnapshotsIfNeeded() {
+        guard !didLoadInitialSnapshots else { return }
+        didLoadInitialSnapshots = true
+        refreshAllDays()
+        progressPhotos = store.progressPhotoRecords()
     }
 
     /// Static so it is testable: a private view computed cannot be (the `AwayHeartsCopy`
@@ -396,8 +406,7 @@ struct MoveView: View {
             #endif
         }
         .onAppear {
-            refreshAllDays()
-            progressPhotos = store.progressPhotoRecords()
+            loadInitialSnapshotsIfNeeded()
             store.reconcileGuidedRunFromAppGroup()
             openRequestedTrainerExportIfNeeded()
         }
@@ -436,10 +445,6 @@ struct MoveView: View {
                 .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-        }
-        .task {
-            await store.refreshWorkoutsFromHealth()
-            refreshAllDays()
         }
         .onChange(of: store.day.workouts.count) { refreshAllDays() }
         .onChange(of: store.day.plannedWorkouts.count) { refreshAllDays() }

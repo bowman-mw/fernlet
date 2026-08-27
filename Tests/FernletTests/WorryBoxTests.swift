@@ -203,6 +203,19 @@ struct WorryBoxServiceTests {
         #expect(try repository.worries(contentKey: userKey).map(\.text) == ["from before the lock existed"])
     }
 
+    @Test func sectionDeactivationReleasesPlaintextAndReactivationReloads() throws {
+        let (service, _) = makeService()
+        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        try service.addWorry("bounded to the selected section")
+        #expect(service.worries.count == 1)
+
+        service.deactivate()
+        #expect(service.worries.isEmpty)
+
+        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        #expect(service.worries.map(\.text) == ["bounded to the selected section"])
+    }
+
     @Test func releaseDeletesAndUpdatesList() throws {
         let (service, _) = makeService()
         service.updateActivation(lockState: .notConfigured, contentKey: nil)

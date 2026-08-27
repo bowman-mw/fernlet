@@ -7,6 +7,7 @@
 
 import ProximityKit
 import CloudKitSync
+import HealthKit
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
@@ -42,8 +43,9 @@ import FernletUI
 /// (`sensitiveSurfaceVisibility`), not the setters, so every writer is covered.
 struct ContentView: View {
     @Bindable var store: FernletStore
+    private let healthKitService: HealthKitService
     @State private var launcher = LaunchPreparationService()
-    @State private var periodStore = PeriodTrackerStore(healthService: HealthKitService())
+    @State private var periodStore: PeriodTrackerStore
     @State private var intimacyStore = IntimacyLogStore()
     @State private var periodContext: PeriodContextBridge?
     @State private var stressService = StressService()
@@ -89,21 +91,37 @@ struct ContentView: View {
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
     @State private var discoveryTimeoutTask: Task<Void, Never>?
+    /// Coalesces HealthKit change notifications. Tab selection is deliberately not a HealthKit
+    /// trigger; launch performs the initial read and observer events are the only later trigger.
     @State private var healthRefreshTask: Task<Void, Never>?
+    @State private var pendingObservedHealthTypeIdentifiers: Set<String> = []
     /// The ONE in-flight period drain/load. Every trigger (lock transitions, `.logPeriod` dismissals)
     /// cancels and replaces it, so completions can never land out of order and re-populate `entries`
     /// after a scrub — the load captures its content key by value and cannot notice a later lock.
     @State private var periodLoadTask: Task<Void, Never>?
-    /// Reentrancy latch for the hub-unlock sealed-backup settle. Unlock/lock/unlock used to run two
-    /// full CloudKit restore + re-upload passes concurrently; a second call is a no-op while one is in
-    /// flight (rather than a cancel, which must never interrupt a restore mid-write).
+    /// Defers selected-section hydration until after SwiftUI has removed the unlock overlay. Lock
+    /// and section departures still scrub synchronously; only the safe unlock direction is deferred.
+    @State private var privateActivationTask: Task<Void, Never>?
+    /// Reentrancy latch for section-scoped sealed-backup settlement. A restore must never be
+    /// cancelled mid-write, so later section requests queue behind the current one.
     @State private var isSettlingSealedBackups = false
+    @State private var pendingSealedBackupSections: Set<PrivateHubSection> = []
+    /// A failed targeted repair remains user-retryable, but tab churn must not automatically repeat
+    /// the same decrypt/CloudKit pass within one app session.
+    @State private var attemptedSealedBackupSections: Set<PrivateHubSection> = []
     @Environment(\.scenePhase) private var scenePhase
     /// Read by ``customTabBar`` (at accessibility text sizes the five labels break mid-word —
     /// "Hom/e", "Frien/ds" — and the bar swallows a fifth of the screen, so they stop being drawn)
     /// and by the `.workout` route (3b·AX3: the sheet opens `.large` when the kind chips can no
     /// longer fit the medium detent).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(store: FernletStore, healthKitService: HealthKitService) {
+        self.store = store
+        self.healthKitService = healthKitService
+        _periodStore = State(initialValue: PeriodTrackerStore(healthService: healthKitService))
+    }
+
     var body: some View {
         rootSheetHost
             .onChange(of: activeSheet?.id) { oldID, newID in
@@ -136,6 +154,9 @@ struct ContentView: View {
             .task { await performLaunchWiring() }
             .onChange(of: selectedTab) { oldTab, newTab in
                 handleTabChange(from: oldTab, to: newTab)
+            }
+            .onChange(of: privateHubSection) { _, newSection in
+                handlePrivateHubSectionChange(newSection)
             }
             .onChange(of: scenePhase) { _, phase in
                 handleScenePhaseChange(phase)
@@ -254,7 +275,13 @@ struct ContentView: View {
     /// so reload + refresh when the period sheet dismisses to keep the chip/outlook/trends/score
     /// current (catches logging from Home or the period screen alike).
     private func handleActiveSheetIDChange(oldID: String?, newID: String?) {
-        guard newID == nil, oldID == "logPeriod" else { return }
+        if newID == nil, oldID == "settings" {
+            configureHealthChangeObservation()
+            Task { await store.refreshWorkoutsFromHealth() }
+        }
+        guard newID == nil, oldID == "logPeriod",
+              privateHubSection == .cycle,
+              lockService.isUnlocked(for: .privateHub) else { return }
         // Cancel-and-replace on the ONE period-load handle (R3): a dismissal per sheet used to spawn
         // an un-deduplicated task, and the older one could land after a lock and re-populate entries.
         periodLoadTask?.cancel()
@@ -271,15 +298,7 @@ struct ContentView: View {
         // rather than branching per view is the point — the sensitive-visibility getters
         // AND it in, and the whole existing hide machinery follows from there.
         store.duressSessionActive = lockService.isDuressSessionActive
-        // One in-flight drain/load at a time (R3). Every lock transition used to add another
-        // unstructured task, and the loser of that race could write cycle plaintext AFTER a scrub.
-        periodLoadTask?.cancel()
-        periodLoadTask = Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
-        applySealedJournalActivation(for: newState)
-        worryBoxService.updateActivation(
-            lockState: newState,
-            contentKey: lockService.contentKey(for: .privateHub)
-        )
+        updatePrivateDataActivation(section: privateHubSection, lockState: newState)
         // Every paged sealed backup is sealed under the hub's content key, so turning one on
         // from Settings (reached from Home, where the hub is always re-locked) can only ever
         // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
@@ -290,21 +309,28 @@ struct ContentView: View {
         // re-upload from a not-yet-restored store would replace the good cloud backup with an
         // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
         if newState.isUnlocked(for: .privateHub) {
-            Task { await settleSealedBackupsAfterHubUnlock() }
+            requestSealedBackupSettlement(for: privateHubSection)
         }
         updateRecipeShareListener()
     }
 
+    private func handlePrivateHubSectionChange(_ section: PrivateHubSection) {
+        updatePrivateDataActivation(section: section, lockState: lockService.state)
+        guard lockService.isUnlocked(for: .privateHub) else { return }
+        requestSealedBackupSettlement(for: section)
+    }
+
     private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
         isHomeTabBarCompact = false
+        if oldTab == .personal || newTab == .personal {
+            updatePrivateDataActivation(section: privateHubSection, lockState: lockService.state)
+        }
         if newTab == .social {
             startFriendsDiscovery()
         } else if oldTab == .social {
             stopFriendsDiscovery()
         }
         updateRecipeShareListener()
-        healthRefreshTask?.cancel()
-        healthRefreshTask = Task { await refreshHealthContextForActiveTab(newTab) }
     }
 
     /// Preserves each page's scroll position across tabs. Re-selecting its current tab is the
@@ -332,8 +358,6 @@ struct ContentView: View {
             // Credit any day that became active while backgrounded (or synced in from another
             // device). Idempotent, so a no-op when nothing new is logged.
             store.reconcileCoinLedger()
-            // Body signals refresh (debounced to >= 30 min inside the service).
-            Task { await stressService.refreshIfNeeded() }
             // Belt-and-braces for the foreground App Intent deep-link: the `requestNotification`
             // handler is the primary path, but if a token is present when the scene reactivates
             // (and within its expiry window), honor it here too.
@@ -412,24 +436,20 @@ struct ContentView: View {
             periodStore.scrubCycleState()
             bridge?.refresh(unlocked: false, wellbeingByDay: store.periodWellbeingByDay)
         }
-        // Body signals (opt-in): wire the stress service to the store + a fresh
-        // gateway fetch. Foreground-pull only — refreshed below and on scene-active.
-        stressService.attach(store: store, fetchMetricDays: { [storagePreferencesStore] daysBack in
-            try await HealthKitService(preferencesStore: storagePreferencesStore).stressMetricDays(daysBack: daysBack)
+        // Body signals (opt-in): wire the stress service to the shared gateway. The initial read
+        // happens during launch preparation; later reads follow observed Health changes.
+        stressService.attach(store: store, fetchMetricDays: { [healthKitService] daysBack in
+            try await healthKitService.stressMetricDays(daysBack: daysBack)
         })
         store.attachStressScoringContext(stressService)
     }
 
-    /// Mirrors the initial lock state into the store, activates the sealed journal / worry-box seams
-    /// for it, and attaches the delete-all hooks (plus the DEBUG demo seed).
+    /// Mirrors the initial lock state into the store, leaves offscreen private caches inactive, and
+    /// attaches the delete-all hooks (plus the DEBUG demo seed).
     private func wireLockAndWorryBox() {
         let initialLockState = lockService.state
         store.lockState = initialLockState
-        applySealedJournalActivation(for: initialLockState)
-        worryBoxService.updateActivation(
-            lockState: initialLockState,
-            contentKey: lockService.contentKey(for: .privateHub)
-        )
+        updatePrivateDataActivation(section: privateHubSection, lockState: initialLockState)
         // Worry "let go" counts are DEVICE-LOCAL (WorryBoxService owns them, incremented at the
         // "let it go" write) — never the synced milestone ledger, so worry metadata honors the
         // box's "never sync anywhere" promise. The store reads the count through this provider
@@ -483,9 +503,8 @@ struct ContentView: View {
         _ = messagesRecipeInbox.purgeExpired()
         consumePendingMessagesRecipeImport()
         await store.processSharedRecipeImportQueue()
-        await loadPeriodEntriesIfPossible()
-        settlePeriodEntriesAfterLoad()
         await stressService.refreshIfNeeded()
+        configureHealthChangeObservation()
     }
 
     /// Opens the sheet a notification tap asked for (daily check-in → journal). Skipped while
@@ -696,13 +715,15 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             HomeView(
                 store: store,
+                healthKitService: healthKitService,
                 activeSheet: $activeSheet,
                 selectedTab: $selectedTab,
                 privateHubSection: $privateHubSection,
                 isTabBarCompact: $isHomeTabBarCompact,
                 tabResetToken: resetTokenBinding(for: .home),
                 periodStore: periodStore,
-                stressService: stressService
+                stressService: stressService,
+                isActive: selectedTab == .home && !rootSheetIsCoveringTabs
             )
             .tabPage(.home)
             FoodView(store: store, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -722,7 +743,7 @@ struct ContentView: View {
             // invisibly) while an unprotected sheet — Settings, Trends, First Aid from a
             // notification tap, an incoming recipe share — fully covers the Personal tab. The
             // protected sheets claim the nudge themselves, visibly, via their own attachments.
-            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs)
+            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, healthKitService: healthKitService, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isActive: selectedTab == .personal, isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs)
                 .tabPage(.personal)
         }
         // Paging is OFF: the floating tab bar is the navigation. `.page` style handed every
@@ -1040,9 +1061,11 @@ struct ContentView: View {
     private func autoImportHealthProfileIfAvailable() async {
         guard !didAutoImportHealthProfile else { return }
         didAutoImportHealthProfile = true
+        guard healthKitService.isCapabilityRequestedAndEnabled(.bodyProfile) else { return }
 
         do {
-            let healthProfile = try await HealthKitService(preferencesStore: storagePreferencesStore).loadBodyProfile()
+            let healthProfile = try await healthKitService.loadBodyProfile()
+            try Task.checkCancellation()
             guard healthProfile.appliedFieldCount > 0 else { return }
             store.settings.userProfile = healthProfile.applying(to: store.settings.userProfile)
         } catch {
@@ -1055,17 +1078,191 @@ struct ContentView: View {
     private func autoImportHealthContextIfAvailable() async {
         guard !didAutoImportHealthContext else { return }
         didAutoImportHealthContext = true
+        let allowed = store.allowedHealthCapabilities(from: Set(HealthCapability.allCases))
+        let capabilities = healthKitService.requestedAndEnabledCapabilities(from: allowed)
+        guard !capabilities.isEmpty else { return }
 
         do {
-            let context = try await HealthKitService(preferencesStore: storagePreferencesStore).loadDailyHealthContext(
+            let context = try await healthKitService.loadDailyHealthContext(
                 referenceDate: .now,
-                capabilities: store.allowedHealthCapabilities(from: Set(HealthCapability.allCases))
+                capabilities: capabilities
             )
+            try Task.checkCancellation()
             store.updateHealthContext(context)
         } catch {
             // Health context import is optional; manual app entries remain available.
             FernletAuditLog.log("health.contextAutoImportSkipped", context: ["error": String(describing: error)])
         }
+    }
+
+    /// Launch performs the initial Health reads. After that, payload-free HealthKit observers are
+    /// the only daily-context trigger; tab selection and ordinary view lifecycle never query Health.
+    private func configureHealthChangeObservation() {
+        let capabilities: Set<HealthCapability> = [
+            .bodyProfile, .cycleTracking, .bodyContext, .activityContext,
+            .mindfulness, .intimateLogging
+        ]
+        do {
+            try healthKitService.startObservingChanges(for: capabilities) { type in
+                scheduleHealthRefreshAfterObservedChange(typeIdentifier: type.identifier)
+            }
+        } catch {
+            FernletAuditLog.log(
+                "health.changeObservationUnavailable",
+                context: ["error": String(describing: error)]
+            )
+        }
+    }
+
+    /// A Health write can notify several sample types in one batch. Newest-wins coalescing turns
+    /// that burst into one profile/context refresh and cancellation prevents an older result from
+    /// updating state after a newer notification supersedes it.
+    private func scheduleHealthRefreshAfterObservedChange(typeIdentifier: String) {
+        pendingObservedHealthTypeIdentifiers.insert(typeIdentifier)
+        healthRefreshTask?.cancel()
+        healthRefreshTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+            } catch {
+                return
+            }
+            let changedTypes = pendingObservedHealthTypeIdentifiers
+            pendingObservedHealthTypeIdentifiers.removeAll()
+            await refreshHealthAfterObservedChange(typeIdentifiers: changedTypes)
+        }
+    }
+
+    private func refreshHealthAfterObservedChange(typeIdentifiers: Set<String>) async {
+        if !typeIdentifiers.isDisjoint(with: Self.bodyProfileTypeIdentifiers) {
+            await refreshBodyProfileAfterObservedChange()
+        }
+        guard !Task.isCancelled else { return }
+        if !typeIdentifiers.isSubset(of: Self.bodyProfileTypeIdentifiers) {
+            await refreshDailyContextAfterObservedChange()
+        }
+        guard !Task.isCancelled else { return }
+        if !typeIdentifiers.isDisjoint(with: Self.stressTypeIdentifiers) {
+            await stressService.refresh()
+        }
+        reloadPeriodEntriesAfterObservedChangeIfNeeded(typeIdentifiers)
+    }
+
+    private func refreshBodyProfileAfterObservedChange() async {
+        guard healthKitService.isCapabilityRequestedAndEnabled(.bodyProfile) else { return }
+        do {
+            let profile = try await healthKitService.loadBodyProfile()
+            try Task.checkCancellation()
+            guard profile.appliedFieldCount > 0 else { return }
+            store.settings.userProfile = profile.applying(to: store.settings.userProfile)
+        } catch is CancellationError {
+            return
+        } catch {
+            FernletAuditLog.log("health.profileChangeRefreshSkipped", context: [
+                "error": String(describing: error)
+            ])
+        }
+    }
+
+    private func refreshDailyContextAfterObservedChange() async {
+        do {
+            let allowed = store.allowedHealthCapabilities(from: Set(HealthCapability.allCases))
+            let capabilities = healthKitService.requestedAndEnabledCapabilities(from: allowed)
+            guard !capabilities.isEmpty else { return }
+            let context = try await healthKitService.loadDailyHealthContext(
+                referenceDate: .now,
+                capabilities: capabilities
+            )
+            try Task.checkCancellation()
+            store.updateHealthContext(context)
+        } catch is CancellationError {
+            return
+        } catch {
+            FernletAuditLog.log("health.contextChangeRefreshSkipped", context: [
+                "error": String(describing: error)
+            ])
+        }
+    }
+
+    private func reloadPeriodEntriesAfterObservedChangeIfNeeded(_ identifiers: Set<String>) {
+        guard !identifiers.isDisjoint(with: Self.cycleTypeIdentifiers),
+              privateHubSection == .cycle,
+              lockService.isUnlocked(for: .privateHub) else { return }
+        periodLoadTask?.cancel()
+        periodLoadTask = Task {
+            await loadPeriodEntriesIfPossible()
+            settlePeriodEntriesAfterLoad()
+        }
+    }
+
+    private static let bodyProfileTypeIdentifiers: Set<String> = [
+        HKQuantityTypeIdentifier.height.rawValue,
+        HKQuantityTypeIdentifier.bodyMass.rawValue
+    ]
+    private static let stressTypeIdentifiers: Set<String> = [
+        HKQuantityTypeIdentifier.heartRateVariabilitySDNN.rawValue,
+        HKQuantityTypeIdentifier.restingHeartRate.rawValue,
+        HKQuantityTypeIdentifier.respiratoryRate.rawValue,
+        HKQuantityTypeIdentifier.appleSleepingWristTemperature.rawValue,
+        HKCategoryTypeIdentifier.sleepAnalysis.rawValue
+    ]
+    private static let cycleTypeIdentifiers: Set<String> = [
+        HKCategoryTypeIdentifier.menstrualFlow.rawValue,
+        HKQuantityTypeIdentifier.basalBodyTemperature.rawValue,
+        HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue,
+        HKCategoryTypeIdentifier.intermenstrualBleeding.rawValue,
+        HKCategoryTypeIdentifier.ovulationTestResult.rawValue
+    ]
+
+    /// Scrubs every private cache immediately, then hydrates only the selected synchronous store
+    /// after the unlock overlay has had one frame to disappear. Cycle owns its async view task.
+    private func updatePrivateDataActivation(
+        section: PrivateHubSection,
+        lockState: FernletLockState
+    ) {
+        privateActivationTask?.cancel()
+        periodLoadTask?.cancel()
+        store.deactivateSealedJournals()
+        worryBoxService.deactivate()
+        scrubPeriodDataIfNeeded()
+        guard selectedTab == .personal,
+              lockState.isUnlocked(for: .privateHub),
+              section != .cycle else { return }
+        privateActivationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return
+            }
+            guard selectedTab == .personal,
+                  lockService.state == lockState,
+                  privateHubSection == section else { return }
+            activateSelectedPrivateData(section: section, lockState: lockState)
+        }
+    }
+
+    private func activateSelectedPrivateData(
+        section: PrivateHubSection,
+        lockState: FernletLockState
+    ) {
+        switch section {
+        case .journal:
+            applySealedJournalActivation(for: lockState)
+        case .cycle:
+            break
+        case .worryBox:
+            worryBoxService.updateActivation(
+                lockState: lockState,
+                contentKey: lockService.contentKey(for: .privateHub)
+            )
+        }
+    }
+
+    private func scrubPeriodDataIfNeeded() {
+        guard !periodStore.entries.isEmpty
+                || periodStore.prediction != nil
+                || periodStore.currentPhase != .unknown else { return }
+        periodStore.scrubCycleState()
+        refreshPeriodContext()
     }
 
     /// Journal plaintext follows the `.privateHub` scope and nothing else. Written as an exhaustive
@@ -1087,31 +1284,6 @@ struct ContentView: View {
         }
     }
 
-    private func drainPendingPeriodNarrativesIfUnlocked(_ lockState: FernletLockState) async {
-        guard lockState.isUnlocked(for: .privateHub),
-              let contentKey = lockService.contentKey(for: .privateHub) else {
-            // Withholding the key is not enough: `periodStore.entries` still hold the DECRYPTED
-            // narratives from the last hub session, and `prediction` feeds the Home tab's ungated
-            // "cycle outlook" card. So a lock that isn't open for the hub — whether re-locked or
-            // held by the photo strip / App-lock settings — has to drop them, exactly as the
-            // visibility gate's `periodScrubHook` does. Skipped when no lock is configured, where
-            // a nil content key is normal and the entries are the user's ordinary, ungated data.
-            if lockState != .notConfigured { periodStore.scrubCycleState() }
-            refreshPeriodContext()
-            return
-        }
-        do {
-            try await periodStore.drainPendingBuffer(contentKey: contentKey)
-        } catch {
-            // Benign for THIS call — the callee purges the pending buffer only after every insert
-            // succeeds, so the notes are retained and re-drained at the next hub unlock. The audit
-            // line is the recovery: a persistently failing drain would otherwise be invisible forever.
-            FernletAuditLog.log("periodNarratives.pendingDrainFailed", context: ["error": String(describing: error)])
-        }
-        await periodStore.loadEntries(unlockedContentKey: contentKey)
-        settlePeriodEntriesAfterLoad()
-    }
-
     /// The post-`await` gate every period load runs through.
     ///
     /// `loadEntries` captures its content key BY VALUE and assigns `entries`/`prediction` after a
@@ -1128,8 +1300,7 @@ struct ContentView: View {
         refreshPeriodContext()
     }
 
-    /// Settles the sealed backups whose payloads are sealed under the `.privateHub` content key, at the
-    /// one moment that key is live.
+    /// Queues only the selected section's sealed backups while the hub content key is live.
     ///
     /// Both halves are needed and the ORDER is the invariant. The Privacy & Data toggles are reached
     /// from Home, where the hub is always re-locked, so turning journal/intimacy backup on can only
@@ -1141,30 +1312,55 @@ struct ContentView: View {
     /// and each re-upload runs afterwards behind `mayReuploadFromLocalStore`, so a store this device
     /// has not restored into yet can never replace the cloud backup with the single empty head record
     /// `reconcileChunked` writes for a count of 0.
-    private func settleSealedBackupsAfterHubUnlock() async {
-        // Bounded fan-out (R3): one settle pass at a time. The work is idempotent, so a second unlock
-        // arriving mid-pass has nothing to add — and cancelling the in-flight one would risk
-        // interrupting a restore rather than duplicating a round trip.
+    private func requestSealedBackupSettlement(for section: PrivateHubSection) {
+        guard section != .worryBox,
+              !attemptedSealedBackupSections.contains(section) else { return }
+        pendingSealedBackupSections.insert(section)
         guard !isSettlingSealedBackups else { return }
         isSettlingSealedBackups = true
+        Task { await drainSealedBackupSettlements() }
+    }
+
+    private func drainSealedBackupSettlements() async {
         defer { isSettlingSealedBackups = false }
+        // Backup repair is not user-visible. Give authentication, lock-gate removal, and the
+        // selected section's first frame priority before any Core Data/CloudKit reconciliation.
+        do {
+            try await Task.sleep(for: .milliseconds(300))
+        } catch {
+            return
+        }
+        guard selectedTab == .personal,
+              lockService.isUnlocked(for: .privateHub) else { return }
+        // There are exactly two backup-bearing sections. Requests arriving during an await are
+        // picked up by the second bounded iteration; Worry Box owns no backup payload.
+        for _ in 0..<2 {
+            guard let section = pendingSealedBackupSections.first else { break }
+            pendingSealedBackupSections.remove(section)
+            guard attemptedSealedBackupSections.insert(section).inserted else { continue }
+            await settleSealedBackups(for: section)
+        }
+    }
+
+    private func settleSealedBackups(for section: PrivateHubSection) async {
         let preferences = storagePreferencesStore.preferences
-        if preferences.iCloudSyncEnabled {
-            if preferences.sealedBackupJournalEnabled {
-                // R7: the outcome is recorded on the store inside the call — that recording is the
-                // restore banner and its Retry — so there is no decision left for this seam to make.
+        switch section {
+        case .journal:
+            if preferences.iCloudSyncEnabled, preferences.sealedBackupJournalEnabled {
                 _ = await store.restoreJournalBackupTargeted()
             }
-            // The intimacy gate is re-checked inside the targeted restore too (fail-closed at the
-            // decrypt seam); this is the cheap pre-check that avoids the CloudKit fetch entirely.
-            if preferences.sealedBackupIntimacyEnabled, store.isIntimacyTrackingVisible {
-                // Same as above: the outcome lands on the store's observable restore status.
+            await store.retryDeferredSealedBackupIfNeeded(payloadType: .journalNarratives)
+        case .cycle:
+            if preferences.iCloudSyncEnabled,
+               preferences.sealedBackupIntimacyEnabled,
+               store.isIntimacyTrackingVisible {
                 _ = await store.restoreIntimacyBackupTargeted()
             }
+            await store.retryDeferredSealedPeriodBackupIfNeeded()
+            await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
+        case .worryBox:
+            break
         }
-        await store.retryDeferredSealedPeriodBackupIfNeeded()
-        await store.retryDeferredSealedBackupIfNeeded(payloadType: .journalNarratives)
-        await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
     }
 
     /// Wires the "delete everything" seams for the stores `FernletStore` doesn't own — the sealed
@@ -1211,8 +1407,8 @@ struct ContentView: View {
         store.mainStoreRebuildHook = {
             (try? await PersistenceController.shared.compactStoreAfterWipe()) != nil
         }
-        store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
-            await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
+        store.healthKitSampleDeleteHook = { [healthKitService] in
+            await healthKitService.deleteAllAuthoredSamples()
         }
         // The duress WIPE's durable half (P7). The crypto-erase already happened inside the lock
         // service before this runs, so this is cleanup, not the guarantee — it drops the sealed rows,
@@ -1391,34 +1587,6 @@ struct ContentView: View {
         // Cycle narratives are Private Hub content: an unlock held by another surface is not one.
         let unlocked = lockService.isUnlocked(for: .privateHub)
         periodContext.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
-    }
-
-    private func refreshHealthContextForActiveTab(_ tab: FernletTab) async {
-        let capabilities: Set<HealthCapability>
-        switch tab {
-        case .home:
-            capabilities = store.allowedHealthCapabilities(from: Set(HealthCapability.allCases))
-        case .move:
-            capabilities = [.activityContext, .bodyContext]
-        case .food:
-            await autoImportHealthProfileIfAvailable()
-            capabilities = [.activityContext]
-        case .social:
-            return
-        case .personal:
-            capabilities = store.allowedHealthCapabilities(from: [.cycleTracking, .mindfulness, .intimateLogging, .bodyContext])
-        }
-
-        do {
-            let context = try await HealthKitService(preferencesStore: storagePreferencesStore).loadDailyHealthContext(referenceDate: .now, capabilities: capabilities)
-            store.updateHealthContext(context)
-        } catch {
-            // Health context refresh is opportunistic and should never block tab navigation — but a
-            // tab that never refreshes has to be diagnosable.
-            // `rawValue`, not `title`: an audit line is a diagnostic record, and `title` localizes.
-            FernletAuditLog.log("health.contextRefreshSkipped",
-                                context: ["tab": tab.rawValue, "error": String(describing: error)])
-        }
     }
 
     private func showMealLogNotification(_ meals: [Meal]) {
@@ -1910,5 +2078,5 @@ struct LaunchScreen: View {
 }
 
 #Preview {
-    ContentView(store: FernletStore())
+    ContentView(store: FernletStore(), healthKitService: HealthKitService())
 }

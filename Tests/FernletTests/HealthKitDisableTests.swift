@@ -10,6 +10,59 @@ import HealthKitGateway
 @MainActor
 @Suite(.serialized)
 struct HealthKitDisableTests {
+    @Test func cancellingOneShotReadStopsUnderlyingQuery() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        let task = Task {
+            try await harness.service.recentWorkouts(since: .distantPast)
+        }
+        await Task.yield()
+        #expect(harness.controller.executedQueries.count == 1)
+
+        task.cancel()
+        do {
+            _ = try await task.value
+            Issue.record("A cancelled HealthKit read unexpectedly completed")
+        } catch is CancellationError {
+            // Expected: cancellation also stops the underlying HKQuery.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+        #expect(harness.controller.stoppedQueries.count == 1)
+    }
+
+    @Test func unrequestedChangeObservationStartsNoQueries() throws {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+
+        try harness.service.startObservingChanges(for: [.activityContext]) { _ in }
+
+        #expect(harness.controller.executedQueries.isEmpty)
+    }
+
+    @Test func repeatedChangeObservationReusesQueriesInsteadOfAccumulating() throws {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        harness.requestCapability(.activityContext)
+        try harness.service.startObservingChanges(for: [.activityContext]) { _ in }
+        let initialQueryCount = harness.controller.executedQueries.count
+        #expect(initialQueryCount > 0)
+
+        try harness.service.startObservingChanges(for: [.activityContext]) { _ in }
+
+        #expect(harness.controller.executedQueries.count == initialQueryCount)
+        #expect(harness.controller.stoppedQueries.isEmpty)
+    }
+
+    @Test func unrequestedWorkoutObservationStartsNoQuery() async throws {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+
+        try await harness.service.startObservingWorkouts { _, _ in }
+
+        #expect(harness.controller.executedQueries.isEmpty)
+    }
+
     @Test func disableCancelsObserversAndDisablesBackgroundDelivery() async throws {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
@@ -280,9 +333,13 @@ private final class HealthKitDisableHarness {
     let preferences: StoragePreferencesStore
     let service: HealthKitService
     private let preferenceServiceID: String
+    private let ledgerDefaults: UserDefaults
+    private let ledgerDefaultsSuiteName: String
 
     init(masterEnabled: Bool = true, cacheCleaner: HealthKitCacheClearing = MockHealthKitCacheCleaner()) {
         preferenceServiceID = "com.fernlet.healthkit-disable.tests.\(UUID().uuidString)"
+        ledgerDefaultsSuiteName = "com.fernlet.healthkit-disable.defaults.\(UUID().uuidString)"
+        ledgerDefaults = UserDefaults(suiteName: ledgerDefaultsSuiteName) ?? .standard
         preferences = StoragePreferencesStore(keychainService: preferenceServiceID)
         preferences.update { storagePreferences in
             storagePreferences.healthKitMasterEnabled = masterEnabled
@@ -290,11 +347,29 @@ private final class HealthKitDisableHarness {
         service = HealthKitService(
             storeController: controller,
             cacheCleaner: cacheCleaner,
-            preferencesStore: preferences
+            preferencesStore: preferences,
+            capabilityLedgerKeychainService: preferenceServiceID,
+            capabilityLedgerDefaults: ledgerDefaults
+        )
+    }
+
+    func requestCapability(_ capability: HealthCapability) {
+        preferences.update { storagePreferences in
+            storagePreferences.healthKitCapabilityEnabled[capability.rawValue] = true
+        }
+        HealthCapabilityRequestLedger.record(
+            capability,
+            keychainService: preferenceServiceID,
+            legacyDefaults: ledgerDefaults
         )
     }
 
     func cleanup() {
+        _ = HealthCapabilityRequestLedger.clear(
+            keychainService: preferenceServiceID,
+            legacyDefaults: ledgerDefaults
+        )
+        ledgerDefaults.removePersistentDomain(forName: ledgerDefaultsSuiteName)
         KeychainItem.delete(for: .storagePreferences, service: preferenceServiceID)
         HealthKitAnchorKeychain.delete(identifier: HKQuantityTypeIdentifier.stepCount.rawValue)
         HealthKitAnchorKeychain.delete(identifier: HKCategoryTypeIdentifier.sleepAnalysis.rawValue)

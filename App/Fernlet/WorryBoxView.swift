@@ -513,7 +513,6 @@ struct WorryBoxView: View {
         }
         .background(Color.parchment)
         .overlay(alignment: .bottom) { keepItToast }
-        .onAppear { worryBox.reload() }
         // Leaving COMMITS the pending release — the same contract as Mail's Undo Send. The strip is
         // the undo affordance while the user is on the page; once the page is gone, the ceremony the
         // user just completed ("releasing one lets it go for good") must not quietly un-happen and

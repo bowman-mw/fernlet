@@ -12,6 +12,18 @@ private let ownBundleIDForTests = "com.fernlet.test"
 
 @MainActor
 struct WorkoutHealthKitSyncTests {
+    @Test func refreshDoesNotObserveBeforeWorkoutPermissionIsRequested() async {
+        let context = FakeWorkoutSyncContext()
+        let service = FakeWorkoutHealthKitService(authorizationStatuses: [:])
+        service.capabilityRequestedAndEnabled = false
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        await sync.refreshFromHealth()
+
+        #expect(service.startObservingWorkoutsCallCount == 0)
+        #expect(service.stopObservingWorkoutsCallCount == 1)
+    }
+
     @Test func refreshReconcilesNewHKWorkoutByUpserting() async throws {
         let context = FakeWorkoutSyncContext()
         let sample = FakeHealthWorkoutSample()
@@ -411,9 +423,11 @@ private final class FakeWorkoutHealthKitService: HealthKitServicing {
     var authorizationStatuses: [String: HKAuthorizationStatus]
     var observedWorkouts: [HKWorkout]
     var integrationAvailable = true
+    var capabilityRequestedAndEnabled = true
     var saveWorkoutUUID = UUID()
     var deleteWorkoutReturns = true
     private(set) var saveWorkoutCallCount = 0
+    private(set) var startObservingWorkoutsCallCount = 0
     private(set) var stopObservingWorkoutsCallCount = 0
     private(set) var deletedFernletWorkoutIDs: [UUID] = []
 
@@ -427,8 +441,12 @@ private final class FakeWorkoutHealthKitService: HealthKitServicing {
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
         AuthorizationSnapshot(isAvailable: integrationAvailable, writeStatuses: authorizationStatuses)
     }
+    func isCapabilityRequestedAndEnabled(_ capability: HealthCapability) -> Bool {
+        integrationAvailable && capabilityRequestedAndEnabled
+    }
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
     func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws {
+        startObservingWorkoutsCallCount += 1
         handler(observedWorkouts, [])
     }
     func stopObservingWorkouts() { stopObservingWorkoutsCallCount += 1 }

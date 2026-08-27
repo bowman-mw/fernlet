@@ -2,6 +2,7 @@ import SwiftUI
 import FernletFoundation
 import FernletDomainModel
 import FernletUI
+import FernletLock
 
 /// The Journal screen: a one-tap mood row, a feeling-tinted month calendar, today's entries, and
 /// the recent-previous list.
@@ -23,10 +24,14 @@ struct JournalView: View {
     /// presenter) — the explicit per-presentation-site convention, because a missing
     /// environment object in a sheet is a runtime crash, not a compile error.
     @Environment(CaptureProtectionState.self) private var captureProtection
+    @Environment(FernletLockService.self) private var lockService
     @State private var path = NavigationPath()
     @State private var displayedMonth: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     @State private var editingJournal: JournalEntryEditTarget?
+    /// Coalesces lock hydration, store-count changes, and month navigation into one state write.
+    /// Synchronous duplicates caused SwiftUI's NavigationRequestObserver to update twice per frame.
+    @State private var calendarRefreshTask: Task<Void, Never>?
     #if DEBUG
     /// DEBUG-only: presents ``DayEditSheet`` directly under `FERNLET_UI_TEST_OPEN_DAY_EDIT=1` —
     /// the capture-protection UI test cannot reach it by navigation while the forced Tier-2
@@ -46,13 +51,24 @@ struct JournalView: View {
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(for: String.self) { dateKey in
                 DayDetailView(store: store, dateKey: dateKey)
-                    .onDisappear { allDays = store.loadDays() }
+                    .onDisappear { scheduleCalendarRefresh() }
             }
         }
-        .onAppear { allDays = store.loadDays() }
-        .onChange(of: store.day.journals.count) { allDays = store.loadDays() }
-        .onChange(of: store.day.meals.count) { allDays = store.loadDays() }
-        .sheet(item: $editingJournal, onDismiss: { allDays = store.loadDays() }) { target in
+        .onAppear { scheduleCalendarRefresh() }
+        .onChange(of: displayedMonth) { scheduleCalendarRefresh() }
+        .onChange(of: store.day.journals.count) { scheduleCalendarRefresh() }
+        .onChange(of: store.day.meals.count) { scheduleCalendarRefresh() }
+        .onChange(of: lockService.state) { _, state in
+            if state.isUnlocked(for: .privateHub) {
+                scheduleCalendarRefresh()
+            } else {
+                calendarRefreshTask?.cancel()
+                allDays.removeAll(keepingCapacity: false)
+                if !path.isEmpty { path = NavigationPath() }
+                editingJournal = nil
+            }
+        }
+        .sheet(item: $editingJournal, onDismiss: { scheduleCalendarRefresh() }) { target in
             // `.large` only: at `.medium` the feeling chips and the character counter pushed the
             // editor itself under the fold, and at accessibility sizes it was off-screen entirely.
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
@@ -71,6 +87,42 @@ struct JournalView: View {
                 .environment(captureProtection)
         }
         #endif
+    }
+
+    /// The sealing coordinator activates on the next UI turn after unlock. A short newest-wins
+    /// delay lets that activation land first and collapses all same-frame refresh triggers.
+    private func scheduleCalendarRefresh() {
+        calendarRefreshTask?.cancel()
+        calendarRefreshTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(40))
+            } catch {
+                return
+            }
+            refreshCalendarDaysIfUnlocked()
+        }
+    }
+
+    /// Retains only the displayed month. The former full-history snapshot duplicated every day in
+    /// the app store and, more importantly, kept hydrated journal strings after the hub re-locked.
+    private func refreshCalendarDaysIfUnlocked() {
+        guard lockService.isUnlocked(for: .privateHub),
+              let interval = Calendar.current.dateInterval(of: .month, for: displayedMonth) else {
+            allDays.removeAll(keepingCapacity: false)
+            return
+        }
+        var monthDays: [String: FernletDay] = [:]
+        monthDays.reserveCapacity(31)
+        // A month has at most 31 days. Loading those keys directly avoids materializing and then
+        // filtering the app's entire uncapped day-history dictionary on every Journal entry.
+        for offset in 0..<31 {
+            guard let date = Calendar.current.date(byAdding: .day, value: offset, to: interval.start),
+                  date < interval.end else { break }
+            let key = FernletDate.dayKey(for: date)
+            let day = store.loadDay(for: key)
+            if day.hasLoggedContent { monthDays[key] = day }
+        }
+        allDays = monthDays
     }
 
     /// The scrolling page: header row, the one-tap mood card, the month calendar, and the two

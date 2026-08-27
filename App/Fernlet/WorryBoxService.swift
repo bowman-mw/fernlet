@@ -71,6 +71,9 @@ final class WorryBoxService {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var mode: ActivationMode = .inactive
     @ObservationIgnored private var userContentKey: SymmetricKey?
+    /// Unknown on process start; cleared after one successful device-key migration and re-armed
+    /// whenever a worry is written without the user's active content key.
+    @ObservationIgnored private var deviceKeyMigrationPending = true
 
     /// The hard cap on a worry's text, enforced at ``addWorry(_:)`` — the one seam through which
     /// every composer (First Aid's entry view and the Private hub's field) reaches the sealed store.
@@ -112,18 +115,28 @@ final class WorryBoxService {
         reload()
     }
 
+    /// Drops the active key and every decrypted worry when another Private section is selected or
+    /// the hub leaves the screen. Unlike a lock-state transition this performs no repository read.
+    func deactivate() {
+        mode = .inactive
+        userContentKey = nil
+        worries.removeAll(keepingCapacity: false)
+    }
+
     /// Re-seals the worries written under the device fallback key so they open under the user key.
     ///
     /// The rows stay readable under the DEVICE key on either failure leg; this fold runs again on the
     /// next `.unlocked(.privateHub)` transition, so it retries then. Until it lands the hub shows only
     /// user-key rows — audited rather than silent.
     private func foldDeviceKeyRows(into contentKey: SymmetricKey) {
+        guard deviceKeyMigrationPending else { return }
         guard let deviceKey = deviceWorryKey else {
             FernletAuditLog.log("worryBox.rekey.failed", context: [:])
             return
         }
         do {
             try repository.reencryptAll(from: deviceKey, to: contentKey)
+            deviceKeyMigrationPending = false
         } catch {
             FernletAuditLog.log("worryBox.rekey.failed", context: [:])
         }
@@ -144,9 +157,13 @@ final class WorryBoxService {
         let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxCharacters))
         guard !trimmed.isEmpty else { return }
         let worry = WorryNarrative(text: trimmed)
-        try repository.insert(worry, contentKey: activeKey ?? deviceWorryKey)
-        if activeKey != nil {
+        let readKey = activeKey
+        try repository.insert(worry, contentKey: readKey ?? deviceWorryKey)
+        if readKey != nil {
             worries.insert(worry, at: 0)
+        }
+        if userContentKey == nil {
+            deviceKeyMigrationPending = true
         }
         // Writing a worry down and setting it aside IS the "letting go" gesture (First Aid's "Let it
         // go" button routes here), so this is where the lifetime count grows — once per worry, keyed
@@ -193,7 +210,7 @@ final class WorryBoxService {
     /// Re-reads the sealed store with the currently active key (empty while locked/inactive).
     func reload() {
         guard let key = activeKey else {
-            worries = []
+            worries.removeAll(keepingCapacity: false)
             return
         }
         do {
@@ -202,7 +219,7 @@ final class WorryBoxService {
             // Fail closed (never a plaintext fallback), but say so: without the audit line a failed
             // decrypt is indistinguishable from an empty box.
             FernletAuditLog.log("worryBox.read.failed", context: [:])
-            worries = []
+            worries.removeAll(keepingCapacity: false)
         }
     }
 

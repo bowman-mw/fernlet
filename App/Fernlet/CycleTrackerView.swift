@@ -139,14 +139,14 @@ struct CycleTrackerView: View {
     /// `PrivateHubView`. Its `isVisible` is wired to the derived gate in `ContentView`'s launch
     /// task, so the `logs()` call in `loadIntimacyCalendar` decrypts nothing while hidden.
     var intimacyStore: IntimacyLogStore
+    private let healthKitService: HealthKitService
     var periodContext: PeriodContextBridge? = nil
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @Environment(FernletLockService.self) private var lockService
-    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
-    @State private var authorization = HealthKitAuthorizationViewModel()
+    @State private var authorization: HealthKitAuthorizationViewModel
     @State private var selectedDay: SelectedCycleDay?
     @State private var displayedMonth: Date = .now
     /// Merged per-day intimacy event counts (sealed logs max-merged with HealthKit). Plaintext-
@@ -168,6 +168,30 @@ struct CycleTrackerView: View {
         var visibility: SensitiveSurfaceVisibility
     }
 
+    init(
+        store: FernletStore,
+        periodStore: PeriodTrackerStore,
+        intimacyStore: IntimacyLogStore,
+        healthKitService: HealthKitService? = nil,
+        periodContext: PeriodContextBridge? = nil,
+        activeSheet: Binding<FernletSheet?>,
+        isInHub: Bool = false,
+        isTabBarCompact: Binding<Bool>,
+        tabResetToken: Binding<Int>
+    ) {
+        let service = healthKitService ?? HealthKitService()
+        self.store = store
+        self.periodStore = periodStore
+        self.intimacyStore = intimacyStore
+        self.healthKitService = service
+        self.periodContext = periodContext
+        _activeSheet = activeSheet
+        self.isInHub = isInHub
+        _isTabBarCompact = isTabBarCompact
+        _tabResetToken = tabResetToken
+        _authorization = State(initialValue: HealthKitAuthorizationViewModel(service: service))
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -186,15 +210,24 @@ struct CycleTrackerView: View {
             // settings sync) is covered by construction, never just the setter. Without this the
             // just-un-hidden period half would render affirmatively wrong empty states over
             // existing data until a re-appearance or lock cycle happened to restart the task.
-            .task(id: LoadTrigger(lockState: lockService.state, visibility: store.sensitiveSurfaceVisibility)) {
+            .task(id: LoadTrigger(
+                lockState: lockService.state,
+                visibility: store.sensitiveSurfaceVisibility
+            )) {
                 await loadPeriodIfUnlocked()
                 await loadIntimacyCalendar()
             }
-            .task(id: displayedMonth) { await loadIntimacyCalendar() }
+            // Month navigation changes only the month-scoped intimacy merge. Reloading the full
+            // 240-day period feed here caused five new HealthKit queries per calendar swipe.
+            .onChange(of: displayedMonth) {
+                Task { await loadIntimacyCalendar() }
+            }
             // Period entries reload on `.logPeriod` dismiss globally in ContentView (the sheet can
             // also be opened from Home); the month-scoped intimacy merge is this view's own.
-            .onChange(of: activeSheet?.id) { _, newValue in
-                if newValue == nil { Task { await loadIntimacyCalendar() } }
+            .onChange(of: activeSheet?.id) { oldValue, newValue in
+                guard newValue == nil else { return }
+                if oldValue == "logPeriod" { Task { await loadPeriodIfUnlocked() } }
+                if oldValue == "logIntimacy" { Task { await loadIntimacyCalendar() } }
             }
             // Hiding must drop plaintext already on screen, not just refuse the next load — this
             // view holds decrypted logs in @State for as long as it stays in the hierarchy. Keyed
@@ -533,14 +566,21 @@ struct CycleTrackerView: View {
         if !authorization.hasRequested(.cycleTracking) {
             await authorization.request(.cycleTracking)
         }
+        do {
+            try await periodStore.drainPendingBuffer(contentKey: contentKey)
+        } catch {
+            FernletAuditLog.log("periodNarratives.pendingDrainFailed", context: [
+                "error": String(describing: error)
+            ])
+        }
         await periodStore.loadEntries(unlockedContentKey: contentKey)
         refreshContext()
     }
 
     /// Drops the intimacy plaintext held in view state. Safe to call when already empty.
     private func scrubIntimacyState() {
-        intimacyLogs = []
-        intimacyEventsByDay = [:]
+        intimacyLogs.removeAll(keepingCapacity: false)
+        intimacyEventsByDay.removeAll(keepingCapacity: false)
     }
 
     private func loadIntimacyCalendar() async {
@@ -565,9 +605,12 @@ struct CycleTrackerView: View {
         }
         intimacyLogs = localLogs
         let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
+        guard healthKitService.isCapabilityRequestedAndEnabled(.intimateLogging) else {
+            intimacyEventsByDay = localEventsByDay
+            return
+        }
         do {
-            let service = HealthKitService(preferencesStore: storagePreferencesStore)
-            let healthEventsByDay = try await service.loadIntimacyEventsByDay(for: displayedMonth)
+            let healthEventsByDay = try await healthKitService.loadIntimacyEventsByDay(for: displayedMonth)
             intimacyEventsByDay = healthEventsByDay.merging(localEventsByDay) { max($0, $1) }
         } catch {
             intimacyEventsByDay = localEventsByDay

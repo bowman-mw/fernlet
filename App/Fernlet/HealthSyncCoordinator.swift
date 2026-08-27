@@ -38,19 +38,37 @@ final class HealthSyncCoordinator {
         self.providedHealthKitService = healthKitService
     }
 
-    /// Merges a fresh `HealthDailyContext` into today's record (coalescing with what's already
-    /// there), mirrors HealthKit-derived sleep hours into the sleep log, and schedules a save.
+    /// Merges a fresh `HealthDailyContext` into today's record and persists only when health values
+    /// changed. `syncedAt` alone is volatile refresh metadata: it never dirties the snapshot.
     func updateHealthContext(_ context: HealthDailyContext) {
+        let contextChanged = applyHealthContext(context)
+        let sleepChanged = context.body?.sleepHours.map(applyHealthSleepHours) ?? false
+        guard contextChanged || sleepChanged else { return }
+        host.scheduleSnapshotSave()
+    }
+
+    private func applyHealthContext(_ context: HealthDailyContext) -> Bool {
         if var existing = host.day.healthContext {
             existing.merge(context)
+            guard !Self.hasSameHealthValues(host.day.healthContext, existing) else { return false }
             host.day.healthContext = existing
-        } else {
-            host.day.healthContext = context
+            return true
         }
-        if let sleepHours = context.body?.sleepHours {
-            setHealthSleepHours(sleepHours)
-        }
-        host.scheduleSnapshotSave()
+        guard context.hasContent else { return false }
+        host.day.healthContext = context
+        return true
+    }
+
+    private static func hasSameHealthValues(
+        _ lhs: HealthDailyContext?,
+        _ rhs: HealthDailyContext
+    ) -> Bool {
+        guard let lhs else { return false }
+        return lhs.activity == rhs.activity
+            && lhs.body == rhs.body
+            && lhs.cycle == rhs.cycle
+            && lhs.mindfulness == rhs.mindfulness
+            && lhs.intimate == rhs.intimate
     }
 
     /// The largest sleep total one calendar day can carry. HealthKit sums overlapping samples from
@@ -61,15 +79,23 @@ final class HealthSyncCoordinator {
     /// Writes HealthKit-derived sleep hours (rounded to 0.1 h) into today's sleep log, preserving
     /// any user-authored quality/note. Non-finite, non-positive, or above-a-day hours are ignored.
     func setHealthSleepHours(_ hours: Double) {
-        guard hours.isFinite, hours > 0, hours <= Self.maxSleepHours else { return }
+        guard applyHealthSleepHours(hours) else { return }
+        host.scheduleSnapshotSave()
+    }
+
+    @discardableResult
+    private func applyHealthSleepHours(_ hours: Double) -> Bool {
+        guard hours.isFinite, hours > 0, hours <= Self.maxSleepHours else { return false }
         let roundedHours = (hours * 10).rounded() / 10
         let current = host.day.sleep
-        host.day.sleep = SleepLog(
+        let updated = SleepLog(
             hours: roundedHours,
             quality: current?.quality ?? .ok,
             note: current?.note ?? ""
         )
-        host.scheduleSnapshotSave()
+        guard updated != current else { return false }
+        host.day.sleep = updated
+        return true
     }
 
     /// Writes an app-authored workout to Health when sharing is authorized (no-op otherwise).
@@ -92,10 +118,11 @@ final class HealthSyncCoordinator {
         await workoutHealthKitSync.refreshFromHealth()
     }
 
-    /// One-time historical workout backfill (run-once flag lives in `defaults`), then starts the
-    /// live observation the pipeline maintains.
+    /// Launch-only workout setup: one-time historical backfill followed by one persistent observer.
+    /// The sync's request/opt-in gate makes both operations no-ops before permission is requested.
     func backfillWorkoutsFromHealthIfNeeded(defaults: UserDefaults = .standard) async {
         await workoutHealthKitSync.backfillIfNeeded(defaults: defaults)
+        await workoutHealthKitSync.refreshFromHealth()
     }
 
     /// Stops the live Health workout observer (HealthKit master toggle off, or mid-wipe so the

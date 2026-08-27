@@ -547,7 +547,7 @@ public final class PeriodTrackerStore {
 
     /// Drops every piece of cycle plaintext this store holds. Safe to call when already empty.
     public func scrubCycleState() {
-        entries = []
+        entries.removeAll(keepingCapacity: false)
         currentPhase = .unknown
         prediction = nil
         lastLoadHadContentKey = false

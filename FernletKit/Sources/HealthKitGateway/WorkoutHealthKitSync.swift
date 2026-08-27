@@ -167,6 +167,10 @@ public final class WorkoutHealthKitSync {
     /// ``reconcileWorkouts(_:)`` and deletions into ``reconcileDeletedWorkouts(_:)``. Adds are
     /// reconciled before deletes in each batch, which is what makes a same-batch edit-resync safe.
     public func refreshFromHealth() async {
+        guard service.isCapabilityRequestedAndEnabled(.workoutLogging) else {
+            service.stopObservingWorkouts()
+            return
+        }
         do {
             try await service.startObservingWorkouts { [weak self] workouts, deletedHealthKitUUIDs in
                 self?.reconcileWorkouts(workouts)
@@ -222,6 +226,7 @@ public final class WorkoutHealthKitSync {
     /// workouts, reconciled through the same path as live observation. Marks completion only after
     /// a successful fetch so a failed backfill retries on the next launch.
     public func backfillIfNeeded(defaults: UserDefaults = .standard) async {
+        guard service.isCapabilityRequestedAndEnabled(.workoutLogging) else { return }
         guard HealthKitService.shouldRunWorkoutBackfill(defaults: defaults) else { return }
 
         do {

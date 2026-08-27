@@ -5,6 +5,7 @@ import FernletExchange
 import FernletFoundation
 import FoodCatalog
 import Foundation
+import HealthKitGateway
 import SwiftUI
 import UIKit
 
@@ -24,13 +25,19 @@ final class FernletStoreAccess: @unchecked Sendable {
         self.store = store
     }
 
-    func load(statusUpdate: @escaping @MainActor (String) -> Void = { _ in }) async throws -> FernletStore {
+    func load(
+        healthKitService: (any HealthKitServicing)? = nil,
+        statusUpdate: @escaping @MainActor (String) -> Void = { _ in }
+    ) async throws -> FernletStore {
         try requireProtectedData()
         if let store { return store }
         if let loadingStore { return try await loadingStore.value }
         let task = Task { @MainActor [weak self] () throws -> FernletStore in
             guard let self else { throw ExchangeIntentServiceError.storeUnavailable }
-            let store = try await FernletStore.load(statusUpdate: statusUpdate)
+            let store = try await FernletStore.load(
+                healthKitService: healthKitService,
+                statusUpdate: statusUpdate
+            )
             await store.loadBundledFoodItemsForLaunch()
             self.store = store
             return store
@@ -76,8 +83,14 @@ final class ExchangeIntentService: @unchecked Sendable {
         storeAccess.install(store)
     }
 
-    func loadStoreForUI(statusUpdate: @escaping @MainActor (String) -> Void) async throws -> FernletStore {
-        try await storeAccess.load(statusUpdate: statusUpdate)
+    func loadStoreForUI(
+        healthKitService: any HealthKitServicing,
+        statusUpdate: @escaping @MainActor (String) -> Void
+    ) async throws -> FernletStore {
+        try await storeAccess.load(
+            healthKitService: healthKitService,
+            statusUpdate: statusUpdate
+        )
     }
 
     func recipeEntities() async throws -> [RecipeEntity] {
