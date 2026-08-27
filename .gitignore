@@ -24,6 +24,14 @@ AGENTS.md
 # macOS Finder metadata
 .DS_Store
 
+# Xcode per-user state (breakpoints, scheme order hints, workspace settings) — machine-local,
+# regenerated constantly by the IDE; shared schemes live in xcshareddata and stay tracked.
+xcuserdata/
+
+# Ad-hoc xcodebuild output roots left by builds run with an in-repo SYMROOT/-derivedDataPath.
+/App/build/
+/FernletKit/build/
+
 # Stale root-level project stub: an Xcode window still open on the pre-restructure path
 # recreates ./Fernlet.xcodeproj holding only UI state. The real project is App/Fernlet.xcodeproj.
 /Fernlet.xcodeproj/
