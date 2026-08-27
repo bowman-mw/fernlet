@@ -69,7 +69,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses your local network to connect with nearby trainers and friends for workout sharing."
+            "value" : "Fernlet connects with nearby friends for mesh photos, temporary text, and heart gifts during a user-started session, which may continue in the background."
           }
         }
       }

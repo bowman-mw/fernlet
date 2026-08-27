@@ -412,6 +412,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | File | Purpose |
 | --- | --- |
 | `Fernlet/FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift` | Observable mesh network coordinator managing active/lightweight peer slots, proximity-join (15 cm commit gate), pairwise/mesh promotion, session open/closed state, member removal proposals, admission requests, friend-of-friend vouchers, photo session metadata, encrypted mesh payloads, coordinator beacons, and key rotation. Its observation loop explicitly finishes cancelled streams so repeated Friends-tab discovery sessions do not retain suspended observers. |
+| `Fernlet/App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift` | DEBUG-only Bonjour/QUIC probe with a Simulator infrastructure lane and a physical-device peer-to-peer/background gate; verifies the signed TLS-channel binding. |
 | `Fernlet/App/Fernlet/DisposableCameraView.swift` | Active Friends-session disposable-camera UI: `CameraCaptureController` (`@Observable`, queued `AVCaptureSession` lifecycle, rotation handling, and arm/wind gate), `CameraPreviewView`, and the full-screen camera. The session-info sheet exposes the 10-shot film count, open/closed access, mesh rename, participant options, friend-of-friend labels, diagnostics, removal requests, and end-session flow; admission requests and mesh errors are presented as popups. |
 | `Fernlet/App/Fernlet/JoinPromptSheet.swift` | `JoinPromptSheet` — the shared "someone wants to join" confirmation for both closed-group gatekeepers: mesh admission requests (presented by the disposable-camera session flow) and Group Activity join requests (presented by `ActivitiesView`). Generic over the request payload via display-name/fingerprint extractor closures; swipe-to-dismiss declines everything still pending (fail-closed). Replaced the former `MeshAdmissionPromptSheet.swift` and `ActivityJoinPromptSheet.swift`. |
 | `Fernlet/App/Fernlet/FriendListView.swift` | Friend list screen for browsing trusted proximity peers with all/friends/blocked filters and block management. |
@@ -858,6 +859,7 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. Record types added since the last deploy are listed in the persistence sections of the store index. |
 | `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |
 | `Docs/Recipe-P2P-Real-Device-Validation.md` | Two-device validation script for recipe sharing. |
+| `Docs/Mesh-Network-Feasibility-Runbook.md` | Required physical-device validation gate before production background mesh transport work. |
 | `Docs/design-refs/*.html` | Design mockups the shipped UI was ported from (widget, first aid, companion moments, home ambiance, milestones, good vibes, barcode handoff). Cited from `FernletWidgetsBundle.swift`. |
 | `Docs/design-refs/ux-review-2026-08-16/` | The screenshot galleries and per-finding "Current" shots the UI/UX review keys its entries to. |
 

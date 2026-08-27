@@ -48,6 +48,10 @@ public nonisolated enum FernletCryptoPurpose {
         public static let activityJoinTokenV2 = CryptographicPurpose("fernlet.canonical.activity-join-token.v2")
         public static let activityRosterSnapshotV2 = CryptographicPurpose("fernlet.canonical.activity-roster-snapshot.v2")
         public static let moderationReportV2 = CryptographicPurpose("fernlet.canonical.moderation-report.v2")
+        /// Debug-only Network.framework feasibility transcript. This is deliberately distinct
+        /// from production mesh admissions so the device spike cannot become a signing oracle
+        /// for a future shipping protocol.
+        public static let meshProbeChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.probe.channel-introduction.v1")
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")

@@ -23,6 +23,13 @@
 		<string>_fernlet-recipe._udp</string>
 		<string>_fernlet-near._tcp</string>
 		<string>_fernlet-near._udp</string>
+		<string>_fernlet-mesh2._udp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Fernlet connects with nearby friends for mesh photos, temporary text, and heart gifts during a user-started session, which may continue in the background.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>MBO.Fernlet.mesh-continuation.*</string>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>

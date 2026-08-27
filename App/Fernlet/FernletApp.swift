@@ -72,6 +72,11 @@ struct FernletApp: App {
         // App Intents resolve this dependency before any scene exists. Registering it at process
         // startup gives background file exchange the same main-process store access as the UI.
         ExchangeIntentService.registerAppDependency()
+        #if DEBUG
+        // The phase-one Network.framework spike is the only continued-processing registration
+        // until physical-device validation approves a production mesh coordinator.
+        NetworkMeshFeasibilityProbe.registerBackgroundTask()
+        #endif
         // Install the concrete HealthKit cache cleaner before any HealthKitService is
         // constructed. The gateway module has NO default cleaner (WI-2: defaultCacheClearer
         // is nil, so disableIntegration() fails closed rather than silently skipping the

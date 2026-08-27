@@ -250,6 +250,15 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `checkCoordinatorStates()` | Commits newly connected slots with verified keys and removes stale uncommitted slots. |
 | `injectUITestStateIfNeeded()` | Seeds deterministic mesh/admission state from UI test environment variables. |
 
+### `NetworkMeshFeasibilityProbe.swift` (DEBUG-only)
+
+| Function/Surface | What It Does |
+| --- | --- |
+| `NetworkMeshFeasibilityProbe.start()` | Explicitly starts the DEBUG Network.framework probe; Simulator uses infrastructure networking, while physical devices retain the peer-to-peer/continued-processing gate. It never starts a real mesh. |
+| `NetworkMeshFeasibilityProbe.stop()` | Idempotently closes discovery, QUIC connections, and the test continued task. |
+| `MeshProbeChannelIntroduction` | Signs a transcript bound to the active TLS exporter, mesh ID, epoch, identities, and nonces. |
+| `NetworkMeshFeasibilityProbeView` | DEBUG Settings UI for observing bounded probe events and validation results. |
+
 ### `MeshMultipeerSession.swift`
 
 | Function | What It Does |
@@ -1147,4 +1156,3 @@ The rest of the function index should not be one long alphabetical dump. Group i
 | Separate UI rendering helpers from mutation/import/save functions. | This keeps behavioral reuse visible instead of hidden among view body fragments. |
 | Link cross-group reuse explicitly. | Example: social UI should point back to proximity functions instead of repeating proximity internals. |
 | Prefer one index file per broad subsystem if a section grows past a few hundred lines. | The proximity section is already large; food/recipes and store/persistence may deserve their own function-index docs linked from `FileIndex.md`. |
-

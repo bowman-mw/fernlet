@@ -478,6 +478,13 @@ struct SettingsSheet: View {
         Section {
             hubLink("Connection log", .connectionInspector)
                 .accessibilityIdentifier("settings.row.connectionLog")
+            NavigationLink {
+                NetworkMeshFeasibilityProbeView()
+            } label: {
+                Text("Mesh network feasibility")
+                    .font(.fernlet(.label))
+            }
+            .accessibilityIdentifier("settings.row.meshNetworkFeasibility")
         } header: {
             hubSectionHeader("Advanced")
         }
