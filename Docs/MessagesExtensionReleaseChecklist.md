@@ -43,3 +43,29 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 - [ ] Verify Dynamic Type, VoiceOver labels, and reduced-motion behavior in the composer and both
   Fernlet review screens.
 - [ ] Confirm static/local card artwork renders without a network request.
+
+## Localization
+
+The target had NO string catalog until 2026-08-27 — it shipped a round with 57 bare English
+sentences, and no wall could see them. It now owns
+`App/FernletMessagesExtension/Localizable.xcstrings`, has a line in the `TARGETS` array of
+`Scripts/sync-string-catalogs.sh`, and its whole display surface lives in `FernletMessagesCopy`.
+`LocalizationBoundaryTests` rules H1 and H2 keep it that way mechanically; what is left here is what
+a scan cannot judge.
+
+- [ ] `Scripts/sync-string-catalogs.sh --check` passes. Any code change that touched a sentence
+  needs the synced catalog committed WITH it — an un-synced catalog silently stops tracking the
+  code, and `--check` is the only thing that says so.
+- [ ] Run the composer at the largest accessibility text size in a language whose strings are
+  longer than English (German is the usual worst case). The two segment titles, the share button
+  and the three status lines are the tight spots.
+- [ ] Check the two card WORDMARKS (`messages.card.wordmark.recipe`, `…workout`). They are drawn
+  into a 1200×630 image at a fixed 28 pt, so unlike every other string here they cannot reflow — a
+  long translation is clipped, not wrapped, in the artwork the RECIPIENT sees.
+- [ ] Check the four count strings at 1 and at 2+ (`messages.recipe.servingCount`,
+  `…ingredientCount`, `…stepCount`, `messages.workout.sessionCount`). They carry hand-authored
+  `one`/`other` plural variations; `xcstringstool sync` preserves a plural block but will never
+  re-create one, so a dropped block is silent and shows up only as "1 servings".
+- [ ] Confirm the product name renders untranslated wherever it appears ("Fernlet recipe",
+  "Review in Fernlet", the `⌁ FERNLET` brand mark), and that "Review in Fernlet" has not been
+  translated as "Save" or "Import" — it opens a review and saves nothing.

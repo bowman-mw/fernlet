@@ -101,6 +101,15 @@ struct PrivacyWipeCoverageTests {
         // `wipeFunctionSignatures`, so its declaration line is inside the scanned text and a token
         // named after it would satisfy itself (the P1b defect class).
         "FernletMessagesRecipeImportRequest.clearPendingRequest",
+        // The Messages review inboxes themselves — the recipe AND workout-plan records a
+        // received card left waiting for review. Same reasoning as the line above: the token is
+        // the COORDINATOR, never the enclosing `clearMessagesImportInboxes` spelling, which is a
+        // registered signature and would satisfy itself.
+        "FernletMessagesRecipeInboxCoordinator",
+        // The App Group catalog the app publishes FOR the extension. Cleared in
+        // `clearDeviceLocalLedgers` (leg 10), after the second `cancelPending`, so a debounced
+        // save cannot re-publish it.
+        "messagesCatalogPublisher.clear",
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",

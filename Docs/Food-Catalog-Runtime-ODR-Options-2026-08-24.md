@@ -1,5 +1,23 @@
 # Food Catalog Runtime / ODR Options — 2026-08-24
 
+> **STATUS: OPEN — awaiting the owner. Raised 2026-08-24; still open at the 2026-08-27
+> documentation/test/review pass, which sharpened the questions below without answering any of
+> them.**
+>
+> **What is blocked while it stays open.** Item 10 of
+> [Food-Catalog-Remaining-Plan-2026-08-24.md](Food-Catalog-Remaining-Plan-2026-08-24.md) — "design
+> the compact runtime/ODR projection" — cannot start, because the projection's contents *are* the
+> answer to questions 2 and 3 below. Nothing else in the food-catalog track is blocked: search
+> quality, the review gate, and the match floor all work against the shipped base.
+>
+> **What is NOT blocked, and must not wait for this.** The 59,748,352-byte shipped base stays the
+> non-regression baseline either way. No change to the shipped SQLite, its Xcode resource
+> membership, the ODR tags, or `BrandedCatalogResourceLoader` is authorized by this document.
+>
+> **If it is never answered**, the app keeps shipping Option A (current base + optional branded
+> ODR) indefinitely. That is a real, working configuration — the cost of not deciding is the
+> missing P0 fields listed under Option C, not a broken build.
+
 ## Decision requested
 
 Choose the runtime size/features envelope, and explicitly decide whether the runtime catalog remains a
@@ -67,12 +85,34 @@ Adopt Option C only as a new, owner-authorized runtime-projection task. Keep the
 offline and independently validated; do not turn it into a shipped resource. Preserve the exact 50,000-row
 compatibility mapping, attribution, P0 provenance fields, and identity groups in the projection contract.
 
-Please choose:
+Please choose. Each question below states what a valid answer looks like and what the anchors are, so
+it can be answered from this document alone.
 
-1. Base-only P0 size budget and optional ODR download budget.
-2. Whether P1 and/or P2 are allowed in an ODR projection, versus never shipped.
-3. Confirmation that runtime stays a separate database from preservation (recommended), or authorization
-   to evaluate a coupled alternative.
+**1. Size envelope.** Two numbers, in MiB of INSTALLED bytes (not the gzip proxy, which is a transport
+estimate and not what a device spends):
+
+   - a ceiling for the base P0 projection, and
+   - a ceiling for the optional ODR download.
+
+   Anchors, all measured 2026-08-24 and tabulated above: the shipped base is **56.98 MiB**, the existing
+   branded ODR is **169.66 MiB**, and the two together are **226.64 MiB**. P0's own byte cost is
+   **unmeasured** — deliberately, since the current runtime omits fields P0 needs and the historical
+   artifact is the wrong schema — so a ceiling here is a BUDGET the projection must be built to hit, not
+   a prediction. "No larger than today" (56.98 / 169.66) is a valid and defensible answer.
+
+**2. P1 and P2.** For each of the two tiers independently, one of: *may ship in an optional ODR
+projection*, or *never ships*. Note what the question is not: neither tier may enter the base under any
+answer — Option C's contract is that P1/P2 stay separately selectable and are never silently included.
+
+**3. Runtime/preservation separation.** Either *confirmed — two databases* (the recommendation, and the
+architecture every option above assumes), or *authorize evaluating a coupled alternative*, which is a
+request for more measurement rather than a design change: Option B is already rejected on measured
+grounds (428.73 MiB, archival schema, and it would couple app UX to validation storage), so a coupled
+alternative would need a fourth option built and measured first.
+
+**Not being asked here, to keep the scope honest:** whether to regenerate the v4 preservation artifact
+(that is prerequisite work for any Option C measurement, not a choice), and the P1 "user-specific serving
+presets" persisted-surface/privacy/wipe decision, which is its own gate in the remaining-work plan.
 
 ## Evidence sources
 
