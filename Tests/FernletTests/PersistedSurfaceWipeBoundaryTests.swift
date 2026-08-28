@@ -190,6 +190,14 @@ struct PersistedSurfaceWipeBoundaryTests {
 
         // ── Cleared by the funnel ────────────────────────────────────────────────────────────────
         "ageAssuranceRecord": .cleared(token: "ageAssurance.clear"),
+        // The Phase 2.2 sidecar-format migration latch (`HeartDropSidecarMigrationLatch`, one
+        // bit, no content). Cleared because the wipe destroys its entire subject — the sidecar
+        // files (`heartDropService.wipeForDeleteAll()`) AND the seal key
+        // (`HeartPrekeyStore.wipeForDeleteAll()`'s service-wide delete) — the deliberate
+        // mirror-image of `ownPhotoKeyMigrationComplete`'s kept row (subject survives) and the
+        // same case as `hashVersionMigrationComplete`'s cleared row (subject destroyed).
+        "com.fernlet.heartdrop.sidecarFormatMigrationComplete":
+            .cleared(token: "HeartDropSidecarMigrationLatch.resetForDeleteAll"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before

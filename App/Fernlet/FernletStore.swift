@@ -5342,6 +5342,13 @@ final class FernletStore {
         // Then the local state: prekeys (keychain), peer bundle cache, outbox, durable dedup, and
         // the service's own identity cache (the 4th live instance).
         heartDropService.wipeForDeleteAll()
+        // The Phase 2.2 sidecar-format migration latch: the wipe just destroyed its entire
+        // subject — the sidecar files above AND (via `HeartPrekeyStore.wipeForDeleteAll()`'s
+        // service-wide delete) the key that sealed them — so the recorded proof predates the
+        // wipe and is cleared with it. The `hashVersionMigrationComplete` mirror-image case
+        // (subject destroyed → cleared), not the `ownPhotoKeyMigrationComplete` case (subject
+        // survives → kept); the next launch re-proves with a four-stat marker survey.
+        HeartDropSidecarMigrationLatch.resetForDeleteAll()
         // No `heartsAwayPurgePending` reset needed: it derives from the outbox this just emptied, so
         // the Settings "it'll keep trying" notice cannot outlive the wipe that made retrying
         // impossible — which is the honest reading, since nothing addressable is left.
@@ -5683,6 +5690,28 @@ final class FernletStore {
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
         migrateAndBindOwnPhotoKey()
+        migrateHeartDropSidecarFormat()
+    }
+
+    /// Crypto-standardization Phase 2.2: convert any `FSC1`-format heart-drop sidecar to `FSC2`,
+    /// once per launch until proven complete.
+    ///
+    /// Synchronous, on the main actor, after the UI is up — no detached task, unlike the photo
+    /// migrator, because the work does not warrant one: at most three opens/re-seals of files
+    /// that top out around 1 MB on the launches that still hold legacy bytes, and four `stat`s
+    /// afterwards (a set latch is revalidated with a marker-only survey every launch, so
+    /// observation always beats memory). Running on the main actor is also what makes the pass
+    /// atomic with respect to the `@MainActor` sidecar stores — no persist can interleave
+    /// mid-file. The store's injected `heartDropStorage` (never the production scope directly)
+    /// keeps scoped test stores migrating their own directories, and this timing means the
+    /// device is unlocked, so `.completeFileProtection` reads and the sidecars'
+    /// `WhenUnlockedThisDeviceOnly` seal key are both available — a locked-anyway edge lands in
+    /// an indeterminate bucket and retries next launch.
+    private func migrateHeartDropSidecarFormat() {
+        let migrator = HeartDropSidecarFormatMigrator.standard(scope: heartDropStorage)
+        if !migrator.runAtLaunch() {                       // R7: the Bool is never discarded
+            FernletAuditLog.log("heartdrop.sidecarFormat.incomplete")
+        }
     }
 
     /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media

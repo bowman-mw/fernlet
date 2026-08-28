@@ -195,6 +195,10 @@ struct PrivacyWipeCoverageTests {
         // first — it needs the record names the local wipe destroys.
         "heartDropService.purgeDeadDrop",
         "heartDropService.wipeForDeleteAll",
+        // The Phase 2.2 sidecar-format migration latch. Its own token beside the wipe above,
+        // because the wipe destroys the latch's entire subject (files + seal key) and a proof
+        // that predates the wipe must not survive it; the next launch re-proves cheaply.
+        "HeartDropSidecarMigrationLatch.resetForDeleteAll",
         // Settings
         "storagePreferencesResetHook",
     ]
