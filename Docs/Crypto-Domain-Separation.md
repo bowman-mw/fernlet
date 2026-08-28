@@ -266,7 +266,7 @@ hiccup never reads as corruption.
 
 ### `CryptographicPurposeBoundaryTests` — a grep wall
 
-It scans `FernletKit/Sources` and `App/Fernlet` for nine primitive markers (`signature(for:`,
+It scans the five shipping roots (see below) for nine primitive markers (`signature(for:`,
 `isValidSignature(`, `hkdfDerivedSymmetricKey`, `HKDF<`, `HMAC<`, `ChaChaPoly.seal/open`,
 `AES.GCM.seal/open`) and requires a purpose to be named within an asymmetric window: three lines
 above the call, six below (a multi-line call names its purpose inside its own argument list, which
@@ -289,16 +289,31 @@ reviewer would have to remember the policy.
 - **A primitive whose marker is not on the list.** The nine markers are an enumeration. A different
   CryptoKit entry point, a helper that wraps one, or a future primitive is invisible until someone
   adds it.
-- **Anything outside the two scanned roots.** The roots are `FernletKit/Sources` and `App/Fernlet`.
-  `App/FernletWidgets`, `App/FernletShareExtension` and `App/FernletMessagesExtension` are NOT
-  scanned. Verified 2026-08-27: none of the three imports CryptoKit or names a primitive, so there
-  is nothing to miss today — but nothing checks that, and the Messages extension is a worked example
-  of what happens to a shipping target the walls do not enumerate (see
+- **Anything outside the five scanned roots.** The roots are `FernletKit/Sources`, `App/Fernlet`,
+  `App/FernletWidgets`, `App/FernletShareExtension` and `App/FernletMessagesExtension` — every
+  directory whose Swift reaches a device, and the same list `Scripts/power-of-10-scan.py` calls
+  `SHIPPING_ROOTS`. The three extension roots were added in the crypto standardization round's
+  Phase 5; before that the wall scanned two roots and the other three were clean only by inspection
+  (verified 2026-08-27, checked by nothing), which is what happened to the Messages extension under
+  the localization wall (see
   [MessagesExtensionReleaseChecklist.md](MessagesExtensionReleaseChecklist.md) §Localization).
-- **Escape-hatch abuse.** `// cryptographic-domain: …` silences the wall by design, for the paths
-  that genuinely have no domain to name. **There are 18 of them, across 11 files** — more than the
-  handful the mechanism reads like, and nothing tracks the number, so a nineteenth passes
-  unremarked. By the label each one gives itself:
+  A root that stops resolving to Swift now throws `CryptographicWallScan.MissingRoot` rather than
+  scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
+  sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
+- **Escape-hatch abuse — now counted.** `// cryptographic-domain: …` silences the wall by design,
+  for the paths that genuinely have no domain to name. **There are 18 of them, across 10 files** —
+  more than the handful the mechanism reads like. This document used to add that "nothing tracks the
+  number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and a
+  nineteenth fails CI. It pins four things, not one: the total, the count **per label**, the number
+  of files, and the set of labels that exist at all — so a hatch added while another is removed, a
+  hatch relabelled into a more benign category, and a brand-new category of exemption each fail
+  separately. The table below and the pins are one fact in two places, and move in the same commit.
+
+  (The file count was **11** here until 2026-08-28. It was wrong when it was written, not stale:
+  the tree held 18 hatches across 10 files at the commit that wrote the sentence. An uncounted
+  number drifts in both directions.)
+
+  By the label each one gives itself:
 
   | Label | Count | What it means |
   |---|---:|---|
@@ -310,10 +325,24 @@ reviewer would have to remember the policy.
   | `purpose-derived legacy-write` | 1 | `ColumnCrypto`'s fail-open unbound write |
 
   The ten `legacy-read` entries are the ones to watch: each marks a path that will keep accepting
-  un-domained bytes for as long as any row written under it survives, and there is no inventory
-  anywhere of how many such rows remain. The other eight are cases where the domain IS bound, just
-  not within three lines of the call — they are annotations for the grep's benefit, not exemptions,
-  and re-reading them is the only way to tell the two kinds apart.
+  un-domained bytes for as long as any row written under it survives. **The inventory this document
+  said did not exist now does** — the format census built in Phase 0 of
+  [Plan-Crypto-Standardization-2026-08-27.md](Plan-Crypto-Standardization-2026-08-27.md) counts
+  those rows by MARKER BYTE, never by opening a blob, and the DEBUG Phase 3 gate readout renders
+  all six at-rest surfaces from one device in one sitting. Six of the ten entries are the Class-A
+  at-rest sites, each deletable once its own gate reads zero on a real upgraded device; the other
+  four are Class-B wire reads, which no migration can retire because the bytes arrive from a peer —
+  they are governed by which builds are in the field (owner decision D1). The other eight hatches
+  are cases where the domain IS bound, just not within three lines of the call — they are
+  annotations for the grep's benefit, not exemptions, and re-reading them is the only way to tell
+  the two kinds apart.
+
+  One shape the pin has to defend against by itself: the wall reads a raw context window, so a
+  `///` line that merely *mentions* the marker near a primitive call silences it exactly as a real
+  hatch would while reading as documentation to a human. The census classifies documentation
+  mentions separately, pins where they are (one today, in
+  `PendingNarrativeBufferFormatCensus.swift`), and asserts none of them sits within reach of a
+  primitive call.
 
 ### `CryptographicDomainSeparationTests` — a property suite
 

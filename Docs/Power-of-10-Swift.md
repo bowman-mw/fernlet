@@ -20,9 +20,11 @@ Two enforcement layers, mirroring the S3 and no-tracking walls:
   column of the table below; the audit that established this baseline is
   `Docs/CODE_REVIEW_Power-of-10-2026-08-16.md`.
 
-Scope: the four shipping roots — `FernletKit/Sources`, `App/Fernlet`, `App/FernletWidgets`,
-`App/FernletShareExtension`. Test code is exempt from R4/R5/R7 (tests trap on purpose) but not
-from R10 (zero warnings everywhere).
+Scope: the five shipping roots — `FernletKit/Sources`, `App/Fernlet`, `App/FernletWidgets`,
+`App/FernletShareExtension`, `App/FernletMessagesExtension`. (The scanner's `SHIPPING_ROOTS` has
+held all five since the Messages extension shipped; this sentence said "four" and omitted it, so it
+understated the wall's own coverage.) Test code is exempt from R4/R5/R7 (tests trap on purpose) but
+not from R10 (zero warnings everywhere).
 
 | # | NASA rule (C) | Fernlet rule (Swift) | Enforced by |
 |---|---|---|---|

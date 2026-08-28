@@ -766,10 +766,65 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
       and the keyed migrator's clean pass is the second witness). Deletion diffs may be drafted on
       a parked branch; the gate itself cannot be self-satisfied by the loop.
+      **BLOCKED 2026-08-28 on the owner's exported gate report.** The instrument is built and merged
+      to main (`b265b0c`) and the owner has run the sitting, but the exported reading has not
+      reached a session, so nothing is deleted and no verdict is recorded. A simulator zero, a latch
+      quoted to itself, and a verdict inferred from the code all read exactly like a discharge and
+      none of them is one.
 - [ ] Phase 4 — Class B wire readers — BLOCKED: owner decision D1 (§5). No Class-B site is touched
       until it lands.
-- [ ] Phase 5 — wall the end state (§4). The parts independent of Phases 3/4 — the pinned
-      escape-hatch count and the three extension roots — may land early.
+- [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**
+      (SHA recorded at the boundary below); the zero-`legacy-read` assertion is what remains, and it
+      cannot land until Phases 3 and 4 have deleted the ten readers.
+      - Pinned escape-hatch count — `Tests/FernletTests/CryptographicEscapeHatchCensusTests.swift`.
+        Pins FOUR things, not one: the total (18), the count per label, the number of files holding
+        one (10), and the set of labels that exists at all — so a hatch added while another is
+        removed, a hatch relabelled into a more benign category, and a brand-new category of
+        exemption each fail separately. Phase 3 decrements `legacy-read` here in the same commit as
+        each deletion.
+      - The three extension roots — the purpose wall now scans all five shipping roots, the same
+        list `Scripts/power-of-10-scan.py` calls `SHIPPING_ROOTS`. Roots, primitive markers and the
+        context window moved to `Tests/FernletTests/CryptographicWallScan.swift`, shared with the
+        census so the pinned number and the enforced bytes cannot describe different sets. A root
+        that stops resolving to Swift now throws `MissingRoot` instead of scanning an empty
+        directory and reporting green.
+      - §Escape-hatch abuse rewritten in [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md).
+
+  **Discovered while landing Phase 5's early parts** (recorded here rather than done silently):
+  - §Escape-hatch abuse said "18 of them, across **11** files". The file count was **wrong when it
+    was written**, not stale — the tree held 18 hatches across 10 files at `e749adb`, the commit
+    that wrote the sentence. Corrected to 10 and now pinned. An uncounted number drifts in both
+    directions, which is the argument for the pin restated as evidence.
+  - `Scripts/doc-coverage-scan.py` scanned FOUR roots and omitted `App/FernletMessagesExtension` —
+    the same species of hole as the purpose wall's two roots, in the same target the plan already
+    named as the worked example. Three types there had never been doc-coverage-enforced
+    (`CatalogMode`, `Palette`, `MessageTransportProbeError`); all three are now documented and the
+    scanner reads five roots at zero. `Scripts/power-of-10-scan.py`'s usage line still said "four
+    shipping roots" against a five-entry `SHIPPING_ROOTS`; corrected (the Swift port pins the tuple,
+    not the docstring, so nothing was enforcing it).
+  - A `///` line that merely MENTIONS `cryptographic-domain:` silences the purpose wall exactly as a
+    real hatch would — the wall matches a raw context window. There is one such mention today
+    (`PendingNarrativeBufferFormatCensus.swift`); the census pins where the mentions are and asserts
+    none sits within reach of a primitive call.
+  - **NEW WORK, NOT DONE HERE — four more walls omit `App/FernletMessagesExtension`.** The purpose
+    wall's two-root list was not one wall's oversight; it is the shape. Of the six root-scanning
+    walls, only `Scripts/power-of-10-scan.py` covered all five shipping roots. Doc-coverage and the
+    purpose wall were fixed in this commit; these four still read four roots and claim in their own
+    doc comments to match `SHIPPING_ROOTS`:
+    `Tests/FernletTests/TestHookBoundaryTests.swift:34`,
+    `Tests/FernletTests/PasteboardBoundaryTests.swift:30`,
+    `Tests/FernletTests/MemoryLifecycleBoundaryTests.swift:35`,
+    `Scripts/accessibility-scan.py:98`.
+    **Measured 2026-08-28, so the estimate is not a guess:** the Messages extension's three files
+    contain no `Task<`, no `addObserver(forName:)`, no `withObservationTracking`, no `UIPasteboard`,
+    no test hook, and no accessibility-rule violation — all four extensions are one-line root
+    additions over clean source, plus the `four shipping roots` prose that
+    describes them — 16 sites across `Docs/` and the walls' own doc comments as of 2026-08-28,
+    3 of them in [Accessibility-Nutrition-Labels.md](Accessibility-Nutrition-Labels.md) and 1 in
+    [FileIndex.md](FileIndex.md). Deliberately left out of this commit: it is four unrelated walls, not
+    crypto, and it belongs in its own change. `Docs/Power-of-10-Swift.md` said "four shipping roots"
+    against a five-entry `SHIPPING_ROOTS` and was corrected here, because that one was the wall
+    UNDERSTATING coverage it already had, not a hole.
 - [ ] Final pass — docs-vs-code reconciliation sweep + purpose-statement sweep, then stop the loop
       with the gate report (real-device census readings owed, D1, anything parked).
 

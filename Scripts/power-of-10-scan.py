@@ -6,7 +6,7 @@ violation not covered by Scripts/power-of-10-allowlist.json. The enforced baseli
 every enforced check; the allowlist is the only escape hatch and every entry carries a reason.
 
 Usage:
-    Scripts/power-of-10-scan.py                 # scan the four shipping roots, human-readable
+    Scripts/power-of-10-scan.py                 # scan the five shipping roots, human-readable
     Scripts/power-of-10-scan.py --json          # same, machine-readable (one JSON object)
     Scripts/power-of-10-scan.py --advisory      # ALSO print the review-only signals (all `while`
                                                 #   loops, `_ =` discards, @discardableResult,

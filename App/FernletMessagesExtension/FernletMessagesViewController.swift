@@ -5,11 +5,18 @@ import UIKit
 /// A bounded recipe/workout composer. It reads only the App Group catalog and independently
 /// decodes every received envelope instead of trusting the visible message card.
 final class FernletMessagesViewController: MSMessagesAppViewController, UISearchBarDelegate {
+    /// Which half of the App Group catalog the composer is showing.
+    ///
+    /// The `Int` raw values are the `UISegmentedControl` indices, so the segment order and this
+    /// declaration order are one fact, not two.
     private enum CatalogMode: Int {
         case recipes
         case workouts
     }
 
+    /// The composer's colours, spelled out in `UIColor` rather than read from the app's design
+    /// tokens: an app extension is a separate process with no access to the host's asset catalog,
+    /// and a missing token here would render as black-on-black rather than fail loudly.
     private enum Palette {
         static let ink = UIColor(red: 0.24, green: 0.18, blue: 0.12, alpha: 1)
         static let moss = UIColor(red: 0.27, green: 0.41, blue: 0.23, alpha: 1)

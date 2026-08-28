@@ -28,6 +28,11 @@ nonisolated enum MessageTransportProbe {
     }
 }
 
+/// Why a Messages transport probe could not be packed or read.
+///
+/// Every case is developer-facing — the probe has no shipping call site — but the sentences are
+/// localized anyway, because the localization wall's rule G makes no exception for an error a user
+/// is unlikely to see.
 nonisolated enum MessageTransportProbeError: LocalizedError {
     case invalidURL
     case invalidPayload
