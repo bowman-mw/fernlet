@@ -233,6 +233,50 @@ struct SealedColumnMigrationStatusTests {
         #expect(shouldRunAfterReset)
         store.recordSealedColumnMigrationRun(latched: false, passResults: [])
     }
+
+    // MARK: - The Phase 3 gate readout's retained witness (DEBUG only)
+
+    /// A `.confirmed` revalidation leaves a witness with ZERO passes — the state that is completely
+    /// silent today, because `revalidate` returns `.confirmed` before reaching any audit line. The
+    /// readout renders it as "the latch was re-confirmed by a KEYLESS census", and without this
+    /// retention it could not tell that from "nothing ran".
+    @Test func aConfirmedRevalidationLeavesAPasslessWitness() {
+        let store = makeStore("column-witness-confirmed")
+        _ = store.recordSealedColumnRevalidationOutcome(.confirmed)
+        let witness = store.lastSealedColumnPassWitness
+        #expect(witness?.revalidation == .confirmed)
+        #expect(witness?.isKeyedWitness == false)
+        #expect(witness?.passes.isEmpty == true)
+    }
+
+    /// A funded run leaves a witness carrying every pass result, in order.
+    @Test func aFundedRunLeavesAWitnessCarryingEveryPassInOrder() {
+        let store = makeStore("column-witness-funded")
+        store.lockState = .unlocked(scope: .privateHub)
+        store.recordSealedColumnMigrationRun(latched: true, passResults: [convertingResult(), cleanResult()])
+        let witness = store.lastSealedColumnPassWitness
+        #expect(witness?.isKeyedWitness == true)
+        #expect(witness?.passes == [convertingResult(), cleanResult()])
+        #expect(witness?.latched == true)
+        #expect(witness?.everyPassClean == false, "the converting pass is not clean")
+    }
+
+    /// A subsequent PASSLESS run does not displace a keyed witness.
+    ///
+    /// `recordSealedColumnMigrationRun` is also called with `passResults: []` from the cancelled-grace
+    /// path, and an unconditional assignment there would destroy the keyed witness the owner just
+    /// earned and silently revert the readout's row from discharged to not-taken.
+    @Test func aPasslessRunNeverDisplacesAKeyedWitness() {
+        let store = makeStore("column-witness-replacement")
+        store.lockState = .unlocked(scope: .privateHub)
+        store.recordSealedColumnMigrationRun(latched: true, passResults: [cleanResult()])
+        store.recordSealedColumnMigrationRun(latched: false, passResults: [])
+        #expect(store.lastSealedColumnPassWitness?.passes == [cleanResult()],
+                "a passless run displaced the keyed witness")
+        _ = store.recordSealedColumnRevalidationOutcome(.confirmed)
+        #expect(store.lastSealedColumnPassWitness?.passes == [cleanResult()],
+                "a keyless revalidation displaced the keyed witness")
+    }
 }
 
 /// Thread-safe counter for the injected task-body seam — the only thing a funded test task

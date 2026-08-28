@@ -465,7 +465,11 @@ final class OwnPhotoBackupCoordinator {
             // The migration has done its part on this device; the user's tap still buys the real
             // full-verification pass it always did (pinned: the latch never eats the verification).
             lastFullPassBlockedOnlyByOtherDevices = false
-            return await synchronize(preferenceOverride: preferenceOverride, fullVerification: true)
+            let pass = await synchronize(preferenceOverride: preferenceOverride, fullVerification: true)
+            #if DEBUG
+            retainDebugFullPass(pass)
+            #endif
+            return pass
         }
         let epoch = teardownEpoch
         let migrator = SealedPhotoBackupFormatMigrator(latch: latch) {
@@ -508,8 +512,36 @@ final class OwnPhotoBackupCoordinator {
             host.recordOwnPhotoBackupUploadFailed(effective.uploadFailed)
             host.recordOwnPhotoBackupVerifiedUnreadable(effective.verifiedUnreadable ?? 0)
         }
+        #if DEBUG
+        retainDebugFullPass(effective)
+        #endif
         return effective
     }
+
+    #if DEBUG
+    /// The last full-verification pass's per-corpus format verdicts, retained for the Phase 3 gate
+    /// readout. Nothing shipping reads it.
+    ///
+    /// Taken from the RETURNED `PassResult.corpusVerdicts` — set inside
+    /// `synchronize(preferenceOverride:fullVerification:)`, which BOTH legs of
+    /// ``synchronizeFullyVerified(preferenceOverride:)`` reach — and deliberately NOT from
+    /// `lastTally.verdicts`, which the latch guard returns before ever reaching. On a LATCHED device
+    /// (the very device the Phase 3 sitting is taken from) the latter site never runs, so it would
+    /// have left this permanently nil exactly where the corroboration is wanted.
+    private(set) var lastFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]?
+    /// When the last full-verification pass returned. `synchronizeFullyVerified` refuses to overlap
+    /// itself and a refused call is a SILENT no-op, so without this the readout cannot tell "pass
+    /// running" from "pass refused" from "no pass this process".
+    private(set) var lastFullPassCompletedAt: Date?
+    /// Read-only mirror of the private in-flight flag, for the readout's disable rule.
+    var debugPassInFlight: Bool { passInFlight }
+
+    /// Retains a finished full pass's DEBUG evidence.
+    private func retainDebugFullPass(_ pass: PassResult) {
+        lastFullPassVerdicts = pass.corpusVerdicts
+        lastFullPassCompletedAt = Date()
+    }
+    #endif
 
     /// Whether a blocked tally has the §C4 "nothing wrong on this device" shape: committed and
     /// examined everywhere, nothing unreadable, nothing left to heal, no failed leg — and at least
@@ -889,6 +921,12 @@ final class OwnPhotoBackupCoordinator {
         // your other device" line about a route that no longer exists is not a status.
         teardownEpoch += 1
         lastFullPassBlockedOnlyByOtherDevices = false
+        #if DEBUG
+        // The retained verdicts describe manifests this call is deleting; they go with them, on the
+        // same teardown-epoch rule their sibling above already follows.
+        lastFullPassVerdicts = nil
+        lastFullPassCompletedAt = nil
+        #endif
         let cloud = makeCloudService()
         var allCleared = true
         for corpus in SealedPhotoCorpus.allCases {

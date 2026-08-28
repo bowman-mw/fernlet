@@ -67,6 +67,7 @@ final class DeleteEverythingFlow {
                 // Set here (the first thing after the user confirms) so the busy overlay is up for the
                 // whole multi-second wipe, disabling the entry point's buttons and swallowing a second tap.
                 self.isDeleting = true
+                Self.clearDebugDiagnostics(store)
                 return await store.deleteAllData(includingHealthKitSamples: includeHealth)
             },
             onFinished: { outcome in
@@ -100,6 +101,7 @@ final class DeleteEverythingFlow {
         onWipeFinished: (() -> Void)? = nil
     ) {
         isDeleting = true
+        Self.clearDebugDiagnostics(store)
         Task {
             let outcome = await store.deleteAllData(includingHealthKitSamples: includingHealthSamples)
             self.isDeleting = false
@@ -110,6 +112,23 @@ final class DeleteEverythingFlow {
                 self.failure = outcome
             }
         }
+    }
+
+    /// Drops the DEBUG Phase 3 gate readout's in-memory readings before a wipe starts.
+    ///
+    /// It persists nothing, so `Docs/PrivacyWipeCoverage.md` owes it no disposition row — but a
+    /// "gate discharged" reading left standing over corpora this wipe is about to destroy would be
+    /// the same lie a persisted one would be.
+    ///
+    /// Called from HERE rather than from inside `FernletStore.deleteAllData`, and that placement is
+    /// forced: `PersistedSurfaceWipeBoundaryTests` throws on ANY preprocessor conditional inside the
+    /// scanned wipe path, because a clear behind a compile-time condition cannot certify a promise
+    /// the dialog makes unconditionally. This file is not part of that path. The duress wipe needs no
+    /// line of its own — engaging duress clears the session on its own edge.
+    private static func clearDebugDiagnostics(_ store: FernletStore) {
+        #if DEBUG
+        store.phase3ReadoutSession.clear()
+        #endif
     }
 
     /// Which Apple Health outcome the dialog offers, from the two signals that outlive each other.

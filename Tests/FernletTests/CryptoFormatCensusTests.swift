@@ -281,6 +281,20 @@ struct CryptoFormatCensusTests {
         #expect(CryptoFormatCensusSurface.allCases.contains(.sealedPhotoBackup))
     }
 
+    /// The row's refusal is SCOPED, not absolute: the number cannot be produced *here*, and the row
+    /// has to say where it can. Since the Phase 3 gate readout ships beside this census and reads
+    /// exactly that number on request, a row still reading as an absolute would send a Phase 3
+    /// session looking for an instrument it already has.
+    @Test func theSealedPhotoBackupRowNamesTheReadoutRatherThanReadingAsAnAbsolute() throws {
+        let caveat = try #require(CryptoFormatCensus.sealedPhotoBackupRow.caveat)
+        #expect(caveat.contains("it is not a number a census can produce"),
+                "the census's own refusal must survive verbatim")
+        #expect(caveat.contains("Phase 3 gate readout"),
+                "the row must name where the number CAN be read")
+        #expect(caveat.contains("network fetch"),
+                "and it must state the cost that is precisely why this census does not pay it")
+    }
+
     // MARK: - Indeterminate is not zero
 
     /// Every way a surface can fail to produce a number maps to a row with **no** count and a stated

@@ -2201,6 +2201,131 @@ struct SealedPhotoBackupTests {
                 "a restore-only pass saw a legacy manifest and left the latch attesting the opposite")
         #expect(audit.contains("sealedPhoto.hashMigration.invalidatedByForeignWrite"))
     }
+
+    // MARK: - 9. The Phase 3 gate readout's manifest FORMAT accessor
+
+    /// A manifest with proven entries reports its four format facts.
+    ///
+    /// This accessor is what makes the sealed-photo Phase 3 gate readable from the phone at all: the
+    /// gate is `minimumEntryHashVersion >= 2` per corpus, and nothing in the app rendered that number
+    /// anywhere before it. It is a SECOND caller of the existing private `openManifest`, deliberately
+    /// not a second reader with its own copy of the fail-closed corpus re-check.
+    @Test func theManifestFormatAccessorReportsProvenEntries() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+
+        try await service.addPhoto(Data("photo A".utf8), id: UUID(), corpus: .meal)
+        try await service.addPhoto(Data("photo B".utf8), id: UUID(), corpus: .meal)
+
+        let reading = try #require(try await service.manifestFormatReading(corpus: .meal))
+        #expect(reading.entryCount == 2)
+        #expect(reading.minimumEntryHashVersion == 2)
+        #expect(reading.unprovenEntryCount == 0)
+        #expect(reading.generation >= 1)
+    }
+
+    /// The PRE-MARKER fixture reads minimum 1 with a NON-ZERO unproven count — "not proven", which
+    /// the readout is careful never to render as "legacy entries found".
+    @Test func theManifestFormatAccessorReadsAPreMarkerManifestAsUnproven() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        _ = try await plantLegacyMealBackup(identity: identity, database: database)
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+
+        let reading = try #require(try await service.manifestFormatReading(corpus: .meal))
+        #expect(reading.entryCount == 1)
+        #expect(reading.minimumEntryHashVersion == 1)
+        #expect(reading.unprovenEntryCount == 1)
+    }
+
+    /// An EMPTY manifest reads minimum 2 with `entryCount == 0` — the vacuous case, re-pinned through
+    /// the accessor because that is precisely where it becomes a RENDERING hazard: a caller reading
+    /// the minimum alone would see the gate's own number and call the surface proven.
+    @Test func theManifestFormatAccessorReadsAnEmptyManifestAsVacuousTwo() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let cloud = makeCloud(database)
+        try await cloud.saveSealedPhoto(
+            try SealedPhotoCrypto.seal(
+                try JSONEncoder().encode(SealedPhotoManifest(corpus: .recipe, entries: [])),
+                corpus: .recipe,
+                slot: .manifest,
+                identityService: identity,
+                generation: 1,
+                keySalt: Data(repeating: 0x22, count: 32)
+            )
+        )
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+
+        let reading = try #require(try await service.manifestFormatReading(corpus: .recipe))
+        #expect(reading.entryCount == 0)
+        #expect(reading.minimumEntryHashVersion == 2, "an empty manifest is vacuously 2")
+        #expect(reading.unprovenEntryCount == 0)
+    }
+
+    /// A missing manifest record returns nil rather than a fabricated reading. "No record came back"
+    /// is not "no manifest exists", and it is certainly not a zero.
+    @Test func theManifestFormatAccessorReturnsNilForAMissingManifest() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let service = makeService(identity: identity, database: MockPhotoRecordDatabase(),
+                                  defaults: isolatedDefaults())
+        #expect(try await service.manifestFormatReading(corpus: .progress) == nil)
+    }
+
+    /// It WRITES NOTHING: the injected generation store's high-water mark is unchanged after the
+    /// call. `restore` raises it via `recordAcceptedPhoto`; this accessor must not.
+    @Test func theManifestFormatAccessorRaisesNoHighWaterMark() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let service = makeService(identity: identity, database: database, defaults: defaults)
+        try await service.addPhoto(Data("photo".utf8), id: UUID(), corpus: .meal)
+
+        let before = SealedBackupGenerationStore(defaults: defaults).lastSeenPhoto(for: .meal)
+        _ = try await service.manifestFormatReading(corpus: .meal)
+        #expect(SealedBackupGenerationStore(defaults: defaults).lastSeenPhoto(for: .meal) == before,
+                "the format accessor raised the high-water mark — it must never write")
+    }
+
+    /// The correction the Phase 3 readout's design turned on: a LATCHED-device
+    /// `synchronizeFullyVerified` still leaves `lastFullPassVerdicts` populated.
+    ///
+    /// The latch guard returns before `lastTally` is ever computed, so retaining the verdicts there
+    /// would have left them permanently nil on exactly the healthy latched device a Phase 3 sitting
+    /// is taken from. They come from the RETURNED `PassResult.corpusVerdicts` instead, which
+    /// `synchronize(preferenceOverride:fullVerification:)` sets and both legs reach. A test that only
+    /// exercised the unlatched path would have passed against the broken site, so this one asserts
+    /// the latched path specifically.
+    @Test func aLatchedFullPassStillRetainsItsPerCorpusVerdicts() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let route = try await latchedMealRoute(
+            identity: identity, database: database, defaults: defaults, device: device
+        )
+        #expect(migrationLatch(defaults).isComplete, "this test is only meaningful on a latched device")
+
+        _ = await route.coordinator.synchronizeFullyVerified(preferenceOverride: true)
+        let verdicts = try #require(route.coordinator.lastFullPassVerdicts,
+                                    "the latched leg left the retained verdicts nil")
+        #expect(verdicts.count == SealedPhotoCorpus.allCases.count)
+        #expect(route.coordinator.lastFullPassCompletedAt != nil)
+
+        // ...and they die with the manifests they describe.
+        _ = await route.coordinator.tearDownForDeleteAll()
+        #expect(route.coordinator.lastFullPassVerdicts == nil)
+        #expect(route.coordinator.lastFullPassCompletedAt == nil)
+    }
 }
 
 // MARK: - Test doubles

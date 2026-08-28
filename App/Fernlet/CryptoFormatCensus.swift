@@ -181,25 +181,12 @@ nonisolated struct CryptoFormatCensusReport: Sendable, Equatable {
 ///
 /// ## Concurrency
 ///
-/// ``run(inputs:)`` hands the whole scan to `Task.detached(priority: .utility)`, following
+/// ``takeReadings(inputs:)`` hands the whole scan to `Task.detached(priority: .utility)`, following
 /// `FernletStore.migrateAndBindOwnPhotoKey`: the work is blocking file and keychain I/O plus a Core
 /// Data `performAndWait`, none of which belongs on the main actor, and only `Sendable` values cross
-/// back. The main actor does nothing but assemble row models from the returned readings.
-///
-/// Two honest limits of that, both deliberate:
-/// - The detached task **blocks a cooperative-pool worker** for the length of the scan, exactly as
-///   the own-photo migration's does. Nothing here is `async`, so there is no suspension point to
-///   yield at; a thread is the unit of work. That is tolerable because every underlying census is
-///   BOUNDED by construction — a 20,000-row cap on the sealed scan, 10,000 files per media
-///   directory, one keychain read, four sidecar `stat`s, four header bytes per file — so the block
-///   is bounded too. It matches the house precedent; a `DispatchQueue`/thread of its own would be
-///   the correct escalation if the bounds ever grow.
-/// - It **does not observe cancellation.** `Task.detached` inherits nothing, and none of the
-///   blocking calls check `Task.isCancelled`, so a cancelled caller stops awaiting while the scan
-///   runs to completion. Read-only work with no side effects, so the cost of that is CPU, not
-///   correctness — but a caller that can be navigated away from mid-scan must not simply start
-///   another one. `SettingsSheet` holds the in-flight task in `@State` and re-awaits it rather than
-///   stacking a second scan; anything else calling this owes the same.
+/// back. The main actor does nothing but assemble row models from the returned readings. It is the
+/// ONE spelling of the detached scan and the one place stating its cost — see its own doc for the
+/// two honest limits.
 nonisolated enum CryptoFormatCensus {
 
     // MARK: Inputs
@@ -380,13 +367,37 @@ nonisolated enum CryptoFormatCensus {
 
     // MARK: Running
 
+    /// Takes the five countable readings on a detached utility task. The ONE spelling of the scan.
+    ///
+    /// Exposed as its own step because the Phase 3 gate readout folds the SAME readings differently
+    /// (`Phase3GateReadoutBuilder`), and two spellings of the sweep would be two sweeps to keep in
+    /// agreement. Nothing about the census's contract changes: no decrypt, no key fetch, no write,
+    /// no persisted state.
+    ///
+    /// Two honest limits, both deliberate:
+    /// - The detached task **blocks a cooperative-pool worker** for the length of the scan, exactly
+    ///   as the own-photo migration's does. Nothing here is `async`, so there is no suspension point
+    ///   to yield at; a thread is the unit of work. That is tolerable because every underlying
+    ///   census is BOUNDED by construction — a 20,000-row cap on the sealed scan, 10,000 files per
+    ///   media directory, one keychain read, four sidecar `stat`s, four header bytes per file — so
+    ///   the block is bounded too. It matches the house precedent; a `DispatchQueue`/thread of its
+    ///   own would be the correct escalation if the bounds ever grow.
+    /// - It **does not observe cancellation.** `Task.detached` inherits nothing, and none of the
+    ///   blocking calls check `Task.isCancelled`, so a cancelled caller stops awaiting while the
+    ///   scan runs to completion. Read-only work with no side effects, so the cost of that is CPU,
+    ///   not correctness — but a caller that can be navigated away from mid-scan must not simply
+    ///   start another one. `SettingsSheet` holds the in-flight task in `@State` and re-awaits it
+    ///   rather than stacking a second scan; anything else calling this owes the same.
+    static func takeReadings(inputs: Inputs) async -> Readings {
+        await Task.detached(priority: .utility) { inputs.readAllSurfaces() }.value
+    }
+
     /// Takes the whole census and returns one row per surface.
     ///
     /// The scan runs on a detached utility task; only the `Sendable` ``Readings`` come back, and the
     /// row assembly (pure string formatting) happens on the caller's actor.
     static func run(inputs: Inputs) async -> CryptoFormatCensusReport {
-        let readings = await Task.detached(priority: .utility) { inputs.readAllSurfaces() }.value
-        return report(from: readings)
+        report(from: await takeReadings(inputs: inputs))
     }
 
     /// Folds five readings plus the uncountable surface into the six rows. Pure.
@@ -656,6 +667,8 @@ nonisolated enum CryptoFormatCensus {
             + " vouchable entries and is invalidated by foreign writes — the proof for this surface remains"
             + " `minimumEntryHashVersion >= 2` across the three corpora, read from the manifests on a device;"
             + " it is not a number a census can produce."
+            + " That number CAN be read on request from the Phase 3 gate readout next door, at the cost of a"
+            + " network fetch and a manifest decrypt per corpus — which is precisely why it is not read here."
         )
     )
 }

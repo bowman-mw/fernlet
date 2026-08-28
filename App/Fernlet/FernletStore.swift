@@ -221,7 +221,17 @@ final class FernletStore {
     /// `settings.periodTrackingVisible = false`) would turn a reversible decoy into silent data
     /// hiding, and would reach the sealed-backup toggles that DELETE the iCloud backup. Gate on this
     /// flag; never on a setter.
-    var duressSessionActive = false
+    var duressSessionActive = false {
+        didSet {
+            #if DEBUG
+            // The Phase 3 gate readout fetches and decrypts the real owner's iCloud manifests and
+            // prints real per-corpus photo counts. Numbers that contradict an apparently empty decoy
+            // are exactly the disclosure duress mode exists to prevent, so the purchased readings go
+            // fail-closed on the engaging edge — the page's own refusal is the second half.
+            if duressSessionActive { phase3ReadoutSession.clear() }
+            #endif
+        }
+    }
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
     /// their FIRST friend and presence was never offered before). Observable, memory-only —
     /// the persistent never-re-prompt marker is `settings.hasPromptedForPresence`.
@@ -3107,6 +3117,11 @@ final class FernletStore {
         // decrypt) — its only migration role is feeding the foreign-write invalidation, which the
         // coordinator does internally.
         if userInitiated {
+            #if DEBUG
+            // Phase 3 gate readout: the in-flight mirror is raised BEFORE the await so the readout's
+            // Fetch-manifests control disables for the whole pass rather than only after it lands.
+            mirrorOwnPhotoBackupDebugState(passInFlight: true)
+            #endif
             _ = await ownPhotoBackupCoordinator.synchronizeFullyVerified()
         } else {
             _ = await ownPhotoBackupCoordinator.synchronize()
@@ -3172,7 +3187,35 @@ final class FernletStore {
         sealedPhotoHashMigrationComplete = SealedPhotoBackupMigrationLatch().isComplete
         sealedPhotoHashMigrationBlockedByOtherDevice =
             ownPhotoBackupCoordinator.lastFullPassBlockedOnlyByOtherDevices
+        #if DEBUG
+        mirrorOwnPhotoBackupDebugState(passInFlight: ownPhotoBackupCoordinator.debugPassInFlight)
+        #endif
     }
+
+    #if DEBUG
+    /// The last FULL-verification pass's per-corpus format verdicts, mirrored off the coordinator
+    /// (which is a `private lazy var`) for the Phase 3 gate readout.
+    ///
+    /// Rendered under an explicit label — **a by-product of a WRITING pass, not the gate.**
+    /// `observedMinima` includes the pre-heal open AND the outgoing committed value, so a corpus that
+    /// healed this pass legitimately carries a 1 there while its committed manifest reads 2. What the
+    /// verdicts DO buy is `examined`: the three-way "never looked / examined-none / examined-with-minima"
+    /// fact a live probe structurally cannot produce.
+    private(set) var sealedPhotoLastFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]?
+    /// Whether an own-photo coordinator pass is in flight. Fetching manifests mid-pass returns a torn
+    /// reading in which a corpus about to heal reads `minimum == 1` and renders as "not proven" —
+    /// a false gate failure, which is why the readout's Fetch button disables on this.
+    private(set) var ownPhotoBackupPassInFlight = false
+    /// When the last full-verification pass finished, or nil for "none this process".
+    private(set) var ownPhotoBackupLastFullPassCompletedAt: Date?
+
+    /// Mirrors the coordinator's retained DEBUG state onto observed store state.
+    private func mirrorOwnPhotoBackupDebugState(passInFlight: Bool) {
+        ownPhotoBackupPassInFlight = passInFlight
+        ownPhotoBackupLastFullPassCompletedAt = ownPhotoBackupCoordinator.lastFullPassCompletedAt
+        sealedPhotoLastFullPassVerdicts = ownPhotoBackupCoordinator.lastFullPassVerdicts
+    }
+    #endif
 
     /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
     /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
@@ -3187,6 +3230,11 @@ final class FernletStore {
     /// is intent; "a manifest reached iCloud" is a route. Binding is irreversible, so it may only
     /// follow the second — see `OwnPhotoEscrowCommitLedger`.
     func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
+        #if DEBUG
+        // The enable flow runs a full-verification pass through the migration wrapper, so the Phase 3
+        // readout's in-flight mirror is raised here for the same reason it is raised around Retry.
+        if enabled { mirrorOwnPhotoBackupDebugState(passInFlight: true) }
+        #endif
         let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
         if succeeded && enabled {
             let outcome = OwnPhotoKeyBinder(
@@ -5801,12 +5849,41 @@ final class FernletStore {
             // pass's own `privateMedia.formatMigrationPass` audit line, which names every tally
             // and any blocking bucket; nothing downstream gates on it (Phase 3 reads the latch
             // plus the census on a real device, never this launch's return value).
-            _ = MediaAtRestFormatMigrator.standard(
+            let mediaLatched = MediaAtRestFormatMigrator.standard(
                 documentsDirectory: documentsDirectory,
                 proximitySupportDirectory: proximityDirectory
             ).run()
+            #if DEBUG
+            // Phase 3 gate readout: the launch pass's verdict is retained (DEBUG only, nothing
+            // shipping gates on it) so a `latch == false` on this device is never rendered as a bare
+            // false. `run(maxPasses:)` returns the latch state rather than the tally, so this is a
+            // three-way legibility signal — "a pass ran at <t> and did not latch" — and the full
+            // residue tally is bought separately with `performPass()` from the readout.
+            await self?.recordMediaAtRestLaunchPass(latched: mediaLatched)
+            #else
+            _ = mediaLatched
+            #endif
         }
     }
+
+    #if DEBUG
+    /// Records the launch media pass's outcome for the Phase 3 gate readout.
+    ///
+    /// The launch call site discarded its return value, and its own comment said Phase 3 "reads the
+    /// latch plus the census on a real device, never this launch's return value" — which is exactly
+    /// the assumption the gate audit found insufficient, because a LATCHED device then produces no
+    /// residue evidence at all (`FormatMigrator.run(maxPasses:)` opens `if latch.isComplete { return
+    /// true }`). Nothing shipping gates on this.
+    private func recordMediaAtRestLaunchPass(latched: Bool) {
+        mediaAtRestLaunchPassLatched = latched
+        mediaAtRestLaunchPassCompletedAt = Date()
+    }
+
+    /// What the launch media pass's `run()` returned, or nil when none has finished this process.
+    private(set) var mediaAtRestLaunchPassLatched: Bool?
+    /// When the launch media pass finished.
+    private(set) var mediaAtRestLaunchPassCompletedAt: Date?
+    #endif
 
     // MARK: - Sealed-column format migration (crypto-standardization Phase 2.6)
 
@@ -5837,6 +5914,95 @@ final class FernletStore {
     /// census on the first funded trigger per process, then believed as a Bool. NOT consumed by
     /// an `.unavailable` recheck (the next funded trigger retries).
     @ObservationIgnored private(set) var sealedColumnLatchRevalidatedThisProcess = false
+
+    #if DEBUG
+    /// The Phase 3 gate readout's process-scoped, non-persisted session (see
+    /// ``Phase3ReadoutSession``). Lives here because the sitting spans a Settings sheet DISMISSAL —
+    /// the sealed-column keyed pass can only be funded by a hub unlock, which is another tab.
+    @ObservationIgnored let phase3ReadoutSession = Phase3ReadoutSession()
+
+    /// The last sealed-column migration trigger's witness — retained for the Phase 3 gate readout,
+    /// and observed so the row updates itself when a pass lands.
+    ///
+    /// **Replacement rule:** the witness is replaced only when the incoming one carries passes, or
+    /// when the existing one is nil. ``recordSealedColumnMigrationRun(latched:passResults:)`` is also
+    /// called with `passResults: []` from the cancelled-grace path, and an unconditional assignment
+    /// there would destroy the keyed witness the owner just earned and silently revert the row from
+    /// discharged to not-taken.
+    ///
+    /// Retained as typed state rather than through `FernletAuditLog.addCaptureHandler` because the
+    /// `.confirmed` revalidation branch logs NOTHING — the very state the readout most needs is
+    /// invisible to a capture handler, which would also be a permanent process-lifetime registrant.
+    private(set) var lastSealedColumnPassWitness: SealedColumnPassWitness?
+
+    /// Records a sealed-column witness under the replacement rule above.
+    private func retainSealedColumnWitness(_ witness: SealedColumnPassWitness) {
+        guard witness.isKeyedWitness || lastSealedColumnPassWitness == nil else { return }
+        lastSealedColumnPassWitness = witness
+        // The census half of that gate must be re-taken after a keyed pass, or a stale zero taken
+        // BEFORE the pass would be quoted beside it as if it described the corpus the pass left.
+        if witness.isKeyedWitness { phase3ReadoutSession.invalidateCensus() }
+    }
+
+    /// The last foreground media at-rest pass funded from the Phase 3 gate readout.
+    private(set) var lastMediaAtRestPassWitness: MediaPassWitness?
+    /// Whether a readout-funded media pass is running (the control's in-flight guard; the migrator
+    /// has none of its own).
+    private(set) var mediaAtRestPassInFlight = false
+
+    /// Funds one media at-rest pass and retains its witness.
+    ///
+    /// `performPass()` returns the full tally — including `unopenableUnprefixed`, the plan's own
+    /// residue evidence — and NEVER touches the latch (`markComplete()` is reached only from
+    /// `FormatMigrator.run(maxPasses:)` after a clean pass). That is the whole point: gate part (a)
+    /// IS the latch, and ordinary states (a device locking mid-pass, a wall root whose key row was
+    /// never minted) leave a cleared latch cleared, so a reset here would trade a held proof for one
+    /// with no in-sitting recovery.
+    ///
+    /// Only when the latch currently reads FALSE does it additionally run the full loop — the same
+    /// call the launch makes — so a clean pass can latch in this sitting rather than next launch.
+    func fundMediaAtRestWitness() async {
+        guard !mediaAtRestPassInFlight else { return }
+        mediaAtRestPassInFlight = true
+        phase3ReadoutSession.setMediaPassInFlight(true)
+        let documentsDirectory = photoDocumentsDirectory
+        let proximityDirectory = proximitySupportRoot
+        let witness = await Task.detached(priority: .utility) {
+            Self.takeMediaAtRestWitness(documentsDirectory: documentsDirectory,
+                                        proximityDirectory: proximityDirectory)
+        }.value
+        lastMediaAtRestPassWitness = witness
+        phase3ReadoutSession.recordMediaWitness(witness)
+        phase3ReadoutSession.setMediaPassInFlight(false)
+        mediaAtRestPassInFlight = false
+    }
+
+    /// The detached half of ``fundMediaAtRestWitness()``: only `URL`s cross the isolation boundary,
+    /// and the migrator builds its own non-`Sendable` key providers inside the task (the 2.3 shape).
+    private nonisolated static func takeMediaAtRestWitness(
+        documentsDirectory: URL,
+        proximityDirectory: URL
+    ) -> MediaPassWitness {
+        let migrator = MediaAtRestFormatMigrator.standard(
+            documentsDirectory: documentsDirectory,
+            proximitySupportDirectory: proximityDirectory
+        )
+        let latchBefore = migrator.latch.isComplete
+        let result = migrator.performPass()
+        var ranFullLoop = false
+        if !latchBefore {
+            ranFullLoop = true
+            _ = migrator.run()
+        }
+        return MediaPassWitness(
+            stamp: Phase3Stamp(label: "media at-rest pass"),
+            result: result,
+            latchBefore: latchBefore,
+            latchAfter: migrator.latch.isComplete,
+            ranFullLoop: ranFullLoop
+        )
+    }
+    #endif
 
     /// R2/R5: how long a pass must have run — with ≥ 1 conversion — before the capsule shows
     /// `.running`, so the steady-state clean pass never flickers (§8).
@@ -5941,6 +6107,17 @@ final class FernletStore {
     func recordSealedColumnRevalidationOutcome(
         _ outcome: SealedColumnFormatMigrator.RevalidationOutcome
     ) -> Bool {
+        #if DEBUG
+        // The `.confirmed` and `.unavailable` legs return WITHOUT calling
+        // `recordSealedColumnMigrationRun`, so without this second site a silently-confirmed latch
+        // would leave the readout unable to tell "confirmed keylessly" from "nothing ran".
+        retainSealedColumnWitness(SealedColumnPassWitness(
+            stamp: Phase3Stamp(label: "sealed-column revalidation"),
+            revalidation: outcome,
+            latched: outcome != .reset,
+            passes: []
+        ))
+        #endif
         switch outcome {
         case .confirmed:
             sealedColumnLatchRevalidatedThisProcess = true
@@ -5976,6 +6153,14 @@ final class FernletStore {
     ///   `sealedColumn.formatMigrationPass` audit line remains the nothing-silent record);
     /// - anything else unlatched ⇒ `.blocked` ("Fernlet will retry" — details in the ledger).
     func recordSealedColumnMigrationRun(latched: Bool, passResults: [SealedColumnMigrationResult]) {
+        #if DEBUG
+        retainSealedColumnWitness(SealedColumnPassWitness(
+            stamp: Phase3Stamp(label: "sealed-column keyed run"),
+            revalidation: nil,
+            latched: latched,
+            passes: passResults
+        ))
+        #endif
         sealedColumnMigrationInFlight = false
         if latched { sealedColumnLatchRevalidatedThisProcess = true }
         let convertedThisRun = passResults.reduce(0) { $0 + $1.convertedTotal }

@@ -691,6 +691,53 @@ final class SealedPhotoBackupService {
         try await openManifest(corpus: corpus)?.manifest.sidecar
     }
 
+    #if DEBUG
+    /// One corpus manifest's FORMAT facts — counts and version integers only.
+    ///
+    /// Carries no entry `id`, no `contentHash`, and no `.progress` sidecar content (the user's
+    /// timeline dates and captions). The Phase 3 gate readout is designed to be copied off the
+    /// device, so what this type cannot hold is as load-bearing as what it can.
+    struct SealedPhotoManifestFormatReading: Sendable, Equatable {
+        /// `SealedPhotoManifest.minimumEntryHashVersion` — the per-corpus zero-legacy proof. An
+        /// EMPTY manifest computes 2 vacuously, so a caller must read this beside ``entryCount``.
+        let minimumEntryHashVersion: Int
+        /// How many entries the manifest holds.
+        let entryCount: Int
+        /// How many entries decode at the legacy default — legacy **or unproven**, never "legacy".
+        let unprovenEntryCount: Int
+        /// The generation the manifest RECORD carried.
+        let generation: Int64
+    }
+
+    /// Reads one corpus manifest's format facts. Read-only: no write, no mint, no high-water bump.
+    ///
+    /// Deliberately NOT re-implemented in the DEBUG readout file: `openManifest` is private, and the
+    /// alternative (a second `CloudKitDataService.sealedPhoto` + `SealedPhotoCrypto.open` + decode)
+    /// would be a SECOND reader of the manifest with its own copy of the `manifest.corpus == corpus`
+    /// fail-closed re-check — exactly the drift the census's own doctrine forbids.
+    ///
+    /// Three things it deliberately does NOT do, each a way its reading could be quoted as proof of
+    /// something it does not say:
+    /// - **No generation high-water check.** Only ``restore(corpus:limitedTo:write:)`` does that, so a
+    ///   stale-but-authentic manifest can read `>= 2` here while the live one reads 1. The caller
+    ///   prints the record's ``SealedPhotoManifestFormatReading/generation`` beside
+    ///   `SealedBackupGenerationStore.lastSeenPhoto(for:)` and says when they disagree.
+    /// - **It never calls `recordAcceptedPhoto`**, so it raises no high-water mark.
+    /// - **It is never routed through `reconcile` or `restore`**, both of which WRITE.
+    ///
+    /// - Returns: nil when no manifest record came back — which is NOT "no manifest exists".
+    func manifestFormatReading(corpus: SealedPhotoCorpus) async throws -> SealedPhotoManifestFormatReading? {
+        guard let opened = try await openManifest(corpus: corpus) else { return nil }
+        let entries = opened.manifest.entries
+        return SealedPhotoManifestFormatReading(
+            minimumEntryHashVersion: opened.manifest.minimumEntryHashVersion,
+            entryCount: entries.count,
+            unprovenEntryCount: entries.filter { $0.hashVersion < SealedPhotoManifest.Entry.currentHashVersion }.count,
+            generation: opened.generation
+        )
+    }
+    #endif
+
     /// Tears the whole corpus down — every photo record and the manifest. The delete-all leg.
     func deleteCorpus(_ corpus: SealedPhotoCorpus) async throws {
         try await cloudDataService.deleteSealedPhotoCorpus(corpus)

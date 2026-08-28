@@ -6,6 +6,7 @@ import LocalPersistence
 import HealthKit
 import LocalAuthentication
 import SwiftUI
+import UniformTypeIdentifiers
 import FernletDomainModel
 import FernletFoundation
 import FernletLock
@@ -112,6 +113,12 @@ struct SettingsSheet: View {
     /// full sweep of the sealed store and both media roots behind the first. Held here — on the
     /// sheet, which outlives each destination push — so re-entry re-awaits the running scan.
     @State private var cryptoFormatCensusTask: Task<Void, Never>?
+    /// The Phase 3 gate readout's in-flight local scan — held HERE for exactly the reason the
+    /// census's comment above gives (the sheet outlives each destination push). Only the in-flight
+    /// HANDLE lives here; every purchased reading lives on `store.phase3ReadoutSession`, because
+    /// that sitting also spans a sheet DISMISSAL — the sealed-column keyed pass can only be funded
+    /// by a hub unlock, which means leaving Settings and coming back.
+    @State private var phase3ScanTask: Task<Void, Never>?
     #endif
     /// One in-flight reminder reschedule at a time (R3): the DatePicker emits a change per wheel
     /// tick, and they all write the same notification identifier.
@@ -1685,6 +1692,8 @@ struct SettingsSheet: View {
 
             #if DEBUG
             cryptoFormatCensusSection
+
+            phase3GateReadoutLink
             #endif
         }
     }
@@ -1829,11 +1838,16 @@ struct SettingsSheet: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+            Text("That promise is unchanged, and it is why three of the six Phase 3 gates cannot be answered here. Those are answered next door, in the Phase 3 gate readout, at a stated cost.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
 
             if let report = cryptoFormatCensus {
                 ForEach(report.rows) { row in
                     cryptoFormatCensusRow(row)
                 }
+                cryptoFormatCensusCopyButton(report)
             } else {
                 FernletCard { EmptyState(text: "Counting every sealed surface…") }
             }
@@ -1882,6 +1896,49 @@ struct SettingsSheet: View {
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Copies the census reading. It had none, so every reading was hand-transcribed or
+    /// screenshotted; the readout next door has one, and the pair should be symmetric.
+    ///
+    /// `setItems(_:options:)` with `.localOnly: true` is the required spelling (PB1): the general
+    /// pasteboard is Handoff-synced to every device on the same Apple Account.
+    private func cryptoFormatCensusCopyButton(_ report: CryptoFormatCensusReport) -> some View {
+        Button {
+            FernletAuditLog.log("debug.cryptoFormatCensus.copied")
+            let text = report.rows
+                .map { "\($0.displayName): legacy \($0.legacyCountText) — \($0.detail)\($0.caveat.map { " [\($0)]" } ?? "")" }
+                .joined(separator: "\n")
+            UIPasteboard.general.setItems([[UTType.utf8PlainText.identifier: text]],
+                                          options: [.localOnly: true])
+        } label: {
+            Label("Copy the census reading", systemImage: "doc.on.doc")
+        }
+        .accessibilityIdentifier("settings.cryptoFormatCensus.copy")
+    }
+
+    /// The Phase 3 gate readout — a sibling of the census, not a section inside it.
+    ///
+    /// A pushed destination for three reasons: `debugTab`'s body stays trivially small, the new
+    /// surface gets its own toolbar, and "sibling to, not folded into" becomes literal in the code
+    /// as well as in the copy. No `SettingsRoute` case is added, so `SettingsSearchIndex` is
+    /// untouched — this is a DEBUG surface and does not belong in a searchable settings index.
+    private var phase3GateReadoutLink: some View {
+        NavigationLink {
+            Phase3GateReadoutView(scanTask: $phase3ScanTask)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionLabel("Phase 3 gate readout (test-only view)")
+                Text("The census above counts marker bytes and writes nothing. This one also reads completion latches, can fetch and decrypt three iCloud manifests on request, can run a media at-rest conversion pass, and can clear one latch to arm a keyed pass on the next hub unlock.")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityIdentifier("settings.row.phase3GateReadout")
     }
     #endif
 

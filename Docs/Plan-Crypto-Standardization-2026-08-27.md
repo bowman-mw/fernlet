@@ -35,7 +35,7 @@ is a peer-version decision, not a migration. See §5.
 | `PrivateStoreCore/PendingNarrativeBuffer.swift:193` | `isV2` flag | V2 |
 | `PrivateMediaStore/MediaAtRestCrypto.swift:47` | `atRestFormatV2` prefix | V2 |
 | `FernletLock/FernletLockService.swift:410` | `wrappedContentKeyFormatV2` prefix | V2 |
-| `App/Fernlet/SealedPhotoBackupService.swift:692` | digest equality against the v2 pre-image | V2 |
+| `App/Fernlet/SealedPhotoBackupService.swift:765` (`contentHashMatches`) | digest equality against the v2 pre-image | V2 |
 | `ProximityKit/HeartSharing/HeartDropSidecarKey.swift:61` | `magic` vs `legacyMagic` | V2 |
 
 `ColumnCrypto` is the only three-rung ladder (legacy → V2 → V3) and the only one holding the sealed
@@ -564,7 +564,7 @@ Gated on census = 0 for that surface, on real tester devices, not just simulator
 an unbound write, the branch that seals without a binding should refuse rather than silently write an
 un-domained blob a future census would count.
 
-Two surfaces have now recorded a gate more specific than "census = 0", and the specific reading is
+Four surfaces have now recorded a gate more specific than "census = 0", and the specific reading is
 the one that governs:
 
 - **`HeartDropSidecarKey` — the zero-gate is PER ROW, not aggregate.** Zero `legacySealed` on the
@@ -577,11 +577,75 @@ the one that governs:
   plaintext, the undrained `MeshPhotoCache.json`, the benign-pending keyless wall root), **and**
   `hasBlindSpots` false. A latch alone does not discharge it, and neither does a raw census number
   without the residue audit beside it.
+
+  **The residue number is NOT obtainable through the shipped path on the device the gate is read
+  from.** `FormatMigrator.run(maxPasses:)` opens `if latch.isComplete { return true }`
+  (FernletCrypto/FormatMigrator.swift), so a latched device never runs another pass and therefore
+  produces no residue evidence at all. The Phase 3 gate readout obtains it through
+  `MediaAtRestFormatMigrator.performPass()`, which produces the full result **without touching the
+  latch** (`markComplete()` is reached only from the run loop). The audit's residue list is that
+  pass's `unopenableUnprefixed` — which by its own doc covers BOTH the meal-corpus non-JPEG
+  plaintext and every born-sealed unopenable — plus the separately-swept `MeshPhotoCache.json`, with
+  `abortedNoWallKey` as residue C's shape (a reported shape, never a subtraction: a plaintext JPEG
+  is census class `plaintextJPEG`, never `unprefixed`).
+
+  **The correction a Phase 3 session must not get wrong:** an unprefixed byte in a born-sealed
+  corpus is **NOT automatically blocking**. `unopenableUnprefixed` is deliberately absent from
+  `isClean`, and `dispatchUnprefixedWall` routes an unopenable wall byte straight into it — so
+  `MeshPhotos/`, `MeshPhotoThumbnails/` and `MeshPhotoCache.sealed` can each hold unprefixed bytes on
+  a cleanly latched, Phase-3-safe device.
 - **`FernletLockService` wrap** — the census reads 0 on a real upgraded device, either as a
   `v2Marked` row or as an absent row with an *earned* reading (no lock configured, enclave-bound, or
   a wrap that has gone missing — the row's three honest absences). The 2.5 **row-latch licenses
   nothing by itself**: it is a derived read of the same marker the census reads, so quoting it as the
   gate would be quoting the gate to itself. `malformedEmpty` and `unreadable` are not zeros.
+- **`SealedPhotoBackupService` — `minimumEntryHashVersion >= 2` across the three corpora**, read
+  from the manifests at gate time (§4's exception, restated here because this is the section a
+  Phase 3 session actually reads). Five things that reading must not be misquoted as:
+  - An **EMPTY manifest reads 2 vacuously** (`entries.map(\.hashVersion).min() ?? currentHashVersion`
+    — "no entries, vacuously no legacy digest") and does **not** discharge the gate.
+  - `== 1` means **NOT PROVEN**, never "legacy entries found": every entry committed before the
+    marker existed decodes as 1 whatever its digest actually is.
+  - The reading is **meaningless before a full-verification pass** — only the rungs that read the
+    plaintext stamp version 2.
+  - A **no-manifest reading over a never-committed escrow route** (`OwnPhotoEscrowCommitLedger`
+    reads false) is a **VACUOUS satisfaction**, not a discharge, and needs its own wording in the
+    Phase 3 record rather than being inferred either way. Over a COMMITTED route it blocks.
+  - A **Debug build signed from Xcode reads the DEVELOPMENT CloudKit database**, so manifests
+    written by a TestFlight build live in Production and read here as absent — a false gate failure
+    and not a pass. No API on iOS reports which database a build talks to (`SecTaskCopyValueForEntitlement`
+    is macOS-only), so this is a permanent caveat, not something the instrument can decide.
+
+#### How the Phase 3 gates are read
+
+The instrument is the DEBUG **Phase 3 gate readout** (`App/Fernlet/Phase3GateReadoutView.swift`,
+Settings → Debug, a sibling of the marker-bytes census). It renders all six gates as verdict rows —
+`discharged` / `vacuous` / `blocked` / `notTaken` / `unavailable`, never a bare Bool — funds the two
+witnesses that are otherwise one-shot, and exports the whole reading by two independent routes
+(pasteboard, and `FernletAuditLog` chunks that render in full to a connected debugger).
+
+Per-gate witness kind: sealed columns = marker census **plus** a keyed migrator pass; pending
+narrative buffer = the census reading alone; media = the completion latch **plus** a live
+`performPass()` result **plus** the blind-spot flags; lock wrap = the census reading plus
+`isLockConfigured` (the derived row latch is rendered but licenses nothing); heart-drop = the
+per-row census states with the quarantine excluded; sealed photo = an on-request iCloud manifest
+probe, with a read-only body-record probe for a corpus whose manifest did not come back.
+
+Four structural facts a Phase 3 session must know before it starts:
+
+1. **Both run loops early-return on a set latch** (`FormatMigrator.run(maxPasses:)`,
+   `AsyncFormatMigrator.run(maxPasses:)`), so a latched device produces no further pass evidence
+   until a pass is funded another way.
+2. **`performPass()` is that other way** for the two migrators that expose it
+   (`MediaAtRestFormatMigrator`, `SealedColumnFormatMigrator`) — it never touches the latch.
+3. **The sealed-column keyed witness cannot be funded from Settings at all.** Settings is reached
+   from Home, the hub is re-locked on the way, and `contentKey(for: .privateHub)` then answers nil.
+   So the readout's reset only ARMS: reset the latch there, dismiss Settings, open the Private tab
+   and unlock, and the shipped trigger funds a genuine keyed pass ~300 ms later.
+4. **`.confirmed` revalidation logs NOTHING** (`SealedColumnFormatMigrator.revalidate` returns
+   before any audit line), which is why the witness is retained as typed store state rather than
+   read back out of the log. A latch "confirmed" that way is a KEYLESS confirmation and leaves the
+   ~1-in-256 collided-marker sliver unresolved.
 
 ### Phase 4 — Class B: the peer-version decision (§5), then delete those four.
 
@@ -674,6 +738,14 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       through the reader's own dispatch with a strict V3 seal, discriminated verified read-back,
       private-hub-only duress-blind status; latch + both wipe rows, cleared first. Adversarial
       diff review: 16 findings, 1 fatal, all applied)
+- [x] Phase 3 gate INSTRUMENT — the DEBUG Phase 3 gate readout (`App/Fernlet/Phase3GateReadout.swift`,
+      `MediaResidueAudit.swift`, `Phase3ReadoutSession.swift`, `Phase3GateReadoutView.swift`; sibling
+      of the marker-bytes census in Settings → Debug). It does NOT discharge anything — it makes all
+      six gates readable and exportable from a real device in one sitting, which three of them were
+      not: the sealed-photo `minimumEntryHashVersion` was rendered nowhere, the media latch and the
+      named-residue arithmetic needed LLDB plus a downloaded app container, and the sealed-column
+      keyed-pass witness existed only as a one-shot `os_log` line. See "How the Phase 3 gates are
+      read" above.
 - [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
       do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
