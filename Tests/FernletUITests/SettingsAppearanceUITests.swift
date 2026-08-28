@@ -81,6 +81,7 @@ final class SettingsAppearanceUITests: XCTestCase {
 
     @MainActor
     func testPrivacyDataAppearance() throws {
+        UXTestApp.forcePortrait()
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
         app.launchEnvironment["FERNLET_UI_TEST_OPEN_PRIVACY_DATA"] = "1"

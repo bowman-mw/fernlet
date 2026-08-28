@@ -65,6 +65,24 @@ extension FernletStore {
         // so a relaunch that drops the flag puts the coach gate back off rather than leaving it on
         // from an earlier run.
         settings.coachExchangeEnabled = UITestSupport.enableCoachExchange
+        // Same rule, and it is load-bearing for two suites at once. `selectedGoal` is persisted and
+        // NOTHING resets it, but `GoalPresetCardsUITests` taps the Strength card and leaves it
+        // there — so on that simulator's next run the goal is whatever the last test chose. Two
+        // things break. `GoalPresetCardsUITests` itself asserts "Wellness is the seeded default"
+        // and would fail on its own second run. And the Move header renders
+        // `MoveGoalSummary.text(selectedGoal:goalCount:)` — a goal whose `displayName` is longer
+        // than Wellness's clips, which is how `Text clipped — “Exploring · # goals”` appeared in
+        // `Move tab`'s audit on 2026-08-27 with no app change behind it. Resetting here makes the
+        // appearance gallery a function of the seed rather than of test order.
+        settings.selectedGoal = .wellness
+        // Same rule again, same reason. `WorkoutLocationUITests` adds a "Shed" location and leaves
+        // it persisted, and the Move header and the Suggest sheet both render the ACTIVE location's
+        // name (`"Full gym · # items"`). That is how the frozen baseline came to contain
+        // `Text clipped — “Shed · # items”`: it was recorded on a container a location test had
+        // already run against, so the wall was pinned to another suite's leftovers rather than to
+        // the seed. Restoring the shipped default makes the name a function of the seed.
+        settings.workoutLocations = [WorkoutLocation.fullGym]
+        settings.activeWorkoutLocationID = nil
 
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 

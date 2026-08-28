@@ -3967,9 +3967,11 @@ struct PlannedWorkoutRow: View {
             Button("Edit", action: onEdit)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
+                .fernletTapTarget()
             Button("Remove", role: .destructive) { confirmRemove() }
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.terracottaInk)
+                .fernletTapTarget()
                 .accessibilityIdentifier("workout.plan.remove")
         }
     }

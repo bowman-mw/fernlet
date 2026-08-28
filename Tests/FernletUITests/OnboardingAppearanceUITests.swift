@@ -13,6 +13,7 @@ final class OnboardingAppearanceUITests: XCTestCase {
 
     @MainActor
     func testOnboardingScreensAppearance() throws {
+        UXTestApp.forcePortrait()
         let app = XCUIApplication()
         app.launchArguments = ["-resetOnboarding"]
         // Keep the storage step deterministic (no live iCloud detection during the gallery run).

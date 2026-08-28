@@ -129,6 +129,7 @@ final class ItemCreationFlowUITests: XCTestCase {
     /// redesign, HOME-30) → "Design a new item".
     @MainActor
     private func launchToStudioEditor(seedCanvas: Bool) -> XCUIApplication {
+        UXTestApp.forcePortrait()
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
         app.launchEnvironment["FERNLET_UI_TEST_SEED_DEMO"] = "1"

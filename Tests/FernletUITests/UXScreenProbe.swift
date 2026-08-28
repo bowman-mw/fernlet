@@ -23,6 +23,7 @@ enum UXTestApp {
         bypassPrivateLock: Bool = false,
         extraEnvironment: [String: String] = [:]
     ) -> XCUIApplication {
+        forcePortrait()
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
         app.launchEnvironment["FERNLET_UI_TEST_SEED_DEMO"] = "1"
@@ -31,6 +32,23 @@ enum UXTestApp {
         for (key, value) in extraEnvironment { app.launchEnvironment[key] = value }
         app.launch()
         return app
+    }
+
+    /// Puts the simulator back in portrait before an app launches.
+    ///
+    /// Simulator orientation is HOST state: it survives between runs, nothing in this repo sets it,
+    /// and it drifts. On 2026-08-27 both the `iPhone 17` device and `Fernlet-A11y` were found
+    /// rotated to landscape mid-session, having been portrait for the preceding runs of the same
+    /// binary. That matters more here than in an ordinary UI suite, because
+    /// ``UXScreenProbe/auditBaselines`` freezes per-screen CLIPPING and HIT-REGION findings, and
+    /// both are functions of the window the screen laid out in — a rotated simulator fails most
+    /// screens in BOTH directions at once and reads exactly like a real regression.
+    ///
+    /// ``UXScreenProbe/isOnBaselineEnvironment(file:line:)`` is the backstop that says so out loud;
+    /// this is what stops it being needed. Call it from any probe suite that builds its own
+    /// `XCUIApplication` instead of going through ``launch(openSheet:bypassPrivateLock:extraEnvironment:)``.
+    static func forcePortrait() {
+        XCUIDevice.shared.orientation = .portrait
     }
 }
 
@@ -232,8 +250,87 @@ struct UXScreenProbe {
             // the whole reason this harness exists.
             return true
         }
+        attachListingIfOffBaseline(raw: raw)
+        guard isOnBaselineEnvironment(file: file, line: line) else { return self }
         report(found, raw: raw, file: file, line: line)
         return self
+    }
+
+    /// The window geometry every identity in ``auditBaselines`` was recorded against: **iPhone 17
+    /// in portrait**, which is what this repo's canonical `platform=iOS Simulator,name=iPhone 17`
+    /// destination boots into (README, `Scripts/spm-wall-check.sh`, the pre-push hook and
+    /// `.github/workflows/s3-wall.yml` all name that device).
+    static let baselineWindowSize = CGSize(width: 402, height: 874)
+
+    /// `FERNLET_UI_TEST_ALLOW_OFF_BASELINE_DEVICE=1` — run the ratchet anyway. The one legitimate
+    /// use is re-recording the whole map against a deliberately chosen new device; it is an
+    /// environment variable rather than a code edit so that re-record does not have to touch, and
+    /// then remember to restore, this file.
+    static var allowsOffBaselineDevice: Bool {
+        ProcessInfo.processInfo.environment["FERNLET_UI_TEST_ALLOW_OFF_BASELINE_DEVICE"] == "1"
+    }
+
+    /// Whether this run is on the device and orientation the baselines describe — and, when it is
+    /// not, ONE honest failure saying so instead of a screenful of audit deltas.
+    ///
+    /// **This guard is the residue of a real misdiagnosis, and the cost is why it is worth its
+    /// lines.** The frozen identities are per-screen *layout* facts: which text clips, which target
+    /// is under 44pt. Both are functions of the window the screen laid out in. Run the same
+    /// unchanged binary on a simulator that is rotated to landscape, or on an iPhone 17 **Pro**
+    /// rather than the iPhone 17 the map was recorded on, and the ratchet fails in BOTH directions
+    /// on most screens at once — baseline entries stop reproducing because the layout moved, and
+    /// fresh ones appear for the same reason. That pattern reads exactly like the audit engine
+    /// itself having drifted under a runtime upgrade, and on 2026-08-27 it was diagnosed as that
+    /// for some time before the window frame was checked. Landscape additionally suppresses
+    /// `FERNLET_UI_TEST_OPEN_SHEET`'s sheet on some screens, so `assertOnScreen` fails first and the
+    /// audit then measures whatever was behind it — noise on top of noise.
+    ///
+    /// Checking the window frame catches every one of those at once and costs one comparison. The
+    /// failure names the destination to use, because "wrong device" is not a thing the reported
+    /// deltas would ever say out loud.
+    ///
+    /// **What it deliberately does not check.** Appearance (light/dark) and content size are not
+    /// asserted: `.contrast` is subtracted from ``auditTypes`` so appearance barely moves these
+    /// findings, and XCUITest cannot read the content size category back. Those stay the runner's
+    /// responsibility — a shut-down simulator boots to the light/`large` defaults the baselines
+    /// were recorded at, which is why booting a fresh one is the reliable fix for a drifted device.
+    private func isOnBaselineEnvironment(file: StaticString, line: UInt) -> Bool {
+        let size = window.frame.size
+        guard size != Self.baselineWindowSize else { return true }
+        guard !Self.allowsOffBaselineDevice else { return true }
+        XCTFail("""
+            [\(name)] OFF-BASELINE ENVIRONMENT — the accessibility ratchet did not run, because its \
+            result would have been meaningless. This run's window is \(size), but every identity in \
+            `UXScreenProbe.auditBaselines` was recorded at \(Self.baselineWindowSize) (iPhone 17, \
+            portrait). Clipping and hit-region findings are layout facts, so a different device or \
+            a rotated simulator changes most of them at once and the deltas read like a real \
+            regression when nothing regressed.
+
+            Run this suite on the canonical destination:
+                -destination 'platform=iOS Simulator,name=iPhone 17'
+            and if that simulator has been rotated or left in dark mode, boot a fresh one (a \
+            shut-down simulator boots portrait/light/large) rather than trusting the drifted state.
+
+            To re-record the map against a deliberately chosen new device, set \
+            FERNLET_UI_TEST_ALLOW_OFF_BASELINE_DEVICE=1.
+            """, file: file, line: line)
+        return false
+    }
+
+    /// On an off-baseline run the ratchet is skipped, so ``report(_:raw:file:line:)`` never attaches
+    /// its listing. Attach the raw findings anyway — someone diagnosing why a device is off-baseline
+    /// still wants to see what the audit saw.
+    private func attachListingIfOffBaseline(raw: [String]) {
+        guard window.frame.size != Self.baselineWindowSize, !Self.allowsOffBaselineDevice else { return }
+        let attachment = XCTAttachment(string: """
+            [\(name)] off-baseline run (window \(window.frame.size)) — ratchet skipped.
+
+            -- raw (as reported, with frames) --
+            \(raw.isEmpty ? "none" : raw.sorted().joined(separator: "\n"))
+            """)
+        attachment.name = "\(name) – accessibility audit (off-baseline)"
+        attachment.lifetime = .keepAlways
+        test.add(attachment)
     }
 
     /// Compares this screen's findings against its baseline **as a set of issue identities**, and
@@ -274,6 +371,42 @@ struct UXScreenProbe {
         let disappeared = baseline.subtracting(found).subtracting(unreported).sorted()
         attachListing(found: found, raw: raw, appeared: appeared, disappeared: disappeared,
                       unreported: unreported.sorted())
+
+        // A screen with a non-empty baseline that returns NOTHING AT ALL is the auditor failing, not
+        // the screen being fixed — reported as such, because the generic "no longer reproduce"
+        // message below sends the reader to delete baseline lines that are perfectly accurate.
+        //
+        // **The measurement behind this, 2026-08-27.** `performAccessibilityAudit` degrades badly in
+        // a long run. `ScreenAppearanceUITests` on its own: `Home tab` reported 13 distinct findings
+        // from 14 raw. The SAME binary inside a whole-`FernletUITests` invocation: `Home tab` 0 raw,
+        // `Private · Cycle (both halves)` 0 raw against a 27-entry baseline, `Sheet · Hygiene` 0
+        // against 7, `Friends tab` 0 against 4 — fifteen screens at once. Every category went silent
+        // together, which no combination of app fixes can do, and which is why this is attributed to
+        // the auditor rather than to the app.
+        //
+        // **What this deliberately does NOT do.** It does not pass. A run that measured nothing has
+        // validated nothing, and turning that green would make the wall lie in the one direction it
+        // was built to prevent. It also does not rescue the *partial* answers seen in the same run
+        // (`Food tab` 1 of 5, `Move tab` 1 of 5): a partial set is indistinguishable from a real
+        // fix, so those still fail as disappearances. The practical consequence, stated plainly:
+        // this wall is only meaningful when the probe suites are run in their own `xcodebuild`
+        // invocation, which is the context ``auditBaselineEntries`` was recorded in and says so.
+        if found.isEmpty && !baseline.isEmpty {
+            XCTFail("""
+                [\(name)] the accessibility audit returned NOTHING (0 raw issues) for a screen with \
+                \(baseline.count) frozen baseline finding(s). That is the auditor under-reporting, \
+                not \(baseline.count) findings being fixed at once — do NOT delete the baseline \
+                lines on the strength of this run.
+
+                `performAccessibilityAudit` goes silent for whole screens inside a long run: \
+                measured 2026-08-27, fifteen screens returned 0 raw issues in a whole-FernletUITests \
+                invocation while the same binary reported them normally with \
+                `-only-testing:FernletUITests/ScreenAppearanceUITests`.
+
+                Re-run the probe suites in their own invocation before believing any delta here.
+                """, file: file, line: line)
+            return
+        }
 
         if !appeared.isEmpty {
             XCTFail("""
@@ -327,10 +460,12 @@ struct UXScreenProbe {
     /// Audit categories this harness has **measured** to under-report: on any given run they may
     /// report all, some, or none of the issues a screen actually has.
     ///
-    /// Exactly one category qualifies, and finding it is what closed the "the ratchet is red in
-    /// suite and green in isolation" bug rather than papering over it. `.dynamicType` is a
-    /// *stateful* audit — the auditor has to re-render the screen at other content size categories
-    /// before it can decide anything — and under load it silently returns a short answer.
+    /// Two categories qualify, each added only after being measured across runs of an unchanged
+    /// binary. `.dynamicType` was the first, and finding it is what closed the "the ratchet is red
+    /// in suite and green in isolation" bug rather than papering over it: it is a *stateful* audit —
+    /// the auditor has to re-render the screen at other content size categories before it can decide
+    /// anything — and under load it silently returns a short answer. `Potentially inaccessible text`
+    /// was the second, added 2026-08-27; its measurement is on the property below.
     ///
     /// **The measurement, in three runs of the same unchanged binary.** `Private · Cycle (both
     /// halves)` reported 23 Dynamic Type findings, then 0, while all 4 of its non-Dynamic-Type
@@ -345,7 +480,24 @@ struct UXScreenProbe {
     /// Home measured 19 findings in isolation and 25 in suite context, and 18 of Home's baseline
     /// entries are Dynamic Type. The "suite-order sensitivity" was never about suite order, and
     /// never about app-container state — it was this one audit type answering short.
-    static let underReportingCategoryPrefixes = ["Dynamic Type font sizes"]
+    /// **The second category, measured 2026-08-27.** `Potentially inaccessible text` qualifies on
+    /// the same evidence, and it took six runs of an unchanged binary on the pinned simulator to see
+    /// it, because the subset it goes missing from is different every time. That category is frozen
+    /// on seven screens (Hygiene, Meal, Saved recipe notes, Sleep, Water, Workout, Workout
+    /// suggestion). Runs 3 and 4 reported it absent from Workout + Workout suggestion; run 5 from
+    /// Saved recipe notes + Workout + Workout suggestion; run 6 from Meal + Water. No two runs
+    /// agreed, no app code changed between them, and every OTHER category on those same screens
+    /// reproduced exactly.
+    ///
+    /// Why this category and not the clipped-text ones next to it: `Potentially inaccessible text`
+    /// is the audit's most frequently ELEMENT-LESS finding, so ``identity(_:)`` degrades it to the
+    /// bare category string (that cost is documented there). An identity carrying no element is one
+    /// the auditor can drop without anything else about the screen changing — which is exactly the
+    /// shape of what was measured. The cost is the same cost the Dynamic Type entry already pays and
+    /// should be read the same way: on any given run those seven entries may be watched in one
+    /// direction only.
+    static let underReportingCategoryPrefixes = ["Dynamic Type font sizes",
+                                                 "Potentially inaccessible text"]
 
     /// The baseline entries that must not be read as fixed just because this run did not report
     /// them — i.e. the ones belonging to an under-reporting category.
@@ -580,9 +732,14 @@ extension UXScreenProbe {
     /// `FERNLET_UI_TEST_SEED_DEMO` seed, from a full `ScreenAppearanceUITests` suite run — not from
     /// isolated per-test runs, because suite context is the bar this wall has to hold.
     static let auditBaselineEntries: [String: Set<String>] = [
+        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): `ScreenHeader`'s subtitle still
+        // renders (FoodView.swift:87) — it is the clipping that stopped, not the element that went
+        // away. The tab-bar clearance and scroll-position work that landed after the baseline
+        // (e2ebd98, 1ff3294, 92678e8) is the layout change in that window. Same removal on `Move
+        // tab`, which uses the same component. Re-verified deterministic across two independent
+        // `xcodebuild test` runs on the pinned simulator before removing.
         "Food tab": [
             "Hit area is too small — “Adjust targets” id=food.adjustTargets (9)",
-            "Text clipped — “Eating enough, eating well.” (48)",
             "Text clipped — “Friends” (9)",
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
@@ -594,6 +751,14 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
+        // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
+        // it is worth knowing which: `HomeView.swift:1361` renders "1 entry" (singular) below two
+        // entries, and `normalisedLabel` maps that to “# entry” — a DIFFERENT identity from
+        // “# entries”. So a seed that logs one entry rather than two would retire this line without
+        // anything being fixed. Either way the finding does not reproduce and the line has to go;
+        // flagged here because the singular/plural fork is a live time bomb for any future
+        // count-bearing identity. Re-verified deterministic across two independent runs.
         "Home tab": [
             "Dynamic Type font sizes are partially unsupported — “# bottles” (48)",
             "Dynamic Type font sizes are partially unsupported — “# entries” (48)",
@@ -613,17 +778,25 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Today” (48)",
             "Dynamic Type font sizes are partially unsupported — “Water” (48)",
             "Hit area is too small — “Care score # percent” (1)",
-            "Text clipped — “# entries” (48)",
-            "Text clipped — “# of #” (48)",
             "Text clipped — “Friends” (9)",
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): same component and same reason as
+        // `Food tab` above (MoveView.swift:133 still renders it).
+        //
+        // SEED-DETERMINISM CORRECTION (2026-08-27): `Text clipped — “Full gym · # items”` is the
+        // Move header's equipment segment (`MoveView.swift:2523`), and it is NEW here only because
+        // the active workout location is now pinned by the demo seed. It previously read whatever
+        // `WorkoutLocationUITests` had last left persisted — "Shed", which is short enough not to
+        // clip — so this screen's real behaviour under the SHIPPED default was never measured. It
+        // is a genuine clipped-text finding and joins the Larger Text backlog the rest of this map
+        // freezes rather than a defect this round introduced.
         "Move tab": [
             "Label not human-readable — “figure.strengthtraining.traditional” id=figure.strengthtraining.traditional (43)",
-            "Text clipped — “Enough to feel it, not enough to drain.” (48)",
             "Text clipped — “Friends” (9)",
+            "Text clipped — “Full gym · # items” (48)",
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
@@ -683,9 +856,21 @@ extension UXScreenProbe {
         // BASELINE CORRECTION (2026-08-23), separate from T1-9: both recipe sheets share the
         // sub-44pt `TextField("Qty")` in FoodView. Its `.hitRegion` finding was proven to flap on
         // pristine ba6d561, so the two non-deterministic entries are not frozen as ratchet truth.
+        //
+        // IDENTITY-KEY MIGRATION (2026-08-27), and it is deliberately NOT the "paste the new
+        // finding in" move this map's failure message forbids. The finding did not change; its KEY
+        // did. `525b0c8` gave FoodView's ingredient search field an accessibility identifier
+        // (`recipeIngredient.search`, FoodView.swift:2070), and ``identity(_:)`` folds the
+        // identifier into the key — so one unchanged clipped text field stopped reporting as
+        // `<no label> (49)` and started reporting as `<no label> id=recipeIngredient.search (49)`.
+        // Three things establish that it is the same finding rather than a fix plus a regression:
+        // the disappearance and the appearance happen in the SAME run, on BOTH recipe sheets, and
+        // the new key names the exact field the old one described anonymously. Re-verified
+        // deterministic across two independent runs on the pinned simulator. The clipping itself is
+        // untouched — it stays part of the Larger Text backlog this round did not take on.
         "Sheet · Edit recipe": [
             "Hit area is too small — “#g” (9)",
-            "Text clipped — <no label> (49)",
+            "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         "Sheet · Goals": [
             "Hit area is too small — “Craft” (9)",
@@ -712,9 +897,11 @@ extension UXScreenProbe {
             "Text clipped — “Log meal” (48)",
             "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
+        // Same identity-key migration as `Sheet · Edit recipe` above — the two sheets share the
+        // ingredient search field that gained `recipeIngredient.search` in 525b0c8.
         "Sheet · Recipe": [
             "Hit area is too small — “#g” (9)",
-            "Text clipped — <no label> (49)",
+            "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         "Sheet · Recipe book": [
             "Text clipped — <no label> (49)",
@@ -767,11 +954,19 @@ extension UXScreenProbe {
         // across two independent `xcodebuild test` runs before removing. NOTE: this is a real
         // layout consequence, not just an audit artifact — see the increment's report for whether
         // the medium-detent budget needs to grow to match (out of this increment's scope).
+        //
+        // SEED-DETERMINISM CORRECTION (2026-08-27): `Text clipped — “Shed · # items”` became
+        // `“Full gym · # items”`. One finding, one element — the sheet's SPACE & EQUIPMENT segment —
+        // renamed because the demo seed now pins the active workout location to the shipped default
+        // instead of inheriting whatever `WorkoutLocationUITests` last persisted. "Shed" was another
+        // suite's leftover, so this line had been pinning test order rather than the app. See the
+        // matching note on `Move tab`, where the same rename ADDS a finding: the default name is
+        // longer, and the Move header's segment clips at it where "Shed" did not.
         "Sheet · Workout suggestion": [
             "Potentially inaccessible text",
             "Text clipped",
+            "Text clipped — “Full gym · # items” (48)",
             "Text clipped — “SPACE & EQUIPMENT” (48)",
-            "Text clipped — “Shed · # items” (48)",
             "Text clipped — “Suggest a workout” id=workout.suggest (9)",
             "Text clipped — “Suggest workout” (48)",
         ],

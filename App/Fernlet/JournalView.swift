@@ -189,6 +189,7 @@ struct JournalView: View {
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
+                .fernletTapTarget(minWidth: 0)
             } else {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     Button { editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey) } label: {
