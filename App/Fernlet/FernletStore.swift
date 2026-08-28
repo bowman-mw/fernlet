@@ -5856,14 +5856,30 @@ final class FernletStore {
     ///   `FernletLockService.contentKey(for: .privateHub)` — the shipped decrypt seam.
     /// - Returns: Whether a detached run was funded (false for every early-out) — the pin the
     ///   duress/in-flight/latch tests read.
+    /// Test seam (internal): when set, the trigger's synchronous latch read goes to this suite
+    /// instead of `UserDefaults.standard`, so no status test ever touches the device's real
+    /// completion state. `nil` in production — the wiring is byte-identical then.
+    @ObservationIgnored var sealedColumnMigrationLatchDefaultsForTesting: UserDefaults?
+
+    /// Test seam (internal): when set, the funded detached task calls THIS after its 300 ms
+    /// grace instead of the production body, so no status test ever reaches
+    /// `PrivatePersistenceController.shared` or `UserDefaults.standard` through a stray task.
+    /// The test's body owns its own isolated latch/controller and drives the record methods
+    /// itself. `nil` in production — the wiring is byte-identical then.
+    @ObservationIgnored var sealedColumnMigrationTaskBodyForTesting:
+        (@Sendable (_ latchWasComplete: Bool, _ keySource: @escaping @Sendable () async -> SymmetricKey?) async -> Void)?
+
     func runSealedColumnFormatMigrationIfNeeded(
         keySource: @escaping @Sendable () async -> SymmetricKey?
     ) -> Bool {
         guard !sealedColumnMigrationInFlight else { return false }
         guard !duressSessionActive else { return false }
-        let latchWasComplete = SealedColumnFormatMigrator.latch().isComplete
+        let latchWasComplete = SealedColumnFormatMigrator
+            .latch(defaults: sealedColumnMigrationLatchDefaultsForTesting ?? .standard)
+            .isComplete
         if latchWasComplete && sealedColumnLatchRevalidatedThisProcess { return false }
         sealedColumnMigrationInFlight = true
+        let taskBody = sealedColumnMigrationTaskBodyForTesting
         Task.detached(priority: .utility) { [weak self] in
             // First-page deferral (§1.2): give authentication, lock-gate removal, and the hub's
             // first frame priority — the same courtesy `drainSealedBackupSettlements` takes.
@@ -5871,6 +5887,10 @@ final class FernletStore {
                 try await Task.sleep(for: .milliseconds(300))
             } catch {
                 await self?.recordSealedColumnMigrationRun(latched: false, passResults: [])
+                return
+            }
+            if let taskBody {
+                await taskBody(latchWasComplete, keySource)
                 return
             }
             await Self.runSealedColumnMigrationTask(

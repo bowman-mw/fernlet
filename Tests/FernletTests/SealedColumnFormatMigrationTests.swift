@@ -382,6 +382,9 @@ struct SealedColumnFormatMigrationTests {
         ], in: controller)
 
         let viewContext = controller.container.viewContext
+        let audit = AuditEventLog()
+        let auditToken = FernletAuditLog.addCaptureHandler { event, _ in audit.record(event) }
+        defer { FernletAuditLog.removeCaptureHandler(auditToken) }
         try await DeviceBindingID.$testOverride.withValue(.identifier(Self.installA)) {
             var migrator = SealedColumnFormatMigrator(
                 controller: controller, keySource: Self.alwaysKey, latch: try makeLatch()
@@ -403,6 +406,8 @@ struct SealedColumnFormatMigrationTests {
             #expect(!latched)
             #expect(!migrator.latch.isComplete)
             #expect(passes.passResults.count == 1, "run() must NOT fund another pass after an abort")
+            #expect(audit.events.contains("sealedColumn.readBackFailedRestored"),
+                    "the compensating restore must be loud — nothing-silent")
 
             let result = try #require(passes.passResults.first)
             #expect(result.aborted)
@@ -425,6 +430,9 @@ struct SealedColumnFormatMigrationTests {
         let controller = makeController()
         let original = try legacyBlob(Data("environment".utf8), entity: "WorryNarrative")
         try plantWorryRows([original], in: controller)
+        let audit = AuditEventLog()
+        let auditToken = FernletAuditLog.addCaptureHandler { event, _ in audit.record(event) }
+        defer { FernletAuditLog.removeCaptureHandler(auditToken) }
 
         let scripted = DeviceBindingID.ScriptedBinding(.identifier(Self.installA))
         try await DeviceBindingID.$testOverride.withValue(.scripted(scripted)) {
@@ -440,6 +448,8 @@ struct SealedColumnFormatMigrationTests {
             #expect(tally.readBackFailed == 1)
             #expect(tally.restoredOldBlob == 1)
             #expect(tally.converted == 0)
+            #expect(audit.events.contains("sealedColumn.readBackFailedRestored"),
+                    "the compensating restore must be loud — nothing-silent")
         }
 
         let stored = try #require(try storedBlobs(entity: "WorryNarrative", attribute: "textCiphertext", in: controller).first)
@@ -573,6 +583,176 @@ struct SealedColumnFormatMigrationTests {
             #expect(result.total.restoredOldBlob == 0)
         }
         #expect(audit.events.contains("sealedColumn.readBackFailedRestoreFailed"))
+        // F11's stated end-state: the forfeit leaves the STORE holding the corrupt bytes the
+        // hook committed — the openable copy survives only in the (now-dropped) ledger, and the
+        // loud audit line above is its record.
+        let survivors = try storedBlobs(entity: "WorryNarrative", attribute: "textCiphertext", in: controller)
+        #expect(survivors == [Data([0x00, 0x01, 0x02])], "after a forfeited restore the corrupt bytes stand")
+    }
+
+    // MARK: The restore save hitting `NSMergeConflict` means a write landed in the compare
+    // guard's last gap and WINS: exactly one attempt (never the bounded retry), the row
+    // reclassifies as superseded, no forfeit is recorded, and the committed bytes are never
+    // touched by an oldBlob write.
+    @Test func restoreSaveConflictReclassifiesAsSupersededWithoutRetry() async throws {
+        let controller = makeController()
+        try plantWorryRows([try legacyBlob(Data("contended".utf8), entity: "WorryNarrative")], in: controller)
+        let viewContext = controller.container.viewContext
+        let corruptBytes = Data([0xBA, 0xD0, 0x01])
+        let audit = AuditEventLog()
+        let auditToken = FernletAuditLog.addCaptureHandler { event, _ in audit.record(event) }
+        defer { FernletAuditLog.removeCaptureHandler(auditToken) }
+        let attempts = HookCounter()
+
+        try await DeviceBindingID.$testOverride.withValue(.identifier(Self.installA)) {
+            var migrator = SealedColumnFormatMigrator(
+                controller: controller, keySource: Self.alwaysKey, latch: try makeLatch()
+            )
+            migrator.postSavePreReadBackHookForTesting = { _ in
+                viewContext.performAndWait {
+                    do {
+                        let rows = try viewContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "WorryNarrative"))
+                        rows.first?.setValue(corruptBytes, forKey: "textCiphertext")
+                        try viewContext.save()
+                    } catch {
+                        Issue.record("corruption hook failed: \(error)")
+                    }
+                }
+            }
+            migrator.restoreSaveOverrideForTesting = { _ in
+                _ = attempts.next()
+                throw NSError(domain: NSCocoaErrorDomain, code: NSManagedObjectMergeError, userInfo: nil)
+            }
+            let result = await migrator.performPass()
+            #expect(attempts.value == 1, "a conflict means a write won — never spend the bounded retry on it")
+            #expect(result.total.skippedConcurrentlyModified == 1)
+            #expect(result.total.restoreFailed == 0)
+            #expect(result.total.readBackFailed == 0)
+            #expect(result.total.restoredOldBlob == 0)
+            #expect(!result.aborted, "the superseded reclassification continues the pass")
+        }
+        #expect(!audit.events.contains("sealedColumn.readBackFailedRestoreFailed"))
+        let survivors = try storedBlobs(entity: "WorryNarrative", attribute: "textCiphertext", in: controller)
+        #expect(survivors == [corruptBytes], "the committed bytes must be untouched by any oldBlob write")
+    }
+
+    // MARK: Finding-1 half A: ZERO-LENGTH bytes found at read-back are CORRUPTION, not a clear —
+    // no repository writes `Data()` (clears write nil) and every real sealed blob is ≥ 28 bytes —
+    // so they take F10b's compare-guarded restore + abort, loudly.
+    @Test func emptyBytesAtReadBackAreCorruptionNotAClear() async throws {
+        let controller = makeController()
+        let original = try legacyBlob(Data("truncated to nothing".utf8), entity: "WorryNarrative")
+        try plantWorryRows([original], in: controller)
+        let viewContext = controller.container.viewContext
+        let audit = AuditEventLog()
+        let auditToken = FernletAuditLog.addCaptureHandler { event, _ in audit.record(event) }
+        defer { FernletAuditLog.removeCaptureHandler(auditToken) }
+
+        try await DeviceBindingID.$testOverride.withValue(.identifier(Self.installA)) {
+            var migrator = SealedColumnFormatMigrator(
+                controller: controller, keySource: Self.alwaysKey, latch: try makeLatch()
+            )
+            migrator.postSavePreReadBackHookForTesting = { _ in
+                viewContext.performAndWait {
+                    do {
+                        let rows = try viewContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "WorryNarrative"))
+                        rows.first?.setValue(Data(), forKey: "textCiphertext")
+                        try viewContext.save()
+                    } catch {
+                        Issue.record("empty-bytes hook failed: \(error)")
+                    }
+                }
+            }
+            let result = await migrator.performPass()
+            #expect(result.aborted, "zero-length bytes are an environment verdict, not a benign skip")
+            #expect(result.total.readBackFailed == 1)
+            #expect(result.total.restoredOldBlob == 1)
+            #expect(result.total.clearedDuringReadBack == 0)
+        }
+        #expect(audit.events.contains("sealedColumn.readBackFoundEmptyBytes"))
+        #expect(audit.events.contains("sealedColumn.readBackFailedRestored"))
+        let survivors = try storedBlobs(entity: "WorryNarrative", attribute: "textCiphertext", in: controller)
+        #expect(survivors == [original], "the held old blob must be restored over the truncation")
+    }
+
+    // MARK: Finding-1 half B: NIL found at read-back is a genuine repository clear
+    // (`sealOptionalString` clears by writing nil): never restored, the stored value stays nil —
+    // but it lands in its OWN latch-blocking bucket with a loud line, never laundering into a
+    // benign conflict-skip or next pass's `skippedEmpty` unannounced.
+    @Test func nilAtReadBackIsAClearedColumnNeverRestored() async throws {
+        let controller = makeController()
+        try plantWorryRows([try legacyBlob(Data("about to be cleared".utf8), entity: "WorryNarrative")], in: controller)
+        let viewContext = controller.container.viewContext
+        let audit = AuditEventLog()
+        let auditToken = FernletAuditLog.addCaptureHandler { event, _ in audit.record(event) }
+        defer { FernletAuditLog.removeCaptureHandler(auditToken) }
+
+        try await DeviceBindingID.$testOverride.withValue(.identifier(Self.installA)) {
+            var migrator = SealedColumnFormatMigrator(
+                controller: controller, keySource: Self.alwaysKey, latch: try makeLatch()
+            )
+            migrator.postSavePreReadBackHookForTesting = { _ in
+                viewContext.performAndWait {
+                    do {
+                        let rows = try viewContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "WorryNarrative"))
+                        rows.first?.setValue(nil, forKey: "textCiphertext")
+                        try viewContext.save()
+                    } catch {
+                        Issue.record("clear hook failed: \(error)")
+                    }
+                }
+            }
+            let result = await migrator.performPass()
+            #expect(!result.aborted, "a legitimate clear must not abort the pass")
+            #expect(result.total.clearedDuringReadBack == 1)
+            #expect(result.total.skippedConcurrentlyModified == 0, "a clear is its own bucket, never a conflict-skip")
+            #expect(result.total.restoredOldBlob == 0, "restoring would resurrect data the user just cleared")
+            #expect(result.total.readBackFailed == 0)
+            #expect(!result.isClean, "the clear blocks THIS pass's latch")
+        }
+        #expect(audit.events.contains("sealedColumn.readBackFoundCleared"))
+        let context = controller.container.viewContext
+        let storedValue: Data?? = try context.performAndWait {
+            context.refreshAllObjects()
+            let rows = try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "WorryNarrative"))
+            return rows.first.map { $0.value(forKey: "textCiphertext") as? Data }
+        }
+        #expect(storedValue == .some(nil), "the cleared column must STAY nil — one row, value nil")
+    }
+
+    // MARK: F5 in the read-back window: a transient binding READ ERROR blocks the latch without
+    // restoring (the committed v3 blob may be perfectly fine) and without aborting — retry is
+    // the next pass's job, once the keychain recovers.
+    @Test func bindingReadErrorAtReadBackBlocksWithoutRestore() async throws {
+        let controller = makeController()
+        let plaintext = Data("outage mid read-back".utf8)
+        try plantWorryRows([try legacyBlob(plaintext, entity: "WorryNarrative")], in: controller)
+
+        let scripted = DeviceBindingID.ScriptedBinding(.identifier(Self.installA))
+        try await DeviceBindingID.$testOverride.withValue(.scripted(scripted)) {
+            var migrator = SealedColumnFormatMigrator(
+                controller: controller, keySource: Self.alwaysKey, latch: try makeLatch()
+            )
+            migrator.postSavePreReadBackHookForTesting = { _ in
+                scripted.set(.readError)
+            }
+            let result = await migrator.performPass()
+            #expect(result.total.bindingReadError == 1)
+            #expect(result.total.readBackFailed == 0, "a keychain outage must never read as corruption")
+            #expect(result.total.restoredOldBlob == 0)
+            #expect(!result.aborted)
+            #expect(!result.isClean, "the retryable outage still blocks the latch")
+
+            // The committed bytes ARE the new v3 blob: once the outage clears, it opens v3
+            // with the original plaintext.
+            scripted.set(.identifier(Self.installA))
+            let stored = try #require(try storedBlobs(entity: "WorryNarrative", attribute: "textCiphertext", in: controller).first)
+            #expect(stored.first == Self.v3Marker)
+            let crypto = ColumnCrypto(purpose: try Self.purpose(forEntity: "WorryNarrative"))
+            let reopened = try crypto.openReportingRung(stored, contentKey: Self.contentKey)
+            #expect(reopened.rung == .v3)
+            #expect(reopened.plaintext == plaintext)
+        }
     }
 
     // MARK: - 6. Re-lock mid-pass
@@ -1043,10 +1223,15 @@ struct SealedColumnFormatMigrationTests {
                     do {
                         let request = NSFetchRequest<NSManagedObject>(entityName: "WorryNarrative")
                         let rows = try viewContext.fetch(request)
-                        // Corrupt the row page 2 just committed (the one now holding a v3 blob
-                        // that is NOT the page-1 row already verified).
+                        // DETERMINISTIC victim selection: corrupt EVERY marked row. Page 1's
+                        // row was already read-back verified (its conversion stands in the
+                        // tally and nothing re-reads it), so the only read-back this affects
+                        // is page 2's — no dependence on the unsorted fetch's order.
                         let marked = rows.filter { ($0.value(forKey: "textCiphertext") as? Data)?.first == 0x03 }
-                        marked.last?.setValue(Data([0x0B, 0xAD]), forKey: "textCiphertext")
+                        #expect(marked.count == 2, "both pages' commits should be marked v3 by now")
+                        for row in marked {
+                            row.setValue(Data([0x0B, 0xAD]), forKey: "textCiphertext")
+                        }
                         try viewContext.save()
                     } catch {
                         Issue.record("page-2 corruption hook failed: \(error)")

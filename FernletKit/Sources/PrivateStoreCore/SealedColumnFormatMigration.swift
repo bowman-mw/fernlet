@@ -138,6 +138,14 @@ public nonisolated struct SealedColumnMigrationTally: Sendable, Equatable {
     /// The row is *unproven, not healed*: an untouched column can still hold legacy bytes, so
     /// this blocks the latch and a later pass supplies the proof.
     public var skippedConcurrentlyModified: Int
+    /// The read-back found the column NIL on a live row — a genuine repository clear
+    /// (`sealOptionalString` clears by writing nil) landing in the read-back window. Never
+    /// restored (restoring would resurrect data the user just cleared), but its OWN bucket,
+    /// deliberately outside both the conflict-skip and empty vocabularies: this pass cannot
+    /// vouch for what happened, so it blocks the latch, and the clear must never launder into
+    /// next pass's benign `skippedEmpty` without this pass having said so out loud (the
+    /// `sealedColumn.readBackFoundCleared` audit line).
+    public var clearedDuringReadBack: Int
     /// The strict seal or the in-memory verify failed, or the page save failed for a
     /// non-conflict reason and rolled the pending conversions back. Row untouched.
     public var convertFailures: Int
@@ -165,6 +173,7 @@ public nonisolated struct SealedColumnMigrationTally: Sendable, Equatable {
         unopenableUnprefixed: Int = 0,
         unopenableMarked: Int = 0,
         skippedConcurrentlyModified: Int = 0,
+        clearedDuringReadBack: Int = 0,
         convertFailures: Int = 0,
         readBackFailed: Int = 0,
         restoredOldBlob: Int = 0,
@@ -180,6 +189,7 @@ public nonisolated struct SealedColumnMigrationTally: Sendable, Equatable {
         self.unopenableUnprefixed = unopenableUnprefixed
         self.unopenableMarked = unopenableMarked
         self.skippedConcurrentlyModified = skippedConcurrentlyModified
+        self.clearedDuringReadBack = clearedDuringReadBack
         self.convertFailures = convertFailures
         self.readBackFailed = readBackFailed
         self.restoredOldBlob = restoredOldBlob
@@ -192,10 +202,10 @@ public nonisolated struct SealedColumnMigrationTally: Sendable, Equatable {
     }
 
     /// Everything that blocks the latch on this column: unopenable, unclassifiable,
-    /// conflict-skipped, failed, or read-back-failed values.
+    /// conflict-skipped, cleared-mid-read-back, failed, or read-back-failed values.
     public var blocking: Int {
         indeterminate + bindingReadError + unopenableUnprefixed + unopenableMarked
-            + skippedConcurrentlyModified + convertFailures + readBackFailed
+            + skippedConcurrentlyModified + clearedDuringReadBack + convertFailures + readBackFailed
     }
 
     /// Bucket-wise sum, used to fold per-column tallies into pass totals.
@@ -211,6 +221,7 @@ public nonisolated struct SealedColumnMigrationTally: Sendable, Equatable {
             unopenableUnprefixed: lhs.unopenableUnprefixed + rhs.unopenableUnprefixed,
             unopenableMarked: lhs.unopenableMarked + rhs.unopenableMarked,
             skippedConcurrentlyModified: lhs.skippedConcurrentlyModified + rhs.skippedConcurrentlyModified,
+            clearedDuringReadBack: lhs.clearedDuringReadBack + rhs.clearedDuringReadBack,
             convertFailures: lhs.convertFailures + rhs.convertFailures,
             readBackFailed: lhs.readBackFailed + rhs.readBackFailed,
             restoredOldBlob: lhs.restoredOldBlob + rhs.restoredOldBlob,
@@ -529,7 +540,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
     ///   `@discardableResult`.
     public func performPass() async -> SealedColumnMigrationResult {
         var result = SealedColumnMigrationResult()
-        guard let storeIdentity = preflight(into: &result) else {
+        guard let capturedStore = preflight(into: &result) else {
             return finishPass(result)
         }
         let context = controller.container.newBackgroundContext()
@@ -546,23 +557,25 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
             result.notAttempted[.noBinding] = result.rowsAvailable
             return finishPass(result)
         }
-        await sweep(context: context, counts: counts, storeIdentity: storeIdentity, into: &result)
-        // The census's double guard, extended with the store's identity: a store torn off — or
+        await sweep(context: context, counts: counts, capturedStore: capturedStore, into: &result)
+        // The census's double guard, extended with the store instance: a store torn off — or
         // torn off AND healed by a rebuild — under the pass invalidates everything after the
         // tear (F15/F16). Aborting is what proves the held ledger can never replay into a
         // rebuilt store.
         if !result.aborted, !result.abortedNoBinding,
-           currentStoreIdentity() != storeIdentity {
+           attachedStore() !== capturedStore {
             result.aborted = true
         }
         return finishPass(result)
     }
 
     /// The store-loaded + table + purpose-map preflight (F15 + the drift guards). Returns the
-    /// attached store's identity for the mid-pass tear detector, or nil after marking `result`
-    /// aborted.
-    private func preflight(into result: inout SealedColumnMigrationResult) -> ObjectIdentifier? {
-        guard controller.isStoreLoaded, let identity = currentStoreIdentity() else {
+    /// attached `NSPersistentStore` INSTANCE for the mid-pass tear detector — retained by the
+    /// pass for its whole duration, deliberately, so an `===` comparison is sound: a deallocated
+    /// store's address could be reused by a rebuild's replacement, but a retained one's cannot.
+    /// Returns nil after marking `result` aborted.
+    private func preflight(into result: inout SealedColumnMigrationResult) -> NSPersistentStore? {
+        guard controller.isStoreLoaded, let store = attachedStore() else {
             result.aborted = true
             return nil
         }
@@ -579,14 +592,14 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
             result.aborted = true
             return nil
         }
-        return identity
+        return store
     }
 
-    /// The identity of the attached sealed store, or nil when none is attached. A
-    /// `rebuildStore()` swaps the `NSPersistentStore` instance, so identity inequality detects
-    /// both a tear-off and a tear-off-then-heal (F16).
-    private func currentStoreIdentity() -> ObjectIdentifier? {
-        controller.container.persistentStoreCoordinator.persistentStores.first.map(ObjectIdentifier.init)
+    /// The currently attached sealed store, or nil when none is. A `rebuildStore()` swaps the
+    /// `NSPersistentStore` instance, so `!==` against the preflight-retained instance detects
+    /// both a tear-off and a tear-off-then-heal (F16) at every comparison site.
+    private func attachedStore() -> NSPersistentStore? {
+        controller.container.persistentStoreCoordinator.persistentStores.first
     }
 
     /// Counts every censused entity's rows (keyless), or nil when a count itself fails.
@@ -607,7 +620,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
     private func sweep(
         context: NSManagedObjectContext,
         counts: [String: Int],
-        storeIdentity: ObjectIdentifier,
+        capturedStore: NSPersistentStore,
         into result: inout SealedColumnMigrationResult
     ) async {
         var convertedSoFar = 0
@@ -632,7 +645,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
             }
             let stopped = await sweepEntityPages(
                 ids: ids, entity: entity, crypto: crypto, context: context,
-                storeIdentity: storeIdentity, convertedSoFar: &convertedSoFar, into: &result
+                capturedStore: capturedStore, convertedSoFar: &convertedSoFar, into: &result
             )
             if stopped { return }
         }
@@ -645,7 +658,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
         entity: SealedEntityColumns,
         crypto: ColumnCrypto,
         context: NSManagedObjectContext,
-        storeIdentity: ObjectIdentifier,
+        capturedStore: NSPersistentStore,
         convertedSoFar: inout Int,
         into result: inout SealedColumnMigrationResult
     ) async -> Bool {
@@ -659,7 +672,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
                 result.notAttempted[.keyRevoked, default: 0] += Self.remainingRows(in: result)
                 return true
             }
-            guard currentStoreIdentity() == storeIdentity else {
+            guard attachedStore() === capturedStore else {
                 // F16: the store was torn off (or torn and rebuilt) between pages. The pending
                 // ledger died with its page closure; nothing can replay into the rebuilt store.
                 result.aborted = true
@@ -668,7 +681,9 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
             }
             let outcome = runPage(ids: Array(ids[start..<end]), entity: entity, crypto: crypto, pageKey: pageKey, context: context)
             fold(outcome, into: &result)
-            result.rowsScanned += end - start
+            // Only rows the page actually reached count as scanned; an in-page abort's
+            // unreached tail falls to `remainingRows` → notAttempted below.
+            result.rowsScanned += outcome.rowsProcessed
             convertedSoFar += outcome.verifiedConversions
             if outcome.committedConversions > 0 {
                 progressObserver?(.pageCommitted(convertedSoFar: convertedSoFar))
@@ -769,6 +784,7 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
             "unopenableUnprefixed": "\(folded.unopenableUnprefixed)",
             "unopenableMarked": "\(folded.unopenableMarked)",
             "conflictSkipped": "\(folded.skippedConcurrentlyModified)",
+            "clearedDuringReadBack": "\(folded.clearedDuringReadBack)",
             "convertFailures": "\(folded.convertFailures)",
             "readBackFailed": "\(folded.readBackFailed)",
             "notAttempted": "\(result.notAttemptedTotal)",
@@ -789,6 +805,10 @@ public nonisolated struct SealedColumnFormatMigrator: AsyncFormatMigrator {
 nonisolated struct SealedColumnPageOutcome: Sendable {
     /// Per-column tallies for this page.
     var tallies: [SealedColumnIdentifier: SealedColumnMigrationTally] = [:]
+    /// Rows this page's classify/convert loop actually reached (the aborting row included).
+    /// The caller folds ONLY these into `rowsScanned`; an in-page abort's unreached tail is
+    /// accounted as `notAttempted(.aborted)` instead of being silently claimed as scanned.
+    var rowsProcessed: Int = 0
     /// Conversions this page's save committed (before read-back judgment) — the progress feed.
     var committedConversions: Int = 0
     /// Conversions this page's read-back verified (the `converted*` buckets' page total).
@@ -834,6 +854,7 @@ nonisolated enum SealedColumnPageWorker {
         var ledger: [LedgerEntry] = []
         for row in rows {  // R2: bounded by the page.
             processRow(row, entity: entity, crypto: crypto, pageKey: pageKey, ledger: &ledger, outcome: &outcome)
+            outcome.rowsProcessed += 1
             if outcome.abort { break }
         }
         if outcome.abort {
@@ -1002,9 +1023,28 @@ nonisolated enum SealedColumnPageWorker {
                 // is never restored; the held bytes cannot resurrect wiped rows.
                 outcome.tally(entry.column) { $0.indeterminate += 1 }
             case .classified(.empty):
-                // A concurrent legitimate write cleared the column (the repositories nil an
-                // emptied optional column). The editor's committed state wins; never restored.
-                outcome.tally(entry.column) { $0.skippedConcurrentlyModified += 1 }
+                // The census's `.empty` covers two states this window must SPLIT:
+                if value == nil {
+                    // NIL on a live row is the one shape a legitimate clear produces
+                    // (`sealOptionalString` clears by writing nil). Never restored — restoring
+                    // would resurrect data the user just cleared — but tallied in its OWN
+                    // latch-blocking bucket with a loud line, so the clear can never launder
+                    // into next pass's benign `skippedEmpty` silently.
+                    outcome.tally(entry.column) { $0.clearedDuringReadBack += 1 }
+                    FernletAuditLog.log("sealedColumn.readBackFoundCleared", context: [
+                        "entity": entry.column.entityName, "column": entry.column.attributeName
+                    ])
+                } else {
+                    // ZERO-LENGTH Data on a live row is CORRUPTION, not a clear: no repository
+                    // writes `Data()` (clears write nil), and every real sealed blob is ≥ 28
+                    // bytes — bytes differ from the just-committed blob and open under nothing,
+                    // which is exactly F10b's shape. Compare-guarded restore, then abort.
+                    FernletAuditLog.log("sealedColumn.readBackFoundEmptyBytes", context: [
+                        "entity": entry.column.entityName, "column": entry.column.attributeName
+                    ])
+                    restore(entry: entry, observedUnopenable: Data(), crypto: crypto, pageKey: pageKey,
+                            context: context, restoreSaveOverride: restoreSaveOverride, outcome: &outcome)
+                }
             case .classified:
                 guard let found = value as? Data else {
                     outcome.tally(entry.column) { $0.indeterminate += 1 }
@@ -1070,8 +1110,13 @@ nonisolated enum SealedColumnPageWorker {
         restoreSaveOverride: ((NSManagedObjectContext) throws -> Void)?,
         outcome: inout SealedColumnPageOutcome
     ) {
-        // The compare guard: re-read immediately before writing; proceed only if the column
-        // still holds the unopenable bytes just observed.
+        // The compare guard, made REAL by the refresh: re-faulting first means the recheck
+        // below reads what the STORE committed last, not this context's cached snapshot of it —
+        // so a write that landed since the read-back's observation is actually seen here and
+        // wins. The default `NSErrorMergePolicy` on the restore save remains the BACKSTOP for
+        // the narrower race (a write landing between this recheck and the save's commit), which
+        // rolls back and reclassifies below.
+        context.refresh(entry.row, mergeChanges: false)
         let recheck = entry.row.value(forKey: entry.column.attributeName) as? Data
         guard !entry.row.isDeleted, entry.row.managedObjectContext != nil else {
             outcome.tally(entry.column) { $0.indeterminate += 1 }

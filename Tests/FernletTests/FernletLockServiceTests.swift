@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import FernletFoundation
 import CryptoKit
@@ -721,6 +722,54 @@ struct FernletLockServiceTests {
         try service.reset()
 
         #expect(!latch.isComplete, "the destructive reset must clear the sealed-column migration latch")
+    }
+
+    // MARK: The reset-FIRST half of the same pin: the latch is cleared BEFORE the destructive
+    // sealed-store legs, so a reset whose sealed-store work FAILS (the exact case the ordering
+    // exists for — rows or residue left behind under a destroyed content key) still cannot
+    // leave a stale proof standing. The failure is constructed at the rebuild leg — the sqlite
+    // file is replaced by a DIRECTORY at the same path, which neither `destroyPersistentStore`
+    // nor the re-add can open as a database — because the review-prescribed storeless-coordinator
+    // purge turns out NOT to throw on this SDK (a fetch over zero stores answers empty, so the
+    // purge finds nothing to save); the ordering property pinned is identical, since the latch
+    // reset precedes both sealed-store legs.
+    @Test func lockServiceDestructiveResetClearsTheLatchEvenWhenTheStoreLegFails() throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let latch = SealedColumnFormatMigrator.latch()
+        let hadLatch = latch.isComplete
+        defer {
+            if hadLatch { latch.markComplete() } else { latch.reset() }
+        }
+        latch.markComplete()
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet-lock-reset-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let controller = PrivatePersistenceController(storeURL: storeURL)
+        #expect(controller.isStoreLoaded, "the on-disk fixture store must have loaded")
+        // Swap the sqlite FILE for a DIRECTORY at the same path: the open file descriptors keep
+        // the purge working, but the rebuild's destroy-and-re-add cannot open a directory as a
+        // database — the deterministic sealed-store-leg failure.
+        try FileManager.default.removeItem(at: storeURL)
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: false)
+
+        let service = FernletLockService(
+            keychainService: harness.serviceID,
+            sealedContentKeyServices: [harness.sealedContentKeyServiceID],
+            mediaKeychainServices: [harness.mediaKeychainServiceID],
+            narrativeBufferScope: harness.narrativeBufferScope,
+            dateProvider: harness.clock,
+            uptimeProvider: harness.uptime,
+            cryptoProvider: harness.crypto,
+            privatePersistenceController: controller
+        )
+        #expect(throws: (any Error).self, "a reset whose sealed-store leg fails must fail loudly") {
+            try service.reset()
+        }
+        #expect(!latch.isComplete, "cleared FIRST: even a failed sealed-store leg cannot leave a stale proof standing")
     }
 }
 

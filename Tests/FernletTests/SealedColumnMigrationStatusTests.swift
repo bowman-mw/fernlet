@@ -99,9 +99,13 @@ struct SealedColumnMigrationStatusTests {
     }
 
     // MARK: §8 pin 1 (17a): a duress session never shows the capsule for ANY status value, and
-    // the funding call itself early-outs.
-    @Test func duressSessionNeverShowsMigrationCapsule() {
+    // the funding call itself early-outs. Fully seam-isolated: the injected defaults and task
+    // body mean this test can never touch `UserDefaults.standard` or the shared sealed store.
+    @Test func duressSessionNeverShowsMigrationCapsule() throws {
         let store = makeStore("column-status-duress")
+        let isolatedDefaults = try #require(UserDefaults(suiteName: "column-status-duress-\(UUID().uuidString)"))
+        store.sealedColumnMigrationLatchDefaultsForTesting = isolatedDefaults
+        store.sealedColumnMigrationTaskBodyForTesting = { _, _ in }
         store.lockState = .unlocked(scope: .privateHub)
         store.recordSealedColumnMigrationRun(latched: false, passResults: [blockedResult()])
         #expect(store.sealedColumnMigrationStatus == .blocked)
@@ -111,6 +115,21 @@ struct SealedColumnMigrationStatusTests {
         // vend answering nil for a decoy session.
         let funded = store.runSealedColumnFormatMigrationIfNeeded { nil }
         #expect(!funded)
+    }
+
+    // MARK: THE DURESS-BLINDNESS WALL (grep-style, the house boundary-test idiom): the hub view
+    // renders the capsule ONLY through the store's one duress-blind filter. A future edit that
+    // reads the unfiltered status would bypass §8 pin 1 with every behavior test still green —
+    // this makes that a compile-adjacent failure instead of a silent decoy leak.
+    @Test func privateHubRendersOnlyTheDuressBlindCapsuleFilter() throws {
+        let source = try String(
+            contentsOf: RepoRoot.url.appendingPathComponent("App/Fernlet/PrivateHubView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("store.sealedColumnMigrationCapsuleStatus"),
+                "the capsule must render from the duress-blind filter")
+        #expect(!source.contains("store.sealedColumnMigrationStatus"),
+                "PrivateHubView must NEVER read the unfiltered status — the filter IS the duress blindness")
     }
 
     // MARK: §8 pin 2 (17b): a `.blocked` from a legitimate session cannot survive a re-lock into
@@ -180,17 +199,17 @@ struct SealedColumnMigrationStatusTests {
     }
 
     // MARK: The funding call's synchronous guards: one run at a time, and a revalidation slot
-    // that an `.unavailable` recheck does NOT consume.
-    @Test func fundingCallGuardsAndRevalidationSlot() {
+    // that an `.unavailable` recheck does NOT consume. Fully seam-isolated (isolated defaults
+    // suite + a task body that records into a box and touches nothing shared), so no stray
+    // funded task can ever reach `UserDefaults.standard` or `PrivatePersistenceController.shared`.
+    @Test func fundingCallGuardsAndRevalidationSlot() throws {
         let store = makeStore("column-status-funding")
         store.lockState = .unlocked(scope: .privateHub)
-        // Pin the standard-defaults latch key to a known state and restore it afterwards — the
-        // trigger deliberately reads the production latch (its one UserDefaults read).
-        let latch = SealedColumnFormatMigrator.latch()
-        let hadLatch = latch.isComplete
-        defer {
-            if hadLatch { latch.markComplete() } else { latch.reset() }
-        }
+        let defaults = try #require(UserDefaults(suiteName: "column-status-funding-\(UUID().uuidString)"))
+        store.sealedColumnMigrationLatchDefaultsForTesting = defaults
+        let fundedBodies = StatusTaskCounter()
+        store.sealedColumnMigrationTaskBodyForTesting = { _, _ in fundedBodies.increment() }
+        let latch = SealedColumnFormatMigrator.latch(defaults: defaults)
         latch.reset()
 
         let funded = store.runSealedColumnFormatMigrationIfNeeded { nil }
@@ -213,5 +232,23 @@ struct SealedColumnMigrationStatusTests {
         let shouldRunAfterReset = store.recordSealedColumnRevalidationOutcome(.reset)
         #expect(shouldRunAfterReset)
         store.recordSealedColumnMigrationRun(latched: false, passResults: [])
+    }
+}
+
+/// Thread-safe counter for the injected task-body seam — the only thing a funded test task
+/// touches. `@unchecked Sendable` on the documented invariant: the one mutable field is only
+/// ever touched under `lock`.
+private nonisolated final class StatusTaskCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    /// Records one body invocation.
+    func increment() {
+        lock.withLock { count += 1 }
+    }
+
+    /// The invocation count so far.
+    var value: Int {
+        lock.withLock { count }
     }
 }
