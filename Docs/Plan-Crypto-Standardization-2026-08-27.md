@@ -774,8 +774,11 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
 - [ ] Phase 4 — Class B wire readers — BLOCKED: owner decision D1 (§5). No Class-B site is touched
       until it lands.
 - [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**
-      (SHA recorded at the boundary below); the zero-`legacy-read` assertion is what remains, and it
-      cannot land until Phases 3 and 4 have deleted the ten readers.
+      (`2df8d29`; boundary gate: full unit suite 3378 tests / 297 suites green from a private
+      DerivedData — +4 tests / +1 suite, exactly the new census — power-of-10, doc-coverage and
+      accessibility scanners all zero, and a planted nineteenth hatch verified to fail three of the
+      four pins). The zero-`legacy-read` assertion is what remains, and it cannot land until
+      Phases 3 and 4 have deleted the ten readers.
       - Pinned escape-hatch count — `Tests/FernletTests/CryptographicEscapeHatchCensusTests.swift`.
         Pins FOUR things, not one: the total (18), the count per label, the number of files holding
         one (10), and the set of labels that exists at all — so a hatch added while another is
@@ -861,6 +864,18 @@ Token log (per phase: spent / big consumers / remaining):
   the docs pass (~60k), the gate (~100k, green first pass). Gate history for the whole round:
   2.1 needed five fixes; 2.2–2.4, 2.5, and 2.6 each passed their boundary gate on the first
   attempt. Remaining at the loop's end: ~15.0M.
+
+- Phase 5 (early parts): main loop only — **no subagents were spawned this phase**, so there are no
+  per-agent usage blocks to quote and the spend is the session's own; it is the cheapest phase of
+  the round by a wide margin, which is what a mechanical wall change should cost. Remaining at the
+  boundary: ~15.0M. Two process notes worth carrying: a backgrounded `xcodebuild … ; echo "EXIT=$?"`
+  reports the ECHO's status, so a **failed build was notified as exit 0** and the next
+  `test-without-building` then ran the previous bundle and reported a clean pass over a suite that
+  did not contain the new tests — the two traps compose into something that reads exactly like
+  success. Run the build with `exec` (or grep the log for `** TEST BUILD SUCCEEDED **`), and
+  confirm a new suite by NAME in the run output, never by the run's exit code. Second: Swift
+  Testing's `#expect` comment argument is a `Comment`, not a `String`, so a `+`-concatenated message
+  fails to compile — build the text into a `let` and pass `"\(message)"`.
 
 ### Handoff to the Phase 3 session (written at the 2.5 boundary)
 
