@@ -292,12 +292,22 @@ struct DuressSilentWipeTests {
         let service = fixture.service
         let harness = fixture.harness
         service.lock(reason: .manual)
+        // Phase 2.5 pin (the PrivacyWipeCoverage duress-wipe row): a re-wrap staging orphan is a
+        // scrypt-openable copy of the content key, so the wipe's explicit destruction list must
+        // take it with everything else — planted here so the assertion below is executable, not
+        // just a doc row.
+        #expect(KeychainItem.store(Data([0xA5, 0x5A]), for: .wrappedContentKeyRewrapStaging,
+                                   service: harness.serviceID) == errSecSuccess)
 
         _ = try await service.unlock(passcode: "654321", for: .privateHub)
 
         // The credential records are the THROWAWAY lock's now, not the user's.
         #expect(lockRow(.salt, harness) != fixture.originalSalt)
         #expect(lockRow(.verifier, harness) != fixture.originalVerifier)
+        // The Phase 2.5 staging orphan went with the explicit list (never via the tail sweep —
+        // a duress entry returns before it).
+        #expect(lockRow(.wrappedContentKeyRewrapStaging, harness) == nil,
+                "the wipe's explicit list must destroy the re-wrap staging orphan")
         // Biometrics: both rows destroyed, and never re-enrolled by the re-mint. Read via attributes
         // rather than data — the bypass sits behind an access control.
         #expect(accessControlledRowExists(.biometricBypass, harness) == false)

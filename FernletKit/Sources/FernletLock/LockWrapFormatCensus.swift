@@ -111,12 +111,17 @@ public nonisolated struct LockWrapFormatCensusReport: Sendable, Equatable {
 /// persistence controller — side effects a census has no business causing), never unwraps, and
 /// never needs a passcode, a scrypt derivation, or the Secure Enclave.
 ///
-/// ### The one row it counts, and the three it must never touch
-/// Four keychain rows under `com.fernlet.lock` can hold content-key material, under three
-/// different schemes. Only the first is this census's business; naming the other three here is the
+/// ### The one row it counts, and the four it must never touch
+/// Five keychain rows under `com.fernlet.lock` can hold content-key material, under three
+/// different schemes. Only the first is this census's business; naming the other four here is the
 /// point, because conflating them is the easy mistake to make later:
 /// - `LockKeychainKey.wrappedContentKey` — **the census target.** ChaChaPoly under the
 ///   scrypt-derived wrapping key, `FLW2`-marked since domain separation, unmarked before it.
+/// - `LockKeychainKey.wrappedContentKeyRewrapStaging` — the Phase 2.5 re-wrap STAGING slot: an
+///   `FLW2`-marked copy of the wrap that exists only between a migration pass's stage step and
+///   its verified post-promote delete, with any orphan's lifetime bounded by the unlock-tail
+///   sweep. Never the census's business — counting it would double-count the one wrap during the
+///   very pass that is standardizing it.
 /// - `LockKeychainKey.seWrappedContentKey` — ECIES under the non-exportable Secure Enclave key
 ///   (`SecureEnclaveContentKeyWrap`). It carries **no marker of any kind**, so the prefix check
 ///   here would classify every enclave wrap as `legacyUnprefixed` and invent legacy rows that do

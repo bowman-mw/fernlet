@@ -1130,18 +1130,34 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         self.keychainLoadDistinguishing = keychainLoadDistinguishing ?? { key, service in
             KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: service)
         }
-        self.keychainUpdate = keychainUpdate ?? { data, key, service in
-            KeychainItem.updateReportingStatus(data, account: key.rawValue, service: service)
-        }
-        self.keychainDelete = keychainDelete ?? { key, service in
-            KeychainItem.deleteReportingStatus(account: key.rawValue, service: service)
-        }
+        self.keychainUpdate = keychainUpdate ?? Self.defaultKeychainUpdate
+        self.keychainDelete = keychainDelete ?? Self.defaultKeychainDelete
         self.privatePersistenceController = privatePersistenceController ?? .shared
 
         state = Self.initialState(
             saltRow: self.keychainLoadDistinguishing(.salt, keychainService),
             cooldownDeadline: activeCooldownDeadline()
         )
+    }
+
+    /// The production `keychainUpdate` seam: `KeychainItem.updateReportingStatus` over the key's
+    /// account — one securityd transaction, UPDATE-ONLY (`errSecItemNotFound` comes back
+    /// un-normalized and nothing is ever created). Internal rather than private so the custody
+    /// tests can pin the DEFAULT directly — the update-only property of the wrap re-wrap's
+    /// promote must hold on the closure production actually installs, not only on test doubles.
+    nonisolated static func defaultKeychainUpdate(
+        _ data: Data, _ key: LockKeychainKey, _ service: String
+    ) -> OSStatus {
+        KeychainItem.updateReportingStatus(data, account: key.rawValue, service: service)
+    }
+
+    /// The production `keychainDelete` seam: `KeychainItem.deleteReportingStatus` over the key's
+    /// account (`errSecItemNotFound` normalized to success — an absent row is a deleted row).
+    /// Internal for the same reason as ``defaultKeychainUpdate(_:_:_:)``.
+    nonisolated static func defaultKeychainDelete(
+        _ key: LockKeychainKey, _ service: String
+    ) -> OSStatus {
+        KeychainItem.deleteReportingStatus(account: key.rawValue, service: service)
     }
 
     /// Derives the launch-time state from the salt row, refusing to collapse "the read failed"

@@ -477,6 +477,29 @@ struct LockWrapFormatMigrationTests {
         }
     }
 
+    // Review finding 6: a writer whose output is VALID ciphertext but carries no `FLW2` marker
+    // must be refused at the S1 stamp guard — before anything is staged, before the in-memory
+    // verify would have passed it. The marker is what the census, the reader, and the migrator
+    // all discriminate on, so an unstamped wrap must never reach the keychain.
+    @Test func unprefixedWriterOutputIsRefusedBeforeStaging() throws {
+        let service = Self.migrationService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let legacy = try Self.plantLegacyRow(service: service)
+
+        // Valid, openable ciphertext — a bare combined box the legacy branch WOULD open — just
+        // missing the stamp: exactly the writer regression the guard exists to catch.
+        let unprefixedWriter: @MainActor (Data, Data) throws -> Data = { contentKey, wrappingKey in
+            try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKey)).combined
+        }
+        let result = makeMigrator(service: service, wrap: unprefixedWriter).performPass()
+        #expect(result.failed == 1)
+        #expect(result.converted == 0)
+        #expect(KeychainItem.load(for: .wrappedContentKey, service: service) == legacy,
+                "an unstamped writer output must leave the live row byte-identical")
+        #expect(KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: service) == nil,
+                "an unstamped writer output must never be staged")
+    }
+
     // T-15: a stale staging orphan beside an already-converted live row is removed by the next
     // pass's S0 hygiene, and the live row is untouched.
     @Test func stagingOrphanIsCleanedByTheNextPass() throws {
@@ -527,7 +550,7 @@ struct LockWrapFormatMigrationTests {
 
     // T-25 (the KeychainHelpers pin, hosted here — no KeychainHelpers suite exists): the new
     // update seam is UPDATE-ONLY, preserves attributes, and refuses empty inputs.
-    @Test func updateReportingStatusIsUpdateOnly() {
+    @Test func updateReportingStatusIsUpdateOnly() throws {
         let service = "com.fernlet.lock.test.updateseam.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: service) }
         let account = "com.fernlet.lock.test.updateseam.account"
@@ -539,20 +562,41 @@ struct LockWrapFormatMigrationTests {
                 "an update against an absent row must never create one")
 
         // Present row: the value is replaced; accessibility and synchronizable are preserved.
+        // Both attribute reads are REQUIRED and compared against the concrete expected class —
+        // a nil == nil comparison would pass vacuously with the row (or the reader) broken.
         #expect(KeychainItem.store(Data([0x01]), account: account, service: service,
                                    accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly) == errSecSuccess)
-        let before = Self.rowAttributes(account: account, service: service)
+        let before = try #require(Self.rowAttributes(account: account, service: service),
+                                  "the stored row's attributes must be readable")
+        #expect(before.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        #expect(before.synchronizable == false)
         #expect(KeychainItem.updateReportingStatus(Data([0x02]), account: account, service: service)
                 == errSecSuccess)
         #expect(KeychainItem.load(account: account, service: service) == Data([0x02]))
-        let after = Self.rowAttributes(account: account, service: service)
-        #expect(after?.accessible == before?.accessible, "the update must not change the accessibility class")
-        #expect(after?.synchronizable == before?.synchronizable)
+        let after = try #require(Self.rowAttributes(account: account, service: service),
+                                 "the updated row's attributes must be readable")
+        #expect(after.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
+                "the update must not change the accessibility class")
+        #expect(after.synchronizable == false, "the update must not make the row synchronizable")
 
         // R5: empty payload/account/service are caller bugs, refused with errSecParam.
         #expect(KeychainItem.updateReportingStatus(Data(), account: account, service: service) == errSecParam)
         #expect(KeychainItem.updateReportingStatus(Data([0x01]), account: "", service: service) == errSecParam)
         #expect(KeychainItem.updateReportingStatus(Data([0x01]), account: account, service: "") == errSecParam)
+    }
+
+    // Review finding 2, the direct half: the closure PRODUCTION installs as the promote seam —
+    // `FernletLockService.defaultKeychainUpdate` — is itself update-only against the real
+    // keychain: an absent row answers `errSecItemNotFound` un-normalized and nothing is created.
+    // Pinned on the default, not a test double, so a future default swap cannot silently trade
+    // the update-only property away.
+    @Test func theDefaultPromoteSeamIsUpdateOnlyAgainstAnAbsentRow() {
+        let service = Self.migrationService()
+        defer { KeychainItem.deleteAll(service: service) }
+        #expect(FernletLockService.defaultKeychainUpdate(Data([0x01]), .wrappedContentKey, service)
+                == errSecItemNotFound)
+        #expect(KeychainItem.loadAll(service: service).isEmpty,
+                "the default promote seam must never create the row it failed to find")
     }
 
     // MARK: - Service-level integration (format-faithful fake provider, real unlock seam)
@@ -641,12 +685,13 @@ struct LockWrapFormatMigrationTests {
         #expect(rowAfterFirst == rowAfterSecond, "row bytes must be unchanged between the two unlocks")
     }
 
-    // T-15b (§Q2a): the custody-independent sweep — an orphan staging row is removed by the next
-    // passcode unlock WHATEVER that unlock's outcome and custody state, because the sweep
-    // precedes the custody switch. Environment-agnostic by construction: with the live row
-    // deleted, custody is hard-bound on SE environments (the unlock succeeds via the enclave
-    // wrap) and undeterminable on SE-less ones (the unlock honestly throws) — the staging row is
-    // gone either way.
+    // T-15b (§Q2a, strengthened per review finding 3): the custody-independent sweep — an orphan
+    // staging row is removed by the next passcode unlock WHATEVER that unlock's outcome and
+    // custody state, because the sweep precedes the custody switch. Every route to the content
+    // key is destroyed first (the live row, the enclave wrap AND the enclave key), so the unlock
+    // THROWS on EVERY environment — hard-bound-but-unrecoverable on SE hardware,
+    // undeterminable custody on SE-less — and the staging row is gone anyway: the pin that the
+    // sweep runs before the custody switch, not merely on some successful arm.
     @Test func stagingOrphanIsSweptByTheNextPasscodeUnlockUnderAnyCustody() async throws {
         let harness = WrapMigrationServiceHarness()
         defer { harness.cleanup() }
@@ -655,14 +700,15 @@ struct LockWrapFormatMigrationTests {
         #expect(KeychainItem.store(Data([0xAA, 0xBB]), for: .wrappedContentKeyRewrapStaging,
                                    service: harness.serviceID) == errSecSuccess)
         KeychainItem.delete(for: .wrappedContentKey, service: harness.serviceID)
+        KeychainItem.delete(for: .seWrappedContentKey, service: harness.serviceID)
+        _ = SecureEnclaveContentKeyWrap.deleteKey(service: harness.serviceID)
 
-        do {
+        await #expect(throws: FernletLockError.self,
+                      "with every key route destroyed, the unlock must throw on every environment") {
             _ = try await service.unlock(passcode: "123456", for: .privateHub)
-        } catch {
-            // SE-less environments honestly throw on undeterminable custody — AFTER the sweep.
         }
         #expect(KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: harness.serviceID) == nil,
-                "the custody-independent sweep must remove the orphan whatever the unlock's outcome")
+                "the custody-independent sweep must remove the orphan even though the unlock threw")
     }
 
     // T-19: hard-bound (absent-row) and not-configured installs are untouched — no staging row
@@ -732,6 +778,46 @@ struct LockWrapFormatMigrationTests {
                 "the unlock-tail sweep must bound the orphan to the next passcode unlock")
     }
 
+    // Review finding 2, the service-level half: with NO keychainUpdate injection the promote is
+    // the PRODUCTION default seam — and when the live row has vanished out from under the pass
+    // (the injected read reports planted legacy bytes as .found while the real keychain holds no
+    // row), that default promote fails `errSecItemNotFound` and MINTS NOTHING: the migrator can
+    // never create custody state through the seam production actually installs.
+    @Test func theDefaultPromoteSeamRefusesToMintOverAVanishedRow() async throws {
+        let audit = WrapMigrationAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let harness = WrapMigrationServiceHarness()
+        defer { harness.cleanup() }
+        let contentKey = try await configureLockAndCaptureContentKey(harness.makeService())
+        // Legacy bytes the fake can open under the passcode's derived key — reported as the live
+        // row by the injected read, while the REAL row is deleted (already absent on SE hardware,
+        // where configure() hard-bound).
+        let salt = try #require(KeychainItem.load(for: .salt, service: harness.serviceID))
+        let derived = try await harness.crypto.deriveVerifier(
+            passcode: "123456", salt: salt, n: FernletLockCrypto.scryptN
+        )
+        let phantomLegacy = harness.crypto.makeLegacyWrap(contentKey: contentKey, wrappingKey: derived)
+        KeychainItem.delete(for: .wrappedContentKey, service: harness.serviceID)
+
+        let phantomLoad: (LockKeychainKey, String) -> KeychainItem.ReadResult = { key, svc in
+            guard key == .wrappedContentKey else {
+                return KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: svc)
+            }
+            return .found(phantomLegacy)
+        }
+        let service = harness.makeService(keychainLoadDistinguishing: phantomLoad)
+        let result = try await service.unlock(passcode: "123456", for: .privateHub)
+        #expect(result.method == .passcode, "the failed promote must not perturb the unlock")
+
+        #expect(KeychainItem.load(for: .wrappedContentKey, service: harness.serviceID) == nil,
+                "the default promote seam must never mint a row that vanished")
+        #expect(KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: harness.serviceID) == nil,
+                "the failure path must still clean its staging row")
+        #expect(audit.contains("lock.wrapFormatMigrationIncomplete"))
+        #expect(!audit.contains("lock.wrapRewrittenFLW2"))
+    }
+
     // T-20: a duress entry never reaches the migrator — the decoy leaves no residue: the row is
     // byte-identical, nothing is staged, and no migration audit line is emitted.
     @Test func duressEntryNeverRunsTheMigrator() async throws {
@@ -791,7 +877,8 @@ struct LockWrapFormatMigrationTests {
         loadRow: ((LockKeychainKey, String) -> KeychainItem.ReadResult)? = nil,
         storeRow: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
         updateRow: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
-        deleteRow: ((LockKeychainKey, String) -> OSStatus)? = nil
+        deleteRow: ((LockKeychainKey, String) -> OSStatus)? = nil,
+        wrap: (@MainActor (Data, Data) throws -> Data)? = nil
     ) -> LockWrapFormatMigrator {
         let load = loadRow ?? { key, svc in
             KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: svc)
@@ -800,7 +887,7 @@ struct LockWrapFormatMigrationTests {
             keychainService: service,
             contentKey: contentKey,
             wrappingKey: wrappingKey,
-            wrap: { try FernletLockCrypto.wrapContentKey($0, using: $1) },
+            wrap: wrap ?? { try FernletLockCrypto.wrapContentKey($0, using: $1) },
             unwrap: { try FernletLockCrypto.unwrapContentKey($0, using: $1) },
             loadRow: load,
             storeRow: storeRow ?? { data, key, svc in
@@ -925,6 +1012,7 @@ private final class WrapMigrationServiceHarness {
 
     func makeService(
         keychainStore: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
+        keychainLoadDistinguishing: ((LockKeychainKey, String) -> KeychainItem.ReadResult)? = nil,
         keychainUpdate: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
         keychainDelete: ((LockKeychainKey, String) -> OSStatus)? = nil
     ) -> FernletLockService {
@@ -935,6 +1023,7 @@ private final class WrapMigrationServiceHarness {
             narrativeBufferScope: narrativeBufferScope,
             cryptoProvider: crypto,
             keychainStore: keychainStore,
+            keychainLoadDistinguishing: keychainLoadDistinguishing,
             keychainUpdate: keychainUpdate,
             keychainDelete: keychainDelete
         )

@@ -312,6 +312,18 @@ public struct LockWrapFormatMigrator: @MainActor FormatMigrator {
     @MainActor private func convert(oldWrap: Data) -> LockWrapMigrationResult {
         let failedResult = LockWrapMigrationResult(examined: 1, failed: 1)
 
+        // S1 precondition — the recipe invariant made LOCAL: the legacy bytes this pass is about
+        // to supersede must themselves unwrap, under THIS pass's wrapping key, to THIS pass's
+        // content key, before a single byte is written anywhere. The production call site proves
+        // this by construction (the unlock just performed exactly this unwrap to get here), but a
+        // direct caller gets the same guarantee as an executable precondition instead of a
+        // whole-codebase writer-census argument. One ChaChaPoly open; any failure leaves the live
+        // row untouched.
+        guard let oldWrapOpened = try? unwrap(oldWrap, wrappingKey),
+              oldWrapOpened == contentKey else {
+            return failedResult
+        }
+
         // S1 — the shipping FLW2 writer, verbatim: same wrapping key, zero extra derivations,
         // same registered AAD (stamped inside the writer, never named here).
         let newWrap: Data

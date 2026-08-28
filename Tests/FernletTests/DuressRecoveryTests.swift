@@ -285,12 +285,18 @@ struct DuressRecoveryEnrollmentTests {
 @Suite(.serialized)
 struct DuressRecoveryLockTriggerTests {
 
-    /// Arms the response and fires it, returning the fixture mid-decoy.
+    /// Arms the response and fires it, returning the fixture mid-decoy. A Phase 2.5 re-wrap
+    /// staging orphan is planted before the trigger so
+    /// ``theTriggerDestroysEveryLocalUnlockKey()`` can pin that the recovery-lock's explicit
+    /// destruction list takes it — it is a scrypt-openable copy of the content key, and the
+    /// mode's whole claim is that NO local route survives.
     private func triggeredFixture() async throws -> RecoveryFixture {
         let fixture = try await RecoveryFixture()
         try await fixture.enrollCustodian()
         try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
         fixture.service.lock(reason: .manual)
+        #expect(KeychainItem.store(Data([0xA5, 0x5A]), for: .wrappedContentKeyRewrapStaging,
+                                   service: fixture.harness.serviceID) == errSecSuccess)
         _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
         return fixture
     }
@@ -305,6 +311,11 @@ struct DuressRecoveryLockTriggerTests {
         #expect(recoveryRow(.salt, harness) == nil)
         #expect(recoveryRow(.verifier, harness) == nil)
         #expect(recoveryRow(.wrappedContentKey, harness) == nil)
+        // The Phase 2.5 re-wrap staging orphan `triggeredFixture()` planted went with the same
+        // explicit list (the PrivacyWipeCoverage recovery-lock row, pinned executable) — a duress
+        // entry returns before the unlock-tail sweep, so only the list can have taken it.
+        #expect(recoveryRow(.wrappedContentKeyRewrapStaging, harness) == nil,
+                "the recovery-lock destruction must take the re-wrap staging orphan")
         #expect(recoveryRow(.seWrappedContentKey, harness) == nil)
         #expect(accessControlledRecoveryRowExists(.biometricBypass, harness) == false)
         #expect(recoveryRow(.biometricEnabledFlag, harness) == nil)

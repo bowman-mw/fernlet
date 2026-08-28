@@ -1,7 +1,7 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status:** Phases 0, 1 and 2.1–2.4 are BUILT — see §4 and the Progress checklist. Phases 2.5, 2.6
-and 3–5 are still plan only.
+**Status:** Phases 0, 1 and 2.1–2.5 are BUILT — see §4 and the Progress checklist. Phase 2.6 and
+Phases 3–5 are still plan only.
 **Goal (owner, 2026-08-27):** review the domain-separation work and update everything so there is no
 "legacy" code — one standardized format per cryptographic surface.
 **Baseline:** main `def4726`. Prerequisite work already landed: `91c3956` (domain separation),
@@ -414,6 +414,58 @@ The key-pinning split moved the module's single `// cryptographic-domain: legacy
 `loadEntries()`; census files were out of scope for this pass, so the correction is owed to whoever
 next touches that file, or to the final docs-vs-code reconciliation sweep.
 
+### Phase 2.5 — `FernletLockService` content-key re-wrap — **BUILT**
+
+Landed in `4b49175`; the diff-review fix commit follows in this phase. The riskiest surface in the
+plan — a failure here locks the user out of every sealed corpus — and the shape that answers it is
+**one convert site, reached only with the credentials already in hand**: the `.legacyScryptWrapped`
+unlock arm, after the scrypt unwrap has succeeded and before the Secure-Enclave hard-bind flip. The
+migrator cannot be *constructed* without the recovered content key and the just-derived wrapping
+key, so every other state is structurally a no-op rather than merely an unscheduled one. Zero new
+purposes and **zero new derivations**: the new wrap comes out of the shipping `FLW2` writer through
+the existing provider, same key, same AAD.
+
+**The atomic recipe**, whose whole point is that no failure and no crash truncation can leave a row
+that opens under neither branch: wrap → in-memory verify → **stage on a new sibling keychain row**
+(`.wrappedContentKeyRewrapStaging`) → **read the staged row back fresh and prove it byte-identical
+and unwrappable while the legacy wrap still stands untouched** → **single-transaction, update-only
+promote** (`KeychainItem.updateReportingStatus`), where `errSecItemNotFound` aborts and the migrator
+**never** falls back to creating a row — it must not mint custody state → live read-back → restore
+the held old bytes on mismatch → verified staging delete with one retry and a loud audit if it still
+fails. The generalized restore-before-reupload rule is satisfied: the proven-good artifact exists and
+is verified before the only copy is superseded, the supersession is one transaction, and the old
+bytes are held for restore until the new bytes are verified in place. Orphan lifetime is then bounded
+independently of custody by an unconditional best-effort sweep in the **unlock tail** — placed after
+the verifier match and before the custody switch, so it runs under every custody arm including
+hard-bound and undeterminable — capping any staging orphan at the next successful passcode
+verification. That placement is the phase's decisive finding: a legacy-arm-only cleanup would have
+let the same unlock's hard-bind flip retire the only site that would ever have cleaned up, stranding
+a scrypt-openable copy of the content key indefinitely. **A failed re-wrap never fails and never
+slows the unlock** — every failure path is non-mutating with respect to the live row, the sole
+exception being the restore of the bytes it held.
+
+**Two named family deviations, recorded.** (a) **Credential-gated construction means no launch pass
+exists** — not unscheduled, unconstructible — and the launch-time *observation* role the family's
+launch pass would fill is already filled by the Phase-0 census row, which reads the same marker
+through the same classifier; a second launch observer would only restate it. (b) **The row's own
+`FLW2` marker IS the latch**: the `FormatMigrationLatching` witness is derived, `markComplete()` and
+`reset()` are documented no-ops (the pass already wrote the record — the marker — and there is
+nothing stored to clear), there is **no `UserDefaults` key and therefore no wipe rows owed**, and the
+reset predicate equals the latch predicate because both are literally the same marker read. 2.2's
+launch revalidation taken to its limit: observation beats memory, with no memory left to disagree.
+
+**Five smaller implementer deviations from the design.** An absent row tallies
+`examined: 0 / notApplicable: 1` rather than occupying the examined bucket; the S3–S5 failure paths
+reuse S8's verified-with-retry staging delete instead of the design's plain best-effort one; T-25
+lives in the migration suite rather than a KeychainHelpers suite (none exists); T-27 folded into the
+hard-bound custody test rather than standing alone; and **both** `PrivacyWipeCoverage.md` duress rows
+were edited (wipe and recovery-lock), not one. The new staging row joined the key-custody wall,
+`destroyLocalUnlockKeys`, and both coverage rows in the landing commit — the same-commit rule applied
+to a keychain row rather than a defaults key.
+
+**Post-landing review.** An adversarial diff review over three lenses returned 10 findings, **0
+fatal**; the fixes land as a follow-up commit inside this phase (fix commit follows).
+
 ### Phase 3 — Delete the Class-A legacy readers
 
 Gated on census = 0 for that surface, on real tester devices, not just simulators. Also close
@@ -434,6 +486,11 @@ the one that governs:
   plaintext, the undrained `MeshPhotoCache.json`, the benign-pending keyless wall root), **and**
   `hasBlindSpots` false. A latch alone does not discharge it, and neither does a raw census number
   without the residue audit beside it.
+- **`FernletLockService` wrap** — the census reads 0 on a real upgraded device, either as a
+  `v2Marked` row or as an absent row with an *earned* reading (no lock configured, enclave-bound, or
+  a wrap that has gone missing — the row's three honest absences). The 2.5 **row-latch licenses
+  nothing by itself**: it is a derived read of the same marker the census reads, so quoting it as the
+  gate would be quoting the gate to itself. `malformedEmpty` and `unreadable` are not zeros.
 
 ### Phase 4 — Class B: the peer-version decision (§5), then delete those four.
 
@@ -517,8 +574,10 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
 - [x] Phase 2.4 — `PendingNarrativeBuffer` migrator (`81d65d9`; runs on the buffer key, NOT behind
       the app lock — the buffer exists to work while locked; absent file is an earned zero, purge
       hook resets the latch first)
-- [ ] Phase 2.5 — `FernletLockService` content-key re-wrap (atomic, verified read-back before the
-      old wrap is discarded; complete + verify in one funded stretch)
+- [x] Phase 2.5 — `FernletLockService` content-key re-wrap (`4b49175`; diff-review fix commit
+      follows. Staged, read-back-proven, update-only promote at the sole credential-gated convert
+      site; the row's own FLW2 marker is the latch — no UserDefaults key, two recorded family
+      deviations. Adversarial diff review: 10 findings, 0 fatal)
 - [ ] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (D2 assumed yes; one funded stretch)
 - [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
