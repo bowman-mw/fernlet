@@ -217,6 +217,11 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.routeCommitted": .cleared(token: "deleteOwnPhotoEscrowBackups"),
+        // The Phase 2.1 hash-version migration latch (`SealedPhotoBackupMigrationLatch`, one bit,
+        // no content). Cleared because the wipe destroys the manifests the bit makes a claim
+        // about — the deliberate mirror-image of `ownPhotoKeyMigrationComplete`'s kept row, whose
+        // subject (the re-sealed local files) survives the wipe.
+        "fernlet.sealedPhoto.hashVersionMigrationComplete": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.workout.tombstones": .cleared(token: "workoutTombstones.clearAll"),
         "sensitiveVisibilityResolved": .cleared(token: "clearSensitiveVisibilityResolution"),
         "sensitiveVisibilityResolvedPeriodVisible": .cleared(token: "clearSensitiveVisibilityResolution"),

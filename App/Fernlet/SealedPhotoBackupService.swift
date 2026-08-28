@@ -180,6 +180,20 @@ struct SealedPhotoUploadSummary: Equatable, Sendable {
     /// Records deleted after the manifest commit: photos removed locally that THIS device had
     /// uploaded (the `prunableIDs` scope). Never another device's.
     var pruned = 0
+    /// Entries this pass committed at `currentHashVersion` whose prior recorded version was
+    /// `legacyHashVersion` — the format-migration forward-progress signal (crypto-standardization
+    /// Phase 2.1), counting both heal shapes: the re-upload (a legacy digest can never match the
+    /// v2 recompute) and the matched-unchanged stamp upgrade (no byte uploaded). A brand-new
+    /// entry (no prior) is not a heal.
+    var healedEntries = 0
+    /// `minimumEntryHashVersion` of the manifest opened at pass start (nil: none existed) — the
+    /// read-back evidence the migration latch requires, and the foreign-write observation the
+    /// latch invalidation reads. Carried on ambient passes too (the open already happens).
+    var openedManifestMinimumHashVersion: Int?
+    /// `minimumEntryHashVersion` of the manifest this pass committed (nil until commit; reconcile
+    /// throws on failure, so a returned summary always carries it). The OUTGOING encoded value,
+    /// never a re-fetch.
+    var committedManifestMinimumHashVersion: Int?
 }
 
 /// What one own-photo restore pass produced.
@@ -197,6 +211,11 @@ struct SealedPhotoRestoreSummary: Equatable, Sendable {
     /// could be served a different (older but authentic) manifest, and its index would then be
     /// written without ever facing the generation high-water check this restore just made.
     var sidecar: Data?
+    /// `minimumEntryHashVersion` of the manifest this restore decoded — bookkeeping off the value
+    /// already in hand (`opened.manifest`), zero added fetch. A nil `restore(...)` return already
+    /// means "no manifest exists"; together these give the coordinator a complete manifest
+    /// observation from the restore leg (crypto-standardization Phase 2.1).
+    var manifestMinimumEntryHashVersion: Int
 }
 
 /// Seals own photos and moves them to/from the private CloudKit database — the transport half of
@@ -308,6 +327,9 @@ final class SealedPhotoBackupService {
         if let existing {
             generationStore.recordAcceptedPhoto(existing.generation, for: corpus)
         }
+        // The minimum the opened manifest carried, before this pass changes anything — the
+        // migration latch's read-back evidence, and what the foreign-write invalidation reads.
+        summary.openedManifestMinimumHashVersion = existing?.manifest.minimumEntryHashVersion
         // WHOLE entries, not just hashes: an entry carried forward unread must keep its recorded
         // `hashVersion` (never be silently promoted), so the ladder below needs the entry itself.
         let existingEntries = Dictionary(
@@ -344,19 +366,19 @@ final class SealedPhotoBackupService {
             excluding: prunableIDs
         )
 
-        try await writeManifest(
+        // Built into a local so its (computed) minimum can be recorded after the write returns —
+        // the OUTGOING value, over the same entries that were just sealed; never a re-fetch.
+        let outgoing = SealedPhotoManifest(
+            corpus: corpus,
+            entries: entries,
             // Same union reasoning for the sidecar: a caller that has none to offer must not erase
             // the committed one. (Today only the progress corpus carries one, and its coordinator
             // skips the whole upload rather than passing nil for an unreadable index — this is the
             // belt to that braces.)
-            SealedPhotoManifest(
-                corpus: corpus,
-                entries: entries,
-                sidecar: sidecar ?? existing?.manifest.sidecar
-            ),
-            generation: generation,
-            keySalt: keySalt
+            sidecar: sidecar ?? existing?.manifest.sidecar
         )
+        try await writeManifest(outgoing, generation: generation, keySalt: keySalt)
+        summary.committedManifestMinimumHashVersion = outgoing.minimumEntryHashVersion
 
         summary.pruned = await pruneOrphans(
             presentIDs: presentIDs,
@@ -432,6 +454,11 @@ final class SealedPhotoBackupService {
                     hashVersion: SealedPhotoManifest.Entry.currentHashVersion
                 ))
                 summary.skipped += 1
+                // A recorded version rising 1 → 2 is a heal even without an upload (the stamp
+                // upgrade IS the conversion) — the migration loop's forward-progress signal.
+                if existingEntries[id]?.hashVersion == SealedPhotoManifest.Entry.legacyHashVersion {
+                    summary.healedEntries += 1
+                }
                 continue
             }
             try await save(plaintext, corpus: corpus, slot: .photo(id), generation: generation, keySalt: keySalt)
@@ -441,6 +468,12 @@ final class SealedPhotoBackupService {
                 hashVersion: SealedPhotoManifest.Entry.currentHashVersion
             ))
             summary.uploaded += 1
+            // Same rule on the re-upload rung: only an entry whose PRIOR recorded version was
+            // legacy counts (a brand-new entry has nothing to heal, and counting it would let
+            // plain backup progress masquerade as format progress).
+            if existingEntries[id]?.hashVersion == SealedPhotoManifest.Entry.legacyHashVersion {
+                summary.healedEntries += 1
+            }
         }
         return entries
     }
@@ -622,7 +655,12 @@ final class SealedPhotoBackupService {
         }
         generationStore.recordAcceptedPhoto(opened.generation, for: corpus)
 
-        var summary = SealedPhotoRestoreSummary(sidecar: opened.manifest.sidecar)
+        var summary = SealedPhotoRestoreSummary(
+            sidecar: opened.manifest.sidecar,
+            // Bookkeeping off the manifest already in hand — the restore leg's half of the
+            // Phase 2.1 manifest observation. Zero added fetch.
+            manifestMinimumEntryHashVersion: opened.manifest.minimumEntryHashVersion
+        )
         for entry in opened.manifest.entries {
             if let limitedTo, !limitedTo.contains(entry.id) { continue }
             guard let record = try? await cloudDataService.sealedPhoto(corpus: corpus, slot: .photo(entry.id)),

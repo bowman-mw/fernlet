@@ -3090,7 +3090,19 @@ final class FernletStore {
         // The pass records its own verdict on this store (`ownPhotoBackupStatus` +
         // `ownPhotoBackupUploadFailed`, which the Privacy & Data banner reads), so there is no
         // decision left for this seam — the value is consumed and deliberately not re-derived here.
-        _ = await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
+        // A user-initiated pass routes through the Phase 2.1 migration wrapper (the banner's Retry
+        // is one of the two seams that may heal + latch); the ambient pass stays id-set-only and
+        // is never routed through the migrator (owner decision D3: no silent whole-library
+        // decrypt) — its only migration role is feeding the foreign-write invalidation, which the
+        // coordinator does internally.
+        if userInitiated {
+            _ = await ownPhotoBackupCoordinator.synchronizeFullyVerified()
+        } else {
+            _ = await ownPhotoBackupCoordinator.synchronize()
+        }
+        // Either shape can move the latch (a full pass by latching, any pass by observing a
+        // foreign legacy write), so the observable is re-read rather than inferred.
+        refreshSealedPhotoHashMigrationState()
     }
 
     /// Whether the own-photo escrow backup is on, and its last pass's outcome — observable so the
@@ -3128,6 +3140,29 @@ final class FernletStore {
         ownPhotoBackupVerifiedUnreadable = count
     }
 
+    /// Whether this device's sealed-photo-backup format check has latched (crypto-standardization
+    /// Phase 2.1) — observable so Privacy & Data can render the pending nudge, following the
+    /// `ownPhotoKeyMigrationComplete` pattern: initialized from the latch at construction and
+    /// re-read after every seam that can move it, because the latch says what is true.
+    private(set) var sealedPhotoHashMigrationComplete = SealedPhotoBackupMigrationLatch().isComplete
+
+    /// Whether the last user-initiated full pass completed blocked ONLY by another device's
+    /// carried-forward legacy entries — nothing wrong on this device, and nothing a Retry here can
+    /// fix. Drives the differentiated Privacy & Data copy (no Retry invitation for a state Retry
+    /// structurally cannot clear). Session state, like `ownPhotoBackupVerifiedUnreadable` —
+    /// deliberately not persisted: one tap re-derives it.
+    private(set) var sealedPhotoHashMigrationBlockedByOtherDevice = false
+
+    /// Re-reads the Phase 2.1 latch and the coordinator's session verdict into the two
+    /// observables. Called after every seam that can move them: a backup pass (either shape), the
+    /// enable/disable toggle, the delete-all teardown (which resets the latch directly — without
+    /// this seam the observable would stay true until relaunch), and escrow-key adoption.
+    private func refreshSealedPhotoHashMigrationState() {
+        sealedPhotoHashMigrationComplete = SealedPhotoBackupMigrationLatch().isComplete
+        sealedPhotoHashMigrationBlockedByOtherDevice =
+            ownPhotoBackupCoordinator.lastFullPassBlockedOnlyByOtherDevices
+    }
+
     /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
     /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
     ///
@@ -3156,6 +3191,9 @@ final class FernletStore {
             recordOwnPhotoBackupUploadFailed(false)
             recordOwnPhotoBackupVerifiedUnreadable(0)
         }
+        // Enabling may have healed and latched (the enable pass runs through the migration
+        // wrapper); disabling tears the route down, which resets the latch.
+        refreshSealedPhotoHashMigrationState()
         return succeeded
     }
 
@@ -3163,13 +3201,27 @@ final class FernletStore {
     /// photo generation namespace — the "delete everything" leg for the photo route
     /// (Docs/PrivacyWipeCoverage.md). Returns whether every corpus cleared.
     func deleteOwnPhotoEscrowBackups() async -> Bool {
-        await ownPhotoBackupCoordinator.tearDownForDeleteAll()
+        let allCleared = await ownPhotoBackupCoordinator.tearDownForDeleteAll()
+        // Teardown resets the hash-migration latch directly (the delete-all funnel calls this
+        // without passing through the toggle seam), so the observable must be re-read here or it
+        // would stay true until relaunch.
+        refreshSealedPhotoHashMigrationState()
+        return allCleared
     }
 
     /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
     /// enabled backups. Delegates to `SealedBackupCoordinator`.
     func resolveSealedBackupEscrowConflict() async -> Bool {
-        await sealedBackupCoordinator.adoptSyncedEscrowAndReupload()
+        let adopted = await sealedBackupCoordinator.adoptSyncedEscrowAndReupload()
+        if adopted {
+            // The photo route seals under the same escrow key as the chunked route, so adoption
+            // changes which manifest lineage this device opens — the hash-migration latch's
+            // observed-minima proof was made against the OLD lineage and no longer holds.
+            SealedPhotoBackupMigrationLatch().reset()
+            FernletAuditLog.log("sealedPhoto.hashMigration.invalidatedByEscrowAdoption")
+            refreshSealedPhotoHashMigrationState()
+        }
+        return adopted
     }
 
     /// Fetches/decrypts/writes a single sealed-backup payload into the local stores; returns whether

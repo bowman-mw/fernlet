@@ -1048,8 +1048,20 @@ struct PrivacyDataSettingsView: View {
         store?.ownPhotoBackupStatus.flatMap { $0.needsAttention ? $0 : nil }
     }
 
+    /// The Phase 2.1 nudge: the photo backup is on and this device's format check has not latched.
+    /// Deliberately independent of the failure states around it — the healthy pre-marker user is
+    /// exactly who the nudge exists for.
+    private var showsHashMigrationPending: Bool {
+        guard let store else { return false }
+        return storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
+            && !store.sealedPhotoHashMigrationComplete
+    }
+
     /// Whether anything at all is wrong with the encrypted backups. The banner is hidden entirely
-    /// when this is false — there is no "everything is fine" state to report here.
+    /// when this is false — there is no "everything is fine" state to report here. The pending
+    /// format check counts (load-bearing, not styling): the other conditions enumerate failure
+    /// states only, so without it a healthy pre-marker user — the nudge's whole target population
+    /// — would never see the banner, the line, or the Retry button the line points at.
     private var showsSealedBackupStatusBanner: Bool {
         guard let store else { return false }
         return store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
@@ -1058,10 +1070,12 @@ struct PrivacyDataSettingsView: View {
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
             || store.ownPhotoBackupUploadFailed
             || store.ownPhotoBackupVerifiedUnreadable > 0
+            || showsHashMigrationPending
     }
 
-    /// The own-photo backup's three failure lines: a failed upload, a failed disable-delete, and a
-    /// restore outcome that needs attention.
+    /// The own-photo backup's status lines: a failed upload, an unclean verification, a failed
+    /// disable-delete, a restore outcome that needs attention, and the Phase 2.1 format-check
+    /// nudge (pending, or blocked by another device's entries).
     @ViewBuilder
     private var ownPhotoStatusLines: some View {
         if let store, store.ownPhotoBackupUploadFailed {
@@ -1115,6 +1129,30 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("privacy.sealedBackup.ownPhotosStatus")
+        }
+
+        // The Phase 2.1 format-check nudge (owner decision D3: a deliberate, user-visible pass —
+        // never a silent whole-library decrypt). Two copies, because the two states have opposite
+        // remedies: pending invites the Retry beside it, while blocked-by-another-device carries
+        // NO Retry invitation — a Retry here structurally cannot clear it, and a standing
+        // invitation to re-run whole-library decrypts that cannot succeed is a treadmill.
+        //
+        // Whole-sentence literals in first-argument position, like the verification lines above:
+        // a built `String` binds the verbatim overload and stays English in every language.
+        if showsHashMigrationPending {
+            if let store, store.sealedPhotoHashMigrationBlockedByOtherDevice {
+                Text("This device's photos are verified. Photos backed up from another device still need checking there — open Fernlet on that device.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.sealedBackup.formatCheckOtherDevice")
+            } else {
+                Text("Your encrypted photo backup is due a format check on this device. Tap Retry to verify your photos — Fernlet reads each one, so a large library can take a moment.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("privacy.sealedBackup.formatCheckPending")
+            }
         }
     }
 
@@ -1230,6 +1268,10 @@ struct PrivacyDataSettingsView: View {
             // A committed-but-not-clean verification pass: Retry runs a FULL pass, which re-reads
             // every photo — the one remedy for "couldn't read N of your photos to verify".
             || store.ownPhotoBackupVerifiedUnreadable > 0
+            // The pending format check (Phase 2.1): Retry runs the full pass that heals and
+            // latches. NOT offered for the blocked-by-another-device state — that copy carries no
+            // Retry invitation, because a Retry here structurally cannot clear it.
+            || (showsHashMigrationPending && !store.sealedPhotoHashMigrationBlockedByOtherDevice)
             || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
             // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
             // store records no retryable attention item, yet Retry IS the remedy —

@@ -631,9 +631,11 @@ nonisolated enum CryptoFormatCensus {
     /// marker existed decodes as 1 whether its digest is legacy or v2, so the number this row could
     /// print is a not-yet-proven count and not a legacy count — and reading even that would mean
     /// fetching and decrypting each corpus's manifest over the network, which no census here does
-    /// for any surface. There is still no local completed-pass record to substitute for the number,
-    /// and one would not prove zero anyway: a full pass skips local photos it cannot read and never
-    /// heals entries another device carried forward.
+    /// for any surface. Phase 2.1's device-local completion latch
+    /// (`SealedPhotoBackupMigrationLatch`) is not a substitute for the number either, and would
+    /// not prove zero anyway: it attests only this device's vouchable entries, is invalidated by
+    /// foreign writes, and a full pass skips local photos it cannot read and never heals entries
+    /// another device carried forward.
     ///
     /// So this stays the plan's "if any count cannot be produced, stop" case, and the honest
     /// response is to print exactly that. What changed is the EXIT, not the reading: the zero-proof
@@ -650,9 +652,10 @@ nonisolated enum CryptoFormatCensus {
             + " iCloud, which this census does not do for any surface.",
         status: .uncountable(
             "An entry is proven — and stamped — only by a full-verification reconcile (turning backup on, or"
-            + " Retry), and nothing local records that such a pass completed for each corpus. The proof for"
-            + " this surface is `minimumEntryHashVersion >= 2` across the three corpora after those passes,"
-            + " read on a device; it is not a number a census can produce."
+            + " Retry). A device-local completion latch now exists (Phase 2.1) but attests only this device's"
+            + " vouchable entries and is invalidated by foreign writes — the proof for this surface remains"
+            + " `minimumEntryHashVersion >= 2` across the three corpora, read from the manifests on a device;"
+            + " it is not a number a census can produce."
         )
     )
 }

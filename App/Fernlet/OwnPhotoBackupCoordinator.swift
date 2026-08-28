@@ -93,6 +93,26 @@ final class OwnPhotoBackupCoordinator {
     private let cloudFactory: (() -> CloudKitDataService)?
     /// Backs the photo-namespaced rollback high-water marks; tests inject an isolated suite.
     private let defaults: UserDefaults
+    /// In-memory teardown counter, incremented as the FIRST statement of ``tearDownForDeleteAll()``.
+    /// `synchronizeFullyVerified` snapshots it before its migration run and its pass closure
+    /// re-checks it per funded pass, so a delete-all that lands between funded passes turns every
+    /// remaining pass into a no-op instead of re-uploading — and re-latching over — a backup the
+    /// user just destroyed (the delete-all-writers resurrection family). Session state only: a
+    /// crash mid-run leaves nothing latched, which is the safe direction.
+    private var teardownEpoch = 0
+    /// Whether a coordinator pass is currently in flight. `synchronizeFullyVerified` refuses to
+    /// overlap it: the reconcile's open-before/write-after shape is a last-writer-wins race
+    /// between devices, and the same device must never race itself (the Retry button already
+    /// disables in flight — this is the same rule below the UI, covering the launch-ambient pass).
+    private var passInFlight = false
+    /// The §C4 session verdict of the LAST `synchronizeFullyVerified` run: it completed blocked
+    /// with nothing wrong on THIS device — every corpus committed and examined, nothing unreadable,
+    /// nothing left to heal — and only a carried-forward foreign legacy entry (an observed manifest
+    /// minimum of 1) holding the latch open. `FernletStore` re-reads it into the Privacy & Data
+    /// copy, because Retry structurally cannot clear that state and offering it anyway would be a
+    /// treadmill. Cleared by any other wrapper outcome and by teardown; never persisted — one tap
+    /// re-derives it.
+    private(set) var lastFullPassBlockedOnlyByOtherDevices = false
 
     init(
         host: any OwnPhotoBackupContext,
@@ -118,7 +138,13 @@ final class OwnPhotoBackupCoordinator {
     /// timeline-less set of body photos would restore as invisible bytes, and uploading an EMPTY
     /// index over a good one would destroy the dates and captions.
     private struct CorpusAccess {
-        let ids: () -> [UUID]
+        /// The corpus's local id set, or **nil when the store could not enumerate it** (a directory
+        /// that exists but cannot be listed). Nil is a distinct fact from empty: an unknown number
+        /// of files is not the same as none, and a reconcile fed `[]` by an unlistable directory
+        /// would carry everything forward unread — and, with a non-empty prunable set, prune this
+        /// device's own committed entries while their files sit intact on disk. The caller maps
+        /// nil to an indeterminate (skipped, uncommitted) corpus.
+        let ids: () -> [UUID]?
         let plaintext: (UUID) -> Data?
         let write: (UUID, Data) -> Bool
         let isEmpty: () -> Bool
@@ -170,12 +196,30 @@ final class OwnPhotoBackupCoordinator {
         )
     }
 
+    /// `MealPhotoStore.storedPhotoIDs()` maps an unlistable directory to `[]`, which
+    /// `isEmptyForRestore()` deliberately reads as NON-empty — so without this probe the reconcile
+    /// would run over an empty id view of a corpus that holds files. Re-probes the same way
+    /// `isEmptyForRestore` does: directory absent → `[]` (honestly empty); present but unlistable
+    /// → nil (the fail-closed enumeration-failure signal `CorpusAccess.ids` carries).
+    private static func listableStoredIDs(of store: MealPhotoStore, directory: URL) -> [UUID]? {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return [] }
+        guard (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) != nil else {
+            return nil
+        }
+        return store.storedPhotoIDs()
+    }
+
     private func access(for corpus: SealedPhotoCorpus) -> CorpusAccess {
         switch corpus {
         case .meal, .recipe:
             let store = mealStore(recipe: corpus == .recipe)
+            let directory = corpus == .recipe
+                ? OwnPhotoCorpusLayout.recipePhotosDirectory(in: documentsDirectory)
+                : OwnPhotoCorpusLayout.mealPhotosDirectory(in: documentsDirectory)
             return CorpusAccess(
-                ids: { store.storedPhotoIDs() },
+                ids: { Self.listableStoredIDs(of: store, directory: directory) },
                 plaintext: { store.imageData(for: $0) },
                 write: { store.restoreSealedPhoto($1, forID: $0) },
                 isEmpty: { store.isEmptyForRestore() },
@@ -189,6 +233,8 @@ final class OwnPhotoBackupCoordinator {
             return CorpusAccess(
                 // Driven from the INDEX, not the directory: the index is the user-visible timeline,
                 // and a byte file it does not name is an orphan nothing would render after a restore.
+                // Never nil — this corpus's enumeration failure is an unreadable index, which the
+                // sidecar check below already turns into a blocking skip.
                 ids: { store.records().map(\.id) },
                 plaintext: { store.imageData(for: $0) },
                 write: { store.restoreSealedPhoto($1, forID: $0) },
@@ -265,8 +311,12 @@ final class OwnPhotoBackupCoordinator {
                 return false
             }
             // Enabling is a FULL pass: every photo's bytes are read and hashed, so the first upload
-            // is complete rather than id-set-shaped.
-            let pass = await synchronize(preferenceOverride: true, fullVerification: true)
+            // is complete rather than id-set-shaped. Routed through the Phase 2.1 migration
+            // wrapper, whose merge semantics keep this contract exactly the pre-2.1 single-pass
+            // bar: "some pass this run committed with no upload failure" passes the enable, and a
+            // transient CONFIRMING-pass failure never vetoes a committed healing pass (which would
+            // snap the toggle off over a committed backup).
+            let pass = await synchronizeFullyVerified(preferenceOverride: true)
             return !pass.uploadFailed
         }
         return await tearDownForDeleteAll()
@@ -287,6 +337,11 @@ final class OwnPhotoBackupCoordinator {
         /// Non-zero means the pass committed but is NOT clean: those photos may be missing from
         /// the backup or stale in it, and only a pass that reads every byte can say which.
         var verifiedUnreadable: Int?
+        /// The Phase 2.1 per-corpus format verdicts, or nil when this pass has none: populated
+        /// ONLY by full-verification passes (the `verifiedUnreadable` precedent — an ambient pass
+        /// reads almost nothing, so it has no verdict), and nil for a pass that never ran at all
+        /// (preference off / DEBUG skip / teardown-epoch guard).
+        var corpusVerdicts: [SealedPhotoCorpusFormatVerdict]?
     }
 
     /// The launch/adopt seam: restore anything this device is missing, then upload anything the
@@ -322,9 +377,18 @@ final class OwnPhotoBackupCoordinator {
         let prefs = StoragePreferencesStore.currentPreferences()
         guard preferenceOverride || prefs.sealedBackupOwnPhotosEnabled else { return pass }
 
+        // Marks a coordinator pass as in flight for `synchronizeFullyVerified`'s guard — the
+        // migration wrapper must never overlap the launch-ambient pass in the manifest's
+        // last-writer-wins race. Owned only when this call set it, so the wrapper's own funded
+        // passes (which run under ITS flag) do not clear it mid-run.
+        let ownsInFlightFlag = !passInFlight
+        if ownsInFlightFlag { passInFlight = true }
+        defer { if ownsInFlightFlag { passInFlight = false } }
+
         if fullVerification { pass.verifiedUnreadable = 0 }
         var restoredTotal = 0
         var attention: SealedBackupRestoreOutcome?
+        var verdicts: [SealedPhotoCorpusFormatVerdict] = []
         for corpus in SealedPhotoCorpus.allCases {
             let result = await synchronize(corpus: corpus, fullVerification: fullVerification)
             if case .restored(let count) = result.outcome { restoredTotal += count }
@@ -334,7 +398,20 @@ final class OwnPhotoBackupCoordinator {
             if result.uploadFailed { pass.uploadFailed = true }
             if !result.committed { pass.routeCommitted = false }
             if fullVerification { pass.verifiedUnreadable = (pass.verifiedUnreadable ?? 0) + result.unreadable }
+            // Only a full pass has format evidence worth a verdict; an ambient pass reads almost
+            // nothing, and a verdict built from it would score "never looked" as an answer.
+            if fullVerification {
+                verdicts.append(SealedPhotoCorpusFormatVerdict(
+                    corpus: corpus,
+                    committed: result.committed,
+                    examined: result.examined,
+                    observedMinima: result.observedMinima,
+                    unreadable: result.unreadable,
+                    healedEntries: result.healedEntries
+                ))
+            }
         }
+        if fullVerification { pass.corpusVerdicts = verdicts }
         host.recordOwnPhotoBackupOutcome(
             attention ?? (restoredTotal > 0 ? .restored(restoredTotal) : .nothingToRestore)
         )
@@ -351,6 +428,132 @@ final class OwnPhotoBackupCoordinator {
         return pass
     }
 
+    /// The user-visible full pass, routed through the Phase 2.1 format-migration loop while its
+    /// latch is open. Latch complete → one plain full pass (the latch never eats the user's
+    /// verification). Latch open → the same tap funds up to
+    /// `SealedPhotoBackupFormatMigrator.maxMigrationPasses` full passes: one that heals, one that
+    /// confirms the heal by read-back and latches.
+    ///
+    /// MERGE SEMANTICS (explicit — never "last pass wins"): the confirming pass exists only for
+    /// the latch policy, so its transient failure must never un-prove a healing pass that
+    /// committed. The returned `PassResult` is the LAST pass with `!uploadFailed && routeCommitted`
+    /// when one exists, else the last pass — so the enable decision reflects "some pass this run
+    /// committed with no upload failure", while a run in which every pass failed still reports the
+    /// failure. Because every underlying `synchronize` writes host state + the commit ledger per
+    /// pass, this wrapper RE-RECORDS after the loop from the merged view: the commit ledger from
+    /// "did ANY pass commit" (a confirming-pass blip must not unsatisfy the binding gate a
+    /// committed heal just satisfied — within one run; across runs the ledger stays per-pass
+    /// re-derived as its doc demands), and the host's upload-failed / verified-unreadable facts
+    /// from the effective pass — the banner never asserts "your photos may not be in iCloud" about
+    /// photos a pass this run committed. A confirming-pass failure maps only to "latch blocked
+    /// (indeterminate)", never to an upload-failure verdict.
+    ///
+    /// Invoked from `setEnabled(true)` (with `preferenceOverride: true`) and from
+    /// `FernletStore.restoreSealedBackupsIfNeeded(userInitiated: true)`. Never from launch-ambient
+    /// code — owner decision D3: no silent whole-library decrypt.
+    func synchronizeFullyVerified(preferenceOverride: Bool = false) async -> PassResult {
+        // One pass-run at a time per coordinator (see `passInFlight`): a refused call is a no-op,
+        // never a queued one — the tap that is already running covers it.
+        guard !passInFlight else {
+            FernletAuditLog.log("sealedPhoto.hashMigration.refusedPassInFlight")
+            return PassResult()
+        }
+        passInFlight = true
+        defer { passInFlight = false }
+        let latch = SealedPhotoBackupMigrationLatch(defaults: defaults)
+        guard !latch.isComplete else {
+            // The migration has done its part on this device; the user's tap still buys the real
+            // full-verification pass it always did (pinned: the latch never eats the verification).
+            lastFullPassBlockedOnlyByOtherDevices = false
+            return await synchronize(preferenceOverride: preferenceOverride, fullVerification: true)
+        }
+        let epoch = teardownEpoch
+        let migrator = SealedPhotoBackupFormatMigrator(latch: latch) {
+            // The between-pass teardown guard: a delete-all that landed since this run started
+            // turns every remaining funded pass into a no-op (nil verdicts → never clean, no
+            // progress) instead of re-uploading the backup the user just destroyed.
+            guard self.teardownEpoch == epoch else { return PassResult() }
+            return await self.synchronize(preferenceOverride: preferenceOverride, fullVerification: true)
+        }
+        let complete = await migrator.run()
+        guard teardownEpoch == epoch else {
+            // Teardown moved under the run. Reset covers the narrow interleave between a clean
+            // pass's return and `markComplete`; the merge re-records below are SKIPPED so
+            // teardown's own `committed: false` record stands.
+            latch.reset()
+            lastFullPassBlockedOnlyByOtherDevices = false
+            return PassResult()
+        }
+        let passes = migrator.underlyingPasses
+        // The latch guard above means the loop ran at least one pass.
+        assert(!passes.isEmpty, "the latch-open branch always funds at least one pass")
+        // Only passes that actually RAN (a full pass always carries verdicts) are evidence. A
+        // no-op shape (preference off / DEBUG skip) carries `PassResult()`'s defaults —
+        // `routeCommitted == true` among them — so letting it into the merge would re-record a
+        // committed route off a pass that did nothing, and the binding gate consults that ledger.
+        let ranPasses = passes.filter { $0.corpusVerdicts != nil }
+        let effective = ranPasses.last(where: { !$0.uploadFailed && $0.routeCommitted })
+            ?? ranPasses.last
+            ?? passes.last
+            ?? PassResult()
+        let lastTally = SealedPhotoBackupMigrationPassResult(pass: passes.last ?? PassResult())
+        logMigrationRunOutcome(complete: complete, lastTally: lastTally, passCount: passes.count)
+        lastFullPassBlockedOnlyByOtherDevices = !complete && isBlockedOnlyByForeignEntries(lastTally)
+        // The merge re-records (see MERGE SEMANTICS above). Skipped entirely when nothing ran —
+        // a no-op records nothing, exactly as a lone no-op `synchronize` records nothing.
+        if !ranPasses.isEmpty {
+            OwnPhotoEscrowCommitLedger(defaults: defaults).record(
+                committed: ranPasses.contains { $0.routeCommitted }
+            )
+            host.recordOwnPhotoBackupUploadFailed(effective.uploadFailed)
+            host.recordOwnPhotoBackupVerifiedUnreadable(effective.verifiedUnreadable ?? 0)
+        }
+        return effective
+    }
+
+    /// Whether a blocked tally has the §C4 "nothing wrong on this device" shape: committed and
+    /// examined everywhere, nothing unreadable, nothing left to heal, no failed leg — and at least
+    /// one observed manifest minimum still legacy, i.e. a carried-forward entry only its owning
+    /// device can heal. That state must not render as an endlessly-retryable pending check.
+    private func isBlockedOnlyByForeignEntries(_ tally: SealedPhotoBackupMigrationPassResult) -> Bool {
+        guard let verdicts = tally.verdicts, !tally.uploadFailed, tally.routeCommitted else { return false }
+        let thisDeviceClean = verdicts.allSatisfy {
+            $0.committed && $0.examined && $0.unreadable == 0 && $0.healedEntries == 0
+        }
+        let sawForeignLegacy = verdicts.contains { verdict in
+            verdict.observedMinima.contains { $0 < SealedPhotoManifest.Entry.currentHashVersion }
+        }
+        return thisDeviceClean && sawForeignLegacy
+    }
+
+    /// Audit-trail line for one wrapper run (nothing-silent): `latched` on success, else `blocked`
+    /// with the reason buckets a diagnosing reader needs — how many photos were unreadable, how
+    /// many corpora were never examined or never committed, whether any observed manifest minimum
+    /// is still legacy, and whether the last pass made forward progress.
+    private func logMigrationRunOutcome(
+        complete: Bool,
+        lastTally: SealedPhotoBackupMigrationPassResult,
+        passCount: Int
+    ) {
+        guard !complete else {
+            FernletAuditLog.log("sealedPhoto.hashMigration.latched", context: [
+                "passes": String(passCount)
+            ])
+            return
+        }
+        let verdicts = lastTally.verdicts ?? []
+        FernletAuditLog.log("sealedPhoto.hashMigration.blocked", context: [
+            "passes": String(passCount),
+            "unreadable": String(verdicts.reduce(0) { $0 + $1.unreadable }),
+            "notExamined": String(verdicts.filter { !$0.examined }.count),
+            "indeterminateCorpora": String(verdicts.filter { !$0.committed }.count),
+            "minimumBelowTarget": String(verdicts.filter { verdict in
+                verdict.observedMinima.contains { $0 < SealedPhotoManifest.Entry.currentHashVersion }
+            }.count),
+            "noProgress": String(!lastTally.madeForwardProgress)
+        ])
+    }
+
     /// What one corpus's pass did.
     private struct CorpusResult {
         var outcome: SealedBackupRestoreOutcome = .nothingToRestore
@@ -363,6 +566,16 @@ final class OwnPhotoBackupCoordinator {
         /// manifest still committed, but this device could not vouch for these — their existing
         /// cloud entries were kept, and any without one never entered the backup at all.
         var unreadable = 0
+        /// A leg of this pass reached a manifest read and got an answer — the restore leg's
+        /// `service.restore` (nil = proof no manifest exists) or the reconcile's `openManifest`.
+        /// False = never looked, which blocks the migration latch (`SealedPhotoCorpusFormatVerdict`).
+        var examined = false
+        /// Every `minimumEntryHashVersion` either leg observed for this corpus, in observation
+        /// order (restore open, reconcile open, reconcile commit).
+        var observedMinima: [Int] = []
+        /// Entries whose recorded hash version rose 1 → 2 this pass
+        /// (`SealedPhotoUploadSummary.healedEntries`).
+        var healedEntries = 0
     }
 
     /// One corpus: restore into it when it needs restoring, then upload from it when it has
@@ -398,11 +611,17 @@ final class OwnPhotoBackupCoordinator {
             ? !uploadLedger.hasUploaded(for: corpus)
             : access.holdsOnlyUnopenableFiles()
         if needsFullRestore || !repairIDs.isEmpty {
-            result.outcome = await restore(
+            let restored = await restore(
                 corpus: corpus,
                 access: access,
                 limitedTo: needsFullRestore ? nil : repairIDs
             )
+            result.outcome = restored.outcome
+            // The restore leg is the only honest source of "no committed manifest exists" — a nil
+            // `service.restore` return — so its examined/observed facts feed the format verdict
+            // even when the outcome below stops the corpus.
+            if restored.examined { result.examined = true }
+            observeManifestMinimum(restored.observedMinimum, corpus: corpus, into: &result)
             switch result.outcome {
             case .notRecognized, .rolledBack, .deferredKeyNotSynced, .deferredTransient, .deferredLocked:
                 // Nothing here is fixable by uploading, and a corpus we could not fully restore must
@@ -423,16 +642,80 @@ final class OwnPhotoBackupCoordinator {
         // An empty corpus WITH prunable ids is the deletion case and must run: those are ids this
         // device itself put in the manifest and has since deleted locally, and the reconcile's
         // union still carries every other device's entry forward untouched. Once pruned the ledger
-        // holds an empty (but present) list, so this runs exactly once per emptying.
-        guard !access.isEmpty() || !uploadLedger.uploadedIDs(for: corpus).isEmpty else { return result }
-        let upload = await reconcile(corpus: corpus, access: access, fullVerification: fullVerification)
+        // holds an empty (but present) list, so this runs exactly once per emptying on AMBIENT
+        // passes.
+        //
+        // On FULL-verification passes an emptied-after-upload corpus (present-but-empty ledger) IS
+        // admitted: its `ids = []` / empty-prunable reconcile is provably inert — `sealChangedPhotos`
+        // over nothing returns nothing, the carry-forward preserves every committed entry verbatim,
+        // and the commit re-propagates the marker — and running it is what keeps the corpus's
+        // manifest EXAMINED, so the migration latch can set or block on the truth instead of
+        // treadmilling on a corpus this device stopped looking at forever.
+        guard !access.isEmpty() || !uploadLedger.uploadedIDs(for: corpus).isEmpty
+            || (fullVerification && uploadLedger.hasUploaded(for: corpus)) else { return result }
+        // The enumeration-failure signal (nil = the directory exists but cannot be listed): skip
+        // the reconcile rather than feed it an empty id view — which would carry everything
+        // forward unread AND, with a non-empty prunable set, prune this device's own committed
+        // entries while their files sit intact-but-unlistable on disk. Indeterminate, like
+        // `reconcileSkippedUnreadableIndex`: uncommitted, unexamined, retried next pass.
+        guard let localIDs = access.ids() else {
+            FernletAuditLog.log("sealedPhoto.reconcileSkippedUnlistableCorpus", context: ["corpus": corpus.rawValue])
+            result.uploadFailed = true
+            result.committed = false
+            return result
+        }
+        let upload = await reconcile(
+            corpus: corpus,
+            ids: localIDs,
+            access: access,
+            fullVerification: fullVerification
+        )
         result.uploadFailed = !upload.committed
         result.committed = upload.committed
-        result.unreadable = upload.unreadable
+        if let summary = upload.summary {
+            // A returned summary means the reconcile opened the manifest slot and committed —
+            // the reconcile leg's half of the manifest observation.
+            result.unreadable = summary.unreadable
+            result.healedEntries = summary.healedEntries
+            result.examined = true
+            observeManifestMinimum(summary.openedManifestMinimumHashVersion, corpus: corpus, into: &result)
+            observeManifestMinimum(summary.committedManifestMinimumHashVersion, corpus: corpus, into: &result)
+        }
         return result
     }
 
+    /// Threads one manifest-minimum observation into the corpus result AND runs the Phase 2.1
+    /// latch invalidation: any pass — ambient included — that observes a manifest whose minimum is
+    /// still the legacy value has just seen a foreign (or pre-marker) write the latch's proof did
+    /// not cover, so the latch resets. Unconditional reset (a no-op while the latch is closed,
+    /// which is every pass of the migrator's own healing run); the audit line fires only when a
+    /// set latch was actually invalidated, so the trail never claims an invalidation that did not
+    /// happen. Nil (no manifest observed at this point) records nothing.
+    private func observeManifestMinimum(
+        _ minimum: Int?,
+        corpus: SealedPhotoCorpus,
+        into result: inout CorpusResult
+    ) {
+        guard let minimum else { return }
+        result.observedMinima.append(minimum)
+        guard minimum == SealedPhotoManifest.Entry.legacyHashVersion else { return }
+        let latch = SealedPhotoBackupMigrationLatch(defaults: defaults)
+        if latch.isComplete {
+            FernletAuditLog.log("sealedPhoto.hashMigration.invalidatedByForeignWrite", context: [
+                "corpus": corpus.rawValue,
+                "minimum": String(minimum)
+            ])
+        }
+        latch.reset()
+    }
+
     /// Pulls a corpus down from the escrow backup.
+    ///
+    /// Returns the outcome plus the leg's Phase 2.1 manifest observation: whether the manifest
+    /// slot was actually reached (`service.restore` returning nil is the one honest source of "no
+    /// committed manifest exists"), and the opened manifest's minimum when there was one. A leg
+    /// that failed before the manifest read reports `examined: false` — absence of evidence,
+    /// which the migration latch treats as blocking.
     ///
     /// - Parameter limitedTo: When non-nil, only these manifest ids are fetched — the REPAIR pass
     ///   for photos a previous restore could not land. Nil restores the whole committed set.
@@ -440,16 +723,16 @@ final class OwnPhotoBackupCoordinator {
         corpus: SealedPhotoCorpus,
         access: CorpusAccess,
         limitedTo: Set<UUID>? = nil
-    ) async -> SealedBackupRestoreOutcome {
+    ) async -> (outcome: SealedBackupRestoreOutcome, examined: Bool, observedMinimum: Int?) {
         guard let prepared = makeIdentity(escrowMode: .forOpening) else {
             FernletAuditLog.log("sealedPhoto.restoreNotProvisioned", context: ["corpus": corpus.rawValue])
-            return .deferredTransient
+            return (.deferredTransient, examined: false, observedMinimum: nil)
         }
         // The open path must never MINT an escrow key (WS-1): absence is the honest "iCloud Keychain
         // has not synced yet", retried next launch.
         guard prepared.escrowReady else {
             FernletAuditLog.log("sealedPhoto.restoreDeferredKeyNotSynced", context: ["corpus": corpus.rawValue])
-            return .deferredKeyNotSynced
+            return (.deferredKeyNotSynced, examined: false, observedMinimum: nil)
         }
         let service = makeService(identity: prepared.identity)
         let repairLedger = OwnPhotoRestoreRepairLedger(defaults: defaults)
@@ -460,9 +743,11 @@ final class OwnPhotoBackupCoordinator {
                 write: access.write
             ) else {
                 // No manifest at all: nothing was ever committed, so there is nothing left owed.
+                // Examined with no minimum — the vacuous evidence the migration latch accepts.
                 repairLedger.clear(corpus)
-                return .nothingToRestore
+                return (.nothingToRestore, examined: true, observedMinimum: nil)
             }
+            let observedMinimum = summary.manifestMinimumEntryHashVersion
             // The sidecar lands AFTER the bytes, and ONLY once some bytes have landed. An index that
             // named photos not yet on disk would render a timeline of missing pictures — and, worse,
             // writing it is what makes the progress corpus permanently "not empty", so a pass where
@@ -490,28 +775,42 @@ final class OwnPhotoBackupCoordinator {
                 // Some photos landed and some did not. Retryable rather than "restored": the missing
                 // bodies may appear once the rest of the account syncs, and saying "restored" would
                 // hide a partial recovery of exactly the data this route exists to protect.
-                return .deferredTransient
+                return (.deferredTransient, examined: true, observedMinimum: observedMinimum)
             }
             repairLedger.clear(corpus)
-            return summary.restored > 0 ? .restored(summary.restored) : .nothingToRestore
+            return (
+                summary.restored > 0 ? .restored(summary.restored) : .nothingToRestore,
+                examined: true,
+                observedMinimum: observedMinimum
+            )
         } catch {
-            return classify(error, corpus: corpus)
+            // A throw may have happened before OR after the manifest read (a stale-generation
+            // rejection opens it first), and the summary that would say which never came back —
+            // so this leg conservatively reports "never examined", which blocks rather than
+            // vouches.
+            return (classify(error, corpus: corpus), examined: false, observedMinimum: nil)
         }
     }
 
     /// Uploads what this device holds and commits the manifest. Returns whether the commit
     /// succeeded — the caller turns a `false` into a visible, retryable status AND withholds the
-    /// irreversible key binding, because an uncommitted route is not a route — plus the summary's
-    /// `unreadable` count, so a committed-but-not-clean pass (photos this device could not read,
-    /// whose cloud entries were kept or never made) stops being silently discarded.
+    /// irreversible key binding, because an uncommitted route is not a route — plus the whole
+    /// upload summary, so a committed-but-not-clean pass (unreadable photos, whose cloud entries
+    /// were kept or never made) and the Phase 2.1 bookkeeping (healed entries, both manifest
+    /// minima) stop being silently discarded. A nil summary means the reconcile never committed
+    /// (skipped or thrown), so nothing about the manifest was proven.
+    ///
+    /// - Parameter ids: The corpus's local id set, resolved by the caller — which is also where
+    ///   an unlistable directory (nil ids) is turned into an indeterminate skip before this runs.
     private func reconcile(
         corpus: SealedPhotoCorpus,
+        ids: [UUID],
         access: CorpusAccess,
         fullVerification: Bool
-    ) async -> (committed: Bool, unreadable: Int) {
+    ) async -> (committed: Bool, summary: SealedPhotoUploadSummary?) {
         guard let prepared = makeIdentity(escrowMode: .forSealing) else {
             FernletAuditLog.log("sealedPhoto.reconcileNotProvisioned", context: ["corpus": corpus.rawValue])
-            return (committed: false, unreadable: 0)
+            return (committed: false, summary: nil)
         }
         var sidecar: Data?
         if access.carriesSidecar {
@@ -520,17 +819,16 @@ final class OwnPhotoBackupCoordinator {
                 // invisible timeline, and uploading an EMPTY index would destroy the dates and
                 // captions in the cloud copy. Skip the corpus and retry next launch.
                 FernletAuditLog.log("sealedPhoto.reconcileSkippedUnreadableIndex", context: ["corpus": corpus.rawValue])
-                return (committed: false, unreadable: 0)
+                return (committed: false, summary: nil)
             }
             sidecar = payload
         }
         let service = makeService(identity: prepared.identity)
         let ledger = OwnPhotoUploadLedger(defaults: defaults)
-        let localIDs = access.ids()
         do {
             let summary = try await service.reconcile(
                 corpus: corpus,
-                ids: localIDs,
+                ids: ids,
                 sidecar: sidecar,
                 verifyingContentHashes: fullVerification,
                 // Prune scope: only ids this device uploaded before. Anything else in the manifest
@@ -541,11 +839,11 @@ final class OwnPhotoBackupCoordinator {
             )
             // Recorded only after the manifest commit succeeded: a ledger written ahead of a failed
             // upload would claim ownership of ids that never reached the cloud.
-            ledger.recordUploaded(localIDs, for: corpus)
-            return (committed: true, unreadable: summary.unreadable)
+            ledger.recordUploaded(ids, for: corpus)
+            return (committed: true, summary: summary)
         } catch {
             FernletAuditLog.log("sealedPhoto.reconcileFailed", context: ["corpus": corpus.rawValue])
-            return (committed: false, unreadable: 0)
+            return (committed: false, summary: nil)
         }
     }
 
@@ -585,6 +883,12 @@ final class OwnPhotoBackupCoordinator {
     /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7): "every corpus cleared" is a
     ///   success/failure signal the delete-all dialog reports to the user verbatim.
     func tearDownForDeleteAll() async -> Bool {
+        // FIRST, before any await: invalidate every funded migration pass still in flight (see
+        // `teardownEpoch`) — a heal that lands after this line must not re-upload, or re-latch
+        // over, the backup this call is deleting. The session verdict goes with it: a "blocked by
+        // your other device" line about a route that no longer exists is not a status.
+        teardownEpoch += 1
+        lastFullPassBlockedOnlyByOtherDevices = false
         let cloud = makeCloudService()
         var allCleared = true
         for corpus in SealedPhotoCorpus.allCases {
@@ -609,6 +913,12 @@ final class OwnPhotoBackupCoordinator {
         // does not un-bind an already-bound key — that is one-way by design — it only stops a
         // torn-down route from satisfying the gate for a device that has not bound yet.)
         OwnPhotoEscrowCommitLedger(defaults: defaults).record(committed: false)
+        // ...and the hash-version migration latch: the manifests it makes a claim about die with
+        // this call, so keeping it would carry a proof about destroyed objects onto a future
+        // re-enable's brand-new lineage. (The deliberate mirror-image of
+        // `ownPhotoKeyMigrationComplete`'s kept row, whose subject — the re-sealed local files —
+        // survives the wipe. Docs/PrivacyWipeCoverage.md + PersistedSurfaceWipeBoundaryTests.)
+        SealedPhotoBackupMigrationLatch(defaults: defaults).reset()
         return allCleared
     }
 }
