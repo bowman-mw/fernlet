@@ -83,6 +83,13 @@ extension FernletStore {
         // the seed. Restoring the shipped default makes the name a function of the seed.
         settings.workoutLocations = [WorkoutLocation.fullGym]
         settings.activeWorkoutLocationID = nil
+        // And the written goals, for the third time the same way. `MoveGoalSummary.text` renders
+        // "Wellness" alone at zero goals but "Wellness · # goals" once any exist, and the longer
+        // string clips — so a suite that walks onboarding's "Plan your goals" step leaves the Move
+        // header permanently different for every appearance run after it on that simulator. The
+        // seed writes no goals, so empty IS its state; saying so makes it true on the second run
+        // as well as the first. Only ever reached under `FERNLET_UI_TEST_SEED_DEMO`.
+        goals = []
 
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 

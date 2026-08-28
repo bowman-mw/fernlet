@@ -1048,8 +1048,12 @@ extension UXScreenProbe {
             "Text clipped — “NOTE (OPTIONAL)” (48)",
             "Text clipped — “restorative, woke easy” (48)",
         ],
+        // FIXED, NOT DRIFTED (2026-08-27): `Label not human-readable — “face.smiling”` is gone
+        // because `SignalDetailRow` (HomeView.swift) now hides its decorative glyph from
+        // accessibility. This sheet and `Settings · Signals` render the same row, which is why one
+        // fix retires a finding on two screens; the other was never baselined. Deleted in the same
+        // commit as the fix, per this map's rule.
         "Sheet · Trends": [
-            "Label not human-readable — “face.smiling” id=face.smiling (43)",
             "Text clipped",
         ],
         "Sheet · Water": [
