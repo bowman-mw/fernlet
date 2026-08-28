@@ -1399,7 +1399,13 @@ struct ContentView: View {
         // Cycle notes written while the app was locked live in a file, not in the rows above. The lock
         // service owns the buffer, so the store can only reach it through a hook.
         store.pendingNarrativeBufferPurgeHook = { [lockService] in
-            (try? lockService.purgePendingNarratives()) != nil
+            // The Phase 2.4 format-migration latch's subject IS the file the purge below removes,
+            // and the funnel tolerates a purge failure (the `(try? …) != nil` feeds the outcome) —
+            // so the latch is cleared FIRST, unconditionally: a kept latch would keep claiming
+            // clean over a file the purge failed to remove. The next launch's census re-proves
+            // cheaply (post-wipe it reads `.absent`, an earned zero, and re-latches).
+            PendingNarrativeBufferFormatMigrator.latch().reset()
+            return (try? lockService.purgePendingNarratives()) != nil
         }
         // The residue half of the wipe: the row hooks above empty the sealed store, this destroys
         // and re-creates the FILE they lived in so the freed pages and `-wal` frames go with it.

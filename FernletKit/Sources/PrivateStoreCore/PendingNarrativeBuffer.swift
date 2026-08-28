@@ -26,7 +26,11 @@ import FernletFoundation
 /// The `…Bytes` fields hold plaintext encodings (UTF-8 note text, JSON-encoded symptom values):
 /// at-rest protection comes from the buffer's whole-file ChaChaPoly seal, not from the fields
 /// themselves.
-public struct PendingNarrativePayload: Codable {
+///
+/// `Equatable` (synthesized — every stored property already is) exists for the Phase 2.4 format
+/// migrator's read-back verification: a converted file counts as converted only after the
+/// re-sealed bytes decode back to exactly the entries that were opened.
+public struct PendingNarrativePayload: Codable, Equatable {
     /// The HealthKit external-UUID string tying this narrative to its saved cycle sample.
     public let hkExternalUUID: String
     /// The entry's calendar day key.
@@ -185,7 +189,19 @@ public final class PendingNarrativeBuffer {
         let encrypted = try Data(contentsOf: url)
         guard !encrypted.isEmpty else { return [] }
 
-        let key = try bufferKey()
+        return try decodeEntries(from: encrypted, using: bufferKey())
+    }
+
+    /// Opens and decodes one whole-file blob under `key` — ``loadEntries()``'s body from the
+    /// `FNB2`-prefix check down, both branches included.
+    ///
+    /// Split out (Phase 2.4) so ``convertLegacyFileToCurrentFormat()`` can pin ONE `SymmetricKey`
+    /// value through its entire convert instead of re-fetching between open and seal: every
+    /// `bufferKey()` call is a separate keychain read that MINTS on `nil`, and `KeychainItem.load`
+    /// collapses transient failures into `nil` — so a mid-convert re-fetch could delete-then-replace
+    /// the only copy of the real key. The legacy branch below is the single legacy read Phase 3
+    /// deletes.
+    private func decodeEntries(from encrypted: Data, using key: SymmetricKey) throws -> [PendingNarrativePayload] {
         let isV2 = encrypted.starts(with: Self.sealedFormatV2)
         let combined = isV2 ? encrypted.dropFirst(Self.sealedFormatV2.count) : encrypted
         let sealedBox = try ChaChaPoly.SealedBox(combined: combined)
@@ -202,11 +218,18 @@ public final class PendingNarrativeBuffer {
         return try JSONDecoder().decode([PendingNarrativePayload].self, from: plaintext)
     }
 
-    /// JSON-encodes and ChaChaPoly-seals the entries, writes them atomically, then best-effort
-    /// re-applies backup exclusion and complete file protection to the fresh file.
+    /// JSON-encodes and ChaChaPoly-seals the entries under the scope's buffer key, fetching (and on
+    /// first use minting) that key via ``bufferKey()``.
     private func saveEntries(_ entries: [PendingNarrativePayload]) throws {
+        try saveEntries(entries, using: bufferKey())
+    }
+
+    /// JSON-encodes and ChaChaPoly-seals the entries under `key`, writes them atomically, then
+    /// best-effort re-applies backup exclusion and complete file protection to the fresh file.
+    /// Key-parameterized for the same reason as ``decodeEntries(from:using:)``: the Phase 2.4
+    /// convert must seal under exactly the key it opened with.
+    private func saveEntries(_ entries: [PendingNarrativePayload], using key: SymmetricKey) throws {
         let plaintext = try JSONEncoder().encode(entries)
-        let key = try bufferKey()
         let sealedBox = try ChaChaPoly.seal(
             plaintext,
             using: key,
@@ -237,6 +260,89 @@ public final class PendingNarrativeBuffer {
         } catch {
             FernletAuditLog.log("buffer.fileProtectionFailed", context: ["error": "\(error)"])
         }
+    }
+
+    // MARK: - Format migration (crypto-standardization Phase 2.4)
+
+    /// The terminal state of one ``convertLegacyFileToCurrentFormat()`` attempt — module-internal
+    /// plumbing between the buffer and ``PendingNarrativeBufferFormatMigrator``'s pass tally.
+    internal enum LegacyConversionOutcome {
+        /// Re-sealed v2, read back, and verified equal to the opened entries.
+        case converted
+        /// The bytes already carry `FNB2` (or the file emptied out mid-pass) — nothing to convert.
+        case alreadyCurrent
+        /// The raw read threw (file protection mid-pass) — indeterminate, never "corrupt".
+        case unreadable
+        /// The buffer key could not be loaded through the non-minting read — indeterminate,
+        /// never "corrupt": `loadBufferKey()`'s `nil` cannot distinguish a locked keychain from a
+        /// genuinely absent row.
+        case keyUnavailable
+        /// Bytes read, key in hand, and the shipping reader's own paths reject them — the
+        /// unconvertible bucket.
+        case openedUnderNeither
+        /// `saveEntries(_:using:)` threw; the original file is intact (`.atomic`).
+        case writeFailed
+        /// Wrote v2, but the verify read/open/compare failed. Blocks this pass only: the written
+        /// bytes were sealed under the pinned key this pass held, so the next launch classifies
+        /// the file `.v2Marked` by marker and latches census-only.
+        case readBackFailed
+    }
+
+    /// Re-seals a legacy-format buffer file into the current `FNB2`+AAD format, via the shipping
+    /// decode/seal halves — no second spelling of either crypto path exists — with ONE key value
+    /// pinned through the entire convert.
+    ///
+    /// The pinning is load-bearing, not style: after the single non-minting `loadBufferKey()`
+    /// guard, every open and seal takes that `SymmetricKey` as a parameter, so no line of the
+    /// convert can reach `bufferKey()` or `createAndStoreBufferKey()` — a transient keychain
+    /// misread mid-pass therefore cannot mint (a delete-then-add WRITE) over the only copy of the
+    /// real key. Ordering safety is the house model: the only overwrite is the atomic replace of
+    /// a file whose plaintext was fully recovered and is held in memory through read-back
+    /// verification; nothing here deletes, truncates, or purges — not even corrupt bytes, which
+    /// may really be "sealed under a key this device lost".
+    internal func convertLegacyFileToCurrentFormat() -> LegacyConversionOutcome {
+        // One raw read, classified honestly: a throw here cannot distinguish "read denied" from
+        // "opens under neither", so it must be caught BEFORE the open — the fail-closed
+        // unreadable-vs-unopenable split.
+        let raw: Data
+        do {
+            raw = try Data(contentsOf: bufferFileURL)
+        } catch {
+            return .unreadable
+        }
+        // Free defensive re-check; the census take and this call run synchronously on one actor
+        // with no suspension point between them, so divergence is not actually reachable.
+        guard !raw.isEmpty, !raw.starts(with: Self.sealedFormatV2) else { return .alreadyCurrent }
+
+        // THE one key fetch of the entire convert. Never `bufferKey()` — that mints on absence.
+        // `nil` is always indeterminate, never "corrupt": a locked pass retries next launch.
+        guard let key = loadBufferKey() else { return .keyUnavailable }
+
+        let entries: [PendingNarrativePayload]
+        do {
+            entries = try decodeEntries(from: raw, using: key)
+        } catch {
+            // Bytes read, key in hand, the reader's own paths reject them.
+            return .openedUnderNeither
+        }
+        do {
+            try saveEntries(entries, using: key)
+        } catch {
+            // `.atomic` guarantees the original file is intact.
+            return .writeFailed
+        }
+        // Read-back verification before "converted": the marker, then the shipping v2 branch
+        // (AAD-bound open under the same pinned key), then entry-for-entry equality.
+        do {
+            let readBackRaw = try Data(contentsOf: bufferFileURL)
+            guard readBackRaw.starts(with: Self.sealedFormatV2),
+                  try decodeEntries(from: readBackRaw, using: key) == entries else {
+                return .readBackFailed
+            }
+        } catch {
+            return .readBackFailed
+        }
+        return .converted
     }
 
     // MARK: - Buffer key management

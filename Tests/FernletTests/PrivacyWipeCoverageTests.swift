@@ -76,6 +76,13 @@ struct PrivacyWipeCoverageTests {
         "intimacyDataDeleteHook",
         "journalDataDeleteHook",
         "pendingNarrativeBufferPurgeHook",
+        // The Phase 2.4 buffer-format migration latch. Its own token beside the purge above,
+        // because the purge destroys the latch's entire subject — the buffer file — inside the
+        // same hook closure, and it tolerates failure, so a proof that predates the wipe must not
+        // outlive it. The token is the full call-chain spelling at the ContentView closure site
+        // (the `generationStore.reset` pattern: the type's static `latch()` then `.reset()`); the
+        // next launch's census re-proves cheaply (post-wipe: `.absent`, an earned zero).
+        "PendingNarrativeBufferFormatMigrator.latch().reset",
         // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
         // destroys and re-creates the FILE they lived in.
         "sealedStoreRebuildHook",

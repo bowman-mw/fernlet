@@ -16,6 +16,7 @@ import FernletPersistence
 import FoodCatalog
 import PrivateHealthStore
 import PrivateMediaStore
+import PrivateStoreCore
 import PeriodContextBridge
 import StoreCore
 import DiaryStore
@@ -5691,6 +5692,31 @@ final class FernletStore {
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
         migrateAndBindOwnPhotoKey()
         migrateHeartDropSidecarFormat()
+        migratePendingNarrativeBufferFormat()
+    }
+
+    /// Crypto-standardization Phase 2.4: re-seal the locked-note pending buffer from the
+    /// pre-`91c3956` bare-box format into `FNB2`+AAD, once per launch until proven complete.
+    ///
+    /// Runs on the BUFFER key — deliberately NOT behind the app lock or the period-visibility
+    /// gate (the buffer exists to accept writes while both are closed, and a migrator gated on
+    /// either would structurally never run for exactly the users still holding legacy bytes) —
+    /// and deliberately NOT detached, unlike the photo migrator above: `PendingNarrativeBuffer`
+    /// is a non-Sendable class with no internal locking whose production sibling instance
+    /// `FernletLockService` drives from the main actor, so a detached pass could interleave with
+    /// a locked-state `append` and lose the appended note. The migrator is `@MainActor` with an
+    /// isolated conformance, so copying the detached shape is a compile error, not a latent data
+    /// loss. Cost is bounded by the surface: latched → one UserDefaults bool; clean-unlatched →
+    /// one 4-byte read; converting → one decrypt+re-encrypt of a ≤ few-KB file, the same work as
+    /// the single locked-state `append` the buffer already funds on the main actor by shipped
+    /// design. Timing: the buffer key (`AfterFirstUnlock`) is available once the UI is up; a
+    /// pathological pre-first-unlock launch degrades to indeterminate and retries next launch.
+    private func migratePendingNarrativeBufferFormat() {
+        let complete = PendingNarrativeBufferFormatMigrator.standard().run()
+        if !complete {
+            // R7: the Bool is consumed; D3: the non-silent trace rides the audit ledger, not UI.
+            FernletAuditLog.log("buffer.formatMigrationIncomplete")
+        }
     }
 
     /// Crypto-standardization Phase 2.2: convert any `FSC1`-format heart-drop sidecar to `FSC2`,

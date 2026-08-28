@@ -198,6 +198,16 @@ struct PersistedSurfaceWipeBoundaryTests {
         // same case as `hashVersionMigrationComplete`'s cleared row (subject destroyed).
         "com.fernlet.heartdrop.sidecarFormatMigrationComplete":
             .cleared(token: "HeartDropSidecarMigrationLatch.resetForDeleteAll"),
+        // The Phase 2.4 pending-narrative-buffer format-migration latch
+        // (`PendingNarrativeBufferMigrationLatch`, one bit, no content). Cleared because the wipe
+        // destroys its subject — the buffer file — in the SAME closure
+        // (`pendingNarrativeBufferPurgeHook`), and the funnel tolerates a purge failure
+        // (`(try? …) != nil` feeds the outcome), so a KEPT latch would keep claiming clean over a
+        // file the purge failed to remove. Same case as `hashVersionMigrationComplete` and
+        // `sidecarFormatMigrationComplete` above (subject destroyed); contrast
+        // `ownPhotoKeyMigrationComplete`, kept because its subject survives.
+        "com.fernlet.private-store.pendingNarrativeBufferMigrationComplete":
+            .cleared(token: "PendingNarrativeBufferFormatMigrator.latch().reset"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
