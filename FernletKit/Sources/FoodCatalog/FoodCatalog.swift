@@ -221,7 +221,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             now: rankingNow
         )
         let ranked: [FoodItem]
-        if normal.isEmpty, context == .userTyped {
+        if normal.isEmpty, context == .userTyped,
+           mayRelaxOneToken(of: query, stripsStopwords: stripsStopwords) {
             ranked = FoodItemSearch.partialResults(
                 for: query,
                 in: partialIndex(for: query, stripsStopwords: stripsStopwords),
@@ -348,6 +349,46 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let candidates = source.candidates(forQuery: query, stripsStopwords: stripsStopwords)
             + (branded?.candidates(forQuery: query, stripsStopwords: stripsStopwords) ?? [])
         return FoodItemSearch.Index(foodItems: candidates + userItems)
+    }
+
+    /// Whether the leave-one-out fallback is allowed to run for `query` — it is, only when every
+    /// token in the query is a word this catalog actually carries somewhere.
+    ///
+    /// **The distinction this draws, and why it is the whole point.** Relaxing a token is a
+    /// zero-result aid for a word that is REAL but missing from a particular NAME: "plain" is
+    /// ordinary food vocabulary, and "Yogurt, Greek, nonfat" simply does not spell it, so dropping
+    /// it to find the yogurt helps. A word the catalog has never seen anywhere is a different
+    /// situation wearing the same shape. Relaxing THAT one makes the app quietly decide the user
+    /// mistyped, and answer a question they did not ask: type "apple zzznotfood" and get apples
+    /// back, with nothing on screen admitting that half the query was discarded.
+    ///
+    /// The honest answer there is the deterministic miss, because a food the catalog does not stock
+    /// is exactly the case the by-hand entry path exists for — and the seam that user-added
+    /// ingredients will hang off, which is why the miss has to survive rather than be papered over.
+    /// `FoodComposerSearchUITests.testEditedQueryMakesSettledRowsImmediatelyUntappable` is the
+    /// behavioural pin.
+    ///
+    /// Bounded like the fetch it guards: it runs only on the typed zero-result path, only when a
+    /// leave-one-out variant exists at all (2–3 tokens), and asks each source for a single row.
+    private func mayRelaxOneToken(of query: String, stripsStopwords: Bool) -> Bool {
+        guard !FoodItemSearch.partialQueryVariants(in: query, stripsStopwords: stripsStopwords).isEmpty
+        else { return false }
+        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
+        guard !tokens.isEmpty else { return false }
+        let branded = brandedSource
+        let user = userItems
+        return tokens.allSatisfy { token in
+            if !source.candidates(forQuery: token, stripsStopwords: stripsStopwords, limit: 1).isEmpty {
+                return true
+            }
+            if let branded,
+               !branded.candidates(forQuery: token, stripsStopwords: stripsStopwords, limit: 1).isEmpty {
+                return true
+            }
+            return user.contains {
+                FoodItemSearch.nameCarriesQuery($0.name, query: token, stripsStopwords: stripsStopwords)
+            }
+        }
     }
 
     /// Fetches only leave-one-out AND variants after normal retrieval produced no presented rows.

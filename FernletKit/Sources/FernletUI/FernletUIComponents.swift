@@ -1617,6 +1617,14 @@ public struct SheetSaveBar: View {
                     Color.mossFill.opacity(disabled ? 0.55 : 1),
                     in: RoundedRectangle(cornerRadius: 16)
                 )
+                // The pill is 52pt tall and draws as one target, but `.buttonStyle(.plain)` leaves
+                // the hit region on the LABEL — so the commit button every sheet in the app ends
+                // with was reporting a sub-44pt target while looking twice that size. Handing the
+                // drawn shape back fixes it everywhere at once: this is the single component behind
+                // the `Hit area is too small — “Save”` / `“Continue”` entries that were frozen on
+                // eight screens in `UXScreenProbe.auditBaselines`. Purely a hit-testing change —
+                // `contentShape` does not affect how anything draws.
+                .contentShape(RoundedRectangle(cornerRadius: 16))
                 .disabled(disabled)
         }
         .padding(20)

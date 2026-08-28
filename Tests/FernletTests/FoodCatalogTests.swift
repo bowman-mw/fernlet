@@ -130,15 +130,37 @@ struct FoodCatalogTests {
     // MARK: - Bounded typed partial matching
 
     @Test func partialFallbackIsTypedOnlyAndDoesNotReachConfidence() throws {
+        // Both tokens are words this catalog carries; they just never co-occur in one NAME, which
+        // is the situation relaxing a token exists for. (The catalog must stock a kumquat for that
+        // to be true — see `partialFallbackDoesNotRescueAQueryCarryingAnUnknownWord` below, which
+        // pins what happens when it does not.)
         let chicken = Self.sampleItem(name: "Chicken breast, roasted", category: "Poultry", tags: ["chicken"])
-        let catalog = FoodCatalog(source: try buildSQLiteSource([chicken]))
+        let kumquat = Self.sampleItem(name: "Kumquat, raw", category: "Fruit", tags: ["kumquat"])
+        let catalog = FoodCatalog(source: try buildSQLiteSource([chicken, kumquat]))
         let query = "chicken kumquat"
 
         // Normal prefix-AND has no result. The typed surface may relax one token, but no machine
         // consumer or confidence caller can treat the relaxed result as a bindable match.
-        #expect(catalog.results(for: query, limit: 6, context: .userTyped).map(\.id) == [chicken.id])
+        #expect(catalog.results(for: query, limit: 6, context: .userTyped).contains { $0.id == chicken.id })
         #expect(catalog.results(for: query, limit: 6, context: .machineGenerated).isEmpty)
         #expect(catalog.scoredResults(for: query).isEmpty)
+    }
+
+    /// A token the catalog has never seen anywhere makes the whole query a MISS — it is not quietly
+    /// dropped so the remaining words can answer instead.
+    ///
+    /// The fixture is the one the test above used to carry: a lone chicken, and a "kumquat" no
+    /// source stocks. Relaxing there would hand back chicken for "chicken kumquat" with nothing on
+    /// screen admitting half the query was discarded. The miss is what routes the user to by-hand
+    /// entry — and is the seam user-added ingredients will hang off — so it has to survive.
+    @Test func partialFallbackDoesNotRescueAQueryCarryingAnUnknownWord() throws {
+        let chicken = Self.sampleItem(name: "Chicken breast, roasted", category: "Poultry", tags: ["chicken"])
+        let catalog = FoodCatalog(source: try buildSQLiteSource([chicken]))
+
+        #expect(catalog.results(for: "chicken kumquat", limit: 6, context: .userTyped).isEmpty)
+        // The single known token still resolves on its own, so this is a rule about the unknown
+        // word rather than a general retreat from typed search.
+        #expect(catalog.results(for: "chicken", limit: 6, context: .userTyped).map(\.id) == [chicken.id])
     }
 
     @Test func partialFallbackNeverDisplacesAnExactANDResult() throws {

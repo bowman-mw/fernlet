@@ -891,42 +891,33 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
-        // The eight onboarding screens. The `Hit area is too small — “Continue”` entries are all one
-        // component: `SheetSaveBar`'s commit button, whose sub-44pt finding is ALREADY frozen for
-        // `Sheet · Sleep` and `Sheet · Log intimacy`. It is deliberately not fixed here — one change
-        // inside `FernletUIComponents.swift` would move ~41 call sites at once and shift several
-        // frozen sheets in the same commit, which is its own increment, not a side effect of this
-        // one. The identifiers on those entries are the screen containers' (a container
-        // `accessibilityIdentifier` propagates to descendants that lack their own), which is why
-        // one button reads as `id=onboarding.welcome`.
+        // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
+        // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
+        // intimacy`'s `“Save”` and `Sheet · Goals`' `“Craft”` — nine frozen findings on nine
+        // screens, all one component. `SheetSaveBar` draws a 52pt pill but `.buttonStyle(.plain)`
+        // had left its hit region on the label; `contentShape` hands the drawn shape back. Deleted
+        // in the same commit as that fix. `Onboarding · Goal` and `Onboarding · Starter` are gone
+        // from this map entirely — the retired line was their only entry, so they are back to an
+        // empty baseline and fail on their first new finding, which is where a clean screen
+        // belongs. Same for `Sheet · Log intimacy` below.
         "Onboarding · Dietary pattern": [
-            "Hit area is too small — “Continue” id=onboarding.diet (9)",
             "Text clipped — “Pick an eating pattern” (48)",
-        ],
-        "Onboarding · Goal": [
-            "Hit area is too small — “Continue” id=onboarding.goal (9)",
         ],
         "Onboarding · Lock setup": [
             "Text clipped — “Protect private spaces” (48)",
             "Text clipped — “The lock guards period, intimacy, and other sensitive areas before they open.” (48)",
         ],
         "Onboarding · Permissions": [
-            "Hit area is too small — “Start Fernlet” id=onboarding.permissions (9)",
             "Text clipped — “Fernlet asks at first use where practical, so you can start without granting everything now.” (48)",
         ],
         "Onboarding · Personal details": [
-            "Hit area is too small — “Continue” id=onboarding.personal (9)",
             "Text clipped — <no label> id=onboarding.displayName (49)",
             "Text clipped — “These are optional except age. Fernlet never asks for weight goals.” (48)",
-        ],
-        "Onboarding · Starter": [
-            "Hit area is too small — “Continue” id=onboarding.starter (9)",
         ],
         "Onboarding · Storage choice": [
             "Text clipped — “Choose where logs live” (48)",
         ],
         "Onboarding · Welcome": [
-            "Hit area is too small — “Continue” id=onboarding.welcome (9)",
             "Text clipped — “A small daily care companion built around privacy, local control, and enoughness.” (48)",
         ],
         "Private · Cycle (both halves)": [
@@ -1019,8 +1010,9 @@ extension UXScreenProbe {
             "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
+        // “Craft” is this sheet's `SheetSaveBar` label, so its hit-region finding retired with the
+        // rest of them — see the note on the onboarding block above.
         "Sheet · Goals": [
-            "Hit area is too small — “Craft” (9)",
             "Text clipped — <no label> (49)",
         ],
         "Sheet · Hygiene": [
@@ -1034,9 +1026,6 @@ extension UXScreenProbe {
         ],
         "Sheet · Journal": [
             "Hit area is too small — “Start from this” id=journal.inspiration (9)",
-        ],
-        "Sheet · Log intimacy": [
-            "Hit area is too small — “Save” (9)",
         ],
         "Sheet · Meal": [
             "Potentially inaccessible text",
@@ -1062,7 +1051,6 @@ extension UXScreenProbe {
         ],
         "Sheet · Sleep": [
             "Hit area is too small — <no label> (49)",
-            "Hit area is too small — “Save” (9)",
             "Potentially inaccessible text",
             "Text clipped — <no label> (49)",
             "Text clipped — “HOURS (OPTIONAL)” (48)",
