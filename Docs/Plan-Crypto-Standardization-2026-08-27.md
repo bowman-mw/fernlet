@@ -288,8 +288,9 @@ with the landing commit SHA and records the phase's token spend below. Anything 
 mid-phase that is new work gets ADDED here, never done silently or dropped.
 
 - [x] Phase 0 — format census (main `27a780b`)
-- [x] Phase 1 — `FormatMigrator` lift + sealed-photo `hashVersion` marker (branch
-      `claude/admiring-moser-43ae1d`; SHA recorded at the phase-boundary merge)
+- [x] Phase 1 — `FormatMigrator` lift + sealed-photo `hashVersion` marker (`94a8bc4`, merged to
+      main 2026-08-28; boundary gate: full unit phase 3143 tests / 285 suites green from a private
+      DerivedData, power-of-10 and doc-coverage scans clean)
 - [ ] Phase 2.1 — `SealedPhotoBackupService` migrator
 - [ ] Phase 2.2 — `HeartDropSidecarKey` migrator
 - [ ] Phase 2.3 — `MediaAtRestCrypto` migrator
@@ -311,4 +312,9 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       with the gate report (real-device census readings owed, D1, anything parked).
 
 Token log (per phase: spent / big consumers / remaining):
-- Phase 1: recorded at the phase boundary by the first loop iteration.
+- Phase 1: ~1.0M output tokens. Big consumers: three Opus agents — the verifier's three gate runs
+  (~424k; the full suite ran three times because two review findings landed after the first full
+  run — next phases should batch review fixes BEFORE the first full gate), the pin-test writer's
+  three rounds (~386k), the docs pass (~132k); main loop the remainder. Remaining budget at the
+  boundary: ~15.0M. (Numbers from the harness's per-agent usage blocks; the explain-usage chart is
+  deferred to a boundary the owner is watching.)
