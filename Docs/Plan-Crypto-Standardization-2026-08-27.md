@@ -544,3 +544,9 @@ Token log (per phase: spent / big consumers / remaining):
   test writer (~161k), the docs pass (~64k), one gate run (~120k). The gate needed five fixes but
   only ONE full-suite run — the batch-review-fixes-first lesson from Phase 1 held. Remaining at
   the boundary: ~15.0M.
+- Phases 2.2–2.4 (one batch): ~3.0M. Big consumers: the 12-agent three-surface design workflow
+  (~1.85M — again the largest and again load-bearing: all seventeen accepted objections, including
+  the 2.3 index-orphaning must-fix, predate any source), three sequential implementers who each
+  self-verified with a targeted suite run (~294k/~296k/~378k), the docs pass (~62k), one combined
+  gate run (~97k) that was green FIRST PASS with zero fixes — the implementer-self-verifies
+  pattern paid for itself. Remaining at the boundary: ~15.0M.
