@@ -416,7 +416,7 @@ next touches that file, or to the final docs-vs-code reconciliation sweep.
 
 ### Phase 2.5 — `FernletLockService` content-key re-wrap — **BUILT**
 
-Landed in `4b49175`; the diff-review fix commit follows in this phase. The riskiest surface in the
+Landed in `4b49175`; the diff-review fixes landed as `288e132`. The riskiest surface in the
 plan — a failure here locks the user out of every sealed corpus — and the shape that answers it is
 **one convert site, reached only with the credentials already in hand**: the `.legacyScryptWrapped`
 unlock arm, after the scrypt unwrap has succeeded and before the Secure-Enclave hard-bind flip. The
@@ -464,7 +464,8 @@ were edited (wipe and recovery-lock), not one. The new staging row joined the ke
 to a keychain row rather than a defaults key.
 
 **Post-landing review.** An adversarial diff review over three lenses returned 10 findings, **0
-fatal**; the fixes land as a follow-up commit inside this phase (fix commit follows).
+fatal**; the fixes landed as `288e132` (boundary gate on it: 3244 tests / 291 suites green, both
+scanners clean, zero gate fixes).
 
 ### Phase 3 — Delete the Class-A legacy readers
 
@@ -574,10 +575,11 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
 - [x] Phase 2.4 — `PendingNarrativeBuffer` migrator (`81d65d9`; runs on the buffer key, NOT behind
       the app lock — the buffer exists to work while locked; absent file is an earned zero, purge
       hook resets the latch first)
-- [x] Phase 2.5 — `FernletLockService` content-key re-wrap (`4b49175`; diff-review fix commit
-      follows. Staged, read-back-proven, update-only promote at the sole credential-gated convert
-      site; the row's own FLW2 marker is the latch — no UserDefaults key, two recorded family
-      deviations. Adversarial diff review: 10 findings, 0 fatal)
+- [x] Phase 2.5 — `FernletLockService` content-key re-wrap (`4b49175` + fixes `288e132`, merged to
+      main 2026-08-28. Staged, read-back-proven, update-only promote at the sole credential-gated
+      convert site; the row's own FLW2 marker is the latch — no UserDefaults key, two recorded
+      family deviations. Adversarial diff review: 10 findings, 0 fatal, all seven accepted fixes
+      applied; boundary gate 3244 tests / 291 suites green, zero gate fixes)
 - [ ] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (D2 assumed yes; one funded stretch)
 - [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
@@ -609,3 +611,38 @@ Token log (per phase: spent / big consumers / remaining):
   self-verified with a targeted suite run (~294k/~296k/~378k), the docs pass (~62k), one combined
   gate run (~97k) that was green FIRST PASS with zero fixes — the implementer-self-verifies
   pattern paid for itself. Remaining at the boundary: ~15.0M.
+- Phase 2.5: ~2.1M. Big consumers: the design workflow (~913k), the implementer across the landing
+  and the fix round (~441k), the post-landing adversarial DIFF review (~534k — new for this surface,
+  and it earned its cost: three must-fix test-strength holes on the lockout path), the docs/plan
+  record (~60k), the gate (~150k, green first pass). Process notes from a peer session's transcript
+  audit, adopted mid-phase: the `tail -f | grep -m1` build-wait blocked ~10 min per build all
+  session (fix: foreground with explicit timeout, or Bash run_in_background + notification — now a
+  standing rule); and failed builds get ALL diagnostics read in one pass, not one fix per rebuild.
+  A session usage-window limit killed two agents mid-phase; both resumed cleanly after the reset.
+  Remaining at the boundary: ~15.0M.
+
+### Handoff to the Phase 3 session (written at the 2.5 boundary)
+
+The loop that built Phases 1–2.6 ran in ONE session context via self-paced wakeups — contrary to
+the loop prompt's belief, nothing compacts between phases, so Phase 3 MUST start as a fresh session
+reading this file (the loop stops itself at the 2.6 boundary by owner instruction, 2026-08-28).
+What the fresh session needs:
+
+- **Branch state:** work lands on `claude/admiring-moser-43ae1d` and merges ff-only into main from
+  the primary checkout after each phase boundary (never `update-ref`; check main has not moved
+  first). Nothing is pushed — pushing stays a human step.
+- **Hard gates before ANY legacy-reader delete (Phase 3):** per-surface census zeros on a REAL
+  upgraded tester device — simulator zeros do not discharge them. Per-surface wordings live in the
+  Phase 3 section: sidecar is per-row with the quarantine excluded; media is the three-part gate
+  (latch + census residues + no blind spots); ColumnCrypto needs the keyed migrator's clean pass as
+  the second witness; sealed-photo reads `minimumEntryHashVersion >= 2` across the three corpora.
+- **Phase 4 is BLOCKED on owner decision D1** (§5) — no Class-B site is touched until it lands.
+- **Recorded testability residuals:** 2.1's P10/P17/P19 (`.standard` latch seams, private
+  teardownEpoch, private view predicates); 2.3's named residues (non-JPEG plaintext, undrained
+  MeshPhotoCache.json, abortedNoWallKey benign-pending); 2.5's untestable-in-process promote
+  atomicity (pinned instead via the update-only seam tests).
+- **Build discipline:** private -derivedDataPath per gate; build-for-testing once then
+  test-without-building; judge exit codes and include Swift Testing's "failed after" in greps;
+  NEVER wait on a build with `tail -f | grep -m1` (it blocks the full Bash timeout) — foreground
+  with explicit timeout for short runs, Bash run_in_background + completion notification for the
+  full phase; read every diagnostic from a failed build in one pass.
