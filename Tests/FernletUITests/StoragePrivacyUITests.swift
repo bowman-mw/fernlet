@@ -49,7 +49,7 @@ final class StoragePrivacyUITests: XCTestCase {
 
         XCTAssertTrue(
             app.descendants(matching: .any)
-                .matching(NSPredicate(format: "label CONTAINS[c] 'Restore'"))
+                .matching(NSPredicate(format: "label CONTAINS[c] 'Restore from iCloud'"))
                 .firstMatch
                 .waitForExistence(timeout: 6),
             "Expected a 'Restore from iCloud' label when existing cloud data is present"
@@ -69,9 +69,16 @@ final class StoragePrivacyUITests: XCTestCase {
         _ = app.descendants(matching: .any)["onboarding.storage.icloud"]
             .waitForExistence(timeout: 8)
 
+        // Matched on the affordance's full title, not on the bare word. `CONTAINS 'Restore'` also
+        // matched the DETECTION-FAILED copy — "…choose Sync to iCloud to restore it."
+        // (`OnboardingStorageChoiceView.swift:115`) — which is exactly what renders on a machine
+        // where the live iCloud check cannot complete, since this test deliberately does not set
+        // `FERNLET_UI_TEST_DISABLE_CLOUD_DETECTION`. So the assertion failed for having no iCloud
+        // account rather than for showing a restore prompt. The card's own title is
+        // "Restore from iCloud" (line 57), and nothing else on the screen contains that phrase.
         XCTAssertFalse(
             app.descendants(matching: .any)
-                .matching(NSPredicate(format: "label CONTAINS[c] 'Restore'"))
+                .matching(NSPredicate(format: "label CONTAINS[c] 'Restore from iCloud'"))
                 .firstMatch
                 .exists,
             "Restore prompt should be absent when no cloud data exists"

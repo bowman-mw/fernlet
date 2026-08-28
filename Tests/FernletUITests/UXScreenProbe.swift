@@ -239,6 +239,11 @@ struct UXScreenProbe {
     @discardableResult
     func audit(file: StaticString = #file, line: UInt = #line) throws -> Self {
         var (raw, found) = try runAudit()
+        // The environment check comes first: on a wrong device or a rotated simulator the ratchet
+        // does not run at all, so neither the retry below nor `report` has anything to say.
+        attachListingIfOffBaseline(raw: raw)
+        guard isOnBaselineEnvironment(file: file, line: line) else { return self }
+
         // ONE retry, and only for the unambiguous case: this screen has frozen findings but the
         // auditor just returned nothing at all. That is `performAccessibilityAudit` failing, not
         // the screen being fixed — a screen does not lose every finding in every category at once
@@ -254,8 +259,6 @@ struct UXScreenProbe {
         if found.isEmpty && !(Self.auditBaselines[name] ?? []).isEmpty {
             (raw, found) = try runAudit()
         }
-        attachListingIfOffBaseline(raw: raw)
-        guard isOnBaselineEnvironment(file: file, line: line) else { return self }
         report(found, raw: raw, file: file, line: line)
         return self
     }
@@ -797,7 +800,24 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        // Re-recorded 2026-08-27 against a DETERMINISTIC viewport. `capture()` audits the whole
+        // visible screen, and this probe's scroll used to stop the moment the strip became
+        // hittable — a different offset every time Home's content height changed, which another
+        // suite adding one meal is enough to do. The personal-care card entries below are not new
+        // defects; they are what the bottom of the feed has always contained, and they appeared and
+        // disappeared from this screen's deltas depending on where the scroll happened to stop.
+        // `RecentBitesUITests` now scrolls to the true bottom, so the audited viewport is the same
+        // every run. `ProgressPhotoUITests` uses the same stop-when-hittable shape and is a
+        // candidate for the same treatment if it ever starts flapping.
         "Home · Recent bites": [
+            "Dynamic Type font sizes are partially unsupported — “Brush teeth AM” (48)",
+            "Dynamic Type font sizes are partially unsupported — “Brush teeth PM” (48)",
+            "Dynamic Type font sizes are partially unsupported — “Deodorant” (48)",
+            "Dynamic Type font sizes are partially unsupported — “Floss” (48)",
+            "Dynamic Type font sizes are partially unsupported — “Shower” (48)",
+            "Dynamic Type font sizes are partially unsupported — “Skincare AM” (48)",
+            "Text clipped — “Brush teeth AM” (48)",
+            "Text clipped — “Brush teeth PM” (48)",
             "Text clipped — “Chicken rice bowl” (48)",
             "Text clipped — “Food” (9)",
             "Text clipped — “Friends” (9)",
@@ -805,6 +825,7 @@ extension UXScreenProbe {
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
+            "Text clipped — “Skincare AM” (48)",
         ],
         // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
         // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
