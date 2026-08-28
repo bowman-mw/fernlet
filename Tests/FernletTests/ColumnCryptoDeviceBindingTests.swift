@@ -243,6 +243,136 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == "saved during outage")
     }
 
+    // MARK: - Phase 2.6 pins: the rung-reporting refactor and the strict v3 seal
+
+    // MARK: C1 — BEHAVIOR-PRESERVATION PROOF for the openBlob → openReportingRung refactor:
+    // for every rung (v3 / v2 / legacy / both collided slivers) the receipt-bearing dispatch
+    // returns the same plaintext the shipping string reader does, with the right rung receipt;
+    // and for every failure shape (garbage, truncated, ReadError precedence) both paths throw
+    // the same class of error. The migrator's tallies are only as honest as these receipts.
+    @Test func openReportingRungMatchesOpenBlobOnEveryRung() throws {
+        let crypto = ColumnCrypto(label: "journal-narrative")
+
+        // v3 rung.
+        let v3 = try seal("rung three", label: "journal-narrative", override: .identifier(installA))
+        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            let opened = try crypto.openReportingRung(v3, contentKey: contentKey)
+            #expect(opened.rung == .v3)
+            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung three")
+            #expect(try crypto.openString(v3, contentKey: contentKey) == "rung three")
+        }
+
+        // v2 rung (the hand-built pre-purpose generation).
+        let v2 = try sealV2("rung two", label: "journal-narrative", binding: installA)
+        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            let opened = try crypto.openReportingRung(v2, contentKey: contentKey)
+            #expect(opened.rung == .v2)
+            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung two")
+        }
+
+        // Legacy rung, unprefixed: the fallback, with a nil collision receipt.
+        let legacy = try seal("rung legacy", label: "journal-narrative", override: .unavailable)
+        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            let opened = try crypto.openReportingRung(legacy, contentKey: contentKey)
+            #expect(opened.rung == .legacy(markerCollision: nil))
+            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung legacy")
+        }
+
+        // Both collided slivers: a LEGACY blob whose first nonce byte is a marker opens via the
+        // fallback and the receipt names the collided marker — legacy proven BY OPEN, the second
+        // witness Phase 3 needs against the census's byte-only upper bounds.
+        for marker in [ColumnCrypto.deviceBoundFormatVersionV3, ColumnCrypto.deviceBoundFormatVersionV2] {
+            var collided: Data?
+            for _ in 0..<8192 {  // P(miss all) ≈ (255/256)^8192 ≈ 1e-14
+                let candidate = try seal("collide", label: "journal-narrative", override: .unavailable)
+                if candidate.first == marker {
+                    collided = candidate
+                    break
+                }
+            }
+            let blob = try #require(collided, "could not draw a colliding legacy blob")
+            let expectedCollision: ColumnCryptoStoredFormat =
+                marker == ColumnCrypto.deviceBoundFormatVersionV3 ? .v3Marked : .v2Marked
+            try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+                let opened = try crypto.openReportingRung(blob, contentKey: contentKey)
+                #expect(opened.rung == .legacy(markerCollision: expectedCollision))
+                #expect(String(data: opened.plaintext, encoding: .utf8) == "collide")
+            }
+        }
+
+        // Failure shapes: garbage and a truncated blob throw on BOTH paths.
+        let garbage = Data((0..<44).map { UInt8(truncatingIfNeeded: $0 &* 7 &+ 13) })
+        DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            #expect(throws: (any Error).self) { _ = try crypto.openReportingRung(garbage, contentKey: self.contentKey) }
+            #expect(throws: (any Error).self) { _ = try crypto.openString(garbage, contentKey: self.contentKey) }
+            let truncated = v3.prefix(8)
+            #expect(throws: (any Error).self) { _ = try crypto.openReportingRung(Data(truncated), contentKey: self.contentKey) }
+        }
+
+        // ReadError precedence: a marked blob during a keychain outage surfaces the retryable
+        // ReadError on the receipt path exactly as on the shipping path.
+        DeviceBindingID.$testOverride.withValue(.readError) {
+            #expect(throws: DeviceBindingID.ReadError.self) {
+                _ = try crypto.openReportingRung(v3, contentKey: self.contentKey)
+            }
+            #expect(throws: DeviceBindingID.ReadError.self) {
+                _ = try crypto.openString(v3, contentKey: self.contentKey)
+            }
+        }
+    }
+
+    // MARK: C2 — the strict seal REFUSES without a binding (both the authoritative absence and
+    // the transient read error), and never emits a legacy blob. The Phase 2.6 migrator's only
+    // seal entry must be structurally unable to re-mint the format the pass exists to retire.
+    @Test func sealPlaintextV3StrictRefusesWithoutBinding() throws {
+        let crypto = ColumnCrypto(label: "worry-box")
+        DeviceBindingID.$testOverride.withValue(.unavailable) {
+            #expect(throws: ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
+                _ = try crypto.sealPlaintextV3Strict(Data("refuse me".utf8), contentKey: self.contentKey)
+            }
+        }
+        DeviceBindingID.$testOverride.withValue(.readError) {
+            #expect(throws: ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
+                _ = try crypto.sealPlaintextV3Strict(Data("refuse me too".utf8), contentKey: self.contentKey)
+            }
+        }
+    }
+
+    // MARK: C3 — the strict seal's output is byte-compatible with the shipping writer's v3: it
+    // starts with the version tag, opens under the v3 rung on the sealing install, and refuses
+    // on any other install.
+    @Test func strictSealOutputStartsWith0x03AndOpensV3() throws {
+        let crypto = ColumnCrypto(label: "intimacy-log")
+        let plaintext = Data("strictly bound".utf8)
+        let sealed = try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            try crypto.sealPlaintextV3Strict(plaintext, contentKey: contentKey)
+        }
+        #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersionV3)
+        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            let opened = try crypto.openReportingRung(sealed, contentKey: contentKey)
+            #expect(opened.rung == .v3)
+            #expect(opened.plaintext == plaintext)
+        }
+        #expect(throws: (any Error).self) {
+            try DeviceBindingID.$testOverride.withValue(.identifier(self.installB)) {
+                _ = try crypto.openReportingRung(sealed, contentKey: self.contentKey)
+            }
+        }
+    }
+
+    // MARK: C4 — THE LINE IN THE SAND: Phase 2.6 did NOT close `sealPlaintext`'s fail-open.
+    // The shipping writer still degrades to the unprefixed legacy format when no binding
+    // exists; closing that is Phase 3's, and this pin is what makes an accidental early close
+    // fail loudly instead of shipping silently.
+    @Test func sealPlaintextStillFailsOpenToLegacyWithoutBinding() throws {
+        let sealed = try seal("fail-open survivor", label: "menstrual-narrative", override: .unavailable)
+        // Unprefixed legacy layout, exactly: nonce(12) + ciphertext + tag(16) — no version byte.
+        // (The LENGTH is the proof: a v3 blob is one byte longer. The first byte is a random
+        // nonce byte, so asserting on it would flake on the 1-in-256 collision.)
+        #expect(sealed.count == 12 + "fail-open survivor".utf8.count + 16)
+        #expect(try open(sealed, label: "menstrual-narrative", override: .identifier(installA)) == "fail-open survivor")
+    }
+
     // MARK: Proves the production install ID is durable and stable across calls (the real
     // keychain row, exercised without overrides), and correctly sized.
     @Test func realInstallBindingIDIsStableAndSixteenBytes() {

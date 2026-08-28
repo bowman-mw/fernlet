@@ -2004,6 +2004,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             KeychainItem.deleteAll(service: service)
         }
         try buffer.purge()
+        // The Phase 2.6 sealed-column format-migration latch's entire subject is the store the
+        // next two lines purge and rebuild, and both tolerate partial failure — so the latch is
+        // cleared FIRST, unconditionally (the delete-all funnel's `sealedStoreRebuildHook` places
+        // the same reset the same way): a failed purge here would otherwise leave rows behind —
+        // under a destroyed content key — with the latch still standing over them.
+        SealedColumnFormatMigrator.latch().reset()
         try privatePersistenceController.purgeEncryptedEntities()
         // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
         // locked deletion path, and this one has just destroyed the key anyway.

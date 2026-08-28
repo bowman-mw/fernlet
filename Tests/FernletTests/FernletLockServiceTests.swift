@@ -692,6 +692,36 @@ struct FernletLockServiceTests {
         #expect(serviceB.passcodeUnlockedThisProcess)
         #expect(serviceB.isBiometricUnlockAvailable)
     }
+    // MARK: Phase 2.6, §9 caller 2: the destructive lock reset purges and rebuilds the sealed
+    // store INSIDE FernletLock (never through the app's delete-all funnel), so it must clear the
+    // sealed-column format-migration latch beside its own purge — a failed purge would otherwise
+    // leave rows behind, under a destroyed content key, with the latch still standing over them.
+    @Test func lockServiceDestructiveResetClearsTheLatch() throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        // The reset clears the PRODUCTION latch (standard defaults) — pin the real seam, then
+        // restore whatever state the host had.
+        let latch = SealedColumnFormatMigrator.latch()
+        let hadLatch = latch.isComplete
+        defer {
+            if hadLatch { latch.markComplete() } else { latch.reset() }
+        }
+        latch.markComplete()
+
+        let service = FernletLockService(
+            keychainService: harness.serviceID,
+            sealedContentKeyServices: [harness.sealedContentKeyServiceID],
+            mediaKeychainServices: [harness.mediaKeychainServiceID],
+            narrativeBufferScope: harness.narrativeBufferScope,
+            dateProvider: harness.clock,
+            uptimeProvider: harness.uptime,
+            cryptoProvider: harness.crypto,
+            privatePersistenceController: PrivatePersistenceController(inMemory: true)
+        )
+        try service.reset()
+
+        #expect(!latch.isComplete, "the destructive reset must clear the sealed-column migration latch")
+    }
 }
 
 @MainActor

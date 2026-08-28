@@ -208,6 +208,16 @@ struct PersistedSurfaceWipeBoundaryTests {
         // `ownPhotoKeyMigrationComplete`, kept because its subject survives.
         "com.fernlet.private-store.pendingNarrativeBufferMigrationComplete":
             .cleared(token: "PendingNarrativeBufferFormatMigrator.latch().reset"),
+        // The Phase 2.6 sealed-column format-migration latch (`SealedColumnMigrationLatch`, one
+        // bit, no content). Cleared because the wipe destroys the latch's entire subject — the
+        // sealed store's four entities and their seven ciphertext columns — inside the same
+        // `sealedStoreRebuildHook` closure, which tolerates a rebuild failure (`(try? …) != nil`
+        // feeds the outcome), so a KEPT latch could stand over rows a failed purge left behind.
+        // Same case as `pendingNarrativeBufferMigrationComplete` above (subject destroyed);
+        // contrast `ownPhotoKeyMigrationComplete`, kept because its subject survives. The next
+        // unlock's keyless revalidation census re-proves over the empty store.
+        "com.fernlet.private-store.sealedColumnMigrationComplete":
+            .cleared(token: "SealedColumnFormatMigrator.latch().reset"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
@@ -356,6 +366,19 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:key@FernletKit/Sources/FernletUI/FernletTheme.swift": .unreachableByDesign(
             reason: "A read-only site: `UserDefaults.standard.string(forKey: key)` where `key` is a ternary over the two custom-background constants. It writes nothing, and both keys it reads carry their own kept rows above."
         ),
+        // The Phase 2.6 sealed-column format migrator's two dynamic-key writes. Both are
+        // `NSManagedObject.setValue(_:forKey:)` onto rows of the sealed `FernletPrivate` Core
+        // Data store — the KVC spelling the discovery scan cannot tell from a `UserDefaults`
+        // write — where the key is one of the census's seven ciphertext attribute names, never a
+        // defaults key. The store those rows live in carries its own `.cleared` funnel rows
+        // (`sealedStoreRebuildHook` and the sealed row-delete hooks), so there is no
+        // UserDefaults surface here for the funnel to reach.
+        "unresolved:column.attributeName@FernletKit/Sources/PrivateStoreCore/SealedColumnFormatMigration.swift": .unreachableByDesign(
+            reason: "Not a UserDefaults write: `row.setValue(newBlob, forKey: column.attributeName)` re-seals one ciphertext column of a sealed Core Data row during the Phase 2.6 format migration. The rows it writes live in the FernletPrivate store, which the funnel empties (row-delete hooks) and destroys (`sealedStoreRebuildHook`) under its own cleared rows."
+        ),
+        "unresolved:entry.column.attributeName@FernletKit/Sources/PrivateStoreCore/SealedColumnFormatMigration.swift": .unreachableByDesign(
+            reason: "Not a UserDefaults write: `entry.row.setValue(entry.oldBlob, forKey: entry.column.attributeName)` is the migration's compensating restore of a sealed Core Data column's held old bytes. Same substrate as its sibling seam — the FernletPrivate store, wiped by the funnel's own cleared rows."
+        ),
 
         // ── Open gaps: not cleared, and nobody decided they should survive ──────────────────────
         "fernlet.daySummary.lastRunKey": .openGap(
@@ -382,6 +405,8 @@ struct PersistedSurfaceWipeBoundaryTests {
     /// `noDispositionRowIsStale` already catches a seam that disappears entirely.
     static let expectedSeamSites: [String: Int] = [
         "unresolved:$0@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift": 3,
+        "unresolved:column.attributeName@FernletKit/Sources/PrivateStoreCore/SealedColumnFormatMigration.swift": 1,
+        "unresolved:entry.column.attributeName@FernletKit/Sources/PrivateStoreCore/SealedColumnFormatMigration.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/FernletApp.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/SettingsSheet.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": 1,

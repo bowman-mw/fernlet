@@ -83,6 +83,14 @@ struct PrivacyWipeCoverageTests {
         // (the `generationStore.reset` pattern: the type's static `latch()` then `.reset()`); the
         // next launch's census re-proves cheaply (post-wipe: `.absent`, an earned zero).
         "PendingNarrativeBufferFormatMigrator.latch().reset",
+        // The Phase 2.6 sealed-column format-migration latch. Its own token beside the rebuild
+        // below, because the rebuild destroys the latch's entire subject — the sealed store's
+        // rows — inside the same hook closure, and it tolerates failure, so a proof that
+        // predates the wipe must not outlive it. The token is the full call-chain spelling at
+        // the ContentView closure site (the `PendingNarrativeBufferFormatMigrator` pattern:
+        // the type's static `latch()` then `.reset()`); the next unlock's keyless revalidation
+        // census re-proves over the empty store.
+        "SealedColumnFormatMigrator.latch().reset",
         // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
         // destroys and re-creates the FILE they lived in.
         "sealedStoreRebuildHook",

@@ -53,6 +53,45 @@ public nonisolated enum DeviceBindingID {
         /// Behave as if the keychain read itself errored: ``current()`` returns `nil`
         /// (seal falls back to legacy) while ``currentForOpen()`` throws ``ReadError``.
         case readError
+        /// Behave as whatever `binding` currently answers — the MUTABLE override for tests that
+        /// must change the install binding *mid-operation* (the Phase 2.6 environment-break and
+        /// binding-read-error pins, which flip the answer between a migrator's seal and its
+        /// read-back). The three static cases above stay the default idiom; reach for this only
+        /// when a fixed answer cannot express the scenario.
+        case scripted(ScriptedBinding)
+    }
+
+    /// The reference-typed mutable answer behind ``TestOverride/scripted(_:)``: a `Mutex`-owned
+    /// slot the test flips while the code under test is mid-flight. Test seam only — production
+    /// reads never see it because ``testOverride`` is always `nil` there.
+    final class ScriptedBinding: Sendable {
+        /// One scripted keychain answer, mirroring the three static override cases.
+        enum Answer: Sendable {
+            /// The install ID is exactly these bytes.
+            case identifier(Data)
+            /// No durable install ID exists (authoritative absence).
+            case unavailable
+            /// The keychain read itself errors (row state unknown, retryable).
+            case readError
+        }
+
+        /// The current scripted answer; owned by the lock, like ``DeviceBindingID/cache``.
+        private let slot: Mutex<Answer>
+
+        /// Creates a scripted binding answering `initial` until ``set(_:)`` changes it.
+        init(_ initial: Answer) {
+            slot = Mutex(initial)
+        }
+
+        /// Replaces the scripted answer; the next binding read observes it.
+        func set(_ answer: Answer) {
+            slot.withLock { $0 = answer }
+        }
+
+        /// The answer reads observe right now.
+        var current: Answer {
+            slot.withLock { $0 }
+        }
     }
 
     /// The install-binding keychain read failed with an error other than "row not found".
@@ -90,6 +129,11 @@ public nonisolated enum DeviceBindingID {
             switch override {
             case .identifier(let data): return data
             case .unavailable, .readError: return nil
+            case .scripted(let scripted):
+                // Mirrors the static cases: a scripted read error still fails open here (the seal
+                // side treats "row state unknown" like "no binding" — never blocks a save).
+                if case .identifier(let data) = scripted.current { return data }
+                return nil
             }
         }
         return cache.withLock { slot -> Data? in
@@ -132,6 +176,12 @@ public nonisolated enum DeviceBindingID {
             case .identifier(let data): return data
             case .unavailable: return nil
             case .readError: throw ReadError(status: errSecIO)
+            case .scripted(let scripted):
+                switch scripted.current {
+                case .identifier(let data): return data
+                case .unavailable: return nil
+                case .readError: throw ReadError(status: errSecIO)
+                }
             }
         }
         return try cache.withLock { slot -> Data? in
