@@ -1,7 +1,7 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status:** Phases 0, 1 and 2.1–2.5 are BUILT — see §4 and the Progress checklist. Phase 2.6 and
-Phases 3–5 are still plan only.
+**Status:** Phases 0, 1 and 2.1–2.6 are BUILT — every Class-A migrator has landed; see §4 and the
+Progress checklist. Phases 3–5 are still plan only.
 **Goal (owner, 2026-08-27):** review the domain-separation work and update everything so there is no
 "legacy" code — one standardized format per cryptographic surface.
 **Baseline:** main `def4726`. Prerequisite work already landed: `91c3956` (domain separation),
@@ -467,6 +467,96 @@ to a keychain row rather than a defaults key.
 fatal**; the fixes landed as `288e132` (boundary gate on it: 3244 tests / 291 suites green, both
 scanners clean, zero gate fixes).
 
+### Phase 2.6 — `ColumnCrypto` sealed corpora — **BUILT**
+
+Landed in `d6fd1d3`, with all sixteen diff-review findings applied in `fdbeb23`. The largest Class-A
+surface and the last: `SealedColumnFormatMigrator` (`PrivateStoreCore`, beside its census) converts
+legacy → V3 and V2 → V3 across the four sealed entities' seven ciphertext columns, in bounded keyed
+passes behind the private-hub unlock. **Zero new purposes, AAD shapes, derivations or dependency
+edges** — the content key arrives by injection, a closure re-vended per page, because this module
+cannot import `FernletLock`; the app target wires it to the shipped `.privateHub` decrypt seam.
+
+**The convert recipe.** Open through the **reader's own dispatch** — `ColumnCrypto.openReportingRung`,
+which `openBlob` now delegates to, so there is one implementation that cannot fork and every tally is
+*proven by open* rather than inferred from a marker byte. Re-seal only through
+`sealPlaintextV3Strict`, the writer's shared V3 body made to **refuse** where the shipping writer
+falls open; `sealPlaintext`'s fail-open is untouched and pinned open, because closing it is Phase 3's
+line. Then in-memory verify → page save under `NSErrorMergePolicy` → per-page prune → **discriminated
+verified read-back**, whose split is the phase's sharpest distinction and the fix round's fatal
+finding:
+
+- **`nil` on a live row is a genuine repository clear** (`sealOptionalString` clears by writing nil)
+  landing in the read-back window. It is **never restored** — restoring would resurrect data the user
+  just cleared — but it gets its **own latch-blocking bucket** and its own audit line, deliberately
+  outside both the conflict-skip and the empty vocabularies: this pass cannot vouch for what
+  happened, and the clear must never launder into the next pass's benign `skippedEmpty` without this
+  pass having said so out loud.
+- **Zero-length bytes are corruption.** No writer produces `Data()` and every real sealed blob is at
+  least nonce + tag, so empty is a store fault and takes the F10b compare-guarded restore and abort.
+
+A superseding concurrent write wins and is never overwritten (blocking, because an untouched column
+can still hold legacy bytes — the row is *unproven, not healed*); unopenable bytes restore the held
+originals behind a compare guard with one bounded retry; a store-identity tear aborts; and a re-lock
+stops the sweep **cleanly at the next page boundary with page-durable progress**. `madeForwardProgress`
+requires `!aborted`, which is load-bearing: a pass that converted pages and then aborted must not
+re-enter the environment the abort just declared untrustworthy, so any abort stops the whole `run()`
+and the next unlock re-funds against a possibly-recovered one.
+
+**The second-witness wording, stated precisely because Phase 3 leans on it.** A clean pass proves that
+every row **in its own fetch snapshot** opened under V3 with purpose + binding AAD — which is what
+resolves the census's 1-in-256 collided-marker sliver, by open rather than by byte. It proves nothing
+about a truncated pass's remainder, nothing about rows written after the snapshot while
+`sealPlaintext`'s fail-open still lives, and nothing about rows a restore or device transfer imports
+later. The latch attests **one moment** and licenses nothing; a set latch is not even believed across
+launches (the first funded trigger per process re-checks it with a keyless revalidation census). So
+Phase 3's gate for this surface is the census reading zero on a real upgraded device **plus a fresh
+clean keyed pass run at gate time** — never this latch quoted from memory.
+
+**D3 capsule.** The status renders **inside the private hub only** — never Privacy & Data, which
+draws outside the lock, where a "finishing securing your private entries" line would announce to
+anyone holding the unlocked phone that sealed journal/cycle/intimacy content exists. It is
+**duress-blind by the one filter** (the render condition ANDs in the same mirror seam the sensitive
+getters use), backed by a lock-engage reset and by a key-revoked-only stop recording idle rather than
+blocked, with the funding call itself early-outing on a duress session and a grep wall pinning the
+blindness. Session state only; no new `UserDefaults` key for display; the audit ledger carries the
+detail, one line per pass and never per row.
+
+**Latch and wipe.** The latch key landed with both wipe rows, and is cleared **first** — before the
+work it guards — in the delete-all funnel's sealed-store rebuild hook **and** beside
+`FernletLockService`'s destructive reset, because both destroy the latch's entire subject and both
+tolerate partial failure, so a kept latch could stand over rows a failed purge left behind.
+
+**Deviations recorded.** The named family deviation is that the revalidation reset predicate is the
+*marker-visible projection* of the latch predicate rather than 2.2's "reset predicate equals latch
+predicate" — forced by the surface, since the latch predicate includes keyed facts (proven-by-open) a
+keyless recheck cannot see; the gap that leaves is exactly the collided sliver, resolved only by
+Phase 3's fresh keyed pass. The 2.1 P10 lesson was taken at design time: the latch, the funded task's
+body and the store seams are all injectable, so no status test can reach production defaults or the
+shared store. The fix round added an **empirical failed-purge fixture** rather than a scripted one.
+The implementer's eight landing deviations, from its report: (1) row-handle paging by
+`NSManagedObjectID` instead of the census's materialized-rows fetch — the per-page key vend forces
+row handles across suspension points and only object IDs are Sendable, so the optimistic-locking
+window is per-page; (2) two internal test seams beyond the design's one hook
+(`prePageSaveHookForTesting`, because a post-save hook cannot construct the real conflict window,
+and `restoreSaveOverrideForTesting` for save-failure injection); (3) a public `progressObserver`
+(pageCommitted/passEnded) — the 2.1 `underlyingPasses` precedent adapted to a struct, needed by the
+D3 running-state and the per-pass verdicts `run()` does not return; (4) `DeviceBindingID`'s
+scripted test override; (5) the store-identity tear check at preflight/page/pass-end (made
+retained-instance-sound in the fix round); (6) the read-back discrimination extensions — the
+emptied-column rule (refined by the fatal fix into the clearedDuringReadBack split), the
+`bindingReadError` no-restore bucket, the restore-save-conflict reclassify, and byte-equality as
+the restore's proof; (7) repository-interplay tests run against the real install binding, because
+a task-local override is invisible inside `viewContext.performAndWait`; (8) the funding trigger
+returns a pinnable Bool and the lock-engage status reset rides `lockState.didSet` at the one
+mirror point.
+
+**Adversarial diff review: 16 findings, 1 fatal, all applied in `fdbeb23`.** The fatal was the
+read-back conflating a nil-on-a-live-row clear with empty bytes — the split described above. The
+same commit added internal test seams to the funded task, made the tear check retain the preflight
+store instance so pointer reuse cannot mask a rebuild, made `rowsScanned` count only rows the page
+loop reached, and made the restore's compare guard refresh before it rechecks, with ten pins landing
+beside them.
+
 ### Phase 3 — Delete the Class-A legacy readers
 
 Gated on census = 0 for that surface, on real tester devices, not just simulators. Also close
@@ -580,7 +670,10 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       convert site; the row's own FLW2 marker is the latch — no UserDefaults key, two recorded
       family deviations. Adversarial diff review: 10 findings, 0 fatal, all seven accepted fixes
       applied; boundary gate 3244 tests / 291 suites green, zero gate fixes)
-- [ ] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (D2 assumed yes; one funded stretch)
+- [x] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (`d6fd1d3` + fixes `fdbeb23`; converts
+      through the reader's own dispatch with a strict V3 seal, discriminated verified read-back,
+      private-hub-only duress-blind status; latch + both wipe rows, cleared first. Adversarial
+      diff review: 16 findings, 1 fatal, all applied)
 - [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
       do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
@@ -645,4 +738,7 @@ What the fresh session needs:
   test-without-building; judge exit codes and include Swift Testing's "failed after" in greps;
   NEVER wait on a build with `tail -f | grep -m1` (it blocks the full Bash timeout) — foreground
   with explicit timeout for short runs, Bash run_in_background + completion notification for the
-  full phase; read every diagnostic from a failed build in one pass.
+  full phase; read every diagnostic from a failed build in one pass. **Per-test-name
+  `-only-testing` filters silently match nothing for Swift Testing functions — filter at SUITE
+  granularity only** (a name-level filter reports a clean run over zero tests, which reads exactly
+  like a pass).

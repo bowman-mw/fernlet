@@ -119,10 +119,10 @@ on the reasoning.
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
 | `heartDropOuterSealV1` | `fernlet.heartdrop.seal.v1` | `HeartDropSealer` |
 | `lockScryptWrappingV1` | `fernlet.lock.scrypt.wrapping.v1` | — |
-| `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository` |
-| `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository` |
-| `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository` |
-| `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository` |
+| `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository`, `SealedColumnFormatMigration` |
+| `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository`, `SealedColumnFormatMigration` |
+| `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository`, `SealedColumnFormatMigration` |
+| `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository`, `SealedColumnFormatMigration` |
 
 #### HMAC
 

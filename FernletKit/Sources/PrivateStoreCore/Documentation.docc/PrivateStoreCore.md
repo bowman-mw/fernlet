@@ -36,6 +36,8 @@ The second half handles the locked-state write path. When the user logs a cycle 
 
 Phase 2.4 of the crypto-standardization plan gave that buffer its format migrator, ``PendingNarrativeBufferFormatMigrator`` — a `FormatMigrator` conformer on the shared `FernletCrypto` contract (scan → convert → latch, bounded, resumable, idempotent, fail-closed). Its scan **is** ``PendingNarrativeBufferFormatCensus``'s own `take(of:)`, so the converter and the number Phase 3's reader delete is gated on can never disagree, and its convert step goes through the buffer's existing decode/seal halves with a read-back verify: one pinned, non-minting buffer-key value end to end, no new crypto call shape, no new key. It runs at deferred launch on the **buffer key** and deliberately never behind the app lock or the period-visibility gate — the buffer exists to accept writes while both are closed, so a migrator gated on either would structurally never run for exactly the users still holding legacy bytes. Bytes that are read with the key in hand and still will not open block as ``PendingNarrativeBufferMigrationResult/unconvertible`` rather than being deleted, consistent with the drain's own refusal to discard what it cannot decode; an absent file is an *earned* zero, because the surface is transient and only `saveEntries` — which always writes v2 — can re-create it.
 
+Phase 2.6 added the **last** Class-A migrator, and the largest: ``SealedColumnFormatMigrator``, which converts the four sealed entities' seven ciphertext columns from legacy (unprefixed, no AAD) and v2 (binding-only AAD) to v3 (purpose + binding AAD) in bounded keyed passes. Like its siblings the scan **is** the census — ``SealedColumnFormatCensus``'s own classification, paging, `autoreleasepool`, refault and row-budget discipline, so the counter and the converter cannot disagree — and the open is the shipping reader's own dispatch, so its tallies are proven *by open* rather than inferred from a marker byte. It runs behind the **private-hub unlock**, and the content key arrives by **injection**: this module cannot import `FernletLock` (the existing edge runs the other way), so the migrator takes a key-vending closure re-called per page, which the app target wires to the lock service's `.privateHub` decrypt seam. That closure answering nil is how a re-lock stops the sweep fail-closed at the next page boundary — no second lock-state protocol, no key custody of its own, and **zero new dependency edges**.
+
 Concurrency: the target compiles nonisolated (no `defaultIsolation(MainActor.self)`), because the nonisolated layer-3 repositories call the controller and pruner directly. ``PrivatePersistenceController/shared`` is `nonisolated(unsafe)` (the container is not `Sendable`), matching its prior app-target behavior, and ``PendingNarrativeBuffer`` is a plain non-`Sendable` class with no internal locking whose correctness relies on the single lock-service-owned instance being driven from the main actor.
 
 ## Topics
@@ -67,3 +69,12 @@ Concurrency: the target compiles nonisolated (no `defaultIsolation(MainActor.sel
 - ``PendingNarrativeBufferFormatMigrator``
 - ``PendingNarrativeBufferMigrationResult``
 - ``PendingNarrativeBufferMigrationLatch``
+
+### Sealed-column format migration (Phase 2.6)
+
+- ``SealedColumnFormatMigrator``
+- ``SealedColumnMigrationResult``
+- ``SealedColumnMigrationTally``
+- ``SealedColumnNotAttemptedReason``
+- ``SealedColumnMigrationProgressEvent``
+- ``SealedColumnMigrationLatch``
