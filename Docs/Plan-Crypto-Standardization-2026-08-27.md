@@ -713,6 +713,12 @@ Token log (per phase: spent / big consumers / remaining):
   standing rule); and failed builds get ALL diagnostics read in one pass, not one fix per rebuild.
   A session usage-window limit killed two agents mid-phase; both resumed cleanly after the reset.
   Remaining at the boundary: ~15.0M.
+- Phase 2.6: ~2.3M. Big consumers: the design workflow (~775k, 14 objections / 2 fatals accepted),
+  the implementer across landing + the 16-finding fix round (~640k), the adversarial diff review
+  (~702k — it caught the round's one landed FATAL, the read-back clear/corruption conflation),
+  the docs pass (~60k), the gate (~100k, green first pass). Gate history for the whole round:
+  2.1 needed five fixes; 2.2–2.4, 2.5, and 2.6 each passed their boundary gate on the first
+  attempt. Remaining at the loop's end: ~15.0M.
 
 ### Handoff to the Phase 3 session (written at the 2.5 boundary)
 
