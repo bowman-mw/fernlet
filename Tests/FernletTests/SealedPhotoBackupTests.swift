@@ -25,6 +25,7 @@
 import CloudKit
 import CloudKitSync
 import CryptoKit
+import FernletCrypto
 import FernletFoundation
 import Foundation
 import PrivateMediaStore
@@ -1404,6 +1405,751 @@ struct SealedPhotoBackupTests {
         #expect(roundTripped == stamped)
         #expect(roundTripped.hashVersion == 2)
     }
+
+    // MARK: - 9. Format-migration policy (crypto standardization Phase 2.1)
+    //
+    // Phase 2.1 adds no healing mechanism — §8 above already pins the heal. What it adds is the
+    // POLICY around it: bounded passes, a completion latch that attests exactly one honest
+    // sentence, and the invalidation rules that keep the sentence true. Every test below drives
+    // the REAL coordinator over the mock database, so what is asserted is the policy a device
+    // would actually execute.
+
+    /// The Phase 2.1 latch over the SAME isolated defaults the coordinator was built with — a test
+    /// must never read or write the device's real completion state.
+    private func migrationLatch(_ defaults: UserDefaults) -> SealedPhotoBackupMigrationLatch {
+        SealedPhotoBackupMigrationLatch(defaults: defaults)
+    }
+
+    /// Plants a corpus's committed cloud state: one sealed body per id, plus the manifest whose
+    /// plaintext is `manifestJSON` — hand-built by the caller, so the pre-marker shape no build
+    /// that still exists can write (§8's `legacyManifestJSON`) is reachable.
+    private func plantMealBackup(
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase,
+        bodies: [UUID: Data],
+        manifestJSON: Data,
+        corpus: SealedPhotoCorpus = .meal,
+        generation: Int64 = 1
+    ) async throws {
+        let cloud = makeCloud(database)
+        for (id, plaintext) in bodies {
+            try await cloud.saveSealedPhoto(try SealedPhotoCrypto.seal(
+                plaintext,
+                corpus: corpus,
+                slot: .photo(id),
+                identityService: identity,
+                generation: generation,
+                keySalt: Data(repeating: 0x11, count: 32)
+            ))
+        }
+        try await cloud.saveSealedPhoto(try SealedPhotoCrypto.seal(
+            manifestJSON,
+            corpus: corpus,
+            slot: .manifest,
+            identityService: identity,
+            generation: generation,
+            keySalt: Data(repeating: 0x11, count: 32)
+        ))
+    }
+
+    /// Plants the LOCAL half of a healable corpus: the same id the manifest names, holding the
+    /// exact plaintext its planted body was sealed from. `restoreSealedPhoto` is the restore
+    /// path's own writer, so the bytes come back byte-identical (§3's pin) and the pass's recompute
+    /// really does match the digest the manifest committed.
+    private func plantLocalMealPhoto(_ plaintext: Data, id: UUID, in documents: URL) {
+        #expect(mealStore(in: documents).restoreSealedPhoto(plaintext, forID: id),
+                "the local half of the fixture was refused — the planted bytes are not a valid image")
+    }
+
+    /// The generation stamped on a corpus's committed manifest record. Every commit mints the next
+    /// one, so this is the cheapest honest count of how many reconciles actually committed — which
+    /// is how these tests tell a one-pass run from a healed-then-confirmed two-pass run.
+    private func committedManifestGeneration(
+        corpus: SealedPhotoCorpus = .meal,
+        database: MockPhotoRecordDatabase
+    ) async throws -> Int64 {
+        let record = try #require(try await makeCloud(database).sealedPhoto(corpus: corpus, slot: .manifest))
+        return record.generation
+    }
+
+    /// One corpus's format verdict out of a pass — the evidence the latch decision is made from.
+    private func verdict(
+        _ corpus: SealedPhotoCorpus,
+        in pass: OwnPhotoBackupCoordinator.PassResult
+    ) throws -> SealedPhotoCorpusFormatVerdict {
+        try #require(pass.corpusVerdicts?.first { $0.corpus == corpus })
+    }
+
+    /// The latched state P5 / P7 / P8 each start from: §8's legacy meal backup, its plaintext
+    /// planted locally, and one wrapper run — which heals on pass 1 and latches on the confirming
+    /// pass. The host comes back with the coordinator because the coordinator holds it `unowned`.
+    private func latchedMealRoute(
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase,
+        defaults: UserDefaults,
+        device: URL
+    ) async throws -> (
+        coordinator: OwnPhotoBackupCoordinator,
+        host: RecordingOwnPhotoHost,
+        id: UUID,
+        plaintext: Data
+    ) {
+        let id = UUID()
+        let plaintext = jpeg(width: 120, height: 90)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [id: plaintext],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: id, contentHash: Data(SHA256.hash(data: plaintext)))
+            ])
+        )
+        plantLocalMealPhoto(plaintext, id: id, in: device)
+        let (coordinator, host) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+        #expect(migrationLatch(defaults).isComplete, "the shared fixture never reached the latched state")
+        return (coordinator, host, id, plaintext)
+    }
+
+    /// P1 — THE loop, end to end over a corpus this device can fully heal: pass 1 rewrites the
+    /// pre-marker entry with the v2 digest and stamps it, and the LATCH waits for pass 2, which
+    /// re-opens the manifest from CloudKit and finds it already clean. That ordering is the whole
+    /// soundness claim: `isClean` requires `healedEntries == 0`, so a pass that converted anything
+    /// can never be its own proof, and every heal is confirmed by a genuine read-back.
+    @Test func aCleanRunOverAnAllHealableCorpusSetsTheLatchOnTheConfirmingPass() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let route = try await latchedMealRoute(
+            identity: identity, database: database, defaults: defaults, device: device
+        )
+
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.entries.map(\.hashVersion) == [2])
+        #expect(manifest.entries.first?.contentHash == SealedPhotoBackupService.contentHash(route.plaintext))
+        #expect(manifest.minimumEntryHashVersion == 2)
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 3,
+                "the heal latched without a confirming pass that re-opened the manifest from iCloud")
+        #expect(!route.coordinator.lastFullPassBlockedOnlyByOtherDevices)
+    }
+
+    /// P1a — the deliberately-scoped half of that read-back claim. A FRESH enable has no prior
+    /// manifest, so every entry is brand-new; a brand-new entry is not a heal, the first pass is
+    /// clean, and the latch sets in ONE pass. Its digests were computed from plaintext that same
+    /// pass read, so nothing is vouched for by bytes nobody looked at — and requiring a confirming
+    /// pass here would double the whole-library main-actor cost of every first enable for no
+    /// soundness at all. The one-pass shape is policy, so it is pinned rather than left to luck.
+    @Test func aFreshEnableWithNoPriorManifestLatchesInOnePass() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        _ = try #require(mealStore(in: device).save(jpeg(width: 120, height: 90)))
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(migrationLatch(defaults).isComplete)
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 1, "a corpus born clean this pass paid for a confirming pass it does not need")
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.minimumEntryHashVersion == 2)
+        #expect(try verdict(.meal, in: pass).healedEntries == 0, "a brand-new entry was counted as a heal")
+    }
+
+    /// P2 — "I could not look" never latches. A photo the pass could not read may be missing from
+    /// the backup entirely, or stale under a stamp that describes bytes some earlier pass saw —
+    /// so `unreadable > 0` blocks, exactly as the own-photo key migration's indeterminate bucket
+    /// does. And the entry itself is carried VERBATIM: §8's rule, re-asserted from the migrator's
+    /// altitude, because this is where a "we're verifying, so stamp it" edit would look harmless.
+    @Test func theLatchDoesNotSetWhileAPhotoIsUnreadable() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let healable = UUID()
+        let unreadable = UUID()
+        let good = jpeg(width: 120, height: 90)
+        let junk = Data(repeating: 0xAB, count: 512)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [healable: good, unreadable: junk],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: healable, contentHash: Data(SHA256.hash(data: good))),
+                (id: unreadable, contentHash: Data(SHA256.hash(data: junk)))
+            ])
+        )
+        plantLocalMealPhoto(good, id: healable, in: device)
+        // The unreadable half: a file this install cannot open sitting beside one it can, so the
+        // corpus is non-empty AND not all-stranded — the pass goes to the upload leg and fails to
+        // read exactly one photo.
+        try junk.write(to: OwnPhotoCorpusLayout.mealPhotosDirectory(in: device)
+            .appendingPathComponent("\(unreadable.uuidString).jpg"))
+
+        let (coordinator, host) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete, "a pass that could not read a photo latched anyway")
+        #expect(host.verifiedUnreadableCounts.last == 1)
+        let manifest = try await committedManifest(identity: identity, database: database)
+        let kept = try #require(manifest.entries.first { $0.id == unreadable })
+        #expect(kept.contentHash == Data(SHA256.hash(data: junk)),
+                "an unreadable photo's committed digest was rewritten from bytes nobody read")
+        #expect(kept.hashVersion == 1)
+        #expect(manifest.entries.first { $0.id == healable }?.hashVersion == 2,
+                "the readable photo was not healed, so the pass did less than it could")
+    }
+
+    /// P3 — the state this device can never fix, and must therefore never claim to have fixed: a
+    /// manifest entry carried forward from the user's OTHER phone, whose plaintext lives on that
+    /// phone. The latch stays closed on the truth of the corpus until that device heals its own
+    /// entries; the loop stops rather than spinning (no forward progress on pass 2); and the
+    /// session verdict says "blocked by another device", so the UI never renders a Retry
+    /// invitation that structurally cannot succeed.
+    @Test func aForeignCarriedForwardLegacyEntryKeepsTheLatchClosed() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let mine = UUID()
+        let theirs = UUID()
+        let myPhoto = jpeg(width: 120, height: 90)
+        let theirBytes = Data("the other phone's photo".utf8)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [mine: myPhoto, theirs: theirBytes],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: mine, contentHash: Data(SHA256.hash(data: myPhoto))),
+                (id: theirs, contentHash: Data(SHA256.hash(data: theirBytes)))
+            ])
+        )
+        plantLocalMealPhoto(myPhoto, id: mine, in: device)
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete,
+                "a corpus still carrying another device's legacy digest was scored as proven")
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.entries.first { $0.id == mine }?.hashVersion == 2)
+        #expect(manifest.entries.first { $0.id == mine }?.contentHash
+                == SealedPhotoBackupService.contentHash(myPhoto))
+        #expect(manifest.entries.first { $0.id == theirs }?.hashVersion == 1)
+        #expect(manifest.entries.first { $0.id == theirs }?.contentHash
+                == Data(SHA256.hash(data: theirBytes)),
+                "this device rewrote a digest for bytes it has never held")
+        #expect(manifest.minimumEntryHashVersion == 1)
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 3, "the loop did not consume both funded passes before stopping")
+        #expect(coordinator.lastFullPassBlockedOnlyByOtherDevices,
+                "the only blocker was another device's entry, and the UI was not told")
+    }
+
+    /// P4 — a corpus whose manifest could not be READ is indeterminate, not clean. The manifest is
+    /// the sole authority on membership, so a pass that never saw it has no standing to say
+    /// anything about the corpus's format — and (the §2 rule this inherits) it must not rewrite
+    /// the list either.
+    @Test func anUnreadableManifestBlocksTheLatch() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let id = UUID()
+        let plaintext = jpeg(width: 120, height: 90)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [id: plaintext],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: id, contentHash: Data(SHA256.hash(data: plaintext)))
+            ])
+        )
+        plantLocalMealPhoto(plaintext, id: id, in: device)
+        database.unfetchableRecordNames = ["sealed-photo.meal.manifest"]
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete)
+        let mealVerdict = try verdict(.meal, in: pass)
+        #expect(!mealVerdict.committed)
+        #expect(!mealVerdict.examined, "a leg that never reached the manifest reported an answer")
+        #expect(pass.uploadFailed)
+        database.unfetchableRecordNames = []
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 1, "a manifest this device could not read was rewritten anyway")
+    }
+
+    /// P5 — the second run over a latched route is short-circuited by the loop (no healing, no
+    /// second funded pass) and changes nothing: `run()` is idempotent, and a pass over an
+    /// already-converted corpus is the read-only sweep that lets a confirming pass double as proof.
+    @Test func aSecondRunOverALatchedRouteShortCircuitsAndStaysIdempotent() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let route = try await latchedMealRoute(
+            identity: identity, database: database, defaults: defaults, device: device
+        )
+        let bodyBefore = try #require(database.ciphertext(named: "sealed-photo.meal.\(route.id.uuidString)"))
+
+        _ = await route.coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(migrationLatch(defaults).isComplete, "a clean second run un-latched a proven route")
+        #expect(database.ciphertext(named: "sealed-photo.meal.\(route.id.uuidString)") == bodyBefore,
+                "an idempotent pass re-uploaded a photo it had already committed")
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 4, "the latched branch funded more than the one full pass the user asked for")
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.minimumEntryHashVersion == 2)
+    }
+
+    /// P6 — the second heal shape, which uploads not one byte: a pre-marker entry whose committed
+    /// digest ALREADY is the v2 pre-image. The matched-unchanged rung proves it (the recompute
+    /// matches) and stamps it, and that stamp upgrade is forward progress in its own right — a
+    /// loop that only counted re-uploads would stop one pass short and never latch this corpus.
+    @Test func aStampUpgradeWithoutReuploadCountsAsHealing() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let id = UUID()
+        let plaintext = jpeg(width: 100, height: 100)
+        // The digest is the CURRENT one; only the marker is missing, so the entry decodes as
+        // legacy/unproven and one recompute is enough to prove it.
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [id: plaintext],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: id, contentHash: SealedPhotoBackupService.contentHash(plaintext))
+            ])
+        )
+        plantLocalMealPhoto(plaintext, id: id, in: device)
+        let bodyBefore = try #require(database.ciphertext(named: "sealed-photo.meal.\(id.uuidString)"))
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(migrationLatch(defaults).isComplete,
+                "a stamp upgrade was not counted as progress, so the loop stopped before it could latch")
+        #expect(database.ciphertext(named: "sealed-photo.meal.\(id.uuidString)") == bodyBefore,
+                "the stamp upgrade re-uploaded a body whose bytes had not changed")
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.minimumEntryHashVersion == 2)
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 3)
+    }
+
+    /// P7 — how another device's pre-marker write reaches this one: at the next pass that OPENS
+    /// the manifest. A pre-marker build re-encodes manifests with no `hashVersion` field at all, so
+    /// its write silently drops the corpus minimum back to 1; a latch set before that would then be
+    /// attesting something no longer true. Every pass shape observes — the ambient one included,
+    /// at zero added cost, because the reconcile already opens the manifest.
+    @Test func observingAForeignLegacyManifestWriteResetsTheLatch() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let route = try await latchedMealRoute(
+            identity: identity, database: database, defaults: defaults, device: device
+        )
+
+        // "The other phone", running a pre-marker build: it re-commits the manifest it opened, and
+        // its encoder has no `hashVersion` field to write.
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [:],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: route.id, contentHash: Data(SHA256.hash(data: route.plaintext)))
+            ]),
+            generation: 9
+        )
+
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        // The AMBIENT shape (`fullVerification: false`) — the launch pass, which reads almost
+        // nothing and is never routed through the migrator. `preferenceOverride` stands in for the
+        // persisted preference so the test never depends on process-global storage settings.
+        _ = await route.coordinator.synchronize(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete,
+                "a latch kept attesting a corpus another device had just written back to legacy")
+        #expect(audit.contains("sealedPhoto.hashMigration.invalidatedByForeignWrite"),
+                "the invalidation was silent")
+    }
+
+    /// P8 — the latch must never eat the user's verification. Retry after latching still runs a
+    /// REAL full pass, so a photo replaced in place under the same id is re-read, re-hashed and
+    /// re-uploaded. A short-circuit that skipped the pass would turn the one remedy the banner
+    /// offers into a no-op.
+    @Test func retryAfterTheLatchStillRunsARealFullPass() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let route = try await latchedMealRoute(
+            identity: identity, database: database, defaults: defaults, device: device
+        )
+        let bodyBefore = try #require(database.ciphertext(named: "sealed-photo.meal.\(route.id.uuidString)"))
+
+        // The same id, different bytes — the in-place replacement only a full pass notices.
+        let replacement = jpeg(width: 80, height: 140, color: .systemPink)
+        plantLocalMealPhoto(replacement, id: route.id, in: device)
+
+        _ = await route.coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(database.ciphertext(named: "sealed-photo.meal.\(route.id.uuidString)") != bodyBefore,
+                "the latch ate the user's verification — the replaced photo never reached iCloud")
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.entries.first?.contentHash == SealedPhotoBackupService.contentHash(replacement))
+        #expect(migrationLatch(defaults).isComplete)
+    }
+
+    /// P9 — teardown destroys the manifests the latch makes a claim about, so the latch goes with
+    /// them. Keeping it would carry a proof about deleted objects onto a future re-enable's
+    /// brand-new lineage — the deliberate mirror-image of the own-photo key latch, which is KEPT
+    /// because its subject (the re-sealed local files) survives the wipe.
+    @Test func teardownForDeleteAllClearsTheLatch() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        migrationLatch(defaults).markComplete()
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        #expect(await coordinator.tearDownForDeleteAll())
+
+        #expect(!migrationLatch(defaults).isComplete,
+                "a proof about manifests this call just deleted survived the teardown")
+    }
+
+    /// P11 — the no-op pass shape, which three different situations produce (the preference is
+    /// off, the DEBUG skip env is set, or the between-pass teardown guard fired). It carries no
+    /// verdicts, so it is never clean and never progress: the loop stops after one, and nothing
+    /// latches. `PassResult()`'s defaults include `routeCommitted == true`, which is exactly why
+    /// "verdicts present" — not that Bool — has to be the gate.
+    @Test func aNoOpPassIsNeverCleanAndNeverProgress() async throws {
+        let defaults = isolatedDefaults()
+        let noOp = SealedPhotoBackupMigrationPassResult(pass: OwnPhotoBackupCoordinator.PassResult())
+        #expect(!noOp.isClean, "a pass that never ran scored as proof")
+        #expect(!noOp.madeForwardProgress)
+
+        let migrator = SealedPhotoBackupFormatMigrator(latch: migrationLatch(defaults)) {
+            OwnPhotoBackupCoordinator.PassResult()
+        }
+        #expect(await migrator.run() == false)
+        #expect(migrator.underlyingPasses.count == 1, "a no-op pass funded a second identical one")
+        #expect(!migrationLatch(defaults).isComplete)
+    }
+
+    /// P12 — the service-level bookkeeping the whole policy reads, on both pass shapes and both
+    /// legs. Every value is arithmetic over what the pass already had in its hands (the manifest it
+    /// opened, the entries it was about to encode), which is what keeps the migrator's evidence
+    /// free of a single added fetch or decrypt.
+    @Test func theSummaryCarriesManifestMinimaAndHealsOnBothRungs() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+
+        // A FULL pass: it reads the plaintext, so it may (and does) heal.
+        let healing = MockPhotoRecordDatabase()
+        let healingService = makeService(identity: identity, database: healing, defaults: isolatedDefaults())
+        let healable = try await plantLegacyMealBackup(identity: identity, database: healing)
+        let full = try await healingService.reconcile(
+            corpus: .meal, ids: [healable.id], verifyingContentHashes: true
+        ) { _ in healable.plaintext }
+        #expect(full.openedManifestMinimumHashVersion == 1)
+        #expect(full.committedManifestMinimumHashVersion == 2)
+        #expect(full.healedEntries == 1)
+        #expect(full.uploaded == 1)
+
+        // The AMBIENT pass over the same fixture reads nothing, so it heals nothing — and says so.
+        let ambientDatabase = MockPhotoRecordDatabase()
+        let ambientService = makeService(identity: identity, database: ambientDatabase, defaults: isolatedDefaults())
+        let untouched = try await plantLegacyMealBackup(identity: identity, database: ambientDatabase)
+        let ambient = try await ambientService.reconcile(
+            corpus: .meal, ids: [untouched.id], verifyingContentHashes: false
+        ) { _ in untouched.plaintext }
+        #expect(ambient.openedManifestMinimumHashVersion == 1)
+        #expect(ambient.committedManifestMinimumHashVersion == 1,
+                "an ambient pass re-committed a manifest with a minimum it never earned")
+        #expect(ambient.healedEntries == 0)
+
+        // ...and the RESTORE leg's half: the minimum of the manifest it decoded. It is the only
+        // honest source of that number for a corpus the reconcile never reaches.
+        let restoreDatabase = MockPhotoRecordDatabase()
+        let restoreService = makeService(identity: identity, database: restoreDatabase, defaults: isolatedDefaults())
+        _ = try await plantLegacyMealBackup(identity: identity, database: restoreDatabase)
+        let restored = try #require(try await restoreService.restore(corpus: .meal) { _, _ in true })
+        #expect(restored.manifestMinimumEntryHashVersion == 1)
+    }
+
+    /// P13 — the merge semantics, at the one irreversible decision point the route has. The
+    /// confirming pass exists only for the latch policy, so its transient failure must never
+    /// un-prove the healing pass that committed: `setEnabled` still returns true (a `false` snaps
+    /// the toggle off over a backup that IS in iCloud, and leaves it unmaintained — no ambient
+    /// passes, no banner), the commit proof the key-binding gate reads still stands, and the
+    /// banner is not told "your photos may not be in iCloud" about photos this run committed. The
+    /// failure maps to one place only: the latch stays closed.
+    @Test func aFailedConfirmingPassNeverUnprovesACommittedHealingPass() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let id = UUID()
+        let plaintext = jpeg(width: 120, height: 90)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [id: plaintext],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: id, contentHash: Data(SHA256.hash(data: plaintext)))
+            ])
+        )
+        plantLocalMealPhoto(plaintext, id: id, in: device)
+
+        let (coordinator, host) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        // Pass 1 gets its two writes (the healed body, then the manifest); every later save throws,
+        // so the confirming pass fails its commit exactly the way a transport blip would.
+        database.failSavesAfterCallCount = 2
+
+        #expect(await coordinator.setEnabled(true),
+                "a transient confirming pass vetoed an enable whose healing pass committed")
+        #expect(OwnPhotoEscrowCommitLedger(defaults: defaults).isCommitted,
+                "the binding gate's proof was withdrawn by a pass that only exists to read")
+        #expect(host.uploadFailures.last == false, "the banner blamed the upload for a latch-only failure")
+        #expect(!migrationLatch(defaults).isComplete, "a run whose confirming pass failed latched anyway")
+
+        // ...and pass 1's heal is really in iCloud: that is what makes the merge honest.
+        database.failSavesAfterCallCount = nil
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.minimumEntryHashVersion == 2)
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 2, "the healing pass's commit is what the merge is vouching for")
+    }
+
+    /// P14 — the corpus this device stopped looking at. An emptied-after-upload corpus (the user
+    /// deleted their photos; the ledger is present but empty) is skipped by the ambient upload
+    /// guard forever, so without the full-pass admission its cloud manifest — possibly carrying
+    /// another device's legacy entries — would never be observed again: the latch could neither
+    /// honestly set nor ever become satisfiable, i.e. a permanent nudge treadmill. A full pass runs
+    /// its provably inert reconcile (`ids = []`, nothing prunable) purely so the corpus is EXAMINED
+    /// and can block on the truth.
+    @Test func anEmptiedCorpusOverALiveForeignLegacyManifestBlocksTheLatchAndIsExamined() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let theirs = UUID()
+        let theirBytes = Data("the other phone's photo".utf8)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [theirs: theirBytes],
+            manifestJSON: legacyManifestJSON(entries: [
+                (id: theirs, contentHash: Data(SHA256.hash(data: theirBytes)))
+            ])
+        )
+        // The emptied-after-upload state: this device uploaded once, then the user deleted every
+        // meal photo, so the ledger is PRESENT and empty.
+        OwnPhotoUploadLedger(defaults: defaults).recordUploaded([], for: .meal)
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        let mealVerdict = try verdict(.meal, in: pass)
+        #expect(mealVerdict.examined, "the corpus was never looked at, so its latch state is a guess")
+        #expect(mealVerdict.committed)
+        #expect(mealVerdict.observedMinima.contains(1))
+        #expect(!migrationLatch(defaults).isComplete)
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.entries.map(\.id) == [theirs], "the inert reconcile dropped an entry it must carry")
+        #expect(manifest.entries.first?.contentHash == Data(SHA256.hash(data: theirBytes)))
+        #expect(manifest.entries.first?.hashVersion == 1)
+    }
+
+    /// P15 — the emptiest possible user is not indeterminate forever. With nothing local and
+    /// nothing committed, every corpus is examined by the restore leg (a nil `service.restore`
+    /// return is the ONE honest source of "no manifest exists") and observes no minimum at all, so
+    /// the pass is vacuously clean and latches. Vacuousness is evidence-based here — read off what
+    /// the pass actually did, never inferred from a ledger.
+    @Test func aZeroPhotoUserWithNoManifestsLatchesVacuously() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(migrationLatch(defaults).isComplete, "a user with nothing to prove could never finish proving it")
+        let verdicts = try #require(pass.corpusVerdicts)
+        #expect(verdicts.count == SealedPhotoCorpus.allCases.count)
+        #expect(verdicts.allSatisfy(\.examined))
+        #expect(verdicts.allSatisfy { $0.observedMinima.isEmpty })
+        #expect(database.recordNames(withPrefix: "sealed-photo.").isEmpty,
+                "an empty device wrote a manifest, which is the clobber the upload guard exists to stop")
+    }
+
+    /// P16 — an unlistable corpus directory fails CLOSED. `storedPhotoIDs()` maps that state to
+    /// `[]` while `isEmptyForRestore()` deliberately reads it as non-empty, so a reconcile fed the
+    /// empty id view would carry everything forward unread and score clean — and, with a non-empty
+    /// prunable set, would prune this device's own committed entries while their files sit intact
+    /// on disk. So the reconcile is skipped entirely and the corpus is indeterminate.
+    @Test func anUnlistableCorpusDirectoryBlocksTheLatchAndSkipsItsReconcile() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+
+        // A corpus that would otherwise latch on its first pass: local photo, and a committed
+        // manifest already carrying the current digest and marker.
+        let id = UUID()
+        let plaintext = jpeg(width: 120, height: 90)
+        let cleanManifest = try JSONEncoder().encode(SealedPhotoManifest(
+            corpus: .meal,
+            entries: [SealedPhotoManifest.Entry(
+                id: id,
+                contentHash: SealedPhotoBackupService.contentHash(plaintext),
+                hashVersion: SealedPhotoManifest.Entry.currentHashVersion
+            )]
+        ))
+        try await plantMealBackup(
+            identity: identity, database: database, bodies: [id: plaintext], manifestJSON: cleanManifest
+        )
+        plantLocalMealPhoto(plaintext, id: id, in: device)
+
+        // Deny listing on the directory itself (the `OwnPhotoKeyMigrationTests` idiom, one level
+        // up), restored before the teardown below can run.
+        let mealDirectory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: device)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: mealDirectory.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mealDirectory.path)
+        }
+
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete,
+                "a corpus whose files could not even be counted was scored as proven")
+        let mealVerdict = try verdict(.meal, in: pass)
+        #expect(!mealVerdict.committed)
+        #expect(!mealVerdict.examined)
+        #expect(audit.contains("sealedPhoto.reconcileSkippedUnlistableCorpus"), "the skip was silent")
+        let generation = try await committedManifestGeneration(database: database)
+        #expect(generation == 1,
+                "the committed manifest was rewritten from an empty id view of a corpus that holds files")
+    }
+
+    /// P18 — the restore leg observes too. A corpus this device RESTORES never reaches the
+    /// reconcile, so threading the observation through only the upload leg would leave a
+    /// restore-only pass unable to see a foreign legacy write at all — the latch would keep
+    /// attesting a corpus another device had already written back.
+    @Test func aRestoreLegObservationOfALegacyManifestResetsTheLatch() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let defaults = isolatedDefaults()
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        migrationLatch(defaults).markComplete()
+
+        // The RECIPE corpus: empty locally and never uploaded from here, so this pass restores it
+        // rather than reconciling it.
+        let id = UUID()
+        let plaintext = jpeg(width: 90, height: 90, color: .systemPink)
+        try await plantMealBackup(
+            identity: identity,
+            database: database,
+            bodies: [id: plaintext],
+            manifestJSON: legacyManifestJSON(
+                corpus: .recipe,
+                entries: [(id: id, contentHash: Data(SHA256.hash(data: plaintext)))]
+            ),
+            corpus: .recipe
+        )
+
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let (coordinator, _) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        _ = await coordinator.synchronize(preferenceOverride: true)
+
+        #expect(!migrationLatch(defaults).isComplete,
+                "a restore-only pass saw a legacy manifest and left the latch attesting the opposite")
+        #expect(audit.contains("sealedPhoto.hashMigration.invalidatedByForeignWrite"))
+    }
 }
 
 // MARK: - Test doubles
@@ -1438,6 +2184,36 @@ private final class RecordingOwnPhotoHost: OwnPhotoBackupContext {
     }
 }
 
+/// Collects the audit trail for one test, so a "nothing silent" rule can be asserted rather than
+/// assumed. Handlers accumulate in `FernletAuditLog`'s registry, so installing one never displaces
+/// another suite's — but it must still be removed on teardown.
+private final class AuditCapture {
+    private let lock = NSLock()
+    private var storedEvents: [String] = []
+    private var token: UUID?
+
+    func install() {
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.storedEvents.append(event)
+            self.lock.unlock()
+        }
+    }
+
+    func uninstall() {
+        if let token {
+            FernletAuditLog.removeCaptureHandler(token)
+            self.token = nil
+        }
+    }
+
+    func contains(_ event: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return storedEvents.contains(event)
+    }
+}
+
 /// In-memory `CloudKitRecordDatabase` for the photo route, with the one production fidelity these
 /// tests depend on: an incoming `CKAsset` is copied to a stable URL, because the real service
 /// deletes its temp file as soon as the save returns.
@@ -1449,8 +2225,14 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
     /// Record names whose fetch throws, modelling a transient CloudKit failure confined to one
     /// record while everything else works.
     var unfetchableRecordNames: Set<String> = []
+    /// How many `saveRecords` calls succeed before every LATER one throws, or nil for no limit.
+    /// `failSaves` is all-or-nothing for a whole run, so it cannot express the one shape a
+    /// multi-pass migration run needs: a first pass that commits and a second that fails.
+    var failSavesAfterCallCount: Int?
+    /// `saveRecords` calls that have succeeded so far — what `failSavesAfterCallCount` counts.
+    private(set) var saveCallCount = 0
 
-    /// The failure `failSaves` / `unfetchableRecordNames` inject.
+    /// The failure `failSaves` / `failSavesAfterCallCount` / `unfetchableRecordNames` inject.
     struct InjectedFailure: Error {}
 
     func recordZoneIDs() async throws -> [CKRecordZone.ID] {
@@ -1473,6 +2255,8 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
 
     func saveRecords(_ incoming: [CKRecord]) async throws {
         if failSaves { throw InjectedFailure() }
+        if let failSavesAfterCallCount, saveCallCount >= failSavesAfterCallCount { throw InjectedFailure() }
+        saveCallCount += 1
         for record in incoming {
             if let asset = record["encryptedBlob"] as? CKAsset, let sourceURL = asset.fileURL {
                 let stableURL = FileManager.default.temporaryDirectory

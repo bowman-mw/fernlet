@@ -214,6 +214,101 @@ Every migrator: runs behind the app lock (these are sealed corpora), never delet
 until the re-sealed blob has been read back successfully, and reports incomplete rather than
 claiming success.
 
+### Phase 2.1 — `SealedPhotoBackupService` migrator — **BUILT**
+
+Source landed in `db40984`; the tests/docs commit follows. **Policy only.** The heal itself shipped
+with Phase 1 and is pinned by `SealedPhotoBackupTests` §8 — a full-verification reconcile rewrites a
+legacy entry with the v2 digest and stamps its `hashVersion`. What 2.1 adds is the loop, the latch,
+the invalidation rules and the user-visible trigger, at **zero new cryptographic calls**: no
+seal/open/digest/derivation site, no change to the AAD, the record `formatVersion`, or the manifest
+JSON schema. Every write still goes through the reconcile whose ordering, union, carry-forward and
+prune scope the §8 pins already hold. (The Phase 2 preamble's "runs behind the app lock" targets the
+sealed Core Data corpora; this surface's passes already run outside the lock by shipped design —
+launch-ambient passes, keys at `AfterFirstUnlock` — and the migrator rides those same seams without
+changing their custody model.)
+
+**The async sibling.** The pass is `async` and main-actor over CloudKit, which the Phase 1 protocol
+cannot express; bridging it into a synchronous `performPass()` would park a thread on main-actor
+work — the starvation family bounded passes exist to prevent. So `FernletCrypto` gained
+`AsyncFormatMigrator` beside `FormatMigrator`, sharing `FormatMigrationPassResult` and
+`FormatMigrationLatching` verbatim so the latch and verdict vocabulary stay single-sourced.
+`FormatMigrator.swift` and `OwnPhotoKeyMigration.swift` are **not in the diff** — Phase 1's
+"unchanged tests over a replaced loop" proof is undisturbed. The run loop is duplicated
+deliberately, the duplication is named in a doc comment on both sides ("a change to either loop's
+policy must land in both"), and each copy is now pinned from its own side against a scripted
+conformer (`FormatMigratorTests`, `AsyncFormatMigratorTests`).
+
+**Verdict semantics — absence of evidence blocks.** A full pass now returns one
+`SealedPhotoCorpusFormatVerdict` per corpus, built from what the two legs already held: `examined`
+(some leg opened the manifest slot and got an answer — a manifest, or the restore leg's proof that
+none exists), `observedMinima` (every `minimumEntryHashVersion` the pass saw — opened at restore,
+opened at reconcile start, and the outgoing value of the manifest it committed), `unreadable`, and
+`healedEntries`. `isClean` has **no nil-coalescing and no unexamined escape**: an unexamined corpus,
+an unreadable manifest, an unlistable directory, any unreadable photo, anything still to heal, or
+any observed minimum of 1 blocks the latch. Forward progress is `healedEntries > 0` — an entry whose
+recorded version rose 1 → 2, counting both heal shapes (the re-upload and the matched-unchanged
+stamp upgrade) and deliberately not plain new-photo uploads, so a pass that backs up new photos
+while a foreign legacy entry stays stuck cannot spin. Two coordinator policy changes sit above the
+service and are named as changes rather than smuggled in: full passes now reconcile an
+emptied-after-upload corpus (provably inert — `ids = []`, empty prune set, carry-forward verbatim)
+so its manifest is examined instead of permanently unobserved, and a corpus whose id enumeration
+fails — a directory that exists but will not list — is skipped as indeterminate instead of feeding
+the reconcile an empty id view.
+
+**The latch, and what it deliberately does not gate.** `fernlet.sealedPhoto.hashVersionMigrationComplete`
+attests exactly one sentence: on *this* device, a full pass completed in which every photo it holds
+was read and proven, every corpus was examined and committed, and every observed manifest minimum
+was `>= 2`. It does **not** attest fleet convergence, and **it is not the Phase-3 gate** — that gate
+reads `minimumEntryHashVersion` from the manifests at gate time on a real device, never this bit.
+This is a documented deviation from the `FormatMigrationLatching` family norm ("every latch gates an
+irreversible step"): here the irreversible step's gate is the manifests themselves, the only
+artifact every device shares, and the latch's whole job is to stop re-funding whole-library passes
+and to drive the nudge off. It is invalidated by delete-all teardown, by adopting another device's
+escrow key, and by any pass — ambient included — that observes a manifest minimum of 1, which is how
+a foreign or pre-marker write reaches this device.
+
+**Trigger (D3: nothing silent).** No ambient pass of any kind. The migrator runs at exactly the two
+seams that were already full, user-visible passes — enable, and the banner's Retry — both routed
+through one coordinator wrapper, with an in-flight guard so the device never races itself in the
+manifest's last-writer-wins ordering, and a teardown-epoch guard so a delete-all landing between
+funded passes turns every remaining pass into a no-op rather than resurrecting the backup the user
+just destroyed. A latched route still gets the plain full pass: the latch never eats the user's
+verification. While the backup is on and the check is owed, Privacy & Data shows one pending status
+line beside the existing Retry button — and **both** banner predicates were extended, without which
+the healthy pre-marker user (the nudge's entire target population) would see neither the line nor
+the button. When the only blocker is a foreign entry this device cannot heal, the copy swaps to say
+so and withdraws the Retry invitation, because Retry structurally cannot clear that state.
+
+**Wipe wall.** The one new `UserDefaults` key landed with both rows in the same commit: the
+`PersistedSurfaceWipeBoundaryTests` `.cleared(token: "deleteOwnPhotoEscrowBackups")` row and the
+extended `Docs/PrivacyWipeCoverage.md` row. Cleared, not kept — the deliberate mirror-image of
+`ownPhotoKeyMigrationComplete`'s kept row: that latch's subject (re-sealed local files) survives the
+wipe, this one's subject (the manifests) is destroyed by the same call, so keeping it would preserve
+a falsehood.
+
+**Implementer deviations from the reviewed design (four, all deliberate).** (1) The wrapper's merge
+is scoped to passes that actually RAN — a no-op pass carries `PassResult()`'s defaults, including
+`routeCommitted == true`, so admitting it would re-record a committed route off a pass that did
+nothing, and the binding gate consults that ledger. (2) The foreign-write audit line fires only when
+a *set* latch was actually invalidated; the reset itself stays unconditional, so the trail never
+claims an invalidation that did not happen. (3) The census edit extended to the doc comment above
+`sealedPhotoBackupRow`, not only the `.uncountable` string the design named — the same stale premise
+appeared in both, and the row's status and no-fetch behavior are untouched either way. (4) The
+Progress tick moved to this docs commit rather than riding the source commit.
+
+**Residuals — recorded work, not dropped work.** Three planned pins could not be written against the
+landed API and are owed. P10 (escrow adoption resets the latch) and the store-side latch re-reads:
+`FernletStore` constructs `SealedPhotoBackupMigrationLatch()` on `.standard` at all three seams,
+which matches the `ownPhotoKeyMigrationComplete` precedent exactly but leaves no injection point, so
+a test cannot observe the reset without touching the device's real defaults. P17 (teardown between
+funded passes) needs `teardownEpoch`, which is private to the coordinator. P19 (the healthy
+pre-marker user sees the pending line and a tappable Retry) needs the two banner predicates, which
+are private to the view. Each is a testability gap, not a behavior gap — the behavior is implemented
+and reviewed — and closing them means widening a seam, which belongs in its own change rather than
+riding this one. One known behavior residual: after an invalidation the first render shows the
+generic pending copy even when the blocker is another device, because the foreign-only verdict is
+session state derived from a wrapper run; one tap re-derives the honest copy.
+
 ### Phase 3 — Delete the Class-A legacy readers
 
 Gated on census = 0 for that surface, on real tester devices, not just simulators. Also close
@@ -291,7 +386,10 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
 - [x] Phase 1 — `FormatMigrator` lift + sealed-photo `hashVersion` marker (`94a8bc4`, merged to
       main 2026-08-28; boundary gate: full unit phase 3143 tests / 285 suites green from a private
       DerivedData, power-of-10 and doc-coverage scans clean)
-- [ ] Phase 2.1 — `SealedPhotoBackupService` migrator
+- [x] Phase 2.1 — `SealedPhotoBackupService` migrator (source `db40984`; tests/docs commit follows.
+      `AsyncFormatMigrator` sibling + the policy shell over the existing healing reconcile, zero new
+      crypto; latch key landed with both wipe-wall rows. Three planned pins deferred as recorded
+      testability residuals — see the phase section)
 - [ ] Phase 2.2 — `HeartDropSidecarKey` migrator
 - [ ] Phase 2.3 — `MediaAtRestCrypto` migrator
 - [ ] Phase 2.4 — `PendingNarrativeBuffer` migrator (runs on the buffer key, NOT behind the app
