@@ -319,6 +319,43 @@ public nonisolated enum KeychainItem {
         return status == errSecItemNotFound ? errSecSuccess : status
     }
 
+    /// Replaces the VALUE of the single existing item matching `service` + `account` within
+    /// `synchronizable` scope via one `SecItemUpdate` — **update-only**: when no item matches,
+    /// `errSecItemNotFound` is returned *un-normalized* and nothing is created. The caller must
+    /// refuse to create; a caller that needs create-or-replace uses
+    /// ``store(_:account:service:accessibility:synchronizable:replacing:)`` instead.
+    ///
+    /// Why this exists beside the delete-then-add `store`: `SecItemUpdate` is applied by securityd
+    /// (out of process) as a single transaction, so the client dying mid-call cannot leave the row
+    /// absent or half-written — the property the lock's wrap re-wrap promote (crypto-standardization
+    /// Phase 2.5) depends on, where `store`'s two-transaction delete-then-add has a real
+    /// row-absent crash window. Only `kSecValueData` appears in `attributesToUpdate`, so the row's
+    /// accessibility class and synchronizable flag are preserved exactly as stored.
+    ///
+    /// - Returns: the raw `SecItemUpdate` status (`errSecSuccess` on success; `errSecItemNotFound`
+    ///   when no row matched — deliberately NOT normalized, unlike the delete family). R5: empty
+    ///   account/service/payload are caller bugs, refused with `errSecParam` (matching `store`).
+    ///   R7: not discardable — a failed update means the value was never replaced.
+    public static func updateReportingStatus(
+        _ data: Data,
+        account: String,
+        service: String,
+        synchronizable: SynchronizableScope = .any
+    ) -> OSStatus {
+        guard !account.isEmpty, !service.isEmpty, !data.isEmpty else { return errSecParam }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: synchronizable.queryValue,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+        let attributesToUpdate: [String: Any] = [
+            kSecValueData as String: data
+        ]
+        return SecItemUpdate(query as CFDictionary, attributesToUpdate as CFDictionary)
+    }
+
     /// Deletes EVERY item under `service`, both synced and device-only variants. Used by the
     /// lock-reset and delete-everything flows to clear a whole service slot at once.
     ///

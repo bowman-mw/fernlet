@@ -53,7 +53,12 @@ struct KeyCustodyBoundaryTests {
         // Representative rows across the lock's footprint (all share one store path; the
         // biometric bypass is separately pinned by source in `biometricBypassACLIsPinnedInSource`
         // because storing a WhenPasscodeSet item requires a device passcode the simulator lacks).
-        for key in [LockKeychainKey.salt, .verifier, .wrappedContentKey, .seWrappedContentKey] {
+        // `.wrappedContentKeyRewrapStaging` is the Phase 2.5 re-wrap staging row: it holds a
+        // scrypt-openable copy of the content key for its whole (bounded) lifetime, so a staging
+        // copy under a weaker class than the live row would out-expose it — the inheritance is
+        // asserted through the REAL store path here, not assumed (T-26).
+        for key in [LockKeychainKey.salt, .verifier, .wrappedContentKey,
+                    .wrappedContentKeyRewrapStaging, .seWrappedContentKey] {
             #expect(KeychainItem.store(Data([0xAB]), for: key, service: service) == errSecSuccess)
             let attrs = rowAttributes(account: key.rawValue, service: service)
             #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
@@ -83,8 +88,13 @@ struct KeyCustodyBoundaryTests {
         )
         try await lockService.configure(credential: .pin6("123456"), grantingScope: .privateHub)
 
-        // The three accounts that can ever carry the content key itself.
-        let contentKeyBearing: [LockKeychainKey] = [.wrappedContentKey, .seWrappedContentKey, .biometricBypass]
+        // The four accounts that can ever carry the content key itself. The Phase 2.5 re-wrap
+        // staging row (`.wrappedContentKeyRewrapStaging`) is the fourth: expected ABSENT after
+        // `configure()` in BOTH branches — configure never stages — so the exact-set assertions
+        // below now SEE the row instead of silently under-covering it.
+        let contentKeyBearing: [LockKeychainKey] = [
+            .wrappedContentKey, .wrappedContentKeyRewrapStaging, .seWrappedContentKey, .biometricBypass
+        ]
         let present = contentKeyBearing.filter { KeychainItem.load(for: $0, service: service) != nil }
 
         if SecureEnclaveContentKeyWrap.isAvailable {
@@ -94,6 +104,12 @@ struct KeyCustodyBoundaryTests {
             #expect(present == [.wrappedContentKey],
                     "SE-less hardware must stay legacy; found \(present.map(\.rawValue))")
         }
+        // T-27: the steady state stays staging-free — a hard-bound install (and the SE-less
+        // legacy complement) must never carry a scrypt-openable staging copy at rest. The dynamic
+        // version of the same claim (a planted orphan is swept by the next passcode unlock under
+        // any custody) lives at the service level in LockWrapFormatMigrationTests.
+        #expect(KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: service) == nil,
+                "the re-wrap staging row must be absent in the steady state")
         for key in present {
             let attrs = rowAttributes(account: key.rawValue, service: service)
             #expect(attrs?.accessible == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,

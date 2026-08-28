@@ -797,9 +797,24 @@ final class FakeLockCryptoProvider: FernletLockCryptoProviding {
         return Data(repeating: contentKeyCounter, count: FernletLockCrypto.keyLength)
     }
 
+    /// FORMAT-FAITHFUL (crypto-standardization Phase 2.5): the fake stamps the real `FLW2`
+    /// marker exactly as the production writer does, so the service-level wrap-format migrator —
+    /// which classifies by marker through the shared census classifier — sees a fake wrap exactly
+    /// as it sees a production one (a fresh configure is `v2Marked`, never a convert candidate).
+    /// The payload after the marker stays an opaque UUID: the fake's identity is its map, not its
+    /// bytes.
     func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
-        let wrapped = UUID().uuidString.data(using: .utf8)!
+        let wrapped = FernletLockCrypto.wrappedContentKeyFormatV2 + Data(UUID().uuidString.utf8)
         wrappedKeys[wrapped] = (wrappingKeyData, contentKey)
+        return wrapped
+    }
+
+    /// Registers and returns an UNPREFIXED wrap — the legacy-writer stand-in for service-level
+    /// migration tests (no shipping build can produce one; the fixture is the format). A UUID
+    /// string is hex digits plus dashes, so it can never accidentally start with `FLW2`.
+    func makeLegacyWrap(contentKey: Data, wrappingKey: Data) -> Data {
+        let wrapped = Data(UUID().uuidString.utf8)
+        wrappedKeys[wrapped] = (wrappingKey, contentKey)
         return wrapped
     }
 
