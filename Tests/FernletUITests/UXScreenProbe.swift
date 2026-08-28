@@ -238,6 +238,30 @@ struct UXScreenProbe {
     /// manual, forever.
     @discardableResult
     func audit(file: StaticString = #file, line: UInt = #line) throws -> Self {
+        var (raw, found) = try runAudit()
+        // ONE retry, and only for the unambiguous case: this screen has frozen findings but the
+        // auditor just returned nothing at all. That is `performAccessibilityAudit` failing, not
+        // the screen being fixed — a screen does not lose every finding in every category at once
+        // without a code change. Measured 2026-08-27: `Settings · Nutrition targets` reported its
+        // one hit-region finding on two runs and 0 raw issues on the third, and fifteen screens
+        // went silent together inside a whole-`FernletUITests` invocation.
+        //
+        // A retry rather than an excuse, because the two are not equivalent. Excusing a zero would
+        // turn a run where the auditor died into a GREEN one across every screen at once — the
+        // whole wall silently passing is the failure this map exists to prevent. Retrying removes
+        // the transient and leaves both directions walled; if the second pass is also empty the
+        // report below still fails, saying exactly what happened.
+        if found.isEmpty && !(Self.auditBaselines[name] ?? []).isEmpty {
+            (raw, found) = try runAudit()
+        }
+        attachListingIfOffBaseline(raw: raw)
+        guard isOnBaselineEnvironment(file: file, line: line) else { return self }
+        report(found, raw: raw, file: file, line: line)
+        return self
+    }
+
+    /// One `performAccessibilityAudit` pass: the raw descriptions and the identity set.
+    private func runAudit() throws -> (raw: [String], found: Set<String>) {
         var raw: [String] = []
         var found: Set<String> = []
         try app.performAccessibilityAudit(for: Self.auditTypes) { issue in
@@ -250,10 +274,7 @@ struct UXScreenProbe {
             // the whole reason this harness exists.
             return true
         }
-        attachListingIfOffBaseline(raw: raw)
-        guard isOnBaselineEnvironment(file: file, line: line) else { return self }
-        report(found, raw: raw, file: file, line: line)
-        return self
+        return (raw, found)
     }
 
     /// The window geometry every identity in ``auditBaselines`` was recorded against: **iPhone 17
@@ -394,9 +415,10 @@ struct UXScreenProbe {
         if found.isEmpty && !baseline.isEmpty {
             XCTFail("""
                 [\(name)] the accessibility audit returned NOTHING (0 raw issues) for a screen with \
-                \(baseline.count) frozen baseline finding(s). That is the auditor under-reporting, \
-                not \(baseline.count) findings being fixed at once — do NOT delete the baseline \
-                lines on the strength of this run.
+                \(baseline.count) frozen baseline finding(s), TWICE — `audit(file:line:)` already \
+                retried. That is almost certainly the auditor under-reporting rather than \
+                \(baseline.count) findings being fixed at once, so do NOT delete the baseline lines \
+                on the strength of this run.
 
                 `performAccessibilityAudit` goes silent for whole screens inside a long run: \
                 measured 2026-08-27, fifteen screens returned 0 raw issues in a whole-FernletUITests \
@@ -731,7 +753,31 @@ extension UXScreenProbe {
     /// Measured 2026-08-23 on the `Fernlet-A11y` simulator (iPhone 17 / iOS 26) with the standard
     /// `FERNLET_UI_TEST_SEED_DEMO` seed, from a full `ScreenAppearanceUITests` suite run — not from
     /// isolated per-test runs, because suite context is the bar this wall has to hold.
+    /// THE 2026-08-27 HARVEST GAP. Everything below the `Food · Recipe detail` entry down to
+    /// `Studio · Editor` was recorded on 2026-08-27 and is the same *kind* of record as the
+    /// 2026-08-23 block: measured, not invented. It exists because the original harvest was taken
+    /// "from a full `ScreenAppearanceUITests` suite run" while `capture()` audits EVERY probe in
+    /// EVERY suite — so the nine probes that live in other suites (`RecentBitesUITests`,
+    /// `ProgressPhotoUITests`, `OnboardingAppearanceUITests`, `NutritionTargetsEditorUITests`,
+    /// `ItemCreationFlowUITests`, `RecipeDetailUITests`, `SettingsAppearanceUITests`) started from
+    /// an EMPTY baseline and have failed on their first finding ever since. Nothing regressed; they
+    /// were never measured. `FernletUITests` is not run by any CI workflow — `.github/workflows/`
+    /// only invokes named `FernletTests` boundary suites — which is how that stayed unnoticed.
+    ///
+    /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
+    /// simulator and confirmed on a second, independent run. The high-signal findings the original
+    /// harvest note says to fix first were FIXED in the same commit rather than frozen: six
+    /// `Label not human-readable` (three SF Symbol names announced on the very first onboarding
+    /// screen, two on Settings · Health, one on Settings · Signals) and one
+    /// `Element has no description` on the full-size progress photo. What is frozen below is the
+    /// Larger Text backlog these screens share with the other twenty-two.
     static let auditBaselineEntries: [String: Set<String>] = [
+        "Food · Recipe detail": [
+            "Text clipped — “Friends” (9)",
+            "Text clipped — “Home” (9)",
+            "Text clipped — “Move” (9)",
+            "Text clipped — “Private” (9)",
+        ],
         // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): `ScreenHeader`'s subtitle still
         // renders (FoodView.swift:87) — it is the clipping that stopped, not the element that went
         // away. The tab-bar clearance and scroll-position work that landed after the baseline
@@ -747,6 +793,15 @@ extension UXScreenProbe {
         ],
         "Friends tab": [
             "Text clipped — “Friends” (9)",
+            "Text clipped — “Home” (9)",
+            "Text clipped — “Move” (9)",
+            "Text clipped — “Private” (9)",
+        ],
+        "Home · Recent bites": [
+            "Text clipped — “Chicken rice bowl” (48)",
+            "Text clipped — “Food” (9)",
+            "Text clipped — “Friends” (9)",
+            "Text clipped — “Greek yogurt with berries” (48)",
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
@@ -783,6 +838,20 @@ extension UXScreenProbe {
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
         ],
+        "Move · Progress photo detail": [
+            "Text clipped — “Friends” (9)",
+            "Text clipped — “Home” (9)",
+            "Text clipped — “Move” (9)",
+            "Text clipped — “Private” (9)",
+        ],
+        "Move · Progress photos": [
+            "Text clipped — “Feeling stronger” (48)",
+            "Text clipped — “Food” (9)",
+            "Text clipped — “Friends” (9)",
+            "Text clipped — “Home” (9)",
+            "Text clipped — “Move” (9)",
+            "Text clipped — “Private” (9)",
+        ],
         // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): same component and same reason as
         // `Food tab` above (MoveView.swift:133 still renders it).
         //
@@ -800,6 +869,44 @@ extension UXScreenProbe {
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
+        ],
+        // The eight onboarding screens. The `Hit area is too small — “Continue”` entries are all one
+        // component: `SheetSaveBar`'s commit button, whose sub-44pt finding is ALREADY frozen for
+        // `Sheet · Sleep` and `Sheet · Log intimacy`. It is deliberately not fixed here — one change
+        // inside `FernletUIComponents.swift` would move ~41 call sites at once and shift several
+        // frozen sheets in the same commit, which is its own increment, not a side effect of this
+        // one. The identifiers on those entries are the screen containers' (a container
+        // `accessibilityIdentifier` propagates to descendants that lack their own), which is why
+        // one button reads as `id=onboarding.welcome`.
+        "Onboarding · Dietary pattern": [
+            "Hit area is too small — “Continue” id=onboarding.diet (9)",
+            "Text clipped — “Pick an eating pattern” (48)",
+        ],
+        "Onboarding · Goal": [
+            "Hit area is too small — “Continue” id=onboarding.goal (9)",
+        ],
+        "Onboarding · Lock setup": [
+            "Text clipped — “Protect private spaces” (48)",
+            "Text clipped — “The lock guards period, intimacy, and other sensitive areas before they open.” (48)",
+        ],
+        "Onboarding · Permissions": [
+            "Hit area is too small — “Start Fernlet” id=onboarding.permissions (9)",
+            "Text clipped — “Fernlet asks at first use where practical, so you can start without granting everything now.” (48)",
+        ],
+        "Onboarding · Personal details": [
+            "Hit area is too small — “Continue” id=onboarding.personal (9)",
+            "Text clipped — <no label> id=onboarding.displayName (49)",
+            "Text clipped — “These are optional except age. Fernlet never asks for weight goals.” (48)",
+        ],
+        "Onboarding · Starter": [
+            "Hit area is too small — “Continue” id=onboarding.starter (9)",
+        ],
+        "Onboarding · Storage choice": [
+            "Text clipped — “Choose where logs live” (48)",
+        ],
+        "Onboarding · Welcome": [
+            "Hit area is too small — “Continue” id=onboarding.welcome (9)",
+            "Text clipped — “A small daily care companion built around privacy, local control, and enoughness.” (48)",
         ],
         "Private · Cycle (both halves)": [
             "Dynamic Type font sizes are partially unsupported — “<date-word> #” (48)",
@@ -852,6 +959,25 @@ extension UXScreenProbe {
             "Text clipped — “Home” (9)",
             "Text clipped — “Move” (9)",
             "Text clipped — “Private” (9)",
+        ],
+        "Settings · Core memory": [
+            "Text clipped — <no label> (49)",
+        ],
+        "Settings · Hub": [
+            "Dynamic Type font sizes are partially unsupported — “Done” id=settings.done (9)",
+            "Dynamic Type font sizes are partially unsupported — “PRIVACY & DATA” (48)",
+            "Dynamic Type font sizes are unsupported",
+            "Text clipped — “Search settings” (45)",
+        ],
+        // The fully-derived state has no entry here on purpose: it reports nothing, because with no
+        // override pinned there is no Reset control to be too small. The pinned variant below is
+        // where that finding lives.
+        "Settings · Nutrition targets (calories pinned)": [
+            "Hit area is too small — “Reset” id=nutritionTargets.reset (9)",
+        ],
+        "Settings · Personal care tasks": [
+            "Text clipped — <no label> (49)",
+            "Text clipped — “PERSONAL CARE TASKS” (48)",
         ],
         // BASELINE CORRECTION (2026-08-23), separate from T1-9: both recipe sheets share the
         // sub-44pt `TextField("Qty")` in FoodView. Its `.hitRegion` finding was proven to flap on
@@ -969,6 +1095,15 @@ extension UXScreenProbe {
             "Text clipped — “SPACE & EQUIPMENT” (48)",
             "Text clipped — “Suggest a workout” id=workout.suggest (9)",
             "Text clipped — “Suggest workout” (48)",
+        ],
+        "Studio · Confirmation (flagged name)": [
+            "Dynamic Type font sizes are partially unsupported",
+            "Dynamic Type font sizes are partially unsupported — “Pick a friendlier name” (48)",
+            "Dynamic Type font sizes are partially unsupported — “This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)” (48)",
+            "Potentially inaccessible text",
+        ],
+        "Studio · Editor (name/shop moved off)": [
+            "Hit area is too small — “Mirror” id=studio.mirror (9)",
         ],
     ]
 }

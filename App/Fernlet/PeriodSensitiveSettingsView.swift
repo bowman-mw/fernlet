@@ -32,7 +32,11 @@ struct PeriodSensitiveSettingsView: View {
                 ScreenHeader(
                     title: "Period & sensitive content",
                     subtitle: "What Fernlet shows, reads, and protects.",
-                    identifier: "screen.settings.periodSensitive"
+                    identifier: "screen.settings.periodSensitive",
+                    // The longest page title in Settings: at the display face it needs a third line
+                    // on a 402pt screen and truncates at the default two, which the audit reports as
+                    // clipped text. This is what `titleLineLimit` exists for.
+                    titleLineLimit: 3
                 )
                 periodCard
                 intimacyCard

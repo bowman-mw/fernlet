@@ -703,12 +703,15 @@ struct SettingsSheet: View {
                 Text("Contrast \(ratio):1 · accents may be hard to see")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.goldenrodInk)
-                    .lineLimit(2)
+                    // Wraps rather than truncating: at large content sizes this sentence needs more
+                    // than two lines and the audit reported it clipped. A contrast readout that
+                    // truncates is a particularly poor thing to lose at large text sizes.
+                    .fernletWrappingText()
             } else {
                 Text("Contrast \(ratio):1")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
-                    .lineLimit(2)
+                    .fernletWrappingText()
             }
         }
         #endif
@@ -2387,9 +2390,13 @@ struct AppLockSettingsView: View {
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .padding(.vertical, 14)
                 .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+                // `.buttonStyle(.plain)` leaves the button's hit region on the LABEL, not on the
+                // padded pill it draws, so the audit measured a sub-44pt target on a control that
+                // looks 72pt tall. This hands the whole pill back.
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

@@ -508,6 +508,11 @@ struct ProgressPhotoDetailView: View {
                     // T2-10: the full-size progress photo, for the same reason as the strip
                     // thumbnail — inverted, it is a negative of the user's own body.
                     .accessibilityIgnoresInvertColors()
+                    // Without this the hero is an undescribed image: the nav title says "Progress
+                    // photo" but never which one, and the date is the only thing distinguishing
+                    // one from the next. Same wording as the strip card's label so the announcement
+                    // does not change on the way in.
+                    .accessibilityLabel("Progress photo from \(record.capturedAt.formatted(.dateTime.month(.wide).day().year()))")
             } else {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Color.parchment)

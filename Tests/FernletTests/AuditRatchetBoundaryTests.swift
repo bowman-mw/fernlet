@@ -78,6 +78,19 @@ import Testing
             let text = try source("\(uiTestRoot)/\(entry)")
             names.formUnion(try captures(#"UXScreenProbe\(\s*app\s*,\s*"([^"]+)""#, in: text))
             names.formUnion(try captures(#"probeSheet\(\s*"[^"]+"\s*,\s*"([^"]+)""#, in: text))
+            // Third shape: `OnboardingAppearanceUITests`' `probe("Onboarding · Welcome", title:…)`
+            // helper, which — like `probeSheet` — hands the name to `UXScreenProbe` through a
+            // variable the direct pattern cannot see. Added when the eight onboarding screens were
+            // first baselined (2026-08-27); without it every one of them reads as orphaned.
+            // Lower-case `probe(` is deliberate and sufficient to keep this off `UXScreenProbe(`
+            // and `probeSheet(`: the regex is case-sensitive and both differ before the paren.
+            names.formUnion(try captures(#"\bprobe\(\s*"([^"]+)""#, in: text))
+            // Fourth shape: `SettingsAppearanceUITests` walks a table of labelled tuples and probes
+            // each with the `probe:` element, spelled out as a literal precisely so this wall can
+            // see it. Keyed on the argument LABEL rather than on tuple position, so re-ordering the
+            // table's columns cannot silently empty this. It cannot match the baseline map in
+            // `UXScreenProbe.swift` (also scanned by this parse) because nothing there is labelled.
+            names.formUnion(try captures(#"probe:\s*"([^"]+)""#, in: text))
         }
         return names.filter { !$0.contains(#"\("#) }
     }

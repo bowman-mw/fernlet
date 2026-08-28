@@ -22,18 +22,25 @@ final class SettingsAppearanceUITests: XCTestCase {
     /// Core memory / Signals moved inside AI & data sources (walked below); Debug + Connection
     /// Inspector folded into the DEBUG-only Connection log row (SETT-28 — this suite runs Debug,
     /// so the row is present).
-    private let subscreens: [(tap: String, title: String)] = [
-        ("settings.row.appearance", "Appearance"),
-        ("settings.row.goalNutrition", "Goal & nutrition"),
-        ("settings.row.reminders", "Goal & nutrition"),
-        ("settings.row.personalCare", "Personal care tasks"),
-        ("settings.row.quickLog", "Quick-log shortcuts"),
-        ("settings.row.aiDataSources", "AI & data sources"),
-        ("settings.row.health", "Health"),
-        ("settings.row.appLock", "App lock"),
-        ("settings.row.nearbyFriends", "Nearby friends"),
-        ("settings.row.periodSensitive", "Period & sensitive content"),
-        ("settings.row.connectionLog", "Connection log"),
+    /// The third element is the probe name, written out as a LITERAL rather than built from
+    /// `title`. It used to be interpolated (`"Settings · \(title)"`), and interpolated names are
+    /// dropped by `AuditRatchetBoundaryTests.probedScreenNames()` — deliberately, since a literal
+    /// containing `\(` is not a name any baseline could key on. The consequence was a hole rather
+    /// than a saving: these eleven screens were AUDITED by `capture()` but could never be
+    /// BASELINED, so every finding on any of them failed this suite permanently and there was no
+    /// legal way to record it. Spelling the name out makes them ratchetable like every other screen.
+    private let subscreens: [(tap: String, title: String, probe: String)] = [
+        (tap: "settings.row.appearance", title: "Appearance", probe: "Settings · Appearance"),
+        (tap: "settings.row.goalNutrition", title: "Goal & nutrition", probe: "Settings · Goal & nutrition"),
+        (tap: "settings.row.reminders", title: "Goal & nutrition", probe: "Settings · Goal & nutrition"),
+        (tap: "settings.row.personalCare", title: "Personal care tasks", probe: "Settings · Personal care tasks"),
+        (tap: "settings.row.quickLog", title: "Quick-log shortcuts", probe: "Settings · Quick-log shortcuts"),
+        (tap: "settings.row.aiDataSources", title: "AI & data sources", probe: "Settings · AI & data sources"),
+        (tap: "settings.row.health", title: "Health", probe: "Settings · Health"),
+        (tap: "settings.row.appLock", title: "App lock", probe: "Settings · App lock"),
+        (tap: "settings.row.nearbyFriends", title: "Nearby friends", probe: "Settings · Nearby friends"),
+        (tap: "settings.row.periodSensitive", title: "Period & sensitive content", probe: "Settings · Period & sensitive content"),
+        (tap: "settings.row.connectionLog", title: "Connection log", probe: "Settings · Connection log"),
     ]
 
     @MainActor
@@ -48,7 +55,7 @@ final class SettingsAppearanceUITests: XCTestCase {
             .capture()
 
         for screen in subscreens {
-            try openAndProbe(tap: screen.tap, title: screen.title, app: app)
+            try openAndProbe(tap: screen.tap, title: screen.title, probe: screen.probe, app: app)
         }
     }
 
@@ -64,12 +71,15 @@ final class SettingsAppearanceUITests: XCTestCase {
         aiRow.tap()
         XCTAssertTrue(app.navigationBars["AI & data sources"].waitForExistence(timeout: 4))
 
-        for (label, title) in [("Core memory", "Core memory"), ("Signals", "Signals")] {
+        // Probe names spelled out for the same reason as `subscreens` above.
+        let nested = [(label: "Core memory", title: "Core memory", probe: "Settings · Core memory"),
+                      (label: "Signals", title: "Signals", probe: "Settings · Signals")]
+        for (label, title, probe) in nested {
             let link = scrollToRow(label, app: app)
             XCTAssertTrue(link.isHittable, "'\(label)' link not reachable inside AI & data sources")
             link.tap()
             let bar = app.navigationBars[title]
-            try UXScreenProbe(app, "Settings · \(title)", in: self)
+            try UXScreenProbe(app, probe, in: self)
                 .assertElementOnScreen(bar, "\(title) nav bar")
                 .capture()
             let back = bar.buttons.firstMatch
@@ -103,13 +113,13 @@ final class SettingsAppearanceUITests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor
-    private func openAndProbe(tap label: String, title: String, app: XCUIApplication) throws {
+    private func openAndProbe(tap label: String, title: String, probe: String, app: XCUIApplication) throws {
         let row = scrollToRow(label, app: app)
         XCTAssertTrue(row.isHittable, "settings row '\(label)' not reachable")
         row.tap()
 
         let bar = app.navigationBars[title]
-        try UXScreenProbe(app, "Settings · \(title)", in: self)
+        try UXScreenProbe(app, probe, in: self)
             .assertElementOnScreen(bar, "\(title) nav bar")
             .capture()
 

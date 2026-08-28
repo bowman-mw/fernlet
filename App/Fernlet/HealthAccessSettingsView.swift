@@ -326,11 +326,14 @@ struct HealthAccessSettingsView: View {
         let cardState = state(of: card)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
+                // Decorative — `card.title` names the card. Unhidden it announces the raw SF
+                // Symbol name ("person text rectangle", "waveform path ecg").
                 Image(systemName: card.systemImage)
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(Color.moss)
                     .frame(width: 34, height: 34)
                     .background(Color.moss.opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(card.title)
                         .font(.fernlet(.header))

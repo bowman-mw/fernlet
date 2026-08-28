@@ -44,7 +44,15 @@ final class NutritionTargetsEditorUITests: XCTestCase {
         XCTAssertNotEqual(fat.value as? String, fatBaseline,
                           "blank Fat placeholder did not track the calorie override (stale fully-derived value)")
         XCTAssertNotEqual(carbs.label, carbsBaseline, "carbs did not rebalance after pinning calories")
-        try UXScreenProbe(app, "Settings · Nutrition targets", in: self).capture("calories pinned")
+        // Its OWN probe name, not a second `capture()` on the one above. The two probes look at
+        // genuinely different screens — this one has an override pinned, so the Reset control
+        // exists and the fully-derived state above has nothing to reset — and a screen name is the
+        // baseline key. Sharing one key made the ratchet unsatisfiable rather than strict: the
+        // blank state reported 0 findings and the pinned state reported Reset's sub-44pt hit
+        // region, so whichever way the single baseline was written, one of the two probes failed.
+        // Named variants are how `ScreenAppearanceUITests` already handles the Cycle page's halves.
+        try UXScreenProbe(app, "Settings · Nutrition targets (calories pinned)", in: self)
+            .capture("calories pinned")
 
         // Back to baseline; the Fat placeholder returns to its derived value.
         resetIfPresent(app)

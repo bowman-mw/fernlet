@@ -39,11 +39,16 @@ struct OnboardingWelcomeView: View {
 
     private func privacyRow(_ systemImage: String, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // Decorative next to a title and body that already say what the row means — without
+            // this the row announces the raw SF Symbol name ("heart text square fill", "lock
+            // shield fill", "person crop circle badge checkmark"), which is the first thing a
+            // VoiceOver user hears in the app. Same rule as ProximityRecipeShareSheet's glyphs.
             Image(systemName: systemImage)
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(Color.moss)
                 .frame(width: 30, height: 30)
                 .background(Color.moss.opacity(0.10), in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.fernlet(.headerMedium))

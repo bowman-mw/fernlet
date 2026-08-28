@@ -2199,9 +2199,11 @@ struct WorkoutRow: View {
                 Button("Edit") { showEditSheet = true }
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
+                    .fernletTapTarget()
                     .accessibilityIdentifier("workout.log.edit")
                 Button("Remove", role: .destructive) { showRemoveConfirm = true }
                     .font(.fernlet(.label))
+                    .fernletTapTarget()
                     .accessibilityIdentifier("workout.log.remove")
             }
             .buttonStyle(.plain)

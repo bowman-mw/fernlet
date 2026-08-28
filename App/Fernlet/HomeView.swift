@@ -2241,11 +2241,14 @@ struct SignalDetailRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
+                // Decorative — `SignalPresentation.title(for:)` below names the signal. Unhidden it
+                // announces the raw SF Symbol name ("face smiling" for the mood trend).
                 Image(systemName: SignalPresentation.icon(for: signal.signalName))
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(SignalPresentation.color(for: signal.value))
                     .frame(width: 34, height: 34)
                     .background(SignalPresentation.color(for: signal.value).opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(SignalPresentation.title(for: signal.signalName))
