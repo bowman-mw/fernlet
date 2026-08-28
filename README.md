@@ -98,8 +98,24 @@ xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet -des
 xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
 ```
 
-The full suite takes several minutes; run it in batches by suite when iterating. Before pushing,
-install the git hooks once so the wall check runs on wall-relevant pushes:
+The full suite takes several minutes; run it in batches by suite when iterating.
+
+**`FernletUITests` is pinned to iPhone 17, in portrait, and wants its own invocation.** The
+appearance suites freeze a per-screen accessibility-audit baseline
+([`UXScreenProbe.auditBaselines`](Tests/FernletUITests/UXScreenProbe.swift)), and those findings are
+layout facts — what clips, what is under 44pt. Three things therefore change the result without any
+app change, and all three have been mistaken for real regressions:
+
+- **A different device.** iPhone 17 Pro is not the baseline device; run the destination above.
+- **A rotated or dark simulator.** Orientation is host state that survives between runs. The suite
+  forces portrait now, and fails loudly naming the destination if the window is not 402×874, but a
+  simulator booted fresh (light, `large`) is the reliable starting point.
+- **A whole-target run.** `performAccessibilityAudit` under-reports, and sometimes returns nothing
+  at all, when a great many screens are audited in one `xcodebuild` invocation — measured at fifteen
+  screens silent in one whole-`FernletUITests` run. Prefer
+  `-only-testing:FernletUITests/ScreenAppearanceUITests` and its sibling probe suites.
+
+Before pushing, install the git hooks once so the wall check runs on wall-relevant pushes:
 
 ```bash
 Scripts/install-git-hooks.sh
