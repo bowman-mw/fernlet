@@ -141,17 +141,17 @@ on the reasoning.
 | `meshGroupKeyWrapV2` | `fernlet.mesh.groupkey.wrap.aead.v2` | `IdentityService` |
 | `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
 | `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
-| `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
-| `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer` |
+| `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey`, `HeartDropSidecarFormatMigration` |
+| `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer`, `PendingNarrativeBufferFormatMigration` |
 | `lockContentKeyWrapV2` | `fernlet.lock.content-key-wrap.aead.v2` | `FernletLockService` |
 | `columnDeviceBoundV3` | `fernlet.private-column.device-bound.aead.v3` | — |
-| `privateFriendPhotoImageV2` | `fernlet.private-media.friend-photo.image.aead.v2` | `PrivateMediaStore` |
-| `privateFriendPhotoThumbnailV2` | `fernlet.private-media.friend-photo.thumbnail.aead.v2` | `PrivateMediaStore` |
-| `privateFriendPhotoIndexV2` | `fernlet.private-media.friend-photo.index.aead.v2` | `PrivateMediaStore` |
-| `mealPhotoV2` | `fernlet.private-media.meal-photo.aead.v2` | `MealPhotoStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration` |
-| `recipePhotoV2` | `fernlet.private-media.recipe-photo.aead.v2` | `FernletStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration` |
-| `progressPhotoV2` | `fernlet.private-media.progress-photo.aead.v2` | `OwnPhotoKeyMigration`, `ProgressPhotoStore` |
-| `progressPhotoIndexV2` | `fernlet.private-media.progress-photo.index.aead.v2` | `OwnPhotoKeyMigration`, `ProgressPhotoStore` |
+| `privateFriendPhotoImageV2` | `fernlet.private-media.friend-photo.image.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
+| `privateFriendPhotoThumbnailV2` | `fernlet.private-media.friend-photo.thumbnail.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
+| `privateFriendPhotoIndexV2` | `fernlet.private-media.friend-photo.index.aead.v2` | `PrivateMediaStore`, `MediaAtRestFormatMigration` |
+| `mealPhotoV2` | `fernlet.private-media.meal-photo.aead.v2` | `MealPhotoStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration`, `MediaAtRestFormatMigration` |
+| `recipePhotoV2` | `fernlet.private-media.recipe-photo.aead.v2` | `FernletStore`, `OwnPhotoBackupCoordinator`, `OwnPhotoKeyMigration`, `MediaAtRestFormatMigration` |
+| `progressPhotoV2` | `fernlet.private-media.progress-photo.aead.v2` | `OwnPhotoKeyMigration`, `ProgressPhotoStore`, `MediaAtRestFormatMigration` |
+| `progressPhotoIndexV2` | `fernlet.private-media.progress-photo.index.aead.v2` | `OwnPhotoKeyMigration`, `ProgressPhotoStore`, `MediaAtRestFormatMigration` |
 
 #### Hash
 

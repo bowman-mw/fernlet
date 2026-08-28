@@ -1,6 +1,7 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status:** Phase 0 (the census) is BUILT — see §4. Phases 1–5 are still plan only.
+**Status:** Phases 0, 1 and 2.1–2.4 are BUILT — see §4 and the Progress checklist. Phases 2.5, 2.6
+and 3–5 are still plan only.
 **Goal (owner, 2026-08-27):** review the domain-separation work and update everything so there is no
 "legacy" code — one standardized format per cryptographic surface.
 **Baseline:** main `def4726`. Prerequisite work already landed: `91c3956` (domain separation),
@@ -309,12 +310,130 @@ riding this one. One known behavior residual: after an invalidation the first re
 generic pending copy even when the blocker is another device, because the foreign-only verdict is
 session state derived from a wrapper run; one tap re-derives the honest copy.
 
+### Phase 2.2 — `HeartDropSidecarKey` migrator — **BUILT**
+
+Landed in `5ca478e`. **The scan IS the census**: `performPass()` calls
+`HeartDropSidecarFormatCensus.survey` and buckets what it returns, so the counter and the converter
+can never disagree about the number Phase 3 is gated on. Convert re-seals an `FSC1` row through
+`HeartDropSidecarSeal.make`'s existing open/seal closures — binding the already-registered
+`heartDropSidecarV2` purpose without ever naming a purpose, touching key bytes, or adding a crypto
+call shape of its own — verified round-trip in memory *before* an atomic, fully-protected,
+backup-excluded write through the shipping sidecar writer, and read back after. Source bytes are
+never deleted.
+
+The bucket arithmetic is exact: every examined row lands in exactly one bucket, so the counts sum to
+`examined` and a diagnostic read is never off by a phantom row. `keyUnavailable` absorbs both the row
+whose open threw a key error *and* every legacy row left unattempted after the one-key early stop —
+one key serves all these files, so those rows are indeterminate for the identical reason, and a
+two-legacy keyless corpus reads 2, never 1. Unmarked bytes stay fail-closed, pending the store's own
+seal-on-load rather than being converted here. The quarantine tombstone is **reported, never
+converted, and never blocking**: no reader ever opens that path again, so its marker bytes prove
+nothing about live data.
+
+Launch revalidation is this phase's own contribution to the family: a set latch is re-checked on
+every launch with one marker-only survey (four `stat`s, key-free), and **the reset predicate equals
+the latch predicate** — the blocking classes it resets on are exactly the set `isClean` refuses to
+latch over — so a restore that re-introduces any blocking row un-latches instead of being silently
+outlived. Observation beats memory. The latch key landed with both wipe rows in the same commit and
+is cleared on delete-all, beside the wipe leg that destroys its entire subject (the sidecar files
+**and** the seal key).
+
+**Deviation from the reviewed design.** The design specified a `nonisolated` stored latch property;
+Swift 6 allows `nonisolated` on a stored property only for `Sendable` types, and `UserDefaults` is
+not `Sendable` in this SDK, so the property is main-actor isolated under the plan-A isolated
+conformance — the latch *type* is still the nonisolated value type the family expects. Documented at
+the declaration.
+
+### Phase 2.3 — `MediaAtRestCrypto` migrator — **BUILT**
+
+Landed in `810c45f`. It converts only the **complement of `OwnPhotoKeyMigrator`'s sweep**, which
+stays byte-for-byte untouched: own-corpus files that already open under the own key but carry no
+marker, the whole friend-wall root (whose key never changed, so the key pass never sweeps it), and
+the pre-sealing plaintext JPEG generations exactly where the read paths' upgrade branches exist.
+Disjoint convert sets, one launch task, strict order — key pass, binder, format pass — so the two
+sweeps compose instead of fighting. Classification goes through the census's **shared classifier**
+(extracted for this, behavior-pinned by the untouched census suite), and every re-seal goes through
+the existing `sealAndWrite` path binding the existing seven AEAD purposes.
+
+Convert is seal → in-memory verify → **index compare-before-write guard** → atomic write → disk
+read-back, and nothing is ever deleted. That guard is the phase's sharpest fix: the two mutable index
+manifests are re-read immediately before the write and proceed only on byte-equality, else
+`skippedConcurrentlyModified`, which blocks the latch — closing the `loadIndex` → save →
+orphan-sweep race in which a stale index write could permanently delete a raced-in friend photo's
+files. An own-root file that fails to open is **probed against the wall key**: it opens ⇒ blocking
+`legacyKeySealedOwnFile` (a state the key latch claims cannot exist, checked rather than assumed,
+because that proof has a real hole); the wall key is unavailable ⇒ indeterminate. Two non-blocking
+buckets are deliberately **split so the Phase-3 gate reads the right one**: `unopenableUnprefixed`
+(bytes read, every key the legacy branch could ever pair them with tried, nothing opens — so
+deleting the branch cannot change what any reader gets) versus `refusedPlaintext` (parseable
+plaintext the pass refuses to launder into a born-sealed corpus, which never reaches that branch at
+all).
+
+The latch is deliberately **KEPT across delete-all**, on the revised rationale: the wipe empties the
+own corpora, the surviving wall was proven all-current-or-named-residue before the latch could set,
+and every post-wipe writer emits the current format — so the claim stays true of everything the wipe
+leaves behind, and clearing it would only force a pointless re-scan. Both wipe rows landed in the
+same commit.
+
+Named limitations and residues, recorded rather than smoothed over. **Objection 2's limitation:** a
+pre-sealing **non-JPEG** plaintext image (HEIC/PNG) in the meal corpus is an expected residue —
+convert eligibility must not exceed the shared census's JPEG-magic sniff — and it is Phase-3-immune,
+because `MealPhotoStore.imageData`'s plaintext branch serves and organically re-seals it without ever
+touching the legacy open. Other named residues: the undrained `MeshPhotoCache.json`, and
+`abortedNoWallKey` as a benign-pending state on a wall root holding only pre-sealing plaintext whose
+`friendWall` keychain row was never minted — it holds the latch open, fail-closed and lossless, until
+the organic exit at the first wall use. **Objection 4's compensating control:** iOS container
+restores are progressive, so a pass running mid-restore can latch before the remaining legacy files
+land; there is no guard for that, and instead the control is the census-vs-latch cross-check on a
+real device — latch true while the census shows unprefixed counts beyond the named residues is that
+scenario's signature — with the documented remediation being a `reset()` to force a re-scan.
+
+### Phase 2.4 — `PendingNarrativeBuffer` migrator — **BUILT**
+
+Landed in `81d65d9`. It runs at deferred launch on the **buffer key**, gated on nothing but "device
+unlocked once since boot", and **never behind the app lock** — the second surface exempt from the
+Phase 2 preamble's behind-the-lock sentence, after 2.1, and for a sharper reason than 2.1's: the
+buffer exists to accept writes while both the app lock and the period-visibility gate are closed, so
+a migrator gated on either would structurally never run for exactly the population still holding
+legacy bytes. The scan is the census's own `take(of:)`; convert pins **one non-minting buffer-key
+value end to end** through the existing v2 seal path, with read-back verification.
+
+Bytes that are read with the key in hand and still will not open block as unconvertible and are never
+deleted — consistent with the drain, which logs and keeps the file — because the census counts those
+same bytes as legacy, and a latch over them would report "complete" while the actual Phase-3 gate
+still reads 1. An absent file is an **earned** zero, not a vacuous one: the surface is transient (the
+drain deletes it after a successful unlock-and-drain), the census makes the identical call, and only
+`saveEntries` — which always writes v2 — can re-create it. The delete-all purge hook resets the latch
+**first**, before the purge it wraps, so a kept latch can never outlive a tolerated purge failure.
+Both wipe rows landed with the key.
+
+The key-pinning split moved the module's single `// cryptographic-domain: legacy-read` marker out of
+`loadEntries()` and into the new `decodeEntries` helper — **still exactly one** marker in
+`PrivateStoreCore`, still the Phase 3 delete target. *Known stale, deliberately not fixed here:*
+`PendingNarrativeBufferFormatCensus.swift:14`'s doc comment still attributes that branch to
+`loadEntries()`; census files were out of scope for this pass, so the correction is owed to whoever
+next touches that file, or to the final docs-vs-code reconciliation sweep.
+
 ### Phase 3 — Delete the Class-A legacy readers
 
 Gated on census = 0 for that surface, on real tester devices, not just simulators. Also close
 `ColumnCrypto.sealPlaintext`'s `purpose-derived legacy-write` fail-open: once no device can produce
 an unbound write, the branch that seals without a binding should refuse rather than silently write an
 un-domained blob a future census would count.
+
+Two surfaces have now recorded a gate more specific than "census = 0", and the specific reading is
+the one that governs:
+
+- **`HeartDropSidecarKey` — the zero-gate is PER ROW, not aggregate.** Zero `legacySealed` on the
+  three MAIN rows (outbox, peer bundles, dedup). `outboxQuarantine` is **excluded** from the gate:
+  no reader ever opens the quarantine path, so a legacy tombstone sitting there is not a reader
+  dependency — and folding it into an aggregate count would strand the gate forever on bytes whose
+  format cannot matter to anything.
+- **`MediaAtRestCrypto`** — the latch set on a real upgraded device, **and** the census's unprefixed
+  count equal to that device's audited named residues (Phase 2.3's list: non-JPEG pre-sealing
+  plaintext, the undrained `MeshPhotoCache.json`, the benign-pending keyless wall root), **and**
+  `hasBlindSpots` false. A latch alone does not discharge it, and neither does a raw census number
+  without the residue audit beside it.
 
 ### Phase 4 — Class B: the peer-version decision (§5), then delete those four.
 
@@ -390,10 +509,14 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       `AsyncFormatMigrator` sibling + the policy shell over the existing healing reconcile, zero new
       crypto; latch key landed with both wipe-wall rows. Three planned pins deferred as recorded
       testability residuals — see the phase section)
-- [ ] Phase 2.2 — `HeartDropSidecarKey` migrator
-- [ ] Phase 2.3 — `MediaAtRestCrypto` migrator
-- [ ] Phase 2.4 — `PendingNarrativeBuffer` migrator (runs on the buffer key, NOT behind the app
-      lock — the buffer exists to work while locked)
+- [x] Phase 2.2 — `HeartDropSidecarKey` migrator (`5ca478e`; scan IS the census survey, quarantine
+      row reported-never-blocking, launch revalidation of a set latch; Phase-3 gate is per-row)
+- [x] Phase 2.3 — `MediaAtRestCrypto` migrator (`810c45f`; converts only the `OwnPhotoKeyMigrator`
+      complement, shared classifier, compare-before-write index guard; latch KEPT across delete-all,
+      named residues recorded for the gate)
+- [x] Phase 2.4 — `PendingNarrativeBuffer` migrator (`81d65d9`; runs on the buffer key, NOT behind
+      the app lock — the buffer exists to work while locked; absent file is an earned zero, purge
+      hook resets the latch first)
 - [ ] Phase 2.5 — `FernletLockService` content-key re-wrap (atomic, verified read-back before the
       old wrap is discarded; complete + verify in one funded stretch)
 - [ ] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (D2 assumed yes; one funded stretch)

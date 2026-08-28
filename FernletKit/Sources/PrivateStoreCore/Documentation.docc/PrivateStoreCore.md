@@ -34,6 +34,8 @@ One documented asymmetry: `deleteAllData` deletes the journal and Worry Box devi
 
 The second half handles the locked-state write path. When the user logs a cycle event with narrative content while the Fernlet app lock is engaged, there is no unlocked content key to seal it under. `PeriodTrackerStore` packages the narrative as a ``PendingNarrativePayload`` and hands it (through the `PeriodLockContext` seam) to `FernletLockService`, which appends it to its ``PendingNarrativeBuffer``. The buffer JSON-encodes all entries and seals them with ChaChaPoly into a single backup-excluded file, using a dedicated 256-bit keychain key (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, this-device-only) that is deliberately separate from the lock's content key so logging works without the user's passcode. The buffer's whole identity — file directory and key service — is the ``PendingNarrativeStorageScope`` given at init, one value so the two halves can never be isolated independently; `.production` resolves to the shipped `Application Support/Fernlet` + `com.fernlet.narrative-buffer`, and tests build throwaway scopes so a parallel suite's reset cannot purge another's buffered notes. On the next successful unlock, `PeriodTrackerStore.drainPendingBuffer(contentKey:)` pulls the payloads back out through the lock service and re-seals each as a real `MenstrualNarrative` row; the buffer's durability invariant is that draining never deletes — the caller purges only after the payloads are durably persisted.
 
+Phase 2.4 of the crypto-standardization plan gave that buffer its format migrator, ``PendingNarrativeBufferFormatMigrator`` — a `FormatMigrator` conformer on the shared `FernletCrypto` contract (scan → convert → latch, bounded, resumable, idempotent, fail-closed). Its scan **is** ``PendingNarrativeBufferFormatCensus``'s own `take(of:)`, so the converter and the number Phase 3's reader delete is gated on can never disagree, and its convert step goes through the buffer's existing decode/seal halves with a read-back verify: one pinned, non-minting buffer-key value end to end, no new crypto call shape, no new key. It runs at deferred launch on the **buffer key** and deliberately never behind the app lock or the period-visibility gate — the buffer exists to accept writes while both are closed, so a migrator gated on either would structurally never run for exactly the users still holding legacy bytes. Bytes that are read with the key in hand and still will not open block as ``PendingNarrativeBufferMigrationResult/unconvertible`` rather than being deleted, consistent with the drain's own refusal to discard what it cannot decode; an absent file is an *earned* zero, because the surface is transient and only `saveEntries` — which always writes v2 — can re-create it.
+
 Concurrency: the target compiles nonisolated (no `defaultIsolation(MainActor.self)`), because the nonisolated layer-3 repositories call the controller and pruner directly. ``PrivatePersistenceController/shared`` is `nonisolated(unsafe)` (the container is not `Sendable`), matching its prior app-target behavior, and ``PendingNarrativeBuffer`` is a plain non-`Sendable` class with no internal locking whose correctness relies on the single lock-service-owned instance being driven from the main actor.
 
 ## Topics
@@ -59,3 +61,9 @@ Concurrency: the target compiles nonisolated (no `defaultIsolation(MainActor.sel
 - ``SealedColumnReadOutcome``
 - ``SealedColumnFormatCensusResult``
 - ``PendingNarrativeBufferFormatCensus``
+
+### At-rest format migration (Phase 2.4)
+
+- ``PendingNarrativeBufferFormatMigrator``
+- ``PendingNarrativeBufferMigrationResult``
+- ``PendingNarrativeBufferMigrationLatch``

@@ -71,6 +71,8 @@ the own key on access. That fallback only ever trusts bytes that GCM-open under 
 owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused
 exactly where it was before.
 
+Beside that KEY migration sits the **format** migration, ``MediaAtRestFormatMigrator`` (crypto-standardization Phase 2.3) — a `FormatMigrator` conformer on the same shared `FernletCrypto` contract, running in the same launch task strictly after the key pass so the two sweeps compose instead of fighting. Its convert set is precisely the key migrator's **complement**: own-corpus files that already open under the own key but carry no `FMA2` prefix, the whole friend-wall root (whose key never changed, so the key pass never sweeps it), and the pre-sealing plaintext JPEG generations exactly where the read paths' upgrade branches exist. Classification goes through ``MediaAtRestFormatCensus``'s own shared classifier, so the counter and the converter can never disagree about what a blob is, and every re-seal goes through the existing `sealAndWrite` path binding the existing per-location purposes — no new purpose, no new crypto call shape, and nothing is ever deleted. Two of its buckets carry the whole Phase-3 arithmetic and are deliberately split: ``MediaAtRestFormatMigrationResult/unopenableUnprefixed`` (bytes read, every key tried, nothing opens — non-blocking, because deleting the legacy branch cannot change what any reader gets) versus ``MediaAtRestFormatMigrationResult/refusedPlaintext`` (parseable plaintext the pass refuses to seal, which never reaches that branch at all). The two mutable index manifests get a compare-before-write guard — re-read immediately before the write, proceed only on byte-equality, else ``MediaAtRestFormatMigrationResult/skippedConcurrentlyModified``, which blocks the latch — closing the `loadIndex` → save → orphan-sweep race that could otherwise let a stale index write delete a raced-in friend photo's files.
+
 ### The binding gate (step 5c)
 
 ``OwnPhotoKeyBinder`` decides whether the `ownPhotos` row may become device-bound, and performs the
@@ -223,6 +225,12 @@ provider instance across isolation domains.
 - ``MediaAtRestFormatLocationCensus``
 - ``MediaAtRestFormatCensusReport``
 - ``FriendWallCorpusLayout``
+
+### At-rest format migration (Phase 2.3)
+
+- ``MediaAtRestFormatMigrator``
+- ``MediaAtRestFormatMigrationResult``
+- ``MediaAtRestFormatMigrationLatch``
 
 ### Own-photo device binding
 
