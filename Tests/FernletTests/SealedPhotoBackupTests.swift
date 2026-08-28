@@ -1121,6 +1121,289 @@ struct SealedPhotoBackupTests {
         #expect(mealStore(in: device).storedPhotoIDs().isEmpty)
         #expect(database.ciphertext(named: "sealed-photo.meal.manifest") == manifestAfterPrune)
     }
+
+    /// The THIRD upload-side status reaching the host (WS-4). A full-verification pass that could
+    /// not read some of the user's photos still COMMITS — the manifest names everything it could
+    /// see — so `recordOwnPhotoBackupUploadFailed(_:)` correctly says `false` and the restore
+    /// vocabulary never speaks at all. Without its own signal the pass reads as clean while exactly
+    /// the gap verification exists to find goes unreported: those photos may be missing from the
+    /// backup or stale in it, and nothing but a pass that reads every byte can tell which. The
+    /// ambient pass has no verdict to publish — it reads almost nothing — so it must leave the last
+    /// full pass's count standing rather than overwrite it with a near-zero it never earned.
+    @Test func aFullPassPublishesHowManyPhotosItCouldNotRead() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        _ = try #require(mealStore(in: device).save(jpeg(width: 120, height: 90)))
+        let unreadableID = try #require(mealStore(in: device).save(jpeg(width: 80, height: 80, color: .systemPink)))
+
+        // Deny read on ONE photo's file — the closest a test gets to a Complete-class file whose
+        // protected data is unavailable (the `OwnPhotoKeyMigrationTests` idiom). Permissions are
+        // restored before teardown so the directory can still be removed.
+        let unreadableURL = OwnPhotoCorpusLayout.mealPhotosDirectory(in: device)
+            .appendingPathComponent("\(unreadableID.uuidString).jpg")
+        #expect(FileManager.default.fileExists(atPath: unreadableURL.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: unreadableURL.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadableURL.path)
+        }
+
+        // The corpus still holds one photo this install opens, so it is neither empty nor
+        // all-stranded: the pass goes straight to the upload leg and never touches the restore gate.
+        #expect(!mealStore(in: device).isEmptyForRestore())
+        #expect(!mealStore(in: device).holdsOnlyUnopenableFiles(),
+                "'I cannot read this file' must never read as 'these bytes are dead'")
+
+        let (coordinator, host) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: isolatedDefaults()
+        )
+        #expect(await coordinator.setEnabled(true))
+        #expect(host.uploadFailures.last == false,
+                "the manifest committed for everything this device could see — that is not an upload failure")
+        #expect(host.verifiedUnreadableCounts.last == 1,
+                "a committed-but-not-clean pass was reported as clean, so the gap never reached the banner")
+
+        // The ambient pass publishes NOTHING here, rather than a count of bytes it never read.
+        let afterFullPass = host.verifiedUnreadableCounts.count
+        _ = await coordinator.synchronize(preferenceOverride: true)
+        #expect(host.verifiedUnreadableCounts.count == afterFullPass,
+                "an ambient pass overwrote the last full pass's verdict")
+
+        // ...and a full pass that finally reads everything clears the state.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadableURL.path)
+        _ = await coordinator.synchronize(preferenceOverride: true, fullVerification: true)
+        #expect(host.verifiedUnreadableCounts.last == 0, "a clean full pass left the warning standing")
+    }
+
+    // MARK: - 8. Hash-version marker (crypto standardization Phase 1)
+
+    /// The manifest plaintext a PRE-MARKER build wrote: `id` + `contentHash`, and no `hashVersion`
+    /// key at all. Hand-built rather than encoded, because no build that still exists can produce
+    /// it — `Entry` always writes the field now — and the field's ABSENCE is the whole fixture. The
+    /// spellings are `JSONEncoder`'s defaults, which is what the service decodes back with: a UUID
+    /// is its `uuidString`, a `Data` is base64.
+    private func legacyManifestJSON(
+        corpus: SealedPhotoCorpus = .meal,
+        entries: [(id: UUID, contentHash: Data)]
+    ) -> Data {
+        let rows = entries.map {
+            "{\"id\":\"\($0.id.uuidString)\",\"contentHash\":\"\($0.contentHash.base64EncodedString())\"}"
+        }
+        return Data("{\"corpus\":\"\(corpus.rawValue)\",\"entries\":[\(rows.joined(separator: ","))]}".utf8)
+    }
+
+    /// Plants exactly what a pre-marker build left in a user's iCloud: one sealed meal body, plus a
+    /// sealed manifest with no `hashVersion` field whose committed digest is the LEGACY bare
+    /// SHA-256 of that body's plaintext — not the domain-separated v2 digest today's builds compute.
+    private func plantLegacyMealBackup(
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase
+    ) async throws -> (id: UUID, plaintext: Data, legacyDigest: Data) {
+        let id = UUID()
+        let plaintext = Data("legacy photo".utf8)
+        let legacyDigest = Data(SHA256.hash(data: plaintext))
+        let cloud = makeCloud(database)
+        try await cloud.saveSealedPhoto(
+            try SealedPhotoCrypto.seal(
+                plaintext,
+                corpus: .meal,
+                slot: .photo(id),
+                identityService: identity,
+                generation: 1,
+                keySalt: Data(repeating: 0x11, count: 32)
+            )
+        )
+        try await cloud.saveSealedPhoto(
+            try SealedPhotoCrypto.seal(
+                legacyManifestJSON(entries: [(id: id, contentHash: legacyDigest)]),
+                corpus: .meal,
+                slot: .manifest,
+                identityService: identity,
+                generation: 1,
+                keySalt: Data(repeating: 0x11, count: 32)
+            )
+        )
+        return (id, plaintext, legacyDigest)
+    }
+
+    /// The manifest as COMMITTED, read back the way a restoring device reads it: fetched from the
+    /// database, opened under the escrow key, decoded with a plain `JSONDecoder` — the same decoder
+    /// the service uses, so the decode defaults under test here are the real ones.
+    private func committedManifest(
+        corpus: SealedPhotoCorpus = .meal,
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase
+    ) async throws -> SealedPhotoManifest {
+        let record = try #require(try await makeCloud(database).sealedPhoto(corpus: corpus, slot: .manifest))
+        let plaintext = try SealedPhotoCrypto.open(record, identityService: identity)
+        return try JSONDecoder().decode(SealedPhotoManifest.self, from: plaintext)
+    }
+
+    /// THE heal every later phase stands on: a full-verification pass rewrites a pre-marker entry
+    /// with the domain-separated v2 digest AND stamps it, so a corpus's `minimumEntryHashVersion`
+    /// climbs to 2 on its own as devices run their normal passes. Nothing else proves the legacy
+    /// bare-SHA256 digest ever leaves a live manifest — and deleting the legacy read branch is gated
+    /// on exactly that proof, so a stamp that quietly stayed at 1 would either strand the branch
+    /// forever or, worse, see it deleted under a fleet still restoring through it.
+    @Test func aFullPassHealsALegacyManifestEntryToTheV2DigestAndStamp() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+        let legacy = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        let summary = try await service.reconcile(
+            corpus: .meal,
+            ids: [legacy.id],
+            verifyingContentHashes: true
+        ) { _ in legacy.plaintext }
+        #expect(summary.uploaded == 1,
+                "the v2 digest cannot match the committed legacy one, so the body must re-upload")
+        #expect(summary.skipped == 0)
+
+        let manifest = try await committedManifest(identity: identity, database: database)
+        #expect(manifest.entries.count == 1, "the healed entry was appended beside the legacy one")
+        let entry = try #require(manifest.entries.first)
+        #expect(entry.id == legacy.id)
+        #expect(entry.contentHash == SealedPhotoBackupService.contentHash(legacy.plaintext),
+                "the legacy digest survived a pass that read the plaintext and could recompute it")
+        #expect(entry.hashVersion == 2)
+        #expect(manifest.minimumEntryHashVersion == 2,
+                "the per-corpus zero-legacy proof never cleared, so the legacy branch can never be retired")
+
+        // ...and healing is not a way to lose the photo: the committed set still restores.
+        var restored: [UUID: Data] = [:]
+        let restore = try #require(try await service.restore(corpus: .meal) { id, data in
+            restored[id] = data
+            return true
+        })
+        #expect(restore.restored == 1)
+        #expect(restored[legacy.id] == legacy.plaintext)
+    }
+
+    /// The ambient launch pass must NOT heal — and, far more important, must not PRETEND to. It
+    /// skips a committed id without reading a byte, so it has proven nothing about which pre-image
+    /// produced the committed digest; carrying the entry forward verbatim keeps the honest 1. A
+    /// stamp applied on this rung would read fleet-wide as "no legacy digests left" for a digest
+    /// nobody looked at, which is the one way the zero-proof can lie.
+    @Test func anAmbientPassCarriesALegacyEntryForwardWithoutTouchingItsStamp() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+        let legacy = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        let summary = try await service.reconcile(
+            corpus: .meal,
+            ids: [legacy.id],
+            verifyingContentHashes: false
+        ) { _ in legacy.plaintext }
+        #expect(summary.uploaded == 0)
+        #expect(summary.skipped == 1)
+
+        let manifest = try await committedManifest(identity: identity, database: database)
+        let entry = try #require(manifest.entries.first)
+        #expect(entry.contentHash == legacy.legacyDigest,
+                "the ambient pass rewrote a digest it never computed")
+        #expect(entry.hashVersion == 1)
+        #expect(manifest.minimumEntryHashVersion == 1,
+                "an unread entry was counted as proven, so the corpus claims a cleanliness it has not earned")
+    }
+
+    /// ...and the same rule on the UNION leg, where it bites hardest: a verifying pass on a device
+    /// that does not hold the photo — the other phone's, or one whose bytes this device never had —
+    /// routes the entry through the carry-forward, reads no plaintext, and must leave the stamp
+    /// exactly where it found it. "This pass verified hashes" is not the same fact as "this pass
+    /// verified THIS entry", and only the second one licenses a promotion.
+    @Test func aVerifyingPassThatNeverReadThePlaintextDoesNotPromoteTheStamp() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+        let legacy = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        let summary = try await service.reconcile(
+            corpus: .meal,
+            ids: [],
+            verifyingContentHashes: true
+        ) { _ in nil }
+        #expect(summary.uploaded == 0)
+
+        let manifest = try await committedManifest(identity: identity, database: database)
+        let entry = try #require(manifest.entries.first)
+        #expect(entry.id == legacy.id, "the union dropped an id this device simply does not hold")
+        #expect(entry.contentHash == legacy.legacyDigest)
+        #expect(entry.hashVersion == 1,
+                "a verifying pass promoted an entry whose plaintext it never read")
+    }
+
+    /// The third rung that appends an entry verbatim, and the one where "we're verifying, so stamp
+    /// it" is most tempting: a full pass whose `photo` closure cannot hand over the bytes (locked
+    /// keychain, a file the migration has not re-sealed yet) KEEPS the committed entry rather than
+    /// dropping a good cloud copy — and keeps it whole. The pass verified nothing about THIS photo,
+    /// because it never saw a byte of it, so promoting the stamp here would launder an unread legacy
+    /// digest into the zero-proof on the exact photos the pass failed to check.
+    @Test func aVerifyingPassKeepsAnUnreadablePhotosEntryVerbatim() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+        let legacy = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        let summary = try await service.reconcile(
+            corpus: .meal,
+            ids: [legacy.id],
+            verifyingContentHashes: true
+        ) { _ in nil }
+        #expect(summary.unreadable == 1)
+        #expect(summary.uploaded == 0)
+
+        let manifest = try await committedManifest(identity: identity, database: database)
+        let entry = try #require(manifest.entries.first)
+        #expect(entry.id == legacy.id, "an unreadable local file dropped a good cloud copy")
+        #expect(entry.contentHash == legacy.legacyDigest)
+        #expect(entry.hashVersion == 1,
+                "a photo the pass could not read was stamped as proven — the verification never happened")
+        #expect(manifest.minimumEntryHashVersion == 1)
+    }
+
+    /// The decode default, and the floor it feeds. Every manifest already sitting in a user's iCloud
+    /// predates the marker, so a missing field must decode as legacy/unproven for EVERY entry — an
+    /// undercount of proven-v2, never an overcount of clean, which is the only direction that keeps
+    /// `minimumEntryHashVersion >= 2` usable as a proof. That aggregate is a floor rather than an
+    /// average: one unproven entry holds the whole corpus back, while a corpus with nothing
+    /// committed is vacuously clean.
+    @Test func aManifestWrittenBeforeTheMarkerDecodesAsLegacyThroughout() throws {
+        let json = legacyManifestJSON(entries: [
+            (id: UUID(), contentHash: Data(SHA256.hash(data: Data("one".utf8)))),
+            (id: UUID(), contentHash: Data(SHA256.hash(data: Data("two".utf8))))
+        ])
+        let decoded = try JSONDecoder().decode(SealedPhotoManifest.self, from: json)
+        #expect(decoded.entries.map(\.hashVersion) == [1, 1],
+                "a missing field decoded as proven-v2 — every pre-marker manifest would claim to be clean")
+        #expect(decoded.minimumEntryHashVersion == 1)
+
+        let mixed = SealedPhotoManifest(corpus: .meal, entries: [
+            SealedPhotoManifest.Entry(id: UUID(), contentHash: Data([0x01]), hashVersion: 1),
+            SealedPhotoManifest.Entry(id: UUID(), contentHash: Data([0x02]), hashVersion: 2)
+        ])
+        #expect(mixed.minimumEntryHashVersion == 1, "one unproven entry must hold the whole corpus back")
+        #expect(SealedPhotoManifest(corpus: .meal, entries: []).minimumEntryHashVersion == 2,
+                "no entries means vacuously no legacy digest")
+
+        // The field really is WRITTEN, not merely defaulted on the way in: a marker that only ever
+        // decoded would fall back to 1 on every rewrite and no corpus would ever finish healing.
+        let stamped = SealedPhotoManifest.Entry(id: UUID(), contentHash: Data([0x03]), hashVersion: 2)
+        let roundTripped = try JSONDecoder().decode(
+            SealedPhotoManifest.Entry.self,
+            from: try JSONEncoder().encode(stamped)
+        )
+        #expect(roundTripped == stamped)
+        #expect(roundTripped.hashVersion == 2)
+    }
 }
 
 // MARK: - Test doubles
@@ -1136,6 +1419,11 @@ private final class RecordingOwnPhotoHost: OwnPhotoBackupContext {
     /// HAS photos never enters the restore branch, so this is the only signal a totally failed
     /// backup produces.
     private(set) var uploadFailures: [Bool] = []
+    /// The third upload-side status: how many photos the last FULL pass could not read. The manifest
+    /// still committed, so neither of the two above says anything about it — a pass reported as clean
+    /// while photos are missing from (or stale in) the backup is exactly the gap verification exists
+    /// to find.
+    private(set) var verifiedUnreadableCounts: [Int] = []
 
     func recordOwnPhotoBackupOutcome(_ outcome: SealedBackupRestoreOutcome) {
         outcomes.append(outcome)
@@ -1143,6 +1431,10 @@ private final class RecordingOwnPhotoHost: OwnPhotoBackupContext {
 
     func recordOwnPhotoBackupUploadFailed(_ failed: Bool) {
         uploadFailures.append(failed)
+    }
+
+    func recordOwnPhotoBackupVerifiedUnreadable(_ count: Int) {
+        verifiedUnreadableCounts.append(count)
     }
 }
 

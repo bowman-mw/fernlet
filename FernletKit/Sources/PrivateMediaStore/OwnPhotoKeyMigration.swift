@@ -112,7 +112,11 @@ public struct OwnPhotoSealedLocations: Sendable, Equatable {
 /// whose files have not been re-sealed.
 ///
 /// Concurrency: `nonisolated` value type over `UserDefaults` (itself thread-safe).
-public struct OwnPhotoMigrationLatch {
+///
+/// Conforms to `FormatMigrationLatching` (crypto-standardization Phase 1): this latch is the
+/// model the shared contract was lifted from, so the conformance adds no behavior — the three
+/// members below predate the protocol.
+public struct OwnPhotoMigrationLatch: FormatMigrationLatching {
     /// The `UserDefaults` key holding the latch.
     public static let defaultsKey = "com.fernlet.private-media.ownPhotoKeyMigrationComplete"
 
@@ -145,7 +149,11 @@ public struct OwnPhotoMigrationLatch {
 
 /// The tally of one ``OwnPhotoKeyMigrator`` pass — and, through ``isClean``, the sole authority on
 /// whether the completion latch may be set.
-public struct OwnPhotoKeyMigrationResult: Sendable, Equatable {
+///
+/// Conforms to `FormatMigrationPassResult`: ``isClean`` and ``madeForwardProgress`` are the two
+/// verdicts the shared `FormatMigrator.run(maxPasses:)` loop reads; the buckets below are this
+/// migration's own diagnostic breakdown.
+public struct OwnPhotoKeyMigrationResult: Sendable, Equatable, FormatMigrationPassResult {
     /// Files the pass looked at (the sum of the five buckets below).
     public let examined: Int
     /// Already sealed under the own-photos key — nothing to do.
@@ -186,6 +194,10 @@ public struct OwnPhotoKeyMigrationResult: Sendable, Equatable {
     public var isClean: Bool {
         !abortedNoOwnKey && resealed == 0 && resealFailures == 0 && indeterminate == 0
     }
+
+    /// Whether this pass re-sealed at least one file — the forward-progress verdict the shared
+    /// run loop uses to decide between "confirm with another pass" and "stop, retry next launch".
+    public var madeForwardProgress: Bool { resealed > 0 }
 
     /// Creates a result. Public so tests can build expectations; production values come from
     /// ``OwnPhotoKeyMigrator/performPass()``.
@@ -233,11 +245,18 @@ public struct OwnPhotoKeyMigrationResult: Sendable, Equatable {
 /// confined to whatever isolation domain built it. The app builds one INSIDE its off-main launch
 /// task (see ``standard(documentsDirectory:defaults:)``) rather than sharing the store providers,
 /// precisely so no provider crosses a domain.
-public struct OwnPhotoKeyMigrator {
+///
+/// The first `FormatMigrator` conformer (crypto-standardization Phase 1) — and the shipping model
+/// the protocol was lifted FROM, which is what makes the conformance a proof: `run(maxPasses:)`
+/// and `isComplete` now come from the shared protocol extension, and this suite's tests pin that
+/// the shared loop behaves exactly as the local one it replaced.
+public struct OwnPhotoKeyMigrator: FormatMigrator {
     private let locations: OwnPhotoSealedLocations
     private let ownKeyProvider: any PrivateMediaKeyProviding
     private let legacyKeyProvider: any PrivateMediaKeyProviding
-    private let latch: OwnPhotoMigrationLatch
+    /// The completion latch the shared `FormatMigrator.run(maxPasses:)` loop sets after a clean
+    /// pass (a protocol requirement, which is why it is not `private`).
+    public let latch: OwnPhotoMigrationLatch
 
     /// Creates a migrator over an explicit location set and key providers (the test seam).
     ///
@@ -279,43 +298,12 @@ public struct OwnPhotoKeyMigrator {
         OwnPhotoMigrationLatch(defaults: defaults)
     }
 
-    /// Whether the migration has already been proven complete (see ``OwnPhotoMigrationLatch``).
-    public var isComplete: Bool { latch.isComplete }
-
-    /// R2: the named maximum number of sweep passes ``run(maxPasses:)`` will fund — one to re-seal,
-    /// one to confirm the corpus is now clean.
+    /// R2: the named maximum number of sweep passes the shared `run(maxPasses:)` will fund — one
+    /// to re-seal, one to confirm the corpus is now clean. (`run` and `isComplete` themselves come
+    /// from the `FormatMigrator` protocol extension; the loop is line-for-line the one that
+    /// shipped here before the lift, and `run`'s Bool still gates an irreversible key binding
+    /// downstream, so it stays non-`@discardableResult`.)
     public static let maxMigrationPasses = 2
-
-    /// Runs passes until one comes back clean, then sets the latch.
-    ///
-    /// A pass that re-sealed files is by definition not proof — it FOUND legacy files — so a second
-    /// pass runs to confirm the corpus is now clean; that is what `maxPasses` funds. Stops early
-    /// (leaving the latch closed) when a pass makes no forward progress, so a permanently
-    /// unwritable file cannot spin.
-    ///
-    /// - Returns: the latch state afterwards — true only when completion is now proven. R7:
-    ///   deliberately not `@discardableResult` — this Bool gates an irreversible key binding
-    ///   downstream, so ignoring it is never safe.
-    public func run(maxPasses: Int = Self.maxMigrationPasses) -> Bool {
-        if latch.isComplete { return true }
-        // R2: the named bound. `passesLeft` is decremented as the first statement of every
-        // iteration, and two early returns (a clean pass, or a pass with no forward progress) exit
-        // sooner.
-        var passesLeft = max(1, maxPasses)
-        while passesLeft > 0 {
-            passesLeft -= 1
-            let result = performPass()
-            if result.isClean {
-                latch.markComplete()
-                return true
-            }
-            // No forward progress (aborted, or everything left is unwritable/indeterminate):
-            // another identical pass would change nothing. Leave the latch closed and retry at the
-            // next launch, when the keychain or the disk may have recovered.
-            if result.resealed == 0 { return false }
-        }
-        return false
-    }
 
     /// Sweeps every location once, re-sealing legacy-key files under the own-photos key.
     ///

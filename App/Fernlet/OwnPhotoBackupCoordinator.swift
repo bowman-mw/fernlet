@@ -23,6 +23,14 @@ protocol OwnPhotoBackupContext: AnyObject {
     /// in which every CloudKit save failed publishes `.nothingToRestore`, whose `needsAttention` is
     /// false, and the banner renders nothing for the life of the install.
     func recordOwnPhotoBackupUploadFailed(_ failed: Bool)
+
+    /// Records how many photos the last FULL-verification pass could not read — the third
+    /// upload-side status, distinct from ``recordOwnPhotoBackupUploadFailed(_:)`` because the
+    /// manifest still COMMITTED: the pass succeeded for everything it could see, but these photos
+    /// may be missing from the backup or stale in it, and reporting the pass as clean would hide
+    /// exactly the gap a verification pass exists to find. Zero clears the state. Called only for
+    /// full passes — an ambient pass reads almost nothing, so it has no verdict to record.
+    func recordOwnPhotoBackupVerifiedUnreadable(_ count: Int)
 }
 
 /// The opt-in own-photo escrow backup: policy, gating and ordering around
@@ -273,6 +281,12 @@ final class OwnPhotoBackupCoordinator {
         /// Every corpus that holds photos committed a manifest this pass. True for a device with no
         /// own photos at all — there is nothing to commit and nothing that could be stranded.
         var routeCommitted = true
+        /// How many photos a FULL-verification pass could not read across all corpora, or nil when
+        /// this pass did not verify (the ambient launch pass reads almost nothing, so it has no
+        /// verdict — recording its near-zero count would overwrite the last full pass's real one).
+        /// Non-zero means the pass committed but is NOT clean: those photos may be missing from
+        /// the backup or stale in it, and only a pass that reads every byte can say which.
+        var verifiedUnreadable: Int?
     }
 
     /// The launch/adopt seam: restore anything this device is missing, then upload anything the
@@ -308,6 +322,7 @@ final class OwnPhotoBackupCoordinator {
         let prefs = StoragePreferencesStore.currentPreferences()
         guard preferenceOverride || prefs.sealedBackupOwnPhotosEnabled else { return pass }
 
+        if fullVerification { pass.verifiedUnreadable = 0 }
         var restoredTotal = 0
         var attention: SealedBackupRestoreOutcome?
         for corpus in SealedPhotoCorpus.allCases {
@@ -318,11 +333,17 @@ final class OwnPhotoBackupCoordinator {
             if result.outcome.needsAttention, attention == nil { attention = result.outcome }
             if result.uploadFailed { pass.uploadFailed = true }
             if !result.committed { pass.routeCommitted = false }
+            if fullVerification { pass.verifiedUnreadable = (pass.verifiedUnreadable ?? 0) + result.unreadable }
         }
         host.recordOwnPhotoBackupOutcome(
             attention ?? (restoredTotal > 0 ? .restored(restoredTotal) : .nothingToRestore)
         )
         host.recordOwnPhotoBackupUploadFailed(pass.uploadFailed)
+        // Only a full pass carries a verification verdict; an ambient pass leaves the last full
+        // pass's count standing rather than overwriting it with a count of bytes it never read.
+        if let verifiedUnreadable = pass.verifiedUnreadable {
+            host.recordOwnPhotoBackupVerifiedUnreadable(verifiedUnreadable)
+        }
         // The proof the binding gate consults. Written on every pass so a route that later stops
         // committing (quota, revoked account) stops satisfying the gate for a device that has not
         // bound yet — binding is one-way, so the gate has to be right BEFORE it fires, not after.
@@ -338,6 +359,10 @@ final class OwnPhotoBackupCoordinator {
         /// This corpus has a committed cloud copy of what it holds — true when the upload committed,
         /// and vacuously true when the corpus holds nothing to commit.
         var committed = true
+        /// Photos the upload leg could not read (`SealedPhotoUploadSummary.unreadable`): the
+        /// manifest still committed, but this device could not vouch for these — their existing
+        /// cloud entries were kept, and any without one never entered the backup at all.
+        var unreadable = 0
     }
 
     /// One corpus: restore into it when it needs restoring, then upload from it when it has
@@ -400,9 +425,10 @@ final class OwnPhotoBackupCoordinator {
         // union still carries every other device's entry forward untouched. Once pruned the ledger
         // holds an empty (but present) list, so this runs exactly once per emptying.
         guard !access.isEmpty() || !uploadLedger.uploadedIDs(for: corpus).isEmpty else { return result }
-        let committed = await reconcile(corpus: corpus, access: access, fullVerification: fullVerification)
-        result.uploadFailed = !committed
-        result.committed = committed
+        let upload = await reconcile(corpus: corpus, access: access, fullVerification: fullVerification)
+        result.uploadFailed = !upload.committed
+        result.committed = upload.committed
+        result.unreadable = upload.unreadable
         return result
     }
 
@@ -475,15 +501,17 @@ final class OwnPhotoBackupCoordinator {
 
     /// Uploads what this device holds and commits the manifest. Returns whether the commit
     /// succeeded — the caller turns a `false` into a visible, retryable status AND withholds the
-    /// irreversible key binding, because an uncommitted route is not a route.
+    /// irreversible key binding, because an uncommitted route is not a route — plus the summary's
+    /// `unreadable` count, so a committed-but-not-clean pass (photos this device could not read,
+    /// whose cloud entries were kept or never made) stops being silently discarded.
     private func reconcile(
         corpus: SealedPhotoCorpus,
         access: CorpusAccess,
         fullVerification: Bool
-    ) async -> Bool {
+    ) async -> (committed: Bool, unreadable: Int) {
         guard let prepared = makeIdentity(escrowMode: .forSealing) else {
             FernletAuditLog.log("sealedPhoto.reconcileNotProvisioned", context: ["corpus": corpus.rawValue])
-            return false
+            return (committed: false, unreadable: 0)
         }
         var sidecar: Data?
         if access.carriesSidecar {
@@ -492,7 +520,7 @@ final class OwnPhotoBackupCoordinator {
                 // invisible timeline, and uploading an EMPTY index would destroy the dates and
                 // captions in the cloud copy. Skip the corpus and retry next launch.
                 FernletAuditLog.log("sealedPhoto.reconcileSkippedUnreadableIndex", context: ["corpus": corpus.rawValue])
-                return false
+                return (committed: false, unreadable: 0)
             }
             sidecar = payload
         }
@@ -500,7 +528,7 @@ final class OwnPhotoBackupCoordinator {
         let ledger = OwnPhotoUploadLedger(defaults: defaults)
         let localIDs = access.ids()
         do {
-            try await service.reconcile(
+            let summary = try await service.reconcile(
                 corpus: corpus,
                 ids: localIDs,
                 sidecar: sidecar,
@@ -514,10 +542,10 @@ final class OwnPhotoBackupCoordinator {
             // Recorded only after the manifest commit succeeded: a ledger written ahead of a failed
             // upload would claim ownership of ids that never reached the cloud.
             ledger.recordUploaded(localIDs, for: corpus)
-            return true
+            return (committed: true, unreadable: summary.unreadable)
         } catch {
             FernletAuditLog.log("sealedPhoto.reconcileFailed", context: ["corpus": corpus.rawValue])
-            return false
+            return (committed: false, unreadable: 0)
         }
     }
 

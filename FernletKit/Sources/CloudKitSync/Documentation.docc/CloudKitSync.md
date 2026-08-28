@@ -109,6 +109,13 @@ the commit marker. A **separate namespace** from ``SealedBackupPayloadType`` on 
 and the settings toggles iterate that type's `allCases`, and photos must not be routed through the
 chunked path, which rewrites its whole set on every change.
 
+Each ``SealedPhotoManifest`` entry carries a `hashVersion` beside its digest (crypto-standardization
+Phase 1): `2` means the digest was *proven* to be the current domain-separated pre-image by a pass
+that read the plaintext, and an absent field decodes as `1` — legacy **or** merely unproven — so
+pre-marker manifests keep decoding and their entries are never silently promoted. Only the rungs
+that actually read bytes stamp `2`; carried-forward entries propagate whatever version was recorded,
+which is what lets the computed `minimumEntryHashVersion` stand as the per-corpus zero-legacy proof.
+
 - ``SealedPhotoCorpus``
 - ``SealedPhotoSlot``
 - ``SealedPhotoManifest``

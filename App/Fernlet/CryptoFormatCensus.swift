@@ -614,31 +614,45 @@ nonisolated enum CryptoFormatCensus {
 
     // MARK: The surface that cannot be counted
 
-    /// `SealedPhotoBackupService` — **present, and permanently uncountable.** Static text: no
-    /// network call, no CloudKit fetch, and above all no invented number.
+    /// `SealedPhotoBackupService` — **present, and still uncountable.** Static text: no network
+    /// call, no CloudKit fetch, and above all no invented number.
     ///
-    /// The surface has no marker. A manifest entry commits `contentHash`, an unversioned 32-byte
-    /// digest, and telling the v2 pre-image from the legacy one requires the plaintext — so
-    /// classifying a single entry would mean decrypting the sealed manifest AND pulling that
-    /// photo's body record from iCloud to hash it. Entries whose body record has vanished cannot be
-    /// classified at any price. And there is no completed-pass latch to substitute for the count;
-    /// one would not prove zero anyway, because a full verification pass skips local photos it
-    /// cannot read and can never heal entries another device carried forward.
+    /// The surface's original problem was the absence of a marker: a manifest entry commits
+    /// `contentHash`, an unversioned 32-byte digest, and telling the v2 pre-image from the legacy
+    /// one requires the plaintext — so classifying a single entry meant decrypting the sealed
+    /// manifest AND pulling that photo's body record from iCloud to hash it, with entries whose body
+    /// record has vanished unclassifiable at any price.
     ///
-    /// This is the plan's "if any count cannot be produced, stop" case, and the honest response is
-    /// to print exactly that. Phase 3's delete here is blocked on Phase 1 adding a `hashVersion`
-    /// marker to manifest entries — not on a census (see the plan's §4).
+    /// Phase 1 supplied the missing marker — `SealedPhotoManifest.Entry.hashVersion`, decoding as 1
+    /// (legacy **or** unproven) when absent, stamped 2 only by a pass that read the plaintext, and
+    /// aggregated per corpus by the computed `minimumEntryHashVersion`. That fixes the FUTURE:
+    /// every entry written or verified from now on carries its own answer. It changes nothing about
+    /// what can be counted TODAY, for two independent reasons. Every entry committed before the
+    /// marker existed decodes as 1 whether its digest is legacy or v2, so the number this row could
+    /// print is a not-yet-proven count and not a legacy count — and reading even that would mean
+    /// fetching and decrypting each corpus's manifest over the network, which no census here does
+    /// for any surface. There is still no local completed-pass record to substitute for the number,
+    /// and one would not prove zero anyway: a full pass skips local photos it cannot read and never
+    /// heals entries another device carried forward.
+    ///
+    /// So this stays the plan's "if any count cannot be produced, stop" case, and the honest
+    /// response is to print exactly that. What changed is the EXIT, not the reading: the zero-proof
+    /// for this surface is `minimumEntryHashVersion >= 2` across the three corpora after a
+    /// full-verification pass has re-committed each manifest, observed on a device — never a census
+    /// number (see the plan's §4).
     static let sealedPhotoBackupRow = CryptoFormatCensusRow(
         surface: .sealedPhotoBackup,
         definitelyLegacy: nil,
-        detail: "UNAVAILABLE — no marker exists. A manifest entry commits an unversioned 32-byte digest,"
-            + " so telling the v2 pre-image from the legacy one needs the plaintext: classifying would mean"
-            + " decrypting the sealed manifest and every photo body from iCloud, and entries whose body record"
-            + " is gone cannot be classified at any price.",
+        detail: "UNAVAILABLE — a marker now exists (`hashVersion` per manifest entry, aggregated by"
+            + " `minimumEntryHashVersion`), but it can only answer for entries written or verified since it"
+            + " landed: everything committed earlier decodes as the unproven default whatever its digest is,"
+            + " and reading even that would mean fetching and decrypting each corpus's sealed manifest from"
+            + " iCloud, which this census does not do for any surface.",
         status: .uncountable(
-            "Legacy entries are rewritten only by a full-verification reconcile (turning backup on, or Retry),"
-            + " and nothing records that such a pass completed — so zero-legacy is currently unprovable for"
-            + " this surface. It needs a format marker (plan Phase 1), not a better census."
+            "An entry is proven — and stamped — only by a full-verification reconcile (turning backup on, or"
+            + " Retry), and nothing local records that such a pass completed for each corpus. The proof for"
+            + " this surface is `minimumEntryHashVersion >= 2` across the three corpora after those passes,"
+            + " read on a device; it is not a number a census can produce."
         )
     )
 }

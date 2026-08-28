@@ -3116,6 +3116,18 @@ final class FernletStore {
         ownPhotoBackupUploadFailed = failed
     }
 
+    /// How many photos the last FULL-verification own-photo pass could not read — observable for
+    /// the same WS-4 reason as the two states above, and distinct from both: the manifest still
+    /// committed (so `ownPhotoBackupUploadFailed` is rightly false), but these photos may be
+    /// missing from the backup or stale in it. Session state, like its siblings — an ambient pass
+    /// never overwrites it, because an ambient pass reads almost nothing and has no verdict.
+    private(set) var ownPhotoBackupVerifiedUnreadable = 0
+
+    /// Records the last full-verification pass's unreadable-photo count (``OwnPhotoBackupContext``).
+    func recordOwnPhotoBackupVerifiedUnreadable(_ count: Int) {
+        ownPhotoBackupVerifiedUnreadable = count
+    }
+
     /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
     /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
     ///
@@ -3138,8 +3150,11 @@ final class FernletStore {
         }
         if succeeded && !enabled {
             // The route is gone, so a stale upload-failure banner would be reporting a problem the
-            // user has just resolved by removing the thing that had it.
+            // user has just resolved by removing the thing that had it. The verification count goes
+            // with it for the same reason: "tap Retry to verify again" over a backup that no longer
+            // exists is a treadmill, not a status.
             recordOwnPhotoBackupUploadFailed(false)
+            recordOwnPhotoBackupVerifiedUnreadable(0)
         }
         return succeeded
     }

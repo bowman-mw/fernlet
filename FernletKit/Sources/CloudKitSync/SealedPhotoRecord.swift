@@ -94,16 +94,59 @@ public enum SealedPhotoSlot: Equatable, Hashable, Sendable {
 public struct SealedPhotoManifest: Codable, Equatable, Sendable {
     /// One photo's entry in the manifest.
     public struct Entry: Codable, Equatable, Sendable {
+        /// The digest generation an entry proven to carry the current, domain-separated pre-image
+        /// is stamped with (`SealedPhotoBackupService.contentHash`'s v2 purpose-bound digest).
+        public static let currentHashVersion = 2
+        /// The digest generation ``hashVersion`` defaults to on decode: the legacy bare-SHA256
+        /// pre-image, or an entry whose pre-image simply has not been proven yet.
+        public static let legacyHashVersion = 1
+
         /// The photo id — also its record-name slot.
         public let id: UUID
         /// SHA-256 of the sealed PLAINTEXT (the normalized JPEG), so a restore can prove the body
         /// it opened is the body this generation committed.
         public let contentHash: Data
+        /// Which pre-image generation produced ``contentHash`` — the format marker this surface
+        /// never had (crypto-standardization plan Phase 1), added because the digest itself is
+        /// unversioned and telling the legacy pre-image from the current one otherwise requires
+        /// the plaintext.
+        ///
+        /// `2` means the digest is PROVEN to be the domain-separated v2 pre-image — stamped only
+        /// by a pass that computed (or recomputed and matched) the digest from plaintext it read.
+        /// `1` means legacy **or unproven**: the field was absent on decode, so the entry predates
+        /// the marker and its digest may be either pre-image. That default is the fail-closed
+        /// direction — an undercount of proven-v2, never an overcount of clean — which is what
+        /// lets `SealedPhotoManifest/minimumEntryHashVersion >= 2` stand as a zero-legacy proof.
+        /// A carried-forward entry KEEPS its recorded version; only a pass that read the plaintext
+        /// may upgrade it.
+        public let hashVersion: Int
 
-        /// Creates an entry pairing a photo id with the hash of its plaintext bytes.
-        public init(id: UUID, contentHash: Data) {
+        /// Creates an entry pairing a photo id with the hash of its plaintext bytes and the digest
+        /// generation that produced it. `hashVersion` is deliberately not defaulted: every
+        /// construction site must say whether it PROVED the pre-image or is carrying a recorded
+        /// claim forward.
+        public init(id: UUID, contentHash: Data, hashVersion: Int) {
             self.id = id
             self.contentHash = contentHash
+            self.hashVersion = hashVersion
+        }
+
+        /// Declared (not synthesized) so the at-rest JSON key names are pinned in source.
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case contentHash
+            case hashVersion
+        }
+
+        /// Decodes an entry, defaulting a missing `hashVersion` to ``legacyHashVersion`` — every
+        /// manifest entry written before the marker existed decodes as legacy/unproven, so old
+        /// manifests keep decoding and their entries are never silently promoted.
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            contentHash = try container.decode(Data.self, forKey: .contentHash)
+            hashVersion = try container.decodeIfPresent(Int.self, forKey: .hashVersion)
+                ?? Self.legacyHashVersion
         }
     }
 
@@ -126,6 +169,20 @@ public struct SealedPhotoManifest: Codable, Equatable, Sendable {
         self.corpus = corpus
         self.entries = entries
         self.sidecar = sidecar
+    }
+
+    /// The lowest ``Entry/hashVersion`` among ``entries`` — the per-corpus zero-legacy proof
+    /// (crypto-standardization plan Phase 1): `>= 2` means no entry in this manifest carries (or
+    /// might carry) the legacy bare-SHA256 digest, fleet-wide, because the manifest is the sole
+    /// authority on membership and every device's reconcile re-encodes it wholesale.
+    ///
+    /// Deliberately COMPUTED, never stored: `entries` is mutable, so a stored copy could drift
+    /// from the entries it summarizes, and the AEAD-sealed JSON needs no second spelling of a fact
+    /// the entries already carry — re-deriving at every read (including at write time, from the
+    /// entries actually committed) is what makes the proof self-propagating. An empty manifest
+    /// reads as ``Entry/currentHashVersion``: no entries, vacuously no legacy digest.
+    public var minimumEntryHashVersion: Int {
+        entries.map(\.hashVersion).min() ?? Entry.currentHashVersion
     }
 }
 

@@ -1057,6 +1057,7 @@ struct PrivacyDataSettingsView: View {
             || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
             || store.ownPhotoBackupUploadFailed
+            || store.ownPhotoBackupVerifiedUnreadable > 0
     }
 
     /// The own-photo backup's three failure lines: a failed upload, a failed disable-delete, and a
@@ -1074,6 +1075,28 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("privacy.sealedBackup.ownPhotosUploadFailed")
+        }
+
+        if let store, store.ownPhotoBackupVerifiedUnreadable > 0 {
+            // A committed-but-not-clean verification pass. Distinct from the upload failure above:
+            // the manifest reached iCloud, but these photos could not be read to verify, so they
+            // may be missing from the backup or out of date in it. Silently reporting the pass as
+            // clean is exactly what the verification pass exists to prevent.
+            //
+            // Two whole-sentence literals rather than one concatenation: a literal in first-argument
+            // position is a `LocalizedStringKey` the catalog sync can harvest, while a built `String`
+            // binds the verbatim overload and stays English in every language.
+            Group {
+                if store.ownPhotoBackupVerifiedUnreadable == 1 {
+                    Text("Couldn't read 1 of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again.")
+                } else {
+                    Text("Couldn't read \(store.ownPhotoBackupVerifiedUnreadable) of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again.")
+                }
+            }
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .accessibilityIdentifier("privacy.sealedBackup.ownPhotosVerifiedUnreadable")
         }
 
         if ownPhotoBackupDisableFailed {
@@ -1204,6 +1227,9 @@ struct PrivacyDataSettingsView: View {
             // for a failed upload.
             || (ownPhotoAttention?.isRetryable ?? false)
             || store.ownPhotoBackupUploadFailed
+            // A committed-but-not-clean verification pass: Retry runs a FULL pass, which re-reads
+            // every photo — the one remedy for "couldn't read N of your photos to verify".
+            || store.ownPhotoBackupVerifiedUnreadable > 0
             || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
             // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
             // store records no retryable attention item, yet Retry IS the remedy —

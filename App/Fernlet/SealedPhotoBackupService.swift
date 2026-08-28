@@ -308,8 +308,10 @@ final class SealedPhotoBackupService {
         if let existing {
             generationStore.recordAcceptedPhoto(existing.generation, for: corpus)
         }
-        let existingHashes = Dictionary(
-            (existing?.manifest.entries ?? []).map { ($0.id, $0.contentHash) },
+        // WHOLE entries, not just hashes: an entry carried forward unread must keep its recorded
+        // `hashVersion` (never be silently promoted), so the ladder below needs the entry itself.
+        let existingEntries = Dictionary(
+            (existing?.manifest.entries ?? []).map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
         // A transport failure on the id listing is NOT the same fact as "no records present", and
@@ -327,7 +329,7 @@ final class SealedPhotoBackupService {
 
         var entries = try await sealChangedPhotos(
             ids: ids,
-            existingHashes: existingHashes,
+            existingEntries: existingEntries,
             presentIDs: presentIDs,
             verifyingContentHashes: verifyingContentHashes,
             corpus: corpus,
@@ -380,9 +382,16 @@ final class SealedPhotoBackupService {
     /// reading its bytes when this pass is not verifying hashes; an id whose local bytes cannot be
     /// read KEEPS its existing entry (an unreadable local file must never delete a good cloud copy);
     /// an unchanged hash is skipped; anything else is sealed and uploaded.
+    ///
+    /// `hashVersion` stamping follows one rule: an entry is stamped `currentHashVersion` ONLY on a
+    /// rung that read the plaintext and computed the v2 digest from it (matched-unchanged, or
+    /// sealed-and-uploaded). The two rungs that do not read bytes carry the existing entry forward
+    /// VERBATIM, recorded version included — which is how a legacy (bare-SHA256) entry survives an
+    /// ambient pass unchanged and is healed, hash and stamp together, by the next full-verification
+    /// pass.
     private func sealChangedPhotos(
         ids: [UUID],
-        existingHashes: [UUID: Data],
+        existingEntries: [UUID: SealedPhotoManifest.Entry],
         presentIDs: Set<UUID>,
         verifyingContentHashes: Bool,
         corpus: SealedPhotoCorpus,
@@ -394,9 +403,10 @@ final class SealedPhotoBackupService {
         var entries: [SealedPhotoManifest.Entry] = []
         for id in ids {
             // Cheap path first: this id is already committed AND its record is really there, and
-            // this pass is not verifying bytes. Nothing is read, nothing is decrypted.
-            if !verifyingContentHashes, let known = existingHashes[id], presentIDs.contains(id) {
-                entries.append(SealedPhotoManifest.Entry(id: id, contentHash: known))
+            // this pass is not verifying bytes. Nothing is read, nothing is decrypted — so the
+            // entry (its recorded `hashVersion` included) is carried forward verbatim.
+            if !verifyingContentHashes, let known = existingEntries[id], presentIDs.contains(id) {
+                entries.append(known)
                 summary.skipped += 1
                 continue
             }
@@ -405,19 +415,31 @@ final class SealedPhotoBackupService {
                 // KEEP a good cloud copy of a photo this device merely failed to read right now.
                 // Dropping it from the manifest would let a transient local failure (locked
                 // keychain, a file the migration has not re-sealed yet) delete the backup.
-                if let hash = existingHashes[id], presentIDs.contains(id) {
-                    entries.append(SealedPhotoManifest.Entry(id: id, contentHash: hash))
+                if let kept = existingEntries[id], presentIDs.contains(id) {
+                    entries.append(kept)
                 }
                 continue
             }
             let hash = Self.contentHash(plaintext)
-            if existingHashes[id] == hash, presentIDs.contains(id) {
-                entries.append(SealedPhotoManifest.Entry(id: id, contentHash: hash))
+            if existingEntries[id]?.contentHash == hash, presentIDs.contains(id) {
+                // The v2 digest of the bytes just read MATCHES the committed digest, so the
+                // committed digest is proven v2 — stamp it, even when the recorded version was
+                // still the decode-default 1. This is how a full pass upgrades the stamp on
+                // entries written before the marker existed without re-uploading a byte.
+                entries.append(SealedPhotoManifest.Entry(
+                    id: id,
+                    contentHash: hash,
+                    hashVersion: SealedPhotoManifest.Entry.currentHashVersion
+                ))
                 summary.skipped += 1
                 continue
             }
             try await save(plaintext, corpus: corpus, slot: .photo(id), generation: generation, keySalt: keySalt)
-            entries.append(SealedPhotoManifest.Entry(id: id, contentHash: hash))
+            entries.append(SealedPhotoManifest.Entry(
+                id: id,
+                contentHash: hash,
+                hashVersion: SealedPhotoManifest.Entry.currentHashVersion
+            ))
             summary.uploaded += 1
         }
         return entries
@@ -429,6 +451,11 @@ final class SealedPhotoBackupService {
     ///
     /// See rule 4 on ``reconcile(corpus:ids:sidecar:verifyingContentHashes:prunableIDs:photo:)``:
     /// own photos do not sync between devices, so an unknown id is another phone's, not a deletion.
+    ///
+    /// Entries are appended VERBATIM — recorded `hashVersion` included, PROPAGATED and never
+    /// upgraded: this device did not read the other phone's plaintext, so it has no standing to
+    /// promote the entry's digest claim, and a wrongly-stamped 2 here would fake the corpus-level
+    /// zero-proof (`minimumEntryHashVersion`) for a digest nobody verified.
     private func carryForwardCommittedEntries(
         _ entries: inout [SealedPhotoManifest.Entry],
         from existing: (manifest: SealedPhotoManifest, generation: Int64)?,
@@ -495,7 +522,13 @@ final class SealedPhotoBackupService {
         try await save(plaintext, corpus: corpus, slot: .photo(id), generation: generation, keySalt: keySalt)
 
         var entries = (existing?.manifest.entries ?? []).filter { $0.id != id }
-        entries.append(SealedPhotoManifest.Entry(id: id, contentHash: Self.contentHash(plaintext)))
+        // Stamped v2: this add computed the digest from the plaintext it just sealed. The carried
+        // entries above keep their recorded versions verbatim.
+        entries.append(SealedPhotoManifest.Entry(
+            id: id,
+            contentHash: Self.contentHash(plaintext),
+            hashVersion: SealedPhotoManifest.Entry.currentHashVersion
+        ))
         try await writeManifest(
             SealedPhotoManifest(
                 corpus: corpus,
@@ -686,7 +719,9 @@ final class SealedPhotoBackupService {
     }
 
     /// Accepts the current purpose-bound digest first, then the pre-domain v1 digest solely for
-    /// read compatibility. A normal reconcile rewrites a legacy entry with the v2 digest.
+    /// read compatibility. A full-verification reconcile rewrites a legacy entry with the v2
+    /// digest and stamps its `hashVersion` — the marker `minimumEntryHashVersion` aggregates into
+    /// the per-corpus zero-proof Phase 3's legacy-branch delete is gated on.
     static func contentHashMatches(_ plaintext: Data, expected: Data) -> Bool {
         if contentHash(plaintext) == expected { return true }
         return Data(SHA256.hash(data: plaintext)) == expected // cryptographic-domain: legacy-read

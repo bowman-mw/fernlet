@@ -97,9 +97,12 @@ iCloud), entries whose body record has vanished are unclassifiable at any price,
 latch exists — nor would one prove zero: a full pass skips unreadable local photos and never heals
 another device's carried-forward entries. Phase 2 item 1's "already self-heals on reconcile; likely
 the cheapest" is right about the mechanism and wrong about the consequence: Phase 3's delete here is
-blocked on **Phase 1 adding a `hashVersion` marker to manifest entries** (default 1 on decode;
-manifest-level minimum computed at write; self-propagating, since the manifest is re-encoded wholesale
-each pass) — not on a census. The census row for this surface is static text saying so.
+blocked on the **`hashVersion` marker Phase 1 has now added to manifest entries** (default 1 on
+decode; manifest-level minimum computed, not stored; self-propagating, since the manifest is
+re-encoded wholesale each pass) — not on a census, which is why the census row for this surface stays
+static text saying so even now that the marker exists. The proof is
+`SealedPhotoManifest.minimumEntryHashVersion >= 2` across the three corpora after full-verification
+passes, read on a device; see Phase 1 below.
 
 **Phase 3 cascade hazard on that surface.** Deleting the legacy digest branch while one legacy entry
 remains does not merely fail that entry: it sends it to `summary.failed` → `.deferredTransient`, the
@@ -114,13 +117,79 @@ never rendered as `0`). **If any count cannot be produced, stop** — a surface 
 cannot be counted cannot be proven migrated. Still owed: a reading from a real tester device with
 real upgraded data. Simulator numbers do not discharge this.
 
-### Phase 1 — Generalize the migrator that already works
+### Phase 1 — Generalize the migrator that already works — **BUILT**
 
-`PrivateMediaStore/OwnPhotoKeyMigration.swift` is a complete, shipping model: `run(maxPasses:)`,
-`performPass()`, `candidateFiles()`, and a UserDefaults-backed latch (`markComplete()`, `reset()`).
-Lift its shape into a shared protocol (`FormatMigrator`: scan → convert → latch, bounded passes,
-resumable, idempotent) and keep `OwnPhotoKeyMigrator` as its first conformer to prove the
-generalization is behavior-preserving.
+Two halves, both preparatory: one shared contract for the migrations Phase 2 will write, and the one
+format marker Phase 0 proved was missing. **No migration ran, no legacy reader was deleted, no blob
+was converted, no wire format and no Class-B site was touched.** The AES-GCM envelope's
+`formatVersion` stays 2 and `contentHash` is computed exactly as before.
+
+**Half A — the `FormatMigrator` lift.** `FernletKit/Sources/FernletCrypto/FormatMigrator.swift`
+holds a new `public nonisolated protocol FormatMigrator` plus the two contracts it reads through —
+`FormatMigrationPassResult` (`isClean`, `madeForwardProgress`) and `FormatMigrationLatching`
+(`isComplete`, `markComplete()`, `reset()`). The shared `run(maxPasses:)` and `isComplete` live in a
+protocol extension: scan → convert → latch, bounded passes, resumable, idempotent, latch set only by
+a pass that converted nothing, failed nothing and could classify everything. `OwnPhotoKeyMigrator`,
+`OwnPhotoMigrationLatch` and `OwnPhotoKeyMigrationResult` are the first conformers, and the migrator's
+own `run`/`isComplete` were **deleted** in favour of the shared pair — the loop is line-for-line the
+one that shipped there, and the untouched `OwnPhotoKeyMigrationTests` are what make the conformance a
+proof rather than a claim.
+
+It lives in `FernletCrypto` and not `FernletFoundation`, the other reachable Layer-0 home, for wall
+reasons: `CloudKitSync` imports `FernletFoundation`, and machinery whose purpose is to touch sealed
+corpora must stay unnameable by walled code, while every module that will conform in Phase 2
+(`PrivateMediaStore`, `PrivateStoreCore`, `FernletLock`, `ProximityKit`, the app target) already
+depends on this zero-dependency target for its sealing primitives — so no conformer needs a new
+dependency edge, and none of them gains one.
+
+**Half B — the sealed-photo-backup marker.** `SealedPhotoManifest.Entry` gained
+`hashVersion: Int` (`CloudKitSync/SealedPhotoRecord.swift`), governed by three rules:
+
+- **Decode-default 1.** A missing field decodes as `legacyHashVersion` = 1, meaning legacy *or
+  simply unproven*. Old manifests keep decoding, and no pre-marker entry is ever silently promoted.
+  The default is the fail-closed direction — an undercount of proven-v2, never an overcount of clean.
+- **Stamp only on proof.** `SealedPhotoBackupService` writes `currentHashVersion` = 2 only on the
+  rungs that read the plaintext and computed the v2 digest from it: matched-unchanged (which upgrades
+  a pre-marker entry's stamp without re-uploading a byte) and sealed-and-uploaded. The init parameter
+  is deliberately not defaulted, so every construction site has to say which it is.
+- **Carry-forward propagates.** The two rungs that read no bytes — the cheap skip, and the
+  unreadable-local-file rung that keeps a good cloud copy — now carry the whole existing entry
+  forward verbatim, recorded version included, as does the union that carries another device's
+  entries. This device did not read those bytes and has no standing to promote their digest claim.
+
+The per-corpus proof is `SealedPhotoManifest.minimumEntryHashVersion` — the minimum over entries,
+**computed and never stored** (`entries` is mutable, and a stored copy could drift from what it
+summarizes), reading as 2 for an empty manifest. `>= 2` means no entry in that corpus carries, or
+might carry, the legacy bare-SHA256 digest; it is self-propagating because every reconcile re-encodes
+the manifest wholesale.
+
+Half B also stopped `OwnPhotoBackupCoordinator` discarding the reconcile summary. A full-verification
+pass's `unreadable` count now flows through `CorpusResult` and `PassResult.verifiedUnreadable` into
+`OwnPhotoBackupContext.recordOwnPhotoBackupVerifiedUnreadable(_:)` →
+`FernletStore.ownPhotoBackupVerifiedUnreadable` (session state; **no new `UserDefaults` key**, so the
+wipe wall is untouched) → a Privacy & Data banner line and Retry eligibility. Only a full pass records
+a verdict — an ambient pass reads almost nothing, and letting it write its near-zero would erase the
+last real reading. This matters to the marker: a committed-but-unread photo is exactly an entry whose
+version stays 1, so the count is the user-visible half of "this corpus is not proven yet".
+
+**What this means for the §4 exception.** The zero-proof for this surface will come from
+`minimumEntryHashVersion >= 2` across the three corpora after full-verification passes on a real
+device — not from a census count, which is why `CryptoFormatCensus.sealedPhotoBackupRow` stays
+`.uncountable`: pre-marker entries decode as 1 whatever their digest is, so the only number available
+today is "not yet proven", and producing even that would mean fetching and decrypting each manifest
+from iCloud. Phase 3's cascade hazard on this surface is unchanged and still gates the delete.
+
+**Pinned.** Six new tests in `SealedPhotoBackupTests` hold Half B's rules against a hand-built
+pre-marker manifest (no `hashVersion` key at all, committing the legacy bare-SHA256 digest — no build
+that still exists can produce one, and the field's absence is the fixture): a full pass heals such an
+entry to the v2 digest *and* stamps it; an ambient pass carries it forward without touching the
+stamp; a verifying pass that never read that plaintext — the union leg, where it bites hardest —
+does not promote it either; a verifying pass whose LOCAL read fails keeps that entry verbatim (the
+"we're verifying, so stamp it" edit that must never slip in); a pre-marker manifest decodes as
+legacy throughout, floor included; and the coordinator publishes a full pass's unreadable count to
+the host — commit succeeded, banner still not clean — with an ambient pass unable to overwrite it.
+`OwnPhotoKeyMigrationTests` was deliberately not touched: unchanged tests over a deleted-and-replaced
+loop are the proof Half A is behavior-preserving.
 
 Note `ColumnCrypto` already self-migrates opportunistically — "every routine re-seal — edits, the …"
 rebinds a row. That covers rows the user touches and *never* covers the rest, which is exactly why a
@@ -210,3 +279,36 @@ The web-imported-recipe Messages defect (owner decision 2026-08-27: web recipes 
 shareable) is tracked separately — it is a wire change to `SharedRecipePayload`, unrelated to crypto.
 Note for whoever takes it: `RecipeExchangePacketHashInput` is a **frozen** hash pre-image, so adding
 fields to the shared payload interacts with `contentHash` and needs a version story of its own.
+
+## Progress
+
+Single source of truth for the standardization loop (owner-approved 2026-08-28). Every loop
+iteration re-reads §4 and this checklist before acting; every phase boundary checks its item off
+with the landing commit SHA and records the phase's token spend below. Anything discovered
+mid-phase that is new work gets ADDED here, never done silently or dropped.
+
+- [x] Phase 0 — format census (main `27a780b`)
+- [x] Phase 1 — `FormatMigrator` lift + sealed-photo `hashVersion` marker (branch
+      `claude/admiring-moser-43ae1d`; SHA recorded at the phase-boundary merge)
+- [ ] Phase 2.1 — `SealedPhotoBackupService` migrator
+- [ ] Phase 2.2 — `HeartDropSidecarKey` migrator
+- [ ] Phase 2.3 — `MediaAtRestCrypto` migrator
+- [ ] Phase 2.4 — `PendingNarrativeBuffer` migrator (runs on the buffer key, NOT behind the app
+      lock — the buffer exists to work while locked)
+- [ ] Phase 2.5 — `FernletLockService` content-key re-wrap (atomic, verified read-back before the
+      old wrap is discarded; complete + verify in one funded stretch)
+- [ ] Phase 2.6 — `ColumnCrypto` legacy→V3 and V2→V3 (D2 assumed yes; one funded stretch)
+- [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
+      — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
+      do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
+      and the keyed migrator's clean pass is the second witness). Deletion diffs may be drafted on
+      a parked branch; the gate itself cannot be self-satisfied by the loop.
+- [ ] Phase 4 — Class B wire readers — BLOCKED: owner decision D1 (§5). No Class-B site is touched
+      until it lands.
+- [ ] Phase 5 — wall the end state (§4). The parts independent of Phases 3/4 — the pinned
+      escape-hatch count and the three extension roots — may land early.
+- [ ] Final pass — docs-vs-code reconciliation sweep + purpose-statement sweep, then stop the loop
+      with the gate report (real-device census readings owed, D1, anything parked).
+
+Token log (per phase: spent / big consumers / remaining):
+- Phase 1: recorded at the phase boundary by the first loop iteration.
