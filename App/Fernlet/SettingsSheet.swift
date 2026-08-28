@@ -1925,7 +1925,7 @@ struct SettingsSheet: View {
     /// untouched — this is a DEBUG surface and does not belong in a searchable settings index.
     private var phase3GateReadoutLink: some View {
         NavigationLink {
-            Phase3GateReadoutView(scanTask: $phase3ScanTask)
+            Phase3GateReadoutView(store: store, scanTask: $phase3ScanTask)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel("Phase 3 gate readout (test-only view)")

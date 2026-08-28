@@ -536,8 +536,16 @@ final class OwnPhotoBackupCoordinator {
     /// Read-only mirror of the private in-flight flag, for the readout's disable rule.
     var debugPassInFlight: Bool { passInFlight }
 
-    /// Retains a finished full pass's DEBUG evidence.
+    /// Retains a finished full pass's DEBUG evidence — only from a pass that actually RAN.
+    ///
+    /// The same rule the merge above it applies (`ranPasses = passes.filter { $0.corpusVerdicts != nil }`):
+    /// `verdicts == nil` means the pass was a no-op — preference off, the DEBUG skip guard, or the
+    /// teardown-epoch guard. Stamping a completion time off one of those would tick the readout's
+    /// checklist step 4 ("Run Privacy & Data → Retry to completion") for a Retry that rewrote no
+    /// manifest and healed nothing, which is precisely the pass the sealed-photo row's own caveat
+    /// says its reading is meaningless without.
     private func retainDebugFullPass(_ pass: PassResult) {
+        guard pass.corpusVerdicts != nil else { return }
         lastFullPassVerdicts = pass.corpusVerdicts
         lastFullPassCompletedAt = Date()
     }

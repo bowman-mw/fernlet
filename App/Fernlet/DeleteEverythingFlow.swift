@@ -123,11 +123,16 @@ final class DeleteEverythingFlow {
     /// Called from HERE rather than from inside `FernletStore.deleteAllData`, and that placement is
     /// forced: `PersistedSurfaceWipeBoundaryTests` throws on ANY preprocessor conditional inside the
     /// scanned wipe path, because a clear behind a compile-time condition cannot certify a promise
-    /// the dialog makes unconditionally. This file is not part of that path. The duress wipe needs no
-    /// line of its own — engaging duress clears the session on its own edge.
+    /// the dialog makes unconditionally. This file is not part of that path.
+    ///
+    /// It clears through `FernletStore.clearPhase3Evidence()` rather than the session directly,
+    /// because the ONE reading that reaches a verdict — the sealed-column keyed witness — lives on
+    /// the store, not the session. That is also why the duress engage routes through the same call:
+    /// the duress silent wipe reaches `deleteAllData` directly through `installDuressPurgeHook` and
+    /// never through this flow, so the `duressSessionActive` didSet is the only clear it gets.
     private static func clearDebugDiagnostics(_ store: FernletStore) {
         #if DEBUG
-        store.phase3ReadoutSession.clear()
+        store.clearPhase3Evidence()
         #endif
     }
 

@@ -601,7 +601,7 @@ the one that governs:
   gate would be quoting the gate to itself. `malformedEmpty` and `unreadable` are not zeros.
 - **`SealedPhotoBackupService` — `minimumEntryHashVersion >= 2` across the three corpora**, read
   from the manifests at gate time (§4's exception, restated here because this is the section a
-  Phase 3 session actually reads). Five things that reading must not be misquoted as:
+  Phase 3 session actually reads). Six things that reading must not be misquoted as:
   - An **EMPTY manifest reads 2 vacuously** (`entries.map(\.hashVersion).min() ?? currentHashVersion`
     — "no entries, vacuously no legacy digest") and does **not** discharge the gate.
   - `== 1` means **NOT PROVEN**, never "legacy entries found": every entry committed before the
@@ -615,6 +615,14 @@ the one that governs:
     written by a TestFlight build live in Production and read here as absent — a false gate failure
     and not a pass. No API on iOS reports which database a build talks to (`SecTaskCopyValueForEntitlement`
     is macOS-only), so this is a permanent caveat, not something the instrument can decide.
+  - A record whose **`generation` sits BELOW this device's `SealedBackupGenerationStore` high-water
+    mark is not a reading of the LIVE manifest**. `manifestFormatReading` performs no high-water
+    check and says so in its own doc — "a stale-but-authentic manifest can read `>= 2` here while the
+    live one reads 1" — and `restore(corpus:limitedTo:write:)` would refuse that same record with
+    `.staleGeneration`. The readout folds it as `unavailable` (a burned generation from a
+    mint-then-failed-write produces the same inequality over a live record, so "cannot be shown to be
+    live" is the honest claim, not "is stale"). `generation > deviceHighWater` is the ordinary
+    another-device-wrote-newer case and stays a printed caveat.
 
 #### How the Phase 3 gates are read
 
@@ -641,7 +649,14 @@ Four structural facts a Phase 3 session must know before it starts:
 3. **The sealed-column keyed witness cannot be funded from Settings at all.** Settings is reached
    from Home, the hub is re-locked on the way, and `contentKey(for: .privateHub)` then answers nil.
    So the readout's reset only ARMS: reset the latch there, dismiss Settings, open the Private tab
-   and unlock, and the shipped trigger funds a genuine keyed pass ~300 ms later.
+   and unlock, and the shipped trigger funds a genuine keyed pass ~300 ms later. The pass must
+   POSTDATE that reset: the gate is "a fresh clean keyed pass run at gate time", and a keyed witness
+   the process happened to be holding — the one the first hub unlock of the day produced — proves
+   nothing about the rows written since, of which the marker-collided legacy ones are exactly the
+   sliver the keyed pass exists to resolve. The readout refuses to discharge without one, and it
+   also refuses over a corpus holding **no sealed column values at all**: with no page to sweep, the
+   pass never vends the content key, so a `.vacuous` verdict records that both halves were true over
+   nothing.
 4. **`.confirmed` revalidation logs NOTHING** (`SealedColumnFormatMigrator.revalidate` returns
    before any audit line), which is why the witness is retained as typed store state rather than
    read back out of the log. A latch "confirmed" that way is a KEYLESS confirmation and leaves the

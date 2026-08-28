@@ -101,9 +101,12 @@ nonisolated enum Phase3Gate: String, Sendable, CaseIterable, Identifiable {
     var gateWording: String {
         switch self {
         case .sealedColumns:
-            return "census unprefixed == 0 on a real upgraded device, AND a keyed migrator pass"
-                + " whose final result isClean — the second witness that resolves the collided"
-                + " ~1-in-256 marker sliver a keyless census can never close."
+            return "census unprefixed == 0 on a real upgraded device, AND a FRESH keyed migrator"
+                + " pass — run at gate time, after this sitting's latch reset — whose final result"
+                + " isClean. That is the second witness that resolves the collided ~1-in-256 marker"
+                + " sliver a keyless census can never close; a pass quoted from earlier in the"
+                + " process does not discharge it, and neither half means anything over a corpus"
+                + " that holds no sealed values."
         case .pendingNarrativeBuffer:
             return "census legacyCount == 0; an unreadable buffer is not a zero."
         case .mediaAtRest:
@@ -460,26 +463,31 @@ nonisolated struct MediaPassWitness: Sendable, Equatable {
     let result: MediaAtRestFormatMigrationResult
     /// The latch before the pass — captured so a stale latch is visible as a change, not inferred.
     let latchBefore: Bool
-    /// The latch after. `performPass()` cannot move it; only the optional follow-up `run()` can.
+    /// The latch after. `performPass()` cannot move it, and the readout runs nothing that can, so
+    /// this is an ASSERTION rather than a report: see ``latchMoved``.
     let latchAfter: Bool
-    /// Whether the control additionally ran the full `run(maxPasses:)` loop (it does so only when
-    /// the latch read false, so a clean pass can latch in this sitting rather than next launch).
-    let ranFullLoop: Bool
 
     /// Creates a witness.
     init(
         stamp: Phase3Stamp,
         result: MediaAtRestFormatMigrationResult,
         latchBefore: Bool,
-        latchAfter: Bool,
-        ranFullLoop: Bool
+        latchAfter: Bool
     ) {
         self.stamp = stamp
         self.result = result
         self.latchBefore = latchBefore
         self.latchAfter = latchAfter
-        self.ranFullLoop = ranFullLoop
     }
+
+    /// Whether the latch moved across the pass — which it must NEVER do.
+    ///
+    /// The media latch IS gate part (a), and this instrument is forbidden to set it or clear it: a
+    /// latch this page minted from the foreground is a gate the sitting awarded itself, and would
+    /// read next launch exactly like one a shipped pass earned. `performPass()` is documented never
+    /// to reach `markComplete()`, so a `true` here means that contract broke and the media row
+    /// refuses to answer rather than quoting a latch it may have moved.
+    var latchMoved: Bool { latchBefore != latchAfter }
 
     /// The blocking buckets this pass hit, by name. Empty for a clean pass.
     var blockingBuckets: [String] {
@@ -498,6 +506,47 @@ nonisolated struct MediaPassWitness: Sendable, Equatable {
         if result.abortedNoOwnKey { named.append("abortedNoOwnKey") }
         if result.abortedNoWallKey { named.append("abortedNoWallKey") }
         return named
+    }
+}
+
+/// What the LAUNCH media pass returned, and when.
+///
+/// Retained because "no pass has been observed this process" is a claim, and on a device whose
+/// launch pass ran and did not latch it is a false one — the record sits on `FernletStore` while the
+/// row denies it. `run(maxPasses:)` returns the latch state rather than a tally, so this carries the
+/// three-way legibility signal ("a pass ran at <t> and did not latch") and nothing else; the residue
+/// numbers are still bought separately with `performPass()`.
+nonisolated struct MediaLaunchPassRecord: Sendable, Equatable {
+    /// What `run()` returned — whether the launch pass left the latch set.
+    let latched: Bool
+    /// When it finished.
+    let completedAt: Date
+
+    /// Creates a launch-pass record.
+    init(latched: Bool, completedAt: Date) {
+        self.latched = latched
+        self.completedAt = completedAt
+    }
+
+    /// The record as the row prints it.
+    var printed: String {
+        "the launch pass at \(completedAt.ISO8601Format()) ran and returned latched \(latched)"
+    }
+}
+
+/// A caught error reduced to a BOUNDED classification, because the raw description is the report's
+/// only free-text payload and the report is designed to be copied off the device.
+///
+/// `String(describing:)` of a `CKError` renders its `userInfo`, which for a multi-record operation
+/// carries a per-item dictionary keyed by `CKRecord.ID` — and this scheme's sealed-photo record
+/// names are built from photo UUIDs. Domain and code cannot carry an identifier; the raw description
+/// can, and the redaction contract is stated in ``Phase3GateReportBuilder``.
+nonisolated enum Phase3ProbeFailure {
+    /// The error as the readout is allowed to retain it: the Swift type, the bridged domain, and the
+    /// code. Never `userInfo`, never `localizedDescription`, never the raw description.
+    static func summarize(_ error: Error) -> String {
+        let bridged = error as NSError
+        return "\(type(of: error)) (domain \(bridged.domain), code \(bridged.code))"
     }
 }
 
@@ -626,6 +675,18 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
     var mediaWitness: MediaPassWitness?
     /// Whether a media pass is running right now.
     var mediaPassInFlight: Bool
+    /// What the LAUNCH media pass returned, so a `latch == false` with no funded witness never
+    /// renders as "no pass has been observed this process" while the launch record stands.
+    var mediaLaunchPass: MediaLaunchPassRecord?
+    /// Whether a keyed sealed-column pass was running at any point while the census scan ran.
+    ///
+    /// Recorded at scan START and again at LANDING, because the render-time flag says nothing about
+    /// the window the bytes were read in — and the verdict's own sentence claims it does.
+    var censusOverlappedKeyedPass: Bool
+    /// The last own-photo full-verification pass's per-corpus verdicts — a BY-PRODUCT of a writing
+    /// pass, never the gate. Its `examined` bit is the "never looked / examined-none" fact a live
+    /// probe structurally cannot produce.
+    var sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]?
     /// The retained sealed-column witness, or nil when no trigger ran this process.
     var sealedColumnWitness: SealedColumnPassWitness?
     /// Whether a sealed-column run is in flight — a discharge is refused outright while it is.
@@ -652,6 +713,9 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
         bodyProbes: [SealedPhotoCorpus: BodyProbeReading] = [:],
         mediaWitness: MediaPassWitness? = nil,
         mediaPassInFlight: Bool = false,
+        mediaLaunchPass: MediaLaunchPassRecord? = nil,
+        censusOverlappedKeyedPass: Bool = false,
+        sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]? = nil,
         sealedColumnWitness: SealedColumnPassWitness? = nil,
         sealedColumnPassInFlight: Bool = false,
         sealedColumnResetTakenAt: Date? = nil,
@@ -670,6 +734,9 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
         self.bodyProbes = bodyProbes
         self.mediaWitness = mediaWitness
         self.mediaPassInFlight = mediaPassInFlight
+        self.mediaLaunchPass = mediaLaunchPass
+        self.censusOverlappedKeyedPass = censusOverlappedKeyedPass
+        self.sealedPhotoFullPassVerdicts = sealedPhotoFullPassVerdicts
         self.sealedColumnWitness = sealedColumnWitness
         self.sealedColumnPassInFlight = sealedColumnPassInFlight
         self.sealedColumnResetTakenAt = sealedColumnResetTakenAt
@@ -691,6 +758,9 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
     let rows: [Phase3GateRow]
     /// The seven bits as they read before the one reset this design offers, when it was taken.
     let preResetLatchSnapshot: Phase3LatchReadings?
+    /// When the sealed-column latch was reset this sitting. Carried so the export can say the
+    /// pre-reset snapshot was NOT captured, rather than omitting the section and saying nothing.
+    let sealedColumnResetTakenAt: Date?
     /// The sitting checklist with its derived done-states.
     let checklist: [Phase3SittingStep]
     /// Refusals recorded this sitting.
@@ -707,6 +777,7 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
         environment: Phase3GateEnvironment,
         rows: [Phase3GateRow],
         preResetLatchSnapshot: Phase3LatchReadings?,
+        sealedColumnResetTakenAt: Date? = nil,
         checklist: [Phase3SittingStep],
         refusals: [String],
         mediaAudit: MediaResidueAudit?,
@@ -716,6 +787,7 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
         self.environment = environment
         self.rows = rows
         self.preResetLatchSnapshot = preResetLatchSnapshot
+        self.sealedColumnResetTakenAt = sealedColumnResetTakenAt
         self.checklist = checklist
         self.refusals = refusals
         self.mediaAudit = mediaAudit
@@ -752,16 +824,41 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// When the local scan has not landed, EVERY row says so rather than folding an all-false latch
     /// reading as evidence — an unread latch is not a cleared latch.
     static func readout(from inputs: Phase3GateReadoutInputs) -> Phase3GateReadout {
+        guard !inputs.environment.duressSessionActive else { return duressRefusal(inputs.environment) }
         let audit = mediaAudit(from: inputs)
         return Phase3GateReadout(
             stamps: stamps(from: inputs),
             environment: inputs.environment,
             rows: rows(from: inputs, audit: audit),
             preResetLatchSnapshot: inputs.preResetLatchSnapshot,
+            sealedColumnResetTakenAt: inputs.sealedColumnResetTakenAt,
             checklist: inputs.checklist,
             refusals: inputs.refusals,
             mediaAudit: audit,
             manifestProbes: inputs.manifestProbes
+        )
+    }
+
+    /// The whole readout under a duress session: six refusals, no stamps, no probes, no audit.
+    ///
+    /// Enforced HERE, in the pure layer, and not only by the view's `if store.duressSessionActive`.
+    /// The model already carries the flag, and a refactor of the view's `@ViewBuilder` — merging the
+    /// sections, moving the guard into a subview, wrapping it in a `Group` (a documented trap in
+    /// this codebase) — would otherwise let the fold and BOTH export routes assemble real per-corpus
+    /// photo counts and real decrypted manifest minima under a decoy session with the suite green.
+    static func duressRefusal(_ environment: Phase3GateEnvironment) -> Phase3GateReadout {
+        let reason = "a duress session is active. This surface reads and decrypts real backup"
+            + " manifests and prints per-corpus counts, which is exactly what this session must not"
+            + " disclose — so nothing is folded, and no reading is carried into either export route."
+        return Phase3GateReadout(
+            stamps: [],
+            environment: environment,
+            rows: Phase3Gate.allCases.map { notTakenRow($0, reason: reason) },
+            preResetLatchSnapshot: nil,
+            checklist: [],
+            refusals: [],
+            mediaAudit: nil,
+            manifestProbes: []
         )
     }
 
@@ -802,16 +899,20 @@ nonisolated enum Phase3GateReadoutBuilder {
         return [
             row(forSealedColumns: census.sealedColumns, latch: latches.sealedColumn,
                 witness: inputs.sealedColumnWitness, censusStamp: inputs.censusStamp,
-                passInFlight: inputs.sealedColumnPassInFlight),
+                passInFlight: inputs.sealedColumnPassInFlight,
+                overlappedKeyedPass: inputs.censusOverlappedKeyedPass,
+                resetTakenAt: inputs.sealedColumnResetTakenAt),
             row(forPendingNarrative: census.pendingNarrative, latch: latches.pendingNarrativeBuffer,
                 stamp: inputs.censusStamp),
             row(forMedia: audit, latches: latches, witness: inputs.mediaWitness,
-                passInFlight: inputs.mediaPassInFlight, censusStamp: inputs.censusStamp),
+                passInFlight: inputs.mediaPassInFlight, censusStamp: inputs.censusStamp,
+                launchPass: inputs.mediaLaunchPass),
             row(forLockWrap: census.lockWrap, rowLatch: latches.lockWrapRow,
                 lockConfigured: inputs.environment.lockConfigured, stamp: inputs.censusStamp),
             row(forHeartDrop: census.heartDrop, latch: latches.heartDropSidecar, stamp: inputs.censusStamp),
             row(forSealedPhoto: inputs.manifestProbes.last, bodyProbes: inputs.bodyProbes,
-                latch: latches.sealedPhotoBackup, environment: inputs.environment)
+                latch: latches.sealedPhotoBackup, environment: inputs.environment,
+                fullPassVerdicts: inputs.sealedPhotoFullPassVerdicts)
         ]
     }
 
@@ -839,7 +940,9 @@ nonisolated enum Phase3GateReadoutBuilder {
         latch: Bool,
         witness: SealedColumnPassWitness?,
         censusStamp: Phase3Stamp?,
-        passInFlight: Bool
+        passInFlight: Bool,
+        overlappedKeyedPass: Bool = false,
+        resetTakenAt: Date? = nil
     ) -> Phase3GateRow {
         var stamps: [Phase3Stamp] = []
         if let censusStamp { stamps.append(censusStamp) }
@@ -849,7 +952,9 @@ nonisolated enum Phase3GateReadoutBuilder {
             witnesses: [.markerCensus, .keyedMigratorPass, .completionLatch],
             stamps: stamps,
             verdict: sealedColumnVerdict(outcome, witness: witness, censusStamp: censusStamp,
-                                         passInFlight: passInFlight),
+                                         passInFlight: passInFlight,
+                                         overlappedKeyedPass: overlappedKeyedPass,
+                                         resetTakenAt: resetTakenAt),
             evidence: sealedColumnEvidence(outcome, latch: latch, witness: witness),
             caveats: sealedColumnCaveats(outcome, witness: witness, censusStamp: censusStamp)
         )
@@ -859,15 +964,18 @@ nonisolated enum Phase3GateReadoutBuilder {
         _ outcome: CryptoFormatCensus.SealedColumnOutcome,
         witness: SealedColumnPassWitness?,
         censusStamp: Phase3Stamp?,
-        passInFlight: Bool
+        passInFlight: Bool,
+        overlappedKeyedPass: Bool,
+        resetTakenAt: Date?
     ) -> Phase3GateVerdict {
         guard case let .counted(result) = outcome else {
             guard case let .failed(reason) = outcome else { return .notTaken("no census reading") }
             return .unavailable("the sealed store could not be censused: \(reason). This is not a zero.")
         }
-        guard !passInFlight else {
+        guard !passInFlight, !overlappedKeyedPass else {
             return .notTaken("a keyed pass was writing the corpus while this scan ran, so the marker"
-                + " counts are neither the before nor the after state")
+                + " counts are neither the before nor the after state. Re-take the local scan once"
+                + " the pass has landed.")
         }
         guard let witness, let final = witness.finalPass else {
             return .notTaken(passlessReason(witness))
@@ -877,7 +985,33 @@ nonisolated enum Phase3GateReadoutBuilder {
                 + " off and re-arm the pass.")
         }
         guard final.isClean else { return .blocked(blockingDescription(final)) }
+        if let stale = sealedColumnFreshnessRefusal(witness, resetTakenAt: resetTakenAt) { return stale }
         return dischargeSealedColumns(result, witness: witness, censusStamp: censusStamp)
+    }
+
+    /// The plan's "a FRESH clean keyed pass run at GATE TIME — never this latch quoted from memory".
+    ///
+    /// Without this, any keyed witness the process happens to hold discharges the row: a pass run at
+    /// the first hub unlock of the day, hours before the sitting, satisfies the ordering rule the
+    /// moment the census is re-taken — while proving nothing about the rows written since. Those
+    /// rows matter: `ColumnCrypto.sealPlaintext` still fails open to an unprefixed legacy write when
+    /// the device binding cannot be read, and ~1 in 256 of those collides with a marker byte and is
+    /// invisible to `unprefixed == 0`. Resolving that sliver is the keyed pass's whole job.
+    private static func sealedColumnFreshnessRefusal(
+        _ witness: SealedColumnPassWitness,
+        resetTakenAt: Date?
+    ) -> Phase3GateVerdict? {
+        guard let resetAt = resetTakenAt else {
+            return .notTaken("no latch reset was taken this sitting, so the keyed pass beside this"
+                + " census is one the process happened to have — not a pass run at gate time. Reset"
+                + " the latch here, dismiss Settings, open the Private tab and unlock (step 7).")
+        }
+        guard witness.stamp.takenAt > resetAt else {
+            return .notTaken("the keyed pass (\(witness.stamp.printed)) predates this sitting's latch"
+                + " reset (\(resetAt.ISO8601Format())), so it says nothing about rows written since."
+                + " Complete step 7.")
+        }
+        return nil
     }
 
     /// Why a witness carries no keyed pass — the state that is completely silent in the app today.
@@ -891,7 +1025,8 @@ nonisolated enum Phase3GateReadoutBuilder {
             + " census's ~1-in-256 collided-marker sliver is unresolved"
     }
 
-    /// The last clause: a marker zero taken AT OR AFTER the pass that could have changed it.
+    /// The last clause: a marker zero taken AT OR AFTER the pass that could have changed it, over a
+    /// corpus that held something to count.
     private static func dischargeSealedColumns(
         _ result: SealedColumnFormatCensusResult,
         witness: SealedColumnPassWitness,
@@ -901,12 +1036,38 @@ nonisolated enum Phase3GateReadoutBuilder {
         guard unprefixed == 0 else {
             return .blocked("the marker census still counts \(unprefixed) unprefixed column values")
         }
+        guard !result.truncated else {
+            return .unavailable("the marker census stopped at its \(result.rowCap)-row cap after"
+                + " \(result.rowsScanned) of \(result.rowsAvailable) rows, so its zero describes a"
+                + " SUBSET of the corpus and says nothing about the rows it never reached.")
+        }
         guard let censusStamp else { return .notTaken("no census stamp, so the two halves cannot be ordered") }
         guard censusStamp.takenAt >= witness.stamp.takenAt else {
             return .notTaken("the marker census was taken BEFORE the keyed pass beside it, so the"
                 + " zero it reports is not a reading of the corpus the pass left. Retake the census.")
         }
-        return .discharged
+        return emptyCorpusRefusal(result) ?? .discharged
+    }
+
+    /// The `.vacuous` branch the sealed-column row was missing: both halves are trivially satisfied
+    /// over a corpus that holds nothing.
+    ///
+    /// The census's tally is empty, so `unprefixed == 0`; `SealedColumnMigrationResult.isClean` is
+    /// `converted == 0 && blocking == 0 && notAttemptedTotal == 0 && …`, all satisfied by a pass over
+    /// zero pages — which also means the per-page content key was never vended, so that "keyed" pass
+    /// opened NOTHING and resolved none of the collided-marker sliver it exists for. `emptyOrNil` is
+    /// counted separately from `unprefixed`, so a store with rows whose sealed columns are all nil
+    /// reads a healthy non-zero row count and is the variant a bare `rowsAvailable > 0` floor misses.
+    private static func emptyCorpusRefusal(_ result: SealedColumnFormatCensusResult) -> Phase3GateVerdict? {
+        let classified = result.total
+        let sealedValues = classified.total - classified.emptyOrNil
+        guard result.rowsAvailable == 0 || sealedValues == 0 else { return nil }
+        return .vacuous("the sealed corpora hold \(result.rowsAvailable) rows and \(sealedValues)"
+            + " sealed column values, so the census's zero and the keyed pass's clean verdict are"
+            + " both over an EMPTY corpus. With no page to sweep the pass never vended the content"
+            + " key — it opened nothing and resolved none of the ~1-in-256 collided-marker sliver."
+            + " Read this gate on a device that actually holds sealed journal / cycle / intimacy /"
+            + " worry text.")
     }
 
     private static func sealedColumnEvidence(
@@ -1087,7 +1248,8 @@ nonisolated enum Phase3GateReadoutBuilder {
         latches: Phase3LatchReadings,
         witness: MediaPassWitness?,
         passInFlight: Bool,
-        censusStamp: Phase3Stamp?
+        censusStamp: Phase3Stamp?,
+        launchPass: MediaLaunchPassRecord? = nil
     ) -> Phase3GateRow {
         var stamps: [Phase3Stamp] = []
         if let censusStamp { stamps.append(censusStamp) }
@@ -1096,8 +1258,10 @@ nonisolated enum Phase3GateReadoutBuilder {
             gate: .mediaAtRest,
             witnesses: [.markerCensus, .completionLatch, .mediaMigratorPass],
             stamps: stamps,
-            verdict: mediaVerdict(audit, latches: latches, witness: witness, passInFlight: passInFlight),
-            evidence: mediaEvidence(audit, latches: latches, witness: witness, passInFlight: passInFlight),
+            verdict: mediaVerdict(audit, latches: latches, witness: witness, passInFlight: passInFlight,
+                                  censusStamp: censusStamp, launchPass: launchPass),
+            evidence: mediaEvidence(audit, latches: latches, witness: witness,
+                                    passInFlight: passInFlight, launchPass: launchPass),
             caveats: mediaCaveats(audit, latches: latches)
         )
     }
@@ -1106,7 +1270,9 @@ nonisolated enum Phase3GateReadoutBuilder {
         _ audit: MediaResidueAudit?,
         latches: Phase3LatchReadings,
         witness: MediaPassWitness?,
-        passInFlight: Bool
+        passInFlight: Bool,
+        censusStamp: Phase3Stamp?,
+        launchPass: MediaLaunchPassRecord?
     ) -> Phase3GateVerdict {
         guard let audit else { return .notTaken("no census reading, so there is no residue audit") }
         guard !audit.allLocationsAbsent else {
@@ -1114,32 +1280,100 @@ nonisolated enum Phase3GateReadoutBuilder {
                 + " count, which is not a swept-clean corpus")
         }
         guard !passInFlight else { return .notTaken("a media pass is running now") }
-        guard let unaccounted = audit.unaccountedUnprefixed, witness != nil else {
-            return .notTaken("no media pass observed this process, so the residue subtraction has no"
-                + " K term. Fund one from this screen — performPass() never touches the latch.")
+        guard let unaccounted = audit.unaccountedUnprefixed, let witness else {
+            return .notTaken("no media pass was funded this process, so the residue subtraction has"
+                + " no K term. Fund one from this screen — performPass() never touches the latch."
+                + (launchPass.map { " (\($0.printed).)" } ?? ""))
         }
+        if let refusal = mediaPassRefusal(audit, witness: witness, censusStamp: censusStamp) { return refusal }
         guard latches.mediaAtRest else {
-            return .blocked("gate part (a) is not satisfied: \(mediaLatchLine(latch: false, witness: witness, passInFlight: false))")
+            return .blocked("gate part (a) is not satisfied: "
+                + mediaLatchLine(latch: false, witness: witness, passInFlight: false, launchPass: launchPass))
         }
         guard !audit.hasBlindSpots else { return .blocked(mediaBlindSpotDescription(audit)) }
-        guard unaccounted == 0 else {
-            return .blocked("\(unaccounted) unprefixed bytes are unaccounted for after subtracting the"
-                + " named residues (census \(audit.censusUnprefixedTotal) − MeshPhotoCache.json"
-                + " \(audit.meshPhotoCacheUnprefixed) − pass unopenableUnprefixed"
-                + " \(audit.passUnopenableUnprefixed.map(String.init) ?? "—"))")
-        }
+        guard unaccounted == 0 else { return mediaUnaccountedVerdict(audit, unaccounted: unaccounted) }
         return .discharged
     }
 
-    /// The three-way string a `false` latch is never rendered without.
-    static func mediaLatchLine(latch: Bool, witness: MediaPassWitness?, passInFlight: Bool) -> String {
+    /// The three ways this row's own inputs disqualify themselves before the latch is even consulted.
+    ///
+    /// The first is the one that authorizes a false pass. `MediaAtRestFormatMigrationResult.isClean`
+    /// requires `converted == 0 && convertedPlaintext == 0`, and a converting pass rewrites those
+    /// files into the current format — so on the sitting's own prescribed order (fund the pass, then
+    /// re-take the census) they vanish from the census's unprefixed bucket and `U − J − K` nets to
+    /// zero. The instrument's own copy says "on a latched device it should convert nothing; if it
+    /// converts something, that is the finding", and the verdict was swallowing exactly that finding
+    /// — certifying gate part (a) on a latch the sitting had just proved stale. Every OTHER device in
+    /// that state runs no pass at all, so the one device that healed itself would certify the fleet.
+    private static func mediaPassRefusal(
+        _ audit: MediaResidueAudit,
+        witness: MediaPassWitness,
+        censusStamp: Phase3Stamp?
+    ) -> Phase3GateVerdict? {
+        guard !witness.latchMoved else {
+            return .unavailable("the media completion latch MOVED across this pass"
+                + " (\(witness.latchBefore) -> \(witness.latchAfter)). performPass() is documented"
+                + " never to reach markComplete(), so gate part (a) can no longer be quoted from"
+                + " this sitting at all — relaunch and read the latch a shipped pass left.")
+        }
+        guard witness.result.isClean else {
+            return .blocked("the live pass was not clean: \(witness.blockingBuckets.joined(separator: ", "))"
+                + (witness.latchBefore
+                   ? " — and the latch ALREADY STOOD when it ran, so this is a STALE latch: the pass"
+                     + " has now healed this device and the census beside it can no longer show the"
+                     + " residue. Other devices in this state run no pass at all."
+                   : ""))
+        }
+        guard audit.locations.allSatisfy({ $0.residueVerdict != .unnamedLocation }) else {
+            return .unavailable("the sweep returned a location this audit's vocabulary cannot name,"
+                + " so residue B's label-to-location mapping cannot be trusted and the subtraction"
+                + " is not a number. Fix MediaCorpusLabel.expectedURLs before reading this gate.")
+        }
+        guard let censusStamp, censusStamp.takenAt >= witness.stamp.takenAt else {
+            return .notTaken("the marker census beside this pass was taken BEFORE it, so U and K do"
+                + " not describe one filesystem state. Re-take the local scan.")
+        }
+        return nil
+    }
+
+    /// A negative subtraction is not a blocking count — it is an unanswerable one.
+    private static func mediaUnaccountedVerdict(
+        _ audit: MediaResidueAudit,
+        unaccounted: Int
+    ) -> Phase3GateVerdict {
+        let terms = "census \(audit.censusUnprefixedTotal) − MeshPhotoCache.json"
+            + " \(audit.meshPhotoCacheUnprefixed) − pass unopenableUnprefixed"
+            + " \(audit.passUnopenableUnprefixed.map(String.init) ?? "—")"
+        guard unaccounted > 0 else {
+            return .unavailable("the pass accounted for MORE unprefixed bytes than the census saw"
+                + " outside residue B (\(terms) = \(unaccounted)), so the two sweeps did not describe"
+                + " one filesystem state. Nothing answered against the gate — retake both.")
+        }
+        return .blocked("\(unaccounted) unprefixed bytes are unaccounted for after subtracting the"
+            + " named residues (\(terms))")
+    }
+
+    /// The four-way string a `false` latch is never rendered without.
+    static func mediaLatchLine(
+        latch: Bool,
+        witness: MediaPassWitness?,
+        passInFlight: Bool,
+        launchPass: MediaLaunchPassRecord? = nil
+    ) -> String {
         guard !latch else { return "latch true" }
         guard !passInFlight else { return "latch false — a pass is running now" }
-        guard let witness else { return "latch false — no pass has been observed this process" }
+        guard let witness else {
+            guard let launchPass else {
+                return "latch false — no pass has been observed this process"
+            }
+            return "latch false — no pass was funded here, but \(launchPass.printed); fund one from"
+                + " this screen for the residue tally"
+        }
         let buckets = witness.blockingBuckets
         guard !buckets.isEmpty else {
             return "latch false — a pass was observed at \(witness.stamp.printed) and reported no"
-                + " blocking bucket; the latch is set only by the run loop, which this pass bypassed"
+                + " blocking bucket; the latch is set only by the run loop, which this instrument"
+                + " never runs (it is gate part (a), and this page may neither set nor clear it)"
         }
         return "latch false — a pass was observed at \(witness.stamp.printed) and was blocked on"
             + " \(buckets.joined(separator: ", "))"
@@ -1149,9 +1383,12 @@ nonisolated enum Phase3GateReadoutBuilder {
         _ audit: MediaResidueAudit?,
         latches: Phase3LatchReadings,
         witness: MediaPassWitness?,
-        passInFlight: Bool
+        passInFlight: Bool,
+        launchPass: MediaLaunchPassRecord?
     ) -> [String] {
-        var lines = ["(a) \(mediaLatchLine(latch: latches.mediaAtRest, witness: witness, passInFlight: passInFlight))"]
+        var lines = ["(a) " + mediaLatchLine(latch: latches.mediaAtRest, witness: witness,
+                                             passInFlight: passInFlight, launchPass: launchPass)]
+        lines.append("launch pass: \(launchPass?.printed ?? "none has finished this process")")
         lines.append("ownPhotoKeyMigrationComplete (an INPUT to this gate, never a seventh gate):"
             + " \(latches.ownPhotoKey)")
         guard let audit else { return lines }
@@ -1160,15 +1397,27 @@ nonisolated enum Phase3GateReadoutBuilder {
         lines.append("(c) hasBlindSpots \(audit.hasBlindSpots) — indeterminate \(audit.indeterminate)"
             + " · unlistableDirectories \(audit.unlistableDirectories) · truncated \(audit.truncated)")
         lines.append("allLocationsAbsent (a separate trap): \(audit.allLocationsAbsent)")
-        if let witness {
-            lines.append("media pass \(witness.stamp.printed): examined \(witness.result.examined)"
+        lines.append(contentsOf: mediaWitnessLines(witness))
+        return lines
+    }
+
+    /// The funded pass's own tally — including, ALWAYS, the buckets that made it unclean.
+    ///
+    /// `blockingBuckets` used to be reachable only through the latch-false branch of
+    /// `mediaLatchLine`, so a latched device printed a bare `isClean false` with no named bucket
+    /// beside it — and `converted` / `convertedPlaintext`, the two that a re-taken census erases,
+    /// appeared on no line of the row or the export at all.
+    private static func mediaWitnessLines(_ witness: MediaPassWitness?) -> [String] {
+        guard let witness else { return [] }
+        let buckets = witness.blockingBuckets
+        return [
+            "media pass \(witness.stamp.printed): examined \(witness.result.examined)"
                 + " · unopenableUnprefixed \(witness.result.unopenableUnprefixed)"
                 + " · refusedPlaintext \(witness.result.refusedPlaintext)"
                 + " · alreadyCurrent \(witness.result.alreadyCurrentFormat) · empty \(witness.result.empty)"
-                + " · isClean \(witness.result.isClean) · latch \(witness.latchBefore) -> \(witness.latchAfter)"
-                + " · ranFullLoop \(witness.ranFullLoop)")
-        }
-        return lines
+                + " · isClean \(witness.result.isClean) · latch \(witness.latchBefore) -> \(witness.latchAfter)",
+            "media pass blocking buckets: " + (buckets.isEmpty ? "none" : buckets.joined(separator: ", "))
+        ]
     }
 
     private static func mediaBlindSpotDescription(_ audit: MediaResidueAudit) -> String {
@@ -1379,24 +1628,57 @@ nonisolated enum Phase3GateReadoutBuilder {
         forSealedPhoto probe: Phase3ManifestProbe?,
         bodyProbes: [SealedPhotoCorpus: BodyProbeReading],
         latch: Bool,
-        environment: Phase3GateEnvironment
+        environment: Phase3GateEnvironment,
+        fullPassVerdicts: [SealedPhotoCorpusFormatVerdict]? = nil
     ) -> Phase3GateRow {
         Phase3GateRow(
             gate: .sealedPhotoBackup,
             witnesses: [.manifestProbe, .bodyProbe, .completionLatch],
             stamps: probe.map { [$0.stamp] } ?? [],
             verdict: sealedPhotoVerdict(probe, bodyProbes: bodyProbes, environment: environment),
-            evidence: sealedPhotoEvidence(probe, bodyProbes: bodyProbes, latch: latch, environment: environment),
-            caveats: [
-                Phase3GateEnvironment.cloudKitDatabaseCaveat,
-                "minimum == 1 means legacy OR UNPROVEN. The row says NOT PROVEN and never 'legacy"
-                    + " entries found'; every entry committed before the marker existed decodes as 1"
-                    + " whatever its digest is.",
-                "This reading is meaningless before a full-verification pass: only the rungs that"
-                    + " read the plaintext stamp version 2. Probe once BEFORE Privacy & Data → Retry"
-                    + " and once after, and keep both."
-            ]
+            evidence: sealedPhotoEvidence(probe, bodyProbes: bodyProbes, latch: latch,
+                                          environment: environment, fullPassVerdicts: fullPassVerdicts),
+            caveats: sealedPhotoCaveats(probe, environment: environment)
         )
+    }
+
+    private static func sealedPhotoCaveats(
+        _ probe: Phase3ManifestProbe?,
+        environment: Phase3GateEnvironment
+    ) -> [String] {
+        var caveats = [
+            Phase3GateEnvironment.cloudKitDatabaseCaveat,
+            "minimum == 1 means legacy OR UNPROVEN. The row says NOT PROVEN and never 'legacy"
+                + " entries found'; every entry committed before the marker existed decodes as 1"
+                + " whatever its digest is.",
+            "This reading is meaningless before a full-verification pass: only the rungs that"
+                + " read the plaintext stamp version 2. Probe once BEFORE Privacy & Data → Retry"
+                + " and once after, and keep both."
+        ]
+        // R2: bounded by `SealedPhotoCorpus.allCases` (three).
+        let stale = SealedPhotoCorpus.allCases.filter { isStaleManifestReading(probe?.readings[$0]) }
+        if !stale.isEmpty {
+            caveats.append("STALE MANIFEST: \(stale.map(\.rawValue).joined(separator: ", ")) came back"
+                + " carrying a generation BELOW the one this device has already authenticated."
+                + " SealedPhotoBackupService.restore would refuse that same record with"
+                + " .staleGeneration, so it cannot be shown to be the live manifest.")
+        }
+        return caveats
+    }
+
+    /// Whether a reading's record generation sits BELOW this device's high-water mark.
+    ///
+    /// `manifestFormatReading` performs no high-water check and says so in its own doc: "a
+    /// stale-but-authentic manifest can read >= 2 here while the live one reads 1". The inequality
+    /// also has a benign local cause — `mintNextPhoto` burns the number before the write, so one
+    /// failed upload leaves the high-water one ahead of a LIVE record — which is exactly why the
+    /// verdict this feeds is `.unavailable` ("cannot be shown to be live") and not `.blocked`.
+    private static func isStaleManifestReading(_ reading: SealedPhotoManifestReading?) -> Bool {
+        switch reading {
+        case let .proven(_, _, _, generation, highWater): return generation < highWater
+        case let .vacuousEmptyManifest(generation, highWater): return generation < highWater
+        case .noManifestReturned, .unreadable, .none: return false
+        }
     }
 
     private static func sealedPhotoVerdict(
@@ -1407,6 +1689,12 @@ nonisolated enum Phase3GateReadoutBuilder {
         guard let probe else {
             return .notTaken("no manifest probe has been taken this process. It is an explicit"
                 + " button because it goes over the network and decrypts three manifests.")
+        }
+        guard !environment.skipSealedRestoreEnvSet else {
+            return .notTaken("FERNLET_SKIP_SEALED_RESTORE=1 is set on this run scheme. That DEBUG"
+                + " guard fronts the UPLOAD path as well as the restore, so the full-verification"
+                + " pass this gate's wording requires silently no-ops — whatever the manifests"
+                + " already in the cloud read, this sitting cannot discharge the gate.")
         }
         var groups: [String: [String]] = [:]
         // R2: bounded by `SealedPhotoCorpus.allCases` (three).
@@ -1440,15 +1728,17 @@ nonisolated enum Phase3GateReadoutBuilder {
             return ("notTaken", "\(corpus.rawValue): the probe returned no reading for this corpus")
         }
         switch reading {
-        case let .proven(minimum, entryCount, _, _, _):
+        case let .proven(minimum, entryCount, _, generation, highWater):
             guard entryCount > 0 else {
                 return ("vacuous", "\(corpus.rawValue): a manifest with no entries carries no legacy digest")
             }
+            guard generation >= highWater else { return staleGenerationOutcome(corpus, generation, highWater) }
             guard minimum >= 2 else {
                 return ("blocked", "\(corpus.rawValue): minimumEntryHashVersion \(minimum) — NOT PROVEN")
             }
             return nil
-        case .vacuousEmptyManifest:
+        case let .vacuousEmptyManifest(generation, highWater):
+            guard generation >= highWater else { return staleGenerationOutcome(corpus, generation, highWater) }
             return ("vacuous", "\(corpus.rawValue): empty manifest — no entry exists to carry a legacy digest")
         case .noManifestReturned:
             return sealedPhotoNoManifestOutcome(corpus: corpus, bodyProbe: bodyProbe, environment: environment)
@@ -1459,9 +1749,29 @@ nonisolated enum Phase3GateReadoutBuilder {
         }
     }
 
+    /// The record that came back is older than one this device has already authenticated.
+    ///
+    /// `.unavailable`, not `.blocked`: the honest claim is "this cannot be shown to be the live
+    /// manifest", because a burned generation from a mint-then-failed-write produces the same
+    /// inequality over a record that IS live.
+    private static func staleGenerationOutcome(
+        _ corpus: SealedPhotoCorpus,
+        _ generation: Int64,
+        _ highWater: Int64
+    ) -> (kind: String, detail: String) {
+        ("unavailable", "\(corpus.rawValue): the manifest record that came back carries generation"
+            + " \(generation), BELOW the generation \(highWater) this device has already"
+            + " authenticated. This reading cannot be shown to be the live manifest — and"
+            + " SealedPhotoBackupService.restore would refuse this same record with .staleGeneration,"
+            + " so nothing here is a zero. Re-probe after a completed Retry.")
+    }
+
     /// "No manifest record came back" is not "no manifest exists". A committed escrow route makes it
     /// blocking; a route this device never committed makes it a VACUOUS satisfaction with its own
-    /// reason, which is the owner's policy call to record rather than the readout's to infer.
+    /// reason, which is the owner's policy call to record rather than the readout's to infer — but
+    /// only once the bodies have actually been ENUMERATED. "Zero bodies" is what turns the missing
+    /// manifest into a vacuous satisfaction, so a probe nobody took and a probe that threw must not
+    /// fold as if the bodies had been looked for and found absent.
     private static func sealedPhotoNoManifestOutcome(
         corpus: SealedPhotoCorpus,
         bodyProbe: BodyProbeReading,
@@ -1471,25 +1781,37 @@ nonisolated enum Phase3GateReadoutBuilder {
             return ("blocked", "\(corpus.rawValue): no manifest came back but \(count)+ body records"
                 + " exist — bodies with no commit marker restore nothing")
         }
-        guard environment.escrowRouteCommitted else {
-            return ("vacuous", "\(corpus.rawValue): no manifest came back and OwnPhotoEscrowCommitLedger"
-                + " says no route was ever committed on this device")
+        guard !environment.escrowRouteCommitted else {
+            return ("blocked", "\(corpus.rawValue): no manifest record came back over a COMMITTED"
+                + " escrow route — which is not the same as no manifest existing")
         }
-        return ("blocked", "\(corpus.rawValue): no manifest record came back over a COMMITTED escrow"
-            + " route — which is not the same as no manifest existing")
+        switch bodyProbe {
+        case .notProbed:
+            return ("notTaken", "\(corpus.rawValue): no manifest came back and no body probe was"
+                + " taken — 'never written' needs the zero-body reading, which nobody bought")
+        case let .failed(cause):
+            return ("unavailable", "\(corpus.rawValue): no manifest came back and the body probe"
+                + " failed (\(cause)) — this is not a zero")
+        case .counted:
+            return ("vacuous", "\(corpus.rawValue): no manifest came back, the body probe enumerated"
+                + " zero records, and OwnPhotoEscrowCommitLedger says no route was ever committed on"
+                + " this device")
+        }
     }
 
     private static func sealedPhotoEvidence(
         _ probe: Phase3ManifestProbe?,
         bodyProbes: [SealedPhotoCorpus: BodyProbeReading],
         latch: Bool,
-        environment: Phase3GateEnvironment
+        environment: Phase3GateEnvironment,
+        fullPassVerdicts: [SealedPhotoCorpusFormatVerdict]?
     ) -> [String] {
         var lines = [
             "sealedBackupOwnPhotosEnabled: \(environment.sealedBackupOwnPhotosEnabled)",
             "escrowRouteCommitted (the COMMIT PROOF, not the preference): \(environment.escrowRouteCommitted)",
             "SealedPhotoBackupMigrationLatch (explicitly NOT the Phase-3 gate): \(latch)"
         ]
+        lines.append(contentsOf: fullPassVerdictLines(fullPassVerdicts))
         guard let probe else {
             lines.append("manifest probe: not taken this process")
             return lines
@@ -1499,6 +1821,30 @@ nonisolated enum Phase3GateReadoutBuilder {
         for corpus in SealedPhotoCorpus.allCases {
             lines.append("  \(corpus.rawValue): \(sealedPhotoReadingLine(probe.readings[corpus]))")
             lines.append("  \(corpus.rawValue) body probe: \(bodyProbeLine(bodyProbes[corpus] ?? .notProbed))")
+        }
+        return lines
+    }
+
+    /// The last full-verification pass's per-corpus verdicts, under a heading that says what they
+    /// are NOT.
+    ///
+    /// A by-product of a WRITING pass, never the gate: `observedMinima` includes the pre-heal open
+    /// AND the outgoing committed value, so a corpus that healed this pass legitimately carries a 1
+    /// there while its committed manifest reads 2. What they DO buy is `examined` — the three-way
+    /// "never looked / examined-none / examined-with-minima" fact a live probe structurally cannot
+    /// produce, and the difference between a vacuous satisfaction that is safe to record and one
+    /// hiding an un-swept corpus.
+    private static func fullPassVerdictLines(_ verdicts: [SealedPhotoCorpusFormatVerdict]?) -> [String] {
+        guard let verdicts else {
+            return ["last full pass verdicts (a BY-PRODUCT of a writing pass, not the gate): none"
+                + " retained this process"]
+        }
+        var lines = ["last full pass verdicts (a BY-PRODUCT of a writing pass, not the gate):"]
+        // R2: bounded by `SealedPhotoCorpus.allCases` (three).
+        for verdict in verdicts {
+            lines.append("  \(verdict.corpus.rawValue): examined \(verdict.examined)"
+                + " · committed \(verdict.committed) · observedMinima \(verdict.observedMinima)"
+                + " · unreadable \(verdict.unreadable) · healedEntries \(verdict.healedEntries)")
         }
         return lines
     }
@@ -1568,13 +1914,39 @@ nonisolated enum Phase3GateReportBuilder {
     static func lines(for readout: Phase3GateReadout) -> [String] {
         var out = headerLines(readout)
         out.append(contentsOf: environmentLines(readout.environment))
-        out.append(contentsOf: preResetLines(readout.preResetLatchSnapshot))
+        out.append(contentsOf: preResetLines(readout.preResetLatchSnapshot,
+                                             resetTakenAt: readout.sealedColumnResetTakenAt))
         // R2: bounded by `Phase3Gate.allCases` (six).
         for row in readout.rows { out.append(contentsOf: gateLines(row)) }
+        out.append(contentsOf: manifestProbeHistoryLines(readout.manifestProbes))
         out.append(contentsOf: mediaArithmeticLines(readout.mediaAudit))
         out.append(contentsOf: checklistLines(readout.checklist))
         out.append(contentsOf: refusalLines(readout.refusals))
         out.append(contentsOf: trailerLines(readout))
+        return out
+    }
+
+    /// EVERY manifest probe, in acquisition order — not just the one the gate row folds.
+    ///
+    /// The sitting takes probe #1 before Privacy & Data → Retry precisely because Retry rewrites all
+    /// three manifests and forces `generation` and `deviceHighWater` into agreement, so probe #2
+    /// structurally cannot show the stale-manifest disagreement probe #1 exists to capture. The
+    /// verdict folds `.last`, and the header prints probe #1's LABEL and TIME — so without this
+    /// section the report proves two probes were taken while carrying the numbers of only one, and
+    /// the unrepeatable reading never leaves memory.
+    private static func manifestProbeHistoryLines(_ probes: [Phase3ManifestProbe]) -> [String] {
+        guard !probes.isEmpty else { return [] }
+        var out = ["", "MANIFEST PROBES, IN ORDER (the gate row folds the LAST; probe #1 cannot be"
+            + " re-taken once Retry has run)"]
+        // R2: bounded by `Phase3ReadoutSession.maxManifestProbes`.
+        for probe in probes {
+            out.append("  \(probe.stamp.printed)")
+            // R2: bounded by `SealedPhotoCorpus.allCases` (three).
+            for corpus in SealedPhotoCorpus.allCases {
+                out.append("    \(corpus.rawValue): "
+                    + Phase3GateReadoutBuilder.sealedPhotoReadingLine(probe.readings[corpus]))
+            }
+        }
         return out
     }
 
@@ -1592,16 +1964,24 @@ nonisolated enum Phase3GateReportBuilder {
         // R7: validate at entry. A zero or negative bound would emit one chunk per line forever.
         let bound = max(256, maxBytes)
         var chunks: [String] = []
-        var current = ""
+        // Accumulated as LINES, not as one growing string. A string accumulator tests emptiness on
+        // the accumulator itself, so a report's blank separator line landing at a chunk boundary
+        // starts a chunk that is still empty and is then overwritten by the next line — silently
+        // deleting it from the reassembled report.
+        var current: [String] = []
+        var currentBytes = 0
         // R2: bounded by the line array `lines(for:)` returns.
         for line in lines(for: readout) {
-            if !current.isEmpty, current.utf8.count + line.utf8.count + 1 > bound {
-                chunks.append(current)
-                current = ""
+            let separator = current.isEmpty ? 0 : 1
+            if !current.isEmpty, currentBytes + separator + line.utf8.count > bound {
+                chunks.append(current.joined(separator: "\n"))
+                current = []
+                currentBytes = 0
             }
-            current = current.isEmpty ? line : current + "\n" + line
+            currentBytes += (current.isEmpty ? 0 : 1) + line.utf8.count
+            current.append(line)
         }
-        if !current.isEmpty { chunks.append(current) }
+        if !current.isEmpty { chunks.append(current.joined(separator: "\n")) }
         return chunks
     }
 
@@ -1610,6 +1990,9 @@ nonisolated enum Phase3GateReportBuilder {
             "Fernlet Phase 3 gate readout (DEBUG only)",
             "device: \(readout.environment.deviceModel)",
             "system: \(readout.environment.systemVersion)",
+            "EVERY reading below lives in ONE app launch. Nothing here is persisted, so stopping or"
+                + " re-running the app discards the whole sitting — and manifest probe #1, taken"
+                + " before Privacy & Data → Retry, cannot be re-taken on this device afterwards.",
             "stamps, in acquisition order (there is deliberately no single takenAt):"
         ]
         guard !readout.stamps.isEmpty else {
@@ -1638,8 +2021,20 @@ nonisolated enum Phase3GateReportBuilder {
         ]
     }
 
-    private static func preResetLines(_ snapshot: Phase3LatchReadings?) -> [String] {
-        guard let snapshot else { return [] }
+    private static func preResetLines(
+        _ snapshot: Phase3LatchReadings?,
+        resetTakenAt: Date?
+    ) -> [String] {
+        guard let snapshot else {
+            // Nothing-silent: the reset dialog promises "the pre-reset value of all seven latches is
+            // captured into the report first". An omitted section would let an unkept promise read
+            // as an untaken reset.
+            guard let resetTakenAt else { return [] }
+            return ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING",
+                    "  NOT CAPTURED — the reset at \(resetTakenAt.ISO8601Format()) was taken before"
+                        + " the local scan had landed, so the seven pre-reset bits for this device"
+                        + " are gone for this sitting."]
+        }
         var out = ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING"]
         // R2: bounded by the seven printed bits.
         for line in snapshot.printedLines { out.append("  \(line)") }

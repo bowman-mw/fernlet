@@ -94,18 +94,64 @@ final class Phase3ReadoutSession {
     private(set) var sealedColumnResetTakenAt: Date?
     /// Refusals recorded this sitting — a control that declined, a probe that could not run.
     private(set) var refusals: [String] = []
+    /// Whether a keyed sealed-column pass overlapped the scan that produced ``censusReadings``.
+    private(set) var censusOverlappedKeyedPass = false
+
+    /// The scan fence. Bumped by ``invalidateCensus()`` and ``clear()``; a landing whose captured
+    /// generation no longer matches is DROPPED (with a recorded refusal) rather than stamped fresh.
+    ///
+    /// `CryptoFormatCensus.takeReadings` does not observe cancellation, so a sweep that started
+    /// before an invalidation cannot be stopped — only fenced. Without this, an orphaned scan that
+    /// sampled the corpus BEFORE a keyed pass lands afterwards carrying a stamp taken after it, and
+    /// the sealed-column ordering guard passes on stamps ordered opposite to reality.
+    ///
+    /// It is also the view's `.task(id:)` key, so an invalidation re-arms the scan on its own rather
+    /// than leaving six blank rows until the owner happens to navigate away and back.
+    private(set) var scanGeneration = 0
+    /// The session fence. Bumped by ``clear()`` only. Work that started in an earlier epoch — a
+    /// manifest probe in flight across a duress engage or a delete-all — is dropped instead of
+    /// re-populating the session the clear just emptied.
+    private(set) var epoch = 0
+    /// How many manifest probes have EVER been taken this sitting, so the `#N` labels stay
+    /// monotonic across an eviction.
+    private var manifestProbesTaken = 0
 
     /// Creates an empty session.
     init() {}
 
     // MARK: Mutators
 
-    /// Records a landed census scan and the latch bits taken beside it.
-    func recordScan(census: CryptoFormatCensus.Readings, latches: Phase3LatchReadings, at takenAt: Date = Date()) {
+    /// Records a landed census scan and the latch bits taken beside it, or drops it when the fence
+    /// has moved. Returns whether the reading was kept.
+    ///
+    /// `takenAt` is the moment the census sweep STARTED, not the moment it landed: the sealed-column
+    /// gate consumes this stamp as a SAMPLING-order proof ("a marker zero taken at or after the pass
+    /// that could have changed it"), and a landing time over a multi-second sweep would let a census
+    /// read entirely before a keyed pass claim to postdate it.
+    ///
+    /// `latchesAt` is separate because the seven bits are read AFTER the sweep, not beside it: one
+    /// stamp over two observations minutes apart is the thing this whole model refuses.
+    @discardableResult
+    func recordScan(
+        census: CryptoFormatCensus.Readings,
+        latches: Phase3LatchReadings,
+        at takenAt: Date = Date(),
+        latchesAt: Date? = nil,
+        generation: Int? = nil,
+        overlappedKeyedPass: Bool = false
+    ) -> Bool {
+        if let generation, generation != scanGeneration {
+            recordRefusal("A local scan landed against a stale fence (generation \(generation), now"
+                + " \(scanGeneration)) and was DROPPED: it sampled a corpus that has since been"
+                + " invalidated. Re-take the local scan.")
+            return false
+        }
         censusReadings = census
-        censusStamp = Phase3Stamp(label: "marker census", takenAt: takenAt)
+        censusStamp = Phase3Stamp(label: "marker census (stamped at sweep START)", takenAt: takenAt)
         self.latches = latches
-        latchStamp = Phase3Stamp(label: "completion latches", takenAt: takenAt)
+        latchStamp = Phase3Stamp(label: "completion latches", takenAt: latchesAt ?? takenAt)
+        censusOverlappedKeyedPass = overlappedKeyedPass
+        return true
     }
 
     /// Records the seven bits as they read before a reset, so the destroyed reading survives in the
@@ -115,21 +161,61 @@ final class Phase3ReadoutSession {
     }
 
     /// Records one manifest probe, keeping earlier ones.
-    func recordManifests(_ readings: [SealedPhotoCorpus: SealedPhotoManifestReading], at takenAt: Date = Date()) {
-        let label = "iCloud manifest probe #\(manifestProbes.count + 1)"
+    ///
+    /// The eviction at the cap drops the SECOND-oldest, never the first: probe #1 is the pre-Retry
+    /// reading, and Retry destroys the state that produced it, so it is the one probe in the array
+    /// that cannot be re-taken. An eviction is recorded as a refusal rather than being silent.
+    @discardableResult
+    func recordManifests(
+        _ readings: [SealedPhotoCorpus: SealedPhotoManifestReading],
+        at takenAt: Date = Date(),
+        epoch capturedEpoch: Int? = nil
+    ) -> Bool {
+        guard isCurrent(capturedEpoch, work: "A manifest probe") else { return false }
+        manifestProbesTaken += 1
+        let label = "iCloud manifest probe #\(manifestProbesTaken)"
         manifestProbes.append(Phase3ManifestProbe(stamp: Phase3Stamp(label: label, takenAt: takenAt),
                                                   readings: readings))
-        if manifestProbes.count > Self.maxManifestProbes { manifestProbes.removeFirst() }
+        guard manifestProbes.count > Self.maxManifestProbes else { return true }
+        let evicted = manifestProbes.remove(at: 1)
+        recordRefusal("The probe cap (\(Self.maxManifestProbes)) evicted \(evicted.stamp.printed)."
+            + " Probe #1 is kept deliberately — it is the only reading Retry makes unrepeatable.")
+        return true
     }
 
     /// Records one corpus's body-record probe.
-    func recordBodyProbe(_ reading: BodyProbeReading, for corpus: SealedPhotoCorpus) {
+    @discardableResult
+    func recordBodyProbe(
+        _ reading: BodyProbeReading,
+        for corpus: SealedPhotoCorpus,
+        epoch capturedEpoch: Int? = nil
+    ) -> Bool {
+        guard isCurrent(capturedEpoch, work: "A body-record probe") else { return false }
         bodyProbes[corpus] = reading
+        return true
     }
 
     /// Records a funded media pass.
-    func recordMediaWitness(_ witness: MediaPassWitness) {
+    @discardableResult
+    func recordMediaWitness(_ witness: MediaPassWitness, epoch capturedEpoch: Int? = nil) -> Bool {
+        guard isCurrent(capturedEpoch, work: "A media at-rest pass") else { return false }
         mediaWitness = witness
+        return true
+    }
+
+    /// Whether work that started in `capturedEpoch` may still write to this session.
+    ///
+    /// `clear()` is a point-in-time wipe, and the network probes it races take seconds. Without this
+    /// fence a probe in flight across a duress engage — or across the top of a delete-all — lands
+    /// afterwards and writes the real owner's per-corpus readings straight back into the session the
+    /// clear just emptied, defeating both the fail-closed duress rule and the wipe's own stated
+    /// reason for clearing ("a reading left standing over corpora this wipe is about to destroy
+    /// would be the same lie a persisted one would be").
+    private func isCurrent(_ capturedEpoch: Int?, work: String) -> Bool {
+        guard let capturedEpoch, capturedEpoch != epoch else { return true }
+        recordRefusal("\(work) that started before this session was cleared landed afterwards and was"
+            + " DROPPED (epoch \(capturedEpoch), now \(epoch)).")
+        return false
     }
 
     /// Sets the media pass in-flight flag.
@@ -162,21 +248,35 @@ final class Phase3ReadoutSession {
     func invalidateCensus() {
         censusReadings = nil
         censusStamp = nil
+        latches = nil
+        latchStamp = nil
+        censusOverlappedKeyedPass = false
+        scanGeneration += 1
     }
 
     /// Drops every purchased reading. Called on a duress engage and on teardown: fail-closed, on the
     /// principle that a decoy session must not be able to read numbers about the real owner's data.
+    ///
+    /// Both fences move, so work already in flight lands into a dropped refusal rather than back
+    /// into the emptied session, and both in-flight flags are reset so a control cannot be left
+    /// permanently disabled by a probe whose result was discarded.
     func clear() {
         censusReadings = nil
         censusStamp = nil
         latches = nil
         latchStamp = nil
+        censusOverlappedKeyedPass = false
         preResetLatchSnapshot = nil
         manifestProbes = []
+        manifestProbesTaken = 0
         bodyProbes = [:]
         mediaWitness = nil
+        mediaPassInFlight = false
+        manifestProbeInFlight = false
         sealedColumnResetTakenAt = nil
         refusals = []
+        scanGeneration += 1
+        epoch += 1
     }
 
     // MARK: Derived
@@ -231,7 +331,9 @@ final class Phase3ReadoutSession {
             title: "3. Fetch manifests BEFORE any healing pass",
             detail: "Captures the pre-pass minima and any generation-vs-deviceHighWater disagreement"
                 + " while they can still disagree. Costs three CloudKit fetches and three AES-GCM"
-                + " opens; writes nothing.",
+                + " opens; writes nothing. This probe CANNOT be re-taken after step 4, and nothing"
+                + " here survives a relaunch — do not stop or re-run the app until the report is"
+                + " exported.",
             isDone: !manifestProbes.isEmpty
         )
     }
@@ -266,8 +368,11 @@ final class Phase3ReadoutSession {
         Phase3SittingStep(
             title: "6. Fund a media at-rest pass",
             detail: "MediaAtRestFormatMigrator.performPass() produces unopenableUnprefixed — the"
-                + " plan's own residue evidence — and NEVER touches the latch. On a latched device it"
-                + " should convert nothing; if it converts something, that is the finding.",
+                + " plan's own residue evidence — and NEVER touches the latch, in either direction."
+                + " On a latched device it should convert nothing; if it converts something, that is"
+                + " the finding and the gate refuses. On an UNLATCHED device this gate cannot"
+                + " discharge in this sitting at all: gate part (a) is the latch, and only a shipped"
+                + " launch pass may set it — relaunch, let that pass run, and take the sitting again.",
             isDone: mediaWitness != nil
         )
     }
@@ -293,7 +398,9 @@ final class Phase3ReadoutSession {
         ownPhotoDocumentsDirectory: URL,
         friendWallSupportDirectory: URL,
         sealedColumnWitness: SealedColumnPassWitness?,
-        sealedColumnPassInFlight: Bool
+        sealedColumnPassInFlight: Bool,
+        mediaLaunchPass: MediaLaunchPassRecord? = nil,
+        sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]? = nil
     ) -> Phase3GateReadoutInputs {
         Phase3GateReadoutInputs(
             environment: environment,
@@ -308,6 +415,9 @@ final class Phase3ReadoutSession {
             bodyProbes: bodyProbes,
             mediaWitness: mediaWitness,
             mediaPassInFlight: mediaPassInFlight,
+            mediaLaunchPass: mediaLaunchPass,
+            censusOverlappedKeyedPass: censusOverlappedKeyedPass,
+            sealedPhotoFullPassVerdicts: sealedPhotoFullPassVerdicts,
             sealedColumnWitness: sealedColumnWitness,
             sealedColumnPassInFlight: sealedColumnPassInFlight,
             sealedColumnResetTakenAt: sealedColumnResetTakenAt,

@@ -2,7 +2,7 @@
 // Fernlet
 //
 // The pushed DEBUG screen for the Phase 3 gate readout: the sitting checklist, the six gate rows,
-// four explicit controls, and two independent export routes.
+// five explicit controls, and two independent export routes.
 //
 // SIBLING to the marker-bytes census, never folded into it. The census counts marker bytes and
 // writes nothing; this page also reads completion latches, can FETCH from iCloud and DECRYPT three
@@ -37,7 +37,15 @@ import UniformTypeIdentifiers
 /// sealed-column keyed pass can only be funded by a hub unlock, which means leaving Settings
 /// entirely and coming back.
 struct Phase3GateReadoutView: View {
-    @Environment(FernletStore.self) private var store
+    /// Passed EXPLICITLY, the way every other store-consuming view in the app takes it
+    /// (`SettingsSheet`, `PrivacyDataSettingsView`, `HealthAccessSettingsView`, …).
+    ///
+    /// It used to be `@Environment(FernletStore.self)`, and nothing in the app has ever put a
+    /// `FernletStore` in the SwiftUI environment — so the first body pass trapped and the app died
+    /// on the push, every time. The app has hit that exact failure once before (`FernletApp`'s note
+    /// on pushed destinations evaluating outside the root view's injections). A stored property
+    /// converts the whole defect class from a runtime trap into a compile error.
+    let store: FernletStore
     @Environment(FernletLockService.self) private var lockService
     /// The in-flight local scan, held on the SHEET (which outlives each destination push) exactly as
     /// the census's is — a push → pop → push before it returns must re-await the running scan rather
@@ -53,7 +61,10 @@ struct Phase3GateReadoutView: View {
         .navigationTitle("Phase 3 gate readout")
         .navigationBarTitleDisplayMode(.inline)
         .destructiveConfirmation($pendingDestructiveAction)
-        .task { await runScanIfNeeded() }
+        // Keyed on the session's scan fence rather than bare, so an invalidation — the latch reset,
+        // a landed keyed pass, a funded media pass — re-arms the scan instead of leaving six blank
+        // NOT TAKEN rows until the owner happens to navigate away and back.
+        .task(id: session.scanGeneration) { await runScanIfNeeded() }
     }
 
     // MARK: - Duress
@@ -101,10 +112,18 @@ struct Phase3GateReadoutView: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.terracotta)
                 .fernletWrappingText()
-            Text(verbatim: "It still reads no photo body, opens no photo key, mints nothing, and"
-                + " persists nothing of its own — no UserDefaults key, no cache, no stored verdict.")
+            Text(verbatim: "It still reads no photo body, opens no photo key, mints nothing, moves"
+                + " no completion latch except the one sealed-column latch below, and persists"
+                + " nothing of its own — no UserDefaults key, no cache, no stored verdict.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Text(verbatim: "EVERY reading here lives in THIS app launch only. Stopping or re-running"
+                + " the app discards the whole sitting, and manifest probe #1 — taken before"
+                + " Privacy & Data → Retry — cannot be re-taken afterwards. Do step 1 before you"
+                + " buy any reading, and export the report before you stop the app.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.terracotta)
                 .fernletWrappingText()
         } header: {
             SectionLabel(verbatim: "What this costs")
@@ -234,12 +253,34 @@ struct Phase3GateReadoutView: View {
 
     private var controlsSection: some View {
         Section {
+            reScanControl
             fetchManifestsControl
             bodyProbeControl
             mediaWitnessControl
             sealedColumnResetControl
         } header: {
             SectionLabel(verbatim: "Controls")
+        }
+    }
+
+    /// Re-takes the local scan, because several things invalidate it mid-sitting — the latch reset,
+    /// a landed keyed pass, a funded media pass — and the row that then has to be re-paired is the
+    /// one whose halves must describe one state.
+    private var reScanControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                session.invalidateCensus()
+            } label: {
+                Text(verbatim: "Re-take the local scan")
+                    .font(.fernlet(.label))
+            }
+            .accessibilityIdentifier("phase3Readout.reScan")
+            Text(verbatim: "Free: marker bytes, seven latch bits, no writes. The census is dropped"
+                + " and re-taken whenever a pass could have changed what it counts, so use this to"
+                + " re-pair the two halves of a row rather than reading a stale one.")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
         }
     }
 
@@ -311,10 +352,12 @@ struct Phase3GateReadoutView: View {
             }
             .accessibilityIdentifier("phase3Readout.fundMediaPass")
             .disabled(store.mediaAtRestPassInFlight)
-            Text(verbatim: "NO LATCH IS CLEARED. performPass() returns unopenableUnprefixed — the"
-                + " plan's own residue evidence — without touching the latch. It WRITES: a pass"
+            Text(verbatim: "NO LATCH IS TOUCHED — not cleared, and not SET. performPass() returns"
+                + " unopenableUnprefixed, the plan's own residue evidence, and never reaches"
+                + " markComplete(); the run loop that would latch is deliberately not called, so a"
+                + " latch this sitting quotes is always one a shipped pass earned. It WRITES: a pass"
                 + " converts anything convertible. On a latched device it should convert nothing;"
-                + " if it converts something, that is the finding.")
+                + " if it converts something, that is the finding, and the gate refuses.")
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -332,25 +375,38 @@ struct Phase3GateReadoutView: View {
                     .font(.fernlet(.label))
             }
             .accessibilityIdentifier("phase3Readout.resetSealedColumnLatch")
-            .disabled(store.sealedColumnMigrationInFlight)
-            Text(verbatim: store.sealedColumnMigrationInFlight
-                ? "Disabled: a sealed-column run is in flight."
-                : "One removeObject. This latch is NOT gate evidence — the gate is census-zero plus a"
+            .disabled(resetDisabledReason != nil)
+            Text(verbatim: resetDisabledReason
+                ?? "One removeObject. This latch is NOT gate evidence — the gate is census-zero plus a"
                 + " clean keyed pass — so clearing it destroys no proof. Then dismiss Settings, open"
                 + " the Private tab and unlock: the shipped trigger funds the keyed pass.")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(store.sealedColumnMigrationInFlight ? Color.terracotta : Color.slate)
+                .foregroundStyle(resetDisabledReason == nil ? Color.slate : Color.terracotta)
                 .fernletWrappingText()
         }
+    }
+
+    /// Why the reset is refused, or nil when it may be taken.
+    ///
+    /// The scan clause is load-bearing rather than tidy: the confirmation states "the pre-reset
+    /// value of all seven latches is captured into the report first", and that capture is only
+    /// possible once the local scan has landed. Clearing the latch before then destroys the reading
+    /// while keeping the promise unkept.
+    private var resetDisabledReason: String? {
+        if store.sealedColumnMigrationInFlight { return "Disabled: a sealed-column run is in flight." }
+        guard session.latches == nil else { return nil }
+        return "Disabled until the local scan lands: this control promises to capture the seven"
+            + " pre-reset latch bits into the report FIRST, and there is nothing to capture yet."
     }
 
     private func makeMediaWitnessConfirmation() -> DestructiveConfirmation {
         DestructiveConfirmation(
             title: "Run a media at-rest conversion pass?",
             verbatimMessage: "This WRITES: the pass converts every legacy media blob it can open, in"
-                + " place, verify-before-replace. It never clears the completion latch. On a device"
-                + " whose latch already stands it should convert nothing — and if it converts"
-                + " something, that is the finding, not a failure.",
+                + " place, verify-before-replace. It never clears the completion latch and never"
+                + " sets one — the run loop that would latch is not called, because that latch IS"
+                + " the gate. On a device whose latch already stands it should convert nothing — and"
+                + " if it converts something, that is the finding, and the gate refuses.",
             confirmLabel: "Run the pass",
             auditEvent: "debug.phase3Readout.mediaWitnessPass"
         ) {
@@ -437,8 +493,19 @@ struct Phase3GateReadoutView: View {
             ownPhotoDocumentsDirectory: store.photoDocumentsDirectory,
             friendWallSupportDirectory: store.proximitySupportDirectory,
             sealedColumnWitness: store.lastSealedColumnPassWitness,
-            sealedColumnPassInFlight: store.sealedColumnMigrationInFlight
+            sealedColumnPassInFlight: store.sealedColumnMigrationInFlight,
+            mediaLaunchPass: mediaLaunchPass,
+            sealedPhotoFullPassVerdicts: store.sealedPhotoLastFullPassVerdicts
         ))
+    }
+
+    /// The launch media pass's record, so a `latch == false` with no funded witness is never
+    /// rendered — or exported — as "no pass has been observed this process" while the store holds
+    /// the pass that ran three seconds after launch.
+    private var mediaLaunchPass: MediaLaunchPassRecord? {
+        guard let latched = store.mediaAtRestLaunchPassLatched,
+              let completedAt = store.mediaAtRestLaunchPassCompletedAt else { return nil }
+        return MediaLaunchPassRecord(latched: latched, completedAt: completedAt)
     }
 
     /// The corpora whose manifest did not come back in the most recent probe — the only ones the
@@ -451,31 +518,52 @@ struct Phase3GateReadoutView: View {
 
     // MARK: - Work
 
-    /// One local scan per sitting, re-awaited rather than restacked.
+    /// One local scan per fence generation, re-awaited rather than restacked.
     ///
     /// The two-part guard is the census's: once readings are in hand the first clause short-circuits;
     /// while a scan is running there are none yet, so the handle stands in for them and a re-push
-    /// awaits the scan already underway. The detached scan does not observe cancellation.
+    /// awaits the scan already underway. The detached scan does not observe cancellation, which is
+    /// why a scan that lands against a moved fence is DROPPED by the session rather than stopped —
+    /// and why the awaited scan is re-checked afterwards, since the one it awaited may have been the
+    /// dropped one.
     private func runScanIfNeeded() async {
         guard !store.duressSessionActive else { return }
         guard session.censusReadings == nil else { return }
-        let scan: Task<Void, Never>
         if let inFlight = scanTask {
-            scan = inFlight
-        } else {
-            let inputs = CryptoFormatCensus.Inputs.production(for: store)
-            let started = Task {
-                let readings = await CryptoFormatCensus.takeReadings(inputs: inputs)
-                let latches = await Task.detached(priority: .utility) {
-                    Phase3LatchReadings.take(inputs: inputs)
-                }.value
-                session.recordScan(census: readings, latches: latches)
-            }
-            scanTask = started
-            scan = started
+            await inFlight.value
+            guard session.censusReadings == nil else { return }
         }
-        await scan.value
-        scanTask = nil
+        let started = Task { await takeScan() }
+        scanTask = started
+        await started.value
+        // Only if it is still OURS: a reset or an invalidation can start a second scan while this
+        // one is running, and clearing the handle unconditionally lets a third push stack a third
+        // uncancellable full sweep on the utility pool.
+        if scanTask == started { scanTask = nil }
+    }
+
+    /// The scan itself, stamped at its START and fenced against the session it may outlive.
+    ///
+    /// Two facts force both halves. `CryptoFormatCensus.takeReadings` is a detached full sweep that
+    /// does not observe cancellation, so a scan can outlive the reset that invalidated it and land
+    /// afterwards; and `Phase3Stamp.takenAt` is consumed by the sealed-column gate as a SAMPLING
+    /// order proof, so a landing time would let a census read entirely BEFORE a keyed pass claim to
+    /// postdate it. The overlap bit is sampled on both sides of the sweep, because the verdict's own
+    /// sentence — "a keyed pass was writing the corpus while this scan ran" — was checking a
+    /// render-time flag that says nothing about the window the bytes were read in.
+    private func takeScan() async {
+        let generation = session.scanGeneration
+        let inputs = CryptoFormatCensus.Inputs.production(for: store)
+        let startedAt = Date()
+        let overlapAtStart = store.sealedColumnMigrationInFlight
+        let readings = await CryptoFormatCensus.takeReadings(inputs: inputs)
+        let latchesAt = Date()
+        let latches = await Task.detached(priority: .utility) {
+            Phase3LatchReadings.take(inputs: inputs)
+        }.value
+        session.recordScan(census: readings, latches: latches, at: startedAt, latchesAt: latchesAt,
+                           generation: generation,
+                           overlappedKeyedPass: overlapAtStart || store.sealedColumnMigrationInFlight)
     }
 
     /// Fetches and opens the three corpus manifests.
@@ -492,6 +580,7 @@ struct Phase3GateReadoutView: View {
             return
         }
         session.setManifestProbeInFlight(true)
+        let capturedEpoch = session.epoch
         let service = SealedPhotoBackupService(
             cloudDataService: CloudKitDataService(),
             identityService: IdentityService()
@@ -501,7 +590,7 @@ struct Phase3GateReadoutView: View {
         for corpus in SealedPhotoCorpus.allCases {
             readings[corpus] = await manifestReading(service: service, corpus: corpus)
         }
-        session.recordManifests(readings)
+        session.recordManifests(readings, epoch: capturedEpoch)
         session.setManifestProbeInFlight(false)
         FernletAuditLog.log("debug.phase3Readout.manifestProbe", context: ["corpora": "\(readings.count)"])
     }
@@ -526,28 +615,47 @@ struct Phase3GateReadoutView: View {
                 deviceHighWater: highWater
             )
         } catch {
-            return .unreadable(String(describing: error))
+            // NEVER `String(describing:)`: a CKError renders its userInfo, and for a multi-record
+            // operation that includes a per-item dictionary keyed by CKRecord.ID — and this scheme's
+            // sealed-photo record names are built from photo UUIDs. See `Phase3ProbeFailure`.
+            return .unreadable(Phase3ProbeFailure.summarize(error))
         }
     }
 
     /// One read-only id enumeration for a corpus whose manifest did not come back.
     private func probeBodies(corpus: SealedPhotoCorpus) async {
+        let capturedEpoch = session.epoch
         do {
             let ids = try await CloudKitDataService().existingSealedPhotoIDs(corpus: corpus)
-            session.recordBodyProbe(.counted(ids.count, truncatedAtPageCap: false), for: corpus)
+            session.recordBodyProbe(.counted(ids.count, truncatedAtPageCap: false),
+                                    for: corpus, epoch: capturedEpoch)
         } catch {
-            session.recordBodyProbe(.failed(String(describing: error)), for: corpus)
+            session.recordBodyProbe(.failed(Phase3ProbeFailure.summarize(error)),
+                                    for: corpus, epoch: capturedEpoch)
         }
         FernletAuditLog.log("debug.phase3Readout.bodyProbe", context: ["corpus": corpus.rawValue])
     }
 
     /// Captures the pre-reset value of ALL SEVEN latches into the readout FIRST, then clears the one.
+    ///
+    /// The standing keyed witness goes with it, ordered BEFORE the reset is stamped: the gate now
+    /// requires a pass run AFTER this reset, and leaving the pre-reset witness in place would let a
+    /// later refactor fall back on a pass that never saw the rows the sitting is about.
+    ///
+    /// It deliberately does NOT drop `scanTask`. The scan it would orphan is uncancellable, so the
+    /// honest treatment is the session's scan fence — which `invalidateCensus()` bumps, and which
+    /// turns that landing into a recorded refusal instead of a stale reading under a fresh stamp.
     private func resetSealedColumnLatch() {
-        if let latches = session.latches { session.recordPreResetSnapshot(latches) }
+        guard let latches = session.latches else {
+            session.recordRefusal("Reset refused: the local scan had not landed, so the seven"
+                + " pre-reset latch bits could not be captured first.")
+            return
+        }
+        session.recordPreResetSnapshot(latches)
         SealedColumnFormatMigrator.latch().reset()
+        store.clearSealedColumnPassWitness()
         session.recordSealedColumnReset()
         session.invalidateCensus()
-        scanTask = nil
     }
 
     /// Logs FIRST, then writes — the probe's nothing-silent ordering.
@@ -572,14 +680,20 @@ struct Phase3GateReadoutView: View {
         // R2: bounded by the chunk array, which is bounded by the report's line count.
         for (index, chunk) in chunks.enumerated() {
             FernletAuditLog.log("debug.phase3Readout.reportChunk", context: [
-                "i": "\(index + 1)", "n": "\(chunks.count)", "text": chunk
+                "i": "\(index + 1)", "n": "\(chunks.count)",
+                "bytes": "\(chunk.utf8.count)", "text": chunk
             ])
         }
     }
 
-    /// R2: the per-chunk byte budget for the log egress route. Small enough that the unified log's
-    /// own truncation does not eat a chunk, large enough that a report is a handful of lines.
-    private static let logChunkByteBudget = 2_048
+    /// R2: the per-chunk byte budget for the log egress route.
+    ///
+    /// Under os_log's documented ~1 024-byte message maximum, with room left for the event name and
+    /// the `i`/`n`/`bytes` context: a chunk over that ceiling is truncated by the unified log
+    /// itself, and the index/total scheme detects a MISSING chunk but cannot detect one that
+    /// arrived half-length. `bytes` is emitted beside every chunk so a short capture is visible
+    /// rather than silently complete-looking.
+    private static let logChunkByteBudget = 768
 }
 
 #endif

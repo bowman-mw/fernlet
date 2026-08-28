@@ -423,6 +423,7 @@ nonisolated enum CryptoFormatCensus {
             let tally = result.total
             let detail = "legacy \(tally.unprefixed) exact · v3 ≤\(tally.v3Marked) / v2 ≤\(tally.v2Marked) upper bounds"
                 + " · empty \(tally.emptyOrNil) · scanned \(result.rowsScanned) of \(result.rowsAvailable) rows"
+                + sealedColumnVacuityNote(result)
             return CryptoFormatCensusRow(
                 surface: .sealedColumns,
                 definitelyLegacy: tally.unprefixed,
@@ -437,6 +438,24 @@ nonisolated enum CryptoFormatCensus {
                 status: .indeterminate(reason)
             )
         }
+    }
+
+    /// Says out loud when this zero is over an EMPTY corpus — the reading a fresh install and a
+    /// just-wiped device both produce.
+    ///
+    /// It goes in the DETAIL rather than the status deliberately: over an empty corpus the count is
+    /// exact, not a lower bound, so `countedWithBlindSpots` would be the wrong word. What was wrong
+    /// was the silence. `legacy 0 · scanned 0 of 0 rows` rendered with nothing else beside it, next
+    /// to a media row that honestly says "nothing was there to count, which is not a swept-clean
+    /// corpus" — and this is the surface Phase 3 deletes a reader on the strength of. `emptyOrNil`
+    /// is counted apart from `unprefixed`, so rows whose sealed columns are all nil read as a
+    /// healthy row count and are the variant a bare row-count check would miss.
+    private static func sealedColumnVacuityNote(_ result: SealedColumnFormatCensusResult) -> String {
+        let sealedValues = result.total.total - result.total.emptyOrNil
+        guard result.rowsAvailable == 0 || sealedValues == 0 else { return "" }
+        return "  [VACUOUS: \(result.rowsAvailable) rows and \(sealedValues) sealed column values —"
+            + " nothing was there to count, which is not a swept-clean corpus. A fresh install and a"
+            + " just-wiped device both read this way.]"
     }
 
     /// Truncation and unreadable rows both make the exact count a LOWER bound: the rows the scan

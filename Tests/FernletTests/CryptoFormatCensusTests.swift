@@ -600,4 +600,41 @@ struct CryptoFormatCensusTests {
             #expect(!row.detail.isEmpty)
         }
     }
+    /// An EMPTY sealed corpus renders its zero as VACUOUS rather than silently clean.
+    ///
+    /// `legacy 0 · scanned 0 of 0 rows` is what a fresh install and a just-wiped device both read,
+    /// and it used to carry no caveat at all — beside a media row that honestly says "nothing was
+    /// there to count, which is not a swept-clean corpus". A zero over nothing is true and proves
+    /// nothing, and this surface is the one Phase 3 deletes a reader on the strength of.
+    @Test func anEmptySealedCorpusRendersItsZeroAsVacuous() {
+        let empty = SealedColumnFormatCensusResult(columns: [:], rowsScanned: 0, rowsAvailable: 0,
+                                                   truncated: false, rowCap: 20_000)
+        let row = CryptoFormatCensus.row(forSealedColumns: .counted(empty))
+        #expect(row.definitelyLegacy == 0)
+        #expect(row.detail.contains("VACUOUS"), "an empty corpus must not read as a silent clean zero")
+        // The count over an empty corpus is EXACT, not a lower bound, so the status must not be
+        // downgraded to a blind spot — the defect was the silence, not the number.
+        #expect(row.status == .counted)
+
+        // Rows present, every sealed value nil — the variant a bare row-count floor misses.
+        let allEmpty = SealedColumnFormatCensusResult(
+            columns: [
+                SealedColumnIdentifier(entityName: "MenstrualNarrative", attributeName: "notesCiphertext"):
+                    SealedColumnFormatTally(emptyOrNil: 120)
+            ],
+            rowsScanned: 40, rowsAvailable: 40, truncated: false, rowCap: 20_000
+        )
+        #expect(CryptoFormatCensus.row(forSealedColumns: .counted(allEmpty)).detail.contains("VACUOUS"))
+
+        // A corpus that actually holds sealed values is not called vacuous.
+        let real = SealedColumnFormatCensusResult(
+            columns: [
+                SealedColumnIdentifier(entityName: "WorryNarrative", attributeName: "textCiphertext"):
+                    SealedColumnFormatTally(v3Marked: 4)
+            ],
+            rowsScanned: 4, rowsAvailable: 4, truncated: false, rowCap: 20_000
+        )
+        #expect(!CryptoFormatCensus.row(forSealedColumns: .counted(real)).detail.contains("VACUOUS"))
+    }
+
 }

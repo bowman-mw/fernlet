@@ -228,7 +228,7 @@ final class FernletStore {
             // prints real per-corpus photo counts. Numbers that contradict an apparently empty decoy
             // are exactly the disclosure duress mode exists to prevent, so the purchased readings go
             // fail-closed on the engaging edge — the page's own refusal is the second half.
-            if duressSessionActive { phase3ReadoutSession.clear() }
+            if duressSessionActive { clearPhase3Evidence() }
             #endif
         }
     }
@@ -3124,6 +3124,13 @@ final class FernletStore {
             #endif
             _ = await ownPhotoBackupCoordinator.synchronizeFullyVerified()
         } else {
+            #if DEBUG
+            // The ambient pass writes manifests too (it re-commits on a foreign-write invalidation),
+            // so the readout's Fetch-manifests guard has to see it. Raising the mirror only at the
+            // two user-initiated seams left `ownPhotoBackupPassInFlight` reading false for the whole
+            // launch pass — the one a probe is most likely to race.
+            mirrorOwnPhotoBackupDebugState(passInFlight: true)
+            #endif
             _ = await ownPhotoBackupCoordinator.synchronize()
         }
         // Either shape can move the latch (a full pass by latching, any pass by observing a
@@ -3260,6 +3267,11 @@ final class FernletStore {
     /// photo generation namespace — the "delete everything" leg for the photo route
     /// (Docs/PrivacyWipeCoverage.md). Returns whether every corpus cleared.
     func deleteOwnPhotoEscrowBackups() async -> Bool {
+        #if DEBUG
+        // Teardown deletes the manifests a probe would read; the mirror covers it for the same
+        // reason it covers the two pass seams.
+        mirrorOwnPhotoBackupDebugState(passInFlight: true)
+        #endif
         let allCleared = await ownPhotoBackupCoordinator.tearDownForDeleteAll()
         // Teardown resets the hash-migration latch directly (the delete-all funnel calls this
         // without passing through the toggle seam), so the observable must be re-read here or it
@@ -5909,7 +5921,14 @@ final class FernletStore {
     @ObservationIgnored private var sealedColumnMigrationConvertedThisProcess = false
     /// In-flight guard (the 2.1 precedent): one funded run at a time; cleared when the run's
     /// record lands, so a blocked pass can be re-funded at a later unlock.
-    @ObservationIgnored private(set) var sealedColumnMigrationInFlight = false
+    ///
+    /// Deliberately TRACKED, unlike its `@ObservationIgnored` neighbours above: the DEBUG Phase 3
+    /// gate readout reads it in three places that all assume it is live — the reset control's
+    /// `.disabled`, that control's printed reason, and the fold's refusal to discharge while a pass
+    /// is writing the corpus. Untracked, the reset stayed tappable through a running pass and the
+    /// row never re-folded when one ended. Nothing about the 2.1 guard requires it to be untracked;
+    /// it is only ever written from a funded run's start and its record, never during a view update.
+    private(set) var sealedColumnMigrationInFlight = false
     /// The once-per-process revalidation slot: a SET latch is re-checked with one keyless
     /// census on the first funded trigger per process, then believed as a Bool. NOT consumed by
     /// an `.unavailable` recheck (the next funded trigger retries).
@@ -5944,8 +5963,6 @@ final class FernletStore {
         if witness.isKeyedWitness { phase3ReadoutSession.invalidateCensus() }
     }
 
-    /// The last foreground media at-rest pass funded from the Phase 3 gate readout.
-    private(set) var lastMediaAtRestPassWitness: MediaPassWitness?
     /// Whether a readout-funded media pass is running (the control's in-flight guard; the migrator
     /// has none of its own).
     private(set) var mediaAtRestPassInFlight = false
@@ -5959,20 +5976,30 @@ final class FernletStore {
     /// never minted) leave a cleared latch cleared, so a reset here would trade a held proof for one
     /// with no in-sitting recovery.
     ///
-    /// Only when the latch currently reads FALSE does it additionally run the full loop — the same
-    /// call the launch makes — so a clean pass can latch in this sitting rather than next launch.
+    /// It deliberately does NOT follow up with `run(maxPasses:)` on an unlatched device. That loop
+    /// SETS the latch on its first clean pass, and the media latch is gate part (a): a latch this
+    /// page minted from the foreground would read next launch exactly like one a shipped pass
+    /// earned, with the only record of the difference living in process memory a relaunch destroys —
+    /// and both pieces of copy the owner confirms say the control does not touch the latch. The next
+    /// launch's own pass latches it, which is the reading the gate is entitled to.
+    ///
+    /// The census is invalidated afterwards for the reason the keyed sealed-column path already
+    /// gives: U and K must describe one filesystem state, and the latch bit beside them must be one
+    /// read after anything that could have moved it.
     func fundMediaAtRestWitness() async {
         guard !mediaAtRestPassInFlight else { return }
         mediaAtRestPassInFlight = true
         phase3ReadoutSession.setMediaPassInFlight(true)
+        let capturedEpoch = phase3ReadoutSession.epoch
         let documentsDirectory = photoDocumentsDirectory
         let proximityDirectory = proximitySupportRoot
         let witness = await Task.detached(priority: .utility) {
             Self.takeMediaAtRestWitness(documentsDirectory: documentsDirectory,
                                         proximityDirectory: proximityDirectory)
         }.value
-        lastMediaAtRestPassWitness = witness
-        phase3ReadoutSession.recordMediaWitness(witness)
+        if phase3ReadoutSession.recordMediaWitness(witness, epoch: capturedEpoch) {
+            phase3ReadoutSession.invalidateCensus()
+        }
         phase3ReadoutSession.setMediaPassInFlight(false)
         mediaAtRestPassInFlight = false
     }
@@ -5989,18 +6016,35 @@ final class FernletStore {
         )
         let latchBefore = migrator.latch.isComplete
         let result = migrator.performPass()
-        var ranFullLoop = false
-        if !latchBefore {
-            ranFullLoop = true
-            _ = migrator.run()
-        }
         return MediaPassWitness(
             stamp: Phase3Stamp(label: "media at-rest pass"),
             result: result,
             latchBefore: latchBefore,
-            latchAfter: migrator.latch.isComplete,
-            ranFullLoop: ranFullLoop
+            latchAfter: migrator.latch.isComplete
         )
+    }
+
+    /// Clears the sealed-column keyed witness so the readout cannot fall back on a pre-reset pass.
+    ///
+    /// Called from the reset control, ordered BEFORE the reset is stamped so no fold can observe a
+    /// reset time beside a witness that predates it.
+    func clearSealedColumnPassWitness() {
+        lastSealedColumnPassWitness = nil
+    }
+
+    /// Drops every Phase 3 readout reading held OUTSIDE ``phase3ReadoutSession``, then clears the
+    /// session — the single point every wipe and the duress engage both go through.
+    ///
+    /// `lastSealedColumnPassWitness` is the one retained value that reaches a VERDICT, and it lives
+    /// on the store rather than the session because the sitting spans a sheet dismissal. Clearing
+    /// only the session therefore left a pre-wipe keyed pass standing while the wipe supplied a
+    /// census zero over the emptied corpus for free — manufacturing exactly the "gate discharged"
+    /// reading `DeleteEverythingFlow` clears the session to prevent.
+    func clearPhase3Evidence() {
+        lastSealedColumnPassWitness = nil
+        mediaAtRestLaunchPassLatched = nil
+        mediaAtRestLaunchPassCompletedAt = nil
+        phase3ReadoutSession.clear()
     }
     #endif
 
