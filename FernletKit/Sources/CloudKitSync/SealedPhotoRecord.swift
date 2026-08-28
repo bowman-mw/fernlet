@@ -96,10 +96,17 @@ public struct SealedPhotoManifest: Codable, Equatable, Sendable {
     public struct Entry: Codable, Equatable, Sendable {
         /// The digest generation an entry proven to carry the current, domain-separated pre-image
         /// is stamped with (`SealedPhotoBackupService.contentHash`'s v2 purpose-bound digest).
-        public static let currentHashVersion = 2
+        ///
+        /// `nonisolated` (this module declares `defaultIsolation(MainActor.self)`) because the
+        /// format-migration verdict types read it from nonisolated contexts: Phase 2.1's
+        /// `SealedPhotoBackupMigrationPassResult.isClean` witnesses a `FormatMigrationPassResult`
+        /// requirement, which the nonisolated protocol makes nonisolated too. An immutable `Int`
+        /// on a `Sendable` value type has no isolation to lose.
+        public nonisolated static let currentHashVersion = 2
         /// The digest generation ``hashVersion`` defaults to on decode: the legacy bare-SHA256
-        /// pre-image, or an entry whose pre-image simply has not been proven yet.
-        public static let legacyHashVersion = 1
+        /// pre-image, or an entry whose pre-image simply has not been proven yet. `nonisolated`
+        /// for the same reason as its pair above — the two are read together.
+        public nonisolated static let legacyHashVersion = 1
 
         /// The photo id — also its record-name slot.
         public let id: UUID

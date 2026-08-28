@@ -1555,9 +1555,14 @@ struct SealedPhotoBackupTests {
         defer { try? FileManager.default.removeItem(at: device) }
         _ = try #require(mealStore(in: device).save(jpeg(width: 120, height: 90)))
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(migrationLatch(defaults).isComplete)
@@ -1646,9 +1651,14 @@ struct SealedPhotoBackupTests {
         )
         plantLocalMealPhoto(myPhoto, id: mine, in: device)
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(!migrationLatch(defaults).isComplete,
@@ -1693,9 +1703,14 @@ struct SealedPhotoBackupTests {
         plantLocalMealPhoto(plaintext, id: id, in: device)
         database.unfetchableRecordNames = ["sealed-photo.meal.manifest"]
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(!migrationLatch(defaults).isComplete)
@@ -1762,9 +1777,14 @@ struct SealedPhotoBackupTests {
         plantLocalMealPhoto(plaintext, id: id, in: device)
         let bodyBefore = try #require(database.ciphertext(named: "sealed-photo.meal.\(id.uuidString)"))
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         _ = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(migrationLatch(defaults).isComplete,
@@ -1863,9 +1883,14 @@ struct SealedPhotoBackupTests {
         defer { try? FileManager.default.removeItem(at: device) }
         migrationLatch(defaults).markComplete()
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         #expect(await coordinator.tearDownForDeleteAll())
 
         #expect(!migrationLatch(defaults).isComplete,
@@ -1963,8 +1988,11 @@ struct SealedPhotoBackupTests {
             documents: device, identity: identity, database: database, defaults: defaults
         )
         // Pass 1 gets its two writes (the healed body, then the manifest); every later save throws,
-        // so the confirming pass fails its commit exactly the way a transport blip would.
-        database.failSavesAfterCallCount = 2
+        // so the confirming pass fails its commit exactly the way a transport blip would. The
+        // budget is relative to `saveCallCount` because the plant above already spent saves on the
+        // same mock — an absolute 2 would fail pass 1's FIRST write, making this an honestly failed
+        // enable rather than the merge scenario under test.
+        database.failSavesAfterCallCount = database.saveCallCount + 2
 
         #expect(await coordinator.setEnabled(true),
                 "a transient confirming pass vetoed an enable whose healing pass committed")
@@ -2010,9 +2038,14 @@ struct SealedPhotoBackupTests {
         // meal photo, so the ledger is PRESENT and empty.
         OwnPhotoUploadLedger(defaults: defaults).recordUploaded([], for: .meal)
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         let mealVerdict = try verdict(.meal, in: pass)
@@ -2039,15 +2072,23 @@ struct SealedPhotoBackupTests {
         let device = temporaryDocumentsDirectory()
         defer { try? FileManager.default.removeItem(at: device) }
 
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(migrationLatch(defaults).isComplete, "a user with nothing to prove could never finish proving it")
         let verdicts = try #require(pass.corpusVerdicts)
         #expect(verdicts.count == SealedPhotoCorpus.allCases.count)
-        #expect(verdicts.allSatisfy(\.examined))
+        // Closure rather than the `\.examined` key path: `#expect` decomposes its expression, and
+        // a key-path-as-function argument makes the `rethrows` analysis of `allSatisfy` fail to
+        // compile inside the expansion. Same assertion, and the same spelling as the line below.
+        #expect(verdicts.allSatisfy { $0.examined })
         #expect(verdicts.allSatisfy { $0.observedMinima.isEmpty })
         #expect(database.recordNames(withPrefix: "sealed-photo.").isEmpty,
                 "an empty device wrote a manifest, which is the clobber the upload guard exists to stop")
@@ -2094,9 +2135,14 @@ struct SealedPhotoBackupTests {
         let audit = AuditCapture()
         audit.install()
         defer { audit.uninstall() }
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         let pass = await coordinator.synchronizeFullyVerified(preferenceOverride: true)
 
         #expect(!migrationLatch(defaults).isComplete,
@@ -2141,9 +2187,14 @@ struct SealedPhotoBackupTests {
         let audit = AuditCapture()
         audit.install()
         defer { audit.uninstall() }
-        let (coordinator, _) = makeCoordinator(
+        // Bound, not discarded: `OwnPhotoBackupCoordinator` holds its host `unowned` (it is owned
+        // by `FernletStore` in production, which outlives it), so a `_` here drops the only strong
+        // reference and the first `host.record…` inside a pass traps on a destroyed object. The
+        // `defer` keeps it alive past every coordinator call in the test.
+        let (coordinator, host) = makeCoordinator(
             documents: device, identity: identity, database: database, defaults: defaults
         )
+        defer { withExtendedLifetime(host) {} }
         _ = await coordinator.synchronize(preferenceOverride: true)
 
         #expect(!migrationLatch(defaults).isComplete,

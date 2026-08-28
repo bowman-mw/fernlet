@@ -416,3 +416,8 @@ Token log (per phase: spent / big consumers / remaining):
   three rounds (~386k), the docs pass (~132k); main loop the remainder. Remaining budget at the
   boundary: ~15.0M. (Numbers from the harness's per-agent usage blocks; the explain-usage chart is
   deferred to a boundary the owner is watching.)
+- Phase 2.1: ~1.6M. Big consumers: the 5-agent design workflow (~894k — expensive and worth it:
+  two fatal design holes caught before a line of source existed), the implementer (~282k), the
+  test writer (~161k), the docs pass (~64k), one gate run (~120k). The gate needed five fixes but
+  only ONE full-suite run — the batch-review-fixes-first lesson from Phase 1 held. Remaining at
+  the boundary: ~15.0M.

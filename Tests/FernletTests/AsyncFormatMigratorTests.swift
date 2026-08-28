@@ -104,9 +104,17 @@ private struct ScriptedLatch: FormatMigrationLatching {
 }
 
 /// An ``AsyncFormatMigrator`` whose passes are a script, counting how many the loop actually
-/// funded. `@MainActor` with a `nonisolated let latch`, mirroring `SealedPhotoBackupFormatMigrator`
-/// exactly: that shape (an isolated async witness for a nonisolated async requirement) is itself
-/// part of what these tests keep honest.
+/// funded. `@MainActor` state behind a `nonisolated let latch`, mirroring
+/// `SealedPhotoBackupFormatMigrator`: that shape (main-actor pass state reached through a
+/// nonisolated async requirement) is itself part of what these tests keep honest.
+///
+/// `performPass()` is `nonisolated` and hops with `MainActor.run`, which is what the app target's
+/// witness thunk does implicitly. It has to be written out HERE because `AsyncFormatMigrator` is a
+/// `nonisolated protocol` — its requirements are explicitly nonisolated, so a witness cannot be
+/// main-actor-isolated. The app target gets the isolated conformance inferred for
+/// `SealedPhotoBackupFormatMigrator` from its `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` build
+/// setting; `FernletTests` does not set it, so the hop is spelled out. The loop under test is
+/// unaffected either way — it awaits `performPass()` and reads the two verdicts.
 @MainActor
 private final class ScriptedAsyncMigrator: AsyncFormatMigrator {
     nonisolated let latch: ScriptedLatch
@@ -125,7 +133,12 @@ private final class ScriptedAsyncMigrator: AsyncFormatMigrator {
         self.script = script
     }
 
-    func performPass() async -> ScriptedPassResult {
+    nonisolated func performPass() async -> ScriptedPassResult {
+        await MainActor.run { self.nextScriptedPass() }
+    }
+
+    /// The main-actor half of one pass: tallies the invocation and returns the scripted verdict.
+    private func nextScriptedPass() -> ScriptedPassResult {
         defer { invocations += 1 }
         guard invocations < script.count else {
             overran = true
