@@ -1,4 +1,5 @@
 import Foundation
+import FernletCrypto
 
 // Phase 0 of `Docs/Plan-Crypto-Standardization-2026-08-27.md` for the media at-rest surface:
 // **count the sealed media blobs on this device by FORMAT, without opening any of them.**
@@ -347,6 +348,47 @@ public enum FriendWallCorpusLayout {
             ]
         )
     }
+
+    /// The subset of ``sealedLocations(in:)`` a FORMAT migrator may rewrite: the two photo
+    /// directories plus the sealed index.
+    ///
+    /// The pre-sealing PLAINTEXT index (``legacyPlaintextIndexFileName``) is **deliberately
+    /// excluded**, and the exclusion is load-bearing rather than an omission. Its migration
+    /// already exists, shipped, and correctly ordered: `PrivateMediaStore.loadIndex()` reads it
+    /// once, rewrites `MeshPhotoCache.sealed`, and deletes the plaintext original only after the
+    /// sealed file exists. A format migrator that sealed it independently would race that flow
+    /// and would have to replicate its decode + cap + orphan-sweep semantics (`save(_:)` deletes
+    /// files — machinery a never-delete migrator must not invoke). And excluding it is *safe*:
+    /// the file is read via `Data` + `JSONDecoder`, never through `gcmOpen`, so deleting the
+    /// legacy-read branch cannot strand it. The census keeps sweeping it (its
+    /// ``sealedLocations(in:)`` row) so the residue stays visible until a wall load retires it.
+    public static func resealableLocations(in supportDirectory: URL) -> OwnPhotoSealedLocations {
+        OwnPhotoSealedLocations(
+            directories: [
+                supportDirectory.appendingPathComponent(photosDirectoryName, isDirectory: true),
+                supportDirectory.appendingPathComponent(thumbnailsDirectoryName, isDirectory: true)
+            ],
+            files: [supportDirectory.appendingPathComponent(sealedIndexFileName)]
+        )
+    }
+
+    /// The AEAD purpose a wall file at `url` is sealed under, derived from this fixed, app-owned
+    /// layout — the wall analogue of ``OwnPhotoCorpusLayout/sealPurpose(for:)``, and living here
+    /// for the same reason: it IS layout knowledge, and anything opening wall bytes outside their
+    /// owning store must agree with `PrivateMediaStore`'s own per-location purposes.
+    ///
+    /// Fixed layout arithmetic only: the sealed index is matched by its one frozen file name and
+    /// the thumbnail directory by its one frozen component — untrusted file names never select or
+    /// construct a purpose.
+    public static func sealPurpose(for url: URL) -> CryptographicPurpose {
+        if url.lastPathComponent == sealedIndexFileName {
+            return FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
+        }
+        if url.pathComponents.contains(thumbnailsDirectoryName) {
+            return FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2
+        }
+        return FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2
+    }
 }
 
 // MARK: - The census
@@ -457,9 +499,22 @@ public struct MediaAtRestFormatCensus: Sendable {
     /// should not have to re-derive the byte rule.
     public static func format(ofFileAt url: URL) -> MediaAtRestFormatClass {
         guard let head = firstBytes(of: url) else { return .indeterminate }
-        if head.isEmpty { return .empty }
-        if head.starts(with: MediaAtRestFormat.v2Marker) { return .v2Marked }
-        if head.starts(with: jpegMagic) { return .plaintextJPEG }
+        return format(ofHeader: head)
+    }
+
+    /// The byte rule of ``format(ofFileAt:)`` over bytes the caller has ALREADY read — the head of
+    /// a file, or the whole file.
+    ///
+    /// This is the share-the-classifier seam: `MediaAtRestFormatMigrator` re-checks a file's class
+    /// over its convert-time full read through this exact function, so the migrator and the census
+    /// cannot disagree about what a blob is by construction. `starts(with:)` inspects only the
+    /// leading bytes, so passing a whole file is equivalent to passing its head. Never `nil`-able:
+    /// "could not read the bytes" is the CALLER's fact (``format(ofFileAt:)`` maps it to
+    /// ``MediaAtRestFormatClass/indeterminate``); bytes in hand always classify.
+    public static func format(ofHeader bytes: Data) -> MediaAtRestFormatClass {
+        if bytes.isEmpty { return .empty }
+        if bytes.starts(with: MediaAtRestFormat.v2Marker) { return .v2Marked }
+        if bytes.starts(with: jpegMagic) { return .plaintextJPEG }
         return .unprefixedLegacyOrUnrecognized
     }
 

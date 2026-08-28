@@ -267,6 +267,13 @@ struct PersistedSurfaceWipeBoundaryTests {
         "com.fernlet.launch.priorUseRecorded": .kept(
             reason: "The Phase-6 prior-use marker: one bit that must outlive the wipe, or the next launch classifies a wiped-but-reused device as FRESH and silently adopts the excluded backup default over it."
         ),
+        // The Phase 2.3 media at-rest FORMAT migration latch (`MediaAtRestFormatMigrationLatch`,
+        // one bit, no content). Kept — NOT the mirror of the cleared format latches above,
+        // because their "subject destroyed" premise is false here: three of its eight locations
+        // (the friend wall's photos, thumbnails, and sealed index) deliberately SURVIVE the wipe.
+        "com.fernlet.private-media.mediaAtRestFormatMigrationComplete": .kept(
+            reason: "The media at-rest format-migration latch. The wipe empties the own-photo corpora, the surviving friend wall was proven all-current-format (or named residue) before the latch could set, and every post-wipe writer emits the current format — so the latch's claim stays true of everything the wipe leaves behind, and clearing it would only force a pointless re-scan."
+        ),
         "com.fernlet.private-media.ownPhotoDeviceBindingConsent": .kept(
             reason: "The own-photo device-binding consent bit. Clearing it would silently WIDEN custody for everything captured after the wipe, because the next launch would find the gate unsatisfied and photos would go back to being backup-restorable."
         ),

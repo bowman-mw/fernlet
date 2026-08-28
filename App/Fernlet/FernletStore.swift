@@ -5760,8 +5760,22 @@ final class FernletStore {
     /// sets is the proof that no own file is still readable only under the pre-split key. The gate
     /// then refuses unless the user also has a cross-device route (escrow backup on, or recorded
     /// consent), so a launch never silently trades away their phone-swap recovery.
+    ///
+    /// Crypto-standardization Phase 2.3 appends the media FORMAT pass to the same task, LAST —
+    /// the ordering contract: the format migrator defers own-root candidates while the key latch
+    /// is unset, so running it after the key pass is what lets it convert on the same launch. It
+    /// sweeps the same two roots the census aggregator reads (`photoDocumentsDirectory` and
+    /// `proximitySupportRoot`), so migrator and census cover identical paths by construction.
+    /// The binding outcome is recorded BEFORE the format pass, unmoved from its shipped timing:
+    /// the Privacy & Data custody state must not wait behind the format sweep on the converting
+    /// launch — the format pass never reads binding state, and its only ordering need is
+    /// key-pass-then-format-pass, which holds either way.
     private func migrateAndBindOwnPhotoKey() {
         let documentsDirectory = photoDocumentsDirectory
+        // Same property `CryptoFormatCensus.Inputs.production(for:)` reads (via the adapter's
+        // `proximitySupportDirectory`); only `URL`s cross the isolation boundary — the migrators
+        // build their own non-Sendable key providers inside the task.
+        let proximityDirectory = proximitySupportRoot
         // The COMMIT PROOF, not the preference. A launch that bound on the stored flag alone would
         // re-decide, on every boot, that a switch someone once flipped is a cross-device route —
         // including for a user whose every upload has failed since. Read on the main actor and
@@ -5773,6 +5787,14 @@ final class FernletStore {
                 ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
                 : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
             await self?.recordOwnPhotoKeyBindingOutcome(outcome)
+            // After the key pass — the ordering contract above. The Bool is consumed by the
+            // pass's own `privateMedia.formatMigrationPass` audit line, which names every tally
+            // and any blocking bucket; nothing downstream gates on it (Phase 3 reads the latch
+            // plus the census on a real device, never this launch's return value).
+            _ = MediaAtRestFormatMigrator.standard(
+                documentsDirectory: documentsDirectory,
+                proximitySupportDirectory: proximityDirectory
+            ).run()
         }
     }
 
