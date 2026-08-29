@@ -38,13 +38,12 @@ private final class RecipeCapTestHost: ProximityHost {
 @MainActor
 struct ProximityRecipeShareCapTests {
 
-    private func makePeer(named name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeer(named name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: nil
         )
     }
 
@@ -67,7 +66,7 @@ struct ProximityRecipeShareCapTests {
     @discardableResult
     private func registerConnection(
         on manager: ProximityRecipeShareManager,
-        peer: MultipeerPeer
+        peer: PeerHandle
     ) -> ProximityCoordinator {
         registerConnection(on: manager, peer: peer, transport: MockMultipeerTransport())
     }
@@ -75,7 +74,7 @@ struct ProximityRecipeShareCapTests {
     @discardableResult
     private func registerConnection(
         on manager: ProximityRecipeShareManager,
-        peer: MultipeerPeer,
+        peer: PeerHandle,
         transport: MockMultipeerTransport
     ) -> ProximityCoordinator {
         manager.makeRetainedConnectionCoordinatorForTesting(

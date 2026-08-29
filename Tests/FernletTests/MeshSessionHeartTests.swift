@@ -67,13 +67,12 @@ struct MeshSessionHeartTests {
         )
     }
 
-    private func makeMultipeerPeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeerHandle(name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: "mc-\(UUID().uuidString.prefix(8))")
+            advertisedFingerprint: nil
         )
     }
 
@@ -133,7 +132,7 @@ struct MeshSessionHeartTests {
         if trust { store.proximityTrustVault.trust(identity, mode: .friend) }
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: senderName),
+            peer: makePeerHandle(name: senderName),
             fingerprint: commit ? identity.fingerprint : nil,
             peerCapabilities: heartsCap
         )
@@ -205,7 +204,7 @@ struct MeshSessionHeartTests {
         let coordinator = throwawayCoordinator()
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: "Blocked"),
+            peer: makePeerHandle(name: "Blocked"),
             fingerprint: identity.fingerprint,
             peerCapabilities: heartsCap
         )
@@ -237,7 +236,7 @@ struct MeshSessionHeartTests {
         manager.onSessionHeartSendForTesting = { sentSlotIDs.append($0) }
 
         let fp = uniqueFingerprint()
-        let peer = makeMultipeerPeer(name: "Capable")
+        let peer = makePeerHandle(name: "Capable")
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: peer, fingerprint: fp,
             verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
@@ -259,7 +258,7 @@ struct MeshSessionHeartTests {
         // A photos-only committed peer (older build) cannot receive a mesh heart.
         let fp = uniqueFingerprint()
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "PhotosOnly"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "PhotosOnly"),
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([2]),
             peerCapabilities: [ProximityCapability.photos.rawValue]
         )
@@ -279,7 +278,7 @@ struct MeshSessionHeartTests {
         manager.onSessionHeartSendForTesting = { _ in sends += 1 }
         let fp = uniqueFingerprint()
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
         )
 
@@ -300,7 +299,7 @@ struct MeshSessionHeartTests {
         var sends = 0
         manager.onSessionHeartSendForTesting = { _ in sends += 1 }
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
         )
 
@@ -327,7 +326,7 @@ struct MeshSessionHeartTests {
 
         let fp = uniqueFingerprint()
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
         )
         let friend = friendRecord(fingerprint: fp, name: "Capable")
@@ -354,7 +353,7 @@ struct MeshSessionHeartTests {
         manager.onSessionHeartSendForTesting = { _ in sends += 1 }
 
         let fp = uniqueFingerprint()
-        let firstPeer = makeMultipeerPeer(name: "Capable")
+        let firstPeer = makePeerHandle(name: "Capable")
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: firstPeer,
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
@@ -367,7 +366,7 @@ struct MeshSessionHeartTests {
         // re-seats the same friend.
         manager.evictSlotForTesting(peerID: firstPeer.id)
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
         )
         manager.sendSessionHeart(to: friend)

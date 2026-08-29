@@ -150,42 +150,238 @@ flowchart TD
 
 ---
 
-## 5. Phase P0 — housekeeping and spike closure
+## 5. Phase P0 — housekeeping and spike closure — **BUILT** (2026-08-29)
 
-Small, unblocking, land first.
+Small, unblocking, land first. Every item below is done except one, called out honestly in item 5:
+the device↔simulator lane still has no hardware result, because no session that has touched this
+plan has had a physical iOS 26.5 device. The runbook now has somewhere to record it.
 
-1. **Fix the compile blocker:** `MeshNetworkFeasibilityTests.swift` references
-   `MeshProbeNetworkProfile.includesPeerToPeer` (now a private probe var) and property-style
-   `displayName` (now `displayName(peerToPeerIncluded:)`). Repair against the current probe API.
-2. **Register crypto labels:** add the TLS-exporter label (`fernlet.mesh.probe.tls-exporter.v1`) to
-   `CryptographicPurpose` alongside `meshProbeChannelIntroductionV1`; reserve the production labels now
-   (`fernlet.mesh.channel-introduction.v1`, `fernlet.mesh.tls-exporter.v1`, plus P5's content-key wrap
-   and manifest-signature purposes) so domain separation is one review, not five.
-3. **Info.plist decision:** the three uncommitted keys (`NSLocalNetworkUsageDescription`,
-   `_fernlet-mesh2._udp`, `BGTaskSchedulerPermittedIdentifiers` wildcard) currently ship in Release
-   while the probe compiles out. Recommendation: keep them (inert without code, needed by P2/P8
-   anyway) and document each in [No-Tracking-Wall.md](No-Tracking-Wall.md) §4c in the same commit.
-4. **String catalog:** run `Scripts/sync-string-catalogs.sh` so the probe's DEBUG UI strings land; the
-   `--check` CI form currently fails.
-5. **Runbook closure for the stated spike goal:** fill the gate table's device↔simulator lane
-   (discovery, QUIC connect, stream, datagram, channel binding — pass/fail with dates). Move the
-   locked/LPM/soak/battery rows into P8's gate (§15.3) and mark them "deferred to P8" rather than
-   leaving the table blank.
-6. **Probe upkeep for later phases:** raise `maxConnections` to 4 behind the same DEBUG toggle, and add
-   the cheap counters P8's gate needs (bytes in/out, connect/reconnect timestamps,
-   `ProcessInfo.thermalState` + Low Power Mode snapshots in the event ring). Nothing else grows.
-7. **Docs:** update [FileIndex.md](FileIndex.md) and [ProximityFunctionIndex.md](ProximityFunctionIndex.md)
-   for the Feasibility directory; cross-link this plan from the runbook.
+1. ~~**Fix the compile blocker.**~~ **BUILT** — landed earlier, in `c29da7b`'s test-debt repair.
+   `MeshNetworkFeasibilityTests.swift` calls `displayName(peerToPeerIncluded:)` and never references
+   `includesPeerToPeer`; the test target builds clean.
+2. **Register crypto labels: BUILT.** Seven entries added to `FernletCryptoPurpose`, taking the
+   registry from 47 to 54, each carrying a `///` comment that says what it is for and that it is
+   reserved rather than in use:
+   - `Signature.meshChannelIntroductionV1` — `fernlet.mesh.channel-introduction.v1`, `.lengthPrefixed`
+   - `Signature.meshRoutedManifestV1` — `fernlet.mesh.routed-manifest.v1`, `.lengthPrefixed`
+   - `KeyDerivation.meshProbeTLSExporterV1` — `fernlet.mesh.probe.tls-exporter.v1`, moved out of the
+     probe, which now reads the constant instead of a bare string literal
+   - `KeyDerivation.meshTLSExporterV1` — `fernlet.mesh.tls-exporter.v1`
+   - `KeyDerivation.meshRoutedContentKeyWrapV1` + `AEAD.meshRoutedContentKeyWrapV1` — the two halves
+     of P5's per-recipient content-key wrap, mirroring the shipped `meshGroupKeyWrap` pair
+   - `AEAD.meshRoutedItemV1` — the routed item's own content-key seal
+
+   **Two judgement calls to know about.** The framing on the two signature purposes is a
+   *reservation*: nothing has signed under either spelling, so P2/P5 may still change it — but they
+   must change the serializer and the registry together, which is exactly the pairing that broke in
+   `91c3956`. And `AEAD.meshRoutedItemV1` is one entry beyond what P0 literally asked for: a wrap
+   purpose with no item purpose would leave P5 to invent the second spelling alone, which is how
+   copy-paste collisions enter a registry.
+
+   `CryptographicDomainSeparationTests.allDomains` grew the matching seven rows, so the all-pairs
+   uniqueness and key-distinctness sweeps now cover them, and
+   `MeshNetworkFeasibilityTests.probeAndProductionMeshLabelsAreSeparateDomains` pins the property the
+   probe/production split exists for: the spike can never derive the shipping build's exporter secret.
+3. **Info.plist decision: BUILT** — recommendation accepted, keys kept. §4c of
+   [No-Tracking-Wall.md](No-Tracking-Wall.md) still described the proximity layer as
+   MultipeerConnectivity + NearbyInteraction over `_fernlet-*`. It now tabulates all three local-only
+   paths (MC, NearbyInteraction, the DEBUG QUIC probe) with their service types, gives each of the
+   three plist keys a row saying why it ships in Release for a probe that does not, and names the
+   `NWConnection` → `NetworkConnection` marker gap as deliberate-and-scheduled (§7.4) rather than
+   leaving it to be discovered.
+4. **String catalog: the probe's strings landed, but the gate is still RED — and it was already red
+   before this round.** `Scripts/sync-string-catalogs.sh --check` reports every SPM module clean
+   (ProximityKit included, 63 stringsdata) and `App/Fernlet/Localizable.xcstrings` **stale**, over
+   nine keys the current source no longer produces:
+
+   `- %@`, `--`, `…`, `· %lld servings`, `%@ - %@`, `%@ – %@`, and three sentence keys about photo
+   deletion, "logged to today", and the System appearance setting.
+
+   All nine are present in the file **as committed at `f4fa541`**, and the sync's output is a pure
+   function of the source — so the check fails on the committed tree, independent of anything this
+   round did and independent of the uncommitted churn another session has in that file. Nothing in
+   P0 or P1 adds a user-facing string; the staleness is leftover from an earlier round that deleted
+   UI without re-syncing.
+
+   **Deliberately not fixed here.** The fix is one write-mode `Scripts/sync-string-catalogs.sh` run,
+   which rewrites exactly the file a concurrent session was actively editing when this round started
+   — the one file this round's launcher names as off-limits. It is a one-command fix on a quiet tree
+   and belongs to whoever owns that file next.
+5. **Runbook closure: STRUCTURE BUILT, one lane still owed to hardware.** The gate table had only
+   *Check* and *Required result* columns — nowhere to record what happened. It is now two lanes with
+   **Result** and **Date** columns:
+   - **Lane A (device↔simulator).** Discovery, QUIC connect, control stream, datagram, and on-radio
+     channel binding read **"Not yet run"**, because they have not been. No session that has touched
+     this plan has had a physical iOS 26.5 device, and the probe's own discovery policy makes a
+     simulator↔simulator run impossible by design (each side refuses a simulator peer). The three
+     rows the radio-free suite genuinely proves — off-radio channel-binding rejection, dial policy,
+     plist configuration — carry a real Pass and date, listed *beside* the empty ones so the gap is
+     legible instead of papered over.
+   - **Lane B.** The locked / background / Low Power Mode / soak / battery / force-quit / partition
+     rows read **"Deferred to P8 — see plan §15.x"**. A blank cell reads as untested; a deferred cell
+     reads as scheduled.
+
+   The runbook's opening "do not begin the transport-abstraction phase until the gate has an approved
+   result" is superseded, and now says so: MC deprecation is iOS 27, and P1/P2 have unconditional
+   value. **Owner action: Lane A is one sitting with a phone.**
+6. **Probe upkeep: BUILT.** `maxConnections` is 4 — the runbook's four-device step was impossible at
+   2 — and the cap's own event string interpolates the constant instead of saying "two". The P8
+   counters are `bytesSent` / `bytesReceived` (every control frame and datagram now routes through
+   four counted wrappers, so the numbers are exact rather than estimated), `connectCount` with
+   first/last timestamps, `reconnectCount` with its timestamp, and thermal-state / Low Power Mode
+   readings.
+
+   Two deliberate shapes. The **counters are fields, not ring entries**: the ring holds 80 events and
+   a six-hour soak fires 720 heartbeats, so a counter kept in the ring would measure nothing. And
+   **power state is recorded on CHANGE only**, sampled at the connect, re-dial and heartbeat paths
+   P8 correlates against — a steady soak costs one line, a throttling one shows exactly when. All of
+   it lands in the copied diagnostic report, which is the only way numbers leave a device the
+   developer cannot attach a debugger to; `theDiagnosticReportCarriesTheP8GateCounters` pins that.
+7. **Docs: BUILT.** The FileIndex / ProximityFunctionIndex entries for the Feasibility directory
+   landed with the spike; the runbook now cross-links this plan from its Status section and states
+   which of its rows gate what.
 
 Acceptance: full gauntlet green (`power-of-10-scan.py`, `spm-wall-check.sh`, S3 + no-tracking +
 localization boundary tests, doc coverage), runbook gate table has no empty cells.
 
 ---
 
-## 6. Phase P1 — transport neutrality
+## 6. Phase P1 — transport neutrality — **BUILT** (2026-08-29)
 
 Goal: remove MC types from the shared protocol surface with **zero behavior change**, so P2 can slot in
 beside MC and the other three radios keep working untouched.
+
+**Result:** no `MultipeerConnectivity` symbol survives outside
+`Transport/MeshMultipeerSession.swift` and `Transport/MCPeerIDStore.swift`. `ProximityCoordinator`,
+`MeshNetworkManager`, `PresenceManager` and `ProximityRecipeShareManager` no longer import the
+framework at all. The whole existing proximity suite — 25 suites — passes unchanged through the new
+abstraction over the MC adapter, and two golden vectors pin the one field that could have moved a
+signed byte.
+
+### 6.1 The thing the sketch above got wrong: `id` is not an identity
+
+The target surface as drafted has `PeerHandle` carrying `id` and `displayHint`, with the transport's
+routing token kept private. That is right about the routing token and **wrong about `id`**, and
+building it as drafted would have deleted a load-bearing check with no compile error and no test
+failure.
+
+Seven sites across the three radio managers were written as
+`$0.peer.id == peer.id || $0.peer.underlying == peer.underlying`. The disjunct is not defensive
+padding. `MeshMultipeerSession.peer(for:)` mints a **fresh UUID on every cache miss**, and the cache
+is evicted when a peer is lost while holding no channel — and, more importantly, is simply absent
+for an inbound invitation from a device the transport is not currently tracking, because
+`advertiser(_:didReceiveInvitationFromPeer:)` calls `peer(for:)` *before* `prepareChannel`. So
+`a.id == b.id` implies "same device", but "same device" does **not** imply `a.id == b.id`. `id` is a
+false-negative-only test; `MCPeerID` equality was the total one.
+
+The rationale lived in `Docs/CODE_REVIEW_2026-06-12.md` finding #19 ("Committed peer slots leak when
+browser lostPeer fires before session .notConnected"), which was deleted from the tree in `cee2a31`.
+No surviving comment explains it — the ones that exist ("the SAME peer re-inviting is always let
+through") read as an `id` question — and **no test covered it**: every test peer is built with its
+own fresh `MCPeerID`, and two separately constructed `MCPeerID`s are never equal, so the disjunct
+could have been deleted outright and the suite would have stayed green.
+
+What it costs when the match is missed, per site: a slot that is never removed on disconnect keeps
+its seat against `maxTotalSlots` and its coordinator is never cancelled, so `end()` never runs —
+ranging is not invalidated, the foreground Live Activity anchor is orphaned until the system's time
+cap, and no `.sessionEnded` audit is written; a heart connection leaks one of four slots with an
+in-flight send that never surfaces its failure; and a reconnecting recipe partner is refused by the
+cap it already occupies, with the radio staying paused because reopening is keyed on record eviction.
+
+So the built surface adds one type and one method:
+
+```swift
+public nonisolated struct PeerEndpointKey: Hashable, Sendable { /* opaque, process-local */ }
+
+public func isSameEndpoint(as other: PeerHandle) -> Bool { id == other.id || endpoint == other.endpoint }
+```
+
+`isSameEndpoint(as:)` is now the single spelling of the "same device?" question; the seven sites call
+it and the MC→QUIC swap touches one line instead of seven. `MeshMultipeerSession` keeps a private,
+bounded (FIFO, cap 64) `MCPeerID ↔ PeerEndpointKey` mapping that is deliberately **not** pruned
+alongside `peerMap`: `MCPeerID` equality is unaffected by our cache, so pruning would narrow the
+identity test rather than preserve it. It is memory-only, per session instance, and links nothing the
+presence radio's ephemeral-`MCPeerID` posture does not already link — so it owes no wipe-wall row.
+
+### 6.2 Deviations from the sketch, and why
+
+- **`PeerHandle` keeps `discoveryInfo` and `advertisedFingerprint`.** Dropping them would not have
+  been neutral: five keys are read off a peer in shipping (`sid`, `v`, `t`, `name`, `fp`), including
+  the deterministic single-inviter rule that once deadlocked the mesh, the presence friend-matching
+  tag set, and the recipe-share recipient label. All five are Fernlet's own vocabulary, not
+  MultipeerConnectivity's, so they survive a transport swap unchanged.
+- **`displayHint` is renamed but is not yet purely a hint.** Two readers use it for more than
+  display, and the doc comment names both rather than letting the new name assert something false:
+  `ProximityCoordinator.shouldInviteDiscoveredPeer` uses `displayName < peer.displayName` as the
+  last-resort inviter tie-break when neither side advertises a session id, and `PresenceManager`
+  compares it against its own ephemeral names to filter its own ghost advertisements. Re-homing both
+  is P2/P9 work (§7.2, §17.1); doing it here would have been a behaviour change.
+- **`PeerTransportError` was renamed too**, though the sketch does not name it — it is the payload of
+  `PeerTransportState.failed`, so leaving it would have left an MC-named type on the neutral surface.
+- **`MultipeerServiceType`, `MCPeerIDStoring`, `FileMCPeerIDStore` and `MockMultipeerTransport` keep
+  their names.** The first three are genuinely MC-shaped and retire with MC in P9 —
+  `FileMCPeerIDStore` in particular is a named row in the privacy-wipe ledger, which is the worst
+  place to take an unplanned rename. The mock is 78 references across 16 test files for no behavioural
+  gain; renaming it would bury the real diff.
+- **The sketch's naming collides with itself** — it calls both the protocol and the test fake
+  `PeerTransport`. Resolved: the protocol is `PeerTransport`, the fake is `FakePeerTransport`.
+
+### 6.3 What landed
+
+| | |
+|---|---|
+| New | `Transport/PeerHandle.swift` (`PeerHandle`, `PeerEndpointKey`), `Transport/PeerTransport.swift` (`PeerTransport`, `PeerTransportState`, `PeerPendingInvite`, `InboundPeerFrame`, `PeerTransportError`, `PeerDeliveryMode`), `Transport/MCPeerIDStore.swift` (split out unchanged) |
+| Changed | `MeshMultipeerSession` holds the only `MCSessionSendDataMode` mapping (`.bestEffort → .unreliable`) and the only `MCPeerID` lookup; the three radio managers and the coordinator dropped `import MultipeerConnectivity` |
+| Tests | `PeerHandleIdentityTests` (the endpoint rule, previously untested), `FakePeerTransportTests`, `PeerHandleWireGoldenTests` |
+| Fake | `Mocks/FakePeerTransport.swift` — `VirtualClock` + `FakePeerNetwork` + `FakePeerTransport`: scriptable connect/disconnect/latency/partition/heal, n-way splits, and **no wall-clock sleeps anywhere**. Time moves only when a test advances it, so a §16.2 scenario either settles deterministically or fails visibly. Mid-flight frames re-check reachability at arrival, so a partition opened after a send still drops the frame; healing never replays what was dropped, because convergence is the application's job (§10.3). |
+
+### 6.4 Findings for the owner — real, and deliberately NOT fixed here
+
+Each of these is a behaviour change, which P1's neutrality contract forbids. They are named so P2
+does not inherit them silently.
+
+1. **`shouldAdmitChannel` and `handleChannelReady` disagree about identity** in
+   `ProximityRecipeShareManager`. The first uses the endpoint test, the second is `id`-only
+   (`guard !connections.contains(where: { $0.peer.id == channel.peer.id })`). A re-minted reconnect
+   is therefore *admitted* by the first and *appended as a second connection record* by the second —
+   breaking the hard two-device cap from the inside. Same split exists in mesh
+   (`MeshNetworkManager` :2051, :2548) and presence.
+2. **`locallyKickedPeerIDs` and `peerRetryCount` are keyed by `peer.id`** beside a slot lookup that
+   uses the endpoint test. Review finding #19 called this out explicitly and it was never closed:
+   the slot lookup survives an identity churn, the kick/retry bookkeeping next to it does not.
+3. **`PeerSlot.id == peer.id` propagates the unstable handle into trust bookkeeping** — the QR
+   ceremony's `pendingQRVerifications`, `outstandingAdmissionRequestBySlot`, photo-send tracking,
+   shop-catalog dedupe. A QUIC transport that mints a fresh id on reconnect changes that behaviour,
+   and the verification tests drive slot ids directly so they would not catch it.
+4. **`advertisedFingerprint` is always `nil` in shipping.** `"fp"` is published only by
+   `ProximityCoordinator.discoveryInfo(for:mode:)`, which is handed to
+   `PeerChannelTransport.startAdvertising` — an empty no-op. So the fingerprint-mismatch gate is
+   vacuous today, and the intro/ack/heartbeat envelopes ship `recipientFingerprint: nil`, which the
+   envelope format defines as *broadcast*, so the recipient-binding check never binds on them. **A P2
+   transport that actually delivers a TXT `fp` would activate all of that at once** — a behaviour
+   change disguised as a port, and one that moves signed bytes. `PeerHandleWireGoldenTests` pins both
+   the bound and the broadcast vectors so the flip is loud when it happens.
+5. **`meshID`, `meshName` and `memberCount` are advertised and never read** by any peer
+   (`MeshNetworkManager` :1976-1978). A faithful port carries three dead keys into the new TXT
+   record; dropping them passes every test while changing what a passive Bonjour scanner sees.
+6. **Five coordinator branches are unreachable in production** — `PeerChannelTransport` only ever
+   emits `.idle` / `.connected` / `.disconnected`, so `handleDiscoveredPeers`,
+   `shouldInviteDiscoveredPeer`, `acceptPendingInvite` and the two awaiting-acceptance arms are
+   driven by the mock alone. The live inviter decision is `MeshNetworkManager.shouldInitiateInvite`,
+   covered by two tests. P2's dial policy needs its own symmetry test rather than inherited
+   confidence — this comparison deadlocked the mesh once already.
+
+### 6.5 Root fix considered and deferred
+
+The churn exists only because the endpoint→UUID mapping shared a dictionary with the one discovery
+prunes. Splitting them so `peer(for:)` returns a *stable* `id` for the life of a session would make
+`id ==` a true identity test, fix findings 1–3 for free, and collapse `isSameEndpoint(as:)` to a
+single comparison. It is a behaviour change, so it is not P1 — but it is the cheapest place to close
+findings 1–3 together, and P2 is the natural home. **Privacy constraint if it is done:** the map must
+stay session-scoped and cleared at teardown; the presence radio's whole posture is a per-start
+random, never-persisted identity, and a persisted map would both weaken that and owe a wipe-wall row.
+
+Work items:
 
 ```swift
 public enum PeerDeliveryMode { case reliable, bestEffort }
@@ -685,9 +881,11 @@ No-Tracking-Wall, privacy copy, this plan's checkboxes.
 (preserving pause/resume semantics); presence → QUIC with the **ephemeral posture reproduced** (fresh
 TLS identity + randomized instance name per 900 s presence epoch — no stable name, matching today's
 ephemeral MCPeerID intent); coach service constant per the Coach-app decision (§18). Then delete
-`MeshMultipeerSession`, `MultipeerPeer.underlying`, `FileMCPeerIDStore` (with delete-all/wipe rows
-retired), drop the eight `_fernlet-*` MC Bonjour types from the plist, remove the MC import — done
-before the Xcode 27 toolchain move.
+`MeshMultipeerSession` and `FileMCPeerIDStore` (with delete-all/wipe rows retired), drop the eight
+`_fernlet-*` MC Bonjour types from the plist, remove the MC import — done before the Xcode 27
+toolchain move. Note that `MultipeerPeer.underlying` is **already gone** (P1 replaced it with
+``PeerEndpointKey``), so P9's deletion list is two files plus the plist, not a signature sweep; and
+`TransportNeutralityBoundaryTests`' permit list is the exact inventory of what is left to delete.
 
 **17.2 P10 — companion `BGAppRefreshTask`:** as v1 §8 — `MBO.Fernlet.companion-refresh`, `fetch`
 background mode, schedule at handle+background, handler limited to: acquire the existing store safely →
@@ -734,3 +932,84 @@ settled first. P7 can start once P3's states exist. P10 and P0 can interleave an
 4. Coach radio disposition in P9 (retire with the rest vs hold for the Coach-app decision).
 5. Wi-Fi Aware evaluation (§15.4): run it during P2, or only if §15.1's AWDL rows fail?
 6. Plist keys shipping in Release now (P0.3 recommendation: yes, documented).
+
+---
+
+## 19. P2 handoff — written at the P1 boundary, 2026-08-29
+
+P0 and P1 are **BUILT** (§5, §6). This section is what a fresh session needs to start P2 and nothing
+more; the sections above are the authority for *what* to build.
+
+### 19.1 What P2 inherits
+
+- A framework-free transport surface: `PeerTransport`, `PeerHandle`, `PeerEndpointKey`,
+  `PeerDeliveryMode`, `PeerTransportState`, `PeerPendingInvite`, `InboundPeerFrame`,
+  `PeerTransportError`. A second conformer needs **no change** to any of them.
+- `MeshMultipeerSession` and `MCPeerIDStore.swift` are the only two files that may name a
+  MultipeerConnectivity type, and `TransportNeutralityBoundaryTests` fails the build if a third does.
+  Add `NetworkMeshSession.swift` beside them; do not widen that permit list to reach it.
+- A deterministic fabric — `VirtualClock` + `FakePeerNetwork` + `FakePeerTransport` — with
+  connect/disconnect/latency/partition/heal and n-way splits, and **no wall-clock sleeps**. Write P2's
+  session-actor tests against it, not against timers.
+- Two golden vectors (`PeerHandleWireGoldenTests`) that fail if a peer field starts or stops reaching
+  the signed envelope bytes. Treat a failure there as a wire-format decision, never as a test to
+  re-pin without thinking.
+
+### 19.2 Prerequisites this session did not have
+
+1. **Two physical iOS 26.5+ devices.** P2's acceptance is mesh flows on the QUIC transport on the
+   device↔simulator lane *and* on two physical devices. Lane A of the runbook is still empty
+   (§5 item 5) — **fill it before writing QUIC code**, because a red Lane A during P2 is indis-
+   tinguishable from a P2 bug, and the probe already exists to answer it in one sitting.
+2. **TN3213 open alongside.** §7.1's mapping table was written against it and should be re-read
+   rather than trusted from memory; the API is new enough that details move between revisions.
+3. **The §7.2 decisions, which are still decisions, not facts.** Specifically: the ephemeral per-mesh
+   self-signed P-256 TLS identity (minted at session start, never persisted, never reused across
+   meshes — TLS identity is not Fernlet identity), and `prohibitedInterfaceTypes = [.cellular]`
+   always, which turns the serverless claim from aspiration into enforcement. Both need the owner's
+   explicit yes before they are load-bearing.
+
+### 19.3 Do these first, in this order
+
+1. **Close the marker gap in the same commit as the first QUIC file** (§7.4). `NWConnection` and
+   `NWBrowser` are banned markers today; `NetworkConnection` / `NetworkListener` / `NetworkBrowser`
+   are not, so the new API passes through a hole. Extend `NoTrackingBoundaryTests`' marker list,
+   permit exactly the ProximityKit transport files plus the DEBUG probe, and update
+   [No-Tracking-Wall.md](No-Tracking-Wall.md) §4c/§5 — §4c already names this gap as scheduled, so
+   the paperwork is half written.
+2. **Register the channel-introduction transcript against its declared framing.** The purpose exists
+   (`Signature.meshChannelIntroductionV1`, `.lengthPrefixed`) but nothing signs under it yet. When
+   P2's serializer lands, add its case to `CryptographicPurposeBoundaryTests`' framing test in the
+   same commit. That pairing — declared framing vs. what the serializer emits — is exactly what broke
+   in `91c3956` and surfaced as ~200 unexplained failures rather than one named cause.
+3. **Give the dial policy its own symmetry test.** The MC inviter tie-break deadlocked the mesh once
+   (documented at `MeshNetworkManager` :1993-2004) and is covered by two tests today. Do not inherit
+   confidence from the existing suite: five of the coordinator's discovery branches are unreachable
+   in production and are driven by the mock alone (§6.4 finding 6).
+
+### 19.4 Decide before writing the session actor
+
+- **Whether to take the §6.5 root fix.** Making `peer(for:)` return a stable `id` for the life of a
+  session would fix §6.4 findings 1–3 together and collapse `isSameEndpoint(as:)` to one comparison.
+  It is a behaviour change, which is why P1 did not take it, and P2 is the natural home — but if P2
+  instead mints a *fresh* id per QUIC reconnect, findings 1–3 get **worse**, because reconnection
+  becomes routine rather than exceptional. Decide deliberately; do not let the QUIC session's
+  endpoint-cache design settle it by accident.
+- **Whether the QUIC TXT record publishes `fp`.** It would activate the fingerprint-mismatch gate and
+  the envelope recipient-binding that are vacuous today (§6.4 finding 4) — probably desirable, but it
+  moves signed bytes, so it is a wire decision with a golden vector attached, not a port detail.
+- **What the new TXT record carries.** `meshID`, `meshName` and `memberCount` are advertised today and
+  read by nobody (§6.4 finding 5). Carrying them forward preserves a passive-scanner surface nobody
+  asked for; dropping them passes every test. Either is defensible; silence is not.
+
+### 19.5 Cross-round constraint that reaches P3/P5, not P2
+
+`ColumnCrypto` is a single generation (V3) and **refuses to seal** without a `DeviceBindingID`
+(`SealedColumnStrictSealError.bindingUnavailable`, owner decision D4); the V2 and unprefixed read
+paths are deleted and survive only as classification cases so a refusal can name what it refused.
+
+Consequence for §8.1's sealed `MeshSessionContext` and §11's routed store: **they cannot be written
+before first unlock.** The four-state sidecar model in invariant 7 needs a fifth consideration —
+"seal refused" is distinct from "deferred because protected data is unavailable" — and background
+custody must never assume it can seal. This meets the durable-before-acknowledged rule (§3.6) head
+on: **if you cannot seal, you must not acknowledge.**

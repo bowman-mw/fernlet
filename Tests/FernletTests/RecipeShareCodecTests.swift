@@ -255,12 +255,11 @@ struct RecipeShareCodecTests {
 
         let manager = ProximityRecipeShareManager(store: host)
         let transport = MockMultipeerTransport()
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: "Revoked",
+            displayHint: "Revoked",
             discoveryInfo: ["fp": remote.localFingerprint],
-            advertisedFingerprint: remote.localFingerprint,
-            underlying: MCPeerID(displayName: "Revoked")
+            advertisedFingerprint: remote.localFingerprint
         )
         // The manager builds AND retains the connection — its FriendSessionTrustPolicy lives on the
         // connection struct, and the coordinator holds it only `weak`, so this exercises the retention fix.

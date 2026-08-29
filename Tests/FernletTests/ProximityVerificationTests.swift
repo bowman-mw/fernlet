@@ -130,7 +130,7 @@ struct ProximityVerificationTests {
         localIdentity: IdentityService,
         remote: IdentityService,
         name: String
-    ) async throws -> (coordinator: ProximityCoordinator, peer: MultipeerPeer) {
+    ) async throws -> (coordinator: ProximityCoordinator, peer: PeerHandle) {
         let transport = MockMultipeerTransport()
         let coordinator = ProximityCoordinator(
             identity: localIdentity,
@@ -142,12 +142,11 @@ struct ProximityVerificationTests {
             displayName: "Local",
             timeoutSeconds: 0
         )
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: nil
         )
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)

@@ -319,13 +319,12 @@ struct MeshNetworkManagerTests {
 
     /// A transport peer for `addSlotForTesting` — a non-nil fingerprint on the slot models a
     /// COMMITTED (post-dwell) session member, nil a pre-commit candidate.
-    private func makePeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeer(name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: nil
         )
     }
 
@@ -921,27 +920,25 @@ struct MeshNetworkManagerTests {
         #expect(manager.shouldInitiateInvite(to: makePeer(displayName: "iPhone", sessionID: "")))
     }
 
-    /// Builds the `MultipeerPeer` the OTHER manager would appear as, carrying the discovery info
+    /// Builds the `PeerHandle` the OTHER manager would appear as, carrying the discovery info
     /// it actually broadcasts — so the tie-break is exercised on real wire values.
-    private func peerRepresenting(_ manager: MeshNetworkManager) -> MultipeerPeer {
-        MultipeerPeer(
+    private func peerRepresenting(_ manager: MeshNetworkManager) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: "iPhone",
+            displayHint: "iPhone",
             discoveryInfo: manager.currentDiscoveryInfo(),
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: "iPhone")
+            advertisedFingerprint: nil
         )
     }
 
-    private func makePeer(displayName: String, sessionID: String?) -> MultipeerPeer {
+    private func makePeer(displayName: String, sessionID: String?) -> PeerHandle {
         var info: [String: String] = ["v": "1", "name": displayName]
         if let sessionID { info["sid"] = sessionID }
-        return MultipeerPeer(
+        return PeerHandle(
             id: UUID(),
-            displayName: displayName,
+            displayHint: displayName,
             discoveryInfo: info,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: displayName)
+            advertisedFingerprint: nil
         )
     }
 }

@@ -6,14 +6,14 @@ import FernletDomainModel
 @testable import Fernlet
 
 @MainActor
-final class MockMultipeerTransport: MultipeerTransport {
+final class MockMultipeerTransport: PeerTransport {
 
-    private let stateSubject = CurrentValueSubject<MultipeerTransportState, Never>(.idle)
-    private let inboundSubject = PassthroughSubject<MultipeerInboundMessage, Never>()
+    private let stateSubject = CurrentValueSubject<PeerTransportState, Never>(.idle)
+    private let inboundSubject = PassthroughSubject<InboundPeerFrame, Never>()
 
-    var state: AnyPublisher<MultipeerTransportState, Never> { stateSubject.eraseToAnyPublisher() }
-    var inbound: AnyPublisher<MultipeerInboundMessage, Never> { inboundSubject.eraseToAnyPublisher() }
-    var connectedPeers: [MultipeerPeer] = []
+    var state: AnyPublisher<PeerTransportState, Never> { stateSubject.eraseToAnyPublisher() }
+    var inbound: AnyPublisher<InboundPeerFrame, Never> { inboundSubject.eraseToAnyPublisher() }
+    var connectedPeers: [PeerHandle] = []
 
     // Recorded calls
     var advertisingStarted = false
@@ -22,10 +22,10 @@ final class MockMultipeerTransport: MultipeerTransport {
     var lastDiscoveryInfo: [String: String]?
     var disconnectCalled = false
     var sendDelayNanoseconds: UInt64 = 0
-    var sentData: [(Data, MultipeerPeer, MCSessionSendDataMode)] = []
-    var acceptedInvites: [MultipeerPendingInvite] = []
+    var sentData: [(Data, PeerHandle, PeerDeliveryMode)] = []
+    var acceptedInvites: [PeerPendingInvite] = []
 
-    // MARK: MultipeerTransport
+    // MARK: PeerTransport
 
     func startAdvertising(serviceType: String, discoveryInfo: [String: String]) async throws {
         advertisingStarted = true
@@ -40,16 +40,16 @@ final class MockMultipeerTransport: MultipeerTransport {
         stateSubject.send(.browsing)
     }
 
-    func invite(_ peer: MultipeerPeer) async throws {
+    func invite(_ peer: PeerHandle) async throws {
         stateSubject.send(.awaitingPeerAcceptance(peer))
     }
 
-    func accept(_ invite: MultipeerPendingInvite) async throws {
+    func accept(_ invite: PeerPendingInvite) async throws {
         acceptedInvites.append(invite)
         invite.respond(true)
     }
 
-    func send(_ data: Data, to peer: MultipeerPeer, mode: MCSessionSendDataMode) async throws {
+    func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
         if sendDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: sendDelayNanoseconds)
         }
@@ -64,7 +64,7 @@ final class MockMultipeerTransport: MultipeerTransport {
 
     // MARK: Simulation helpers
 
-    func simulateDiscovery(peer: MultipeerPeer) {
+    func simulateDiscovery(peer: PeerHandle) {
         if case .discovered(let existing) = stateSubject.value {
             stateSubject.send(.discovered(existing + [peer]))
         } else {
@@ -72,14 +72,14 @@ final class MockMultipeerTransport: MultipeerTransport {
         }
     }
 
-    func simulatePeerLost(peer: MultipeerPeer) {
+    func simulatePeerLost(peer: PeerHandle) {
         if case .discovered(let existing) = stateSubject.value {
             stateSubject.send(.discovered(existing.filter { $0.id != peer.id }))
         }
     }
 
-    func simulateInvite(from peer: MultipeerPeer, info: [String: String] = [:]) {
-        let invite = MultipeerPendingInvite(
+    func simulateInvite(from peer: PeerHandle, info: [String: String] = [:]) {
+        let invite = PeerPendingInvite(
             peer: peer,
             advertisedInfo: info,
             context: nil,
@@ -95,17 +95,17 @@ final class MockMultipeerTransport: MultipeerTransport {
     /// session delegate always reports both), which is what puts a trainer coordinator into
     /// `.awaitingTapConfirmation` BEFORE the connected event — the second of the tap-gate
     /// auto-advance's two entry points.
-    func simulateConnecting(peer: MultipeerPeer) {
+    func simulateConnecting(peer: PeerHandle) {
         stateSubject.send(.connecting(peer))
     }
 
-    func simulateConnected(peer: MultipeerPeer) {
+    func simulateConnected(peer: PeerHandle) {
         connectedPeers = [peer]
         stateSubject.send(.connected(peer))
     }
 
-    func simulateInboundData(_ data: Data, from peer: MultipeerPeer) {
-        let msg = MultipeerInboundMessage(peer: peer, data: data, receivedAt: Date(), bytesReceived: data.count)
+    func simulateInboundData(_ data: Data, from peer: PeerHandle) {
+        let msg = InboundPeerFrame(peer: peer, data: data, receivedAt: Date(), bytesReceived: data.count)
         inboundSubject.send(msg)
     }
 

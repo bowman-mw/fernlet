@@ -60,13 +60,12 @@ struct SealedIntroductionTests {
 
     /// A presence-style peer: NO advertised fingerprint (presence discoveryInfo carries only tags),
     /// mirroring what `MeshMultipeerSession` produces for a heart channel.
-    private func presencePeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func presencePeer(name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: ["v": "1", "t": "sometag"],
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name))
+            advertisedFingerprint: nil)
     }
 
     private func makeSealedCoordinator(

@@ -31,13 +31,12 @@ struct TrainerProximityServiceTests {
         )
     }
 
-    private func makeMultipeerPeer(name: String, fingerprint: String?) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeerHandle(name: String, fingerprint: String?) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: fingerprint.map { ["fp": $0] },
-            advertisedFingerprint: fingerprint,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: fingerprint
         )
     }
 
@@ -70,7 +69,7 @@ struct TrainerProximityServiceTests {
         let peerIdentity = makePeerIdentity(from: remote)
         store.trustProximityPeer(peerIdentity, mode: .trainer)
         serviceRevoke(store: store, signingPublicKey: remote.localSigningPublicKey)
-        let peer = makeMultipeerPeer(name: "Coach Alex", fingerprint: remote.localFingerprint)
+        let peer = makePeerHandle(name: "Coach Alex", fingerprint: remote.localFingerprint)
         let data = try JSONEncoder().encode(signedIntroduction(from: remote))
 
         await coordinator.begin(role: .browser, mode: .trainer)

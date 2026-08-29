@@ -281,7 +281,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `ensureSession()` | Creates the shared required-encryption MCSession. |
 | `startAdvertiser(info:)` | Starts `MCNearbyServiceAdvertiser`. |
 | `startBrowser()` | Starts `MCNearbyServiceBrowser`. |
-| `peer(for:discoveryInfo:)` | Maps `MCPeerID` to stable `MultipeerPeer`, updating discovery info when it changes. |
+| `peer(for:discoveryInfo:)` | Maps `MCPeerID` to a `PeerHandle`, updating discovery info when it changes. **The `id` is NOT stable**: it is re-minted on every cache miss (a peer lost while holding no channel, or an inbound invitation from an untracked device). The `PeerEndpointKey` it carries *is* stable — that is what `isSameEndpoint(as:)` compares. |
 | `session(_:peer:didChange:)` | Routes MC connection state to channel readiness/disconnect callbacks. |
 | `session(_:didReceive:fromPeer:)` | Routes inbound bytes to the matching channel. |
 | Resource/stream delegate methods | Present but intentionally no-op because this transport only sends data messages. |
@@ -315,22 +315,25 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 
 ## Transport And Ranging
 
-### `MultipeerPeer.swift`
+### `PeerHandle.swift` / `MCPeerIDStore.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `MultipeerPeer.==` | Treats peers as equal when their generated UUIDs match. |
+| `PeerHandle.==` | Treats peers as equal when their per-discovery UUIDs match. |
+| `PeerHandle.isSameEndpoint(as:)` | The "same device?" test: `id` OR endpoint key. Use this, never `==`, when matching a stored record (slot, heart connection, recipe pairing, device cap) against a transport event — `==` returns false for a device re-minted between the record being stored and the event arriving. |
+| `endpointKey(for:)` | Mints or reuses the stable `PeerEndpointKey` for an `MCPeerID`, bounded FIFO at 64. |
+| `mcPeerID(for:)` | Resolves a `PeerHandle` back to its framework peer — the single seam where the MC type is reached. |
 | `hash(into:)` | Hashes the generated peer UUID. |
 | `FileMCPeerIDStore.init(fileURL:)` | Chooses an explicit or default Application Support archive URL. |
 | `load()` | Reads and unarchives a persisted `MCPeerID`. |
 | `save(_:)` | Archives and atomically writes an `MCPeerID`. |
 
-### `MultipeerTransport.swift`
+### `PeerTransport.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `MultipeerTransportState.==` | Equates states and associated peer/invite/error values. |
-| `MultipeerPendingInvite.==` | Equates pending invites by peer, advertised info, and context, ignoring callback closure identity. |
+| `PeerTransportState.==` | Equates states and associated peer/invite/error values. |
+| `PeerPendingInvite.==` | Equates pending invites by peer, advertised info, and context, ignoring callback closure identity. |
 | Protocol methods | Define async advertising, browsing, invite, accept, send, and disconnect capabilities implemented by transports. |
 
 ### `RangingProvider.swift`

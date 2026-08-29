@@ -71,13 +71,12 @@ struct PresenceHeartsTests {
             lastSeenAt: baseDate)
     }
 
-    private func peer(tokens: [String]) -> MultipeerPeer {
-        MultipeerPeer(
+    private func peer(tokens: [String]) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: "peer-\(UUID().uuidString.prefix(8))",
+            displayHint: "peer-\(UUID().uuidString.prefix(8))",
             discoveryInfo: ["v": "1", "t": tokens.joined(separator: ",")],
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: "mc-\(UUID().uuidString.prefix(8))"))
+            advertisedFingerprint: nil)
     }
 
     private func makePeerIdentity(displayName: String, in host: MockPresenceHeartsHost, trust: Bool) -> ProximityCoordinator.PeerIdentity {

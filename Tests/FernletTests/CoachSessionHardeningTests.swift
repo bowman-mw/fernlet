@@ -33,13 +33,12 @@ struct CoachSessionHardeningTests {
         KeychainItem.deleteAll(service: id)
     }
 
-    private func makePeer(name: String = "Coach", fingerprint: String? = nil) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeer(name: String = "Coach", fingerprint: String? = nil) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: fingerprint.map { ["fp": $0] },
-            advertisedFingerprint: fingerprint,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: fingerprint
         )
     }
 

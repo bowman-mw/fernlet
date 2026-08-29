@@ -85,13 +85,12 @@ private func waitUntil(
 }
 
 @MainActor
-private func makePeer(name: String = "peer-\(UUID().uuidString.prefix(8))") -> MultipeerPeer {
-    MultipeerPeer(
+private func makePeer(name: String = "peer-\(UUID().uuidString.prefix(8))") -> PeerHandle {
+    PeerHandle(
         id: UUID(),
-        displayName: name,
+        displayHint: name,
         discoveryInfo: nil,
-        advertisedFingerprint: nil,
-        underlying: MCPeerID(displayName: name)
+        advertisedFingerprint: nil
     )
 }
 
@@ -298,13 +297,12 @@ struct PresenceReleaseTests {
         )
     }
 
-    private func advertisingPeer(tokens: [String]) -> MultipeerPeer {
-        MultipeerPeer(
+    private func advertisingPeer(tokens: [String]) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: "peer-\(UUID().uuidString.prefix(8))",
+            displayHint: "peer-\(UUID().uuidString.prefix(8))",
             discoveryInfo: ["v": "1", "t": tokens.joined(separator: ",")],
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: "mc-\(UUID().uuidString.prefix(8))")
+            advertisedFingerprint: nil
         )
     }
 
@@ -389,7 +387,7 @@ struct PresenceReleaseTests {
         peerName: String,
         anchor: NoopProximityForegroundAnchor,
         ranging: MockRangingProvider
-    ) async throws -> (ProximityCoordinator, FriendSessionTrustPolicy, MultipeerPeer) {
+    ) async throws -> (ProximityCoordinator, FriendSessionTrustPolicy, PeerHandle) {
         let transport = MockMultipeerTransport()
         let trustPolicy = FriendSessionTrustPolicy(vault: vault)
         let coordinator = ProximityCoordinator(
@@ -403,12 +401,11 @@ struct PresenceReleaseTests {
             displayName: "Local",
             timeoutSeconds: 0
         )
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: peerName,
+            displayHint: peerName,
             discoveryInfo: ["fp": remote.localFingerprint],
-            advertisedFingerprint: remote.localFingerprint,
-            underlying: MCPeerID(displayName: peerName)
+            advertisedFingerprint: remote.localFingerprint
         )
         let intro = try FernletIdentityEnvelope.signed(
             identityService: remote,

@@ -85,13 +85,12 @@ struct PresenceManagerTests {
             .appendingPathComponent("HeartLedger.json"))
     }
 
-    private func peer(displayName: String = "peer-\(UUID().uuidString.prefix(8))", tokens: [String]) -> MultipeerPeer {
-        MultipeerPeer(
+    private func peer(displayName: String = "peer-\(UUID().uuidString.prefix(8))", tokens: [String]) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: displayName,
+            displayHint: displayName,
             discoveryInfo: ["v": "1", "t": tokens.joined(separator: ",")],
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: "mc-\(UUID().uuidString.prefix(8))")
+            advertisedFingerprint: nil
         )
     }
 

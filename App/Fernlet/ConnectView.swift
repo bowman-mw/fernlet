@@ -599,7 +599,7 @@ struct FriendsView: View {
                 break
             }
         }
-        return manager.slots.first?.peer.displayName ?? "Friend"
+        return manager.slots.first?.peer.displayHint ?? "Friend"
     }
 
     /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
@@ -1155,7 +1155,7 @@ private struct NearbySlotRow: View {
              .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
             return p.displayName
         default:
-            return slot.peer.displayName
+            return slot.peer.displayHint
         }
     }
 

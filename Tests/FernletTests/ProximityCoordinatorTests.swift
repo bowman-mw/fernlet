@@ -22,14 +22,13 @@ struct ProximityCoordinatorTests {
         KeychainItem.deleteAll(service: id)
     }
 
-    private func makePeer(name: String = "Peer", fingerprint: String? = nil) -> MultipeerPeer {
+    private func makePeer(name: String = "Peer", fingerprint: String? = nil) -> PeerHandle {
         let info = fingerprint.map { ["fp": $0] }
-        return MultipeerPeer(
+        return PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: info,
-            advertisedFingerprint: fingerprint,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: fingerprint
         )
     }
 
@@ -72,7 +71,7 @@ struct ProximityCoordinatorTests {
         transport: MockMultipeerTransport,
         local: IdentityService,
         remote: IdentityService
-    ) async throws -> MultipeerPeer {
+    ) async throws -> PeerHandle {
         let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
         let data = try JSONEncoder().encode(signedIntroduction(from: remote))
         await coordinator.begin(role: .browser, mode: .trainer)
@@ -1059,7 +1058,7 @@ struct ProximityCoordinatorTests {
         transport: MockMultipeerTransport,
         remote: IdentityService,
         uwbCapable: Bool
-    ) async throws -> MultipeerPeer {
+    ) async throws -> PeerHandle {
         struct RangingPayload: Encodable {
             let rangingMode: String
             let discoveryToken: Data?

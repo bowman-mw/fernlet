@@ -508,9 +508,9 @@ struct MeshEncryptionTests {
             timeoutSeconds: 0)
     }
 
-    private func meshPeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(id: UUID(), displayName: name, discoveryInfo: nil,
-                      advertisedFingerprint: nil, underlying: MCPeerID(displayName: name))
+    private func meshPeer(name: String) -> PeerHandle {
+        PeerHandle(id: UUID(), displayHint: name, discoveryInfo: nil,
+                   advertisedFingerprint: nil)
     }
 
     private func peerIdentity(for identity: IdentityService) -> ProximityCoordinator.PeerIdentity {

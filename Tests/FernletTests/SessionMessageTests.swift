@@ -63,13 +63,12 @@ struct SessionMessageTests {
         )
     }
 
-    private func makeMultipeerPeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeerHandle(name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: nil
         )
     }
 
@@ -129,7 +128,7 @@ struct SessionMessageTests {
         if !manager.slots.contains(where: { $0.fingerprint == identity.fingerprint }) {
             manager.addSlotForTesting(
                 coordinator: coordinator,
-                peer: makeMultipeerPeer(name: senderName),
+                peer: makePeerHandle(name: senderName),
                 fingerprint: identity.fingerprint,
                 peerCapabilities: messagesCap
             )
@@ -167,7 +166,7 @@ struct SessionMessageTests {
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: "Pending", signingPublicKey: Data([9, 9, 1]))
         // fingerprint: nil models a pre-dwell (uncommitted) candidate — the registry gate must drop it.
-        manager.addSlotForTesting(coordinator: coordinator, peer: makeMultipeerPeer(name: "Pending"), fingerprint: nil)
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeerHandle(name: "Pending"), fingerprint: nil)
         let (envelope, plaintext) = try messageEnvelope(text: "sneaky", senderName: "Pending")
         manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
 
@@ -185,7 +184,7 @@ struct SessionMessageTests {
         let coordinator = throwawayCoordinator()
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: "Blocked"),
+            peer: makePeerHandle(name: "Blocked"),
             fingerprint: identity.fingerprint,
             peerCapabilities: messagesCap
         )
@@ -204,7 +203,7 @@ struct SessionMessageTests {
         let coordinator = throwawayCoordinator()
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: "Bob"),
+            peer: makePeerHandle(name: "Bob"),
             fingerprint: identity.fingerprint,
             peerCapabilities: messagesCap
         )
@@ -322,7 +321,7 @@ struct SessionMessageTests {
         // First slot COMMIT (session formation) clears it.
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: "Alex", signingPublicKey: Data([4, 5, 6]))
-        let peer = makeMultipeerPeer(name: "Alex")
+        let peer = makePeerHandle(name: "Alex")
         manager.addSlotForTesting(coordinator: coordinator, peer: peer, fingerprint: identity.fingerprint, peerCapabilities: messagesCap)
         let slot = try #require(manager.slots.first { $0.id == peer.id })
         manager.noteSlotCommittedForShop(slot: slot, identity: identity)
@@ -364,17 +363,17 @@ struct SessionMessageTests {
         manager.onTempMessageSendForTesting = { sentSlotIDs.append($0) }
 
         // One messages-capable committed peer, one photos-only, one legacy (nil capabilities).
-        let capable = makeMultipeerPeer(name: "Capable")
+        let capable = makePeerHandle(name: "Capable")
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: capable, fingerprint: "fp-capable",
             verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: messagesCap
         )
-        let photosOnly = makeMultipeerPeer(name: "PhotosOnly")
+        let photosOnly = makePeerHandle(name: "PhotosOnly")
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: photosOnly, fingerprint: "fp-photos",
             verifiedKeyAgreementPublicKey: Data([2]), peerCapabilities: [ProximityCapability.photos.rawValue]
         )
-        let legacy = makeMultipeerPeer(name: "Legacy")
+        let legacy = makePeerHandle(name: "Legacy")
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: legacy, fingerprint: "fp-legacy",
             verifiedKeyAgreementPublicKey: Data([3]), peerCapabilities: nil
@@ -394,7 +393,7 @@ struct SessionMessageTests {
         var sends = 0
         manager.onTempMessageSendForTesting = { _ in sends += 1 }
         manager.addSlotForTesting(
-            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: "fp-capable", verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: messagesCap
         )
 

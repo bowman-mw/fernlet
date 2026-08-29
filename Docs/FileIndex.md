@@ -433,8 +433,9 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | --- | --- |
 | `Fernlet/FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift` | High-level coordinator for proximity sessions; orchestrates MultipeerConnectivity transport, signed identity/ranging-token handshake, UWB startup, heartbeat RTT, payload dispatch, and inspector recording. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Engine/ObservationLoop.swift` | `ObservationLoop.start` — the shared `withObservationTracking` re-arm loop behind the proximity managers' coordinator-state observers (`MeshNetworkManager.startObserving`, `ProximityRecipeShareManager.startObserving`, `PresenceManager.startHeartObserving`), which each hand-rolled the same machinery until its leak-fix comment had drifted to only one copy. Holds the owner weakly and finishes the `AsyncStream` explicitly, so a cancelled discovery session leaves no suspended observer task behind. |
-| `Fernlet/FernletKit/Sources/ProximityKit/Transport/MultipeerPeer.swift` | MultipeerConnectivity peer model plus persistent `MCPeerID` storage shared by active mesh transport and future trainer transport work. |
-| `Fernlet/FernletKit/Sources/ProximityKit/Transport/MultipeerTransport.swift` | Neutral MultipeerConnectivity transport protocol, state, invite, inbound-message, error, and reserved trainer-service definitions. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Transport/PeerHandle.swift` | Transport-neutral peer value (`PeerHandle`) and the transport's stable endpoint identity (`PeerEndpointKey`), whose `isSameEndpoint(as:)` is the sanctioned "same device?" test. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Transport/MCPeerIDStore.swift` | Persistent `MCPeerID` storage (`MCPeerIDStoring`, `FileMCPeerIDStore`) — the one deliberately MultipeerConnectivity-shaped seam left on the transport surface; retires with MC in P9. Owns the `FernletPeerID.archive` delete-all row. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Transport/PeerTransport.swift` | Framework-free transport protocol and its value family: `PeerTransport`, `PeerTransportState`, `PeerPendingInvite`, `InboundPeerFrame`, `PeerTransportError`, `PeerDeliveryMode`, plus the reserved trainer-service constant. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Engine/ProximityCommitDetector.swift` | Rolling distance-window detector used by proximity commit and trainer tap gates. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Ranging/RangingProvider.swift` | Ranging provider contract plus shared distance and state models. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift` | Shared `MCSession` host for multi-peer mesh; `PeerChannelTransport` adapts per-peer state and data routing without managing the MC lifecycle directly. |
@@ -781,7 +782,8 @@ the whole directory to keep it that way.
 
 | File | Purpose |
 | --- | --- |
-| `Fernlet/Tests/FernletTests/Mocks/MockMultipeerTransport.swift` | In-memory mock for MultipeerConnectivity transport used in proximity unit tests. |
+| `Fernlet/Tests/FernletTests/Mocks/MockMultipeerTransport.swift` | Single-peer scripted `PeerTransport` for coordinator handshake tests. |
+| `Fernlet/Tests/FernletTests/Mocks/FakePeerTransport.swift` | Deterministic multi-endpoint transport fabric: `VirtualClock`, `FakePeerNetwork` (links, latency, partition/heal), `FakePeerTransport`. No wall-clock sleeps — the foundation of the P4 partition suite. |
 | `Fernlet/Tests/FernletTests/Mocks/MockRangingProvider.swift` | Controllable mock for NearbyInteraction ranging used in coordinator and session tests. |
 
 ### UI Tests

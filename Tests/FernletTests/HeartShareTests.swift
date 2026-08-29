@@ -330,7 +330,7 @@ struct HeartShareTests {
         remote: IdentityService,
         vault: ProximityTrustVault,
         peerName: String
-    ) async throws -> (ProximityCoordinator, FriendSessionTrustPolicy, MultipeerPeer) {
+    ) async throws -> (ProximityCoordinator, FriendSessionTrustPolicy, PeerHandle) {
         let transport = MockMultipeerTransport()
         let trustPolicy = FriendSessionTrustPolicy(vault: vault)
         let coordinator = ProximityCoordinator(
@@ -344,12 +344,11 @@ struct HeartShareTests {
             displayName: "Local",
             timeoutSeconds: 0
         )
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: peerName,
+            displayHint: peerName,
             discoveryInfo: ["fp": remote.localFingerprint],
-            advertisedFingerprint: remote.localFingerprint,
-            underlying: MCPeerID(displayName: peerName)
+            advertisedFingerprint: remote.localFingerprint
         )
         let intro = try FernletIdentityEnvelope.signed(
             identityService: remote,
@@ -521,12 +520,11 @@ struct HeartShareTests {
             displayName: "Local",
             timeoutSeconds: 0
         )
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: "Revoked",
+            displayHint: "Revoked",
             discoveryInfo: ["fp": remote.localFingerprint],
-            advertisedFingerprint: remote.localFingerprint,
-            underlying: MCPeerID(displayName: "Revoked")
+            advertisedFingerprint: remote.localFingerprint
         )
         let intro = try FernletIdentityEnvelope.signed(
             identityService: remote,

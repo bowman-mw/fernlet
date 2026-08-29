@@ -88,13 +88,12 @@ struct MeshClothingShopTests {
         )
     }
 
-    private func makeMultipeerPeer(name: String) -> MultipeerPeer {
-        MultipeerPeer(
+    private func makePeerHandle(name: String) -> PeerHandle {
+        PeerHandle(
             id: UUID(),
-            displayName: name,
+            displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            underlying: MCPeerID(displayName: name)
+            advertisedFingerprint: nil
         )
     }
 
@@ -128,7 +127,7 @@ struct MeshClothingShopTests {
         let identity = makePeerIdentity(name: senderName, signingPublicKey: senderSigningKey)
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: senderName),
+            peer: makePeerHandle(name: senderName),
             fingerprint: identity.fingerprint
         )
         let (envelope, plaintext) = try catalogEnvelope(displayName: senderName, items: items, designerID: designerID)
@@ -145,10 +144,10 @@ struct MeshClothingShopTests {
         name: String,
         signingKey: Data,
         capabilities: [String]? = [ProximityCapability.photos.rawValue, ProximityCapability.shop.rawValue]
-    ) -> (coordinator: ProximityCoordinator, peer: MultipeerPeer, identity: ProximityCoordinator.PeerIdentity) {
+    ) -> (coordinator: ProximityCoordinator, peer: PeerHandle, identity: ProximityCoordinator.PeerIdentity) {
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: name, signingPublicKey: signingKey, capabilities: capabilities)
-        let peer = makeMultipeerPeer(name: name)
+        let peer = makePeerHandle(name: name)
         manager.addSlotForTesting(coordinator: coordinator, peer: peer, fingerprint: identity.fingerprint)
         if let slot = manager.slots.first(where: { $0.id == peer.id }) {
             manager.noteSlotCommittedForShop(slot: slot, identity: identity)
@@ -256,7 +255,7 @@ struct MeshClothingShopTests {
         let coordinator = throwawayCoordinator()
         manager.addSlotForTesting(
             coordinator: coordinator,
-            peer: makeMultipeerPeer(name: "Blocked"),
+            peer: makePeerHandle(name: "Blocked"),
             fingerprint: identity.fingerprint
         )
         let (envelope, plaintext) = try catalogEnvelope(displayName: "Blocked", items: [sellerItem(designer: UUID())])
@@ -471,7 +470,7 @@ struct MeshClothingShopTests {
 
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: "Pending", signingPublicKey: Data([9, 9, 1]))
-        manager.addSlotForTesting(coordinator: coordinator, peer: makeMultipeerPeer(name: "Pending"), fingerprint: nil)
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeerHandle(name: "Pending"), fingerprint: nil)
         manager.proximityCoordinator(coordinator, didReceive: requestEnvelope(displayName: "Pending"),
                                      plaintext: Data(), from: identity)
 
@@ -622,12 +621,11 @@ struct MeshClothingShopTests {
 
         let manager = store.meshNetworkManager
         let transport = MockMultipeerTransport()
-        let peer = MultipeerPeer(
+        let peer = PeerHandle(
             id: UUID(),
-            displayName: "Revoked",
+            displayHint: "Revoked",
             discoveryInfo: ["fp": remote.localFingerprint],
-            advertisedFingerprint: remote.localFingerprint,
-            underlying: MCPeerID(displayName: "Revoked")
+            advertisedFingerprint: remote.localFingerprint
         )
         // The manager builds AND retains the slot — its FriendSessionTrustPolicy lives in
         // slotTrustPolicies, and the coordinator holds it only `weak`, so this exercises the retention.
