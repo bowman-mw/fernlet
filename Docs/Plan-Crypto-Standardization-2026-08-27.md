@@ -1,12 +1,52 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status:** Phases 0, 1 and 2.1–2.6 are BUILT — every Class-A migrator has landed; see §4 and the
-Progress checklist. Phases 3–5 are still plan only.
-**Goal (owner, 2026-08-27):** review the domain-separation work and update everything so there is no
-"legacy" code — one standardized format per cryptographic surface.
+**Status (2026-08-28):** Phases 0, 1 and 2.1–2.6 are BUILT — every Class-A migrator has landed.
+Phase 3's gate INSTRUMENT is built and its three false-pass arms are closed; Phase 5's
+Phase-3/4-independent parts have landed. **The deletions themselves — Phase 3 (six Class-A readers)
+and Phase 4 (four Class-B readers) — are now UNBLOCKED and are the remaining work**, together with
+D4's write-side closure. See §0 for the premise that unblocked them, and the Progress checklist for
+where each stands.
+**Goal (owner, 2026-08-27, restated 2026-08-28):** review the domain-separation work and update
+everything so there is no "legacy" code — one standardized format per cryptographic surface.
+**Remove all legacy items, or update them to the new standard.** The measurable end state is zero
+`legacy-read` escape hatches across the five shipping roots.
 **Baseline:** main `def4726`. Prerequisite work already landed: `91c3956` (domain separation),
 `216f1ba` (the framing-regression repair), `2fa6f24` (the property suite), `e749adb`
 ([Crypto-Domain-Separation.md](Crypto-Domain-Separation.md)).
+
+---
+
+## 0. READ THIS FIRST — the premise the rest of the document was written without
+
+**Owner, 2026-08-28: THERE ARE NO OTHER USERS. No testers, no second device, no App Store release.
+The owner's iPhone is the only install, and it holds test data only.**
+
+This is not a detail; it invalidates a whole class of reasoning that earlier sections of this plan
+are built on. Anything written here in fleet shape — tester rosters, readings taken "across
+devices", build-distribution inventories, "ship it and soak for a release", a peer on an old build —
+describes a population that does not exist. **Sessions and agents working from this document must
+discard those conclusions rather than reasoning about how to satisfy them.**
+
+Two corollaries that repeatedly matter:
+
+1. **A near-empty corpus makes the EVIDENCE weak and the RISK small for the same reason.** The gate
+   wordings in §4 exist to prove migration completed over real data. Where there is no real data,
+   they cannot be satisfied — and there is also nothing to lose. Do not treat a vacuous reading as
+   dangerous without first asking whether any data exists for the danger to apply to.
+2. **The deletions in Phases 3 and 4 proceed on the owner's RISK judgement, not on gate evidence.**
+   Recorded plainly at §4 Phase 3. A future session must not read the completed checkboxes as "the
+   gates were met" — they were not; they were superseded, knowingly, by a premise that made them
+   unnecessary.
+
+**The goal, restated by the owner 2026-08-28:** *remove all legacy items, or update them to the new
+standard.* The end state is **zero** `// cryptographic-domain: legacy-read` markers in the five
+shipping roots — all ten of them, Class A and Class B alike — which is exactly the assertion
+Phase 5 closes with. `Tests/FernletTests/CryptographicEscapeHatchCensusTests.swift` pins the count
+on the way down, so each deletion decrements a number in the same commit rather than being noticed
+later or not at all.
+
+**If a second install ever exists, several of these decisions must be re-opened** — D5's accepted
+backup hazard and D1's hard cutover both. They are dormant, not absent.
 
 ---
 
@@ -675,7 +715,27 @@ Four structural facts a Phase 3 session must know before it starts:
    read back out of the log. A latch "confirmed" that way is a KEYLESS confirmation and leaves the
    ~1-in-256 collided-marker sliver unresolved.
 
-### Phase 4 — Class B: the peer-version decision (§5), then delete those four.
+### Phase 4 — Class B: delete the four wire readers
+
+**UNBLOCKED 2026-08-28** — D1 resolved as a hard cutover on the no-peers predicate (§0, §5). The
+four sites are `MeshNetworkManager.swift:3582` (`meshGroupPhotoV2`), `:3616` (mesh group payload),
+`IdentityService.swift:271` (`proximityTransportV2` AAD) and `:466` (`meshGroupKeyWrapV2`).
+
+Nothing is stored to convert, so there is no migrator and no gate to read: the legacy branch fires
+only when a peer running an older build sends old-format bytes, and there is no such peer. Deletion
+is therefore the whole of the work.
+
+**What the deletion must still get right**, since "no peer sends these bytes" is not the same as
+"these bytes cannot arrive":
+- A peer that DOES send old-format bytes after this lands must fail **honestly** — a named refusal
+  the connection surface can explain, never a bare decrypt throw surfacing as a generic failure or,
+  worse, a silent no-op. The house rule is nothing-silent, and it does not lapse because the
+  population is currently zero.
+- Each deletion removes a `// cryptographic-domain: legacy-read` marker, so
+  `CryptographicEscapeHatchCensusTests`'s `pinnedByLabel` decrements in the SAME commit.
+- These are wire formats: check whether any test fixture or round-trip suite feeds the legacy
+  branch deliberately. Such a test is asserting a contract that is being retired, so it is updated
+  or deleted WITH the branch, never left to fail.
 
 ### Phase 5 — Wall the end state
 
@@ -693,16 +753,21 @@ Four structural facts a Phase 3 session must know before it starts:
 
 ## 5. Open decisions — owner only
 
-**D1 — Minimum peer build (blocks Phase 4).** The four Class-B readers can be deleted only when no
-peer in the field still speaks the old wire format. Options:
-  - **(a) Hard cutover.** Confirm every tester has updated past the domain-separation build, then
-    delete. Cheapest, and viable *because the tester group is small and known* — but a peer on an old
-    build then fails to connect with no explanation.
+**D1 — Minimum peer build (blocked Phase 4). RESOLVED 2026-08-28: (a) HARD CUTOVER.** Owner:
+*"No users, use the new paths."* The predicate D1 turned on — whether any peer in the field still
+speaks the old wire format — is settled by §0: there is no other install, therefore no peer, so
+option (a) is satisfied trivially rather than by an audit of who has updated. **Phase 4 is
+unblocked and its four Class-B readers are in scope for deletion.**
+
+The original options are kept below because the reasoning becomes live again the moment a second
+install exists:
+  - **(a) Hard cutover.** Delete, having confirmed no peer runs an older build. Cheapest — but a
+    peer on an old build then fails to connect with no explanation.
   - **(b) Negotiated refusal.** Add a wire-version field to the handshake and refuse older peers with
     a clear message ("update Fernlet to share with this person"). More work; degrades honestly, and
     is the only option that stays correct once the group is not hand-countable.
-  - Recommendation: **(b)** if App Store release is in view, **(a)** only while the tester list is
-    still enumerable by hand.
+  - **If Fernlet ever ships to a second device, revisit this as (b)** — a hard cutover chosen when
+    the population was zero is not a hard cutover justified when it is two.
 
 **D2 — Does the ColumnCrypto V2 rung go too?** V2 is post-domain-separation and is not `legacy-read`
 — it is a `v2 device-bound read`. Standardizing to V3 alone is more thorough and costs one more
@@ -821,18 +886,29 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       readout's own printed verdict is the gate. The four constraints above are what actually
       blocks, and none of them depends on which reading is right.
 
-      **Two OWNER decisions now gate the rest** (neither may be picked silently):
-      - **D4 — the write-side closure.** Closing `sealPlaintext`'s fail-open turns a silent legacy
-        write into a refused save. That is the house's nothing-silent principle applied to the write
-        path, but it means a sealed save can now FAIL during the pre-first-unlock window instead of
-        succeeding in the wrong format. Recommend closing it, in its own commit, BEFORE any reader
-        is deleted — it is what converts every census zero from a moment into a latch. But the
-        user-visible failure mode is the owner's call.
-      - **D5 — the iOS-backup channel.** Three options: keep one minimal legacy read path
-        permanently, exclude those roots from the device backup, or accept and document the
-        restore-an-old-backup hazard. Owner's call; surface, do not choose.
-- [ ] Phase 4 — Class B wire readers — BLOCKED: owner decision D1 (§5). No Class-B site is touched
-      until it lands.
+      **Both gating decisions RESOLVED by the owner, 2026-08-28:**
+      - **D4 — the write-side closure: FAIL CLOSE.** Owner: *"D4 fail close. No actual users so no
+        data to be failed."* `sealPlaintext`'s fail-open branch refuses instead of writing an
+        un-domained blob. Lands FIRST and alone, before any reader is deleted — it is what converts
+        every census zero from a moment into a latch.
+      - **D5 — the iOS-backup channel: ACCEPT, use the new read paths.** Owner: *"I don't see the
+        hazard. No actual users. Use the new read paths."* No legacy read path is kept for the
+        restore case and the backup roots are not excluded. The restore-an-old-backup hazard is
+        accepted knowingly and is recorded here rather than mitigated. **Re-open this the moment a
+        second install exists** — the hazard is dormant, not absent, and it needs no fleet to bite.
+
+      **The basis for proceeding is "nothing to lose", NOT "migration proven complete".** Recorded
+      plainly because the two are easy to conflate later. Under the CORRECTED instrument the owner's
+      2026-08-28 sitting reads three of its gates VACUOUS, not discharged — heart-drop (all three
+      main rows absent), media (all 51 files friend-wall, own-photo corpora empty) and sealed
+      columns (one `JournalNarrative` row; three entities never written). Those three discharges
+      were artifacts of the false passes fixed in `739eb78`. The deletions proceed on the owner's
+      risk judgement — one install, no other users, and that install's own bytes already reading
+      `alreadyCurrent 51` and `openedV3` — not on gate evidence.
+- [ ] Phase 4 — Class B wire readers — **UNBLOCKED 2026-08-28**: D1 resolved as a hard cutover
+      (owner: *"No users, use the new paths."*). All four sites are in scope; each removes a
+      `legacy-read` marker and decrements the escape-hatch pin in its own commit. A peer sending
+      old-format bytes afterwards must fail with a NAMED refusal, not a bare decrypt throw.
 - [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**
       (`2df8d29`; boundary gate: full unit suite 3378 tests / 297 suites green from a private
       DerivedData — +4 tests / +1 suite, exactly the new census — power-of-10, doc-coverage and
