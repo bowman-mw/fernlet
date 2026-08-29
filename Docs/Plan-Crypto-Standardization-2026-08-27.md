@@ -861,11 +861,22 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       gates" — it is four constraints that survive any reading, each verified against the source in
       this session rather than taken on report:
 
-      - **(a) The legacy WRITER is still live.** `ColumnCrypto.sealPlaintext` (:186-187) still falls
-        open and writes an unprefixed legacy blob whenever `DeviceBindingID.current()` is nil, and
-        the binding row is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — so the pre-first-unlock
-        window alone can mint a fresh legacy blob tomorrow. A census zero here is, in this document's
-        own words at :110-113, *a moment, not a latch*.
+      - **(a) The legacy WRITER is still live. — CLOSED 2026-08-28 (D4).** It was: `sealPlaintext`
+        fell open and wrote an unprefixed legacy blob whenever `DeviceBindingID.current()` was nil,
+        and the binding row is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, so the
+        pre-first-unlock window alone could mint a fresh one. **No writer can now mint an unprefixed
+        blob** — the branch refuses with `SealedColumnStrictSealError.bindingUnavailable`, and
+        `sealPlaintext`/`sealV3` were collapsed into `sealPlaintextV3Strict` as the single seal
+        entry, so the two cannot drift apart again. Census zeros are latches from here.
+
+        Two consequences worth carrying: SEVEN tests used to MINT their legacy fixtures by sealing
+        under `.unavailable`, which production can no longer do — they now build the bytes by hand
+        (`sealLegacy`, beside the existing `sealV2`), so the legacy READ path stays fully exercised
+        after its writer is gone. And `WorryNarrativeRepository.resealPage:269` does
+        `try? crypto.sealString(…)` during the device-key→user-key re-key: a binding outage now
+        fails the whole page instead of writing legacy blobs. It counts into `failures`, which the
+        caller audit-logs, so it is not silent — but it is a real behaviour change on a migration
+        path and is recorded here rather than discovered later.
       - **(b) The migrators convert THROUGH the readers.** `MediaAtRestFormatMigration.swift:7`
         states it outright: the conversion path IS `gcmOpen`'s legacy branch, and `ColumnCrypto`'s
         legacy rung plays the same role for the sealed columns. Deleting a reader retires its

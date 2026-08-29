@@ -301,10 +301,10 @@ reviewer would have to remember the policy.
   scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
   sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
 - **Escape-hatch abuse — now counted.** `// cryptographic-domain: …` silences the wall by design,
-  for the paths that genuinely have no domain to name. **There are 18 of them, across 10 files** —
+  for the paths that genuinely have no domain to name. **There are 17 of them, across 10 files** —
   more than the handful the mechanism reads like. This document used to add that "nothing tracks the
-  number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and a
-  nineteenth fails CI. It pins four things, not one: the total, the count **per label**, the number
+  number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and
+  the next one added fails CI. It pins four things, not one: the total, the count **per label**, the number
   of files, and the set of labels that exist at all — so a hatch added while another is removed, a
   hatch relabelled into a more benign category, and a brand-new category of exemption each fail
   separately. The table below and the pins are one fact in two places, and move in the same commit.
@@ -312,6 +312,11 @@ reviewer would have to remember the policy.
   (The file count was **11** here until 2026-08-28. It was wrong when it was written, not stale:
   the tree held 18 hatches across 10 files at the commit that wrote the sentence. An uncounted
   number drifts in both directions.)
+
+  (The total was **18** until Phase 3 closed `ColumnCrypto.sealPlaintext`'s legacy WRITE — owner
+  decision D4, fail close. That deleted the single `purpose-derived legacy-write` hatch, and with
+  it the last line in the tree that could *mint* an un-domained blob. The file count is unmoved:
+  `ColumnCrypto.swift` still holds two other hatches, so it stays in the set at a lower count.)
 
   By the label each one gives itself:
 
@@ -322,7 +327,11 @@ reviewer would have to remember the policy.
   | `key-derived` | 2 | The domain is bound in the key rather than at this call |
   | `authenticatedData-bound aad` | 2 | The domain is inside the `aad` local, built above the window |
   | `v2 device-bound read` | 1 | The v2 compatibility open, whose AAD is the binding alone |
-  | `purpose-derived legacy-write` | 1 | `ColumnCrypto`'s fail-open unbound write |
+
+  Every remaining hatch is on a READ path or an annotation. `purpose-derived legacy-write` — the
+  one write-side entry, `ColumnCrypto`'s fail-open unbound write — went to **0** in Phase 3 and
+  its row was removed from this table and from `pinnedByLabel`; nothing in the tree can mint an
+  un-domained blob any more, which is what turns a format-census zero from a moment into a latch.
 
   The ten `legacy-read` entries are the ones to watch: each marks a path that will keep accepting
   un-domained bytes for as long as any row written under it survives. **The inventory this document
@@ -332,7 +341,7 @@ reviewer would have to remember the policy.
   all six at-rest surfaces from one device in one sitting. Six of the ten entries are the Class-A
   at-rest sites, each deletable once its own gate reads zero on a real upgraded device; the other
   four are Class-B wire reads, which no migration can retire because the bytes arrive from a peer —
-  they are governed by which builds are in the field (owner decision D1). The other eight hatches
+  they are governed by which builds are in the field (owner decision D1). The other seven hatches
   are cases where the domain IS bound, just not within three lines of the call — they are
   annotations for the grep's benefit, not exemptions, and re-reading them is the only way to tell
   the two kinds apart.

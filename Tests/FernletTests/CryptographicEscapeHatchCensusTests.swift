@@ -49,13 +49,16 @@ struct CryptographicEscapeHatchCensusTests {
         "purpose-derived salt": 2,
         "key-derived": 2,
         "authenticatedData-bound aad": 2,
-        "v2 device-bound read": 1,
-        "purpose-derived legacy-write": 1
+        "v2 device-bound read": 1
     ]
 
     /// The number of distinct files holding a hatch. §Escape-hatch abuse said 11; the tree has only
     /// ever held 10 (verified against the commit that wrote the sentence), so the doc is what
     /// changed, not the code.
+    ///
+    /// Unmoved by Phase 3's write-side closure: the `purpose-derived legacy-write` hatch it deleted
+    /// lived in `ColumnCrypto.swift`, which still holds two others (`legacy-read` and
+    /// `v2 device-bound read`), so the file stays in the set at a lower count.
     private static let pinnedFileCount = 10
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,

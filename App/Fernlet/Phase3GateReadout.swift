@@ -994,9 +994,13 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// Without this, any keyed witness the process happens to hold discharges the row: a pass run at
     /// the first hub unlock of the day, hours before the sitting, satisfies the ordering rule the
     /// moment the census is re-taken — while proving nothing about the rows written since. Those
-    /// rows matter: `ColumnCrypto.sealPlaintext` still fails open to an unprefixed legacy write when
-    /// the device binding cannot be read, and ~1 in 256 of those collides with a marker byte and is
-    /// invisible to `unprefixed == 0`. Resolving that sliver is the keyed pass's whole job.
+    /// rows matter: ~1 in 256 legacy blobs collides with a marker byte and is invisible to
+    /// `unprefixed == 0`, so a stale pass can leave that sliver unresolved over rows the census
+    /// has since counted. Resolving it is the keyed pass's whole job. (Through Phase 2.6 the
+    /// hazard was sharper still — `ColumnCrypto.sealPlaintext` fell open to an unprefixed legacy
+    /// write whenever the device binding could not be read, so the rows written since a stale pass
+    /// could include brand-new legacy ones. That writer is closed; the freshness rule stands,
+    /// because a stale pass still says nothing about the collided sliver among rows it never saw.)
     private static func sealedColumnFreshnessRefusal(
         _ witness: SealedColumnPassWitness,
         resetTakenAt: Date?

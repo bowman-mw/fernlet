@@ -28,8 +28,10 @@ import Foundation
 /// first ciphertext byte happens to equal the version tag). Legacy rows are
 /// progressively rebound because every routine re-seal — edits, the
 /// device-key→user-key migration at lock setup, period restore-on-unhide — writes
-/// v2. When no binding ID is available, sealing falls back to the legacy format
-/// (fail-open: binding is defense-in-depth, never a gate).
+/// v2. When no binding ID is available, sealing **refuses**: it throws
+/// ``SealedColumnStrictSealError/bindingUnavailable`` rather than writing an
+/// un-domained legacy blob (the write-side fail-close of the crypto
+/// standardization round's Phase 3 — see ``sealPlaintextV3Strict(_:contentKey:)``).
 ///
 /// Explicitly `nonisolated` (overriding this module's MainActor default isolation):
 /// it is a pure, stateless crypto value type called synchronously from the
@@ -40,7 +42,9 @@ import Foundation
 /// repositories that hold an instance are themselves `Sendable`; the only stored state is
 /// the immutable typed purpose, so the conformance is compiler-checked, not `@unchecked`.
 ///
-/// Failure modes: sealing rethrows CryptoKit errors; opening throws when the blob is
+/// Failure modes: sealing rethrows CryptoKit errors, and throws
+/// ``SealedColumnStrictSealError/bindingUnavailable`` when no durable install binding
+/// exists (a save FAILS rather than degrading to the legacy format); opening throws when the blob is
 /// truncated, tampered with, or sealed under a different content key or label
 /// (Poly1305 authentication failure). One retryable exception: when a v2-tagged blob
 /// cannot be opened because the install-binding keychain read *errored* (as opposed
@@ -66,12 +70,18 @@ public nonisolated struct ColumnCrypto: Sendable {
         case legacy(markerCollision: ColumnCryptoStoredFormat?)
     }
 
-    /// Refusal thrown by ``sealPlaintextV3Strict(_:contentKey:)`` where the shipping writer would
-    /// fall open to the legacy format instead.
+    /// Refusal thrown by ``sealPlaintextV3Strict(_:contentKey:)`` — the ONE seal entry — when it
+    /// cannot mint the device-bound v3 format.
+    ///
+    /// Until Phase 3 of the crypto standardization round this refusal was the strict *sibling's*
+    /// alone, and the shipping writer fell open to an un-domained legacy blob in the same
+    /// condition. Owner decision D4 closed that branch and the two entries collapsed into one, so
+    /// this error now reaches every sealed-column writer.
     public nonisolated enum SealedColumnStrictSealError: Error, Equatable {
         /// `DeviceBindingID.current()` produced no durable install binding, so a V3 blob (whose
-        /// AAD includes the binding) cannot be minted. The strict path refuses; it never writes a
-        /// legacy blob — that fail-open belongs exclusively to the shipping `sealPlaintext`.
+        /// AAD includes the binding) cannot be minted. The seal refuses; it never writes a legacy
+        /// blob. Callers see a failed save — deliberately, because the alternative is a save that
+        /// silently succeeds in a format the round exists to retire.
         case bindingUnavailable
     }
 
@@ -119,11 +129,12 @@ public nonisolated struct ColumnCrypto: Sendable {
     ///   - value: The plaintext to encrypt (UTF-8 encoded before sealing).
     ///   - contentKey: The unlocked content key the column subkey is derived from.
     /// - Returns: One opaque blob suitable for a single binary Core Data attribute:
-    ///   the device-bound v2 form (version byte ‖ nonce ‖ ciphertext ‖ tag, sealed
-    ///   with the install's binding ID as AAD) when a binding ID exists, else the
-    ///   legacy combined form (nonce ‖ ciphertext ‖ tag).
+    ///   the device-bound v3 form (version byte ‖ nonce ‖ ciphertext ‖ tag, sealed
+    ///   with the column purpose ‖ the install's binding ID as AAD).
+    /// - Throws: ``SealedColumnStrictSealError/bindingUnavailable`` when no durable install
+    ///   binding exists — there is no legacy fallback; otherwise rethrows CryptoKit seal errors.
     public func sealString(_ value: String, contentKey: SymmetricKey) throws -> Data {
-        try sealPlaintext(Data(value.utf8), contentKey: contentKey)
+        try sealPlaintextV3Strict(Data(value.utf8), contentKey: contentKey)
     }
 
     /// Seals an optional string column, skipping values with nothing to protect.
@@ -156,7 +167,7 @@ public nonisolated struct ColumnCrypto: Sendable {
     /// be opened with the matching ``open(_:contentKey:)``.
     public func seal<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
         let plaintext = try JSONEncoder().encode(value)
-        return try sealPlaintext(plaintext, contentKey: contentKey)
+        return try sealPlaintextV3Strict(plaintext, contentKey: contentKey)
     }
 
     /// Opens a sealed `Codable` column: decrypts, then JSON-decodes the plaintext.
@@ -173,28 +184,26 @@ public nonisolated struct ColumnCrypto: Sendable {
 
     // MARK: - Device-bound format core
 
-    /// Seals plaintext in the newest format this install supports: device-bound v3
-    /// (version byte + `combined`, with the column purpose + ``DeviceBindingID`` as AAD)
-    /// when a durable binding ID exists, else the legacy unbound `combined` blob.
+    /// THE one seal entry — every sealed-column write in the app, and the Phase 2.6 format
+    /// migrator's re-seal, land here. Writes device-bound v3 and nothing else: `0x03` ‖
+    /// `combined`, with the column purpose ‖ this install's ``DeviceBindingID`` as AAD.
     ///
-    /// The fail-open branch is deliberate and UNTOUCHED by Phase 2.6 (binding is defense-in-depth,
-    /// never a gate); closing it is Phase 3's. Both this and ``sealPlaintextV3Strict(_:contentKey:)``
-    /// share one private ``sealV3(_:key:binding:)`` body, so the strict path cannot drift from the
-    /// writer's.
-    private func sealPlaintext(_ plaintext: Data, contentKey: SymmetricKey) throws -> Data {
-        let key = columnKey(from: contentKey)
-        guard let binding = DeviceBindingID.current() else {
-            return try ChaChaPoly.seal(plaintext, using: key).combined // cryptographic-domain: purpose-derived legacy-write
-        }
-        return try sealV3(plaintext, key: key, binding: binding)
-    }
-
-    /// The existing V3 seal body, minus the fail-open: throws
-    /// ``SealedColumnStrictSealError/bindingUnavailable`` when `DeviceBindingID.current()` is nil
-    /// instead of writing a legacy blob. The Phase 2.6 sealed-column format migrator's ONLY seal
-    /// entry — a converter that fell open would re-mint the exact legacy format the pass exists to
-    /// retire. `sealPlaintext` keeps its fail-open branch untouched for every production writer;
-    /// both entries call one private ``sealV3(_:key:binding:)``, so they cannot drift.
+    /// ## Why there is no lenient sibling any more
+    ///
+    /// Through Phase 2.6 this had a private twin, `sealPlaintext`, which *fell open*: with no
+    /// durable binding it wrote an unprefixed, un-domained legacy blob rather than refusing, on the
+    /// argument that binding is defense-in-depth and never a gate. `DeviceBindingID.current()`
+    /// returns nil on any keychain read/add failure, and the binding row is
+    /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — so the pre-first-unlock window alone
+    /// could mint a fresh legacy blob on any shipping build, at any time. That branch is why every
+    /// format-census zero was "a moment, not a latch". Phase 3 of
+    /// `Docs/Plan-Crypto-Standardization-2026-08-27.md` closed it (owner decision D4: fail close),
+    /// the two entries became byte-identical, and they were collapsed into this one so no third
+    /// copy can grow. The cost is deliberate and accepted: a sealed save can now FAIL where it used
+    /// to succeed in the wrong format.
+    ///
+    /// The `V3Strict` name is kept rather than renamed to `sealPlaintext`: it is public API the
+    /// migrator calls, and it still says exactly what the method does — v3 or nothing.
     ///
     /// - Parameters:
     ///   - plaintext: The exact bytes to seal (byte-level — no UTF-8 or JSON semantics).
@@ -207,13 +216,6 @@ public nonisolated struct ColumnCrypto: Sendable {
         guard let binding = DeviceBindingID.current() else {
             throw SealedColumnStrictSealError.bindingUnavailable
         }
-        return try sealV3(plaintext, key: key, binding: binding)
-    }
-
-    /// THE one V3 seal body both seal entries share: `0x03` ‖ `ChaChaPoly(combined)`, with the
-    /// column purpose and the caller-supplied install binding as AAD. Private so no third entry
-    /// can grow its own copy.
-    private func sealV3(_ plaintext: Data, key: SymmetricKey, binding: Data) throws -> Data {
         let aad = purpose.data + binding
         let combined = try ChaChaPoly.seal(plaintext, using: key, authenticating: aad).combined
         return Data([Self.deviceBoundFormatVersionV3]) + combined

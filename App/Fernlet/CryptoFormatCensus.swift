@@ -175,9 +175,12 @@ nonisolated struct CryptoFormatCensusReport: Sendable, Equatable {
 /// Every underlying census is read-only by construction (no decrypt, no keychain mint, no file
 /// created), and this layer adds no state of its own: **no `UserDefaults` key, no latch, no
 /// cache**. That is a deliberate refusal, not an omission. A latch would be a new persisted surface
-/// needing a disposition row in `Docs/PrivacyWipeCoverage.md` (the house wipe wall), and it would
-/// be a latch on a reading that `ColumnCrypto.sealPlaintext`'s fail-open can invalidate on the very
-/// next write — a stored "census: clean" is a claim with a shelf life nobody can see.
+/// needing a disposition row in `Docs/PrivacyWipeCoverage.md` (the house wipe wall), and a stored
+/// "census: clean" is a claim with a shelf life nobody can see — a restored iOS backup, or any
+/// legacy reader still in the dispatch, can make it wrong without the latch noticing. (Until
+/// Phase 3 the shelf life was shorter still: `ColumnCrypto.sealPlaintext`'s fail-open could
+/// invalidate the reading on the very next write. That branch is closed; the refusal to latch is
+/// not.)
 ///
 /// ## Concurrency
 ///

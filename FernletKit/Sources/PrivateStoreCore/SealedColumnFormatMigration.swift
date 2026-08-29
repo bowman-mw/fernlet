@@ -12,11 +12,11 @@
 // and row-budget discipline are the census's, so counter and converter cannot disagree), and the
 // open IS the shipping reader's dispatch (`ColumnCrypto.openReportingRung`, which `openBlob`
 // delegates to — one implementation, now with a rung receipt). The re-seal goes through
-// `ColumnCrypto.sealPlaintextV3Strict`, the strict sibling of the shipping writer's own private
-// v3 body — same purpose, same AAD shape, same HKDF; it REFUSES when no install binding exists
-// instead of falling open to legacy, because a converter that fell open would re-mint the exact
-// format this pass exists to retire. Zero new purposes, zero new AAD shapes, zero new
-// derivations, zero new dependency edges.
+// `ColumnCrypto.sealPlaintextV3Strict`, which since Phase 3 is the shipping writer's ONE seal
+// entry (it had a fall-open sibling through Phase 2.6; owner decision D4 closed that and the two
+// collapsed). It REFUSES when no install binding exists, because a converter that fell open would
+// re-mint the exact format this pass exists to retire. Zero new purposes, zero new AAD shapes,
+// zero new derivations, zero new dependency edges.
 //
 // The content key arrives by INJECTION (`keySource`, re-vended per page) because this module
 // cannot import `FernletLock` (FernletLock → PrivateStoreCore is the existing edge); the app

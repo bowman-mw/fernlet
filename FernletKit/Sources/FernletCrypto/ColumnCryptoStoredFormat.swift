@@ -41,12 +41,14 @@ import Foundation
 ///
 /// ## Two more honesty notes for whoever reads a census number
 ///
-/// - **The number can go up.** `ColumnCrypto.sealPlaintext` still *fails open*: when
-///   `DeviceBindingID.current()` returns `nil` (no durable install binding — a fresh keychain,
-///   a keychain the device cannot read yet) it writes an unprefixed legacy blob rather than
-///   refusing. Fresh legacy rows are therefore still producible on shipping builds, so a census
-///   is a reading at a moment in time, not a monotonically shrinking counter. Phase 3 of the
-///   plan closes that fail-open; until it does, a zero reading can be undone by the next write.
+/// - **The number can no longer go up.** `ColumnCrypto.sealPlaintextV3Strict` — the one seal
+///   entry — *fails closed*: when `DeviceBindingID.current()` returns `nil` (no durable install
+///   binding — a fresh keychain, a keychain the device cannot read yet) it throws
+///   `SealedColumnStrictSealError.bindingUnavailable` rather than writing an unprefixed legacy
+///   blob. Through Phase 2.6 it fell open, so a census reading was a moment in time that the next
+///   write could undo; Phase 3 closed that branch (owner decision D4), and the legacy population
+///   is now monotonically non-increasing on any given install. A restored iOS backup can still
+///   re-introduce older rows, which is a separate channel (plan decision D5), not a new write.
 /// - **Length is deliberately not validated.** Classification looks at the first byte and
 ///   nothing else, exactly as the reader's dispatch does. A truncated or corrupt blob lands in
 ///   whichever bucket the reader would try first, which is the answer a census is being asked

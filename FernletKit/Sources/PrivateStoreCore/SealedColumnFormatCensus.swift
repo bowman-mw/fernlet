@@ -242,9 +242,11 @@ public struct SealedColumnFormatCensusResult: Sendable, Equatable {
 /// reading of `definitelyLegacy == 0` is therefore **necessary but not sufficient** proof that the
 /// legacy population is empty; only a keyed migration pass can resolve the ~0.78% collided sliver.
 /// Two further caveats belong next to any reported number:
-/// - **It can go up.** `ColumnCrypto.sealPlaintext` still fails open, writing an unbound legacy
-///   blob whenever no `DeviceBindingID` is available, so shipping builds can still create legacy
-///   rows. Phase 3 closes that; until then a zero reading is a moment, not a latch.
+/// - **It can no longer go up.** `ColumnCrypto`'s one seal entry (`sealPlaintextV3Strict`) now
+///   fails CLOSED, throwing when no `DeviceBindingID` is available rather than writing an unbound
+///   legacy blob — Phase 3, owner decision D4. Through Phase 2.6 a zero reading was a moment, not
+///   a latch; a shipping build can no longer mint a legacy row. A restored iOS backup remains a
+///   separate re-introduction channel (plan decision D5).
 /// - **A truncated census counted a subset.** See ``SealedColumnFormatCensusResult/truncated``.
 /// - **A row the scan could not actually READ is not an empty row.** Faulting a row in can fail
 ///   silently (see ``classify(value:readFrom:)``), so every value's readability is judged after the

@@ -339,14 +339,16 @@ struct CryptographicDomainSeparationTests {
     /// So this seals through production, then derives the sealing purpose's OWN column key by hand
     /// and attempts the open with that correct key and a FOREIGN purpose in the AAD. The key is
     /// right, the binding is right, the nonce and tag are right; the only wrong byte is the domain.
-    /// It must still fail — and it only can if `sealPlaintext` really wrote `purpose.data + binding`
+    /// It must still fail — and it only can if the seal really wrote `purpose.data + binding`
     /// rather than `binding` alone (which is exactly what the v2 format did, and what a revert to
     /// v2 would silently reinstate).
     ///
-    /// The binding is pinned through `DeviceBindingID`'s `@TaskLocal` seam. Without it the outcome
-    /// depends on whether the simulator keychain happens to hold an install row: with no binding,
-    /// `sealPlaintext` falls back to the LEGACY no-AAD format and this test would pass vacuously,
-    /// having proved nothing about AAD at all.
+    /// The binding is pinned through `DeviceBindingID`'s `@TaskLocal` seam so the test does not
+    /// depend on whether the simulator keychain happens to hold an install row. Before Phase 3
+    /// that pin also guarded against a *vacuous pass*: with no binding the writer fell back to the
+    /// LEGACY no-AAD format and this test proved nothing about AAD at all. The writer now refuses
+    /// instead, so the un-pinned failure would be loud rather than silent — the pin stays because
+    /// a test that only passes when the keychain cooperates is not a pin.
     @Test func theProductionSealBindsThePurposeIntoTheAuthenticatedData() throws {
         let binding = Data(repeating: 0xC3, count: 16)
         let sealer = FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1
