@@ -1073,6 +1073,33 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       rather than being anything Phase 4 introduced — but Phase 4 is what made "a peer on an old
       build" a thing that fails rather than a thing that works, and nothing-silent says the one
       remaining invisible path should be named. Small, self-contained, not blocking.
+- [x] Round REVIEW + boundary gate — **2026-08-29, `ad224a7`.** The six deletion commits had never
+      been gated end to end: the last recorded gate (`2df8d29`) predates all of them. Gate run from
+      a private DerivedData at `282fbd4`: full unit suite **3277 tests / 293 suites green**,
+      power-of-10 0 violations, doc-coverage 0 undocumented types, `Scripts/spm-wall-check.sh`
+      PASSED with zero warnings. The −101 tests / −4 suites against the previous gate is exactly the
+      five deleted migrator test files, which went with the migrators that converted through the
+      deleted readers.
+
+      A six-dimension fable-agent review with adversarial refuters over `739eb78..282fbd4` raised
+      **17 findings: 5 REFUTED on evidence, 12 CONFIRMED, zero FATAL, zero power-of-10.** All 12
+      are fixed in `ad224a7`; re-gated at **3288 tests / 296 suites green**, wall PASSED.
+
+      **The one HIGH was caused by D4, and it is the lesson this round should be remembered for.**
+      Closing a fail-open converts a silent wrong-format write into a THROW — so every writer that
+      had no rollback for that throw became a data-loss path overnight.
+      `MenstrualNarrativeRepository.insert`/`.update` and `IntimacyLogRepository.insert` left a
+      note-less row pending in the SHARED view context, and nothing downstream can tell it from a
+      sealed row (nil ciphertexts open as nil), so the drain skipped the buffered payload as
+      already-sealed and purged the only copy of the user's note. Their four siblings in the same
+      two files already rolled back; these three were missed. **When a fail-open is closed, audit
+      every writer on that path for rollback** — the refusal is only half the change.
+
+      Two refutations worth keeping, because both look like defects and are not: the relocated
+      `.wrappedContentKeyRewrapStaging` sweep is not deleting recoverable key material (the row's
+      own contract says no reader may ever consult it, so sweeping it is what hard binding is for),
+      and the heart-drop stores' split policy is deliberate (the outbox quarantines because it holds
+      user content; the dedup and peer-bundle caches discard because their contents re-derive).
 - [ ] Final pass — docs-vs-code reconciliation sweep + purpose-statement sweep, then stop the loop
       with the gate report (real-device census readings owed, D1, anything parked).
 
