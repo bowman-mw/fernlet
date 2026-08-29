@@ -144,17 +144,12 @@ struct CryptographicEscapeHatchCensusTests {
     /// §5 D5 knowingly accepted — that is a design decision with an owner, not a test to quietly
     /// amend.
     @Test func noLegacyReadPathRemainsAnywhere() throws {
-        #expect(
-            Self.pinnedByLabel["legacy-read"] == nil,
-            "`legacy-read` is back in pinnedByLabel. The pin is not the place to re-authorize a"
-                + " legacy read path — see the plan's §5 D5."
-        )
+        let pinMessage = "`legacy-read` is back in pinnedByLabel. The pin is not the place to"
+            + " re-authorize a legacy read path — see the plan's §5 D5."
+        #expect(Self.pinnedByLabel["legacy-read"] == nil, "\(pinMessage)")
         let legacy = try Self.scan().filter { !$0.isProse && $0.label == "legacy-read" }
-        let sites = legacy.map { "  \($0.printed)" }.joined(separator: "
-")
-        let message = "\(legacy.count) legacy read path(s) have come back:
-\(sites)
-"
+        let sites = legacy.map { "  \($0.printed)" }.joined(separator: "\n")
+        let message = "\(legacy.count) legacy read path(s) have come back:\n\(sites)\n"
             + "Every stored format is standardized and every legacy reader was deleted in Phases 3"
             + " and 4. A path that opens pre-standardization bytes is a deliberate reversal of that,"
             + " not a fix — take it to the plan's §5 before making this test pass."
