@@ -916,10 +916,36 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       were artifacts of the false passes fixed in `739eb78`. The deletions proceed on the owner's
       risk judgement — one install, no other users, and that install's own bytes already reading
       `alreadyCurrent 51` and `openedV3` — not on gate evidence.
-- [ ] Phase 4 — Class B wire readers — **UNBLOCKED 2026-08-28**: D1 resolved as a hard cutover
-      (owner: *"No users, use the new paths."*). All four sites are in scope; each removes a
-      `legacy-read` marker and decrements the escape-hatch pin in its own commit. A peer sending
-      old-format bytes afterwards must fail with a NAMED refusal, not a bare decrypt throw.
+- [x] Phase 4 — Class B wire readers — **DONE 2026-08-29**. D1 resolved as a hard cutover (owner:
+      *"No users, use the new paths."*), and all four readers are deleted in one commit: the
+      unprefixed `meshGroupPhotoV2` photo and mesh group payload opens in `MeshNetworkManager`, the
+      AAD ternary that selected a bare static key for a pre-`FPT2` transport seal, and the 92-byte
+      pre-`FGK2` group-key wrap open. Nothing was migrated because nothing is stored in these
+      formats.
+      - **Named refusals, not bare throws.** `MeshEncryptionError.legacyWireFormat` and
+        `IdentityError.legacyWireFormat` are new cases beside the existing `decryptionFailed` /
+        `openFailed`, and each is surfaced where its neighbours already are: audit lines
+        (`mesh.friendPhoto.droppedLegacyWireFormat`,
+        `mesh.encryptedMetadata.droppedLegacyWireFormat`,
+        `mesh.admissionGrant.droppedLegacyKeyWrap`), a new
+        `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat` that reaches the Connection
+        Inspector and the trainer audit trail through `handleInbound`'s existing catch, and a new
+        `SealedIntroUnwrap.legacyWireFormat` so an older peer's sealed introduction reads as an
+        older build rather than as a forger. The key-rotation paths already logged
+        `String(describing: error)`, so they carry the new name with no edit.
+      - **Both format markers are KEPT.** `FGK2`'s absence at exactly 92 bytes is what classifies an
+        older peer's bundle as old rather than malformed, and `FMGP2`/`FMGM2`/`FPT2` still tell a
+        current payload from a retired one. Deleting the open path is not deleting the classifier —
+        a refusal that cannot classify cannot explain itself.
+      - **Pins moved in the same commit:** `legacy-read` 10 → **6**, total 17 → **13**, files
+        10 → **8** (`MeshNetworkManager.swift` and `IdentityService.swift` held only these four
+        hatches and left the set entirely), plus the matching edits to
+        [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md) §Escape-hatch abuse.
+      - **Retired contracts updated with the branch:** `MeshEncryptionTests`'
+        `photoDecryptFailsWithTamperedCiphertext` flipped byte 0 — the `FMGP2` marker — so it would
+        have started passing for the wrong reason; it now flips a byte inside the sealed body and
+        still reaches the AEAD tag. Three new tests pin the refusal by name (unmarked photo,
+        legacy 92-byte wrap vs a merely malformed 91-byte one, unmarked transport seal).
 - [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**
       (`2df8d29`; boundary gate: full unit suite 3378 tests / 297 suites green from a private
       DerivedData — +4 tests / +1 suite, exactly the new census — power-of-10, doc-coverage and
@@ -975,6 +1001,12 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
     crypto, and it belongs in its own change. `Docs/Power-of-10-Swift.md` said "four shipping roots"
     against a five-entry `SHIPPING_ROOTS` and was corrected here, because that one was the wall
     UNDERSTATING coverage it already had, not a hole.
+- [ ] RESIDUAL from Phase 4 — `DuressRecoveryCoordinator` (app target) swallows the new
+      `legacyWireFormat` refusal in three `try? identity.open(…)` calls, so a legacy peer fails
+      INVISIBLY there and only there. Pre-existing, and it swallows every open failure equally
+      rather than being anything Phase 4 introduced — but Phase 4 is what made "a peer on an old
+      build" a thing that fails rather than a thing that works, and nothing-silent says the one
+      remaining invisible path should be named. Small, self-contained, not blocking.
 - [ ] Final pass — docs-vs-code reconciliation sweep + purpose-statement sweep, then stop the loop
       with the gate report (real-device census readings owed, D1, anything parked).
 
@@ -1039,7 +1071,9 @@ What the fresh session needs:
   Phase 3 section: sidecar is per-row with the quarantine excluded; media is the three-part gate
   (latch + census residues + no blind spots); ColumnCrypto needs the keyed migrator's clean pass as
   the second witness; sealed-photo reads `minimumEntryHashVersion >= 2` across the three corpora.
-- **Phase 4 is BLOCKED on owner decision D1** (§5) — no Class-B site is touched until it lands.
+- **Phase 4 was blocked on owner decision D1** (§5); D1 resolved 2026-08-28 as a hard cutover and
+  Phase 4 landed 2026-08-29. Re-open D1 as option (b) — a negotiated, versioned refusal — the moment
+  a second install exists.
 - **Recorded testability residuals:** 2.1's P10/P17/P19 (`.standard` latch seams, private
   teardownEpoch, private view predicates); 2.3's named residues (non-JPEG plaintext, undrained
   MeshPhotoCache.json, abortedNoWallKey benign-pending); 2.5's untestable-in-process promote

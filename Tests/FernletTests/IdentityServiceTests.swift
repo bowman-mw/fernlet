@@ -256,6 +256,28 @@ struct IdentityServiceTests {
         }
     }
 
+    /// Phase 4 of the crypto standardization round deleted the pre-`FPT2` transport read — the
+    /// branch that opened a seal under the sender's bare static key with no typed AEAD purpose.
+    /// Bytes in that shape must be refused with a DIFFERENT error from a tampered or misaddressed
+    /// payload: it is the only thing that lets the Connection Inspector separate "these bytes never
+    /// reached the AEAD" from "the AEAD rejected them".
+    @Test func openRefusesUnmarkedLegacyTransportByName() throws {
+        let (alice, aliceID) = makeService()
+        defer { cleanup(aliceID) }
+        try alice.ensureProvisioned()
+
+        let (bob, bobID) = makeService()
+        defer { cleanup(bobID) }
+        try bob.ensureProvisioned()
+
+        let sealed = try alice.seal(Data("secret".utf8), to: bob.localKeyAgreementPublicKey)
+        let unmarked = Data(sealed.dropFirst(4))   // strip `FPT2`: the pre-marker layout
+
+        #expect(throws: IdentityError.legacyWireFormat) {
+            try bob.open(unmarked, from: alice.localKeyAgreementPublicKey)
+        }
+    }
+
     // MARK: - Wipe
 
     @Test func wipeRemovesAllKeyMaterial() throws {

@@ -333,6 +333,12 @@ struct SealedIntroductionTests {
 
         // Hand-rolled wrapper: ephemeral-static ECIES with the FRIEND's public KA key occupying the
         // sender slot in the sharedInfo and the AAD. The forger holds only PUBLIC keys.
+        //
+        // The wire spelling is hand-written on purpose and must track `IdentityService.seal`: the
+        // `FPT2` marker and the typed `fernlet.proximity.transport.aead.v2` AAD prefix are both
+        // MANDATORY since the crypto standardization round's Phase 4 deleted the unmarked read.
+        // Without them this forgery no longer opens, and the precondition below — not the sender
+        // binding this test exists for — is what would fail.
         let ephemeral = Curve25519.KeyAgreement.PrivateKey()
         let recipient = try Curve25519.KeyAgreement.PublicKey(
             rawRepresentation: local.localKeyAgreementPublicKey)
@@ -342,10 +348,10 @@ struct SealedIntroductionTests {
             salt: Data("fernlet.proximity.v1".utf8),
             sharedInfo: friend.localKeyAgreementPublicKey + local.localKeyAgreementPublicKey,
             outputByteCount: 32)
-        let box = try ChaChaPoly.seal(innerJSON, using: symKey,
-                                      authenticating: friend.localKeyAgreementPublicKey)
+        let aad = Data("fernlet.proximity.transport.aead.v2".utf8) + friend.localKeyAgreementPublicKey
+        let box = try ChaChaPoly.seal(innerJSON, using: symKey, authenticating: aad)
         let wrapper = SealedIntroductionEnvelope(
-            sealedIntroduction: ephemeral.publicKey.rawRepresentation + box.combined)
+            sealedIntroduction: Data("FPT2".utf8) + ephemeral.publicKey.rawRepresentation + box.combined)
 
         // Precondition: this wrapper really does open — otherwise the test proves nothing.
         #expect((try? local.open(wrapper.sealedIntroduction,

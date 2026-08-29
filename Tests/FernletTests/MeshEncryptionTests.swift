@@ -3,7 +3,7 @@
 //
 // Unit tests for Phase 3 group symmetric encryption (§17.13).
 
-import ProximityKit
+@testable import ProximityKit
 import Foundation
 import Testing
 import CryptoKit
@@ -77,10 +77,49 @@ struct MeshEncryptionTests {
         let original = Data("tamper test".utf8)
 
         var (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(original, key: key)
-        ciphertext[0] ^= 0xFF  // flip a bit
+        // Flip a bit INSIDE the sealed body, past the 5-byte `FMGP2` marker. Flipping byte 0
+        // corrupts the marker instead, which is now refused as a retired wire format before the
+        // AEAD is consulted at all — this test is about the tag, so it has to reach the tag.
+        ciphertext[ciphertext.startIndex + 5] ^= 0xFF
 
+        // The AEAD tag itself rejects this, so the error is CryptoKit's, not ours.
         #expect(throws: (any Error).self) {
             _ = try MeshNetworkManager.decryptPhoto(ciphertext, nonce: nonce, key: key)
+        }
+    }
+
+    // MARK: - Phase 4: the retired (pre-marker) wire formats are refused BY NAME
+
+    /// The pre-`FMGP2` photo was opened with no AAD at all until the crypto standardization round's
+    /// Phase 4 deleted that reader. A peer still sending it must fail explicably — the mesh drops
+    /// photos silently, so an unnameable failure here is indistinguishable from a corrupt image.
+    @Test func photoDecryptRefusesUnmarkedLegacyBytesByName() throws {
+        let key = makeGroupKey()
+        let (ciphertext, nonce) = try MeshNetworkManager.encryptPhoto(Data("legacy".utf8), key: key)
+        let unmarked = Data(ciphertext.dropFirst(5))   // strip `FMGP2`: the pre-marker layout
+
+        #expect(throws: MeshEncryptionError.legacyWireFormat) {
+            _ = try MeshNetworkManager.decryptPhoto(unmarked, nonce: nonce, key: key)
+        }
+    }
+
+    /// The 92-byte group-key wrap is the ONE thing that separates an older peer's bundle from
+    /// garbage, so the length stays recognised even though the open path is gone: a refusal that
+    /// cannot classify cannot explain itself.
+    @Test func groupKeyUnwrapRefusesLegacy92ByteBundleByName() throws {
+        let sender = makeIdentity()
+        let recipient = makeIdentity()
+
+        let bundle = try sender.encryptGroupKey(makeRandomBytes(), for: recipient.localKeyAgreementPublicKey)
+        let legacy = Data(bundle.dropFirst(4))         // strip `FGK2`: the pre-marker 92-byte layout
+        #expect(legacy.count == 92)
+
+        #expect(throws: IdentityError.legacyWireFormat) {
+            _ = try recipient.decryptGroupKey(legacy)
+        }
+        // A length that is neither 96-with-marker nor the legacy 92 is malformed, not old.
+        #expect(throws: IdentityError.openFailed) {
+            _ = try recipient.decryptGroupKey(Data(bundle.dropFirst(5)))
         }
     }
 

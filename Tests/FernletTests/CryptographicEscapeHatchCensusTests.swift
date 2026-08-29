@@ -38,14 +38,20 @@ struct CryptographicEscapeHatch: Sendable {
 ///
 /// ## Updating the pins
 ///
-/// Deliberately. A hatch removed by the crypto standardization round's Phase 3 decrements its label
-/// here in the same commit as the deletion, and §Escape-hatch abuse's table is updated to match.
-/// Both numbers reach zero for `legacy-read` when the last Class-A and Class-B legacy reader goes.
+/// Deliberately. A hatch removed by the crypto standardization round's Phase 3 or Phase 4
+/// decrements its label here in the same commit as the deletion, and §Escape-hatch abuse's table is
+/// updated to match. Both numbers reach zero for `legacy-read` when the last Class-A and Class-B
+/// legacy reader goes.
+///
+/// Phase 4 took `legacy-read` 10 → 6 by deleting the four Class-B WIRE readers (`meshGroupPhotoV2`
+/// and the mesh group payload in `MeshNetworkManager`, the `proximityTransportV2` AAD selector and
+/// `meshGroupKeyWrapV2` in `IdentityService`). The six that remain are the Class-A at-rest readers,
+/// which are Phase 3's business.
 struct CryptographicEscapeHatchCensusTests {
 
     /// The label → count pin. The sum is the number §Escape-hatch abuse quotes.
     private static let pinnedByLabel: [String: Int] = [
-        "legacy-read": 10,
+        "legacy-read": 6,
         "purpose-derived salt": 2,
         "key-derived": 2,
         "authenticatedData-bound aad": 2,
@@ -59,7 +65,11 @@ struct CryptographicEscapeHatchCensusTests {
     /// Unmoved by Phase 3's write-side closure: the `purpose-derived legacy-write` hatch it deleted
     /// lived in `ColumnCrypto.swift`, which still holds two others (`legacy-read` and
     /// `v2 device-bound read`), so the file stays in the set at a lower count.
-    private static let pinnedFileCount = 10
+    ///
+    /// Moved 10 → 8 by Phase 4: `MeshNetworkManager.swift` and `IdentityService.swift` held
+    /// **only** the four Class-B wire readers between them, so deleting those readers dropped both
+    /// files out of the set entirely rather than lowering their counts.
+    private static let pinnedFileCount = 8
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,
     /// which is what ``proseMentionsCannotSilenceTheWall`` checks.

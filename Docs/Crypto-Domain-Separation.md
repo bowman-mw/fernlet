@@ -301,7 +301,7 @@ reviewer would have to remember the policy.
   scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
   sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
 - **Escape-hatch abuse — now counted.** `// cryptographic-domain: …` silences the wall by design,
-  for the paths that genuinely have no domain to name. **There are 17 of them, across 10 files** —
+  for the paths that genuinely have no domain to name. **There are 13 of them, across 8 files** —
   more than the handful the mechanism reads like. This document used to add that "nothing tracks the
   number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and
   the next one added fails CI. It pins four things, not one: the total, the count **per label**, the number
@@ -315,14 +315,25 @@ reviewer would have to remember the policy.
 
   (The total was **18** until Phase 3 closed `ColumnCrypto.sealPlaintext`'s legacy WRITE — owner
   decision D4, fail close. That deleted the single `purpose-derived legacy-write` hatch, and with
-  it the last line in the tree that could *mint* an un-domained blob. The file count is unmoved:
+  it the last line in the tree that could *mint* an un-domained blob. The file count was unmoved:
   `ColumnCrypto.swift` still holds two other hatches, so it stays in the set at a lower count.)
+
+  (17 → **13**, and 10 files → **8**, when Phase 4 deleted the four Class-B WIRE readers — owner
+  decision D1(a), hard cutover on the no-peers premise. Unlike D4's deletion this one moved the
+  file count, because `MeshNetworkManager.swift` and `IdentityService.swift` held *only* those four
+  hatches between them and dropped out of the set entirely. Nothing was migrated: there are no
+  stored bytes in these formats, and the readers existed solely for a peer on an older build. Such
+  a peer now fails by NAME — `MeshEncryptionError.legacyWireFormat`,
+  `IdentityError.legacyWireFormat`, `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat`
+  — reaching the Connection Inspector and the mesh audit log instead of a generic decrypt failure.
+  The two format markers are kept: `FGK2`'s absence at 92 bytes is what CLASSIFIES an older peer's
+  bundle, and classification is what makes the refusal explicable.)
 
   By the label each one gives itself:
 
   | Label | Count | What it means |
   |---|---:|---|
-  | `legacy-read` | 10 | Opening bytes written before the domain existed. Correct, and permanent until the last such row is re-sealed |
+  | `legacy-read` | 6 | Opening bytes written before the domain existed. Correct, and permanent until the last such row is re-sealed |
   | `purpose-derived salt` | 2 | The domain reached the primitive through the KDF salt, not as a visible argument |
   | `key-derived` | 2 | The domain is bound in the key rather than at this call |
   | `authenticatedData-bound aad` | 2 | The domain is inside the `aad` local, built above the window |
@@ -333,18 +344,19 @@ reviewer would have to remember the policy.
   its row was removed from this table and from `pinnedByLabel`; nothing in the tree can mint an
   un-domained blob any more, which is what turns a format-census zero from a moment into a latch.
 
-  The ten `legacy-read` entries are the ones to watch: each marks a path that will keep accepting
+  The six `legacy-read` entries are the ones to watch: each marks a path that will keep accepting
   un-domained bytes for as long as any row written under it survives. **The inventory this document
   said did not exist now does** — the format census built in Phase 0 of
   [Plan-Crypto-Standardization-2026-08-27.md](Plan-Crypto-Standardization-2026-08-27.md) counts
   those rows by MARKER BYTE, never by opening a blob, and the DEBUG Phase 3 gate readout renders
-  all six at-rest surfaces from one device in one sitting. Six of the ten entries are the Class-A
-  at-rest sites, each deletable once its own gate reads zero on a real upgraded device; the other
-  four are Class-B wire reads, which no migration can retire because the bytes arrive from a peer —
-  they are governed by which builds are in the field (owner decision D1). The other seven hatches
-  are cases where the domain IS bound, just not within three lines of the call — they are
-  annotations for the grep's benefit, not exemptions, and re-reading them is the only way to tell
-  the two kinds apart.
+  all six at-rest surfaces from one device in one sitting. All six are now the Class-A at-rest
+  sites, each deletable once its own gate reads zero on a real upgraded device. The four Class-B
+  wire reads that used to sit beside them are **gone**: no migration could ever have retired them,
+  because the bytes arrive from a peer rather than from disk, so they were governed by which builds
+  are in the field — and owner decision D1 settled that there are none (no second install,
+  therefore no peer on an older build). The other seven hatches are cases where the domain IS
+  bound, just not within three lines of the call — they are annotations for the grep's benefit, not
+  exemptions, and re-reading them is the only way to tell the two kinds apart.
 
   One shape the pin has to defend against by itself: the wall reads a raw context window, so a
   `///` line that merely *mentions* the marker near a primitive call silences it exactly as a real
