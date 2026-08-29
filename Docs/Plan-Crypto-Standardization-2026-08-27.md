@@ -1000,7 +1000,12 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
         have started passing for the wrong reason; it now flips a byte inside the sealed body and
         still reaches the AEAD tag. Three new tests pin the refusal by name (unmarked photo,
         legacy 92-byte wrap vs a merely malformed 91-byte one, unmarked transport seal).
-- [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**
+- [x] Phase 5 — wall the end state (§4). **CLOSED 2026-08-29** with
+      `noLegacyReadPathRemainsAnywhere` — the zero-`legacy-read` assertion the round was for. It is
+      deliberately redundant with the per-label pin, because that wall lives in the ABSENCE of a
+      dictionary key and absence is repaired by typing `"legacy-read": 1`, a one-line edit that
+      reads as reasonable in a diff. The named test cannot be satisfied that way. Earlier:
+      **the three Phase-3/4-independent parts LANDED 2026-08-28**
       (`2df8d29`; boundary gate: full unit suite 3378 tests / 297 suites green from a private
       DerivedData — +4 tests / +1 suite, exactly the new census — power-of-10, doc-coverage and
       accessibility scanners all zero, and a planted nineteenth hatch verified to fail three of the

@@ -128,6 +128,39 @@ struct CryptographicEscapeHatchCensusTests {
         }
     }
 
+    /// The assertion the whole round was for: **no legacy read path exists anywhere.**
+    ///
+    /// This is deliberately redundant with ``everyEscapeHatchLabelIsPinnedAtItsOwnCount``, which
+    /// already fails a re-introduced `legacy-read` as "1 found, 0 pinned". The redundancy is the
+    /// point. That wall lives in the ABSENCE of a dictionary key, and absence is repaired by typing
+    /// `"legacy-read": 1` — a one-line edit that looks like updating a count and reads as
+    /// reasonable in a diff. This test cannot be satisfied that way: it asserts the label is absent
+    /// from the pin AND that no site carries it, so restoring a legacy reader means deleting a test
+    /// whose name says what you are doing.
+    ///
+    /// If a legacy read path is ever genuinely needed again — a restored device backup written by a
+    /// pre-standardization build is the case
+    /// [Plan-Crypto-Standardization-2026-08-27.md](Docs/Plan-Crypto-Standardization-2026-08-27.md)
+    /// §5 D5 knowingly accepted — that is a design decision with an owner, not a test to quietly
+    /// amend.
+    @Test func noLegacyReadPathRemainsAnywhere() throws {
+        #expect(
+            Self.pinnedByLabel["legacy-read"] == nil,
+            "`legacy-read` is back in pinnedByLabel. The pin is not the place to re-authorize a"
+                + " legacy read path — see the plan's §5 D5."
+        )
+        let legacy = try Self.scan().filter { !$0.isProse && $0.label == "legacy-read" }
+        let sites = legacy.map { "  \($0.printed)" }.joined(separator: "
+")
+        let message = "\(legacy.count) legacy read path(s) have come back:
+\(sites)
+"
+            + "Every stored format is standardized and every legacy reader was deleted in Phases 3"
+            + " and 4. A path that opens pre-standardization bytes is a deliberate reversal of that,"
+            + " not a fix — take it to the plan's §5 before making this test pass."
+        #expect(legacy.isEmpty, "\(message)")
+    }
+
     @Test func escapeHatchesStayInTheFilesThatAlreadyHaveThem() throws {
         let hatches = try Self.scan().filter { !$0.isProse }
         let files = Set(hatches.map(\.path))
