@@ -1186,8 +1186,23 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       Decide it deliberately, in its own change, or leave it — but do not let a future "delete dead
       code" sweep take it for dead weight.
 
-      **PUT TO THE OWNER 2026-08-29 (final pass); awaiting an answer. Two findings sharpen the
-      question and neither was in the residual as written:**
+      **RESOLVED BY THE OWNER 2026-08-29: RETIRE THE WHOLE THING** — the migrator and the latch,
+      not just the unreachable repair arm. The decision was taken with both findings below in front
+      of it, including the explicit cost: `OwnPhotoKeyBinder.bindIfEligible()` loses gate half 1.
+      **NOT BUILT. It is its own change, and one sub-question is open before a line is written:
+      what, if anything, replaces that half** — a consent-only gate is the shape with the sharpest
+      consequence (the irreversible bind could then happen on a device that never successfully
+      enumerated its own photo corpora, which is the exact failure `indeterminate` was written for),
+      and it is a different decision from "retire the migrator". The change also owes: a
+      `PrivacyWipeCoverage.md` + `PersistedSurfaceWipeBoundaryTests` disposition move for
+      `com.fernlet.private-media.ownPhotoKeyMigrationComplete` (currently `.kept`), the
+      `ownPhotoKeyMigrationComplete` "still preparing" state in `PrivacyDataSettingsView`, the
+      `ownPhotoKey` row in the DEBUG Phase 3 gate readout, and `FormatMigrator`'s reference
+      conformer — the protocol was lifted FROM this type, and `OwnPhotoKeyMigrationTests` is what
+      makes the conformance a proof rather than a claim.
+
+      **The two findings the decision was taken against, neither of which was in the residual as
+      written:**
       1. **What Phase 3 killed is the REPAIR arm, not the verifier.** `performPass()` has five
          buckets and only two of them (`resealed`, `resealFailures`) go through the deleted reader.
          The three the binding gate actually consumes are untouched: `alreadyOwnKey` is the positive
