@@ -241,6 +241,18 @@ public struct OwnPhotoKeyMigrationResult: Sendable, Equatable, FormatMigrationPa
 /// Order matters for safety: the pass NEVER deletes and never writes a file it could not first
 /// open, so the worst case of any interruption is "try again next launch".
 ///
+/// **What Phase 3 took away, stated rather than left to be rediscovered.** Every own file written
+/// before the 2026-08-26 domain separation — which is every file the pre-split shared key ever
+/// sealed — carries no `FMA2` marker, and the crypto standardization round's Phase 3 deleted
+/// `gcmOpen`'s reader for unmarked bytes. So this pass can no longer OPEN a genuine pre-split
+/// file: it counts one as ``OwnPhotoKeyMigrationResult/unopenable`` (non-blocking, never deleted,
+/// re-examined every pass) and moves on, and the read path's dual-open resolves it to nil. Those
+/// photos are not recoverable by anything this build ships. The re-seal arm below is kept because
+/// it is still correct for a marked file the wall key opens, and because the latch it earns is
+/// half of `OwnPhotoKeyBinder`'s irreversible binding gate — a proof this change had no standing
+/// to redefine. `OwnPhotoKeyMigrationTests.preSplitUnprefixedBytesAreUnopenableResidueNow` pins
+/// the new behaviour.
+///
 /// Concurrency: a nonisolated struct holding two non-`Sendable` key providers, so an instance is
 /// confined to whatever isolation domain built it. The app builds one INSIDE its off-main launch
 /// task (see ``standard(documentsDirectory:defaults:)``) rather than sharing the store providers,

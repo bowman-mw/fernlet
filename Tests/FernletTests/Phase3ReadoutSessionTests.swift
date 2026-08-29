@@ -37,7 +37,7 @@ struct Phase3ReadoutSessionTests {
     }
 
     private func latches() -> Phase3LatchReadings {
-        Phase3LatchReadings(sealedColumn: true, pendingNarrativeBuffer: true, mediaAtRest: true,
+        Phase3LatchReadings(sealedColumn: true, mediaAtRest: true,
                             ownPhotoKey: true, heartDropSidecar: true, sealedPhotoBackup: true,
                             lockWrapRow: true)
     }

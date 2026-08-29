@@ -1006,6 +1006,42 @@ struct SealedPhotoBackupTests {
         #expect(OwnPhotoRestoreRepairLedger(defaults: defaultsTwo).pendingIDs(for: .meal).isEmpty)
     }
 
+    /// The coordinator half of the terminal-refusal pin: a permanently unverifiable entry must not
+    /// enter the repair ledger, and must not pin the route uncommitted.
+    ///
+    /// This is the exact cascade the crypto-standardization plan warned Phase 3 could start. The
+    /// entry cannot be verified by anything this build ships, so a retry re-fetches the same record
+    /// and fails identically; if it were queued, `pendingIDs` would be non-empty on every launch,
+    /// every launch would run the same doomed repair, the corpus would answer `.deferredTransient`,
+    /// and `OwnPhotoEscrowCommitLedger` would read false forever — which is what withholds the
+    /// irreversible own-photo key binding. All three are asserted here, not just the ledger.
+    @Test func anUnverifiableLegacyEntryNeverEntersTheRepairLedger() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        _ = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        let defaults = isolatedDefaults()
+        let (coordinator, host) = makeCoordinator(
+            documents: device, identity: identity, database: database, defaults: defaults
+        )
+        let pass = await coordinator.synchronize(preferenceOverride: true)
+
+        #expect(OwnPhotoRestoreRepairLedger(defaults: defaults).pendingIDs(for: .meal).isEmpty,
+                "a doomed repair was queued: every launch would re-fetch a record nothing can verify")
+        #expect(pass.routeCommitted, "the route was pinned uncommitted by an unrecoverable photo")
+        #expect(OwnPhotoEscrowCommitLedger(defaults: defaults).isCommitted)
+        #expect(host.outcomes.last?.isRetryable != true,
+                "an unrecoverable entry was reported as retryable, which invites an endless Retry")
+
+        // A second pass behaves identically — the state is stable, not a treadmill.
+        let second = await coordinator.synchronize(preferenceOverride: true)
+        #expect(second.routeCommitted)
+        #expect(OwnPhotoRestoreRepairLedger(defaults: defaults).pendingIDs(for: .meal).isEmpty)
+    }
+
     /// The progress corpus's sidecar (its sealed timeline index) is what makes that corpus
     /// "not empty". Committing it after a restore in which ZERO bodies landed would lock the corpus
     /// out of every future restore on the first attempt — a timeline of missing pictures, forever,
@@ -1283,6 +1319,79 @@ struct SealedPhotoBackupTests {
         })
         #expect(restore.restored == 1)
         #expect(restored[legacy.id] == legacy.plaintext)
+    }
+
+    /// The refusal Phase 3 put in place of the deleted v1 digest read, and the loop it must not
+    /// start.
+    ///
+    /// The legacy branch used to accept a bare-SHA256 digest so a pre-marker manifest stayed
+    /// restorable. With it gone, a legacy-stamped entry whose committed digest is that bare digest
+    /// can never match, and the restore has to refuse the photo. WHERE that refusal is recorded is
+    /// the whole test: `failed` is the retryable list the coordinator writes into the repair
+    /// ledger, so putting it there would re-fetch the same record on every launch forever, hold the
+    /// ledger non-empty, keep the corpus `.deferredTransient`, and pin the route uncommitted —
+    /// withholding the key binding on a photo that is never coming back. It goes in the terminal
+    /// list instead, and the coordinator half of this pin is
+    /// ``anUnverifiableLegacyEntryNeverEntersTheRepairLedger``.
+    @Test func aLegacyDigestEntryIsRefusedTerminallyRatherThanRestored() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+        let legacy = try await plantLegacyMealBackup(identity: identity, database: database)
+
+        var written: [UUID: Data] = [:]
+        let summary = try #require(try await service.restore(corpus: .meal) { id, data in
+            written[id] = data
+            return true
+        })
+
+        #expect(summary.restored == 0)
+        #expect(written.isEmpty, "bytes whose committed digest cannot be verified were handed to the writer")
+        #expect(summary.failed.isEmpty, "a permanently unverifiable entry was queued for repair")
+        #expect(summary.unverifiableLegacyDigest == [legacy.id])
+
+        // And the healed corpus restores normally — the refusal is about the retired digest, not
+        // about this id or these bytes.
+        _ = try await service.reconcile(
+            corpus: .meal, ids: [legacy.id], verifyingContentHashes: true
+        ) { _ in legacy.plaintext }
+        let healed = try #require(try await service.restore(corpus: .meal) { id, data in
+            written[id] = data
+            return true
+        })
+        #expect(healed.restored == 1)
+        #expect(healed.unverifiableLegacyDigest.isEmpty)
+        #expect(written[legacy.id] == legacy.plaintext)
+    }
+
+    /// A v2-STAMPED entry whose bytes do not match stays retryable, because its digest is known to
+    /// be the current spelling — so the mismatch is a divergence a later upload can genuinely fix,
+    /// not a format nobody can read. The split has to fall on the stamp, or every corrupt body
+    /// would be abandoned as if it were a retired digest.
+    @Test func aStampedEntryWhoseBytesDivergeStaysRetryable() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let service = makeService(identity: identity, database: database, defaults: isolatedDefaults())
+
+        let good = UUID()
+        let tampered = UUID()
+        _ = try await service.reconcile(corpus: .meal, ids: [good, tampered]) { id in
+            id == good ? Data("good body".utf8) : Data("other body".utf8)
+        }
+        // Substitute one body with another authentically-sealed one: the record opens, the digest
+        // does not match, and the entry is stamped 2.
+        let donor = try #require(database.record(named: "sealed-photo.meal.\(good.uuidString)"))
+        database.replaceCiphertext(
+            named: "sealed-photo.meal.\(tampered.uuidString)",
+            with: try #require(database.ciphertext(of: donor))
+        )
+
+        let summary = try #require(try await service.restore(corpus: .meal) { _, _ in true })
+        #expect(summary.failed == [tampered])
+        #expect(summary.unverifiableLegacyDigest.isEmpty,
+                "a stamped entry was abandoned as if its digest were the retired spelling")
     }
 
     /// The ambient launch pass must NOT heal — and, far more important, must not PRETEND to. It

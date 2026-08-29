@@ -69,7 +69,6 @@ struct Phase3GateReadoutTests {
     ) -> Phase3LatchReadings {
         Phase3LatchReadings(
             sealedColumn: sealedColumn,
-            pendingNarrativeBuffer: true,
             mediaAtRest: mediaAtRest,
             ownPhotoKey: ownPhotoKey,
             heartDropSidecar: true,
@@ -467,13 +466,14 @@ struct Phase3GateReadoutTests {
         unopenable: Int,
         examined: Int,
         offset: TimeInterval = 0,
-        converted: Int = 0,
+        sealedPlaintext: Int = 0,
         latchBefore: Bool = true,
         latchAfter: Bool = true
     ) -> MediaPassWitness {
         MediaPassWitness(
             stamp: stamp("media at-rest pass", offset: offset),
-            result: MediaAtRestFormatMigrationResult(examined: examined, converted: converted,
+            result: MediaAtRestFormatMigrationResult(examined: examined,
+                                                     convertedPlaintext: sealedPlaintext,
                                                      unopenableUnprefixed: unopenable),
             latchBefore: latchBefore,
             latchAfter: latchAfter
@@ -713,11 +713,11 @@ struct Phase3GateReadoutTests {
 
     /// A CONVERTING pass on a latched device is the finding, and the verdict must not swallow it.
     ///
-    /// `converted`/`convertedPlaintext` are the only buckets that do not survive into the post-pass
-    /// census — the pass rewrote those files into the current format — and the sitting's own order
-    /// re-takes the census after the pass, so `U − J − K` nets to zero and the row used to render
-    /// DISCHARGED beside a printed `isClean false`. Every OTHER device in this state runs no pass at
-    /// all, so the one device that healed itself would have certified the fleet.
+    /// `convertedPlaintext` is the only bucket that does not survive into the post-pass census —
+    /// the pass sealed those files into the current format — and the sitting's own order re-takes
+    /// the census after the pass, so `U − J − K` nets to zero and the row used to render DISCHARGED
+    /// beside a printed `isClean false`. Every OTHER device in this state runs no pass at all, so
+    /// the one device that healed itself would have certified the fleet.
     @Test func aConvertingPassOnALatchedDeviceBlocksAndNamesTheStaleLatch() {
         let own = ownRoot
         let wall = wallRoot
@@ -725,7 +725,7 @@ struct Phase3GateReadoutTests {
             locations: [(.mealPhotos, MediaAtRestFormatTally(v2Marked: 12), true)],
             ownRoot: own, wallRoot: wall
         )
-        let witness = mediaWitness(unopenable: 0, examined: 12, converted: 12)
+        let witness = mediaWitness(unopenable: 0, examined: 12, sealedPlaintext: 12)
         let audit = MediaResidueAudit.take(report: report, ownPhotoDocumentsDirectory: own,
                                            friendWallSupportDirectory: wall,
                                            latches: latches(), witness: witness)
@@ -736,9 +736,9 @@ struct Phase3GateReadoutTests {
             Issue.record("expected .blocked, got \(row.verdict)")
             return
         }
-        #expect(reason.contains("converted 12"))
+        #expect(reason.contains("convertedPlaintext 12"))
         #expect(reason.contains("STALE latch"))
-        #expect(row.evidence.contains { $0.contains("blocking buckets: converted 12") },
+        #expect(row.evidence.contains { $0.contains("blocking buckets: convertedPlaintext 12") },
                 "the buckets must be printed whether or not the verdict turns on them")
     }
 
@@ -1253,7 +1253,7 @@ struct Phase3GateReadoutTests {
                 format: .absent,
                 fileURL: URL(fileURLWithPath: "/var/mobile/Containers/Data/Application/x/Library/PendingNarratives.bin")
             ),
-            latch: true, stamp: nil
+            stamp: nil
         )
         #expect(absent.verdict == .discharged)
 
@@ -1262,7 +1262,7 @@ struct Phase3GateReadoutTests {
                 format: .unreadable(reason: "Operation not permitted"),
                 fileURL: URL(fileURLWithPath: "/var/mobile/Containers/Data/Application/x/Library/PendingNarratives.bin")
             ),
-            latch: true, stamp: nil
+            stamp: nil
         )
         guard case let .unavailable(reason) = unreadable.verdict else {
             Issue.record("expected .unavailable, got \(unreadable.verdict)")
@@ -1359,14 +1359,13 @@ struct Phase3GateReadoutTests {
         let readings = Phase3LatchReadings.take(inputs: censusInputs, defaults: defaults)
         #expect(readings.mediaAtRest, "the media latch must be read from the injected suite")
         #expect(!readings.sealedColumn)
-        #expect(!readings.pendingNarrativeBuffer)
         #expect(!readings.ownPhotoKey)
         #expect(!readings.heartDropSidecar)
         #expect(!readings.sealedPhotoBackup)
         // An empty keychain service reads as an ABSENT wrap row, which the derived latch calls
         // complete — which is exactly why the row copy says it licenses nothing.
         #expect(readings.lockWrapRow)
-        #expect(readings.printedLines.count == 7)
+        #expect(readings.printedLines.count == 6)
     }
 
     // MARK: - The redaction wall

@@ -31,9 +31,27 @@ struct OwnPhotoKeyMigrationTests {
         }.jpegData(compressionQuality: 0.7)!
     }
 
-    /// AES-GCM-seals bytes the way every media store does, so a fixture file is byte-compatible
-    /// with something the shipping code wrote.
-    private func sealed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
+    /// AES-GCM-seals bytes the way every media store does TODAY: the `FMA2` marker, then a box
+    /// binding the file's own at-rest purpose — so a fixture file is byte-compatible with something
+    /// the shipping code wrote.
+    ///
+    /// It used to emit the pre-domain-separation shape (a bare `combined` box, no marker, no AAD).
+    /// The crypto standardization round's Phase 3 deleted the reader for that shape, so a fixture
+    /// in it is no longer a file the migrator can act on — it is an unopenable residue, which
+    /// ``preSplitUnprefixedBytesAreUnopenableResidueNow`` pins on its own rather than smuggling
+    /// into every other test's setup.
+    private func sealed(_ plaintext: Data, under key: SymmetricKey, at url: URL) throws -> Data {
+        let combined = try #require(try AES.GCM.seal(
+            plaintext,
+            using: key,
+            authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+        ).combined)
+        return Data("FMA2".utf8) + combined
+    }
+
+    /// Bytes byte-identical to what a PRE-domain-separation build wrote: `AES.GCM.seal` with no
+    /// associated data, `combined`, no marker. Nothing in the app opens these any more.
+    private func preSplitUnprefixed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
         try #require(try AES.GCM.seal(plaintext, using: key).combined)
     }
 
@@ -84,20 +102,20 @@ struct OwnPhotoKeyMigrationTests {
         for directory in locations.directories {
             let plaintext = jpeg()
             let url = directory.appendingPathComponent("\(UUID().uuidString).jpg")
-            try sealed(plaintext, under: key).write(to: url)
+            try sealed(plaintext, under: key, at: url).write(to: url)
             written[url] = plaintext
         }
         for file in locations.files {
             let plaintext = Data("[]".utf8)  // an empty but well-formed progress index
-            try sealed(plaintext, under: key).write(to: file)
+            try sealed(plaintext, under: key, at: file).write(to: file)
             written[file] = plaintext
         }
         return written
     }
 
-    /// Opens an at-rest media file the way the stores do, in BOTH formats: a `FMA2`-marked box
-    /// authenticates the file's own purpose as AEAD data, while an unmarked box is the
-    /// pre-domain-separation layout these fixtures deliberately seed.
+    /// Opens an at-rest media file the way the stores do: a `FMA2`-marked box authenticating the
+    /// file's own purpose as AEAD data, and nothing else. The unmarked fallback this helper used to
+    /// carry went with production's own, in Phase 3.
     ///
     /// The marker is spelled out rather than read from `PrivateMediaStore`: this suite asserts the
     /// at-rest FORMAT, and a fixture that asks production what the format is could never notice
@@ -106,14 +124,11 @@ struct OwnPhotoKeyMigrationTests {
     private func opens(_ url: URL, under key: SymmetricKey) -> Data? {
         guard let stored = try? Data(contentsOf: url) else { return nil }
         let formatV2 = Data("FMA2".utf8)
-        if stored.starts(with: formatV2) {
-            guard let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
-            return try? AES.GCM.open(
-                box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
-            )
-        }
-        guard let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
-        return try? AES.GCM.open(box, using: key)
+        guard stored.starts(with: formatV2),
+              let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
+        return try? AES.GCM.open(
+            box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+        )
     }
 
     // MARK: - Migration
@@ -183,6 +198,50 @@ struct OwnPhotoKeyMigrationTests {
 
         let afterSecond = ordered.compactMap { try? Data(contentsOf: $0) }
         #expect(afterFirst == afterSecond, "the idempotent pass rewrote files it had already migrated")
+    }
+
+    // MARK: The generation Phase 3 gave up on, pinned so nobody rediscovers it as a bug. A
+    // PRE-domain-separation file (no `FMA2`, no AAD) sealed under the pre-split key was the key
+    // migrator's original subject; `gcmOpen`'s legacy-read branch was how it opened one. That
+    // branch is gone, so the file opens under NEITHER provider, is counted `unopenable`, and — per
+    // this migrator's never-delete rule — is left byte-identical on disk forever. It is not
+    // recoverable, and the point of this test is that the code says so out loud instead of
+    // quietly counting it as migrated.
+    @Test func preSplitUnprefixedBytesAreUnopenableResidueNow() throws {
+        let root = try makeDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let legacyKey = SymmetricKey(size: .bits256)
+        let ownKey = SymmetricKey(size: .bits256)
+        let plaintext = jpeg()
+        let mealDirectory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: root)
+        let id = UUID()
+        let file = mealDirectory.appendingPathComponent("\(id.uuidString).jpg")
+        let bytesOnDisk = try preSplitUnprefixed(plaintext, under: legacyKey)
+        try bytesOnDisk.write(to: file)
+
+        let subject = migrator(
+            root: root,
+            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
+            legacyKey: InMemoryPrivateMediaKeyProvider(key: legacyKey),
+            defaults: defaults
+        )
+        let result = subject.performPass()
+        #expect(result.examined == 1)
+        #expect(result.resealed == 0, "there is no reader left that could have opened these bytes")
+        #expect(result.unopenable == 1)
+        #expect(try Data(contentsOf: file) == bytesOnDisk, "unopenable bytes were rewritten or deleted")
+
+        // And the read path agrees: nil, never ciphertext handed back as a photo, with the legacy
+        // provider injected — so this is the deleted FORMAT reader, not a missing key.
+        let store = MealPhotoStore(
+            directory: mealDirectory,
+            keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey),
+            legacyKeyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey)
+        )
+        #expect(store.imageData(for: id) == nil)
     }
 
     // MARK: Crash-safety: a truncated file opens under NEITHER key. It must be counted, left
@@ -400,7 +459,7 @@ struct OwnPhotoKeyMigrationTests {
         let mealDirectory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: root)
         let id = UUID()
         let straggler = mealDirectory.appendingPathComponent("\(id.uuidString).jpg")
-        try sealed(plaintext, under: legacyKey).write(to: straggler)
+        try sealed(plaintext, under: legacyKey, at: straggler).write(to: straggler)
 
         // Make the directory unwritable so the atomic re-seal cannot land — the disk-error shape of
         // "a file is still legacy after the pass".
@@ -477,7 +536,7 @@ struct OwnPhotoKeyMigrationTests {
         let plaintext = jpeg()
         let file = OwnPhotoCorpusLayout.recipePhotosDirectory(in: root)
             .appendingPathComponent("\(UUID().uuidString).jpg")
-        try sealed(plaintext, under: friendKey).write(to: file)
+        try sealed(plaintext, under: friendKey, at: file).write(to: file)
 
         #expect(OwnPhotoKeyMigrator.standard(documentsDirectory: root, defaults: defaults).run())
         #expect(opens(file, under: ownKey) == plaintext)

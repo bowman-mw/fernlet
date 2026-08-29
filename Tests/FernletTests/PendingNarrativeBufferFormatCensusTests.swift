@@ -18,12 +18,12 @@ import Testing
 /// Two properties are load-bearing here, and neither is about convenience:
 ///
 /// 1. **The census must be right about legacy bytes**, because Phase 3 of the plan deletes
-///    `PendingNarrativeBuffer.loadEntries()`'s legacy branch once the count is observed at zero.
-///    A census that mislabels a legacy file as clean would license deleting the only code that can
-///    open a tester's cycle notes. So this suite plants a byte-exact legacy file — and then proves
-///    it is byte-exact the only way that can be proven: by having the **shipping legacy reader**
-///    open it. That is also the first coverage this repo has ever had of that branch; before this
-///    file, no legacy fixture existed anywhere.
+///    `PendingNarrativeBuffer.loadEntries()`'s legacy branch — and did, once the count was read.
+///    A census that mislabels a legacy file as clean would have licensed deleting the only code
+///    that could open a tester's cycle notes. So this suite plants a byte-exact legacy file — built
+///    from the pre-`91c3956` seal call verbatim — and pins what the shipping reader now does with
+///    it: refuse it by name (the branch that opened it is gone), with the buffer key resident, so
+///    the refusal cannot be an artefact of a missing key.
 /// 2. **The census must not write.** A "census" that created the buffer directory, or minted the
 ///    buffer key by asking for it, would perturb exactly the state it is measuring — and minting
 ///    the key is not hypothetical: `PendingNarrativeBuffer.bufferKey()` creates and stores one on
@@ -144,15 +144,22 @@ struct PendingNarrativeBufferFormatCensusTests {
         )
     }
 
-    /// The fixture is not merely legacy-*shaped*: the shipping reader's legacy branch opens it and
-    /// decodes the payloads back.
+    /// The shipping reader REFUSES the legacy fixture, by name, with the buffer key in hand.
     ///
-    /// This is the byte-exactness proof. `PendingNarrativeBuffer.loadEntries()`'s
-    /// `// cryptographic-domain: legacy-read` line had no test anywhere in the repo before this one,
-    /// so "the census recognises legacy files" was previously unfalsifiable — the only legacy bytes
-    /// in existence were on testers' phones. Planting the key under the scope's throwaway service
-    /// (rather than letting the buffer mint one) is what lets the real reader open the real fixture.
-    @Test func theLegacyFixtureIsExactlyWhatTheShippingLegacyReaderOpens() throws {
+    /// This test used to assert the opposite — that `loadEntries()`'s legacy branch opened these
+    /// exact bytes — and it was the byte-exactness proof for the fixture. Phase 3 of the
+    /// crypto-standardization plan deleted that branch, so the assertion is inverted with it rather
+    /// than left to fail: the contract it pinned is retired, and the contract that replaced it is
+    /// the one worth pinning.
+    ///
+    /// The key is planted anyway, and that is the whole point of the test: a refusal that only
+    /// happened because no key was available would prove nothing. With the real key resident, the
+    /// only thing standing between these bytes and the payloads inside them is the deleted reader —
+    /// so ``PendingNarrativeBufferError/legacyUnprefixedFormat``, and not a generic `CryptoKit`
+    /// throw, is what the drain's audit line will carry. The fixture's byte-exactness now rests on
+    /// its construction (the pre-`91c3956` seal call verbatim, no AAD, no prefix), which is where a
+    /// retired format's fixture has to rest once nothing ships that can open it.
+    @Test func theShippingReaderRefusesTheLegacyFixtureByName() throws {
         let scope = uniqueNarrativeBufferScope()
         defer { cleanUp(scope) }
 
@@ -163,27 +170,30 @@ struct PendingNarrativeBufferFormatCensusTests {
             service: scope.keychainService,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         )
-        #expect(stored == errSecSuccess, "planting the buffer key failed; the fixture cannot be opened")
-        try plant(try legacyFileBytes(under: key), in: scope)
+        #expect(stored == errSecSuccess, "planting the buffer key failed; the refusal would be for the wrong reason")
+        let bytes = try legacyFileBytes(under: key)
+        let planted = try plant(bytes, in: scope)
 
         // The census's verdict, and the reader's behaviour on the same bytes, must agree.
         #expect(PendingNarrativeBufferFormatCensus.take(of: scope).format == .legacyUnprefixed)
 
-        let drained = try PendingNarrativeBuffer(scope: scope).drainAll()
-        #expect(drained.count == 2)
-        #expect(drained.first?.hkExternalUUID == "6C0F4E1A-0000-4000-8000-00000000CE01")
-        #expect(drained.first?.noteBytes == Data("cramps in the evening".utf8))
-        #expect(drained.last?.dateKey == "2026-08-21")
+        let buffer = PendingNarrativeBuffer(scope: scope)
+        #expect(throws: PendingNarrativeBufferError.legacyUnprefixedFormat) {
+            _ = try buffer.drainAll()
+        }
+        // Refused, never destroyed: bytes that will not open may really be "sealed under a key this
+        // device lost", so the refusal leaves the file byte-identical for a later inspection.
+        #expect(try Data(contentsOf: planted) == bytes)
     }
 
     /// Bytes far too short to be any ChaChaPoly box still land in the legacy bucket, because the
-    /// marker is the *only* rule — exactly as in the reader, which would strip nothing, hand the
-    /// scribble to `ChaChaPoly.SealedBox(combined:)` and throw.
+    /// marker is the *only* rule — exactly as in the reader, which refuses anything unmarked by
+    /// name without looking any further.
     ///
     /// This pins the documented limit rather than a desirable behavior: corrupt bytes are
     /// indistinguishable from legacy bytes by marker alone, so ``legacyCount`` is an upper bound.
-    /// That is the safe direction — an over-count delays the Phase-3 deletion; an under-count would
-    /// authorize it wrongly.
+    /// That is the safe direction — an over-count over-reports the surface; an under-count would
+    /// have authorized the Phase-3 deletion wrongly.
     @Test func bytesTooShortToBeABoxLandInTheLegacyBucket() throws {
         let scope = uniqueNarrativeBufferScope()
         defer { cleanUp(scope) }

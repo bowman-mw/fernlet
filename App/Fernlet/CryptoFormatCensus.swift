@@ -547,9 +547,10 @@ nonisolated enum CryptoFormatCensus {
     ///
     /// **Pre-sealing plaintext JPEGs** are not a blind spot and do not bound anything — they are a
     /// SECOND legacy generation, sitting in the clear, which the primary number deliberately does
-    /// not include. They are named because Phase 3's "the legacy reader can go" is about
-    /// `gcmOpen`'s legacy branch, and nothing about that branch heals these: `MealPhotoStore`'s
-    /// upgrade-on-read does, on its own schedule, file by file, only for files somebody opens.
+    /// not include. They are named because they are the one generation still being converted:
+    /// Phase 3 deleted `gcmOpen`'s legacy branch, so the primary number now counts bytes NOTHING
+    /// opens, while these are healed by the format migrator's remaining arm and by
+    /// `MealPhotoStore`'s upgrade-on-read.
     private static func mediaStatus(_ report: MediaAtRestFormatCensusReport) -> CryptoFormatCensusRow.Status {
         let tally = report.total
         var blindSpots: [String] = []
@@ -566,7 +567,7 @@ nonisolated enum CryptoFormatCensus {
             notes.append(blindSpots.joined(separator: "; ") + " — the count is a lower bound")
         }
         if tally.plaintextJPEG > 0 {
-            notes.append("\(tally.plaintextJPEG) pre-sealing plaintext JPEGs present — a second legacy generation, healed by the meal store's upgrade-on-read, not by gcmOpen")
+            notes.append("\(tally.plaintextJPEG) pre-sealing plaintext JPEGs present — a second legacy generation, sealed by the format migrator's plaintext arm and by the meal store's upgrade-on-read")
         }
         guard notes.isEmpty else { return .countedWithBlindSpots(notes.joined(separator: ". ")) }
         return .counted

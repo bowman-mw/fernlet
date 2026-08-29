@@ -2,24 +2,25 @@
 // PrivateMediaStore
 //
 // Phase 2.3 of Docs/Plan-Crypto-Standardization-2026-08-27.md for the `MediaAtRestCrypto`
-// surface (Class A): the scan → convert → latch format migrator that drives the census's
-// `unprefixedLegacyOrUnrecognized` count toward zero so Phase 3 can delete the legacy-read
-// branch at `MediaAtRestCrypto.swift`'s `gcmOpen` (the unprefixed, no-AAD open).
+// surface (Class A), as it stands AFTER Phase 3.
+//
+// Phase 3 deleted `gcmOpen`'s legacy-read branch (the unprefixed, no-AAD open), and with it this
+// migrator's ciphertext conversion arms: a blob with no `FMA2` marker is opened by nothing in
+// the app any more, so re-sealing it is not a thing that can be attempted, let alone succeed.
+// Those arms are gone. What remains is a real job on a DIFFERENT generation — the pre-sealing
+// **plaintext JPEG** photos, which never went near the deleted branch (the read paths inspect
+// raw bytes only after a GCM open fails) and are plaintext on disk until something seals them.
+// This pass seals them everywhere at once, eagerly, instead of one-at-a-time as the user happens
+// to open each photo; and it keeps counting the unopenable unprefixed residue, which is
+// classification, not reading.
 //
 // Division of labor with `OwnPhotoKeyMigrator` (which stays byte-for-byte untouched): the KEY
-// migrator converts files that fail own-key open (friend-key own files, opened via the legacy
-// key and re-sealed — its re-seal now emits FMA2, so every file it converts is simultaneously
-// format-migrated). THIS migrator converts only what the key migrator cannot see: own-corpus
-// files that already open under the own key but are unprefixed (every own write between the
-// 2026-08-11 key split and the 2026-08-26 domain separation, including that window's key-
-// migration re-seals), the whole friend-wall root (whose key never changed, so the key pass
-// never sweeps it), and the legitimate pre-sealing plaintext JPEG generations exactly where the
-// read paths' upgrade branches exist. Disjoint convert sets, one launch task, strict order —
-// key pass, then binder, then format pass — so the two sweeps compose instead of fighting.
+// migrator converts own files sealed under the pre-split shared key. Disjoint convert sets, one
+// launch task, strict order — key pass, then binder, then format pass.
 //
 // Classification goes through the census's own shared classifier
 // (`MediaAtRestFormatCensus.format(ofFileAt:)` / `format(ofHeader:)`), so the counter and the
-// converter can never disagree about what a blob is. Convert re-seals through the surface's
+// converter can never disagree about what a blob is. Convert seals through the surface's
 // existing `sealAndWrite` path binding the existing registered per-location purposes
 // (`OwnPhotoCorpusLayout.sealPurpose(for:)` / `FriendWallCorpusLayout.sealPurpose(for:)`) —
 // zero new purposes, zero new crypto call shapes, and nothing is ever deleted.
@@ -31,16 +32,18 @@ import FernletFoundation
 /// The persisted "no media blob on this device is in the pre-domain-separation at-rest format"
 /// latch (crypto-standardization Phase 2.3).
 ///
-/// ATTESTS, precisely: *on this device, a full sweep of the eight-location media surface proved
-/// no bytes remain that only `gcmOpen`'s legacy-read branch can open.* Set only by
-/// `FormatMigrator.run` after a clean pass — one that converted nothing, failed nothing,
-/// deferred nothing, and could classify everything. Named non-blocking residues
+/// ATTESTS, precisely: *on this device, a full sweep of the eight-location media surface found no
+/// pre-sealing plaintext image left to seal, and could classify every file it met.* Set only by
+/// `FormatMigrator.run` after a clean pass — one that sealed nothing, failed nothing, raced
+/// nothing and saw everything. Named non-blocking residues
 /// (``MediaAtRestFormatMigrationResult/unopenableUnprefixed``,
-/// ``MediaAtRestFormatMigrationResult/refusedPlaintext``) do not weaken the claim: their bytes
-/// were read and proven unreachable through the legacy branch (§ the result's own docs).
+/// ``MediaAtRestFormatMigrationResult/refusedPlaintext``) do not weaken the claim: neither is a
+/// file this pass could ever act on (§ the result's own docs).
 ///
-/// DOES NOT ATTEST the Phase-3 gate — that gate reads the census on a real upgraded device at
-/// gate time, beside this latch and this migrator's audited residue, never this bit alone.
+/// The claim it USED to make — "no bytes remain that only `gcmOpen`'s legacy-read branch can
+/// open" — retired with that branch in Phase 3. Nothing opens unmarked ciphertext now, so the
+/// residue count is a census fact rather than a reader dependency, and the latch stopped being
+/// evidence for anything's deletion.
 ///
 /// Device-local (`UserDefaults`, never synced): the claim is about THIS device's bytes. Absent
 /// reads false — the fail-closed direction. **Kept across "Delete everything"** (wipe wall:
@@ -113,10 +116,6 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
     /// the scan is marker-bytes-only by contract, and a corrupt FMA2 box already resolves to nil
     /// in every read path (there is no purpose-rebinding pass).
     public let alreadyCurrentFormat: Int
-    /// Legacy sealed boxes opened under their root's key and re-sealed in the current format by
-    /// THIS pass, read-back verified. Non-zero means the corpus was not clean when the pass
-    /// started, so the latch waits for a following pass to confirm zero.
-    public let converted: Int
     /// Legitimate pre-sealing plaintext JPEGs sealed in place by THIS pass (meal corpus, wall
     /// photos, wall thumbnails — the exact locations whose read paths carry an upgrade branch).
     public let convertedPlaintext: Int
@@ -124,36 +123,28 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
     /// write, or the disk read-back. Blocks the latch; the source bytes are untouched
     /// (verify-before-replace), so the next pass re-examines.
     public let conversionFailures: Int
-    /// Census-unprefixed bytes that were fully READ and open under NEITHER key (own root: both
-    /// keys probed; wall root: the wall key). Does **not** block the latch, and the argument is
-    /// deliberately the latch's precise claim and no more: the bytes were read, every key the
-    /// legacy branch could ever pair them with was tried, and nothing opens them — so deleting
-    /// the legacy-read branch cannot change what any reader gets. Includes one documented
-    /// limitation: a pre-sealing plaintext non-JPEG image (HEIC/PNG) in the meal corpus lands
-    /// here, because convert eligibility must not exceed the shared census sniff (JPEG-magic
-    /// only) — such a file is still served and organically re-sealed by
-    /// `MealPhotoStore.imageData`'s plaintext branch, which never touches `gcmOpen`'s legacy
-    /// branch, so Phase 3 is invisible to it. A named expected residue for the Phase-3 gate.
+    /// Files carrying no `FMA2` marker: the retired at-rest ciphertext format, or bytes nothing
+    /// recognises. Counted from the header alone and left exactly as found — since Phase 3 no
+    /// reader in the app opens unmarked ciphertext, so there is no key to try, nothing to convert,
+    /// and nothing a sweep could do for them beyond saying how many there are.
     ///
-    /// - Important: this bucket means "we READ the bytes and no key opens them". A file whose
-    ///   bytes could not be read at all is ``indeterminate``, never this.
+    /// Does **not** block the latch, for the same reason: the latch's claim is about plaintext
+    /// this pass could have sealed, and these are not that. Includes one documented member: a
+    /// pre-sealing plaintext non-JPEG image (HEIC/PNG) in the meal corpus lands here, because
+    /// seal eligibility must not exceed the shared census sniff (JPEG-magic only) — such a file is
+    /// still served and organically re-sealed by `MealPhotoStore.imageData`'s plaintext branch.
+    ///
+    /// - Important: this bucket means "the header says unmarked". A file whose bytes could not be
+    ///   read at all is ``indeterminate``, never this.
     public let unopenableUnprefixed: Int
     /// A parseable plaintext image the pass REFUSED to seal: a plaintext JPEG in a born-sealed
     /// corpus (recipe, progress bytes, either sealed index — where the read paths refuse
-    /// unsealed bytes, and converting would be the laundering those refusals exist to prevent),
-    /// or an out-of-pixel-bounds plaintext anywhere. Does **not** block the latch: these bytes
-    /// never reach `gcmOpen`'s legacy branch — the plaintext read branches inspect raw bytes
-    /// only after GCM-open fails — so the branch delete is invisible to them. Census class
-    /// `plaintextJPEG`, never `unprefixed`: the split the Phase-3 gate arithmetic relies on.
+    /// unsealed bytes, and sealing it would be the laundering those refusals exist to prevent),
+    /// or an out-of-pixel-bounds plaintext anywhere. Does **not** block the latch: the pass is
+    /// never going to seal them, so waiting for the count to fall would be waiting forever.
+    /// Census class `plaintextJPEG`, never `unprefixed` — the split the residue arithmetic
+    /// depends on.
     public let refusedPlaintext: Int
-    /// An own-root file the WALL key opens while the own-key migration latch is set — a state
-    /// the key latch claims cannot exist, checked rather than assumed because that proof has a
-    /// real hole (the key pass silently drops a listed entry whose `isRegularFile` resource
-    /// value reads nil). BLOCKS the latch loudly: such a file still needs the dual-open path
-    /// Phase 3 would delete. Never converted here — probing is read-only, and converting a
-    /// friend-key file stays the key migrator's job; the file itself recovers organically via
-    /// `MealPhotoStore.imageData`'s dual-open on access.
-    public let legacyKeySealedOwnFile: Int
     /// A file whose bytes changed between this pass's reads — the convert-time full read no
     /// longer matching the scanned header class, or (for the two mutable index manifests) the
     /// pre-write re-read no longer matching the convert-time read. The file is left untouched
@@ -164,24 +155,17 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
     /// Non-blocking.
     public let empty: Int
     /// Could not be classified: bytes unreadable (header or full read), an existing directory
-    /// that would not enumerate, a listed entry whose type could not be read, or an own-root
-    /// open-failure that could not be attributed while the wall key was unavailable. Blocks the
-    /// latch — "I could not see the bytes" is never "there are no legacy bytes"; see
+    /// that would not enumerate, or a listed entry whose type could not be read. Blocks the
+    /// latch — "I could not see the bytes" is never "there is nothing here to seal"; see
     /// `OwnPhotoKeyMigrationResult.indeterminate` for the house statement of why (these are
     /// `.completeFileProtection` files, so a device locking mid-pass must block, never look
     /// clean).
     public let indeterminate: Int
-    /// Own-root convert candidates skipped because `OwnPhotoMigrationLatch` is not yet set. An
-    /// unprefixed own file with the key latch unset might be a healthy friend-key file
-    /// mid-key-migration — the key migrator's file, not this one's — so the pass defers rather
-    /// than duplicate it. Blocks the latch; costs at most one launch, since in the healthy case
-    /// the key latch sets moments earlier in the same launch task.
-    public let deferredOwnKeyMigrationIncomplete: Int
-    /// The own root had convert candidates but the own key was unavailable (locked or failing
+    /// The own root had seal candidates but the own key was unavailable (locked or failing
     /// keychain, on a non-minting probe). Blocks the latch; the skipped candidates are
     /// re-examined next launch.
     public let abortedNoOwnKey: Bool
-    /// The wall root had convert candidates but the wall key was unavailable. Blocks the latch.
+    /// The wall root had seal candidates but the wall key was unavailable. Blocks the latch.
     /// One shape is persistently keyless and benign-pending rather than a defect: a wall root
     /// holding only pre-sealing plaintext photos on a device whose `friendWall` keychain row was
     /// never minted (the files predate every sealed-era wall access) or did not travel with a
@@ -191,59 +175,58 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
     /// after which the next pass converts the rest.
     public let abortedNoWallKey: Bool
 
-    /// Whether this pass proves the surface is fully migrated: it converted nothing (so nothing
-    /// was left in the legacy format when it started), failed nothing, deferred nothing, raced
-    /// nothing, met nothing that should not exist, and could classify everything.
+    /// Whether this pass proves the surface is fully migrated: it sealed nothing (so no plaintext
+    /// was left when it started), failed nothing, raced nothing, and could classify everything.
     public var isClean: Bool {
         !abortedNoOwnKey && !abortedNoWallKey
-            && deferredOwnKeyMigrationIncomplete == 0
-            && converted == 0 && convertedPlaintext == 0
+            && convertedPlaintext == 0
             && conversionFailures == 0 && indeterminate == 0
-            && legacyKeySealedOwnFile == 0 && skippedConcurrentlyModified == 0
+            && skippedConcurrentlyModified == 0
     }
 
-    /// Whether this pass converted at least one blob — the forward-progress verdict the shared
-    /// run loop uses to decide between "confirm with another pass" and "stop, retry next launch".
-    public var madeForwardProgress: Bool { converted + convertedPlaintext > 0 }
+    /// Whether this pass sealed at least one plaintext image — the forward-progress verdict the
+    /// shared run loop uses to decide between "confirm with another pass" and "stop, retry next
+    /// launch".
+    public var madeForwardProgress: Bool { convertedPlaintext > 0 }
 
     /// Creates a result. Public so tests can build expectations; production values come from
     /// ``MediaAtRestFormatMigrator/performPass()``.
     public init(
         examined: Int = 0,
         alreadyCurrentFormat: Int = 0,
-        converted: Int = 0,
         convertedPlaintext: Int = 0,
         conversionFailures: Int = 0,
         unopenableUnprefixed: Int = 0,
         refusedPlaintext: Int = 0,
-        legacyKeySealedOwnFile: Int = 0,
         skippedConcurrentlyModified: Int = 0,
         empty: Int = 0,
         indeterminate: Int = 0,
-        deferredOwnKeyMigrationIncomplete: Int = 0,
         abortedNoOwnKey: Bool = false,
         abortedNoWallKey: Bool = false
     ) {
         self.examined = examined
         self.alreadyCurrentFormat = alreadyCurrentFormat
-        self.converted = converted
         self.convertedPlaintext = convertedPlaintext
         self.conversionFailures = conversionFailures
         self.unopenableUnprefixed = unopenableUnprefixed
         self.refusedPlaintext = refusedPlaintext
-        self.legacyKeySealedOwnFile = legacyKeySealedOwnFile
         self.skippedConcurrentlyModified = skippedConcurrentlyModified
         self.empty = empty
         self.indeterminate = indeterminate
-        self.deferredOwnKeyMigrationIncomplete = deferredOwnKeyMigrationIncomplete
         self.abortedNoOwnKey = abortedNoOwnKey
         self.abortedNoWallKey = abortedNoWallKey
     }
 }
 
-/// Re-seals every remaining pre-domain-separation media blob into the current `FMA2` +
-/// purpose-AAD format — the format half of the media migration, beside `OwnPhotoKeyMigrator`'s
-/// key half.
+/// Seals every remaining pre-sealing plaintext photo into the current `FMA2` + purpose-AAD
+/// format, and counts what is left that nothing can open — the format half of the media
+/// migration, beside `OwnPhotoKeyMigrator`'s key half.
+///
+/// Phase 3 took the ciphertext half of this job away by deleting `gcmOpen`'s legacy-read branch:
+/// an unmarked box has no reader left, so it is classified into
+/// ``MediaAtRestFormatMigrationResult/unopenableUnprefixed`` and left alone. The plaintext
+/// generation is the half that survives, and it is the more urgent one anyway — those bytes are
+/// photographs sitting on disk in the clear.
 ///
 /// **Eager, idempotent, crash-safe**, on the `OwnPhotoKeyMigrator` contract: per file the first
 /// question is a header-only "is it already current?", so a confirming pass over a converted
@@ -253,20 +236,17 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
 /// new-and-valid, nothing is ever deleted, and any interruption's worst case is "re-examined
 /// next pass".
 ///
-/// **The residual live-store race, accepted with its stakes stated.** The pass runs off-main
-/// while the owning stores are live. Photo files are content-immutable per id, so a lost race
-/// is byte-equivalent — no guard. The two index files are file MANIFESTS and different: a stale
-/// wall-index write could, at the next launch's `loadIndex()` normalization, sweep a raced-in
-/// friend photo's files (permanent loss, no mesh rehydration hook), and a stale progress-index
-/// write strands its record's sealed bytes unreferenced. Three things bound that window to
-/// near-zero: exposure requires an index still legacy-format at the converting launch (every
-/// keyed wall load since domain separation already rewrote its index current-format); each
-/// file's classify→convert gap is one file's work, never the sweep's (per-file interleaving);
-/// and the two manifests get a compare-before-write guard — re-read immediately before the
-/// write, proceed only on byte-equality, else `skippedConcurrentlyModified` — shrinking the
-/// deletion-amplified window to one syscall gap. That residual gap is accepted: only an
-/// exclusive-access scheme could close it, and that machinery is not warranted for a
-/// one-launch, one-syscall window over indexes that are usually already current-format.
+/// **The live-store race, and why the manifests are now out of it.** The pass runs off-main while
+/// the owning stores are live. The only files it writes are the pre-sealing plaintext photos in
+/// the three locations whose read paths already upgrade on access, and photo files are
+/// content-immutable per id, so a lost race is byte-equivalent. The two index MANIFESTS — whose
+/// stale-write hazard (a wall index rewritten from a stale snapshot lets the next launch's
+/// `loadIndex()` orphan-sweep delete a raced-in friend photo's files) is the sharp one — are no
+/// longer writable by this pass at all: neither lives inside a plaintext-eligible directory, so
+/// `allowsPlaintextConversion` refuses them, and the ciphertext arm that used to rewrite them
+/// went with Phase 3's reader. They are still ENUMERATED and classified; they are simply never
+/// replaced. The compare-before-write guard that bounded that window went with the arm it
+/// guarded, because a guard on a path nothing can take is not a guard.
 ///
 /// Concurrency: a nonisolated struct holding two non-`Sendable` key providers, so an instance
 /// is confined to whatever isolation domain built it. The app builds one INSIDE its off-main
@@ -285,7 +265,6 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
     private let wallLocations: OwnPhotoSealedLocations
     private let ownKeyProvider: any PrivateMediaKeyProviding
     private let wallKeyProvider: any PrivateMediaKeyProviding
-    private let ownKeyMigrationLatch: OwnPhotoMigrationLatch
 
     /// Creates a migrator over explicit location sets and key providers (the test seam).
     ///
@@ -298,22 +277,18 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
     ///   - ownKeyProvider: Vends the own-photos key. Non-minting in production: a format sweep
     ///     must never be the reason a key row is created.
     ///   - wallKeyProvider: Vends the friend-wall key. Non-minting in production, same reason.
-    ///   - ownKeyMigrationLatch: `OwnPhotoKeyMigrator`'s completion latch — read (never written)
-    ///     to defer own-root unprefixed candidates the key migrator may still own.
     ///   - latch: The completion latch `run(maxPasses:)` sets.
     public init(
         ownLocations: OwnPhotoSealedLocations,
         wallLocations: OwnPhotoSealedLocations,
         ownKeyProvider: any PrivateMediaKeyProviding,
         wallKeyProvider: any PrivateMediaKeyProviding,
-        ownKeyMigrationLatch: OwnPhotoMigrationLatch,
         latch: MediaAtRestFormatMigrationLatch
     ) {
         self.ownLocations = ownLocations
         self.wallLocations = wallLocations
         self.ownKeyProvider = ownKeyProvider
         self.wallKeyProvider = wallKeyProvider
-        self.ownKeyMigrationLatch = ownKeyMigrationLatch
         self.latch = latch
     }
 
@@ -334,7 +309,6 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
             wallLocations: FriendWallCorpusLayout.resealableLocations(in: proximitySupportDirectory),
             ownKeyProvider: KeychainPrivateMediaKeyProvider(role: .ownPhotos, mintsIfAbsent: false),
             wallKeyProvider: KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false),
-            ownKeyMigrationLatch: OwnPhotoKeyMigrator.latch(defaults: defaults),
             latch: MediaAtRestFormatMigrationLatch(defaults: defaults)
         )
     }
@@ -342,12 +316,12 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
     // MARK: - The pass
 
     /// Sweeps every location once — classifying each file header-only through the census's shared
-    /// classifier and converting eligible legacy blobs in place, one file fully dispatched before
+    /// classifier and sealing eligible plaintext photos in place, one file fully dispatched before
     /// the next is touched — and tallies what it found.
     ///
     /// Never sets the latch — `run(maxPasses:)` owns that decision — so tests can drive passes
     /// directly and assert idempotence. Key probes are lazy-on-first-candidate and cached per
-    /// root, so a sweep with no convert candidates (an empty install, a fully-converted corpus)
+    /// root, so a sweep with no seal candidates (an empty install, a fully-sealed corpus)
     /// never touches the keychain at all — the key-migrator precedent, subsumed rather than
     /// special-cased. R7: not `@discardableResult` — the tally carries the pass's failure
     /// information.
@@ -373,16 +347,13 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
         let result = MediaAtRestFormatMigrationResult(
             examined: state.examined,
             alreadyCurrentFormat: state.alreadyCurrentFormat,
-            converted: state.converted,
             convertedPlaintext: state.convertedPlaintext,
             conversionFailures: state.conversionFailures,
             unopenableUnprefixed: state.unopenableUnprefixed,
             refusedPlaintext: state.refusedPlaintext,
-            legacyKeySealedOwnFile: state.legacyKeySealedOwnFile,
             skippedConcurrentlyModified: state.skippedConcurrentlyModified,
             empty: state.empty,
             indeterminate: state.indeterminate,
-            deferredOwnKeyMigrationIncomplete: state.deferredOwnKeyMigrationIncomplete,
             abortedNoOwnKey: state.abortedNoOwnKey,
             abortedNoWallKey: state.abortedNoWallKey
         )
@@ -399,36 +370,31 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
         case wall
     }
 
-    /// One enumerated file: where it is, whose root it belongs to, and whether it is one of the
-    /// two mutable index MANIFESTS (which get the compare-before-write guard).
+    /// One enumerated file: where it is and whose root it belongs to.
     private struct Candidate {
         let url: URL
         let root: Root
-        let isIndexFile: Bool
     }
 
     /// What one pass has learned so far: the running tallies plus the per-root lazy key probes.
     private struct PassState {
         var examined = 0
         var alreadyCurrentFormat = 0
-        var converted = 0
         var convertedPlaintext = 0
         var conversionFailures = 0
         var unopenableUnprefixed = 0
         var refusedPlaintext = 0
-        var legacyKeySealedOwnFile = 0
         var skippedConcurrentlyModified = 0
         var empty = 0
         var indeterminate = 0
-        var deferredOwnKeyMigrationIncomplete = 0
         var abortedNoOwnKey = false
         var abortedNoWallKey = false
         var ownKey = KeyProbe.unprobed
         var wallKey = KeyProbe.unprobed
     }
 
-    /// One root's key-availability state, probed lazily on that root's FIRST convert candidate
-    /// and cached for the pass — so a root with zero candidates never touches the keychain.
+    /// One root's key-availability state, probed lazily on that root's FIRST seal candidate and
+    /// cached for the pass — so a root with zero candidates never touches the keychain.
     private enum KeyProbe {
         case unprobed
         case available
@@ -449,10 +415,11 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
         case .plaintextJPEG:
             dispatchPlaintext(candidate, into: &state)
         case .unprefixedLegacyOrUnrecognized:
-            switch candidate.root {
-            case .own: dispatchUnprefixedOwn(candidate, into: &state)
-            case .wall: dispatchUnprefixedWall(candidate, into: &state)
-            }
+            // Counted from the header and left alone. Phase 3 deleted the only reader that could
+            // ever have opened these bytes, so there is no key to probe and nothing to convert:
+            // the pass has no more to say about them than how many there are. Never deleted —
+            // unopenable is not the same fact as unwanted.
+            state.unopenableUnprefixed += 1
         }
     }
 
@@ -465,7 +432,7 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
             state.refusedPlaintext += 1
             return
         }
-        guard keyIsAvailable(for: candidate.root, in: &state, abortsOnMiss: true) else { return }
+        guard keyIsAvailable(for: candidate.root, in: &state) else { return }
         guard let stored = try? Data(contentsOf: candidate.url) else {
             state.indeterminate += 1
             return
@@ -481,80 +448,9 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
             state.refusedPlaintext += 1
             return
         }
-        switch convert(plaintext: stored, stored: stored, candidate: candidate) {
+        switch convert(plaintext: stored, candidate: candidate) {
         case .converted: state.convertedPlaintext += 1
         case .failed: state.conversionFailures += 1
-        case .raced: state.skippedConcurrentlyModified += 1
-        }
-    }
-
-    /// An unprefixed own-root file — the middle state the key migrator structurally cannot see
-    /// (own-key-but-legacy-format opens through the legacy branch and is counted `alreadyOwnKey`
-    /// there), converted here iff the own key actually opens it.
-    private func dispatchUnprefixedOwn(_ candidate: Candidate, into state: inout PassState) {
-        // Latch precedence: with the key latch unset this may be a healthy friend-key file the
-        // key migrator has simply not reached — converting it here would need the legacy key
-        // and would duplicate that pass. Defer (blocking) instead; costs at most one launch.
-        guard ownKeyMigrationLatch.isComplete else {
-            state.deferredOwnKeyMigrationIncomplete += 1
-            return
-        }
-        guard keyIsAvailable(for: .own, in: &state, abortsOnMiss: true) else { return }
-        guard let stored = try? Data(contentsOf: candidate.url) else {
-            state.indeterminate += 1
-            return
-        }
-        guard MediaAtRestFormatCensus.format(ofHeader: stored) == .unprefixedLegacyOrUnrecognized else {
-            state.skippedConcurrentlyModified += 1
-            return
-        }
-        let purpose = OwnPhotoCorpusLayout.sealPurpose(for: candidate.url)
-        if let plaintext = ownKeyProvider.gcmOpen(stored, purpose: purpose) {
-            switch convert(plaintext: plaintext, stored: stored, candidate: candidate) {
-            case .converted: state.converted += 1
-            case .failed: state.conversionFailures += 1
-            case .raced: state.skippedConcurrentlyModified += 1
-            }
-            return
-        }
-        // The own key does not open it. Probe the wall key before concluding anything — the
-        // house model (`OwnPhotoKeyMigration`'s legacy-key posture): a verdict reached with a
-        // key unavailable is no verdict. This probe is DIAGNOSTIC — it never sets
-        // `abortedNoWallKey` (that flag belongs to wall-root candidates) and never converts
-        // (a friend-key file is the key migrator's job, and its recovery path is the read
-        // side's dual-open).
-        guard keyIsAvailable(for: .wall, in: &state, abortsOnMiss: false) else {
-            state.indeterminate += 1
-            return
-        }
-        if wallKeyProvider.gcmOpen(stored, purpose: purpose) != nil {
-            state.legacyKeySealedOwnFile += 1
-        } else {
-            state.unopenableUnprefixed += 1
-        }
-    }
-
-    /// An unprefixed wall-root file: converted iff the wall key opens it, under the wall's
-    /// per-location purpose.
-    private func dispatchUnprefixedWall(_ candidate: Candidate, into state: inout PassState) {
-        guard keyIsAvailable(for: .wall, in: &state, abortsOnMiss: true) else { return }
-        guard let stored = try? Data(contentsOf: candidate.url) else {
-            state.indeterminate += 1
-            return
-        }
-        guard MediaAtRestFormatCensus.format(ofHeader: stored) == .unprefixedLegacyOrUnrecognized else {
-            state.skippedConcurrentlyModified += 1
-            return
-        }
-        let purpose = FriendWallCorpusLayout.sealPurpose(for: candidate.url)
-        guard let plaintext = wallKeyProvider.gcmOpen(stored, purpose: purpose) else {
-            state.unopenableUnprefixed += 1
-            return
-        }
-        switch convert(plaintext: plaintext, stored: stored, candidate: candidate) {
-        case .converted: state.converted += 1
-        case .failed: state.conversionFailures += 1
-        case .raced: state.skippedConcurrentlyModified += 1
         }
     }
 
@@ -573,19 +469,20 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
         }
     }
 
-    /// Probes (once per pass per root, cached) whether `root`'s key is available.
+    /// Probes (once per pass per root, cached) whether `root`'s key is available, and raises that
+    /// root's abort flag on a miss.
     ///
-    /// `abortsOnMiss` distinguishes a root's OWN convert candidate — whose missing key sets that
-    /// root's abort flag — from the own-root diagnostic wall-key probe, whose miss makes only
-    /// that one file indeterminate.
-    private func keyIsAvailable(for root: Root, in state: inout PassState, abortsOnMiss: Bool) -> Bool {
+    /// The `abortsOnMiss: false` variant went with Phase 3: its only caller was the own-root
+    /// diagnostic wall-key probe, which existed to attribute an unprefixed own file to the
+    /// pre-split key — a question no reader asks any more.
+    private func keyIsAvailable(for root: Root, in state: inout PassState) -> Bool {
         switch root {
         case .own:
             if state.ownKey == .unprobed {
                 state.ownKey = ownKeyProvider.mediaKey() != nil ? .available : .unavailable
             }
             guard state.ownKey == .available else {
-                if abortsOnMiss { state.abortedNoOwnKey = true }
+                state.abortedNoOwnKey = true
                 return false
             }
             return true
@@ -594,7 +491,7 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
                 state.wallKey = wallKeyProvider.mediaKey() != nil ? .available : .unavailable
             }
             guard state.wallKey == .available else {
-                if abortsOnMiss { state.abortedNoWallKey = true }
+                state.abortedNoWallKey = true
                 return false
             }
             return true
@@ -609,32 +506,22 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
         case converted
         /// The seal, in-memory verify, write, or disk read-back failed; the file is wholly old
         /// (or, past the atomic write, wholly new-and-valid — atomic replace has no third state).
+        ///
+        /// No `raced` sibling any more: the only compare-before-write this pass performed guarded
+        /// the two index manifests, and Phase 3 took away the arm that could rewrite them. The
+        /// header re-read in ``dispatchPlaintext(_:into:)`` still catches a file that changed class
+        /// between the scan and the convert, and tallies it `skippedConcurrentlyModified` there.
         case failed
-        /// The index-file guard found the on-disk bytes changed since the convert-time read; the
-        /// store's newer bytes were left untouched.
-        case raced
     }
 
-    /// Converts one opened file: seal, verify in memory BEFORE any byte lands, guard the two
-    /// mutable index manifests against a concurrent store save, atomically write via the
-    /// surface's one fully-protected path, and read back from disk before counting. The source
+    /// Seals one plaintext file: seal, verify in memory BEFORE any byte lands, atomically write via
+    /// the surface's one fully-protected path, and read back from disk before counting. The source
     /// is never deleted, and nothing unverified ever replaces it.
-    private func convert(plaintext: Data, stored: Data, candidate: Candidate) -> ConvertOutcome {
+    private func convert(plaintext: Data, candidate: Candidate) -> ConvertOutcome {
         let provider = keyProvider(for: candidate.root)
         let purpose = sealPurpose(for: candidate)
         guard let sealed = provider.gcmSeal(plaintext, purpose: purpose) else { return .failed }
         guard provider.gcmOpen(sealed, purpose: purpose) == plaintext else { return .failed }
-        if candidate.isIndexFile {
-            // The compare-before-write guard (the two mutable manifests only): a store may have
-            // committed a newer index since the convert-time read, and landing this stale
-            // snapshot over it would — for the wall — let the next launch's normalization
-            // orphan-sweep delete a raced-in friend photo's files. Byte-inequality (or a failed
-            // re-read) skips the file untouched; it is re-examined next pass. This does not
-            // close the TOCTOU — it shrinks the window to one syscall gap (see the type doc).
-            guard let recheck = try? Data(contentsOf: candidate.url), recheck == stored else {
-                return .raced
-            }
-        }
         guard provider.sealAndWrite(plaintext, to: candidate.url, purpose: purpose) else {
             return .failed
         }
@@ -710,11 +597,11 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
                     scan.unreadableListingEntries += 1
                     continue
                 }
-                scan.candidates.append(Candidate(url: url, root: root, isIndexFile: false))
+                scan.candidates.append(Candidate(url: url, root: root))
             }
         }
         for url in locations.files where fileManager.fileExists(atPath: url.path) {
-            scan.candidates.append(Candidate(url: url, root: root, isIndexFile: true))
+            scan.candidates.append(Candidate(url: url, root: root))
         }
     }
 
@@ -722,23 +609,20 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
 
     /// One audit line per pass: every tally as a count, plus — when the pass does not prove
     /// completion — the names of the buckets holding the latch closed. Counts only, never file
-    /// names of own media beyond what existing reseal logs already record. §8's gate arithmetic
-    /// reads `unopenableUnprefixed` (the census-unprefixed residue) and `refusedPlaintext` (the
-    /// census-plaintext non-residue) from this line, which is why both always ride it.
+    /// names of own media beyond what existing reseal logs already record. The residue arithmetic
+    /// reads `unopenableUnprefixed` (the unmarked, unopenable residue) and `refusedPlaintext` (the
+    /// plaintext this pass will never seal) from this line, which is why both always ride it.
     private func logPass(_ result: MediaAtRestFormatMigrationResult) {
         var context: [String: String] = [
             "examined": String(result.examined),
             "alreadyCurrentFormat": String(result.alreadyCurrentFormat),
-            "converted": String(result.converted),
             "convertedPlaintext": String(result.convertedPlaintext),
             "conversionFailures": String(result.conversionFailures),
             "unopenableUnprefixed": String(result.unopenableUnprefixed),
             "refusedPlaintext": String(result.refusedPlaintext),
-            "legacyKeySealedOwnFile": String(result.legacyKeySealedOwnFile),
             "skippedConcurrentlyModified": String(result.skippedConcurrentlyModified),
             "empty": String(result.empty),
-            "indeterminate": String(result.indeterminate),
-            "deferredOwnKeyMigrationIncomplete": String(result.deferredOwnKeyMigrationIncomplete)
+            "indeterminate": String(result.indeterminate)
         ]
         if !result.isClean {
             context["blocking"] = blockingBucketNames(of: result).joined(separator: ",")
@@ -749,13 +633,10 @@ public struct MediaAtRestFormatMigrator: FormatMigrator {
     /// The names of every bucket (and abort flag) currently holding the latch closed.
     private func blockingBucketNames(of result: MediaAtRestFormatMigrationResult) -> [String] {
         var names: [String] = []
-        if result.converted > 0 { names.append("converted") }
         if result.convertedPlaintext > 0 { names.append("convertedPlaintext") }
         if result.conversionFailures > 0 { names.append("conversionFailures") }
-        if result.legacyKeySealedOwnFile > 0 { names.append("legacyKeySealedOwnFile") }
         if result.skippedConcurrentlyModified > 0 { names.append("skippedConcurrentlyModified") }
         if result.indeterminate > 0 { names.append("indeterminate") }
-        if result.deferredOwnKeyMigrationIncomplete > 0 { names.append("deferredOwnKeyMigrationIncomplete") }
         if result.abortedNoOwnKey { names.append("abortedNoOwnKey") }
         if result.abortedNoWallKey { names.append("abortedNoWallKey") }
         return names

@@ -492,16 +492,11 @@ nonisolated struct MediaPassWitness: Sendable, Equatable {
     /// The blocking buckets this pass hit, by name. Empty for a clean pass.
     var blockingBuckets: [String] {
         var named: [String] = []
-        if result.converted > 0 { named.append("converted \(result.converted)") }
         if result.convertedPlaintext > 0 { named.append("convertedPlaintext \(result.convertedPlaintext)") }
         if result.conversionFailures > 0 { named.append("conversionFailures \(result.conversionFailures)") }
         if result.indeterminate > 0 { named.append("indeterminate \(result.indeterminate)") }
-        if result.legacyKeySealedOwnFile > 0 { named.append("legacyKeySealedOwnFile \(result.legacyKeySealedOwnFile)") }
         if result.skippedConcurrentlyModified > 0 {
             named.append("skippedConcurrentlyModified \(result.skippedConcurrentlyModified)")
-        }
-        if result.deferredOwnKeyMigrationIncomplete > 0 {
-            named.append("deferredOwnKeyMigrationIncomplete \(result.deferredOwnKeyMigrationIncomplete)")
         }
         if result.abortedNoOwnKey { named.append("abortedNoOwnKey") }
         if result.abortedNoWallKey { named.append("abortedNoWallKey") }
@@ -552,7 +547,7 @@ nonisolated enum Phase3ProbeFailure {
 
 // MARK: - Latches
 
-/// The seven completion bits, taken in one place with one stamp.
+/// The six completion bits, taken in one place with one stamp.
 ///
 /// Every bit goes through an accessor that already exists, so no FernletKit module gains a new
 /// public surface for this instrument. ``mediaAtRest`` in particular is rendered NOWHERE in the app
@@ -569,11 +564,9 @@ nonisolated enum Phase3ProbeFailure {
 nonisolated struct Phase3LatchReadings: Sendable, Equatable {
     /// `SealedColumnMigrationLatch.isComplete`.
     let sealedColumn: Bool
-    /// `PendingNarrativeBufferMigrationLatch.isComplete`.
-    let pendingNarrativeBuffer: Bool
     /// `MediaAtRestFormatMigrationLatch.isComplete` — gate part (a) for the media surface.
     let mediaAtRest: Bool
-    /// `OwnPhotoMigrationLatch.isComplete` — an INPUT to the media gate, never a seventh gate.
+    /// `OwnPhotoMigrationLatch.isComplete` — an INPUT to the media gate, never a gate of its own.
     let ownPhotoKey: Bool
     /// `HeartDropSidecarMigrationLatch.isComplete`.
     let heartDropSidecar: Bool
@@ -585,7 +578,6 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
     /// Creates a latch reading.
     init(
         sealedColumn: Bool,
-        pendingNarrativeBuffer: Bool,
         mediaAtRest: Bool,
         ownPhotoKey: Bool,
         heartDropSidecar: Bool,
@@ -593,7 +585,6 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
         lockWrapRow: Bool
     ) {
         self.sealedColumn = sealedColumn
-        self.pendingNarrativeBuffer = pendingNarrativeBuffer
         self.mediaAtRest = mediaAtRest
         self.ownPhotoKey = ownPhotoKey
         self.heartDropSidecar = heartDropSidecar
@@ -601,7 +592,7 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
         self.lockWrapRow = lockWrapRow
     }
 
-    /// Takes all seven bits.
+    /// Takes all six bits.
     ///
     /// The keychain service is threaded from the SAME ``CryptoFormatCensus/Inputs`` the scan used
     /// rather than re-spelled here. The census's own recorded hazard is the reason: a re-spelled
@@ -609,17 +600,15 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
     /// two readers that diverge either agree by making the same mistake or disagree for a reason
     /// that is not a signal.
     ///
-    /// Blocking: six `UserDefaults` reads and one keychain read. Call it off the main actor beside
+    /// Blocking: five `UserDefaults` reads and one keychain read. Call it off the main actor beside
     /// the census scan.
     static func take(inputs: CryptoFormatCensus.Inputs, defaults: UserDefaults = .standard) -> Phase3LatchReadings {
         Phase3LatchReadings(
             sealedColumn: SealedColumnFormatMigrator.latch(defaults: defaults).isComplete,
-            // The two `Migrator.latch(defaults:)` accessors for these surfaces are `@MainActor`
-            // (their migrators are), and this reading is taken off the main actor beside the census
-            // scan. Both latch TYPES are `public nonisolated` with the same `init(defaults:)`, so
-            // the bit is read through the type rather than by hopping actors for a `UserDefaults`
-            // read — the same spelling `MediaAtRestFormatMigrationLatch` already needs here.
-            pendingNarrativeBuffer: PendingNarrativeBufferMigrationLatch(defaults: defaults).isComplete,
+            // Read through the latch TYPE rather than through `Migrator.latch(defaults:)`: this
+            // reading is taken off the main actor beside the census scan, and that accessor is
+            // `@MainActor` (its migrator is), so the bit would otherwise cost an actor hop for a
+            // `UserDefaults` read.
             mediaAtRest: MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete,
             ownPhotoKey: OwnPhotoKeyMigrator.latch(defaults: defaults).isComplete,
             heartDropSidecar: HeartDropSidecarMigrationLatch(defaults: defaults).isComplete,
@@ -628,11 +617,10 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
         )
     }
 
-    /// The seven bits as report lines, in a fixed order, each naming the latch it came from.
+    /// The six bits as report lines, in a fixed order, each naming the latch it came from.
     var printedLines: [String] {
         [
             "sealedColumn: \(sealedColumn)",
-            "pendingNarrativeBuffer: \(pendingNarrativeBuffer)",
             "mediaAtRest: \(mediaAtRest)",
             "ownPhotoKey (input, not a gate): \(ownPhotoKey)",
             "heartDropSidecar: \(heartDropSidecar)",
@@ -661,11 +649,11 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
     var census: CryptoFormatCensus.Readings?
     /// When the census landed.
     var censusStamp: Phase3Stamp?
-    /// The seven latch bits, or nil when the local scan has not landed.
+    /// The six latch bits, or nil when the local scan has not landed.
     var latches: Phase3LatchReadings?
     /// When the latches were read.
     var latchStamp: Phase3Stamp?
-    /// The seven bits as they read BEFORE a reset was taken this sitting, when one was.
+    /// The six bits as they read BEFORE a reset was taken this sitting, when one was.
     var preResetLatchSnapshot: Phase3LatchReadings?
     /// Every manifest probe taken this sitting, in acquisition order.
     var manifestProbes: [Phase3ManifestProbe]
@@ -756,7 +744,7 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
     let environment: Phase3GateEnvironment
     /// One row per gate, in ``Phase3Gate/allCases`` order.
     let rows: [Phase3GateRow]
-    /// The seven bits as they read before the one reset this design offers, when it was taken.
+    /// The six bits as they read before the one reset this design offers, when it was taken.
     let preResetLatchSnapshot: Phase3LatchReadings?
     /// When the sealed-column latch was reset this sitting. Carried so the export can say the
     /// pre-reset snapshot was NOT captured, rather than omitting the section and saying nothing.
@@ -902,8 +890,7 @@ nonisolated enum Phase3GateReadoutBuilder {
                 passInFlight: inputs.sealedColumnPassInFlight,
                 overlappedKeyedPass: inputs.censusOverlappedKeyedPass,
                 resetTakenAt: inputs.sealedColumnResetTakenAt),
-            row(forPendingNarrative: census.pendingNarrative, latch: latches.pendingNarrativeBuffer,
-                stamp: inputs.censusStamp),
+            row(forPendingNarrative: census.pendingNarrative, stamp: inputs.censusStamp),
             row(forMedia: audit, latches: latches, witness: inputs.mediaWitness,
                 passInFlight: inputs.mediaPassInFlight, censusStamp: inputs.censusStamp,
                 launchPass: inputs.mediaLaunchPass),
@@ -1222,20 +1209,22 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// `.absent` discharges as an EARNED zero — the buffer's drain-and-purge lifecycle makes absence
     /// real evidence, and `saveEntries` can only re-create the file in v2. `.unreadable` is
     /// `.unavailable`, carrying the census's own wording: it is not a zero.
+    ///
+    /// One witness, not two: Phase 3 deleted this surface's legacy reader and, with it, the format
+    /// migrator whose completion latch used to be rendered beside the census. The latch was never
+    /// the gate — the census reading was — so its removal takes an ornament, not evidence.
     static func row(
         forPendingNarrative census: PendingNarrativeBufferFormatCensus,
-        latch: Bool,
         stamp: Phase3Stamp?
     ) -> Phase3GateRow {
         Phase3GateRow(
             gate: .pendingNarrativeBuffer,
-            witnesses: [.markerCensus, .completionLatch],
+            witnesses: [.markerCensus],
             stamps: stamp.map { [$0] } ?? [],
             verdict: pendingNarrativeVerdict(census),
             evidence: [
                 "\(census.fileURL.lastPathComponent): \(pendingNarrativeState(census))",
-                "legacyCount: \(census.legacyCount.map(String.init) ?? "—")",
-                "completion latch (a launch-pass record, not the gate): \(latch)"
+                "legacyCount: \(census.legacyCount.map(String.init) ?? "—")"
             ],
             caveats: [
                 "No control is offered here, and that is a decision rather than a gap: the gate IS"
@@ -1365,7 +1354,7 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// The three ways this row's own inputs disqualify themselves before the latch is even consulted.
     ///
     /// The first is the one that authorizes a false pass. `MediaAtRestFormatMigrationResult.isClean`
-    /// requires `converted == 0 && convertedPlaintext == 0`, and a converting pass rewrites those
+    /// requires `convertedPlaintext == 0`, and a converting pass rewrites those
     /// files into the current format — so on the sitting's own prescribed order (fund the pass, then
     /// re-take the census) they vanish from the census's unprefixed bucket and `U − J − K` nets to
     /// zero. The instrument's own copy says "on a latched device it should convert nothing; if it
@@ -1456,7 +1445,7 @@ nonisolated enum Phase3GateReadoutBuilder {
         var lines = ["(a) " + mediaLatchLine(latch: latches.mediaAtRest, witness: witness,
                                              passInFlight: passInFlight, launchPass: launchPass)]
         lines.append("launch pass: \(launchPass?.printed ?? "none has finished this process")")
-        lines.append("ownPhotoKeyMigrationComplete (an INPUT to this gate, never a seventh gate):"
+        lines.append("ownPhotoKeyMigrationComplete (an INPUT to this gate, never a gate of its own):"
             + " \(latches.ownPhotoKey)")
         guard let audit else { return lines }
         lines.append(contentsOf: audit.printedLocationLines)
@@ -1472,8 +1461,8 @@ nonisolated enum Phase3GateReadoutBuilder {
     ///
     /// `blockingBuckets` used to be reachable only through the latch-false branch of
     /// `mediaLatchLine`, so a latched device printed a bare `isClean false` with no named bucket
-    /// beside it — and `converted` / `convertedPlaintext`, the two that a re-taken census erases,
-    /// appeared on no line of the row or the export at all.
+    /// beside it — and `convertedPlaintext`, the one a re-taken census erases, appeared on no line
+    /// of the row or the export at all.
     private static func mediaWitnessLines(_ witness: MediaPassWitness?) -> [String] {
         guard let witness else { return [] }
         let buckets = witness.blockingBuckets
@@ -1494,11 +1483,10 @@ nonisolated enum Phase3GateReadoutBuilder {
 
     private static func mediaCaveats(_ audit: MediaResidueAudit?, latches: Phase3LatchReadings) -> [String] {
         var caveats = [
-            "An unprefixed byte in a born-sealed corpus is NOT automatically blocking:"
-                + " unopenableUnprefixed is deliberately absent from the pass's isClean, and"
-                + " dispatchUnprefixedWall routes an unopenable wall byte straight into it. Those"
-                + " bytes were read, every key the legacy branch could pair them with was tried, and"
-                + " nothing opens them — so deleting the legacy branch cannot change what a reader gets."
+            "An unprefixed byte is NOT blocking: unopenableUnprefixed is deliberately absent from"
+                + " the pass's isClean, and since Phase 3 deleted gcmOpen's legacy-read branch every"
+                + " unmarked blob lands there by classification alone. No key opens them, so there is"
+                + " nothing a pass could do for them beyond counting them."
         ]
         guard let audit else { return caveats }
         if audit.keylessWallSignature {
@@ -1508,10 +1496,6 @@ nonisolated enum Phase3GateReadoutBuilder {
                 + " the arithmetic above.")
         }
         if let disagreement = audit.examinedDisagreementCaveat { caveats.append(disagreement) }
-        if !latches.ownPhotoKey {
-            caveats.append("The own-photo KEY latch is unset, so the format pass defers own-root"
-                + " unprefixed candidates (deferredOwnKeyMigrationIncomplete) rather than converting them.")
-        }
         return caveats
     }
 
@@ -2105,17 +2089,17 @@ nonisolated enum Phase3GateReportBuilder {
         resetTakenAt: Date?
     ) -> [String] {
         guard let snapshot else {
-            // Nothing-silent: the reset dialog promises "the pre-reset value of all seven latches is
+            // Nothing-silent: the reset dialog promises "the pre-reset value of all six latches is
             // captured into the report first". An omitted section would let an unkept promise read
             // as an untaken reset.
             guard let resetTakenAt else { return [] }
             return ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING",
                     "  NOT CAPTURED — the reset at \(resetTakenAt.ISO8601Format()) was taken before"
-                        + " the local scan had landed, so the seven pre-reset bits for this device"
+                        + " the local scan had landed, so the six pre-reset bits for this device"
                         + " are gone for this sitting."]
         }
         var out = ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING"]
-        // R2: bounded by the seven printed bits.
+        // R2: bounded by the six printed bits.
         for line in snapshot.printedLines { out.append("  \(line)") }
         return out
     }

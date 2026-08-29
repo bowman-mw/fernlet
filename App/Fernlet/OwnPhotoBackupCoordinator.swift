@@ -759,6 +759,10 @@ final class OwnPhotoBackupCoordinator {
     ///
     /// - Parameter limitedTo: When non-nil, only these manifest ids are fetched — the REPAIR pass
     ///   for photos a previous restore could not land. Nil restores the whole committed set.
+    ///
+    /// Only `summary.failed` — the RETRYABLE failures — reaches the repair ledger.
+    /// `summary.unverifiableLegacyDigest` is terminal by construction and is audit-logged instead;
+    /// see the comment at the recording site.
     private func restore(
         corpus: SealedPhotoCorpus,
         access: CorpusAccess,
@@ -800,6 +804,20 @@ final class OwnPhotoBackupCoordinator {
             if access.carriesSidecar, summary.restored > 0, let sidecar = summary.sidecar,
                !access.restoreSidecar(sidecar) {
                 FernletAuditLog.log("sealedPhoto.restoreSidecarRefused", context: ["corpus": corpus.rawValue])
+            }
+            // Terminal, never queued: an entry whose recorded hash version is legacy and whose
+            // bytes do not match the v2 digest cannot be verified by anything this build ships
+            // (Phase 3 deleted the v1 digest comparison). Putting it in the repair ledger would
+            // re-fetch the same record every launch, hold the ledger permanently non-empty, keep
+            // this corpus answering `.deferredTransient`, and pin `OwnPhotoEscrowCommitLedger`
+            // false — a doomed repair pinning the binding gate shut. It is named here instead, and
+            // the pass moves on; the real repair is a full-verification pass from the device that
+            // owns those photos, which re-uploads them at `currentHashVersion`.
+            if !summary.unverifiableLegacyDigest.isEmpty {
+                FernletAuditLog.log("sealedPhoto.restoreAbandonedUnverifiable", context: [
+                    "corpus": corpus.rawValue,
+                    "entries": String(summary.unverifiableLegacyDigest.count)
+                ])
             }
             guard summary.failed.isEmpty else {
                 FernletAuditLog.log("sealedPhoto.restorePartial", context: [

@@ -275,7 +275,7 @@ struct Phase3GateReadoutView: View {
                     .font(.fernlet(.label))
             }
             .accessibilityIdentifier("phase3Readout.reScan")
-            Text(verbatim: "Free: marker bytes, seven latch bits, no writes. The census is dropped"
+            Text(verbatim: "Free: marker bytes, six latch bits, no writes. The census is dropped"
                 + " and re-taken whenever a pass could have changed what it counts, so use this to"
                 + " re-pair the two halves of a row rather than reading a stale one.")
                 .font(.fernlet(.labelSmall))
@@ -389,13 +389,13 @@ struct Phase3GateReadoutView: View {
     /// Why the reset is refused, or nil when it may be taken.
     ///
     /// The scan clause is load-bearing rather than tidy: the confirmation states "the pre-reset
-    /// value of all seven latches is captured into the report first", and that capture is only
+    /// value of all six latches is captured into the report first", and that capture is only
     /// possible once the local scan has landed. Clearing the latch before then destroys the reading
     /// while keeping the promise unkept.
     private var resetDisabledReason: String? {
         if store.sealedColumnMigrationInFlight { return "Disabled: a sealed-column run is in flight." }
         guard session.latches == nil else { return nil }
-        return "Disabled until the local scan lands: this control promises to capture the seven"
+        return "Disabled until the local scan lands: this control promises to capture the six"
             + " pre-reset latch bits into the report FIRST, and there is nothing to capture yet."
     }
 
@@ -419,7 +419,7 @@ struct Phase3GateReadoutView: View {
             title: "Clear the sealed-column completion latch?",
             verbatimMessage: "This latch MAY NOT COME BACK in this sitting: a device that locks"
                 + " mid-pass, or a pass stopped by key revocation, leaves it cleared until a later"
-                + " launch runs clean. The pre-reset value of all seven latches is captured into the"
+                + " launch runs clean. The pre-reset value of all six latches is captured into the"
                 + " report first. Nothing else is touched, and no data is deleted.",
             confirmLabel: "Clear the latch",
             auditEvent: "debug.phase3Readout.sealedColumnLatchReset"
@@ -647,7 +647,7 @@ struct Phase3GateReadoutView: View {
     /// turns that landing into a recorded refusal instead of a stale reading under a fresh stamp.
     private func resetSealedColumnLatch() {
         guard let latches = session.latches else {
-            session.recordRefusal("Reset refused: the local scan had not landed, so the seven"
+            session.recordRefusal("Reset refused: the local scan had not landed, so the six"
                 + " pre-reset latch bits could not be captured first.")
             return
         }

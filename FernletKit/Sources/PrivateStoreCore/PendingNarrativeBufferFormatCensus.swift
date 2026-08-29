@@ -11,15 +11,18 @@ import Foundation
 ///
 /// ## Why this type exists
 ///
-/// `PendingNarrativeBuffer.loadEntries()` still carries a `// cryptographic-domain: legacy-read`
-/// branch: a file written before `91c3956` is a bare `ChaChaPoly` box sealed with **no** associated
-/// data, while every file written since is the four cleartext bytes `FNB2` followed by a box bound
-/// to `FernletCryptoPurpose.AEAD.pendingNarrativeBufferV2`. That branch cannot simply be deleted —
-/// the bytes it opens are the user's cycle notes, written while the app lock was engaged, on a phone
-/// they still own. Deleting the reader would not standardize those bytes; it would make them
-/// unopenable. So the plan's shape is *migrate, prove, then delete*, and this census is the "prove"
-/// half's precondition: nothing can be deleted until the number of legacy blobs is known and has
-/// been observed to reach zero on a real device that upgraded from a pre-`91c3956` build.
+/// A file written before `91c3956` is a bare `ChaChaPoly` box sealed with **no** associated data,
+/// while every file written since is the four cleartext bytes `FNB2` followed by a box bound to
+/// `FernletCryptoPurpose.AEAD.pendingNarrativeBufferV2`. The crypto-standardization plan's Phase 3
+/// **deleted the reader for the first shape**: `PendingNarrativeBuffer.loadEntries()` now requires
+/// the marker and refuses its absence by name
+/// (``PendingNarrativeBufferError/legacyUnprefixedFormat``).
+///
+/// This census outlives that deletion because a counter is not a reader. It holds no key, opens
+/// nothing, and answers the one question the refusal raises: *are there any such bytes on this
+/// device at all?* Before the deletion it was the "prove" half of *migrate, prove, then delete*;
+/// after it, it is how a device that still holds a legacy buffer file can be told apart from the
+/// overwhelmingly common device that never had one.
 ///
 /// ## What the number is, and why it is a 0-or-1
 ///
@@ -37,18 +40,18 @@ import Foundation
 /// Classification is defined as *what `loadEntries()` will decide*, not as an independent opinion:
 /// both test the first four bytes against the same ``PendingNarrativeBuffer`` constant, before any
 /// key is fetched. That equivalence is the point — a census that classified by some cleverer rule
-/// could report "no legacy bytes" about a file the shipping reader would still send down the legacy
-/// branch. Two consequences follow, and both are honest limits rather than bugs:
+/// could report "no legacy bytes" about a file the shipping reader would still refuse. Two
+/// consequences follow, and both are honest limits rather than bugs:
 ///
 /// - **Corrupt or truncated bytes land in ``Format/legacyUnprefixed``.** A three-byte scribble is not a valid
-///   box under either format, but it carries no `FNB2` marker, so the reader would take it down the
-///   legacy branch and fail to open it — and so this census calls it legacy. ``Format/legacyUnprefixed`` is
-///   therefore an *upper bound* on true legacy blobs, which is the safe direction to be wrong in: it
-///   can delay the Phase-3 deletion, never license it early.
+///   box under either format, but it carries no `FNB2` marker, so the reader refuses it as
+///   ``PendingNarrativeBufferError/legacyUnprefixedFormat`` — and so this census calls it legacy.
+///   ``Format/legacyUnprefixed`` is therefore an *upper bound* on true legacy blobs, which is the
+///   safe direction to be wrong in: it over-reports the surface, never under-reports it.
 /// - **A legacy box whose first four nonce bytes happen to spell `FNB2` is called v2.** ChaChaPoly
 ///   nonces are random, so this is a 2⁻³² accident, and it is deliberately not engineered around:
-///   the shipping reader would misread that same file identically (strip four bytes, attempt a v2
-///   open, throw), so the census keeps telling the truth about the reader's behavior. Engineering a
+///   the shipping reader misreads that same file identically (strip four bytes, attempt a v2 open,
+///   throw), so the census keeps telling the truth about the reader's behavior. Engineering a
 ///   disambiguation here would only make the census disagree with the code it is measuring.
 ///
 /// ## Absent is not unreadable
@@ -65,14 +68,14 @@ import Foundation
 ///   is locked can legitimately fail to open a file that is perfectly fine. (Fernlet's own app lock
 ///   is irrelevant here by design — the buffer exists precisely to be writable while the app lock is
 ///   engaged, and its key is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — but the device
-///   lock is not.) Scoring that as zero would manufacture exactly the false "census = 0" proof that
-///   Phase 3 deletes the legacy reader on.
+///   lock is not.) Scoring that as zero would manufacture exactly the false "census = 0" proof
+///   Phase 3's deletion was read against.
 ///
 /// ``isProvenLegacyFree`` encodes that distinction; ``indeterminateCount`` keeps it visible, and
 /// ``legacyCount`` is `Int?` rather than `Int` so an unclassifiable file cannot be summed into a
 /// total as if it were a zero.
 ///
-/// One residual caveat rides on that split, and it is the reason a Phase-3 zero must be taken on an
+/// One residual caveat rides on that split, and it is the reason a reading must be taken on an
 /// **unlocked** device rather than opportunistically in the background: absent-vs-unreadable is
 /// decided by `fileExists(atPath:)`, which answers from file *metadata* — readable today even when
 /// data protection is denying the contents. If that ever stopped being true, a protected file would
@@ -243,8 +246,8 @@ public struct PendingNarrativeBufferFormatCensus: Sendable, Equatable {
     ///
     /// `Int?` rather than `Int`, and that is the whole safety property of this API: an unreadable
     /// file returning `0` would read, in a summary line or a sum across surfaces, exactly like a
-    /// clean device. It is not one. Phase 3 (deleting the legacy reader) is gated on observing this
-    /// at `0` — never on `nil`, and never on a total that quietly absorbed a `nil` as a zero.
+    /// clean device. It is not one. Phase 3's deletion was read against this at `0` — never against
+    /// `nil`, and never against a total that quietly absorbed a `nil` as a zero.
     public var legacyCount: Int? {
         switch format {
         case .legacyUnprefixed:        return 1

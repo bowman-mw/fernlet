@@ -41,15 +41,25 @@ struct OwnPhotoKeyBindingTests {
         }.jpegData(compressionQuality: 0.7)!
     }
 
-    private func sealed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
-        try #require(try AES.GCM.seal(plaintext, using: key).combined)
+    /// AES-GCM-seals bytes the way every media store does TODAY: the `FMA2` marker, then a box
+    /// binding the file's own at-rest purpose. It used to emit the pre-domain-separation shape (no
+    /// marker, no AAD), which the crypto standardization round's Phase 3 left with no reader at
+    /// all — a fixture in it would make this suite's subject unopenable for a reason that has
+    /// nothing to do with the binding flip it exists to test.
+    private func sealed(_ plaintext: Data, under key: SymmetricKey, at url: URL) throws -> Data {
+        let combined = try #require(try AES.GCM.seal(
+            plaintext,
+            using: key,
+            authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+        ).combined)
+        return Data("FMA2".utf8) + combined
     }
 
     /// Opens a sealed file the way the stores do, for the one artifact with no store-level reader
     /// that distinguishes "empty" from "unreadable" (the progress index).
-    /// Opens an at-rest media file the way the stores do, in BOTH formats: a `FMA2`-marked box
-    /// authenticates the file's own purpose as AEAD data, while an unmarked box is the
-    /// pre-domain-separation layout these fixtures deliberately seed.
+    /// Opens an at-rest media file the way the stores do: a `FMA2`-marked box authenticating the
+    /// file's own purpose as AEAD data, and nothing else. The unmarked fallback this helper used to
+    /// carry went with production's own, in Phase 3.
     ///
     /// The marker is spelled out rather than read from `PrivateMediaStore`: this suite asserts the
     /// at-rest FORMAT, and a fixture that asks production what the format is could never notice
@@ -58,14 +68,11 @@ struct OwnPhotoKeyBindingTests {
     private func opens(_ url: URL, under key: SymmetricKey) -> Data? {
         guard let stored = try? Data(contentsOf: url) else { return nil }
         let formatV2 = Data("FMA2".utf8)
-        if stored.starts(with: formatV2) {
-            guard let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
-            return try? AES.GCM.open(
-                box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
-            )
-        }
-        guard let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
-        return try? AES.GCM.open(box, using: key)
+        guard stored.starts(with: formatV2),
+              let box = try? AES.GCM.SealedBox(combined: stored.dropFirst(formatV2.count)) else { return nil }
+        return try? AES.GCM.open(
+            box, using: key, authenticating: OwnPhotoCorpusLayout.sealPurpose(for: url).data
+        )
     }
 
     /// An isolated defaults suite: the migration latch and the binding consent must never be read
@@ -225,13 +232,13 @@ struct OwnPhotoKeyBindingTests {
         for corpus in corpora {
             let plaintext = jpeg()
             let id = UUID()
-            try sealed(plaintext, under: legacyKey)
-                .write(to: corpus.directory.appendingPathComponent("\(id.uuidString).jpg"))
+            let url = corpus.directory.appendingPathComponent("\(id.uuidString).jpg")
+            try sealed(plaintext, under: legacyKey, at: url).write(to: url)
             photos.append((corpus.directory, corpus.purpose, id, plaintext))
         }
         let indexURL = try #require(locations.files.first)
         let indexPlaintext = Data("[]".utf8)
-        try sealed(indexPlaintext, under: legacyKey).write(to: indexURL)
+        try sealed(indexPlaintext, under: legacyKey, at: indexURL).write(to: indexURL)
 
         // Binding is refused while those files are still legacy — the latch has not been earned yet.
         #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()

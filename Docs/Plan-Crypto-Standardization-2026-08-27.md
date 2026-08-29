@@ -1001,6 +1001,13 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
     crypto, and it belongs in its own change. `Docs/Power-of-10-Swift.md` said "four shipping roots"
     against a five-entry `SHIPPING_ROOTS` and was corrected here, because that one was the wall
     UNDERSTATING coverage it already had, not a hole.
+- [ ] RESIDUAL from Phase 3 — **`OwnPhotoKeyMigrator`'s convert is now unreachable in production**
+      and it was KEPT deliberately. Every pre-split own-photo file is unmarked, so after
+      `MediaAtRestCrypto`'s legacy open went, nothing can reach its conversion path. It is not
+      leftovers: its LATCH is half of `OwnPhotoKeyBinder`'s irreversible binding gate, so retiring
+      it is a security-design change and not a cleanup. Documented at the type and pinned by a test.
+      Decide it deliberately, in its own change, or leave it — but do not let a future "delete dead
+      code" sweep take it for dead weight.
 - [ ] RESIDUAL from Phase 4 — `DuressRecoveryCoordinator` (app target) swallows the new
       `legacyWireFormat` refusal in three `try? identity.open(…)` calls, so a legacy peer fails
       INVISIBLY there and only there. Pre-existing, and it swallows every open failure equally

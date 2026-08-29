@@ -63,7 +63,7 @@ import Foundation
 /// `FormatMigrationLatching` family expects.
 public nonisolated struct SealedColumnMigrationLatch: FormatMigrationLatching {
     /// The `UserDefaults` key holding the latch. A `static let` literal so the wipe wall's
-    /// discovery scan finds it (the `PendingNarrativeBufferMigrationLatch` shape, byte for byte).
+    /// discovery scan finds it (the `OwnPhotoMigrationLatch` shape, byte for byte).
     public static let defaultsKey = "com.fernlet.private-store.sealedColumnMigrationComplete"
 
     private let defaults: UserDefaults

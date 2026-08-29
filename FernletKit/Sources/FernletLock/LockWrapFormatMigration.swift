@@ -173,7 +173,9 @@ public nonisolated struct LockWrapMigrationResult: Sendable, Equatable, FormatMi
 /// scripted-failure tests can reach every step.
 ///
 /// Concurrency: `@MainActor` with an ISOLATED conformance (`: @MainActor FormatMigrator`) — the
-/// 2.4 (`PendingNarrativeBufferFormatMigrator`) precedent verbatim. The migrator is built and run
+/// 2.4 pending-narrative-buffer precedent verbatim (that migrator is gone — Phase 3 deleted the
+/// legacy reader it healed for — but the isolation shape it established stands). The migrator is
+/// built and run
 /// inside the service's MainActor unlock tail and holds the service's injected (non-Sendable)
 /// closures; every pass step is synchronous, so the whole pass runs without suspension points.
 @MainActor

@@ -39,8 +39,10 @@ enum MediaAtRestFormat {
 /// falls through to that store's legacy-plaintext branch) is preserved per-store behavior,
 /// not something these helpers arbitrate.
 extension PrivateMediaKeyProviding {
-    /// Prefix on purpose-authenticated at-rest boxes. Previous boxes began directly with the GCM
-    /// nonce and remain read-compatible so upgrade-on-read can rewrite them in this format.
+    /// Prefix on purpose-authenticated at-rest boxes, REQUIRED on read as well as write. Previous
+    /// boxes began directly with the GCM nonce and bound no purpose; Phase 3 of the crypto
+    /// standardization plan deleted that read, so the marker's absence now only classifies bytes as
+    /// unopenable rather than selecting a second, unbound open.
     ///
     /// A local alias for ``MediaAtRestFormat/v2Marker``, which is where the bytes actually live: a
     /// static member of a protocol extension cannot be named without a conforming type, and the
@@ -60,18 +62,38 @@ extension PrivateMediaKeyProviding {
     }
 
     /// Opens AES-256-GCM combined bytes sealed under ``mediaKey()``. Returns nil when no key is
-    /// available, the bytes aren't a well-formed sealed box, or authentication/decryption fails —
-    /// callers branch on nil to fail closed (or to try their own legacy-plaintext path).
+    /// available, the bytes carry no `FMA2` marker, they aren't a well-formed sealed box, or
+    /// authentication/decryption fails — callers branch on nil to fail closed (or to try their own
+    /// legacy-plaintext path).
+    ///
+    /// The marker is REQUIRED on read as well as write. The crypto standardization round's Phase 3
+    /// deleted the unprefixed, no-AAD open that used to sit at the bottom of this function, so an
+    /// unmarked ciphertext blob is now classified and refused instead of opened under no domain at
+    /// all. The refusal keeps this function's `Optional` contract — every caller already fails
+    /// closed on nil, and turning the nil into a throw would rewrite eight read paths for no added
+    /// safety — but it is NOT silent: bytes the census calls
+    /// ``MediaAtRestFormatClass/unprefixedLegacyOrUnrecognized`` get a named audit line naming the
+    /// purpose (never a file name) before the nil goes back.
+    ///
+    /// Only that class is logged. The plaintext-JPEG generation reaches this call too, on its way
+    /// to the read paths' own upgrade-on-access branch, and it never had anything to do with the
+    /// deleted reader — announcing it as a legacy-format refusal would be a false line on every
+    /// pre-sealing photo the user opens.
     func gcmOpen(_ stored: Data, purpose: CryptographicPurpose) -> Data? {
         guard let key = mediaKey() else { return nil }
-        if stored.starts(with: Self.atRestFormatV2) {
-            guard let currentBox = try? AES.GCM.SealedBox(
-                combined: stored.dropFirst(Self.atRestFormatV2.count)
-            ) else { return nil }
-            return try? AES.GCM.open(currentBox, using: key, authenticating: purpose.data)
+        guard stored.starts(with: Self.atRestFormatV2) else {
+            if MediaAtRestFormatCensus.format(ofHeader: stored) == .unprefixedLegacyOrUnrecognized {
+                FernletAuditLog.log(
+                    "privateMedia.legacyFormatRefused",
+                    context: ["purpose": purpose.rawValue]
+                )
+            }
+            return nil
         }
-        guard let box = try? AES.GCM.SealedBox(combined: stored) else { return nil }
-        return try? AES.GCM.open(box, using: key) // cryptographic-domain: legacy-read
+        guard let currentBox = try? AES.GCM.SealedBox(
+            combined: stored.dropFirst(Self.atRestFormatV2.count)
+        ) else { return nil }
+        return try? AES.GCM.open(currentBox, using: key, authenticating: purpose.data)
     }
 
     /// Seals `plaintext` via ``gcmSeal(_:)`` and atomically writes the ciphertext to `url` with

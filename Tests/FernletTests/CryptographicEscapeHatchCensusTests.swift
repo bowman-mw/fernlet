@@ -45,13 +45,18 @@ struct CryptographicEscapeHatch: Sendable {
 ///
 /// Phase 4 took `legacy-read` 10 → 6 by deleting the four Class-B WIRE readers (`meshGroupPhotoV2`
 /// and the mesh group payload in `MeshNetworkManager`, the `proximityTransportV2` AAD selector and
-/// `meshGroupKeyWrapV2` in `IdentityService`). The six that remain are the Class-A at-rest readers,
-/// which are Phase 3's business.
+/// `meshGroupKeyWrapV2` in `IdentityService`).
+///
+/// Phase 3 then took it 6 → 3 by deleting three of the six Class-A AT-REST readers: the
+/// `PendingNarrativeBuffer` buffer-file open, `MediaAtRestCrypto.gcmOpen`'s unprefixed no-AAD
+/// branch, and `SealedPhotoBackupService`'s v1 digest comparison. The three that remain are the
+/// delicate ones — `ColumnCrypto`, `FernletLockService`'s content-key wrap, and
+/// `HeartDropSidecarKey`.
 struct CryptographicEscapeHatchCensusTests {
 
     /// The label → count pin. The sum is the number §Escape-hatch abuse quotes.
     private static let pinnedByLabel: [String: Int] = [
-        "legacy-read": 6,
+        "legacy-read": 3,
         "purpose-derived salt": 2,
         "key-derived": 2,
         "authenticatedData-bound aad": 2,
@@ -69,13 +74,20 @@ struct CryptographicEscapeHatchCensusTests {
     /// Moved 10 → 8 by Phase 4: `MeshNetworkManager.swift` and `IdentityService.swift` held
     /// **only** the four Class-B wire readers between them, so deleting those readers dropped both
     /// files out of the set entirely rather than lowering their counts.
-    private static let pinnedFileCount = 8
+    ///
+    /// Moved 8 → 6 by Phase 3's first three deletions, and the arithmetic is deliberately not
+    /// uniform: `PendingNarrativeBuffer.swift` and `MediaAtRestCrypto.swift` held only their one
+    /// `legacy-read` each and left the set, while `SealedPhotoBackupService.swift` STAYS — its
+    /// `authenticatedData-bound aad` hatch is untouched by this round.
+    private static let pinnedFileCount = 6
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,
     /// which is what ``proseMentionsCannotSilenceTheWall`` checks.
-    private static let pinnedProseMentions: [String: Int] = [
-        "FernletKit/Sources/PrivateStoreCore/PendingNarrativeBufferFormatCensus.swift": 1
-    ]
+    ///
+    /// EMPTY since Phase 3: the one entry was `PendingNarrativeBufferFormatCensus`'s doc comment
+    /// pointing at the buffer's legacy branch, and that sentence was rewritten when the branch it
+    /// described was deleted. An empty pin is still a pin — a new prose mention fails here.
+    private static let pinnedProseMentions: [String: Int] = [:]
 
     @Test func theTotalEscapeHatchCountIsPinned() throws {
         let hatches = try Self.scan().filter { !$0.isProse }

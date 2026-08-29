@@ -198,22 +198,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         // same case as `hashVersionMigrationComplete`'s cleared row (subject destroyed).
         "com.fernlet.heartdrop.sidecarFormatMigrationComplete":
             .cleared(token: "HeartDropSidecarMigrationLatch.resetForDeleteAll"),
-        // The Phase 2.4 pending-narrative-buffer format-migration latch
-        // (`PendingNarrativeBufferMigrationLatch`, one bit, no content). Cleared because the wipe
-        // destroys its subject — the buffer file — in the SAME closure
-        // (`pendingNarrativeBufferPurgeHook`), and the funnel tolerates a purge failure
-        // (`(try? …) != nil` feeds the outcome), so a KEPT latch would keep claiming clean over a
-        // file the purge failed to remove. Same case as `hashVersionMigrationComplete` and
-        // `sidecarFormatMigrationComplete` above (subject destroyed); contrast
-        // `ownPhotoKeyMigrationComplete`, kept because its subject survives.
-        "com.fernlet.private-store.pendingNarrativeBufferMigrationComplete":
-            .cleared(token: "PendingNarrativeBufferFormatMigrator.latch().reset"),
         // The Phase 2.6 sealed-column format-migration latch (`SealedColumnMigrationLatch`, one
         // bit, no content). Cleared because the wipe destroys the latch's entire subject — the
         // sealed store's four entities and their seven ciphertext columns — inside the same
         // `sealedStoreRebuildHook` closure, which tolerates a rebuild failure (`(try? …) != nil`
         // feeds the outcome), so a KEPT latch could stand over rows a failed purge left behind.
-        // Same case as `pendingNarrativeBufferMigrationComplete` above (subject destroyed);
+        // Same case as `sidecarFormatMigrationComplete` above (subject destroyed);
         // contrast `ownPhotoKeyMigrationComplete`, kept because its subject survives. The next
         // unlock's keyless revalidation census re-proves over the empty store.
         "com.fernlet.private-store.sealedColumnMigrationComplete":

@@ -200,10 +200,35 @@ struct SealedPhotoUploadSummary: Equatable, Sendable {
 struct SealedPhotoRestoreSummary: Equatable, Sendable {
     /// Photos opened, hash-verified, and handed to the writer successfully.
     var restored = 0
-    /// Manifest ids that could not be restored: no record, an unopenable record, a content-hash
-    /// mismatch, or a writer that refused. Per the commit-marker contract these fail THAT photo, not
-    /// the set.
+    /// Manifest ids that could not be restored and are worth RETRYING: no record, an unopenable
+    /// record, a v2-stamped entry whose digest did not match, or a writer that refused. Per the
+    /// commit-marker contract these fail THAT photo, not the set.
+    ///
+    /// The coordinator records exactly this list in `OwnPhotoRestoreRepairLedger`, so anything put
+    /// here is re-fetched on every launch until it lands. That is why the terminal case below is
+    /// NOT here.
     var failed: [UUID] = []
+    /// Manifest ids refused permanently: the entry's recorded `hashVersion` is
+    /// `legacyHashVersion`, and the bytes that came back do not match the v2 digest this build
+    /// computes — so the committed digest is (or may be) the pre-domain v1 spelling whose reader
+    /// Phase 3 deleted, and nothing this build can do will ever verify it.
+    ///
+    /// Separate from ``failed`` because the REMEDY differs, which is the only thing the split has
+    /// to earn. A retryable failure goes into the repair ledger and is re-fetched every launch; a
+    /// photo whose digest cannot be verified by any code we still ship would then re-run the same
+    /// doomed fetch on every launch, hold the repair ledger permanently non-empty, keep the corpus
+    /// answering `.deferredTransient`, and pin `OwnPhotoEscrowCommitLedger` false — which withholds
+    /// the key binding on the strength of a photo that is never coming back. Naming the refusal and
+    /// stopping is the honest end of that path.
+    ///
+    /// A v2-stamped entry NEVER lands here, however wrong its bytes are: its digest is known to be
+    /// the current spelling, so a mismatch is a divergence a later upload can fix. The
+    /// over-classification that remains is narrow and stated: an entry stamped 1 that actually
+    /// carried a v2 digest, whose body is corrupt, is abandoned here rather than retried — and
+    /// retrying it would have re-fetched the same corrupt record forever anyway. A full-verification
+    /// pass from the device that owns those photos re-uploads them at `currentHashVersion`, which is
+    /// the real repair for this state.
+    var unverifiableLegacyDigest: [UUID] = []
     /// The corpus sidecar carried by the manifest this restore authenticated — the progress
     /// timeline index — or nil when the manifest has none.
     ///
@@ -664,18 +689,48 @@ final class SealedPhotoBackupService {
         for entry in opened.manifest.entries {
             if let limitedTo, !limitedTo.contains(entry.id) { continue }
             guard let record = try? await cloudDataService.sealedPhoto(corpus: corpus, slot: .photo(entry.id)),
-                  let plaintext = try? SealedPhotoCrypto.open(record, identityService: identityService),
-                  Self.contentHashMatches(plaintext, expected: entry.contentHash),
-                  write(entry.id, plaintext) else {
+                  let plaintext = try? SealedPhotoCrypto.open(record, identityService: identityService) else {
+                summary.failed.append(entry.id)
+                continue
+            }
+            guard Self.contentHash(plaintext) == entry.contentHash else {
+                // The bytes opened — the escrow AEAD vouched for them — but they do not match the
+                // digest this entry committed. Two very different facts hide behind that, and
+                // since Phase 3 they must be told apart or the retry never ends.
+                //
+                // A `currentHashVersion` entry means the committed digest IS a v2 digest, so a
+                // mismatch is a real divergence (a stale body record, a corrupt upload) that a
+                // later pass can genuinely fix once the owning device re-uploads: RETRYABLE.
+                //
+                // A `legacyHashVersion` entry cannot be judged at all: its digest was written
+                // before the stamp existed, so it may be the pre-domain v1 spelling this build no
+                // longer computes. Retrying re-fetches the same record, recomputes the same v2
+                // digest, and fails identically — forever, with the repair ledger never clearing
+                // and the route pinned uncommitted. So it is TERMINAL and named, never queued.
+                if entry.hashVersion == SealedPhotoManifest.Entry.legacyHashVersion {
+                    summary.unverifiableLegacyDigest.append(entry.id)
+                } else {
+                    summary.failed.append(entry.id)
+                }
+                continue
+            }
+            guard write(entry.id, plaintext) else {
                 summary.failed.append(entry.id)
                 continue
             }
             summary.restored += 1
         }
+        if !summary.unverifiableLegacyDigest.isEmpty {
+            FernletAuditLog.log("sealedPhoto.restore.unverifiableLegacyDigest", context: [
+                "corpus": corpus.rawValue,
+                "entries": String(summary.unverifiableLegacyDigest.count)
+            ])
+        }
         FernletAuditLog.log("sealedPhoto.restored", context: [
             "corpus": corpus.rawValue,
             "restored": String(summary.restored),
             "failed": String(summary.failed.count),
+            "unverifiableLegacyDigest": String(summary.unverifiableLegacyDigest.count),
             "generation": String(opened.generation)
         ])
         return summary
@@ -796,20 +851,17 @@ final class SealedPhotoBackupService {
         try await cloudDataService.saveSealedPhoto(record)
     }
 
-    /// Domain-separated SHA-256 of a photo's plaintext — what new manifest entries commit per id
-    /// and what a restore re-computes before trusting the bytes it opened. The matching helper
-    /// below also accepts v1's bare digest so existing manifests remain restorable.
+    /// Domain-separated SHA-256 of a photo's plaintext — what every manifest entry commits per id
+    /// and what a restore re-computes before trusting the bytes it opened.
+    ///
+    /// The ONE digest this build computes. The pre-domain v1 spelling (a bare `SHA256` over the
+    /// plaintext) used to be accepted as a second, unbound comparison in a matching helper here;
+    /// the crypto standardization round's Phase 3 deleted it, so an entry whose committed digest
+    /// was written under v1 no longer matches anything and is refused BY NAME at the one call site
+    /// that compares — see ``restore(corpus:limitedTo:write:)`` and
+    /// ``SealedPhotoRestoreSummary/unverifiableLegacyDigest``.
     static func contentHash(_ plaintext: Data) -> Data {
         Data(SHA256.hash(data: FernletCryptoPurpose.Hash.sealedPhotoContentV2.data + plaintext))
-    }
-
-    /// Accepts the current purpose-bound digest first, then the pre-domain v1 digest solely for
-    /// read compatibility. A full-verification reconcile rewrites a legacy entry with the v2
-    /// digest and stamps its `hashVersion` — the marker `minimumEntryHashVersion` aggregates into
-    /// the per-corpus zero-proof Phase 3's legacy-branch delete is gated on.
-    static func contentHashMatches(_ plaintext: Data, expected: Data) -> Bool {
-        if contentHash(plaintext) == expected { return true }
-        return Data(SHA256.hash(data: plaintext)) == expected // cryptographic-domain: legacy-read
     }
 
     /// Mints one write's HKDF salt: 32 CSPRNG bytes from `SystemRandomNumberGenerator`

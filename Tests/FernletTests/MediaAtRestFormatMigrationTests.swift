@@ -6,25 +6,27 @@ import UIKit
 import FernletDomainModel
 import PrivateMediaStore
 
-/// Crypto-standardization Phase 2.3: `MediaAtRestFormatMigrator` retires every remaining
-/// pre-domain-separation media blob so Phase 3 can delete `gcmOpen`'s legacy-read branch.
+/// `MediaAtRestFormatMigrator` as it stands after Phase 3: it seals the pre-sealing PLAINTEXT
+/// photo generation, and counts — never touches — everything unmarked.
 ///
-/// What this suite defends is the trustworthiness of `MediaAtRestFormatMigrationLatch` — a bit
-/// that will later license deleting a READER over these exact bytes. So the closed directions
-/// are pinned at least as hard as the open one: "could not look" always blocks (unreadable
-/// bytes, unlistable directories, missing keys, a mid-pass rewrite), "should not exist" blocks
-/// loudly (a friend-key own file the key latch claims impossible), and the two argued
-/// non-blocking residues (`unopenableUnprefixed`, `refusedPlaintext`) are pinned as exactly the
-/// classes the branch delete cannot cost. Division of labor with `OwnPhotoKeyMigrator` is
-/// proven by composition, not asserted: the two sweeps run against the same corpus and land it
-/// clean without fighting.
+/// Phase 3 deleted `gcmOpen`'s legacy-read branch, so the ciphertext conversion this suite was
+/// originally written for is gone, and the tests that pinned it went with it rather than being
+/// left to fail over a retired contract. What replaced them is the honest new behaviour: an
+/// unmarked box is `unopenableUnprefixed`, non-blocking, and left byte-identical forever, because
+/// no reader in the app can open it and a latch that waited for that count to fall would wait
+/// forever.
+///
+/// What the suite still defends is the trustworthiness of `MediaAtRestFormatMigrationLatch` over
+/// the job that remains: "could not look" always blocks (unreadable bytes, unlistable directories,
+/// missing keys, a mid-pass class change), the plaintext seal binds each location's own purpose,
+/// and the two argued non-blocking residues (`unopenableUnprefixed`, `refusedPlaintext`) are
+/// pinned as exactly the classes no pass will ever act on.
 ///
 /// Fixture discipline: UUID-fresh temp roots per test (never shared container roots — see
-/// `PhotoDirectoryIsolationTests`), `UserDefaults(suiteName: UUID)` per test for BOTH latches,
-/// in-memory key providers, and fixtures that RE-SPELL the marker (`"FMA2"`) and build legacy
-/// boxes as bare `AES.GCM.seal(_:using:).combined` — never asking production what the format
-/// is, the `OwnPhotoKeyMigrationTests.opens` doctrine. Own-root tests seed the key-migration
-/// latch SET unless stated.
+/// `PhotoDirectoryIsolationTests`), `UserDefaults(suiteName: UUID)` per test, in-memory key
+/// providers, and fixtures that RE-SPELL the marker (`"FMA2"`) and build pre-domain boxes as bare
+/// `AES.GCM.seal(_:using:).combined` — never asking production what the format is, the
+/// `OwnPhotoKeyMigrationTests.opens` doctrine.
 @MainActor
 struct MediaAtRestFormatMigrationTests {
 
@@ -55,7 +57,7 @@ struct MediaAtRestFormatMigrationTests {
     }
 
     /// A byte-exact PRE-domain-separation box: combined (nonce + ciphertext + tag), no marker,
-    /// no AAD — what the legacy writers put on disk and what the legacy-read branch still opens.
+    /// no AAD — what the legacy writers put on disk, and what nothing in the app opens any more.
     private func legacySealed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
         try #require(try AES.GCM.seal(plaintext, using: key).combined)
     }
@@ -126,24 +128,23 @@ struct MediaAtRestFormatMigrationTests {
         return (paths.sorted(), files)
     }
 
-    /// Builds the subject over explicit roots and providers, seeding the key-migration latch
-    /// SET (the steady state) unless a test says otherwise.
+    /// Builds the subject over explicit roots and providers.
+    ///
+    /// No key-migration latch any more: the own-root deferral it drove existed to keep this pass
+    /// off files the KEY migrator might still convert, and neither pass converts unmarked bytes
+    /// since Phase 3.
     private func makeMigrator(
         ownRoot: URL,
         wallRoot: URL,
         ownKey: any PrivateMediaKeyProviding,
         wallKey: any PrivateMediaKeyProviding,
-        defaults: UserDefaults,
-        ownKeyMigrationComplete: Bool = true
+        defaults: UserDefaults
     ) -> MediaAtRestFormatMigrator {
-        let keyLatch = OwnPhotoMigrationLatch(defaults: defaults)
-        if ownKeyMigrationComplete { keyLatch.markComplete() }
-        return MediaAtRestFormatMigrator(
+        MediaAtRestFormatMigrator(
             ownLocations: OwnPhotoCorpusLayout.sealedLocations(in: ownRoot),
             wallLocations: FriendWallCorpusLayout.resealableLocations(in: wallRoot),
             ownKeyProvider: ownKey,
             wallKeyProvider: wallKey,
-            ownKeyMigrationLatch: keyLatch,
             latch: MediaAtRestFormatMigrationLatch(defaults: defaults)
         )
     }
@@ -188,9 +189,9 @@ struct MediaAtRestFormatMigrationTests {
         return written
     }
 
-    // MARK: - 1/2: legacy sealed boxes convert under the right key and the right purpose
+    // MARK: - 1/2: unmarked boxes are residue — counted, never touched, never blocking
 
-    @Test func convertsLegacySealedFilesInEveryOwnCorpusUnderTheOwnKey() throws {
+    @Test func legacySealedBoxesInEveryCorpusAreUnopenableResidueThatDoesNotBlock() throws {
         let ownRoot = try makeOwnRoot()
         defer { try? FileManager.default.removeItem(at: ownRoot) }
         let wallRoot = try makeWallRoot()
@@ -198,83 +199,63 @@ struct MediaAtRestFormatMigrationTests {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
+        // Both roots, seeded with bytes the pre-domain writers produced — and, deliberately, with
+        // the RIGHT keys available. The refusal has to be the deleted reader, not a missing key.
         let ownKey = SymmetricKey(size: .bits256)
-        let seeded = try seedLegacyOwnCorpus(root: ownRoot, key: ownKey)
-        #expect(seeded.count == 4, "fixture must cover meal, recipe, progress bytes and the index")
+        let wallKey = SymmetricKey(size: .bits256)
+        let seededOwn = try seedLegacyOwnCorpus(root: ownRoot, key: ownKey)
+        let seededWall = try seedLegacyWallCorpus(root: wallRoot, key: wallKey)
+        #expect(seededOwn.count == 4, "fixture must cover meal, recipe, progress bytes and the index")
+        #expect(seededWall.count == 3, "fixture must cover photos, thumbnails and the sealed index")
 
         let subject = makeMigrator(
             ownRoot: ownRoot, wallRoot: wallRoot,
             ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            wallKey: InMemoryPrivateMediaKeyProvider(),
-            defaults: defaults
-        )
-        let result = subject.performPass()
-
-        #expect(result.converted == 4)
-        #expect(result.conversionFailures == 0)
-        #expect(result.indeterminate == 0)
-        #expect(!result.isClean, "a pass that FOUND legacy files is not proof of completion")
-        #expect(result.madeForwardProgress)
-
-        for (url, plaintext) in seeded {
-            let stored = try #require(try? Data(contentsOf: url))
-            #expect(stored.starts(with: Data("FMA2".utf8)),
-                    "\(url.lastPathComponent) is not in the current format")
-            let purpose = OwnPhotoCorpusLayout.sealPurpose(for: url)
-            #expect(openCurrentFormat(url, under: ownKey, purpose: purpose) == plaintext,
-                    "\(url.lastPathComponent) did not re-seal under its own purpose")
-            // The per-location AAD binding: the same key with the WRONG purpose must fail.
-            let wrongPurpose = purpose == FernletCryptoPurpose.AEAD.mealPhotoV2
-                ? FernletCryptoPurpose.AEAD.recipePhotoV2
-                : FernletCryptoPurpose.AEAD.mealPhotoV2
-            #expect(openCurrentFormat(url, under: ownKey, purpose: wrongPurpose) == nil,
-                    "\(url.lastPathComponent) opens under a purpose that is not its location's")
-        }
-    }
-
-    @Test func wallPhotosThumbnailsAndSealedIndexConvertUnderTheWallKeyAndPurposes() throws {
-        let ownRoot = try makeOwnRoot()
-        defer { try? FileManager.default.removeItem(at: ownRoot) }
-        let wallRoot = try makeWallRoot()
-        defer { try? FileManager.default.removeItem(at: wallRoot) }
-        let (defaults, suiteName) = makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let wallKey = SymmetricKey(size: .bits256)
-        let seeded = try seedLegacyWallCorpus(root: wallRoot, key: wallKey)
-        #expect(seeded.count == 3, "fixture must cover photos, thumbnails and the sealed index")
-
-        let subject = makeMigrator(
-            ownRoot: ownRoot, wallRoot: wallRoot,
-            ownKey: InMemoryPrivateMediaKeyProvider(),
             wallKey: InMemoryPrivateMediaKeyProvider(key: wallKey),
             defaults: defaults
         )
+        let before = (own: try snapshot(of: ownRoot), wall: try snapshot(of: wallRoot))
         let result = subject.performPass()
 
-        #expect(result.converted == 3)
-        #expect(!result.isClean)
+        #expect(result.unopenableUnprefixed == 7)
+        #expect(result.convertedPlaintext == 0)
+        #expect(result.conversionFailures == 0)
+        #expect(result.indeterminate == 0)
+        // Non-blocking, and this is the load-bearing half: waiting for this count to fall would
+        // wait forever, since nothing that ships can convert these bytes.
+        #expect(result.isClean, "unmarked bytes no reader can open must not hold the latch open")
+        #expect(!result.madeForwardProgress)
+        #expect(subject.run())
+        #expect(MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete)
 
-        // Pins `FriendWallCorpusLayout.sealPurpose(for:)` per location: each file opens ONLY
-        // under its own location's purpose.
-        let allWallPurposes = [
-            FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2,
-            FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
-            FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
-        ]
-        for (url, plaintext) in seeded {
-            let expected = FriendWallCorpusLayout.sealPurpose(for: url)
-            #expect(openCurrentFormat(url, under: wallKey, purpose: expected) == plaintext,
-                    "\(url.lastPathComponent) did not re-seal under its location's purpose")
-            for other in allWallPurposes where other != expected {
-                #expect(openCurrentFormat(url, under: wallKey, purpose: other) == nil,
-                        "\(url.lastPathComponent) opens under \(other), not only its own purpose")
-            }
-        }
-        // The mapping itself, stated once: index by frozen name, thumbnails by frozen component.
-        let locations = FriendWallCorpusLayout.resealableLocations(in: wallRoot)
-        #expect(FriendWallCorpusLayout.sealPurpose(for: locations.files[0])
-                == FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2)
+        // Never rewritten, never deleted — unopenable is not the same fact as unwanted.
+        #expect(try snapshot(of: ownRoot).files == before.own.files)
+        #expect(try snapshot(of: ownRoot).paths == before.own.paths)
+        #expect(try snapshot(of: wallRoot).files == before.wall.files)
+        #expect(try snapshot(of: wallRoot).paths == before.wall.paths)
+    }
+
+    @Test func theShippingReadPathRefusesAnUnmarkedBoxUnderItsOwnKey() throws {
+        // The other half of the same fact, at the read seam rather than the sweep: the store that
+        // owns the corpus, holding the exact key that sealed the bytes, still resolves them to nil
+        // — because the marker is required. Then the same key opens the same plaintext once it is
+        // written in the current format, so the nil above is the FORMAT, not the key.
+        let ownRoot = try makeOwnRoot()
+        defer { try? FileManager.default.removeItem(at: ownRoot) }
+
+        let key = SymmetricKey(size: .bits256)
+        let plaintext = jpeg()
+        let mealDirectory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
+        let id = UUID()
+        let url = mealDirectory.appendingPathComponent("\(id.uuidString).jpg")
+        try legacySealed(plaintext, under: key).write(to: url)
+
+        let store = MealPhotoStore(directory: mealDirectory, keyProvider: InMemoryPrivateMediaKeyProvider(key: key))
+        #expect(store.imageData(for: id) == nil, "the deleted legacy-read branch is still reachable")
+
+        try currentFormatSealed(plaintext, under: key, purpose: FernletCryptoPurpose.AEAD.mealPhotoV2)
+            .write(to: url)
+        #expect(store.imageData(for: id) == plaintext)
     }
 
     // MARK: - 3/4: idempotence and the latch
@@ -289,8 +270,15 @@ struct MediaAtRestFormatMigrationTests {
 
         let ownKey = SymmetricKey(size: .bits256)
         let wallKey = SymmetricKey(size: .bits256)
-        try seedLegacyOwnCorpus(root: ownRoot, key: ownKey)
-        try seedLegacyWallCorpus(root: wallRoot, key: wallKey)
+        // The plaintext generation — the only one this pass still converts.
+        try jpeg().write(to: OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
+            .appendingPathComponent("\(UUID().uuidString).jpg"))
+        try jpeg().write(to: wallRoot
+            .appendingPathComponent(FriendWallCorpusLayout.photosDirectoryName, isDirectory: true)
+            .appendingPathComponent("\(UUID().uuidString).jpg"))
+        try jpeg(width: 32, height: 32).write(to: wallRoot
+            .appendingPathComponent(FriendWallCorpusLayout.thumbnailsDirectoryName, isDirectory: true)
+            .appendingPathComponent("\(UUID().uuidString).jpg"))
 
         let subject = makeMigrator(
             ownRoot: ownRoot, wallRoot: wallRoot,
@@ -305,9 +293,8 @@ struct MediaAtRestFormatMigrationTests {
         let confirming = subject.performPass()
 
         #expect(confirming.isClean)
-        #expect(confirming.converted == 0)
         #expect(confirming.convertedPlaintext == 0)
-        #expect(confirming.alreadyCurrentFormat == 7)
+        #expect(confirming.alreadyCurrentFormat == 3)
         #expect(try snapshot(of: ownRoot).files == ownBefore.files,
                 "the confirming pass rewrote own-root bytes")
         #expect(try snapshot(of: ownRoot).paths == ownBefore.paths)
@@ -325,7 +312,8 @@ struct MediaAtRestFormatMigrationTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let ownKey = SymmetricKey(size: .bits256)
-        try seedLegacyOwnCorpus(root: ownRoot, key: ownKey)
+        try jpeg().write(to: OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
+            .appendingPathComponent("\(UUID().uuidString).jpg"))
         let latch = MediaAtRestFormatMigrationLatch(defaults: defaults)
         #expect(!latch.isComplete, "the latch must start closed")
 
@@ -335,7 +323,7 @@ struct MediaAtRestFormatMigrationTests {
             wallKey: InMemoryPrivateMediaKeyProvider(),
             defaults: defaults
         )
-        // One pass converts, the confirming pass comes back clean — only then does run latch.
+        // One pass seals the plaintext, the confirming pass comes back clean — only then latch.
         #expect(subject.run())
         #expect(latch.isComplete)
     }
@@ -349,8 +337,12 @@ struct MediaAtRestFormatMigrationTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
 
-        let legacyKey = SymmetricKey(size: .bits256)
-        let seeded = try seedLegacyOwnCorpus(root: ownRoot, key: legacyKey)
+        // A plaintext photo — a file the pass WOULD seal if it ran, so "nothing happened" is a
+        // real observation rather than a fixture the pass would have skipped anyway.
+        let plaintext = jpeg()
+        let url = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
+            .appendingPathComponent("\(UUID().uuidString).jpg")
+        try plaintext.write(to: url)
         let ownTrap = KeychainTouchTrap()
         let wallTrap = KeychainTouchTrap()
         let subject = makeMigrator(
@@ -360,10 +352,7 @@ struct MediaAtRestFormatMigrationTests {
         )
 
         #expect(subject.run(), "a latched migrator must report complete without doing work")
-        for url in seeded.keys {
-            let bytes = try #require(try? Data(contentsOf: url))
-            #expect(!bytes.starts(with: Data("FMA2".utf8)), "a latched run touched the corpus")
-        }
+        #expect(try Data(contentsOf: url) == plaintext, "a latched run touched the corpus")
         #expect(!ownTrap.touched && !wallTrap.touched, "a latched run touched the keychain")
     }
 
@@ -397,6 +386,9 @@ struct MediaAtRestFormatMigrationTests {
         #expect(stored.starts(with: Data("FMA2".utf8)))
         #expect(openCurrentFormat(url, under: ownKey, purpose: FernletCryptoPurpose.AEAD.mealPhotoV2) == plaintext,
                 "the sealed meal photo does not open under mealPhotoV2 with its original bytes")
+        // The per-location AAD binding: the same key with the WRONG purpose must fail.
+        #expect(openCurrentFormat(url, under: ownKey, purpose: FernletCryptoPurpose.AEAD.recipePhotoV2) == nil,
+                "the sealed meal photo opens under a purpose that is not its location's")
     }
 
     @Test func plaintextJPEGInBornSealedCorporaIsRefusedNotConverted() throws {
@@ -466,12 +458,27 @@ struct MediaAtRestFormatMigrationTests {
         let result = subject.performPass()
 
         #expect(result.convertedPlaintext == 2)
-        #expect(openCurrentFormat(
-            photoURL, under: wallKey, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2
-        ) == photoBytes)
-        #expect(openCurrentFormat(
-            thumbnailURL, under: wallKey, purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2
-        ) == thumbnailBytes)
+
+        // Pins `FriendWallCorpusLayout.sealPurpose(for:)` per location: each file opens ONLY under
+        // its own location's purpose.
+        let allWallPurposes = [
+            FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2,
+            FernletCryptoPurpose.AEAD.privateFriendPhotoThumbnailV2,
+            FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
+        ]
+        for (url, plaintext) in [(photoURL, photoBytes), (thumbnailURL, thumbnailBytes)] {
+            let expected = FriendWallCorpusLayout.sealPurpose(for: url)
+            #expect(openCurrentFormat(url, under: wallKey, purpose: expected) == plaintext,
+                    "\(url.lastPathComponent) did not seal under its location's purpose")
+            for other in allWallPurposes where other != expected {
+                #expect(openCurrentFormat(url, under: wallKey, purpose: other) == nil,
+                        "\(url.lastPathComponent) opens under \(other), not only its own purpose")
+            }
+        }
+        // The mapping itself, stated once: index by frozen name, thumbnails by frozen component.
+        let locations = FriendWallCorpusLayout.resealableLocations(in: wallRoot)
+        #expect(FriendWallCorpusLayout.sealPurpose(for: locations.files[0])
+                == FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2)
     }
 
     // MARK: - 8: the excluded plaintext wall index
@@ -519,9 +526,13 @@ struct MediaAtRestFormatMigrationTests {
                 "loadIndex did not retire the plaintext index")
     }
 
-    // MARK: - 9/10/10b: division of labor with the key migrator
+    // MARK: - 10c: a file that changes class between the scan and the convert
 
-    @Test func ownRootCandidatesDeferWhileKeyMigrationLatchIsUnset() throws {
+    @Test func aFileRewrittenBetweenScanAndConvertIsSkippedNotClobbered() throws {
+        // What is left of the concurrency story once the ciphertext arm is gone. The scan
+        // classifies from the header; the convert re-reads the whole file and re-checks that class
+        // before sealing anything. A store that committed newer bytes in between (here: sealed
+        // ones) must not be overwritten with the pass's stale plaintext snapshot.
         let ownRoot = try makeOwnRoot()
         defer { try? FileManager.default.removeItem(at: ownRoot) }
         let wallRoot = try makeWallRoot()
@@ -529,153 +540,21 @@ struct MediaAtRestFormatMigrationTests {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let ownKey = SymmetricKey(size: .bits256)
         let wallKey = SymmetricKey(size: .bits256)
-        let ownPlaintext = jpeg()
-        let ownFile = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
-            .appendingPathComponent("\(UUID().uuidString).jpg")
-        let ownLegacyBytes = try legacySealed(ownPlaintext, under: ownKey)
-        try ownLegacyBytes.write(to: ownFile)
-        let wallFile = wallRoot
+        let photoURL = wallRoot
             .appendingPathComponent(FriendWallCorpusLayout.photosDirectoryName, isDirectory: true)
             .appendingPathComponent("\(UUID().uuidString).jpg")
-        try legacySealed(jpeg(), under: wallKey).write(to: wallFile)
-
-        let subject = makeMigrator(
-            ownRoot: ownRoot, wallRoot: wallRoot,
-            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            wallKey: InMemoryPrivateMediaKeyProvider(key: wallKey),
-            defaults: defaults,
-            ownKeyMigrationComplete: false
-        )
-        let result = subject.performPass()
-
-        #expect(result.converted == 1, "the wall must convert even while the own root defers")
-        #expect(result.deferredOwnKeyMigrationIncomplete == 1)
-        #expect(!result.isClean)
-        #expect((try? Data(contentsOf: ownFile)) == ownLegacyBytes,
-                "a deferred own file was touched — this may be the key migrator's file")
-        #expect(!subject.run())
-        #expect(!MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete,
-                "the format latch opened over a corpus the key latch has not proven")
-
-        // Resumability: once the key pass reports complete, the same migrator finishes the job.
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
-        #expect(subject.run())
-        #expect(MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete)
-        #expect(openCurrentFormat(ownFile, under: ownKey, purpose: FernletCryptoPurpose.AEAD.mealPhotoV2)
-                == ownPlaintext)
-    }
-
-    @Test func aFriendKeySealedOwnFileBlocksTheLatchAndIsLeftForTheKeyMigrator() throws {
-        let ownRoot = try makeOwnRoot()
-        defer { try? FileManager.default.removeItem(at: ownRoot) }
-        let wallRoot = try makeWallRoot()
-        defer { try? FileManager.default.removeItem(at: wallRoot) }
-        let (defaults, suiteName) = makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let ownKey = SymmetricKey(size: .bits256)
-        let wallKey = SymmetricKey(size: .bits256)
-        let plaintext = jpeg()
-        let straggler = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
-            .appendingPathComponent("\(UUID().uuidString).jpg")
-        let stragglerBytes = try legacySealed(plaintext, under: wallKey)
-        try stragglerBytes.write(to: straggler)
-
-        let subject = makeMigrator(
-            ownRoot: ownRoot, wallRoot: wallRoot,
-            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            wallKey: InMemoryPrivateMediaKeyProvider(key: wallKey),
-            defaults: defaults
-        )
-        let result = subject.performPass()
-
-        // NOT `unopenableUnprefixed`: the wall-key probe finds it — the loud should-not-exist
-        // state the key latch's proof has a hole for. It must hold Phase 3 back, because this
-        // file still needs the dual-open path the branch delete would kill.
-        #expect(result.legacyKeySealedOwnFile == 1)
-        #expect(result.unopenableUnprefixed == 0)
-        #expect(!result.isClean)
-        #expect(!subject.run())
-        #expect(!MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete)
-        #expect((try? Data(contentsOf: straggler)) == stragglerBytes,
-                "the format migrator converted a friend-key file — that is the KEY migrator's job")
-
-        // Division of labor, proven by composition: the key migrator converts it (emitting the
-        // current format), and the next format pass is clean.
-        let keyMigrator = OwnPhotoKeyMigrator(
-            locations: OwnPhotoCorpusLayout.sealedLocations(in: ownRoot),
-            ownKeyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            legacyKeyProvider: InMemoryPrivateMediaKeyProvider(key: wallKey),
-            latch: OwnPhotoMigrationLatch(defaults: defaults)
-        )
-        #expect(keyMigrator.performPass().resealed == 1)
-        let confirming = subject.performPass()
-        #expect(confirming.isClean)
-        #expect(confirming.alreadyCurrentFormat == 1)
-        #expect(openCurrentFormat(straggler, under: ownKey, purpose: FernletCryptoPurpose.AEAD.mealPhotoV2)
-                == plaintext)
-    }
-
-    @Test func ownRootUnopenableCandidatesWithNoWallKeyAreIndeterminate() throws {
-        let ownRoot = try makeOwnRoot()
-        defer { try? FileManager.default.removeItem(at: ownRoot) }
-        let wallRoot = try makeWallRoot()
-        defer { try? FileManager.default.removeItem(at: wallRoot) }
-        let (defaults, suiteName) = makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let ownKey = SymmetricKey(size: .bits256)
-        let wallKey = SymmetricKey(size: .bits256)
-        let straggler = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
-            .appendingPathComponent("\(UUID().uuidString).jpg")
-        try legacySealed(jpeg(), under: wallKey).write(to: straggler)
-
-        let subject = makeMigrator(
-            ownRoot: ownRoot, wallRoot: wallRoot,
-            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            wallKey: NoMediaKeyProvider(),
-            defaults: defaults
-        )
-        let result = subject.performPass()
-
-        // `OwnPhotoKeyMigration`'s posture, pinned here: a verdict reached while a key was
-        // unavailable is no verdict. And the diagnostic probe must NOT read as a wall-root abort.
-        #expect(result.indeterminate == 1)
-        #expect(result.unopenableUnprefixed == 0)
-        #expect(!result.abortedNoWallKey,
-                "the own root's diagnostic wall-key probe set the WALL root's abort flag")
-        #expect(!result.isClean)
-        #expect(!subject.run())
-        #expect(!MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete)
-    }
-
-    // MARK: - 10c: the index-file compare-before-write guard
-
-    @Test func indexFileRewrittenBetweenReadAndWriteIsSkippedNotClobbered() throws {
-        let ownRoot = try makeOwnRoot()
-        defer { try? FileManager.default.removeItem(at: ownRoot) }
-        let wallRoot = try makeWallRoot()
-        defer { try? FileManager.default.removeItem(at: wallRoot) }
-        let (defaults, suiteName) = makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let wallKey = SymmetricKey(size: .bits256)
-        let indexURL = wallRoot.appendingPathComponent(FriendWallCorpusLayout.sealedIndexFileName)
-        try legacySealed(Data("[]".utf8), under: wallKey).write(to: indexURL)
-        // The concurrent store's newer commit — a current-format sealed index the migrator's
-        // stale snapshot must never write over.
+        try jpeg().write(to: photoURL)
         let storeCommit = try currentFormatSealed(
-            Data(#"[{"newer":true}]"#.utf8),
+            jpeg(width: 48, height: 48),
             under: wallKey,
-            purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoIndexV2
+            purpose: FernletCryptoPurpose.AEAD.privateFriendPhotoImageV2
         )
-        // Deterministic stand-in for the concurrent save: the provider rewrites the index from
-        // its THIRD key access on — after the pass's probe (1) and legacy open (2), i.e. inside
-        // the convert's own seal — so the pre-write guard is what has to catch it.
+        // Deterministic stand-in for the concurrent save: the provider rewrites the file on its
+        // FIRST key access — the pass's lazy key probe, which lands between the header-only scan
+        // and the convert-time full read, exactly where the store's own save would.
         let provider = RewritingOnKeyAccessProvider(
-            key: wallKey, target: indexURL, replacement: storeCommit, rewriteAfterAccessCount: 2
+            key: wallKey, target: photoURL, replacement: storeCommit, rewriteAfterAccessCount: 0
         )
 
         let subject = makeMigrator(
@@ -687,13 +566,10 @@ struct MediaAtRestFormatMigrationTests {
         let result = subject.performPass()
 
         #expect(result.skippedConcurrentlyModified == 1)
-        #expect(result.converted == 0)
-        // "Closed THIS pass" is the pin — the raced pass itself may not latch. (A later run over
-        // the store's committed current-format bytes legitimately comes back clean and latches;
-        // that is the race resolving, not the guard failing.)
-        #expect(!result.isClean, "a raced index must hold the latch closed for this pass")
-        #expect((try? Data(contentsOf: indexURL)) == storeCommit,
-                "the migrator clobbered the store's newer index with its stale snapshot")
+        #expect(result.convertedPlaintext == 0)
+        #expect(!result.isClean, "a raced file must hold the latch closed for this pass")
+        #expect((try? Data(contentsOf: photoURL)) == storeCommit,
+                "the migrator clobbered the store's newer bytes with its stale snapshot")
 
         // A fresh pass over the (now current-format) file is clean.
         let fresh = makeMigrator(
@@ -799,7 +675,7 @@ struct MediaAtRestFormatMigrationTests {
         let truncatedURL = wallPhotos.appendingPathComponent("\(UUID().uuidString).jpg")
         try truncatedMarked.write(to: truncatedURL)
         // The §4 documented limitation: a parseable NON-JPEG plaintext image in the meal corpus
-        // is census-unprefixed, so the migrator must score it unopenable and leave it — convert
+        // is census-unprefixed, so the migrator must score it unopenable and leave it — seal
         // eligibility must never exceed the shared census sniff.
         let pngBytes = png()
         let pngID = UUID()
@@ -815,11 +691,11 @@ struct MediaAtRestFormatMigrationTests {
         )
         let result = subject.performPass()
 
-        #expect(result.unopenableUnprefixed == 2, "the garbage bytes and the PNG — read, and no key opens them")
+        #expect(result.unopenableUnprefixed == 2, "the garbage bytes and the PNG — unmarked, so no reader opens them")
         #expect(result.empty == 1)
         #expect(result.alreadyCurrentFormat == 1)
         #expect(result.examined == 4)
-        #expect(result.isClean, "bytes proven unreachable through the legacy branch must not block")
+        #expect(result.isClean, "unmarked bytes no reader can open must not block")
         #expect((try? Data(contentsOf: garbageURL)) == garbage)
         #expect((try? Data(contentsOf: truncatedURL)) == truncatedMarked)
         #expect((try? Data(contentsOf: pngURL)) == pngBytes, "the PNG must drain organically, never here")
@@ -842,10 +718,12 @@ struct MediaAtRestFormatMigrationTests {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
+        // Plaintext, because that is what a seal candidate IS since Phase 3 — an unmarked box is
+        // no longer a candidate, so it would never make the pass reach for a key at all.
         let key = SymmetricKey(size: .bits256)
         let ownFile = OwnPhotoCorpusLayout.mealPhotosDirectory(in: ownRoot)
             .appendingPathComponent("\(UUID().uuidString).jpg")
-        let ownBytes = try legacySealed(jpeg(), under: key)
+        let ownBytes = jpeg()
         try ownBytes.write(to: ownFile)
 
         let ownAborted = makeMigrator(
@@ -865,7 +743,7 @@ struct MediaAtRestFormatMigrationTests {
         let wallFile = wallRoot
             .appendingPathComponent(FriendWallCorpusLayout.photosDirectoryName, isDirectory: true)
             .appendingPathComponent("\(UUID().uuidString).jpg")
-        try legacySealed(jpeg(), under: key).write(to: wallFile)
+        try jpeg().write(to: wallFile)
         let wallAborted = makeMigrator(
             ownRoot: ownRoot, wallRoot: wallRoot,
             ownKey: InMemoryPrivateMediaKeyProvider(key: key),
@@ -914,8 +792,8 @@ struct MediaAtRestFormatMigrationTests {
         let wallPhotos = wallRoot
             .appendingPathComponent(FriendWallCorpusLayout.photosDirectoryName, isDirectory: true)
         let url = wallPhotos.appendingPathComponent("\(UUID().uuidString).jpg")
-        let legacyBytes = try legacySealed(jpeg(), under: wallKey)
-        try legacyBytes.write(to: url)
+        let sourceBytes = jpeg()
+        try sourceBytes.write(to: url)
         // Read-only directory: the atomic re-seal cannot land, but listing and reading still work.
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: wallPhotos.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wallPhotos.path) }
@@ -936,74 +814,10 @@ struct MediaAtRestFormatMigrationTests {
         let result = subject.performPass()
         #expect(result.conversionFailures == 1)
         #expect(!result.isClean)
-        #expect((try? Data(contentsOf: url)) == legacyBytes,
+        #expect((try? Data(contentsOf: url)) == sourceBytes,
                 "a failed rewrite deleted or corrupted the source bytes")
         #expect(!subject.run())
         #expect(!MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete)
-    }
-
-    // MARK: - 15: read-path-level read-back through the owning stores
-
-    @Test func convertedIndexesStillOpenThroughTheirOwningStores() throws {
-        let ownRoot = try makeOwnRoot()
-        defer { try? FileManager.default.removeItem(at: ownRoot) }
-        let wallRoot = try makeWallRoot()
-        defer { try? FileManager.default.removeItem(at: wallRoot) }
-        let (defaults, suiteName) = makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let ownKey = SymmetricKey(size: .bits256)
-        let wallKey = SymmetricKey(size: .bits256)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-
-        let record = ProgressPhotoRecord(
-            id: UUID(),
-            capturedAt: Date(timeIntervalSince1970: 1_756_000_000),
-            caption: "week one"
-        )
-        let progressRoot = OwnPhotoCorpusLayout.progressPhotosDirectory(in: ownRoot)
-        try legacySealed(try encoder.encode([record]), under: ownKey)
-            .write(to: progressRoot.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName))
-
-        // Byte-less on disk, exactly as the store's own index writer strips it.
-        let payload = FriendPhotoPayload(
-            id: UUID(),
-            imageData: jpeg(),
-            addedAt: Date(timeIntervalSince1970: 1_756_000_100),
-            senderName: "Wall",
-            senderFingerprint: "fp",
-            senderSigningPublicKey: Data([0x01]),
-            session: nil
-        ).withoutImageData()
-        try legacySealed(try encoder.encode([payload]), under: wallKey)
-            .write(to: wallRoot.appendingPathComponent(FriendWallCorpusLayout.sealedIndexFileName))
-
-        let subject = makeMigrator(
-            ownRoot: ownRoot, wallRoot: wallRoot,
-            ownKey: InMemoryPrivateMediaKeyProvider(key: ownKey),
-            wallKey: InMemoryPrivateMediaKeyProvider(key: wallKey),
-            defaults: defaults
-        )
-        #expect(subject.run())
-
-        // Stronger than raw gcmOpen: the owning stores decode the converted indexes.
-        let progressStore = ProgressPhotoStore(
-            directory: progressRoot,
-            keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey)
-        )
-        #expect(progressStore.records().map(\.id) == [record.id],
-                "the converted progress index does not decode through its owning store")
-
-        let wallStore = PrivateMediaStore(
-            indexURL: wallRoot.appendingPathComponent(FriendWallCorpusLayout.legacyPlaintextIndexFileName),
-            keyProvider: InMemoryPrivateMediaKeyProvider(key: wallKey)
-        )
-        guard case .entries(let photos) = wallStore.loadIndex() else {
-            Issue.record("the converted wall index did not load as entries")
-            return
-        }
-        #expect(photos.map(\.id) == [payload.id])
     }
 
     // MARK: - 17: the shared classifier
@@ -1053,8 +867,8 @@ struct MediaAtRestFormatMigrationTests {
         #expect(result.examined == census.total.examined)
         #expect(result.alreadyCurrentFormat == census.total.v2Marked)
         #expect(result.empty == census.total.empty)
-        #expect(result.converted == census.total.unprefixedLegacyOrUnrecognized,
-                "every census-legacy blob the key opens converts")
+        #expect(result.unopenableUnprefixed == census.total.unprefixedLegacyOrUnrecognized,
+                "every census-unprefixed blob is residue, one for one")
         #expect(result.convertedPlaintext == census.total.plaintextJPEG,
                 "every census-plaintext JPEG in an eligible location converts")
     }
