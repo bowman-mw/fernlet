@@ -19,7 +19,7 @@ import Testing
 /// gives two registry entries the same spelling, the round-trip suites all stay green and these go
 /// red.
 ///
-/// **Coverage is all-pairs, not sampled.** 47 purposes over five families; a hand-picked pair or
+/// **Coverage is all-pairs, not sampled.** 54 purposes over five families; a hand-picked pair or
 /// two would prove the primitive works, which nobody doubts. What is actually at risk is one entry
 /// — the new one, the copy-pasted one — and only a total sweep sees it. The pair counts are small
 /// enough that this costs milliseconds.
@@ -64,6 +64,8 @@ struct CryptographicDomainSeparationTests {
         Domain("Signature.activityRosterSnapshotV2", FernletCryptoPurpose.Signature.activityRosterSnapshotV2),
         Domain("Signature.moderationReportV2", FernletCryptoPurpose.Signature.moderationReportV2),
         Domain("Signature.meshProbeChannelIntroductionV1", FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1),
+        Domain("Signature.meshChannelIntroductionV1", FernletCryptoPurpose.Signature.meshChannelIntroductionV1),
+        Domain("Signature.meshRoutedManifestV1", FernletCryptoPurpose.Signature.meshRoutedManifestV1),
         Domain("Signature.proximityQRIdentityV1", FernletCryptoPurpose.Signature.proximityQRIdentityV1),
         Domain("Signature.proximityQRResponseV1", FernletCryptoPurpose.Signature.proximityQRResponseV1),
         Domain("Signature.duressRecoveryRequestV1", FernletCryptoPurpose.Signature.duressRecoveryRequestV1),
@@ -75,6 +77,9 @@ struct CryptographicDomainSeparationTests {
         Domain("KeyDerivation.heartDropPairV1", FernletCryptoPurpose.KeyDerivation.heartDropPairV1),
         Domain("KeyDerivation.presencePairV1", FernletCryptoPurpose.KeyDerivation.presencePairV1),
         Domain("KeyDerivation.meshGroupKeyWrapV1", FernletCryptoPurpose.KeyDerivation.meshGroupKeyWrapV1),
+        Domain("KeyDerivation.meshProbeTLSExporterV1", FernletCryptoPurpose.KeyDerivation.meshProbeTLSExporterV1),
+        Domain("KeyDerivation.meshTLSExporterV1", FernletCryptoPurpose.KeyDerivation.meshTLSExporterV1),
+        Domain("KeyDerivation.meshRoutedContentKeyWrapV1", FernletCryptoPurpose.KeyDerivation.meshRoutedContentKeyWrapV1),
         Domain("KeyDerivation.heartDropOuterSealV1", FernletCryptoPurpose.KeyDerivation.heartDropOuterSealV1),
         Domain("KeyDerivation.lockScryptWrappingV1", FernletCryptoPurpose.KeyDerivation.lockScryptWrappingV1),
         Domain("KeyDerivation.journalNarrativeLegacyV1", FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1),
@@ -91,6 +96,8 @@ struct CryptographicDomainSeparationTests {
         Domain("AEAD.meshGroupKeyWrapV2", FernletCryptoPurpose.AEAD.meshGroupKeyWrapV2),
         Domain("AEAD.meshGroupPhotoV2", FernletCryptoPurpose.AEAD.meshGroupPhotoV2),
         Domain("AEAD.meshEncryptedMetadataV2", FernletCryptoPurpose.AEAD.meshEncryptedMetadataV2),
+        Domain("AEAD.meshRoutedContentKeyWrapV1", FernletCryptoPurpose.AEAD.meshRoutedContentKeyWrapV1),
+        Domain("AEAD.meshRoutedItemV1", FernletCryptoPurpose.AEAD.meshRoutedItemV1),
         Domain("AEAD.heartDropSidecarV2", FernletCryptoPurpose.AEAD.heartDropSidecarV2),
         Domain("AEAD.pendingNarrativeBufferV2", FernletCryptoPurpose.AEAD.pendingNarrativeBufferV2),
         Domain("AEAD.lockContentKeyWrapV2", FernletCryptoPurpose.AEAD.lockContentKeyWrapV2),
@@ -182,7 +189,7 @@ struct CryptographicDomainSeparationTests {
         )
     }
 
-    /// Floor for the source scan (47 declarations at the time of writing).
+    /// Floor for the source scan (54 declarations at the time of writing).
     static let minimumDeclaredPurposes = 40
 
     /// Every `CryptographicPurpose("…")` spelling declared in `source`.

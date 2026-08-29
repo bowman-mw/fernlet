@@ -65,6 +65,49 @@ struct MeshNetworkFeasibilityTests {
         ))
     }
 
+    /// The spike's channel-binding label and its production successor must never be the same
+    /// string. If they were, a DEBUG build and a shipping build would derive the SAME exporter
+    /// secret from the same QUIC connection, and the probe would become a signing oracle for the
+    /// shipping introduction — the exact thing the separate `…probe…` spellings exist to prevent.
+    /// Nothing else fails when they collide: both sides still verify, because both use the same one.
+    @Test func probeAndProductionMeshLabelsAreSeparateDomains() {
+        let probeExporter = FernletCryptoPurpose.KeyDerivation.meshProbeTLSExporterV1
+        let productionExporter = FernletCryptoPurpose.KeyDerivation.meshTLSExporterV1
+        let probeIntroduction = FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1
+        let productionIntroduction = FernletCryptoPurpose.Signature.meshChannelIntroductionV1
+
+        #expect(probeExporter.rawValue == "fernlet.mesh.probe.tls-exporter.v1")
+        #expect(productionExporter.rawValue == "fernlet.mesh.tls-exporter.v1")
+        #expect(probeExporter.rawValue != productionExporter.rawValue)
+        #expect(probeIntroduction.rawValue != productionIntroduction.rawValue)
+        // The probe's spellings carry the `probe` marker; the production ones must not.
+        #expect(probeExporter.rawValue.contains(".probe."))
+        #expect(probeIntroduction.rawValue.contains(".probe."))
+        #expect(!productionExporter.rawValue.contains(".probe."))
+        #expect(!productionIntroduction.rawValue.contains(".probe."))
+    }
+
+    /// The thermal names are diagnostic TOKENS pasted into bug notes, not display text: they stay
+    /// frozen English and exhaustive, so a soak report never reads "unknown" for a state iOS names.
+    @Test @MainActor func thermalStateNamesAreFrozenTokens() {
+        #expect(NetworkMeshFeasibilityProbe.thermalStateName(.nominal) == "nominal")
+        #expect(NetworkMeshFeasibilityProbe.thermalStateName(.fair) == "fair")
+        #expect(NetworkMeshFeasibilityProbe.thermalStateName(.serious) == "serious")
+        #expect(NetworkMeshFeasibilityProbe.thermalStateName(.critical) == "critical")
+        #expect(NetworkMeshFeasibilityProbe.timestamp(nil) == "never")
+    }
+
+    /// The P8 gate reads its numbers out of the copied diagnostic report (§15.1/§15.3), so every
+    /// counter the plan names must actually appear in it. A counter that is only a field measures
+    /// nothing on a device the developer cannot attach a debugger to.
+    @Test @MainActor func theDiagnosticReportCarriesTheP8GateCounters() {
+        let report = NetworkMeshFeasibilityProbe.shared.diagnosticReport
+        for label in ["bytes sent:", "bytes received:", "connects:", "reconnects:",
+                      "thermal state:", "low power mode:"] {
+            #expect(report.contains(label), "diagnostic report is missing \"\(label)\"")
+        }
+    }
+
     @Test func probeTLSIdentityCanBeImported() throws {
         let identity = try MeshProbeTLSIdentity.load()
 

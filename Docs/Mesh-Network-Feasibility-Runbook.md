@@ -4,8 +4,22 @@
 
 This is the required physical-device gate for background mesh continuation. The
 `NetworkMeshFeasibilityProbe` is DEBUG-only and must not be treated as a
-production mesh implementation. Do not begin the transport-abstraction phase
-until the gate has an approved result.
+production mesh implementation.
+
+**Plan:** [Plan-ProximityKit-Network-Migration-2026-08-27.md](Plan-ProximityKit-Network-Migration-2026-08-27.md)
+is the authority for what this gate feeds. Two of its decisions govern this document:
+
+- The spike's stated purpose was to **prove device↔simulator QUIC connection before touching
+  ProximityKit**. That lane is the standing development loop, and it is the only lane P0 closes.
+- The **background** questions — locked operation, Low Power Mode, soaks, battery and memory
+  budgets, force quit — are **P8 entry criteria** (plan §15), not blockers on the transport work.
+  P1 (transport neutrality) and P2 (the QUIC session) proceed without them: MC deprecation is iOS
+  27, so the migration is unhurried, and the neutral transport has value whatever the background
+  answer turns out to be.
+
+So "do not begin the transport-abstraction phase until the gate has an approved result" — the
+original framing — is superseded. What still holds: **do not ship background continuation** until
+the §15 rows below carry real results.
 
 ## What the probe validates
 
@@ -111,7 +125,8 @@ before any two-device feasibility gate run.
    and datagram/control-stream success.
 6. Repeat with four devices. Exercise topology changes and simultaneous starts;
    verify the deterministic connection tie-breaker leaves at most one connection
-   per peer pair.
+   per peer pair. The probe's connection cap is 4, raised from 2 for exactly this
+   step — at 2 the step was impossible to perform.
 7. Test system cancellation, task expiration, network loss, app switching, and
    app-switcher force quit. Record whether the task receives an expiration
    handler; force quit is expected to be able to stop it without one.
@@ -120,24 +135,71 @@ before any two-device feasibility gate run.
 
 ## Gate criteria
 
-| Check | Required result |
-| --- | --- |
-| Discovery | Peers discover and connect on each required network path. |
-| Signed binding | Changed mesh ID, epoch, nonce, identity, or TLS binding fails verification. |
-| Background operation | The connection remains useful during each approved locked/background soak. |
-| Continued task | A user-started request either begins with system activity or reports the `.fail` refusal clearly. |
-| Cancellation | Every path stops the probe and completes the task exactly once. |
-| Resource budget | Battery, memory, throughput, and photo-size measurements meet an approved product budget. |
-| Security | No untrusted peer reaches the post-introduction state. |
-| Force quit | Evidence confirms durable production acknowledgements cannot depend on an expiration callback. |
+Every row carries a **Result** and a **Date**. A blank cell reads as untested; a cell that says
+`Deferred to P8` reads as scheduled. Neither is the same as a pass, and the difference is the whole
+reason these two columns exist.
+
+Fill a result in from the probe's **Copy diagnostic report** output, which now carries the counters
+these rows are judged on: bytes sent/received, connect and reconnect counts with timestamps, and
+thermal-state / Low Power Mode transitions.
+
+### Lane A — device ↔ simulator (what the spike was built to prove; P0 closes this lane)
+
+One physical iOS 26.5-or-later device plus one Simulator on the same non-isolated infrastructure
+Wi-Fi. This is the standing development loop, not a release gate.
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Not yet run** — no physical device available to the sessions that built the spike | — |
+| QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Not yet run** | — |
+| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | **Not yet run** | — |
+| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero (a zero size is a reportable negative result, not a retry). | **Not yet run** | — |
+| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Not yet run** | — |
+| Channel binding (off-radio) | A changed mesh ID, epoch, nonce, identity, or binding hash fails verification. | **Pass** — `MeshNetworkFeasibilityTests.signedIntroductionRejectsAnyChangedChannelBinding`, run in the standard suite | 2026-08-29 |
+| Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates` | 2026-08-29 |
+| Plist configuration | The three keys the lane needs are present and the registration identifier is concrete, not the wildcard. | **Pass** — `MeshNetworkFeasibilityTests.probeInfoPlistConfigurationAllowsTheDeviceSpike` | 2026-08-29 |
+
+The three `Pass` rows are what the radio-free unit suite can honestly prove. They are listed here
+rather than omitted so the gap is legible: everything above them needs hardware, and nothing in the
+automated suite substitutes for it.
+
+### Lane B — physical multi-device and background (deferred to P8; see plan §15)
+
+These rows do not gate P1 or P2. They gate **shipping background continuation**, and they are
+carried out on 2–4 physical devices per plan §15.1–15.4.
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Four-device topology | Simultaneous starts and topology changes leave at most one connection per peer pair, at `maxConnections = 4`. | Deferred to P8 — see plan §15.1 | — |
+| Background operation | An established connection survives backgrounding and lock; re-dial via cached endpoint works while backgrounded; a fresh background Bonjour browse is recorded either way (failure is the expected, documentable result). | Deferred to P8 — see plan §15.1 | — |
+| Low Power Mode | Behaviour on and off is recorded empirically. Apple documents neither direction. | Deferred to P8 — see plan §15.1 | — |
+| Progress soak | Three-hour and six-hour sessions survive while elapsed-based progress advances. Failure activates the degraded ladder in plan §14, it does not sink the plan. | Deferred to P8 — see plan §15.3 | — |
+| Resource budget | Battery, peak memory, throughput, and photo-size measurements meet an approved product budget. | Deferred to P8 — see plan §15.3 | — |
+| Continued task | A user-started request either begins with system activity or reports the `.fail` refusal clearly. | Deferred to P8 — see plan §14 | — |
+| Cancellation | Every path stops the probe and completes the task exactly once. | Deferred to P8 — see plan §14 | — |
+| Force quit | Evidence confirms durable production acknowledgements cannot depend on an expiration callback. | Deferred to P8 — see plan §14 | — |
+| Partition walks | The plan's §10 partition scenarios, physically. | Deferred to P8 — see plan §15.2 | — |
+| Wi-Fi Aware evaluation | A bounded two-day answer on hardware floor, whether `NetworkConnection` rides over it, and battery profile. Outcome is a recommendation, not a dependency. | Deferred to P8 — see plan §15.4 | — |
+
+### Security, both lanes
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Security | No untrusted peer reaches the post-introduction state. | **Partly proven** — the introduction's rejection rules hold off-radio (Lane A); an on-radio hostile-peer walk is deferred to P8 | 2026-08-29 (off-radio only) |
 
 ## Decision
 
-Approve phase 2 only when all required paths demonstrate a usable background
-transport and the security review accepts the channel-binding design. If the
-transport is unreliable while continued processing is active, Fernlet must
-offer foreground/opportunistic sharing rather than continuous background
-delivery.
+Two separate decisions, previously conflated into one:
+
+**Lane A gates the development loop.** Once its rows pass, the device↔simulator path is the standing
+way to exercise QUIC work. It does not gate P1 or P2 — those land on the strength of the code and the
+existing suites — but a red Lane A is the first thing to explain before trusting a P2 result.
+
+**Lane B gates shipping background continuation.** Approve it only when the required paths demonstrate
+a usable background transport and the security review accepts the channel-binding design. If the
+transport is unreliable while continued processing is active, Fernlet must offer
+foreground/opportunistic sharing rather than continuous background delivery — plan §14's degraded
+ladder, which is pre-decided rather than improvised at that point.
 
 The later production phases add neutral transport interfaces, authenticated
 QUIC mesh sessions, persistent membership, encrypted store-and-forward routing,

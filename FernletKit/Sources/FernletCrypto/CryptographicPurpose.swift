@@ -100,6 +100,25 @@ public nonisolated enum FernletCryptoPurpose {
         /// from production mesh admissions so the device spike cannot become a signing oracle
         /// for a future shipping protocol.
         public static let meshProbeChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.probe.channel-introduction.v1")
+        /// **Reserved, not yet written.** The production successor to
+        /// ``meshProbeChannelIntroductionV1``: the mutually-signed QUIC channel introduction that
+        /// authenticates a `NetworkMeshSession` peer (plan §7.2 — purpose ‖ version ‖ meshID ‖
+        /// epochRef ‖ both signing public keys ‖ both nonces ‖ TLS-exporter hash). Distinct from
+        /// the probe spelling on purpose: the DEBUG spike must never be able to mint bytes a
+        /// shipping peer would accept.
+        ///
+        /// Framing is declared `.lengthPrefixed` because P2 must serialize this transcript with
+        /// `CanonicalByteWriter`, like every other production canonical signature. Nothing has
+        /// signed under this spelling yet, so P2 may still change the framing — but it must change
+        /// BOTH sides together, and `CryptographicPurposeBoundaryTests` is where that pairing is
+        /// proven once a serializer exists.
+        public static let meshChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.channel-introduction.v1", framing: .lengthPrefixed)
+        /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
+        /// ID, type token, content hash, size, immutable destination set, expiry, and the
+        /// per-recipient key wraps. Signed by the ORIGIN only — relays forward the origin's exact
+        /// signed object and never re-sign, so this purpose has exactly one signer per manifest.
+        /// Same framing reservation as ``meshChannelIntroductionV1``.
+        public static let meshRoutedManifestV1 = CryptographicPurpose("fernlet.mesh.routed-manifest.v1", framing: .lengthPrefixed)
         public static let proximityQRIdentityV1 = CryptographicPurpose("fernlet.verify.qr.v1")
         public static let proximityQRResponseV1 = CryptographicPurpose("fernlet.verify.response.v1")
         public static let duressRecoveryRequestV1 = CryptographicPurpose("fernlet.duress.recovery.request.v1")
@@ -115,6 +134,23 @@ public nonisolated enum FernletCryptoPurpose {
         public static let heartDropPairV1 = CryptographicPurpose("fernlet.heartdrop.v1")
         public static let presencePairV1 = CryptographicPurpose("fernlet.presence.tag.v1")
         public static let meshGroupKeyWrapV1 = CryptographicPurpose("fernlet.mesh.groupkey.v1")
+        /// TLS-exporter label for the DEBUG Network.framework spike's channel binding — the value
+        /// handed to `sec_protocol_metadata_create_secret`, whose SHA-256 the probe's signed
+        /// introduction commits to. An exporter label never reaches ``signingBytes(_:)``, so the
+        /// framing is immaterial; what matters is that it is a reviewed constant rather than a bare
+        /// string literal in the probe, and that it stays distinct from ``meshTLSExporterV1``.
+        public static let meshProbeTLSExporterV1 = CryptographicPurpose("fernlet.mesh.probe.tls-exporter.v1")
+        /// **Reserved, not yet written.** The production TLS-exporter label for P2's QUIC mesh
+        /// channel binding (plan §7.2), the shipping counterpart to ``meshProbeTLSExporterV1``.
+        /// Keeping the two apart is what stops a spike build and a shipping build deriving the same
+        /// binding secret from the same connection.
+        public static let meshTLSExporterV1 = CryptographicPurpose("fernlet.mesh.tls-exporter.v1")
+        /// **Reserved, not yet written.** P5's per-recipient content-key wrap (plan §11): the
+        /// X25519 shared secret between the origin and one destination is run through HKDF under
+        /// this purpose to derive the key-wrapping key. Mirrors the ``meshGroupKeyWrapV1`` /
+        /// ``FernletCryptoPurpose/AEAD/meshGroupKeyWrapV2`` pair — a derivation purpose plus the
+        /// AEAD purpose that authenticates the wrap.
+        public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.v1")
         public static let heartDropOuterSealV1 = CryptographicPurpose("fernlet.heartdrop.seal.v1")
         /// Scrypt has no `info` argument. This constant names its sole consumer; the v2 wrapping
         /// AEAD below authenticates the same purpose beside the derived key.
@@ -139,6 +175,16 @@ public nonisolated enum FernletCryptoPurpose {
         public static let meshGroupKeyWrapV2 = CryptographicPurpose("fernlet.mesh.groupkey.wrap.aead.v2")
         public static let meshGroupPhotoV2 = CryptographicPurpose("fernlet.mesh.group-photo.aead.v2")
         public static let meshEncryptedMetadataV2 = CryptographicPurpose("fernlet.mesh.encrypted-metadata.aead.v2")
+        /// **Reserved, not yet written.** Authenticated data for P5's per-recipient content-key
+        /// wrap — the sealing half of the pair whose derivation half is
+        /// ``FernletCryptoPurpose/KeyDerivation/meshRoutedContentKeyWrapV1``.
+        public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.wrap.aead.v1")
+        /// **Reserved, not yet written.** Authenticated data for a routed item's own content-key
+        /// seal (plan §11 — "content encryption is independent of the group key"). Registered
+        /// beside the wrap because the two are one review: a wrap purpose with no item purpose
+        /// would leave P5 to invent the second spelling alone, which is how copy-paste collisions
+        /// enter a registry.
+        public static let meshRoutedItemV1 = CryptographicPurpose("fernlet.mesh.routed.item.aead.v1")
         public static let heartDropSidecarV2 = CryptographicPurpose("fernlet.heartdrop.sidecar.aead.v2")
         public static let pendingNarrativeBufferV2 = CryptographicPurpose("fernlet.pending-narrative-buffer.aead.v2")
         public static let lockContentKeyWrapV2 = CryptographicPurpose("fernlet.lock.content-key-wrap.aead.v2")

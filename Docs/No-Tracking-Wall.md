@@ -215,9 +215,39 @@ carries from one user-supplied URL to the next).
 
 ### 4c. Local-only, never leaves the room
 
-MultipeerConnectivity + NearbyInteraction (`ProximityKit/Transport/`, `ProximityKit/Ranging/`) over
-the `_fernlet-*` Bonjour service types declared in `App/Fernlet/Info.plist`. Link-local peer-to-peer with
-signed/sealed envelopes; no server is involved at any point.
+Link-local peer-to-peer with signed/sealed envelopes. No server is involved at any point, and none of
+these paths can reach a host at all — they are constrained by the OS to the local link, which is why
+they cannot appear in the §3 allowlist and are enumerated here instead.
+
+| Path | Where | Service types |
+|---|---|---|
+| **MultipeerConnectivity** — the four shipping radios (friend mesh, presence, recipe share, coach) | `ProximityKit/Transport/` | `_fernlet-friend`, `_fernlet-near`, `_fernlet-recipe`, `_fernlet-coach`, each `._tcp` and `._udp` |
+| **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
+| **Network.framework / QUIC** — the DEBUG-only feasibility spike for the [ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
+
+All service types are declared in `App/Fernlet/Info.plist` under `NSBonjourServices`; a type missing
+from that list fails discovery silently on device, which is why the list is exhaustive rather than
+grown as needed.
+
+**Three Info.plist keys ship in Release for a probe that does not.** This is deliberate and worth
+stating plainly, because the asymmetry looks like a mistake:
+
+| Key | Value | Why it ships anyway |
+|---|---|---|
+| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the four shipping MC radios already do. Not new with the probe. |
+| `NSBonjourServices` → `_fernlet-mesh2._udp` | One added entry | Inert without code that browses or advertises it. Declaring a service type advertises nothing; the Release binary contains no `NetworkListener`/`NetworkBrowser` at all, because the probe compiles out. P2 needs it, and adding it now keeps the plist and the plan in one reviewed state. |
+| `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) | Same: a permitted identifier grants nothing until a task is registered and submitted. Runtime registration uses the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. P8 needs it. |
+
+None of the three carries data anywhere. They widen what the app is *permitted* to do on the local
+link, not what it does, and the wall's §3 host allowlist is unchanged by all of it — a Bonjour service
+type is not a destination.
+
+**A gap that is closed deliberately, not accidentally.** `NoTrackingBoundaryTests` bans the marker
+names `NWConnection` and `NWBrowser`, and TN3213's replacement API is spelled `NetworkConnection` /
+`NetworkListener` / `NetworkBrowser` — so the probe's networking passes through a hole in the marker
+list. That hole is named here rather than left to be discovered: plan §7.4 extends the marker list and
+permits exactly the ProximityKit transport files plus the DEBUG probe, in the same commit as P2's
+transport. Until then, no shipping code uses the new API.
 
 ---
 

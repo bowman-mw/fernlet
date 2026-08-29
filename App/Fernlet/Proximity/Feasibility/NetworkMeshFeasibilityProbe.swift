@@ -105,24 +105,30 @@ enum MeshProbeWire {
     static let headerByteCount = 4
     static let maxFrameByteCount = 16 * 1024
 
+    /// - Returns: the wire bytes written, header included, so the caller can keep P8's
+    ///   throughput counters without re-encoding the value.
+    @discardableResult
     static func send<T: Encodable>(
         _ value: T,
         over stream: Network.QUIC.Stream<QUICStream>
-    ) async throws {
+    ) async throws -> Int {
         let payload = try JSONEncoder().encode(value)
         guard payload.count <= maxFrameByteCount else { throw MeshProbeError.oversizedFrame }
         try await stream.send(header(for: payload.count))
         try await stream.send(payload)
+        return headerByteCount + payload.count
     }
 
+    /// - Returns: the decoded value and the wire bytes read, header included — the receive-side
+    ///   half of the counters described on ``send(_:over:)``.
     static func receive<T: Decodable>(
         _ type: T.Type,
         from stream: Network.QUIC.Stream<QUICStream>
-    ) async throws -> T {
+    ) async throws -> (value: T, byteCount: Int) {
         let header = try await stream.receive(exactly: headerByteCount).content
         let length = try payloadLength(from: header)
         let payload = try await stream.receive(exactly: length).content
-        return try JSONDecoder().decode(type, from: payload)
+        return (try JSONDecoder().decode(type, from: payload), headerByteCount + length)
     }
 
     private static func header(for length: Int) -> Data {
@@ -145,7 +151,11 @@ enum MeshProbeWire {
 
 /// Derives a value that is equal only at the two ends of this active QUIC TLS connection.
 enum MeshProbeTLSBinding {
-    private static let channelBindingPurpose = "fernlet.mesh.probe.tls-exporter.v1"
+    /// The exporter label is a reviewed registry constant, not a literal: it is cryptographic
+    /// format data whose spelling must stay distinct from the production
+    /// `KeyDerivation.meshTLSExporterV1` so a DEBUG spike and a shipping build can never derive
+    /// the same binding secret from the same connection.
+    private static let channelBindingPurpose = FernletCryptoPurpose.KeyDerivation.meshProbeTLSExporterV1.rawValue
 
     static func hash(for connection: NetworkConnection<QUIC>) -> Data? {
         let purpose = channelBindingPurpose
@@ -304,7 +314,9 @@ final class NetworkMeshFeasibilityProbe {
     static let bonjourServiceType = "_fernlet-mesh2._udp"
 
     private static let alpn = "fernlet-mesh-probe-v1"
-    private static let maxConnections = 2
+    /// Four, not two: the runbook's four-device step (step 6 — topology changes and
+    /// simultaneous starts) is impossible at a cap of two. DEBUG-only, like the rest of the file.
+    private static let maxConnections = 4
     private static let maxBrowserEndpoints = 16
     private static let maxEventCount = 80
     private static let maxHeartbeatCount = 720
@@ -342,6 +354,11 @@ final class NetworkMeshFeasibilityProbe {
     private var lastUsableDatagramFrameSize: Int?
     private var lastLiveQUICOptionSummary = "not observed"
     private var lastShutdownReason: String?
+    /// Last power reading actually written to the event ring. The ring holds 80 entries and a
+    /// six-hour soak fires 720 heartbeats, so power is recorded on CHANGE only — a soak whose
+    /// thermal state never moves costs one line, and one that throttles shows exactly when.
+    private var lastRecordedThermalState: ProcessInfo.ThermalState?
+    private var lastRecordedLowPowerMode: Bool?
 
     private(set) var isRunning = false
     private(set) var usesInfrastructureCompatibility = false
@@ -353,6 +370,21 @@ final class NetworkMeshFeasibilityProbe {
     private(set) var status = "Not running"
     private(set) var events: [String] = []
     private(set) var discoveredEndpoints: [String] = []
+
+    // P8 gate counters (plan §15). Kept as fields rather than ring entries: a counter that is
+    // evicted at 80 events measures nothing over a six-hour soak. The ring records the
+    // TRANSITIONS; these fields carry the totals into `diagnosticReport`.
+    /// Wire bytes written across control frames and datagrams, headers included.
+    private(set) var bytesSent = 0
+    /// Wire bytes read across control frames and datagrams, headers included.
+    private(set) var bytesReceived = 0
+    /// QUIC connections that reached `.ready`, counting every peer and every re-dial.
+    private(set) var connectCount = 0
+    /// Re-dials scheduled after a tunnel ended — the reconnection half of §15.1's radio matrix.
+    private(set) var reconnectCount = 0
+    private(set) var firstConnectedAt: Date?
+    private(set) var lastConnectedAt: Date?
+    private(set) var lastReconnectAt: Date?
 
     var diagnosticReport: String {
         let taskState = backgroundTask == nil
@@ -376,6 +408,12 @@ final class NetworkMeshFeasibilityProbe {
         live QUIC options: \(lastLiveQUICOptionSummary)
         usable datagram frame size: \(usableSize)
         authenticated heartbeats: \(heartbeatCount)
+        bytes sent: \(bytesSent)
+        bytes received: \(bytesReceived)
+        connects: \(connectCount) (first \(Self.timestamp(firstConnectedAt)), last \(Self.timestamp(lastConnectedAt)))
+        reconnects: \(reconnectCount) (last \(Self.timestamp(lastReconnectAt)))
+        thermal state: \(Self.thermalStateName(ProcessInfo.processInfo.thermalState))
+        low power mode: \(ProcessInfo.processInfo.isLowPowerModeEnabled)
         shutdown reason: \(shutdown)
         candidates:
         \(candidateText)
@@ -733,7 +771,7 @@ final class NetworkMeshFeasibilityProbe {
         guard isRunning, inboundTunnelTask == nil else { return }
         let connectionID = connection.id
         guard reserveConnection(connectionID) else {
-            record("Ignored an additional inbound tunnel after the two-connection cap.")
+            record("Ignored an additional inbound tunnel after the \(Self.maxConnections)-connection cap.")
             return
         }
         record("Accepted inbound QUIC tunnel id=\(connectionID).")
@@ -772,7 +810,12 @@ final class NetworkMeshFeasibilityProbe {
             let usableSize = connection.usableDatagramFrameSize
             lastUsableDatagramFrameSize = usableSize
             lastLiveQUICOptionSummary = Self.quicOptionSummary(from: connection.parameters)
+            connectCount += 1
+            let now = Date()
+            if firstConnectedAt == nil { firstConnectedAt = now }
+            lastConnectedAt = now
             record("QUIC ready with \(peer) at \(remote); \(lastLiveQUICOptionSummary), usable datagram frame size=\(usableSize) bytes.")
+            recordPowerStateIfChanged()
         case .waiting(let error):
             record("QUIC waiting for \(peer): \(error.localizedDescription)")
         case .failed(let error):
@@ -815,7 +858,10 @@ final class NetworkMeshFeasibilityProbe {
             return
         }
         status = "Retrying QUIC tunnel"
+        reconnectCount += 1
+        lastReconnectAt = Date()
         record("Outbound QUIC tunnel ended; retry \(attempts + 1) of \(Self.maxOutboundTunnelAttempts): \(error.localizedDescription)")
+        recordPowerStateIfChanged()
         scheduleOutboundRetry(to: endpoint)
     }
 
@@ -845,9 +891,9 @@ final class NetworkMeshFeasibilityProbe {
         let stream = try await connection.openStream()
         record("Control initiator opened stream id=\(stream.streamID).")
         let localHello = try makeLocalHello()
-        try await MeshProbeWire.send(localHello, over: stream)
+        try await sendFrame(localHello, over: stream)
         record("Control initiator sent identity hello.")
-        let remoteHello = try await MeshProbeWire.receive(MeshProbeHello.self, from: stream)
+        let remoteHello = try await receiveFrame(MeshProbeHello.self, from: stream)
         guard remoteHello.isWellFormed else { throw MeshProbeError.invalidHello }
         record("Control initiator accepted remote identity hello.")
         let binding = try channelBinding(for: connection)
@@ -856,9 +902,9 @@ final class NetworkMeshFeasibilityProbe {
             responder: remoteHello,
             channelBindingHash: binding
         )
-        try await MeshProbeWire.send(localIntroduction, over: stream)
+        try await sendFrame(localIntroduction, over: stream)
         record("Control initiator sent signed channel introduction.")
-        let remoteIntroduction = try await MeshProbeWire.receive(MeshProbeChannelIntroduction.self, from: stream)
+        let remoteIntroduction = try await receiveFrame(MeshProbeChannelIntroduction.self, from: stream)
         guard introduction(remoteIntroduction, matches: localIntroduction, signer: remoteHello.signingPublicKey) else {
             throw MeshProbeError.invalidIntroduction
         }
@@ -880,13 +926,13 @@ final class NetworkMeshFeasibilityProbe {
         to stream: Network.QUIC.Stream<QUICStream>,
         on connection: NetworkConnection<QUIC>
     ) async throws {
-        let initiatorHello = try await MeshProbeWire.receive(MeshProbeHello.self, from: stream)
+        let initiatorHello = try await receiveFrame(MeshProbeHello.self, from: stream)
         guard initiatorHello.isWellFormed else { throw MeshProbeError.invalidHello }
         record("Control responder accepted identity hello on stream id=\(stream.streamID).")
         let localHello = try makeLocalHello()
-        try await MeshProbeWire.send(localHello, over: stream)
+        try await sendFrame(localHello, over: stream)
         record("Control responder sent identity hello.")
-        let remoteIntroduction = try await MeshProbeWire.receive(MeshProbeChannelIntroduction.self, from: stream)
+        let remoteIntroduction = try await receiveFrame(MeshProbeChannelIntroduction.self, from: stream)
         let binding = try channelBinding(for: connection)
         let localIntroduction = try signedIntroduction(
             initiator: initiatorHello,
@@ -897,7 +943,7 @@ final class NetworkMeshFeasibilityProbe {
             throw MeshProbeError.invalidIntroduction
         }
         record("Control responder accepted signed channel introduction.")
-        try await MeshProbeWire.send(localIntroduction, over: stream)
+        try await sendFrame(localIntroduction, over: stream)
         record("Control responder sent signed channel introduction.")
         markControlStreamVerified()
         let datagrams = try await connection.datagrams
@@ -975,8 +1021,8 @@ final class NetworkMeshFeasibilityProbe {
     private func sendInitialDatagram(over datagrams: Network.QUIC.Datagrams<QUICDatagram>) async throws {
         for attempt in 1...Self.maxInitialDatagramAttempts {
             record("Sending initial QUIC datagram ping attempt \(attempt) of \(Self.maxInitialDatagramAttempts).")
-            try await datagrams.send(MeshProbeDatagram.ping)
-            let response = try await datagrams.receive().content
+            try await sendDatagram(MeshProbeDatagram.ping, over: datagrams)
+            let response = try await receiveDatagram(over: datagrams)
             record("Initial QUIC datagram attempt \(attempt) received \(MeshProbeDatagram.label(for: response)).")
             guard response != MeshProbeDatagram.pong else {
                 markDatagramVerified()
@@ -992,15 +1038,15 @@ final class NetworkMeshFeasibilityProbe {
         var unexpectedDatagramCount = 0
         for _ in 1...Self.maxHeartbeatCount {
             guard !Task.isCancelled else { return }
-            let received = try await datagrams.receive().content
+            let received = try await receiveDatagram(over: datagrams)
             record("Responder received \(MeshProbeDatagram.label(for: received)).")
             if received == MeshProbeDatagram.ping {
-                try await datagrams.send(MeshProbeDatagram.pong)
+                try await sendDatagram(MeshProbeDatagram.pong, over: datagrams)
                 markDatagramVerified()
                 continue
             }
             if received == MeshProbeDatagram.heartbeat {
-                try await datagrams.send(MeshProbeDatagram.heartbeatAcknowledgement)
+                try await sendDatagram(MeshProbeDatagram.heartbeatAcknowledgement, over: datagrams)
                 recordAuthenticatedHeartbeat()
                 continue
             }
@@ -1022,9 +1068,9 @@ final class NetworkMeshFeasibilityProbe {
         over datagrams: Network.QUIC.Datagrams<QUICDatagram>
     ) async throws {
         if received == MeshProbeDatagram.ping {
-            try await datagrams.send(MeshProbeDatagram.pong)
+            try await sendDatagram(MeshProbeDatagram.pong, over: datagrams)
         } else if received == MeshProbeDatagram.heartbeat {
-            try await datagrams.send(MeshProbeDatagram.heartbeatAcknowledgement)
+            try await sendDatagram(MeshProbeDatagram.heartbeatAcknowledgement, over: datagrams)
             recordAuthenticatedHeartbeat()
         }
     }
@@ -1056,7 +1102,7 @@ final class NetworkMeshFeasibilityProbe {
         for _ in 1...Self.maxHeartbeatCount {
             guard !Task.isCancelled else { return }
             try await Task.sleep(for: Self.heartbeatInterval)
-            try await datagrams.send(MeshProbeDatagram.heartbeat)
+            try await sendDatagram(MeshProbeDatagram.heartbeat, over: datagrams)
             try await receiveHeartbeatAcknowledgement(over: datagrams)
             recordAuthenticatedHeartbeat()
         }
@@ -1066,7 +1112,7 @@ final class NetworkMeshFeasibilityProbe {
         over datagrams: Network.QUIC.Datagrams<QUICDatagram>
     ) async throws {
         for _ in 1...Self.maxInitialDatagramAttempts {
-            let received = try await datagrams.receive().content
+            let received = try await receiveDatagram(over: datagrams)
             guard received != MeshProbeDatagram.heartbeatAcknowledgement else { return }
             record("Heartbeat received \(MeshProbeDatagram.label(for: received)); continuing.")
             try await answerProbeDatagram(received, over: datagrams)
@@ -1095,6 +1141,7 @@ final class NetworkMeshFeasibilityProbe {
     private func recordAuthenticatedHeartbeat() {
         heartbeatCount = min(heartbeatCount + 1, Self.maxHeartbeatCount)
         lastAuthenticatedHeartbeat = Date()
+        recordPowerStateIfChanged()
         let progress = min(Self.progressTotal - 1, Int64(75 + (heartbeatCount / 8)))
         updateBackgroundTask(title: "Fernlet mesh", subtitle: "1 friend connected", progress: progress)
     }
@@ -1220,11 +1267,89 @@ final class NetworkMeshFeasibilityProbe {
         events = []
         discoveredEndpoints = []
         completedBackgroundTask = false
+        bytesSent = 0
+        bytesReceived = 0
+        connectCount = 0
+        reconnectCount = 0
+        firstConnectedAt = nil
+        lastConnectedAt = nil
+        lastReconnectAt = nil
+        lastRecordedThermalState = nil
+        lastRecordedLowPowerMode = nil
     }
 
     private func record(_ message: String) {
         if events.count == Self.maxEventCount { events.removeFirst() }
         events.append("\(Date.now.formatted(date: .omitted, time: .standard)): \(message)")
+    }
+
+    // MARK: - P8 gate counters
+
+    /// Sends a control frame and adds its wire bytes to ``bytesSent``.
+    private func sendFrame<T: Encodable>(
+        _ value: T,
+        over stream: Network.QUIC.Stream<QUICStream>
+    ) async throws {
+        bytesSent += try await MeshProbeWire.send(value, over: stream)
+    }
+
+    /// Receives a control frame and adds its wire bytes to ``bytesReceived``.
+    private func receiveFrame<T: Decodable>(
+        _ type: T.Type,
+        from stream: Network.QUIC.Stream<QUICStream>
+    ) async throws -> T {
+        let frame = try await MeshProbeWire.receive(type, from: stream)
+        bytesReceived += frame.byteCount
+        return frame.value
+    }
+
+    /// Sends a datagram and adds its bytes to ``bytesSent``.
+    private func sendDatagram(
+        _ payload: Data,
+        over datagrams: Network.QUIC.Datagrams<QUICDatagram>
+    ) async throws {
+        try await datagrams.send(payload)
+        bytesSent += payload.count
+    }
+
+    /// Receives a datagram and adds its bytes to ``bytesReceived``.
+    private func receiveDatagram(
+        over datagrams: Network.QUIC.Datagrams<QUICDatagram>
+    ) async throws -> Data {
+        let content = try await datagrams.receive().content
+        bytesReceived += content.count
+        return content
+    }
+
+    /// Writes one ring entry when thermal state or Low Power Mode has moved since the last entry.
+    /// Called from the connect, re-dial and heartbeat paths — the moments P8 correlates against —
+    /// so no timer of its own is needed and the ring cannot be flooded by a steady state.
+    private func recordPowerStateIfChanged() {
+        let thermal = ProcessInfo.processInfo.thermalState
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        guard thermal != lastRecordedThermalState || lowPower != lastRecordedLowPowerMode else { return }
+        lastRecordedThermalState = thermal
+        lastRecordedLowPowerMode = lowPower
+        record("Power state: thermal=\(Self.thermalStateName(thermal)), lowPowerMode=\(lowPower).")
+    }
+
+    /// Frozen English diagnostic token for a thermal state. `ProcessInfo.ThermalState` has no
+    /// stable textual form of its own, and this text is pasted into bug notes, never shown as UI.
+    nonisolated static func thermalStateName(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal:  return "nominal"
+        case .fair:     return "fair"
+        case .serious:  return "serious"
+        case .critical: return "critical"
+        @unknown default: return "unknown"
+        }
+    }
+
+    /// Report formatting for an optional timestamp — "never" reads as an honest absence where a
+    /// blank cell would read as a missing measurement.
+    nonisolated static func timestamp(_ date: Date?) -> String {
+        guard let date else { return "never" }
+        return date.formatted(date: .omitted, time: .standard)
     }
 }
 
