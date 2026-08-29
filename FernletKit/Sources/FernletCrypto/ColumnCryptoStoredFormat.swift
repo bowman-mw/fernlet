@@ -20,20 +20,26 @@ import Foundation
 ///
 /// ## What the buckets actually prove
 ///
-/// The marker byte is **not** a reliable discriminator, and the shipping reader knows it: a
-/// legacy blob is a bare ChaChaPoly `combined` value, so its first byte is the first byte of a
-/// random 12-byte nonce, which equals `0x03` or `0x02` with probability 1/256 each (2 in 256,
-/// ≈0.78%, overall). `openBlob` copes by *trying* the marked path and then unconditionally
-/// falling back to the legacy open — it disambiguates by attempted decrypt, which this
-/// classifier by construction cannot do. Therefore:
+/// The marker byte is **not** a reliable discriminator, and since Phase 3 the shipping reader
+/// has no way around that either: a legacy blob is a bare ChaChaPoly `combined` value, so its
+/// first byte is the first byte of a random 12-byte nonce, which equals `0x03` or `0x02` with
+/// probability 1/256 each (2 in 256, ≈0.78%, overall). `openBlob` used to disambiguate by
+/// attempted decrypt — try the marked path, then fall back unconditionally to the legacy open —
+/// but the lower rungs are gone (owner decision D2), so it now dispatches on the marker byte and
+/// nothing else, refusing ``v2Marked`` and ``unprefixed`` as
+/// `SealedColumnOpenError.retiredFormat`. Reader and census read the same byte the same way, so
+/// this classifier is no longer the weaker of the two: neither can see through a collision.
+/// Therefore:
 ///
 /// - ``unprefixed`` is **exact**. A blob whose first byte is neither marker cannot be anything
 ///   but legacy, so `count(unprefixed)` is a precise, keyless lower bound on the legacy
 ///   population — and it is precisely the number Phase 3's "census = 0" gate needs to watch.
 /// - ``v3Marked`` and ``v2Marked`` are **upper bounds** on their generations. Each bucket may
-///   contain the ~1/256 sliver of legacy blobs whose nonce collided with that marker. Nothing
-///   short of a keyed migration pass (which opens each blob and observes which path succeeded)
-///   can resolve that sliver.
+///   contain the ~1/256 sliver of legacy blobs whose nonce collided with that marker. The keyed
+///   pass that could once resolve it — `SealedColumnFormatMigrator`, which opened each blob and
+///   observed which rung succeeded — converted THROUGH the rungs Phase 3 deleted and was deleted
+///   with them. **Nothing in the app can resolve the collided sliver any more**, so the sliver is
+///   now permanent rather than pending.
 ///
 /// So a census reading `unprefixed == 0` is **necessary but not sufficient** proof that no
 /// legacy row remains: the collided sliver is invisible to any byte-only classifier. Say so
@@ -51,9 +57,9 @@ import Foundation
 ///   re-introduce older rows, which is a separate channel (plan decision D5), not a new write.
 /// - **Length is deliberately not validated.** Classification looks at the first byte and
 ///   nothing else, exactly as the reader's dispatch does. A truncated or corrupt blob lands in
-///   whichever bucket the reader would try first, which is the answer a census is being asked
-///   for ("what will the reader do with these bytes"), not a claim that the bytes are a
-///   well-formed sealed box.
+///   the bucket that byte names — the same bucket the reader's own dispatch would send it to,
+///   which is the answer a census is being asked for ("what will the reader do with these
+///   bytes"), not a claim that the bytes are a well-formed sealed box.
 ///
 /// `nonisolated` (overriding this module's MainActor default isolation) and `Sendable`: a pure
 /// byte-inspection value type, called synchronously from the sealed store's nonisolated

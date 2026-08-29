@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletFoundation
+import FernletCrypto
 import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
@@ -13,7 +14,9 @@ import FernletUI
 /// event date and protection status go to HealthKit, and only when both the master toggle and the
 /// intimate-logging capability are on in `StoragePreferencesStore`. Saving while the derived
 /// intimacy-tracking gate has flipped to hidden throws `IntimacyTrackingHiddenError`, which the
-/// sheet surfaces as a gentle explanation instead of a raw error string. A HealthKit write failure
+/// sheet surfaces as a gentle explanation instead of a raw error string — as does a seal that
+/// refuses for want of an install binding
+/// (``ColumnCrypto/SealedColumnStrictSealError/bindingUnavailable``). A HealthKit write failure
 /// after a successful seal is reported but never blocks the local save. Chrome is the 2026-08-21
 /// template: the draft-guard header carries Cancel and the title; Save commits bottom-right.
 struct LogIntimacySheet: View {
@@ -234,6 +237,22 @@ struct LogIntimacySheet: View {
             // still the honest verb for the bar, and the draft guard still stands between the note
             // and a swipe-down. What was missing is that none of it was ever spoken.
             report(String(localized: "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."),
+                   kind: .error)
+        } catch ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable {
+            // The one seal entry refused: this install's device binding was unreadable at the moment
+            // of the write, so the device-bound blob could not be minted. Owner decision D4 made this
+            // reachable — the writer used to fall open to an un-domained legacy blob here and the save
+            // simply succeeded — and `ColumnCrypto.SealedColumnStrictSealError` is `Error, Equatable`
+            // only, with no `LocalizedError` anywhere, so the generic catch below both RENDERED and
+            // SPOKE Foundation's default: "The operation couldn't be completed", followed by the
+            // type's own name and a case number.
+            //
+            // Nothing was written on this path — the seal precedes the HealthKit half — so the sheet
+            // stays open exactly as the hidden-gate branch above does. The sentence leads with the
+            // question anyone actually has after a failed save (is what I typed gone?) and only then
+            // says what to do, because the note is still in this sheet's state and a retry is the
+            // whole recovery.
+            report(String(localized: "This device couldn't encrypt your note just now, so nothing was saved. Your note is still here, so you can try saving again in a moment."),
                    kind: .error)
         } catch {
             report(error.localizedDescription, kind: .error)

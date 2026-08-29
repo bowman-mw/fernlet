@@ -74,12 +74,14 @@ struct SealedIntroductionTests {
         transport: MockMultipeerTransport,
         expectedFriendKA: Data?,
         displayName: String,
-        payloadHandler: (any ProximityPayloadHandling)? = nil
+        payloadHandler: (any ProximityPayloadHandling)? = nil,
+        inspector: (any ProximityInspectorRecording)? = nil
     ) -> ProximityCoordinator {
         ProximityCoordinator(
             identity: identity,
             transport: transport,
             ranging: MockRangingProvider(isHardwareSupported: false),
+            inspector: inspector,
             payloadHandler: payloadHandler,
             replayCache: ReplayCache(),
             foregroundAnchor: NoopProximityForegroundAnchor(),
@@ -192,9 +194,70 @@ struct SealedIntroductionTests {
             Issue.record("Expected .failed on an unopenable wrapper, got \(coordinator.state)")
             return
         }
+        // The forger's wrapper DID reach the AEAD and was rejected there, so it must carry the
+        // open-failed reason — not the retired-format one that
+        // `inboundSealedIntroductionWithNoWireFormatMarkerIsNamedAsARetiredFormat` pins. Asserting
+        // the reason here is what stops the two arms of `SealedIntroUnwrap` collapsing into one.
+        #expect(failureReason(coordinator.state) == "sealed introduction open failed")
         // No further bytes were emitted — no acknowledgement, nothing identifying, after the sealed
         // intro. The forger learns nothing in either direction.
         #expect(transport.sentData.count == sentAfterIntro)
+    }
+
+    // MARK: - (b2b) A wrapper with no `FPT2` marker is a retired format, not a forger
+
+    /// The `SealedIntroUnwrap.legacyWireFormat` remap. `unwrapSealedIntroduction` catches
+    /// ``IdentityError/legacyWireFormat`` and returns its own case rather than `.failed`, and
+    /// `unwrapInboundEnvelopeData` turns the two into different Connection Inspector lines and
+    /// different failure reasons. Nothing else in the suite told them apart, so a cleanup pass that
+    /// dropped the inner `catch` would have left an older-build peer reported to the user as a
+    /// tag-replay forger — the exact flattening the remap's doc comment says it exists to prevent.
+    ///
+    /// The bytes must reach the branch under test. The wrapper carries a REAL introduction the
+    /// friend sealed to us with only the 4-byte `FPT2` marker stripped — the shape a pre-Phase-4
+    /// build put on the wire — and the precondition proves the unstripped form opens, so the marker
+    /// is what routes it. The `.failed` arm's own reason is pinned in
+    /// `inboundSealedWrapperThatCannotBeOpenedFailsWithoutEmittingAck`; asserting both is what
+    /// makes either assertion meaningful.
+    @Test func inboundSealedIntroductionWithNoWireFormatMarkerIsNamedAsARetiredFormat() async throws {
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (friend, friendID) = try makeIdentity(); defer { cleanup(friendID) }
+
+        let recorder = ProximityInspectorEventRecorder()
+        let transport = MockMultipeerTransport()
+        let coordinator = makeSealedCoordinator(
+            identity: local, transport: transport,
+            expectedFriendKA: friend.localKeyAgreementPublicKey, displayName: "Aisha Bloom",
+            inspector: recorder)
+        let peer = presencePeer(name: "older-build")
+
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { !transport.sentData.isEmpty }   // our sealed intro is out
+        let sentAfterIntro = transport.sentData.count
+
+        let inner = try FernletIdentityEnvelope.signed(
+            identityService: friend,
+            senderDisplayName: "Robin",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: Data())
+        let innerJSON = try JSONEncoder().encode(inner)
+        let sealed = try friend.seal(innerJSON, to: local.localKeyAgreementPublicKey)
+        #expect((try? local.open(sealed, from: friend.localKeyAgreementPublicKey)) != nil,
+                "precondition: with its marker this wrapper opens, so the strip below is the only difference")
+
+        let wrapper = SealedIntroductionEnvelope(sealedIntroduction: Data(sealed.dropFirst(4)))
+        transport.simulateInboundData(try JSONEncoder().encode(wrapper), from: peer)
+
+        await waitUntil { if case .failed = coordinator.state { return true }; return false }
+        #expect(failureReason(coordinator.state) == "sealed introduction in a retired or unrecognised wire format",
+                "An unmarked wrapper must fail as a retired format, not as an open failure")
+        #expect(recorder.events.contains("sealed introduction carries no current wire-format marker — failing"))
+        #expect(!recorder.events.contains("sealed introduction could not be opened — failing"),
+                "The retired-format arm must not also report the forger line")
+        #expect(transport.sentData.count == sentAfterIntro,
+                "Nothing identifying is emitted to a peer whose wire format we refuse")
     }
 
     // MARK: - (b3) A PLAIN inbound intro on a sealed connection is rejected
@@ -457,6 +520,14 @@ struct SealedIntroductionTests {
         case .awaitingProximityCommit, .awaitingManualCommit, .connected, .transferring: return true
         default: return false
         }
+    }
+
+    /// The reason string a `.failed` state carries. `fail(_:)` passes it through verbatim, so it is
+    /// the only place a test can see WHICH refusal ended the session — the distinction the
+    /// `SealedIntroUnwrap` remap exists to preserve for the Connection Inspector.
+    private func failureReason(_ state: ProximityCoordinator.State) -> String? {
+        if case .failed(let reason) = state { return reason }
+        return nil
     }
 
     private func committedFingerprint(_ state: ProximityCoordinator.State) -> String? {

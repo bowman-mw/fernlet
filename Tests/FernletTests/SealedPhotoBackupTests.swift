@@ -1279,12 +1279,20 @@ struct SealedPhotoBackupTests {
         return try JSONDecoder().decode(SealedPhotoManifest.self, from: plaintext)
     }
 
-    /// THE heal every later phase stands on: a full-verification pass rewrites a pre-marker entry
-    /// with the domain-separated v2 digest AND stamps it, so a corpus's `minimumEntryHashVersion`
-    /// climbs to 2 on its own as devices run their normal passes. Nothing else proves the legacy
-    /// bare-SHA256 digest ever leaves a live manifest — and deleting the legacy read branch is gated
-    /// on exactly that proof, so a stamp that quietly stayed at 1 would either strand the branch
-    /// forever or, worse, see it deleted under a fleet still restoring through it.
+    /// THE heal: a full-verification pass rewrites a pre-marker entry with the domain-separated v2
+    /// digest AND stamps it, so a corpus's `minimumEntryHashVersion` climbs to 2 on its own as the
+    /// device runs its normal passes. Nothing else proves the legacy bare-SHA256 digest ever leaves
+    /// a live manifest.
+    ///
+    /// What a failure here MEANS changed in Phase 3, and this comment states the new stakes rather
+    /// than the retired ones. The heal used to be the gate on deleting the legacy digest read
+    /// branch — a stamp that quietly stayed at 1 would have stranded that branch or seen it deleted
+    /// out from under entries still restoring through it. The branch is gone
+    /// (``aLegacyDigestEntryIsRefusedTerminallyRatherThanRestored`` pins the refusal that replaced
+    /// it), so there is no retirement left to block. An entry this pass leaves stamped 1 is instead
+    /// one the SHIPPING restore refuses terminally, as `unverifiableLegacyDigest`, and a full pass
+    /// that re-reads its plaintext is now the only thing that gives the photo back. Read a red here
+    /// as "this id is unrestorable until healed", never as "the retirement is blocked".
     @Test func aFullPassHealsALegacyManifestEntryToTheV2DigestAndStamp() async throws {
         let (identity, keychainService) = try plantedIdentity()
         defer { KeychainItem.deleteAll(service: keychainService) }
@@ -1309,7 +1317,7 @@ struct SealedPhotoBackupTests {
                 "the legacy digest survived a pass that read the plaintext and could recompute it")
         #expect(entry.hashVersion == 2)
         #expect(manifest.minimumEntryHashVersion == 2,
-                "the per-corpus zero-legacy proof never cleared, so the legacy branch can never be retired")
+                "an entry is still stamped 1, and the shipping restore refuses those terminally")
 
         // ...and healing is not a way to lose the photo: the committed set still restores.
         var restored: [UUID: Data] = [:]

@@ -168,15 +168,35 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
     /// Seals and stores one narrative, prunes persistent history (best-effort), and sets the
     /// divergence latch — only after a successful save.
     ///
-    /// - Important: Fails closed — throws `FernletLockError.locked` when `contentKey` is `nil`.
+    /// - Important: Fails closed — throws `FernletLockError.locked` when `contentKey` is `nil`. On a
+    ///   failed seal or save the inserted object is removed from the context before rethrowing, so no
+    ///   half-built row survives the failure (see the inline rationale).
     public func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
-            try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
-            // Save, then prune history so a re-sealed (updated) row leaves no prior ciphertext in the
-            // persistent-history transaction log (best-effort).
-            try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            do {
+                try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
+                try context.saveSealed()
+            } catch {
+                // `apply` writes the plaintext identity columns (id, hkExternalUUID, dateKey) BEFORE it
+                // seals the note, flags and scales, so a throw from the middle of it — `ColumnCrypto`'s
+                // `SealedColumnStrictSealError.bindingUnavailable`, when the install's device-binding
+                // keychain row is momentarily unreadable — would leave a note-LESS row pending in the
+                // SHARED view context. Nothing downstream can tell that row from a successfully sealed
+                // one: `narrative(forHKUUID:)` finds it (a fetch includes pending changes by default),
+                // `decrypt` returns a valid narrative because nil ciphertexts open as nil, so the next
+                // drain skips the buffered payload as "already sealed" and then purges the pending
+                // buffer — destroying the only copy of the user's note and symptoms. That is how a
+                // transient keychain fault would become permanent data loss, so the half-built row must
+                // not outlive the failure. `delete`, not `rollback`: only this insert is undone.
+                context.delete(object)
+                throw error
+            }
+            // Prune history so a re-sealed (updated) row leaves no prior ciphertext in the
+            // persistent-history transaction log. Best-effort — a prune failure must not undo the
+            // write that succeeded — but it is audit-logged rather than discarded.
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "MenstrualNarrative.insert")
             // Latch AFTER a successful save, so a failed write never claims this device has diverged.
             markNarrativeStored()
         }
@@ -213,17 +233,31 @@ public nonisolated final class MenstrualNarrativeRepository: @unchecked Sendable
 
     /// Re-seals an existing narrative in place (matched by `id`, preserving the stored `createdAt`),
     /// prunes the superseded ciphertext from persistent history, and sets the divergence latch. A
-    /// missing row is a silent no-op; a `nil` key throws `FernletLockError.locked`.
+    /// missing row is a silent no-op; a `nil` key throws `FernletLockError.locked`. A failed re-seal or
+    /// save is rolled back before rethrowing, so the row keeps the ciphertext it had.
     public func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let request = request(id: narrative.id)
             guard let object = try context.fetch(request).first else { return }
             let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
-            try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-            // Save, then prune history so the prior ciphertext for this row is not retained in the
-            // persistent-history transaction log (best-effort).
-            try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            do {
+                try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
+                try context.saveSealed()
+            } catch {
+                // Same hazard as `insert`, one step worse: `apply` overwrites the plaintext identity
+                // columns first and seals afterwards, so a `bindingUnavailable` throw (or any other
+                // seal/save failure) would leave the EXISTING row pending with the new dateKey and stale
+                // ciphertext — a row that still decrypts cleanly and so reads as successfully re-sealed
+                // to every later drain, which then purges the pending buffer holding the edit. Roll the
+                // context back so the row keeps exactly the content it had before the failed edit, then
+                // rethrow: the caller must still see that the update did not land.
+                context.rollback()
+                throw error
+            }
+            // Prune history so the prior ciphertext for this row is not retained in the
+            // persistent-history transaction log (best-effort, and logged when it fails).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "MenstrualNarrative.update")
             // An update proves a row existed — latch even when the ORIGINAL insert predates the latch
             // (an upgrading install), so a later empty store still reads as "diverged", not "fresh".
             markNarrativeStored()

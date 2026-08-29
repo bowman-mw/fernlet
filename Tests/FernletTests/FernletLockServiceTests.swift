@@ -695,6 +695,32 @@ struct FernletLockServiceTests {
     }
 }
 
+/// Configures a lock on a fresh harness and then replaces the live wrap with a registered
+/// UNPREFIXED one, leaving the install in the custody state (`.legacyScryptWrapped`) whose reader
+/// Phase 3 deleted — so the next unlock must refuse by name rather than open anything.
+///
+/// File-scope because two suites need the same install: ``RetiredLockWrapFormatTests``, which pins
+/// the refusal at each of the four callers that unwrap, and ``RewrapStagingSweepTests``, which pins
+/// what a refusing unlock must NOT delete on its way out. The legacy bytes are registered with the
+/// fake provider deliberately — the wrap WOULD open if the format gate were absent, so a refusal is
+/// proven to come from the gate and not from bytes nobody recognized.
+@MainActor
+private func makeRetiredWrapInstall() async throws -> (LockTestHarness, FernletLockService) {
+    let harness = LockTestHarness()
+    let service = harness.makeService()
+    try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+    let derived = try await harness.crypto.deriveVerifier(
+        passcode: "123456",
+        salt: try #require(KeychainItem.load(for: .salt, service: harness.serviceID)),
+        n: FernletLockCrypto.scryptN
+    )
+    let legacy = harness.crypto.makeLegacyWrap(contentKey: Data(repeating: 0x7E, count: 32),
+                                               wrappingKey: derived)
+    #expect(KeychainItem.store(legacy, for: .wrappedContentKey, service: harness.serviceID) == errSecSuccess)
+    service.lock(reason: .manual)
+    return (harness, service)
+}
+
 /// Phase 3's four-caller pin for the app lock's retired content-key wrap format.
 ///
 /// The unprefixed wrap's reader was this module's last `legacy-read` escape hatch. Deleting it is
@@ -702,29 +728,12 @@ struct FernletLockServiceTests {
 /// not just "it refuses" but "it refuses **by name** and destroys nothing" — at every one of the
 /// four call sites that unwrap, not only at the unlock path everyone thinks of first.
 ///
-/// The fixture plants a legacy wrap the fake crypto provider CAN open, so a passing test proves the
-/// refusal came from the format gate rather than from bytes nobody recognized.
+/// The fixture — ``makeRetiredWrapInstall()``, shared with ``RewrapStagingSweepTests`` — plants a
+/// legacy wrap the fake crypto provider CAN open, so a passing test proves the refusal came from
+/// the format gate rather than from bytes nobody recognized.
 @MainActor
 @Suite(.serialized)
 struct RetiredLockWrapFormatTests {
-
-    /// Configures a lock, then replaces the live wrap with a registered UNPREFIXED one — putting
-    /// the install in the custody state (`.legacyScryptWrapped`) whose reader is gone.
-    private func harnessWithLegacyWrap() async throws -> (LockTestHarness, FernletLockService) {
-        let harness = LockTestHarness()
-        let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        let derived = try await harness.crypto.deriveVerifier(
-            passcode: "123456",
-            salt: try #require(KeychainItem.load(for: .salt, service: harness.serviceID)),
-            n: FernletLockCrypto.scryptN
-        )
-        let legacy = harness.crypto.makeLegacyWrap(contentKey: Data(repeating: 0x7E, count: 32),
-                                                   wrappingKey: derived)
-        #expect(KeychainItem.store(legacy, for: .wrappedContentKey, service: harness.serviceID) == errSecSuccess)
-        service.lock(reason: .manual)
-        return (harness, service)
-    }
 
     /// Every row that could ever be destroyed on a failure path, as it stands right now.
     private func keyRows(_ harness: LockTestHarness) -> [LockKeychainKey: Data?] {
@@ -739,7 +748,7 @@ struct RetiredLockWrapFormatTests {
 
     // MARK: `unlock` refuses by name, stays locked, and leaves every key row byte-identical.
     @Test func unlockRefusesARetiredWrapWithoutTouchingAKey() async throws {
-        let (harness, service) = try await harnessWithLegacyWrap()
+        let (harness, service) = try await makeRetiredWrapInstall()
         defer { harness.cleanup() }
         let before = keyRows(harness)
         await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
@@ -753,7 +762,7 @@ struct RetiredLockWrapFormatTests {
     // still governs — the failure mode this guards is a new verifier written over a wrap nothing
     // can open, which is a lock that takes the new passcode and opens nothing forever.
     @Test func changeCredentialRefusesARetiredWrapWithoutRewritingCredentials() async throws {
-        let (harness, service) = try await harnessWithLegacyWrap()
+        let (harness, service) = try await makeRetiredWrapInstall()
         defer { harness.cleanup() }
         let before = keyRows(harness)
         await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
@@ -765,7 +774,7 @@ struct RetiredLockWrapFormatTests {
     // MARK: `setBiometricEnabled(true,…)` refuses before it can write the raw content key into the
     // `.biometryCurrentSet` bypass row — and, just as importantly, before it flips the enabled flag.
     @Test func enablingBiometricsRefusesARetiredWrapWithoutWritingABypass() async throws {
-        let (harness, service) = try await harnessWithLegacyWrap()
+        let (harness, service) = try await makeRetiredWrapInstall()
         defer { harness.cleanup() }
         let before = keyRows(harness)
         await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
@@ -777,7 +786,7 @@ struct RetiredLockWrapFormatTests {
     // MARK: `enrollRecoveryCustodian` refuses before it deletes the existing recovery blob — the
     // one caller whose failure path would otherwise destroy the material that gives the key back.
     @Test func enrollingACustodianRefusesARetiredWrapWithoutDeletingRecoveryMaterial() async throws {
-        let (harness, service) = try await harnessWithLegacyWrap()
+        let (harness, service) = try await makeRetiredWrapInstall()
         defer { harness.cleanup() }
         let publicKey = Data(repeating: 0x2B, count: FernletLockService.recoveryCustodianPublicKeyByteCount)
         let before = keyRows(harness)
@@ -796,6 +805,197 @@ struct RetiredLockWrapFormatTests {
         #expect(sealCalls == 0, "the content key must never reach the sealing closure")
         #expect(keyRows(harness) == before)
         #expect(KeychainItem.load(for: .recoveryBlob, service: harness.serviceID) == nil)
+    }
+}
+
+/// The re-wrap staging orphan's one surviving lifetime rule — and the placement that enforces it.
+///
+/// `LockKeychainKey.wrappedContentKeyRewrapStaging` can hold a scrypt-openable copy of the content
+/// key, left behind by a Phase 2.5 re-wrap that staged and never promoted. Nothing writes the row
+/// any more (the migrator went with the legacy wrap reader), so the sweep at the tail of
+/// `unlock(passcode:for:)` is the only code left that can ever delete it — and Phase 3 MOVED that
+/// sweep, from before the custody switch to after a key has actually been recovered. The move is
+/// the whole point: with the legacy reader gone, a live wrap this build refuses makes the staging
+/// orphan the only openable copy of the key on the device, so a sweep running before the switch
+/// would destroy key material on a path that then throws.
+///
+/// Both halves are pinned here, because both are broken by edits that look harmless — moving the
+/// line back above the switch, or adding an early return between the switch and the sweep:
+/// * an unlock that RECOVERS a key must leave no orphan behind, under every custody arm that gets
+///   that far (legacy, hard-bound, and the tolerated keyless arm);
+/// * an unlock that REFUSES (``FernletLockError/contentKeyWrapFormatRetired``) must leave the
+///   orphan byte-identical.
+///
+/// This coverage lived in `LockWrapFormatMigrationTests` until that suite was deleted with the
+/// migrator it tested; these tests are its surviving half, rewritten against the relocated sweep.
+@MainActor
+@Suite(.serialized)
+struct RewrapStagingSweepTests {
+    /// The planted orphan's bytes. Arbitrary by right: no reader anywhere consults this row, so
+    /// its content is only ever compared against itself.
+    private static let orphanBytes = Data([0xA5, 0x5A, 0x11])
+
+    private func plantOrphan(_ harness: LockTestHarness) {
+        #expect(KeychainItem.store(Self.orphanBytes, for: .wrappedContentKeyRewrapStaging,
+                                   service: harness.serviceID) == errSecSuccess,
+                "precondition: the orphan must actually be planted")
+    }
+
+    private func stagingRow(_ harness: LockTestHarness) -> Data? {
+        KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: harness.serviceID)
+    }
+
+    // MARK: A refusing unlock destroys nothing — least of all the copy of the key it just refused
+    // to read the other way. This is the half the relocation exists for.
+    @Test func aRefusedUnlockLeavesTheStagingOrphanStanding() async throws {
+        let (harness, service) = try await makeRetiredWrapInstall()
+        defer { harness.cleanup() }
+        plantOrphan(harness)
+
+        await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            _ = try await service.unlock(passcode: "123456", for: .privateHub)
+        }
+
+        #expect(!service.isUnlocked(for: .privateHub), "a refused unlock must not open the hub")
+        #expect(stagingRow(harness) == Self.orphanBytes,
+                "a refused unlock must not sweep: this orphan can be the only openable copy left")
+    }
+
+    // MARK: The other half — a successful passcode unlock sweeps, under whichever custody arm this
+    // hardware's `configure()` left behind (hard-bound where a Secure Enclave exists, legacy where
+    // none does). Both arms RECOVER a key, which is exactly the condition the sweep now sits behind.
+    @Test func aSuccessfulPasscodeUnlockSweepsTheStagingOrphan() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        service.lock(reason: .manual)
+        plantOrphan(harness)
+        #expect(stagingRow(harness) == Self.orphanBytes, "precondition: the orphan is there to sweep")
+
+        let result = try await service.unlock(passcode: "123456", for: .privateHub)
+
+        #expect(result.method == .passcode)
+        #expect(service.state == .unlocked(scope: .privateHub))
+        #expect(stagingRow(harness) == nil,
+                "an unlock that recovered a key must bound the orphan's lifetime to itself")
+    }
+
+    // MARK: The LEGACY arm specifically, forced on every environment: a `FLW2` wrap the fake can
+    // open is planted back over the live row, so custody is `.legacyScryptWrapped` even on hardware
+    // whose `configure()` already hard-bound the install. Without it an SE-hardware run would only
+    // ever exercise the enclave arm, and a sweep accidentally re-placed inside the hard-bound
+    // branch would still look green.
+    @Test func aLegacyCustodyUnlockSweepsTheStagingOrphan() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        let derived = try await harness.crypto.deriveVerifier(
+            passcode: "123456",
+            salt: try #require(KeychainItem.load(for: .salt, service: harness.serviceID)),
+            n: FernletLockCrypto.scryptN
+        )
+        let replanted = try harness.crypto.wrapContentKey(Data(repeating: 0x3C, count: 32), using: derived)
+        #expect(KeychainItem.store(replanted, for: .wrappedContentKey, service: harness.serviceID) == errSecSuccess)
+        service.lock(reason: .manual)
+        plantOrphan(harness)
+
+        let result = try await service.unlock(passcode: "123456", for: .privateHub)
+
+        #expect(result.method == .passcode)
+        #expect(stagingRow(harness) == nil, "the legacy arm recovers a key too, so it must sweep too")
+    }
+
+    // MARK: The tolerated KEYLESS arm — the one successful unlock that installs no key at all. A
+    // hard-bound install whose enclave wrap is gone throws `contentKeyUnrecoverable`, which
+    // `unlock(passcode:for:)` tolerates for the two scopes that never receive the key: the unlock
+    // succeeds holding nothing, and the sweep — after the switch, not inside a key-recovered
+    // branch — must still run. Where no enclave is reported at all, the same fixture is
+    // `.undeterminable` custody and the unlock honestly throws; the orphan must then SURVIVE. The
+    // two environments assert opposite outcomes of one rule: swept if and only if the unlock got
+    // past key recovery.
+    @Test func aToleratedKeylessUnlockStillSweepsTheStagingOrphan() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        service.lock(reason: .manual)
+        // Every route to the key destroyed: the scrypt row (already absent where configure()
+        // hard-bound) and the enclave wrap alike.
+        KeychainItem.delete(for: .wrappedContentKey, service: harness.serviceID)
+        KeychainItem.delete(for: .seWrappedContentKey, service: harness.serviceID)
+        plantOrphan(harness)
+
+        guard SecureEnclaveContentKeyWrap.isAvailable else {
+            await #expect(throws: FernletLockError.self,
+                          "no enclave plus no scrypt row is undeterminable custody, which must throw") {
+                _ = try await service.unlock(passcode: "123456", for: .progressPhotos)
+            }
+            #expect(stagingRow(harness) == Self.orphanBytes,
+                    "an unlock that recovered nothing must sweep nothing")
+            return
+        }
+
+        let result = try await service.unlock(passcode: "123456", for: .progressPhotos)
+
+        #expect(result.method == .passcode)
+        #expect(service.state == .unlocked(scope: .progressPhotos),
+                "the terminal recovery failure is tolerated for the scopes that never hold the key")
+        #expect(stagingRow(harness) == nil,
+                "the tolerated keyless arm reaches the sweep like every other arm that gets past recovery")
+    }
+}
+
+/// The update-only contract of `KeychainItem.updateReportingStatus`, hosted here for the same
+/// reason its predecessor in `LockWrapFormatMigrationTests` was: there is no KeychainHelpers suite,
+/// and the lock is where the property mattered.
+///
+/// Its consumer is gone — the Phase 2.5 wrap re-wrap's transactional PROMOTE went with the
+/// migrator, and with it the `keychainUpdate` seam `FernletLockService` carried for it, so the
+/// helper is public API with no caller left in the tree. The contract is kept pinned anyway,
+/// because "update-only: `errSecItemNotFound` un-normalized, nothing ever created" is precisely the
+/// property that makes it safe for the next caller to reach for over the delete-then-add `store`,
+/// and an edit that quietly started minting rows would otherwise ship against key material with
+/// nothing to catch it.
+@MainActor
+@Suite(.serialized)
+struct KeychainUpdateOnlyContractTests {
+    @Test func updateReportingStatusIsUpdateOnly() throws {
+        let service = "com.fernlet.lock.test.updateseam.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: service) }
+        let account = "com.fernlet.lock.test.updateseam.account"
+
+        // Absent row: errSecItemNotFound comes back UN-normalized and nothing is created.
+        #expect(KeychainItem.updateReportingStatus(Data([0x01]), account: account, service: service)
+                == errSecItemNotFound)
+        #expect(KeychainItem.loadAll(service: service).isEmpty,
+                "an update against an absent row must never create one")
+
+        // Present row: the value is replaced; accessibility and synchronizable are preserved. The
+        // accessibility read is REQUIRED and compared against the concrete expected class — a
+        // nil == nil comparison would pass vacuously with the row (or the reader) broken.
+        #expect(KeychainItem.store(Data([0x01]), account: account, service: service,
+                                   accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly) == errSecSuccess)
+        let before = try #require(keychainAttributes(account: account, service: service),
+                                  "the stored row's attributes must be readable")
+        #expect(before[kSecAttrAccessible as String] as? String
+                == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        #expect(KeychainItem.updateReportingStatus(Data([0x02]), account: account, service: service)
+                == errSecSuccess)
+        #expect(KeychainItem.load(account: account, service: service) == Data([0x02]))
+        let after = try #require(keychainAttributes(account: account, service: service),
+                                 "the updated row's attributes must be readable")
+        #expect(after[kSecAttrAccessible as String] as? String
+                == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String,
+                "the update must not change the accessibility class")
+        #expect((after[kSecAttrSynchronizable as String] as? Bool) != true,
+                "the update must not make the row synchronizable")
+
+        // R5: empty payload/account/service are caller bugs, refused with errSecParam.
+        #expect(KeychainItem.updateReportingStatus(Data(), account: account, service: service) == errSecParam)
+        #expect(KeychainItem.updateReportingStatus(Data([0x01]), account: "", service: service) == errSecParam)
+        #expect(KeychainItem.updateReportingStatus(Data([0x01]), account: account, service: "") == errSecParam)
     }
 }
 

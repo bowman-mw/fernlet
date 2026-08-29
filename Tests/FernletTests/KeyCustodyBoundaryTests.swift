@@ -107,7 +107,8 @@ struct KeyCustodyBoundaryTests {
         // T-27: the steady state stays staging-free — a hard-bound install (and the SE-less
         // legacy complement) must never carry a scrypt-openable staging copy at rest. The dynamic
         // version of the same claim (a planted orphan is swept by the next passcode unlock under
-        // any custody) lives at the service level in LockWrapFormatMigrationTests.
+        // any custody) lives at the service level in RewrapStagingSweepTests, which took the
+        // coverage over when LockWrapFormatMigrationTests was deleted with its migrator in Phase 3.
         #expect(KeychainItem.load(for: .wrappedContentKeyRewrapStaging, service: service) == nil,
                 "the re-wrap staging row must be absent in the steady state")
         for key in present {

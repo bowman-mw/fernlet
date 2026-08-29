@@ -7,6 +7,9 @@
 import Foundation
 import Testing
 import CryptoKit
+import MultipeerConnectivity
+import FernletCrypto
+import FernletFoundation
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
@@ -356,6 +359,239 @@ struct MeshEncryptionTests {
 
         #expect(vault.isBlockedProximitySigningKey(id1.localSigningPublicKey))
         #expect(!vault.isBlockedProximitySigningKey(id2.localSigningPublicKey))
+    }
+
+    // MARK: - Phase 4: the `FMGM2` metadata refusal
+
+    /// The audit event that is written for a metadata wrapper refused at the marker guard, and
+    /// deliberately NOT written for one the AEAD rejected. A frozen English token, not display text.
+    private static let droppedLegacyMetadata = "mesh.encryptedMetadata.droppedLegacyWireFormat"
+
+    /// The fourth Phase-4 wire refusal, and the only one with no reachable caller: `decryptPayload`
+    /// is `private`, so its three siblings above can be asserted by throwing `MeshEncryptionError`
+    /// while this one can only be read through what `handleEncryptedMetadata` records. That is not a
+    /// weaker test — the guard's whole functional value IS the nameable audit line (unmarked bytes
+    /// would fail the AEAD and be dropped either way), so this asserts the thing that would actually
+    /// be lost, and it covers the named catch as well as the guard.
+    ///
+    /// Both wrappers carry the SAME sealed bytes under the SAME group key. One has a byte flipped
+    /// inside the sealed body — past `FMGM2`, so it reaches the AEAD and dies on the tag, which is
+    /// the near-miss this suite has been bitten by before (see `photoDecryptFailsWithTamperedCiphertext`).
+    /// The other has the 5-byte marker stripped, which is exactly the pre-Phase-4 layout. Exactly
+    /// one named drop may come out: zero if the marker guard were dropped (the unmarked bytes would
+    /// then die in the AEAD like any other undecryptable wrapper) or if the named catch were folded
+    /// back into the silent one, and two if the named catch ever widened to cover every failure.
+    @Test func encryptedMetadataRefusesUnmarkedLegacyBytesWithItsOwnAuditLine() async throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }   // `MeshNetworkManager.store` is `unowned`
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator,
+                                  peer: meshPeer(name: "Member"),
+                                  fingerprint: "fp-member")
+        let keyBytes = makeRandomBytes()
+        try joinMesh(manager, on: coordinator, admitter: makeIdentity(), keyBytes: keyBytes, epoch: 5)
+        let groupKey = try #require(manager.currentGroupKey)
+        #expect(groupKey.epoch == 5 && groupKey.keyBytes == keyBytes,
+                "precondition: the join flow installed the key both wrappers below are sealed under")
+
+        let capture = MeshMetadataAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        // A genuine inner payload, so the marked wrapper is well-formed in every respect except the
+        // one byte flipped below — and long enough that stripping the marker still clears
+        // `decryptPayload`'s length guard, leaving the marker as the only thing that can refuse it.
+        let inner = try JSONEncoder().encode(
+            EncryptedMetadataInner(payloadType: PayloadType.friendPhotoManifest.rawValue, payload: Data()))
+        let (marked, nonce) = try sealMetadata(inner, keyBytes: keyBytes)
+        var tampered = marked
+        tampered[tampered.startIndex + 5] ^= 0xFF   // past `FMGM2`: these bytes reach the tag
+        try deliverMetadata(tampered, nonce: nonce, epoch: 5, to: manager, on: coordinator)
+        try deliverMetadata(Data(marked.dropFirst(5)), nonce: nonce, epoch: 5,
+                            to: manager, on: coordinator)
+
+        await waitUntil { capture.count(Self.droppedLegacyMetadata) > 0 }
+        // The two handlers run as separate tasks; let the queue drain before counting so a stray
+        // second event cannot slip in after the assertion.
+        for _ in 0..<20 { await Task.yield() }
+        #expect(capture.count(Self.droppedLegacyMetadata) == 1,
+                "Only the unmarked wrapper is a retired wire format — a tampered marked one is not")
+    }
+
+    // MARK: - Encrypted-metadata fixtures
+
+    /// Builds current (`FMGM2`-marked) metadata bytes by hand, because `encryptPayload` is `private`.
+    /// The spelling must track `MeshNetworkManager.encryptPayload`: marker, then AES-256-GCM under
+    /// the group key with the typed metadata AEAD purpose, ciphertext followed by tag, nonce carried
+    /// beside it. If it drifts the marked wrapper stops reaching the AEAD and the control goes
+    /// vacuous — which is why the test asserts exactly one refusal rather than at least one.
+    private func sealMetadata(_ inner: Data, keyBytes: Data) throws -> (ciphertext: Data, nonce: Data) {
+        let box = try AES.GCM.seal(
+            inner,
+            using: SymmetricKey(data: keyBytes),
+            nonce: AES.GCM.Nonce(),
+            authenticating: FernletCryptoPurpose.AEAD.meshEncryptedMetadataV2.data
+        )
+        var ciphertext = Data("FMGM2".utf8) + box.ciphertext
+        ciphertext.append(box.tag)
+        return (ciphertext, Data(box.nonce))
+    }
+
+    /// Hands the manager a `.meshEncryptedMetadata` envelope on a committed slot — the same public
+    /// entry point a verified peer's wrapper arrives through.
+    private func deliverMetadata(
+        _ ciphertext: Data,
+        nonce: Data,
+        epoch: Int,
+        to manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator
+    ) throws {
+        let wrapper = MeshEncryptedMetadataPayload(ciphertext: ciphertext, nonce: nonce, keyEpoch: epoch)
+        let plaintext = try JSONEncoder().encode(wrapper)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(.meshEncryptedMetadata, plaintext: plaintext),
+                                     plaintext: plaintext,
+                                     from: nil)
+    }
+
+    /// Drives the real descriptor → request → grant join flow so the manager ends up holding
+    /// `keyBytes` at `epoch`. `currentGroupKey` is `private(set)` and every mint site is private, so
+    /// the join flow is the only way to give the encrypted-metadata seam a key to work with.
+    private func joinMesh(
+        _ manager: MeshNetworkManager,
+        on coordinator: ProximityCoordinator,
+        admitter: IdentityService,
+        keyBytes: Data,
+        epoch: Int
+    ) throws {
+        let now = Date()
+        let member = MeshMember(
+            fingerprint: IdentityService.fingerprint(of: admitter.localSigningPublicKey),
+            displayName: "Admitter",
+            signingPublicKey: admitter.localSigningPublicKey,
+            keyAgreementPublicKey: admitter.localKeyAgreementPublicKey,
+            joinedAt: now)
+        let mesh = MeshDescriptor(meshID: UUID(), name: "Metadata", mode: .open, members: [member],
+                                  nameSetAt: now, nameSetBy: member.fingerprint,
+                                  modeSetAt: now, modeSetBy: member.fingerprint, createdAt: now)
+        let descriptor = try JSONEncoder().encode(MeshStateChangePayload(descriptor: mesh))
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(.meshDescriptor, plaintext: descriptor),
+                                     plaintext: descriptor, from: nil)
+        let token = try MeshAdmissionToken.signed(meshID: mesh.meshID,
+                                                  joinerFingerprint: manager.localFingerprint,
+                                                  joinerSigningPublicKey: manager.localSigningPublicKey,
+                                                  admitterIdentity: admitter)
+        let grant = MeshAdmissionGrantPayload(
+            meshID: mesh.meshID,
+            requesterFingerprint: manager.localFingerprint,
+            token: token,
+            encryptedCurrentKey: try admitter.encryptGroupKey(keyBytes, for: manager.localKeyAgreementPublicKey),
+            currentKeyEpoch: epoch)
+        let grantData = try JSONEncoder().encode(grant)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(.meshAdmissionGrant, plaintext: grantData),
+                                     plaintext: grantData, from: peerIdentity(for: admitter))
+    }
+
+    /// A coordinator the manager only ever identity-compares against its slots. Deliberately not
+    /// provisioned: its init never touches the keychain, and provisioning would orphan keys under a
+    /// never-reused UUID service on every run.
+    private func throwawayCoordinator() -> ProximityCoordinator {
+        ProximityCoordinator(
+            identity: IdentityService(keychainService: "com.fernlet.meshenc.slot.\(UUID().uuidString)"),
+            transport: MockMultipeerTransport(),
+            ranging: MockRangingProvider(),
+            replayCache: ReplayCache(),
+            displayName: "Local",
+            timeoutSeconds: 0)
+    }
+
+    private func meshPeer(name: String) -> MultipeerPeer {
+        MultipeerPeer(id: UUID(), displayName: name, discoveryInfo: nil,
+                      advertisedFingerprint: nil, underlying: MCPeerID(displayName: name))
+    }
+
+    private func peerIdentity(for identity: IdentityService) -> ProximityCoordinator.PeerIdentity {
+        ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Admitter",
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            fingerprint: IdentityService.fingerprint(of: identity.localSigningPublicKey),
+            rangingMode: .none,
+            firstSeenAt: Date())
+    }
+
+    /// An inbound envelope shell: `proximityCoordinator(_:didReceive:...)` receives envelopes that
+    /// have already been verified, so the key and signature fields are unused here.
+    private func inboundEnvelope(_ payloadType: PayloadType, plaintext: Data) -> FernletIdentityEnvelope {
+        FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: Data(),
+            senderKeyAgreementPublicKey: Data(),
+            senderDisplayName: "Peer",
+            recipientFingerprint: nil,
+            payloadType: payloadType,
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Test"),
+            payload: plaintext,
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data())
+    }
+
+    /// Gives up only once the deadline has passed AND `minimumPolls` observations have really been
+    /// made. A wall-clock deadline alone keeps advancing while this `@MainActor` suite is starved in
+    /// a loaded full-suite run, so it can expire having looked only a handful of times; counting
+    /// observations ties the give-up decision to scheduling received. Terminates either way: `polls`
+    /// only climbs and every turn of the loop yields.
+    private func waitUntil(
+        timeout: Duration = .seconds(3),
+        minimumPolls: Int = 400,
+        _ condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+}
+
+/// A metadata drop is silent by design — `handleEncryptedMetadata` changes no state and shows the
+/// user nothing — so the audit trail is the only place "refused at the marker guard" and "rejected
+/// by the AEAD" differ. Locked because ``FernletAuditLog`` invokes handlers on whatever executor
+/// logged the event, and removed by token on teardown so it does not outlive the test.
+private final class MeshMetadataAuditCapture {
+    private let lock = NSLock()
+    private var storedEvents: [String] = []
+    private var token: UUID?
+
+    func install() {
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.storedEvents.append(event)
+            self.lock.unlock()
+        }
+    }
+
+    func uninstall() {
+        if let token {
+            FernletAuditLog.removeCaptureHandler(token)
+            self.token = nil
+        }
+    }
+
+    func count(_ event: String) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return storedEvents.filter { $0 == event }.count
     }
 }
 

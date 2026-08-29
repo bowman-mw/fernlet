@@ -177,7 +177,12 @@ final class JournalSealingCoordinator {
         // re-sealed by `migrateExistingJournalsToSealedStore` on the next activation, with the
         // past-day rescrub re-armed for days outside the in-memory window.
         guard let key = journalContentKey ?? deviceJournalKey else {
-            FernletAuditLog.log("journal.seal.failed", context: ["id": entry.id.uuidString])
+            // `reason`, not `error`: no call threw here, and the audit line is the ONLY record this
+            // path leaves. Naming the cause is what lets a triage tell "there was no key to seal
+            // under" apart from "the seal itself refused" below — the same split
+            // `updateSealedNarrative`'s guard already makes with its `noContentKey`.
+            FernletAuditLog.log("journal.seal.failed",
+                                context: ["id": entry.id.uuidString, "reason": "noContentKey"])
             host.requestPastDayJournalRescrub()
             return
         }
@@ -191,7 +196,17 @@ final class JournalSealingCoordinator {
             sealedJournalIDs.insert(entry.id)
             if journalContentKey == nil { deviceKeyMigrationPending = true }
         } catch {
-            FernletAuditLog.log("journal.seal.failed", context: ["id": entry.id.uuidString])
+            // Carry the error (the `String(describing:)` form every peer audit line uses, e.g.
+            // `mesh.encryptedMetadata.sealFailed`). This is the only record the exposure window
+            // documented below ever leaves, and the causes it has to keep apart are not
+            // interchangeable: a sealed-store insert failure is a storage fault, while
+            // `SealedColumnStrictSealError.bindingUnavailable` is the seal REFUSING to mint a
+            // device-bound blob — a cause that only became reachable when owner decision D4 closed
+            // the writer's legacy fallback, and that previously landed here as a silent success.
+            // Without the cause, "why did journal plaintext appear in the synced blob?" has no
+            // answer in the trail. The event NAME stays the frozen token it has always been.
+            FernletAuditLog.log("journal.seal.failed",
+                                context: ["id": entry.id.uuidString, "error": String(describing: error)])
             // Do NOT add the entry to sealedJournalIDs on failure. Because the id is then absent from
             // the sealed set, FernletSnapshot.forStorage / mutatePastDay do NOT strip the entry, so its
             // plaintext stays in the days blob — which is plain JSON and, when iCloud sync is on, mirrors
@@ -235,7 +250,11 @@ final class JournalSealingCoordinator {
             // migrateExistingJournalsToSealedStore visits) is the re-armed full-repository scrub, whose
             // insert-upsert overwrites the stale narrative with the blob's current text and re-strips it on
             // a later launch. Bounded transient exposure, but the edit is never lost (F1/F4).
-            FernletAuditLog.log("journal.reseal.failed", context: ["id": entry.id.uuidString])
+            // Same reasoning as `seal()`'s catch: the id alone cannot say WHICH failure re-opened
+            // the exposure window, and this catch's own recovery (drop the id, re-arm the scrub)
+            // reads identically whether the store faulted or the seal refused.
+            FernletAuditLog.log("journal.reseal.failed",
+                                context: ["id": entry.id.uuidString, "error": String(describing: error)])
             sealedJournalIDs.remove(entry.id)
             host.requestPastDayJournalRescrub()
         }

@@ -282,6 +282,56 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    /// The `payloadLegacyWireFormat` remap. `verify`'s `.sealedTo` branch catches
+    /// ``IdentityError/legacyWireFormat`` and rethrows its own named case, while everything else
+    /// the open can throw is flattened to ``VerifyError/payloadDecryptionFailed``. The distinction
+    /// is the whole reason the remap exists: `ProximityCoordinator.handleInbound` puts the thrown
+    /// error straight into the Connection Inspector and the trainer audit trail, so an older peer
+    /// must read there as a retired-format sender rather than as a tag-replay forger.
+    ///
+    /// Both halves are asserted, because only the pair pins the remap: a cleanup that collapsed the
+    /// two catches into one generic clause would still satisfy either assertion alone.
+    ///
+    /// Reaching the branch is load-bearing. The legacy body is a REAL seal with only its 4-byte
+    /// `FPT2` marker stripped, and the precondition below proves the unstripped bytes open — so the
+    /// marker, not damaged ciphertext, is what routes them. The forged body flips a byte inside the
+    /// ChaChaPoly region (past the marker AND past the 32-byte ephemeral key), so it reaches the
+    /// AEAD and is rejected there by the tag.
+    @Test func sealedPayloadWithNoWireFormatMarkerIsNamedSeparatelyFromAnAEADRejection() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let sealedPayload = try alice.seal(Data("a sealed heart".utf8), to: bob.localKeyAgreementPublicKey)
+        #expect((try? bob.open(sealedPayload, from: alice.localKeyAgreementPublicKey)) != nil,
+                "precondition: with its marker this payload opens, so the strip below is the only difference")
+
+        let legacy = try signedEnvelope(
+            sender: alice,
+            payload: Data(sealedPayload.dropFirst(4)),   // strip `FPT2`: the pre-marker layout
+            payloadType: .friendHeart,
+            payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: bob.localKeyAgreementPublicKey)
+        )
+        #expect(throws: FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat) {
+            try legacy.verify(identityService: bob, replayCache: ReplayCache())
+        }
+
+        // `FPT2` (4) + ephemeral key (32) — the first byte of the ChaChaPoly nonce, so these bytes
+        // pass the marker guard and die on the tag instead.
+        var forgedPayload = sealedPayload
+        forgedPayload[forgedPayload.startIndex + 36] ^= 0xFF
+        let forged = try signedEnvelope(
+            sender: alice,
+            payload: forgedPayload,
+            payloadType: .friendHeart,
+            payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: bob.localKeyAgreementPublicKey)
+        )
+        #expect(throws: FernletIdentityEnvelope.VerifyError.payloadDecryptionFailed) {
+            try forged.verify(identityService: bob, replayCache: ReplayCache())
+        }
+    }
+
     @Test func recipeShareEnvelopeRejectsUnsealedPayload() throws {
         let (alice, aid) = try makeIdentity()
         defer { cleanup(aid) }

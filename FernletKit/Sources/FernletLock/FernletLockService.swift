@@ -546,10 +546,13 @@ public enum LockKeychainKey: String {
     /// stays discriminated by ``wrappedContentKey`` alone, so this row can never resurrect a
     /// scrypt custody state. Its lifetime is bounded by the sweep in `unlock(passcode:for:)` —
     /// every passcode unlock that RECOVERS a content key deletes it, under every custody arm that
-    /// gets that far — and it is destroyed by `destroyLocalUnlockKeys` (both duress responses)
-    /// like the live wrap it staged for. Written only through the service's `keychainStore` seam,
-    /// so it inherits the same `WhenUnlockedThisDeviceOnly`, never-synchronized class as the live
-    /// row (pinned by `KeyCustodyBoundaryTests`).
+    /// gets that far, and no unlock that REFUSES may, because on a refusing path this orphan can
+    /// be the only openable copy of the key left. Both halves of that rule are pinned by
+    /// `RewrapStagingSweepTests`, which took the coverage over from the deleted
+    /// `LockWrapFormatMigrationTests`. It is also destroyed by `destroyLocalUnlockKeys` (both
+    /// duress responses) like the live wrap it staged for. Written only through the service's
+    /// `keychainStore` seam, so it inherits the same `WhenUnlockedThisDeviceOnly`,
+    /// never-synchronized class as the live row (pinned by `KeyCustodyBoundaryTests`).
     case wrappedContentKeyRewrapStaging = "com.fernlet.lock.wrappedContentKey.rewrapStaging"
     /// The content key ECIES-wrapped under the non-exportable Secure Enclave key
     /// (`SecureEnclaveContentKeyWrap`). Additive while ``wrappedContentKey`` still exists;
@@ -1084,18 +1087,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// means "the read failed"; injectable so a test can force `.unreadable` and prove the service
     /// refuses to guess.
     @ObservationIgnored private let keychainLoadDistinguishing: (LockKeychainKey, String) -> KeychainItem.ReadResult
-    /// The update-only keychain write the Phase 2.5 wrap re-wrap's PROMOTE goes through — one
-    /// `SecItemUpdate` transaction, so the live row can never be left absent or half-written the
-    /// way ``keychainStore``'s delete-then-add can. Injectable so a test can fail exactly the
-    /// promote; the production default is `KeychainItem.updateReportingStatus`, whose
-    /// `errSecItemNotFound` is returned un-normalized (the migrator must refuse to create).
-    @ObservationIgnored private let keychainUpdate: (Data, LockKeychainKey, String) -> OSStatus
-    /// The status-reporting keychain delete the same migration's staging-row cleanup goes
-    /// through. Injectable so a test can force the S8 delete to fail and prove the orphan is
-    /// still bounded (§Q2a); the production default is `KeychainItem.deleteReportingStatus`.
-    /// The custody-independent unlock-tail sweep deliberately does NOT use this seam — it is a
-    /// plain audited `KeychainItem.delete`, exercised through the real keychain.
-    @ObservationIgnored private let keychainDelete: (LockKeychainKey, String) -> OSStatus
     /// The sealed CoreData stack whose encrypted entities ``reset()`` purges.
     @ObservationIgnored private let privatePersistenceController: PrivatePersistenceController
     /// The unwrapped content key; non-nil only while `.unlocked`, scrubbed on lock/reset.
@@ -1127,8 +1118,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         keychainStore: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
         keychainLoad: ((LockKeychainKey, String) -> Data?)? = nil,
         keychainLoadDistinguishing: ((LockKeychainKey, String) -> KeychainItem.ReadResult)? = nil,
-        keychainUpdate: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
-        keychainDelete: ((LockKeychainKey, String) -> OSStatus)? = nil,
         privatePersistenceController: PrivatePersistenceController? = nil
     ) {
         self.keychainService = keychainService
@@ -1150,34 +1139,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         self.keychainLoadDistinguishing = keychainLoadDistinguishing ?? { key, service in
             KeychainItem.loadDistinguishingAbsence(account: key.rawValue, service: service)
         }
-        self.keychainUpdate = keychainUpdate ?? Self.defaultKeychainUpdate
-        self.keychainDelete = keychainDelete ?? Self.defaultKeychainDelete
         self.privatePersistenceController = privatePersistenceController ?? .shared
 
         state = Self.initialState(
             saltRow: self.keychainLoadDistinguishing(.salt, keychainService),
             cooldownDeadline: activeCooldownDeadline()
         )
-    }
-
-    /// The production `keychainUpdate` seam: `KeychainItem.updateReportingStatus` over the key's
-    /// account — one securityd transaction, UPDATE-ONLY (`errSecItemNotFound` comes back
-    /// un-normalized and nothing is ever created). Internal rather than private so the custody
-    /// tests can pin the DEFAULT directly — the update-only property of the wrap re-wrap's
-    /// promote must hold on the closure production actually installs, not only on test doubles.
-    nonisolated static func defaultKeychainUpdate(
-        _ data: Data, _ key: LockKeychainKey, _ service: String
-    ) -> OSStatus {
-        KeychainItem.updateReportingStatus(data, account: key.rawValue, service: service)
-    }
-
-    /// The production `keychainDelete` seam: `KeychainItem.deleteReportingStatus` over the key's
-    /// account (`errSecItemNotFound` normalized to success — an absent row is a deleted row).
-    /// Internal for the same reason as ``defaultKeychainUpdate(_:_:_:)``.
-    nonisolated static func defaultKeychainDelete(
-        _ key: LockKeychainKey, _ service: String
-    ) -> OSStatus {
-        KeychainItem.deleteReportingStatus(account: key.rawValue, service: service)
     }
 
     /// Derives the launch-time state from the salt row, refusing to collapse "the read failed"
@@ -1806,6 +1773,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // staging orphan the only openable copy of the content key left. Sweeping it on a path
         // that then throws would delete key material on a failure path. `errSecItemNotFound` is
         // the silent benign case; a real failure is audited inside `delete` (R7).
+        //
+        // The PLACEMENT is the invariant, so it has its own pin: `RewrapStagingSweepTests` proves
+        // the orphan is gone after an unlock that recovered a key and still standing after one
+        // that refused (`contentKeyWrapFormatRetired`). Moving this line back above the switch —
+        // or adding an early return between the switch and here — fails that suite.
         KeychainItem.delete(for: .wrappedContentKeyRewrapStaging, service: keychainService)
         // First successful unlock under a build that splits the verifier from the wrapping key:
         // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).

@@ -327,10 +327,17 @@ public nonisolated enum KeychainItem {
     ///
     /// Why this exists beside the delete-then-add `store`: `SecItemUpdate` is applied by securityd
     /// (out of process) as a single transaction, so the client dying mid-call cannot leave the row
-    /// absent or half-written — the property the lock's wrap re-wrap promote (crypto-standardization
-    /// Phase 2.5) depends on, where `store`'s two-transaction delete-then-add has a real
+    /// absent or half-written, where `store`'s two-transaction delete-then-add has a real
     /// row-absent crash window. Only `kSecValueData` appears in `attributesToUpdate`, so the row's
     /// accessibility class and synchronizable flag are preserved exactly as stored.
+    ///
+    /// **No production caller today.** It was written for the lock's wrap re-wrap promote
+    /// (crypto-standardization Phase 2.5), and that converter was deleted in Phase 3 along with the
+    /// legacy wrap reader it healed — the round retired the format, so there is nothing left to
+    /// promote. Kept rather than deleted because the crash-window property above is a real
+    /// primitive that the next update-in-place caller would otherwise re-derive wrongly by reaching
+    /// for `store`; `FernletLockServiceTests.updateReportingStatusIsUpdateOnly` pins the
+    /// update-only contract so it cannot rot while unused.
     ///
     /// - Returns: the raw `SecItemUpdate` status (`errSecSuccess` on success; `errSecItemNotFound`
     ///   when no row matched — deliberately NOT normalized, unlike the delete family). R5: empty

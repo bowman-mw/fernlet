@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletCrypto
 import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
@@ -42,7 +43,10 @@ extension PeriodTemperatureUnit {
 /// The clinical fields become HealthKit samples; the note and symptoms
 /// become a sealed narrative, so the sheet warns up front when no app lock is configured and maps
 /// the store's `PeriodLogResult` (saved / narrative buffered until unlock / narrative dropped) to
-/// an honest status message before dismissing. Chrome is the 2026-08-21 template: the draft-guard
+/// an honest status message before dismissing. A seal that REFUSES —
+/// ``ColumnCrypto/SealedColumnStrictSealError/bindingUnavailable``, the only way the narrative half
+/// can fail after the clinical half has already landed — gets its own sentence for the same reason,
+/// rather than the Foundation default string. Chrome is the 2026-08-21 template: the draft-guard
 /// header carries Cancel and the Log/Edit title; Save commits bottom-right.
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
@@ -601,6 +605,24 @@ struct LogPeriodSheet: View {
                 report(String(localized: "Health event saved. Set up app lock to keep notes with future cycles."),
                        kind: .success)
             }
+        } catch ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable {
+            // The one seal entry refused: this install's device binding was unreadable at the moment
+            // of the write, so the sealed narrative could not be minted. Owner decision D4 made this
+            // reachable — the writer used to fall open to an un-domained legacy blob and the save
+            // simply succeeded — and `ColumnCrypto.SealedColumnStrictSealError` is `Error, Equatable`
+            // only, with no `LocalizedError` anywhere, so the generic catch below both RENDERED and
+            // SPOKE Foundation's default: "The operation couldn't be completed", followed by the
+            // type's own name and a case number.
+            //
+            // The sentence has to carry two facts the generic string could not. First, and first for
+            // a reason: the note is NOT gone. It is still in this sheet's state, which is the only
+            // question worth answering to someone who has just been told a save failed. Second, this
+            // refusal can only come from the narrative half, which `logEvent`/`editEvent` reach
+            // AFTER the HealthKit write has landed — so a plain "try again" would quietly invite a
+            // second copy of the clinical half. It says to look before re-saving instead of naming
+            // Apple Health outright, because a note-or-symptoms-only entry writes no sample at all.
+            report(String(localized: "This device couldn't encrypt your note just now, so the note wasn't saved. Nothing you typed is lost, but the rest of the entry already saved, so check the day on your calendar before saving again."),
+                   kind: .error)
         } catch {
             report(error.localizedDescription, kind: .error)
         }

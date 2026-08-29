@@ -189,14 +189,33 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     /// Seals and stores a new log, then prunes persistent history (best-effort).
     ///
     /// - Important: Fails closed — throws `FernletLockError.locked` when `contentKey` is `nil`
-    ///   (the private area is locked), so no plaintext row can ever be written.
+    ///   (the private area is locked), so no plaintext row can ever be written. On a failed seal or
+    ///   save the inserted object is removed from the context before rethrowing, so no half-built row
+    ///   survives the failure (see the inline rationale).
     public func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
-            try apply(log, to: object, contentKey: contentKey)
-            // Save, then prune history so no prior ciphertext transaction lingers for this sealed row (best-effort).
-            try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            do {
+                try apply(log, to: object, contentKey: contentKey)
+                try context.saveSealed()
+            } catch {
+                // `apply` writes the plaintext columns (id, dayKey, eventDate, healthKitExternalUUID)
+                // BEFORE it seals the note, so a throw from the middle of it — `ColumnCrypto`'s
+                // `SealedColumnStrictSealError.bindingUnavailable`, when the install's device-binding
+                // keychain row is momentarily unreadable — would leave a note-LESS row pending in the
+                // SHARED view context, which the next successful sealed write on that context would
+                // then commit durably. Such a row is indistinguishable from a successfully sealed one
+                // (a nil note ciphertext opens as nil, so `decryptLog` returns a valid, empty-note
+                // log), so the event reads as already recorded while the note the user typed is gone.
+                // Undo the insert rather than let a transient keychain fault leave that behind;
+                // `delete`, not `rollback`, so an unrelated unsaved edit on the shared context stands.
+                context.delete(object)
+                throw error
+            }
+            // Prune history so no prior ciphertext transaction lingers for this sealed row
+            // (best-effort — a prune failure must not undo the write that succeeded — and logged).
+            PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "IntimacyLog.insert")
             // Latch AFTER a successful save, so a failed write never claims this device has diverged.
             markLogStored()
         }
