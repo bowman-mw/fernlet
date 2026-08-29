@@ -63,17 +63,13 @@ struct Phase3GateReadoutTests {
     }
 
     private func latches(
-        sealedColumn: Bool = true,
         mediaAtRest: Bool = true,
         ownPhotoKey: Bool = true
     ) -> Phase3LatchReadings {
         Phase3LatchReadings(
-            sealedColumn: sealedColumn,
             mediaAtRest: mediaAtRest,
             ownPhotoKey: ownPhotoKey,
-            heartDropSidecar: true,
-            sealedPhotoBackup: true,
-            lockWrapRow: true
+            sealedPhotoBackup: true
         )
     }
 
@@ -91,166 +87,90 @@ struct Phase3GateReadoutTests {
         )
     }
 
-    private func cleanColumnPass() -> SealedColumnMigrationResult {
-        SealedColumnMigrationResult(
-            columns: [
-                SealedColumnIdentifier(entityName: "WorryNarrative", attributeName: "textCiphertext"):
-                    SealedColumnMigrationTally(openedV3: 4)
-            ],
-            rowsScanned: 4,
-            rowsAvailable: 4
-        )
-    }
-
-    private func keyedWitness(
-        offset: TimeInterval = 0,
-        passes: [SealedColumnMigrationResult]? = nil
-    ) -> SealedColumnPassWitness {
-        SealedColumnPassWitness(
-            stamp: stamp("sealed-column keyed run", offset: offset),
-            revalidation: nil,
-            latched: true,
-            passes: passes ?? [cleanColumnPass()]
-        )
-    }
-
     // MARK: - Sealed columns
+    //
+    // The GATE this row used to carry is retired. It required a FRESH keyed migrator pass beside the
+    // census — the second witness that resolved the collided ~1-in-256 marker sliver — and every
+    // test that pinned a shape of that pass (no pass ran, a keyless revalidation confirmed the
+    // latch, a pass stopped by key revocation, an unclean pass, a pass predating the sitting's
+    // reset, a census stamped before the pass, a pass in flight) went with
+    // `SealedColumnFormatMigrator` itself.
+    //
+    // Those tests are DELETED rather than relaxed, and that is the whole judgement here: each one
+    // asserted "this shape does not discharge", and under the census-only rule each of their
+    // fixtures discharges on the census alone. Keeping them would have converted a suite of
+    // refusals into a suite of passes that prove nothing — a test that goes green for the opposite
+    // reason is worse than no test. What survives below is every rule that was ever about the
+    // CENSUS, plus one new one for what a non-zero count now MEANS.
 
-    /// A missing observation renders `.notTaken` — never `.discharged`, and never `.blocked`. A
-    /// blocked verdict would be its own lie: nothing answered against the gate, nobody asked.
-    @Test func aSealedColumnGateWithNoKeyedPassIsNotTakenRatherThanDischargedOrBlocked() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: nil,
-            censusStamp: stamp("marker census"),
-            passInFlight: false
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("no keyed pass"))
-        #expect(!row.isDischarged)
+    /// A marker zero over a corpus that actually holds sealed values is the shape that discharges.
+    @Test func aCensusZeroOverAnExercisedCorpusDischarges() {
+        let row = Phase3GateReadoutBuilder.row(forSealedColumns: .counted(cleanColumnCensus()),
+                                               stamp: stamp("marker census"))
+        #expect(row.verdict == .discharged)
         #expect(!row.witnesses.isEmpty, "every row must name at least one witness kind")
+        #expect(row.stamps.count == 1)
     }
 
-    /// A `.confirmed` revalidation with ZERO passes never discharges, and the row says the pass was
-    /// KEYLESS. That state is completely silent in the app today — `revalidate` returns `.confirmed`
-    /// before any audit line — and a bare `latch == true` beside it would read as success.
-    @Test func aConfirmedRevalidationWithNoPassesSaysTheWitnessWasKeyless() {
-        let witness = SealedColumnPassWitness(
-            stamp: stamp("sealed-column revalidation"),
-            revalidation: .confirmed,
-            latched: true,
-            passes: []
-        )
+    /// A non-zero unprefixed count still BLOCKS — and the reason says what the count now means.
+    ///
+    /// This is the one rule the delete made STRONGER. Before it, `unprefixed > 0` meant "not
+    /// converted yet" and a pass existed that could convert it. Now `ColumnCrypto` reads V3 only and
+    /// the converting pass is gone, so the same number counts stored journal / cycle / intimacy /
+    /// worry values that nothing in the build can open. A row that softened to a note would be
+    /// hiding unreadable user data behind a discharged gate.
+    @Test func aNonZeroUnprefixedCountBlocksAsUnopenableRowsRatherThanABacklog() {
         let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus(marked: 3)),
-            latch: true,
-            witness: witness,
-            censusStamp: stamp("marker census"),
-            passInFlight: false
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("KEYLESS"))
-        #expect(reason.contains("collided"))
-        #expect(row.caveats.contains { $0.contains("collided legacy") },
-                "the ~1/256 sliver must be named while marked blobs exist")
-    }
-
-    /// A pass that stopped ONLY on key revocation is a clean stop, not a witness.
-    @Test func aPassStoppedOnlyByKeyRevocationIsNotTakenRatherThanSuccess() {
-        let stopped = SealedColumnMigrationResult(
-            columns: [:],
-            notAttempted: [.keyRevoked: 12],
-            rowsScanned: 0,
-            rowsAvailable: 12
-        )
-        #expect(stopped.stoppedOnlyByKeyRevocation)
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: false,
-            witness: keyedWitness(passes: [stopped]),
-            censusStamp: stamp("marker census"),
-            passInFlight: false
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("re-locked"))
-    }
-
-    /// A keyed pass that ran and was NOT clean renders `.blocked` naming every blocking bucket.
-    @Test func anUncleanKeyedPassBlocksAndNamesItsBuckets() {
-        let dirty = SealedColumnMigrationResult(
-            columns: [
-                SealedColumnIdentifier(entityName: "JournalNarrative", attributeName: "textCiphertext"):
-                    SealedColumnMigrationTally(indeterminate: 2, unopenableUnprefixed: 1)
-            ],
-            rowsScanned: 3,
-            rowsAvailable: 3,
-            truncated: true
-        )
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: false,
-            witness: keyedWitness(passes: [dirty]),
-            censusStamp: stamp("marker census"),
-            passInFlight: false
+            forSealedColumns: .counted(cleanColumnCensus(unprefixed: 7)),
+            stamp: stamp("marker census")
         )
         guard case let .blocked(reason) = row.verdict else {
             Issue.record("expected .blocked, got \(row.verdict)")
             return
         }
-        #expect(reason.contains("indeterminate 2"))
-        #expect(reason.contains("unopenableUnprefixed 1"))
-        #expect(reason.contains("truncated"))
-    }
-
-    /// A census reading taken BEFORE the keyed pass beside it does not silently pair with it: the row
-    /// renders the ordering as a caveat and refuses to discharge.
-    @Test func aCensusStampOlderThanTheKeyedPassRendersTheOrderingCaveatAndDoesNotDischarge() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 60),
-            censusStamp: stamp("marker census", offset: 0),
-            passInFlight: false,
-            resetTakenAt: Self.epoch.addingTimeInterval(30)
-        )
+        #expect(reason.contains("7 stored column values"))
+        #expect(reason.contains("no reader in this build can open them"))
+        #expect(reason.contains("not a conversion backlog"))
         #expect(!row.isDischarged)
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("BEFORE"))
-        #expect(row.caveats.contains { $0.contains("ORDERING") })
-        #expect(row.stamps.count == 2, "a row that folds two observations must print both stamps")
     }
 
-    /// Both witnesses answering, in the right order, is the only shape that discharges.
-    @Test func aCensusZeroTakenAfterACleanKeyedPassDischarges() {
-        let row = dischargingSealedColumnRow()
-        #expect(row.verdict == .discharged)
+    /// The row says in its own wording that its reader is ALREADY GONE and that it licenses no
+    /// deletion — and its caveats say the collided-marker sliver is now unresolvable by anything,
+    /// because the keyed pass that resolved it went with the reader.
+    ///
+    /// That loss is the reason this assertion exists rather than being left to the type doc: a
+    /// reader who takes this row's zero as exact is reading a LOWER bound, permanently.
+    @Test func theSealedColumnRowSaysItsReaderIsGoneAndTheSliverIsUnresolvable() {
+        let row = Phase3GateReadoutBuilder.row(
+            forSealedColumns: .counted(cleanColumnCensus(marked: 3)),
+            stamp: stamp("marker census")
+        )
+        #expect(row.gate.gateWording.contains("THE READER IS ALREADY GONE"))
+        #expect(row.gate.gateWording.contains("licenses no deletion"))
+        #expect(row.caveats.contains { $0.contains("LICENSES NOTHING") })
+        #expect(row.caveats.contains { $0.contains("unresolvable") && $0.contains("LOWER bound") },
+                "the ~1/256 sliver must be named as permanently unresolvable while marked blobs exist")
     }
 
-    /// The only shape that discharges, assembled once: a non-empty corpus, a latch reset taken this
-    /// sitting, a keyed clean pass AFTER it, and a census re-taken after the pass.
+    /// The row folds ONE witness kind now, and the two retired kinds are not merely unused — they
+    /// are gone from the vocabulary, so no row can label evidence nothing can take.
+    @Test func theSealedColumnRowNamesOnlyTheCensusAndTheRetiredKindsAreGone() {
+        let row = Phase3GateReadoutBuilder.row(forSealedColumns: .counted(cleanColumnCensus()),
+                                               stamp: stamp("marker census"))
+        #expect(row.witnesses == [.markerCensus])
+        let kinds = Phase3GateWitness.allCases.map(\.rawValue)
+        #expect(!kinds.contains("keyedMigratorPass"))
+        #expect(!kinds.contains("derivedRowLatch"))
+    }
+
+    /// The only shape that discharges, assembled once: a census zero over a non-empty corpus that
+    /// every sealed column contributed a value to.
     private func dischargingSealedColumnRow(
         census: SealedColumnFormatCensusResult? = nil
     ) -> Phase3GateRow {
         Phase3GateReadoutBuilder.row(
             forSealedColumns: .counted(census ?? cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 10),
-            censusStamp: stamp("marker census", offset: 30),
-            passInFlight: false,
-            resetTakenAt: Self.epoch
+            stamp: stamp("marker census", offset: 30)
         )
     }
 
@@ -259,8 +179,8 @@ struct Phase3GateReadoutTests {
     /// The owner's 2026-08-28 sitting was exactly this shape: one `JournalNarrative` row, and zero
     /// rows in `MenstrualNarrative`, `IntimacyLog` and `WorryNarrative`. The census seeds EVERY
     /// censused column with a zero tally, so the untouched entities are present and readable — the
-    /// verdict simply was not looking at them. Deleting the legacy rung retires the read path for
-    /// every column alike, so coverage has to be per column.
+    /// verdict simply was not looking at them. The deleted legacy rung was the read path for every
+    /// column alike, so coverage has to be per column.
     @Test func aColumnThatContributedNoValueMakesTheSealedGateVacuous() {
         let exercised = SealedColumnIdentifier(entityName: "JournalNarrative", attributeName: "textCiphertext")
         let untouched = SealedColumnIdentifier(entityName: "IntimacyLog", attributeName: "noteCiphertext")
@@ -278,50 +198,11 @@ struct Phase3GateReadoutTests {
         #expect(!row.isDischarged)
     }
 
-    /// All three main sidecars absent is NOT a converted corpus — it is no corpus.
-    ///
-    /// `.absent` and `.empty` are both non-blocking, so the verdict walked its whole switch without
-    /// appending anything and fell through to `.discharged`. That is the vacuous reading wearing the
-    /// discharge's face, and the owner's device produced it.
-    @Test func heartDropWithNoSealedByteAnywhereIsVacuousRatherThanDischarged() {
-        let report = sidecarReport([.outbox: .absent, .peerBundles: .absent, .dedup: .absent])
-        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: true, stamp: stamp("heart-drop"))
-        guard case let .vacuous(reason) = row.verdict else {
-            Issue.record("expected .vacuous, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("no heart-drop bytes AT ALL"))
-        #expect(!row.isDischarged)
-    }
-
-    /// One sealed sidecar is enough to make the reading real, so the arm above does not over-refuse.
-    @Test func heartDropWithOneSealedSidecarStillDischarges() {
-        let report = sidecarReport([.outbox: .v2Sealed, .peerBundles: .absent, .dedup: .absent])
-        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: true, stamp: stamp("heart-drop"))
-        #expect(row.isDischarged)
-    }
-
-    /// A discharge is refused outright while a keyed pass is writing the corpus the scan read.
-    @Test func aSealedColumnPassInFlightRefusesADischarge() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 10),
-            censusStamp: stamp("marker census", offset: 30),
-            passInFlight: true,
-            resetTakenAt: Self.epoch
-        )
-        #expect(!row.isDischarged)
-    }
-
     /// A census that could not run is `.unavailable`, never a zero.
     @Test func aFailedSealedColumnCensusIsUnavailableRatherThanAZero() {
         let row = Phase3GateReadoutBuilder.row(
             forSealedColumns: .failed("the store is not loaded"),
-            latch: true,
-            witness: keyedWitness(),
-            censusStamp: stamp("marker census"),
-            passInFlight: false
+            stamp: stamp("marker census")
         )
         guard case let .unavailable(reason) = row.verdict else {
             Issue.record("expected .unavailable, got \(row.verdict)")
@@ -332,10 +213,9 @@ struct Phase3GateReadoutTests {
 
     /// A census whose zero is over an EMPTY corpus is `.vacuous`, never `.discharged`.
     ///
-    /// Both halves are trivially true there: the tally is empty so `unprefixed == 0`, and a pass
-    /// over zero pages is `isClean` by construction — which also means the per-page content key was
-    /// never vended, so that "keyed" pass opened nothing and resolved none of the collided-marker
-    /// sliver it exists for. A device immediately after Delete everything is exactly this shape.
+    /// The tally is empty, so `unprefixed == 0` trivially — a zero over no bytes says nothing about
+    /// whether this build can open a stored value. A device immediately after Delete everything is
+    /// exactly this shape.
     @Test func aZeroRowCorpusIsVacuousRatherThanDischarged() {
         let empty = SealedColumnFormatCensusResult(columns: [:], rowsScanned: 0, rowsAvailable: 0,
                                                    truncated: false, rowCap: 20_000)
@@ -383,61 +263,6 @@ struct Phase3GateReadoutTests {
             return
         }
         #expect(reason.contains("SUBSET"))
-    }
-
-    /// The plan's gate is a FRESH keyed pass run at gate time. A keyed witness the process happened
-    /// to have — the one the first hub unlock of the day produced — never discharges, because it
-    /// says nothing about rows written since, and post-pass legacy rows whose first byte collides
-    /// with a marker are invisible to `unprefixed == 0`.
-    @Test func aKeyedPassWithNoLatchResetThisSittingIsNotTaken() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 0),
-            censusStamp: stamp("marker census", offset: 30),
-            passInFlight: false
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("no latch reset was taken this sitting"))
-    }
-
-    /// ...and a keyed pass that PREDATES this sitting's reset is refused by name.
-    @Test func aKeyedPassPredatingTheSittingsResetIsNotTaken() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 0),
-            censusStamp: stamp("marker census", offset: 60),
-            passInFlight: false,
-            resetTakenAt: Self.epoch.addingTimeInterval(30)
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("predates this sitting"))
-    }
-
-    /// A scan that OVERLAPPED a keyed pass is refused even though the render-time flag is clear:
-    /// the marker counts are neither the before nor the after state.
-    @Test func aScanThatOverlappedAKeyedPassIsRefusedAfterThePassLands() {
-        let row = Phase3GateReadoutBuilder.row(
-            forSealedColumns: .counted(cleanColumnCensus()),
-            latch: true,
-            witness: keyedWitness(offset: 10),
-            censusStamp: stamp("marker census", offset: 30),
-            passInFlight: false,
-            overlappedKeyedPass: true,
-            resetTakenAt: Self.epoch
-        )
-        guard case let .notTaken(reason) = row.verdict else {
-            Issue.record("expected .notTaken, got \(row.verdict)")
-            return
-        }
-        #expect(reason.contains("writing the corpus while this scan ran"))
     }
 
     // MARK: - Media arithmetic
@@ -1141,7 +966,7 @@ struct Phase3GateReadoutTests {
 
     /// `.absent` with NO lock configured is a named earned zero, and it discharges.
     @Test func anAbsentWrapWithNoLockConfiguredDischargesAsAnEarnedZero() {
-        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.absent), rowLatch: true,
+        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.absent),
                                                lockConfigured: false, stamp: stamp("marker census"))
         #expect(row.verdict == .discharged)
     }
@@ -1149,7 +974,7 @@ struct Phase3GateReadoutTests {
     /// `.absent` with a lock CONFIGURED does NOT discharge, and the row names the two remaining
     /// honest absences.
     @Test func anAbsentWrapWithALockConfiguredDoesNotDischargeAndNamesBothAbsences() {
-        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.absent), rowLatch: true,
+        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.absent),
                                                lockConfigured: true, stamp: stamp("marker census"))
         guard case let .notTaken(reason) = row.verdict else {
             Issue.record("expected .notTaken, got \(row.verdict)")
@@ -1161,7 +986,7 @@ struct Phase3GateReadoutTests {
 
     /// `.malformedEmpty` and `.unreadable` are `.unavailable`, never zeros.
     @Test func aMalformedOrUnreadableWrapIsUnavailableRatherThanAZero() {
-        let empty = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.malformedEmpty), rowLatch: false,
+        let empty = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.malformedEmpty),
                                                  lockConfigured: true, stamp: nil)
         guard case .unavailable = empty.verdict else {
             Issue.record("expected .unavailable for malformedEmpty, got \(empty.verdict)")
@@ -1169,7 +994,7 @@ struct Phase3GateReadoutTests {
         }
         let unreadable = Phase3GateReadoutBuilder.row(
             forLockWrap: lockReport(.unreadable(errSecInteractionNotAllowed)),
-            rowLatch: false, lockConfigured: true, stamp: nil
+            lockConfigured: true, stamp: nil
         )
         guard case let .unavailable(reason) = unreadable.verdict else {
             Issue.record("expected .unavailable for unreadable, got \(unreadable.verdict)")
@@ -1178,14 +1003,20 @@ struct Phase3GateReadoutTests {
         #expect(reason.contains("not a zero"))
     }
 
-    /// The derived row latch is rendered but explicitly licenses nothing, and a disagreement with the
-    /// census row it re-reads is called out.
-    @Test func theDerivedRowLatchIsLabelledNonEvidenceAndADisagreementIsNamed() {
-        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.v2Marked), rowLatch: false,
+    /// The derived row latch used to be printed here under a "licenses NOTHING" caveat, with a
+    /// second caveat raised when it DISAGREED with the census row it re-read. `LockWrapRowLatch`
+    /// went with the migrator that owned it, so both are gone — and the test that pinned them is
+    /// replaced rather than dropped, because the row's remaining claim has to be checked too: one
+    /// witness, and copy that says the reader this row was taken to license is already deleted.
+    @Test func theWrapRowFoldsTheCensusAloneAndSaysItLicensesNothing() {
+        let row = Phase3GateReadoutBuilder.row(forLockWrap: lockReport(.v2Marked),
                                                lockConfigured: true, stamp: nil)
-        #expect(row.witnesses.contains(.derivedRowLatch))
-        #expect(row.caveats.contains { $0.contains("licenses NOTHING") })
-        #expect(row.caveats.contains { $0.contains("DISAGREE") })
+        #expect(row.witnesses == [.markerCensus])
+        #expect(row.evidence.allSatisfy { !$0.contains("LockWrapRowLatch") })
+        #expect(row.gate.gateWording.contains("THE READER IS ALREADY GONE"))
+        #expect(row.caveats.contains { $0.contains("LICENSES NOTHING") })
+        #expect(row.caveats.contains { $0.contains("no second opinion") },
+                "losing the derived latch loses the one cross-check this row had; say so")
     }
 
     // MARK: - Heart-drop sidecars
@@ -1206,14 +1037,14 @@ struct Phase3GateReadoutTests {
     }
 
     /// A LEGACY quarantine sidecar with three clean main rows DISCHARGES. The quarantine is excluded
-    /// from the gate because no reader ever opens that path, and folding it into an aggregate would
-    /// strand the gate forever on bytes whose format cannot matter.
+    /// because no reader ever opens that path, and folding it into an aggregate would strand the
+    /// reading forever on bytes whose format cannot matter.
     @Test func aLegacyQuarantineWithCleanMainRowsDischarges() {
         let report = sidecarReport([
             .outbox: .v2Sealed, .peerBundles: .absent, .dedup: .empty, .outboxQuarantine: .legacySealed
         ])
-        #expect(report.legacySealedCount == 1, "the aggregate INCLUDES the quarantine, which is why it is not the gate")
-        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: true, stamp: nil)
+        #expect(report.legacySealedCount == 1, "the aggregate INCLUDES the quarantine, which is why it is not the rule")
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: nil)
         #expect(row.verdict == .discharged)
         #expect(row.caveats.contains { $0.contains("EXCLUDED") })
     }
@@ -1223,7 +1054,7 @@ struct Phase3GateReadoutTests {
         let report = sidecarReport([
             .outbox: .legacySealed, .peerBundles: .v2Sealed, .dedup: .v2Sealed, .outboxQuarantine: .absent
         ])
-        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: false, stamp: nil)
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: nil)
         guard case let .blocked(reason) = row.verdict else {
             Issue.record("expected .blocked, got \(row.verdict)")
             return
@@ -1236,12 +1067,47 @@ struct Phase3GateReadoutTests {
         let report = sidecarReport([
             .outbox: .v2Sealed, .peerBundles: .v2Sealed, .dedup: .unreadable, .outboxQuarantine: .absent
         ])
-        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: false, stamp: nil)
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: nil)
         guard case let .unavailable(reason) = row.verdict else {
             Issue.record("expected .unavailable, got \(row.verdict)")
             return
         }
         #expect(reason.contains("dedup"))
+    }
+
+    /// All three main sidecars absent is NOT a converted corpus — it is no corpus.
+    ///
+    /// `.absent` and `.empty` are both non-blocking, so the verdict walked its whole switch without
+    /// appending anything and fell through to `.discharged`. That is the vacuous reading wearing the
+    /// discharge's face, and the owner's device produced it.
+    @Test func heartDropWithNoSealedByteAnywhereIsVacuousRatherThanDischarged() {
+        let report = sidecarReport([.outbox: .absent, .peerBundles: .absent, .dedup: .absent])
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: stamp("heart-drop"))
+        guard case let .vacuous(reason) = row.verdict else {
+            Issue.record("expected .vacuous, got \(row.verdict)")
+            return
+        }
+        #expect(reason.contains("no heart-drop bytes AT ALL"))
+        #expect(!row.isDischarged)
+    }
+
+    /// One sealed sidecar is enough to make the reading real, so the arm above does not over-refuse.
+    @Test func heartDropWithOneSealedSidecarStillDischarges() {
+        let report = sidecarReport([.outbox: .v2Sealed, .peerBundles: .absent, .dedup: .absent])
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: stamp("heart-drop"))
+        #expect(row.isDischarged)
+    }
+
+    /// The sidecar completion latch went with `HeartDropSidecarMigrationLatch`, so the row folds the
+    /// census alone and its copy says the reader it was taken to license is already deleted. A legacy
+    /// main row above is now a stored sidecar this build cannot open, not a conversion still owed.
+    @Test func theSidecarRowFoldsTheCensusAloneAndSaysItLicensesNothing() {
+        let report = sidecarReport([.outbox: .v2Sealed, .peerBundles: .v2Sealed, .dedup: .v2Sealed])
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, stamp: nil)
+        #expect(row.witnesses == [.markerCensus])
+        #expect(row.evidence.allSatisfy { !$0.contains("launch latch") })
+        #expect(row.gate.gateWording.contains("THE READER IS ALREADY GONE"))
+        #expect(row.caveats.contains { $0.contains("LICENSES NOTHING") })
     }
 
     // MARK: - Pending narrative buffer
@@ -1337,35 +1203,22 @@ struct Phase3GateReadoutTests {
         #expect(readout.stamps.isEmpty)
     }
 
-    /// `Phase3LatchReadings.take(inputs:defaults:)` reads all seven bits from an ISOLATED suite,
-    /// taking its keychain service from the injected `Inputs` rather than a re-spelled constant.
-    @Test func latchReadingsTakeAllSevenBitsFromAnInjectedSuiteAndService() throws {
+    /// `Phase3LatchReadings.take(defaults:)` reads all THREE surviving bits from an ISOLATED suite.
+    ///
+    /// It used to read six and to take the census `Inputs` purely for one of them — the derived
+    /// lock-wrap latch, which needed the same keychain-service spelling the census row resolved, so
+    /// that the two could not diverge by re-spelling a constant. That latch, the sealed-column latch
+    /// and the sidecar latch all went with their migrators, and what is left is `UserDefaults` only:
+    /// no keychain, no `Inputs`, and no way for this reading to touch the process-wide sealed store.
+    @Test func latchReadingsTakeAllThreeSurvivingBitsFromAnInjectedSuite() throws {
         let suiteName = "fernlet.tests.phase3.latches.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(true, forKey: MediaAtRestFormatMigrationLatch.defaultsKey)
-        let service = "com.fernlet.lock.test.phase3.\(UUID().uuidString)"
-        // An IN-MEMORY controller, never `.shared`: `take(inputs:defaults:)` reads only
-        // `lockKeychainService` off the inputs, and a test must never be the thing that creates the
-        // process-wide sealed store (the `PhotoDirectoryIsolationTests` hazard).
-        let censusInputs = CryptoFormatCensus.Inputs(
-            sealedStore: PrivatePersistenceController(inMemory: true),
-            ownPhotoDocumentsDirectory: URL(fileURLWithPath: "/tmp/phase3-own"),
-            friendWallSupportDirectory: URL(fileURLWithPath: "/tmp/phase3-wall"),
-            narrativeScope: .production,
-            lockKeychainService: service,
-            heartDropDirectory: URL(fileURLWithPath: "/tmp/phase3-heart")
-        )
-        let readings = Phase3LatchReadings.take(inputs: censusInputs, defaults: defaults)
+        let readings = Phase3LatchReadings.take(defaults: defaults)
         #expect(readings.mediaAtRest, "the media latch must be read from the injected suite")
-        #expect(!readings.sealedColumn)
         #expect(!readings.ownPhotoKey)
-        #expect(!readings.heartDropSidecar)
         #expect(!readings.sealedPhotoBackup)
-        // An empty keychain service reads as an ABSENT wrap row, which the derived latch calls
-        // complete — which is exactly why the row copy says it licenses nothing.
-        #expect(readings.lockWrapRow)
-        #expect(readings.printedLines.count == 6)
     }
 
     // MARK: - The redaction wall
@@ -1385,11 +1238,9 @@ struct Phase3GateReadoutTests {
             censusStamp: stamp("marker census"),
             latches: latches(),
             latchStamp: stamp("completion latches"),
-            preResetLatchSnapshot: latches(),
             manifestProbes: [manifestProbe(provenAll()), manifestProbe(dirtyErrorReadings(), offset: 5)],
             bodyProbes: [.meal: .failed(Phase3ProbeFailure.summarize(Self.dirtyError))],
             mediaWitness: mediaWitness(unopenable: 0, examined: 2, offset: 10),
-            sealedColumnWitness: keyedWitness(offset: -10),
             refusals: ["Fetch manifests refused: an own-photo pass was in flight."]
         ))
         let text = Phase3GateReportBuilder.text(for: readout)
@@ -1464,7 +1315,7 @@ struct Phase3GateReadoutTests {
                           verdict: .discharged, evidence: [], caveats: [])
         ]
         let readout = Phase3GateReadout(
-            stamps: [], environment: environment(), rows: rows, preResetLatchSnapshot: nil,
+            stamps: [], environment: environment(), rows: rows,
             checklist: [], refusals: [], mediaAudit: nil, manifestProbes: []
         )
         #expect(readout.rowsNotDischarged.map(\.kind) == ["BLOCKED", "UNAVAILABLE", "VACUOUS", "NOT TAKEN"])
@@ -1489,8 +1340,7 @@ struct Phase3GateReadoutTests {
             censusStamp: stamp("marker census", offset: 100),
             latches: latches(),
             latchStamp: stamp("completion latches", offset: 100),
-            mediaWitness: mediaWitness(unopenable: 0, examined: 2, offset: 50),
-            sealedColumnWitness: keyedWitness(offset: 0)
+            mediaWitness: mediaWitness(unopenable: 0, examined: 2, offset: 50)
         ))
         #expect(readout.stamps.map(\.takenAt) == readout.stamps.map(\.takenAt).sorted())
         let text = Phase3GateReportBuilder.text(for: readout)
@@ -1530,28 +1380,23 @@ struct Phase3GateReadoutTests {
         #expect(text.contains("NOT PROVEN"), "probe #1's pre-Retry minimum must print")
     }
 
-    /// A reset taken before the scan landed says so in the export, rather than omitting the section
-    /// the confirmation dialog promised to fill.
-    @Test func aResetWithNoPreResetSnapshotSaysSoRatherThanOmittingTheSection() {
+    /// The report's header states the one-launch rule: nothing here is persisted, and probe #1
+    /// cannot be re-taken after Retry.
+    ///
+    /// The export used to carry a second nothing-silent promise beside this one — a
+    /// "LATCHES AS THEY READ BEFORE THE RESET" section, printed even when the pre-reset capture had
+    /// failed, so an unkept promise could not read as an untaken reset. There is no reset any more:
+    /// the control that cleared the sealed-column latch is gone with the latch, this page moves no
+    /// bit in either direction, and so nothing is destroyed that the export owes a rescue for. The
+    /// section and its test are deleted rather than left to describe an event that cannot occur.
+    @Test func theReportHeaderStatesTheSittingLivesInOneAppLaunch() {
         let readout = Phase3GateReadout(
             stamps: [], environment: environment(), rows: [],
-            preResetLatchSnapshot: nil,
-            sealedColumnResetTakenAt: Self.epoch,
             checklist: [], refusals: [], mediaAudit: nil, manifestProbes: []
         )
         let text = Phase3GateReportBuilder.text(for: readout)
-        #expect(text.contains("NOT CAPTURED"))
-        #expect(text.contains("LATCHES AS THEY READ BEFORE THE RESET"))
-    }
-
-    /// The report's header states the one-launch rule: nothing here is persisted, and probe #1
-    /// cannot be re-taken after Retry.
-    @Test func theReportHeaderStatesTheSittingLivesInOneAppLaunch() {
-        let readout = Phase3GateReadout(
-            stamps: [], environment: environment(), rows: [], preResetLatchSnapshot: nil,
-            checklist: [], refusals: [], mediaAudit: nil, manifestProbes: []
-        )
-        #expect(Phase3GateReportBuilder.text(for: readout).contains("ONE app launch"))
+        #expect(text.contains("ONE app launch"))
+        #expect(!text.contains("BEFORE THE RESET"))
     }
 
     /// Every log chunk stays under os_log's ~1 024-byte message ceiling, so a chunk cannot arrive
@@ -1606,8 +1451,7 @@ struct Phase3GateReadoutTests {
             latchStamp: stamp("completion latches"),
             manifestProbes: [manifestProbe(provenAll())],
             bodyProbes: [.meal: .counted(412, truncatedAtPageCap: false)],
-            mediaWitness: mediaWitness(unopenable: 0, examined: 2),
-            sealedColumnWitness: keyedWitness()
+            mediaWitness: mediaWitness(unopenable: 0, examined: 2)
         ))
         #expect(readout.rows.allSatisfy { !$0.isDischarged })
         #expect(readout.stamps.isEmpty)

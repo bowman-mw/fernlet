@@ -23,8 +23,12 @@ struct LockWrapFormatCensusTests {
     // MARK: - The two real formats
 
     /// A byte-exact LEGACY wrap — `ChaChaPoly.seal(contentKey, using: wrappingKey).combined`, no
-    /// marker and no additional authenticated data, exactly the shape
-    /// `FernletLockCrypto.unwrapContentKey`'s legacy branch opens — is counted as one legacy wrap.
+    /// marker and no additional authenticated data — is counted as one legacy wrap.
+    ///
+    /// Phase 3 deleted the branch that used to open this shape, which makes the count matter MORE,
+    /// not less: a row here is now a wrap `FernletLockCrypto.unwrapContentKey` refuses as
+    /// ``FernletLockError/contentKeyWrapFormatRetired``, and this census is the only thing that can
+    /// say how many of them a device holds.
     @Test func plantedLegacyWrapIsCountedAsOneLegacyWrap() throws {
         let service = Self.censusService()
         defer { KeychainItem.deleteAll(service: service) }
@@ -218,7 +222,7 @@ struct LockWrapFormatCensusTests {
 
     /// The pre-`FLW2` wrap, byte for byte: a bare ChaChaPoly combined box (nonce ‖ ciphertext ‖ tag)
     /// over the content key, sealed with no additional authenticated data — the exact shape
-    /// `FernletLockCrypto.unwrapContentKey`'s legacy branch opens.
+    /// `FernletLockCrypto.unwrapContentKey` now refuses by name.
     private static func legacyWrapBytes() throws -> Data {
         try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKeyData)).combined
     }

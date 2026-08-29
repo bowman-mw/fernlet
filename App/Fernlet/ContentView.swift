@@ -310,16 +310,6 @@ struct ContentView: View {
         // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
         if newState.isUnlocked(for: .privateHub) {
             requestSealedBackupSettlement(for: privateHubSection)
-            // Phase 2.6: fund the sealed-column format migration off the same unlock tail,
-            // AFTER the settlement request (they may overlap; the migrator's optimistic-locking
-            // conflict handling — not ordering — is the answer). Synchronous cost here is one
-            // in-flight guard, one duress check, and one latch read; the sweep itself runs
-            // detached at utility QoS after a 300 ms first-frame grace. The key source is the
-            // shipped `.privateHub` decrypt seam, re-vended per page, so a re-lock stops the
-            // sweep fail-closed at the next page boundary.
-            _ = store.runSealedColumnFormatMigrationIfNeeded { [lockService] in
-                await MainActor.run { lockService.contentKey(for: .privateHub) }
-            }
         }
         updateRecipeShareListener()
     }
@@ -1420,15 +1410,7 @@ struct ContentView: View {
         // app is locked. `.shared` because that is the one on-device sealed store every sealed
         // repository above writes through.
         store.sealedStoreRebuildHook = {
-            // The Phase 2.6 sealed-column format-migration latch's entire subject is the store
-            // this closure destroys, and the funnel tolerates a rebuild failure (the
-            // `(try? …) != nil` feeds the outcome) — so the latch is cleared FIRST,
-            // unconditionally: a kept latch could stand over rows a failed purge left behind
-            // (the `pendingNarrativeBufferPurgeHook` reasoning, applied to the store the rows
-            // live in). The next unlock's revalidation census re-proves over the empty store
-            // and a clean pass re-latches.
-            SealedColumnFormatMigrator.latch().reset()
-            return (try? PrivatePersistenceController.shared.rebuildStore()) != nil
+            (try? PrivatePersistenceController.shared.rebuildStore()) != nil
         }
         // The synced store's residue pass. Checkpoint + vacuum, NOT the sealed store's
         // destroy-and-re-add: this file carries the CloudKit mirror's pending export queue in its

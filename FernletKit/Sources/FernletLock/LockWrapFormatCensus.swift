@@ -36,16 +36,21 @@ public nonisolated enum LockWrapFormatState: Sendable, Equatable {
     /// stamps on every wrap it writes. Post-domain-separation; nothing to migrate.
     case v2Marked
     /// The row exists and does NOT start with the marker: a pre-`FLW2` bare ChaChaPoly combined box
-    /// (nonce ‖ ciphertext ‖ tag), sealed with no additional authenticated data. This is the number
-    /// Phase 3 must observe at zero before the legacy reader in
-    /// `FernletLockCrypto.unwrapContentKey` may be deleted.
+    /// (nonce ‖ ciphertext ‖ tag), sealed with no additional authenticated data.
+    ///
+    /// This was the number Phase 3 watched before deleting the legacy reader in
+    /// `FernletLockCrypto.unwrapContentKey`. That reader is now GONE, which changes what the bucket
+    /// means rather than retiring it: a row counted here is no longer a migration candidate, it is
+    /// a wrap this build refuses as ``FernletLockError/contentKeyWrapFormatRetired``. Counting rows
+    /// nothing can open is still the only way to know they are there — and it is what lets the
+    /// refusal name what it refused.
     case legacyUnprefixed
     /// The row exists and is EMPTY — zero bytes, which is neither a valid `FLW2` wrap nor a
     /// plausible legacy box (the smallest possible ChaChaPoly combined box is 28 bytes, and one
     /// sealing a 32-byte content key is 60). Bucketed on its own rather than folded into
-    /// ``legacyUnprefixed`` because the two demand opposite responses: a legacy row is a migration
-    /// candidate a re-wrap can fix, while an empty row is a corrupt slot no migrator can convert
-    /// and no reader can open. Folding it into ``v2Marked`` would be worse still — it would report
+    /// ``legacyUnprefixed`` because the two are different diagnoses: a legacy row is a wrap in a
+    /// retired FORMAT, while an empty row is a corrupt slot that was never a format at all.
+    /// Folding it into ``v2Marked`` would be worse still — it would report
     /// a broken lock as already standardized. Unreachable through Fernlet's own writers:
     /// `KeychainItem.store` refuses an empty payload with `errSecParam` (R5), so an empty row can
     /// only arrive from outside the house seam or from a corrupted keychain.
@@ -156,8 +161,9 @@ public nonisolated struct LockWrapFormatCensusReport: Sendable, Equatable {
 /// One wrap exists per lock instance, so the expected number of affected installs is nil.
 ///
 /// ### Why a census is needed at all
-/// A legacy row does not heal itself. Unlocking an install unwraps it in place and rewrites
-/// nothing; the row is only replaced (in `FLW2` form) by `configure()` or `changeCredential`, only
+/// A legacy row does not heal itself, and since Phase 3 nothing tries: unlocking an install now
+/// REFUSES it by name rather than unwrapping it. The row is only replaced (in `FLW2` form) by
+/// `configure()` or `changeCredential` — neither of which a locked-out install can reach — only
 /// deleted by the Secure-Enclave hard-binding or a reset, and a rolled-back re-key deliberately
 /// restores the PRIOR bytes — legacy ones included. On enclave-less hardware whose owner never
 /// changes their passcode, a legacy wrap can therefore live indefinitely.

@@ -119,10 +119,10 @@ on the reasoning.
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
 | `heartDropOuterSealV1` | `fernlet.heartdrop.seal.v1` | `HeartDropSealer` |
 | `lockScryptWrappingV1` | `fernlet.lock.scrypt.wrapping.v1` | — |
-| `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository`, `SealedColumnFormatMigration` |
-| `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository`, `SealedColumnFormatMigration` |
-| `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository`, `SealedColumnFormatMigration` |
-| `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository`, `SealedColumnFormatMigration` |
+| `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository` |
+| `worryNarrativeLegacyV1` | `worry-box` | `ColumnCrypto`, `WorryNarrativeRepository` |
+| `menstrualNarrativeLegacyV1` | `menstrual-narrative` | `ColumnCrypto`, `MenstrualNarrativeRepository` |
+| `intimacyLogLegacyV1` | `intimacy-log` | `ColumnCrypto`, `IntimacyLogRepository` |
 
 #### HMAC
 
@@ -141,7 +141,7 @@ on the reasoning.
 | `meshGroupKeyWrapV2` | `fernlet.mesh.groupkey.wrap.aead.v2` | `IdentityService` |
 | `meshGroupPhotoV2` | `fernlet.mesh.group-photo.aead.v2` | `MeshNetworkManager` |
 | `meshEncryptedMetadataV2` | `fernlet.mesh.encrypted-metadata.aead.v2` | `MeshNetworkManager` |
-| `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey`, `HeartDropSidecarFormatMigration` |
+| `heartDropSidecarV2` | `fernlet.heartdrop.sidecar.aead.v2` | `HeartDropSidecarKey` |
 | `pendingNarrativeBufferV2` | `fernlet.pending-narrative-buffer.aead.v2` | `PendingNarrativeBuffer` |
 | `lockContentKeyWrapV2` | `fernlet.lock.content-key-wrap.aead.v2` | `FernletLockService` |
 | `columnDeviceBoundV3` | `fernlet.private-column.device-bound.aead.v3` | — |
@@ -205,31 +205,45 @@ third one cannot appear quietly.
 
 ## 5. Versioned formats, and what still reads older bytes
 
-Every read path below is compatibility, not choice. Nothing writes a legacy format.
+Every read path below is compatibility, not choice. Nothing writes a legacy format — and after the
+crypto standardization round, the at-rest surfaces no longer READ one either: what remains here is
+the wire and the sealed-backup key, where the bytes come from a peer or from a cloud copy rather
+than from this device's disk.
 
 | Format | Current write | Older readers still live | Where |
 |---|---|---|---|
-| Sealed column blob | **v3**: `0x03 ‖ ChaChaPoly(nonce‖ct‖tag)` with `purpose ‖ deviceBindingID` as AAD | **v2** (`0x02`, binding-only AAD, no domain) and **legacy** (bare `combined`, no AAD, no version byte) | `ColumnCrypto.openBlob` tries v3, then v2, then legacy |
+| Sealed column blob | **v3**: `0x03 ‖ ChaChaPoly(nonce‖ct‖tag)` with `purpose ‖ deviceBindingID` as AAD | **None.** v2 (`0x02`, binding-only AAD) and legacy (bare `combined`, no version byte) are CLASSIFIED and refused, never opened | `ColumnCrypto.openBlob` requires `0x03`; anything else throws `SealedColumnOpenError.retiredFormat(_:)` |
 | Identity envelope signature | `identityEnvelopeV2` over the binary canonical serializer | `identityEnvelopeLegacyV1` over the old `.sortedKeys`/`.iso8601` JSON, selected by `schemaVersion` | `FernletIdentityEnvelope.verify` |
 | Mesh admission token | `meshAdmissionTokenV2` | `meshAdmissionTokenLegacyV1`, tried as a **fallback** after v2 fails | `MeshPayloads` |
 | Sealed backup key | `sealedBackupV2` info + a real salt | `sealedBackupLegacyV1` info + an empty salt, selected by `formatVersion` | `IdentityService.deriveSealedBackupKey` |
 
-Two things about the sealed-column table row are easy to miss:
+Three things about the sealed-column table row are easy to miss, and the first two were true in the
+opposite direction until the crypto standardization round:
 
-- **The legacy fallback is unconditional**, and it has to be: a legacy blob whose first ciphertext
-  byte happens to equal `0x02` or `0x03` (1 in 256, twice) would otherwise be misparsed as versioned
-  and fail. Trying the versioned path first and falling back covers both.
-- **Old rows migrate by being touched.** There is no migration pass. Every routine re-seal — an
-  edit, the device-key→user-key migration at lock setup, period restore-on-unhide — writes v3, so
-  the population drifts forward. A row nobody edits stays legacy indefinitely, which is why the read
-  path cannot be simplified on a schedule.
+- **There is no fallback left.** Phase 3 deleted both lower rungs (owner decision D2 took v2), and
+  the migrator that converted through them went in the same change — a healer that can no longer
+  heal is worse than either alone. The classifier `ColumnCryptoStoredFormat` outlives them so the
+  refusal can name what it refused.
+- **`ColumnCrypto` now fails CLOSED on the write side too.** It used to write the legacy unbound
+  format when no device binding was available, on the argument that binding is defense-in-depth and
+  never a gate. `DeviceBindingID.current()` returns nil on any keychain read/add failure and the
+  binding row is `AfterFirstUnlockThisDeviceOnly`, so the pre-first-unlock window alone could mint a
+  fresh legacy blob at any time — which is why every format-census zero was "a moment, not a latch".
+  Owner decision D4 closed it: `sealPlaintextV3Strict` throws
+  `SealedColumnStrictSealError.bindingUnavailable`, and a sealed save can now FAIL where it used to
+  succeed in the wrong format. That is the accepted cost.
+- **The retryable case survives, and the distinction is load-bearing.** A transient keychain read
+  *error* is not an authoritative absence: it surfaces as `DeviceBindingID.ReadError` rather than an
+  authentication failure or a terminal `SealedColumnOpenError`, so a keychain hiccup reads as "try
+  again" and never as corruption. `currentForOpen()` exists for exactly that split.
 
-One asymmetry worth stating because it looks like a bug: `ColumnCrypto` **fails open** when no
-device binding is available, writing the legacy unbound format rather than refusing. That is
-deliberate — binding is defense-in-depth against a copied database file, never a gate on the user's
-own data. A transient keychain read *error* is different from an authoritative absence, and surfaces
-as a retryable `DeviceBindingID.ReadError` rather than an authentication failure, so a keychain
-hiccup never reads as corruption.
+**One resolution was lost with the rungs, and it is stated rather than glossed.** The unconditional
+legacy fallback used to disambiguate the ~1-in-256 legacy blob whose first ciphertext byte happens
+to equal `0x02` or `0x03` — by *attempting* the open, which is something no byte-only classifier can
+do. The keyed migrator pass resolved the remainder. With both gone, a `0x02` collision is reported
+as a retired v2 row (true enough — it is unopenable either way) and a `0x03` collision is tried as
+V3 and fails AUTHENTICATION, unable to name itself. It is the one refusal in the tree that cannot
+say what it found, and it is pinned as such in `ColumnCryptoDeviceBindingTests`.
 
 ## 6. Adding a new domain
 
@@ -300,83 +314,101 @@ reviewer would have to remember the policy.
   A root that stops resolving to Swift now throws `CryptographicWallScan.MissingRoot` rather than
   scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
   sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
-- **Escape-hatch abuse — now counted.** `// cryptographic-domain: …` silences the wall by design,
-  for the paths that genuinely have no domain to name. **There are 10 of them, across 6 files** —
-  more than the handful the mechanism reads like. This document used to add that "nothing tracks the
-  number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and
-  the next one added fails CI. It pins four things, not one: the total, the count **per label**, the number
-  of files, and the set of labels that exist at all — so a hatch added while another is removed, a
+- **Escape-hatch abuse — now counted, and now ALL annotation.** `// cryptographic-domain: …`
+  silences the wall by design, for the paths that genuinely have no domain to name. **There are 6
+  of them, across 3 files.** This document used to add that "nothing tracks the number, so a
+  nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and the next one
+  added fails CI. It pins four things, not one: the total, the count **per label**, the number of
+  files, and the set of labels that exist at all — so a hatch added while another is removed, a
   hatch relabelled into a more benign category, and a brand-new category of exemption each fail
   separately. The table below and the pins are one fact in two places, and move in the same commit.
-
-  (The file count was **11** here until 2026-08-28. It was wrong when it was written, not stale:
-  the tree held 18 hatches across 10 files at the commit that wrote the sentence. An uncounted
-  number drifts in both directions.)
-
-  (The total was **18** until Phase 3 closed `ColumnCrypto.sealPlaintext`'s legacy WRITE — owner
-  decision D4, fail close. That deleted the single `purpose-derived legacy-write` hatch, and with
-  it the last line in the tree that could *mint* an un-domained blob. The file count was unmoved:
-  `ColumnCrypto.swift` still holds two other hatches, so it stays in the set at a lower count.)
-
-  (17 → **13**, and 10 files → **8**, when Phase 4 deleted the four Class-B WIRE readers — owner
-  decision D1(a), hard cutover on the no-peers premise. Unlike D4's deletion this one moved the
-  file count, because `MeshNetworkManager.swift` and `IdentityService.swift` held *only* those four
-  hatches between them and dropped out of the set entirely. Nothing was migrated: there are no
-  stored bytes in these formats, and the readers existed solely for a peer on an older build. Such
-  a peer now fails by NAME — `MeshEncryptionError.legacyWireFormat`,
-  `IdentityError.legacyWireFormat`, `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat`
-  — reaching the Connection Inspector and the mesh audit log instead of a generic decrypt failure.
-  The two format markers are kept: `FGK2`'s absence at 92 bytes is what CLASSIFIES an older peer's
-  bundle, and classification is what makes the refusal explicable.)
-
-  (13 → **10**, and 8 files → **6**, when Phase 3 deleted three of the six Class-A AT-REST readers:
-  `PendingNarrativeBuffer`'s unmarked buffer-file open, `MediaAtRestCrypto.gcmOpen`'s unprefixed
-  no-AAD branch, and `SealedPhotoBackupService`'s v1 digest comparison. These deletions proceed on
-  the owner's RISK judgement under §0 of the plan — one install, test data only — not on a
-  discharged gate. Each refusal is NAMED: `PendingNarrativeBufferError.legacyUnprefixedFormat`, a
-  `privateMedia.legacyFormatRefused` audit line before `gcmOpen`'s nil, and
-  `SealedPhotoRestoreSummary.unverifiableLegacyDigest`, which is deliberately a TERMINAL list
-  rather than the retryable one — a permanently unverifiable entry in the repair ledger would
-  re-run a doomed restore on every launch and pin the escrow route uncommitted. Two files left the
-  set (`PendingNarrativeBuffer.swift`, `MediaAtRestCrypto.swift`, one hatch each);
-  `SealedPhotoBackupService.swift` stays on its `authenticatedData-bound aad` hatch. Each surface's
-  MIGRATOR was resolved in the same commit: the buffer's was deleted outright — it converted
-  THROUGH the deleted branch, so it could no longer heal anything — the media one was cut back to
-  the plaintext generation it still converts, and the sealed-photo one was KEPT untouched, because
-  its heal is a re-upload triggered by a digest MISMATCH and never used the deleted comparison.)
 
   By the label each one gives itself:
 
   | Label | Count | What it means |
   |---|---:|---|
-  | `legacy-read` | 3 | Opening bytes written before the domain existed. Correct, and permanent until the last such row is re-sealed |
   | `purpose-derived salt` | 2 | The domain reached the primitive through the KDF salt, not as a visible argument |
   | `key-derived` | 2 | The domain is bound in the key rather than at this call |
   | `authenticatedData-bound aad` | 2 | The domain is inside the `aad` local, built above the window |
-  | `v2 device-bound read` | 1 | The v2 compatibility open, whose AAD is the binding alone |
 
-  Every remaining hatch is on a READ path or an annotation. `purpose-derived legacy-write` — the
-  one write-side entry, `ColumnCrypto`'s fail-open unbound write — went to **0** in Phase 3 and
-  its row was removed from this table and from `pinnedByLabel`; nothing in the tree can mint an
-  un-domained blob any more, which is what turns a format-census zero from a moment into a latch.
+  **Every remaining hatch is an annotation, and none of them is debt.** The domain IS bound at all
+  six; the marker only silences a grep that cannot see three lines up, and re-reading them is the
+  only way to tell an annotation from an exemption. There is no reader hatch left in the tree and
+  no write-side one either.
 
-  The three `legacy-read` entries are the ones to watch: each marks a path that will keep accepting
-  un-domained bytes for as long as any row written under it survives. They are the three DELICATE
-  Class-A at-rest surfaces — `ColumnCrypto`'s sealed corpora, `FernletLockService`'s content-key
-  wrap, and `HeartDropSidecarKey` — the three whose failure mode is "the user's sealed data becomes
-  unopenable", which is why they were separated from the three Phase 3 has already deleted.
-  **The inventory this document said did not exist now does** — the format census built in Phase 0
-  of [Plan-Crypto-Standardization-2026-08-27.md](Plan-Crypto-Standardization-2026-08-27.md) counts
-  those rows by MARKER BYTE, never by opening a blob, and the DEBUG Phase 3 gate readout renders
-  all six at-rest surfaces from one device in one sitting (the censuses OUTLIVE the deletions: a
-  classifier is not a reader, and counting bytes nothing can open is still the only way to know
-  they are there). The four Class-B wire reads that used to sit beside them are **gone**: no
-  migration could ever have retired them, because the bytes arrive from a peer rather than from
-  disk, so they were governed by which builds are in the field — and owner decision D1 settled that
-  there are none (no second install, therefore no peer on an older build). The other seven hatches
-  are cases where the domain IS bound, just not within three lines of the call — they are
-  annotations for the grep's benefit, not exemptions, and re-reading them is the only way to tell
-  the two kinds apart.
+  **How the count got here, and why `legacy-read` is not a row at 0.**
+
+  The crypto standardization round
+  ([Plan-Crypto-Standardization-2026-08-27.md](Plan-Crypto-Standardization-2026-08-27.md)) took the
+  total from 18 to 6 and `legacy-read` from 10 to **0**. Rows that reached zero were **removed**
+  from the table and from `pinnedByLabel` rather than left at 0: a label pinned at zero reads as a
+  category that still exists and happens to be empty, when what actually happened is that the
+  category was retired. A re-introduced legacy reader now fails the per-label pin as "1 found, 0
+  pinned" — the absence IS the wall.
+
+  Four steps, each landing with its deletion in one commit:
+
+  - **18 → 17** when Phase 3 closed `ColumnCrypto.sealPlaintext`'s legacy WRITE (owner decision D4,
+    fail close). That deleted the single `purpose-derived legacy-write` hatch, and with it the last
+    line in the tree that could *mint* an un-domained blob — which is what turns a format-census
+    zero from a moment into a latch. The file count was unmoved.
+  - **17 → 13, 10 files → 8** when Phase 4 deleted the four Class-B WIRE readers (owner decision
+    D1(a), hard cutover on the no-peers premise). Nothing was migrated because nothing is stored in
+    those formats: the bytes arrive from a peer, so the readers existed solely for a peer on an
+    older build. `MeshNetworkManager.swift` and `IdentityService.swift` held *only* those four and
+    dropped out of the set.
+  - **13 → 10, 8 files → 6** when Phase 3 deleted three of the six Class-A AT-REST readers:
+    `PendingNarrativeBuffer`'s unmarked buffer-file open, `MediaAtRestCrypto.gcmOpen`'s unprefixed
+    no-AAD branch, and `SealedPhotoBackupService`'s v1 digest comparison.
+  - **10 → 6, 6 files → 3** when Phase 3 deleted the last three — the DELICATE ones, whose failure
+    mode is "the user's sealed data becomes unopenable": `ColumnCrypto`'s sealed corpora (journal,
+    cycle, intimacy, worry), `FernletLockService`'s content-key wrap, and `HeartDropSidecarKey`.
+    The same change removed the last `v2 device-bound read` — `ColumnCrypto`'s `0x02` rung, owner
+    decision D2 — so V3 is the only sealed-column format on the read side and the write side alike,
+    and that label left the pin too.
+
+  These deletions proceed on the owner's RISK judgement under §0 of the plan — one install, test
+  data only — not on a discharged gate. The distinction is recorded because the two are easy to
+  conflate later.
+
+  **Every refusal is NAMED.** That is the through-line, and it is worth more than the count:
+  `PendingNarrativeBufferError.legacyUnprefixedFormat`; a `privateMedia.legacyFormatRefused` audit
+  line; `SealedPhotoRestoreSummary.unverifiableLegacyDigest` (deliberately a TERMINAL list rather
+  than the retryable one, because a permanently unverifiable entry in the repair ledger would re-run
+  a doomed restore on every launch); `MeshEncryptionError.legacyWireFormat`,
+  `IdentityError.legacyWireFormat` and `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat`
+  on the wire; `ColumnCrypto.SealedColumnOpenError.retiredFormat(_:)`, which says *which* generation
+  the marker reports, beside `emptyBlob` and `installBindingMissing` so a store fault and a lost
+  binding row can never be filed as a legacy row; `FernletLockError.contentKeyWrapFormatRetired`,
+  which is neither `invalidPasscode` (the entry was right) nor `contentKeyUnrecoverable` (no enclave
+  key was destroyed); and `SidecarSeal.SealError.legacyFormatRetired`. "Decryption failed" is not
+  actionable; "the bytes are V2 and this build only reads V3" is.
+
+  **The classifiers OUTLIVE the readers, and that is load-bearing rather than tidy.** Every format
+  census, and every marker constant they classify by — `legacyHashVersion`, `FMA2`, `FNB2`, `FGK2`,
+  `FSC1`, `FLW2`, `ColumnCrypto`'s `0x02` — is KEPT. Counting bytes nothing can open is still the
+  only way to know they are there, and a refusal that cannot recognize what it is refusing cannot
+  explain itself. `HeartDropSidecarSeal` is the sharpest case: `isSealed` must keep answering true
+  for `FSC1`, because `ProtectedSidecar` splits on that predicate into "sealed" and "legacy
+  PLAINTEXT v0 — read it as JSON and re-seal it", so a marker that stopped classifying would send
+  ciphertext down the plaintext branch, fail to decode, and take the *corrupt* path — destroyed
+  rather than quarantined. Deleting a reader is not deleting its classifier.
+
+  **What was lost, stated rather than glossed.** Each deletion took its HEALER with it wherever the
+  healer converted *through* the deleted branch — a migrator left standing that can no longer heal
+  is worse than either alone — so the `PendingNarrativeBuffer`, `ColumnCrypto`, `FernletLockService`
+  and `HeartDropSidecarKey` migrators are gone, `MediaAtRestFormatMigration` was cut back to the
+  plaintext-JPEG generation it still converts, and `SealedPhotoBackupService`'s was left untouched
+  (its heal is a re-upload triggered by a digest MISMATCH and never used the deleted comparison).
+  One resolution went with them: the ~1-in-256 sealed-column blob whose first nonce byte collides
+  with a marker used to be resolved *by open* by the keyed migrator pass, and nothing can resolve it
+  now — a `0x02` collision reports as a retired v2 row, and a `0x03` collision fails authentication
+  without being able to name itself. That is the one refusal in the tree that cannot say what it
+  found.
+
+  (The file count was **11** here until 2026-08-28. It was wrong when it was written, not stale:
+  the tree held 18 hatches across 10 files at the commit that wrote the sentence. An uncounted
+  number drifts in both directions.)
 
   One shape the pin has to defend against by itself: the wall reads a raw context window, so a
   `///` line that merely *mentions* the marker near a primitive call silences it exactly as a real

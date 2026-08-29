@@ -60,8 +60,13 @@ final class Phase3GateReadoutUITests: XCTestCase {
 
         // Structure, below the fold. The List is lazy, so each of these has to be scrolled to; a
         // bare `.exists` here would assert nothing about a page that failed to lay out.
+        // Step 2's title, not step 1's: step 1 is the shortest and sits highest, so it can render
+        // above the fold and pass this without the list ever having laid out the section it is
+        // supposed to prove. (The former anchor here was "Turn Auto-Lock off", a step that existed
+        // only to keep the private hub open for the sealed-column keyed pass — deleted with that
+        // pass in Phase 3.)
         let checklistStep = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Turn Auto-Lock off")).firstMatch
+            NSPredicate(format: "label CONTAINS %@", "Fetch manifests BEFORE any healing pass")).firstMatch
         XCTAssertTrue(scrollTo(checklistStep, app: app), "the sitting checklist's steps did not render")
 
         let sealedColumnRow = app.staticTexts["Sealed columns (journal, cycle, intimacy, worry)"]

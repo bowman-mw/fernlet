@@ -32,8 +32,13 @@ import ProximityKit
 // MARK: - Surfaces
 
 /// The six Class-A cryptographic surfaces the plan's §2 table lists — the ones holding bytes
-/// already written to this device, which a migration has to convert before Phase 3 may delete a
-/// legacy reader.
+/// already written to this device.
+///
+/// Phase 3 has now deleted every one of those legacy readers, which changes what these counts are
+/// FOR rather than retiring them: a non-zero legacy count used to mean "a migration still has work
+/// to do", and now means "this device holds that many rows no build can open". Counting bytes
+/// nothing can read is still the only way to know they are there, and it is what lets each
+/// surface's refusal name what it refused.
 ///
 /// Six cases, not five, and that is the point of the type: ``sealedPhotoBackup`` is **uncountable**
 /// (see ``CryptoFormatCensus/sealedPhotoBackupRow``), and the plan's exit criterion is "the census
@@ -469,8 +474,10 @@ nonisolated enum CryptoFormatCensus {
     /// sufficient. A legacy blob's first nonce byte equals a marker ~1/256 times per marker, and no
     /// byte-only classifier can tell such a blob from a genuinely marked one — so every marked blob
     /// is a blob that COULD be collided legacy, and the row has to say so next to the word "exact"
-    /// rather than leaving it to `SealedColumnFormatTally`'s doc comment. Only a keyed migration
-    /// pass resolves the sliver.
+    /// rather than leaving it to `SealedColumnFormatTally`'s doc comment. A keyed migration pass
+    /// used to resolve the sliver by attempting the open; Phase 3 deleted that pass along with the
+    /// rungs it reported, so **nothing resolves it now** — the caveat is permanent rather than
+    /// pending, and the row must keep saying so.
     private static func sealedColumnStatus(_ result: SealedColumnFormatCensusResult) -> CryptoFormatCensusRow.Status {
         var blindSpots: [String] = []
         if result.truncated {

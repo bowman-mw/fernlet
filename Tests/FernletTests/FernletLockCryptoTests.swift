@@ -118,12 +118,44 @@ struct FernletLockCryptoTests {
     }
 
     // MARK: Proves ChaChaPoly authenticates nonce bytes.
+    //
+    // The index is `markerLength + 0`, not `0`. Byte 0 is the `FLW2` format marker's first byte,
+    // and flipping it exercises the FORMAT refusal instead of the AEAD — which is a different
+    // property, already pinned by `retiredUnprefixedWrapIsRefusedByName`. A tamper test that
+    // silently starts asserting the wrong mechanism still passes, which is the whole hazard.
     @Test func aeadTamperedNonceFails() async throws {
         let wrappingKey = try await verifier(passcode: "123456", salt: saltA)
         var wrapped = try FernletLockCrypto.wrapContentKey(randomData(count: 32), using: wrappingKey)
-        wrapped[0] ^= 0x01
+        wrapped[FernletLockCrypto.wrappedContentKeyFormatV2.count] ^= 0x01
         #expect(throws: Error.self) {
             _ = try FernletLockCrypto.unwrapContentKey(wrapped, using: wrappingKey)
+        }
+    }
+
+    // MARK: Proves the retired UNPREFIXED wrap — the pre-domain generation whose reader was this
+    // module's last `legacy-read` escape hatch — is refused BY NAME rather than degrading into an
+    // authentication error that reads as "your sealed data is corrupt".
+    //
+    // The fixture is hand-built because production can no longer make one: `wrapContentKey` has
+    // stamped `FLW2` since the domain split, so without this the refusal would be unreachable code.
+    // Sealed under the CORRECT wrapping key on purpose — a refusal that only happened because the
+    // key was wrong would prove nothing about the format.
+    @Test func retiredUnprefixedWrapIsRefusedByName() async throws {
+        let contentKey = randomData(count: 32)
+        let wrappingKey = try await verifier(passcode: "123456", salt: saltA)
+        let legacy = try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKey)).combined
+        #expect(!legacy.starts(with: FernletLockCrypto.wrappedContentKeyFormatV2))
+        #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            _ = try FernletLockCrypto.unwrapContentKey(legacy, using: wrappingKey)
+        }
+        // An empty row and a too-short row are the same refusal: whatever they are, they are not
+        // `FLW2`, and the reader must not reach a `SealedBox(combined:)` that would throw something
+        // shapeless instead.
+        #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            _ = try FernletLockCrypto.unwrapContentKey(Data(), using: wrappingKey)
+        }
+        #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            _ = try FernletLockCrypto.unwrapContentKey(Data("FLW".utf8), using: wrappingKey)
         }
     }
 
@@ -154,12 +186,16 @@ struct FernletLockCryptoTests {
         #expect(first != second)
     }
 
-    // MARK: Proves wrapped ChaChaPoly output begins with unique 12-byte nonces.
+    // MARK: Proves the wrapped ChaChaPoly body begins with unique 12-byte nonces — read AFTER the
+    // `FLW2` marker, which is what the at-rest layout actually is (marker ‖ nonce ‖ ct ‖ tag).
     @Test func aeadNonceLengthAndUniqueness() async throws {
         let wrappingKey = try await verifier(passcode: "123456", salt: saltA)
         let nonces = try (0..<10).map { _ in
             let wrapped = try FernletLockCrypto.wrapContentKey(randomData(count: 32), using: wrappingKey)
-            return wrapped.prefix(FernletLockCrypto.aeadNonceLength).hexString
+            return wrapped
+                .dropFirst(FernletLockCrypto.wrappedContentKeyFormatV2.count)
+                .prefix(FernletLockCrypto.aeadNonceLength)
+                .hexString
         }
         #expect(FernletLockCrypto.aeadNonceLength == 12)
         #expect(Set(nonces).count == nonces.count)

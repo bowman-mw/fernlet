@@ -90,17 +90,7 @@ struct PrivateHubView: View {
 
         Group {
             if isActive {
-                VStack(spacing: 0) {
-                    // Phase 2.6 D3: the sealed-column migration status, INSIDE the lock gate —
-                    // the one place that can show it at zero marginal disclosure (the hub is
-                    // already displaying the content the migration is about). The render
-                    // condition is the store's single filter, which is duress-blind and `nil`
-                    // in the idle/latched steady state.
-                    if let migrationStatus = store.sealedColumnMigrationCapsuleStatus {
-                        SealedColumnMigrationStatusCapsule(status: migrationStatus)
-                    }
-                    sectionPage(visibleSections: visibleSections)
-                }
+                sectionPage(visibleSections: visibleSections)
             } else {
                 Color.clear
             }
@@ -166,35 +156,3 @@ struct PrivateHubView: View {
     }
 }
 
-/// The Phase 2.6 D3 status capsule: one line above the hub's section content while the
-/// sealed-column format migration is running, blocked, or freshly finished. Copy is deliberately
-/// vague about counts and causes — the details live in the audit ledger, never the UI — and the
-/// capsule exists only inside the lock gate (its render condition,
-/// `FernletStore.sealedColumnMigrationCapsuleStatus`, is duress-blind and session-scoped).
-private struct SealedColumnMigrationStatusCapsule: View {
-    /// The non-idle status to render (`.idle` never reaches here; the render condition is nil).
-    let status: SealedColumnMigrationStatus
-
-    var body: some View {
-        Group {
-            switch status {
-            case .running:
-                Text("Securing your private entries…")
-            case .blocked:
-                Text("Some entries couldn't be re-secured yet. Fernlet will retry.")
-            case .finished:
-                Text("Your entries are secured.")
-            case .idle:
-                EmptyView()
-            }
-        }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(Color(.secondarySystemBackground)))
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .accessibilityIdentifier("privateHub.sealedColumnMigrationStatus")
-    }
-}

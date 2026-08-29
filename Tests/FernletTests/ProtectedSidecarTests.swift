@@ -236,8 +236,9 @@ struct ProtectedSidecarTests {
 
         let raw = try Data(contentsOf: url)
         // Literal, not `HeartDropSidecarSeal.magic`: an at-rest format assertion that reads the
-        // constant from production cannot notice production changing the format. `FSC1` is now the
-        // read-only legacy prefix; every new seal writes `FSC2` with an authenticated purpose.
+        // constant from production cannot notice production changing the format. `FSC2` is the
+        // ONLY readable prefix since Phase 3 deleted the `FSC1` open; every seal writes it with an
+        // authenticated purpose.
         #expect(raw.starts(with: Data("FSC2".utf8)), "the plaintext file is rewritten sealed on first read")
         #expect(diskValue(url) == nil, "no plaintext remains")
 
@@ -294,6 +295,51 @@ struct ProtectedSidecarTests {
         #expect(deleting.dataLossOccurred)
         #expect(!FileManager.default.fileExists(atPath: url2.path))
         #expect(!FileManager.default.fileExists(atPath: url2.appendingPathExtension("corrupt").path))
+    }
+
+    /// THE Phase-3 pin for this surface, and the one that would be catastrophic to get wrong.
+    ///
+    /// `FSC1` — the retired legacy generation — must still CLASSIFY as sealed, and be refused by
+    /// name, so an `FSC1` file lands on the unopenable-sealed policy (quarantined here, with the
+    /// data loss latched). The failure this pins against is the opposite: if `isSealed` stopped
+    /// recognizing the retired marker, `performLoad` would take the "legacy PLAINTEXT v0" branch,
+    /// try to JSON-decode ciphertext, fail, and hand the file to the CORRUPT path — which
+    /// salvages-or-discards, i.e. destroys it, and would then rewrite the store from an empty
+    /// value. That is data destruction rather than a failed read, and no amount of refusing
+    /// elsewhere would undo it.
+    ///
+    /// The bytes are hand-built rather than sealed through production, for the reason the round
+    /// keeps meeting: production can no longer mint this format. The key is minted first through
+    /// the real path so the refusal is proven WITH a usable key in the keychain — a refusal that
+    /// only happens because the key is missing would prove nothing about the format.
+    @Test func aRetiredFSC1FileIsClassifiedAsSealedAndRefusedByName() throws {
+        let service = uuidKeychainService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let seal = HeartDropSidecarSeal.make(keychainService: service)
+        // Mint the real key through the production path (a seal of throwaway bytes), then read it
+        // back out so the fixture can be sealed under exactly the key an open would fetch.
+        _ = try seal.seal(Data("{}".utf8))
+        let keyData = try #require(KeychainItem.load(account: "sidecarSealKey", service: service))
+        let box = try ChaChaPoly.seal(try JSONEncoder().encode(["legacy-value"]), using: SymmetricKey(data: keyData))
+        let legacy = Data("FSC1".utf8) + box.combined
+
+        // 1. It still classifies as sealed — the half that stops it being read as plaintext.
+        #expect(seal.isSealed(legacy), "FSC1 must keep classifying as sealed, or ciphertext takes the plaintext branch")
+        // 2. And it is refused by NAME, not as a generic open failure.
+        #expect(throws: SidecarSeal.SealError.legacyFormatRetired) { _ = try seal.open(legacy) }
+
+        // 3. End to end: the file is quarantined as unopenable sealed data, never discarded as
+        //    corrupt, and the loss is latched rather than silent.
+        let url = tempFile("retired.json")
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try legacy.write(to: url)
+        let sidecar = makeSidecar(url: url, seal: seal, quarantines: true)
+        #expect(sidecar.state == .ready)
+        #expect(sidecar.read() == [])
+        #expect(sidecar.dataLossOccurred)
+        #expect(FileManager.default.fileExists(atPath: url.appendingPathExtension("corrupt").path))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
     }
 
     /// A seal that refuses (read-back-verify failed, key unmintable) makes the persist FAIL —

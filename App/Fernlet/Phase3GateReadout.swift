@@ -14,6 +14,16 @@
 // reads completion latches, folds witnesses from migrator passes, and renders readings a caller
 // bought over the network. Both promises are stated in copy on their own screens.
 //
+// THREE OF THE SIX GATES HAVE OUTLIVED THEIR DECISION. Phase 3 deleted the sealed-column, lock-wrap
+// and heart-drop-sidecar legacy READERS — and, with the sealed-column reader, the keyed migrator
+// that was the second witness on that gate, the derived lock-wrap row latch, and the sidecar
+// completion latch. A gate exists to license a deletion; those deletions have happened. The three
+// rows are therefore kept as CENSUS-ONLY readings and their wording says exactly that: they no
+// longer license anything, they report how many stored rows this build can no longer open. That is
+// a smaller claim and a more urgent number, and the rows are worth more after the delete than
+// before it — a count that used to mean "not yet converted" now means "unreadable data on this
+// device". Nothing here was softened into a pass; the verdict vocabulary is unchanged.
+//
 // DEBUG-ONLY, and the file-scope `#if` is what makes that true rather than merely intended — the
 // reason is stated verbatim at CryptoFormatCensus.swift:15-21: a gated caller leaves the callee in
 // the shipping binary, and this surface should be ABSENT rather than unreachable. Compiling it out
@@ -35,16 +45,15 @@ import ProximityKit
 ///
 /// The readout deliberately carries **no single `takenAt`**. A sitting spans minutes: the local
 /// scan, a network manifest probe, a healing pass the owner runs from another screen, a second
-/// probe, a media pass, and a keyed sealed-column pass funded by a hub unlock. One timestamp over
-/// all of that would let a reader months later pair a census figure with a pass that ran after it.
+/// probe, and a media at-rest pass funded from this page. One timestamp over all of that would let
+/// a reader months later pair a census figure with a pass that ran after it.
 ///
 /// ## Invariants
 /// - A row that folds two observations MUST print both stamps.
 /// - A row whose stamps are out of the order the gate requires — a marker census taken BEFORE the
-///   keyed pass it is quoted beside — renders that ordering as a caveat and refuses to discharge,
-///   rather than silently pairing them.
+///   media pass it is quoted beside — refuses to discharge rather than silently pairing them.
 nonisolated struct Phase3Stamp: Sendable, Equatable {
-    /// What was observed, in the readout's own words ("marker census", "keyed sealed-column pass").
+    /// What was observed, in the readout's own words ("marker census", "media at-rest pass").
     /// Not localized, like the rest of the debug tab.
     let label: String
     /// When the observation landed.
@@ -65,6 +74,24 @@ nonisolated struct Phase3Stamp: Sendable, Equatable {
 
 /// The six Class-A surfaces Phase 3 is gated on, in ``CryptoFormatCensusSurface/allCases`` order so
 /// the two debug surfaces read in the same order.
+///
+/// ## Three of the six no longer gate anything, and the wording says so
+///
+/// ``sealedColumns``, ``lockContentKeyWrap`` and ``heartDropSidecars`` were read BEFORE their legacy
+/// readers were deleted, to license those deletions. The deletions have since landed. Each of the
+/// three is now a CENSUS-ONLY row whose ``gateWording`` states plainly that the reader is already
+/// gone: the row reports how many stored rows this build can no longer open, and a non-zero count is
+/// a more serious finding than it used to be, not a less serious one.
+///
+/// ## What that costs, stated rather than dropped
+///
+/// The sealed-column row's second witness was a keyed migrator pass, and it existed for one reason:
+/// roughly 1 legacy blob in 256 begins with a byte that collides with a format marker, so a keyless
+/// `unprefixed == 0` cannot see it. Opening the value with the real key was the only way to resolve
+/// that sliver, and the migrator that did it was deleted along with the reader it fed. **Nothing in
+/// the app can resolve the collided sliver any more.** Every sealed-column count this row prints is
+/// therefore a LOWER bound on unopenable values, permanently — a genuine loss of resolution, and one
+/// that no future sitting can buy back.
 ///
 /// Not localized, like the rest of the debug tab (the house statement is at
 /// CryptoFormatCensus.swift:64-65).
@@ -97,16 +124,20 @@ nonisolated enum Phase3Gate: String, Sendable, CaseIterable, Identifiable {
     }
 
     /// The plan's own wording for this surface's gate, quoted rather than paraphrased
-    /// (Docs/Plan-Crypto-Standardization-2026-08-27.md §Phase 3, plus §4's sealed-photo exception).
+    /// (Docs/Plan-Crypto-Standardization-2026-08-27.md §Phase 3, plus §4's sealed-photo exception)
+    /// — except on the three surfaces whose reader the plan has already deleted, where the wording
+    /// is rewritten to the smaller claim the row can still make. See the type doc.
     var gateWording: String {
         switch self {
         case .sealedColumns:
-            return "census unprefixed == 0 on a real upgraded device, AND a FRESH keyed migrator"
-                + " pass — run at gate time, after this sitting's latch reset — whose final result"
-                + " isClean. That is the second witness that resolves the collided ~1-in-256 marker"
-                + " sliver a keyless census can never close; a pass quoted from earlier in the"
-                + " process does not discharge it, and neither half means anything over a corpus"
-                + " that holds no sealed values."
+            return "THE READER IS ALREADY GONE: ColumnCrypto opens V3 only, and the keyed migrator"
+                + " that was this gate's second witness went with it. This row licenses no deletion"
+                + " — it reports how many stored journal / cycle / intimacy / worry column values"
+                + " this build can no longer open. census unprefixed == 0 discharges; any non-zero"
+                + " count is that many unopenable rows, and it is a LOWER bound forever: the keyed"
+                + " pass that resolved the collided ~1-in-256 marker sliver no longer exists, so"
+                + " nothing can tell a marked blob from a collided legacy one. A zero over a corpus"
+                + " that holds no sealed values still says nothing about either."
         case .pendingNarrativeBuffer:
             return "census legacyCount == 0; an unreadable buffer is not a zero."
         case .mediaAtRest:
@@ -115,12 +146,21 @@ nonisolated enum Phase3Gate: String, Sendable, CaseIterable, Identifiable {
                 + " does not discharge it, and neither does a raw census number without the residue"
                 + " audit beside it."
         case .lockContentKeyWrap:
-            return "the census reads 0 on a real upgraded device, either as a v2Marked row or as an"
-                + " absent row with an EARNED reading. The 2.5 row-latch licenses nothing by itself."
-                + " malformedEmpty and unreadable are not zeros."
+            return "THE READER IS ALREADY GONE: FernletLockService unwraps the marked format only,"
+                + " and the derived row latch that used to be printed beside this row went with the"
+                + " migrator it belonged to. This row licenses no deletion — it reports whether the"
+                + " one stored content-key wrap is one this build can still open. The census reading"
+                + " 0 discharges, either as a v2Marked row or as an absent row with an EARNED"
+                + " reading; a legacy wrap means the app-lock content key is unrecoverable on this"
+                + " device. malformedEmpty and unreadable are not zeros."
         case .heartDropSidecars:
-            return "zero legacySealed on the three MAIN rows (outbox, peer bundles, dedup)."
-                + " outboxQuarantine is EXCLUDED: no reader ever opens the quarantine path."
+            return "THE READER IS ALREADY GONE: the sidecar opener reads the sealed format only, and"
+                + " the completion latch that used to be printed beside this row went with the"
+                + " migrator. This row licenses no deletion — it reports how many stored sidecars"
+                + " this build can no longer open. Zero legacySealed on the three MAIN rows (outbox,"
+                + " peer bundles, dedup) discharges; a legacy row is an outbox, peer-bundle or dedup"
+                + " file whose contents are now lost to this build. outboxQuarantine is EXCLUDED: no"
+                + " reader ever opens the quarantine path."
         case .sealedPhotoBackup:
             return "minimumEntryHashVersion >= 2 across the three corpora, read from the manifests"
                 + " at gate time after a full-verification pass. An EMPTY manifest reads 2"
@@ -135,34 +175,35 @@ nonisolated enum Phase3Gate: String, Sendable, CaseIterable, Identifiable {
 ///
 /// This is the field `CryptoFormatCensusRow` does not have, and the reason this type exists: the six
 /// gates differ in the kind of evidence available to them — a keyless marker count, a persisted
-/// completion bit, a keyed migrator pass, a network manifest read — and a row that does not say
+/// completion bit, a converting media pass, a network manifest read — and a row that does not say
 /// which kind it rests on will be misread as all of them.
+///
+/// Two kinds have been retired rather than kept as unreachable cases. `keyedMigratorPass` named a
+/// `SealedColumnFormatMigrator` run, and `derivedRowLatch` named the lock-wrap row latch; both types
+/// were deleted with the legacy readers they served, so no row can ever fold either kind again. A
+/// case nothing can produce is not documentation of a lost capability — it is a label a future
+/// caller could attach to evidence it never took. The loss itself is recorded where it belongs, in
+/// ``Phase3Gate``'s type doc and in the affected gates' own wording.
 nonisolated enum Phase3GateWitness: String, Sendable, CaseIterable {
     /// The keyless marker-bytes census — exact for unprefixed, an upper bound for marked blobs.
     case markerCensus
     /// A persisted `FormatMigrationLatching` completion bit.
     case completionLatch
-    /// A keyed `SealedColumnFormatMigrator` pass, funded by a live per-page content-key vend.
-    case keyedMigratorPass
     /// A `MediaAtRestFormatMigrator.performPass()` result, taken without touching the latch.
     case mediaMigratorPass
     /// A sealed-photo manifest fetched from iCloud and opened — counts and version integers only.
     case manifestProbe
     /// A read-only CloudKit id enumeration for a corpus whose manifest did not come back.
     case bodyProbe
-    /// A latch DERIVED from the same byte the census row already reads. Licenses nothing.
-    case derivedRowLatch
 
     /// The witness kind's name on the row.
     var displayName: String {
         switch self {
         case .markerCensus: return "marker census (keyless)"
         case .completionLatch: return "completion latch"
-        case .keyedMigratorPass: return "keyed migrator pass"
         case .mediaMigratorPass: return "media migrator pass"
         case .manifestProbe: return "iCloud manifest probe"
         case .bodyProbe: return "iCloud body-record probe"
-        case .derivedRowLatch: return "derived row latch (not evidence)"
         }
     }
 
@@ -171,12 +212,10 @@ nonisolated enum Phase3GateWitness: String, Sendable, CaseIterable {
     var riskNote: String {
         switch self {
         case .markerCensus: return "free; reads at most four header bytes per blob, writes nothing"
-        case .completionLatch: return "free; one UserDefaults or keychain read"
-        case .keyedMigratorPass: return "converts anything convertible; needs a live hub unlock"
+        case .completionLatch: return "free; one UserDefaults read"
         case .mediaMigratorPass: return "converts anything convertible; never touches the latch"
         case .manifestProbe: return "network fetch plus one AES-GCM open per corpus; no writes"
         case .bodyProbe: return "network query for record ids only; no assets, no writes"
-        case .derivedRowLatch: return "free; re-reads the census's own byte, so it licenses nothing"
         }
     }
 }
@@ -404,47 +443,6 @@ nonisolated struct Phase3ManifestProbe: Sendable, Equatable, Identifiable {
 
 // MARK: - Migrator witnesses
 
-/// What one sealed-column migration trigger produced — the witness `FernletStore` discards today.
-///
-/// ``revalidation`` is carried SEPARATELY from ``passes`` for one reason: `.confirmed` is the launch
-/// path that logs NOTHING (`SealedColumnFormatMigrator.revalidate` returns `.confirmed` before any
-/// `FernletAuditLog.log` line) and runs no keyed pass. A witness carrying `.confirmed` with an empty
-/// ``passes`` therefore means "the latch was re-confirmed by a KEYLESS census; the collided-marker
-/// sliver is unresolved" — a state that is completely invisible in the app today, and one a bare
-/// `latch == true` would render as success.
-nonisolated struct SealedColumnPassWitness: Sendable, Equatable {
-    /// When this witness landed.
-    let stamp: Phase3Stamp
-    /// The §9 launch revalidation's outcome, or nil when no revalidation ran this trigger.
-    let revalidation: SealedColumnFormatMigrator.RevalidationOutcome?
-    /// Whether the run left the latch set.
-    let latched: Bool
-    /// Every keyed pass the run funded, in order. Empty for a revalidation-only or cancelled run.
-    let passes: [SealedColumnMigrationResult]
-
-    /// Creates a witness.
-    init(
-        stamp: Phase3Stamp,
-        revalidation: SealedColumnFormatMigrator.RevalidationOutcome?,
-        latched: Bool,
-        passes: [SealedColumnMigrationResult]
-    ) {
-        self.stamp = stamp
-        self.revalidation = revalidation
-        self.latched = latched
-        self.passes = passes
-    }
-
-    /// Whether this witness carries a KEYED pass — the only kind that resolves the collided sliver.
-    var isKeyedWitness: Bool { !passes.isEmpty }
-
-    /// The last pass's result, or nil for a passless witness.
-    var finalPass: SealedColumnMigrationResult? { passes.last }
-
-    /// Whether every pass in the run was clean.
-    var everyPassClean: Bool { !passes.isEmpty && passes.allSatisfy(\.isClean) }
-}
-
 /// What one media at-rest pass produced.
 ///
 /// This type is the whole answer to the media gate's two blind spots. `FormatMigrator.run(maxPasses:)`
@@ -547,87 +545,66 @@ nonisolated enum Phase3ProbeFailure {
 
 // MARK: - Latches
 
-/// The six completion bits, taken in one place with one stamp.
+/// The three surviving completion bits, taken in one place with one stamp.
 ///
 /// Every bit goes through an accessor that already exists, so no FernletKit module gains a new
-/// public surface for this instrument. ``mediaAtRest`` in particular is rendered NOWHERE in the app
-/// today — the app never constructs `MediaAtRestFormatMigrationLatch` outside
+/// public surface for this instrument. ``mediaAtRest`` in particular is rendered NOWHERE else in the
+/// app — the app never constructs `MediaAtRestFormatMigrationLatch` outside
 /// `MediaAtRestFormatMigrator.standard` — and reading it here is what closes the audit's blocker
 /// that otherwise needs LLDB and a downloaded app container.
 ///
-/// ``lockWrapRow`` is DERIVED and is not gate evidence: it re-reads the same keychain byte through
-/// the same `LockWrapFormatCensus.classify` the census row uses, so quoting it as the gate would be
-/// quoting the gate to itself (the plan says so in as many words). It is rendered anyway because the
-/// two can only disagree if the keychain's answer changed between the reads — which makes a
-/// disagreement a genuine signal, and is exactly why both must resolve the service string the same
-/// way.
+/// It used to carry six. Three went with the migrators that owned them when Phase 3 deleted their
+/// legacy readers: `SealedColumnMigrationLatch`, `HeartDropSidecarMigrationLatch`, and the derived
+/// `LockWrapRowLatch`. Only the last of those was ever an ornament — it re-read the census's own
+/// keychain byte and licensed nothing — while the other two recorded a conversion that no longer has
+/// anywhere to happen. None of the three is reconstructible here, and a bit invented from the census
+/// beside it would be the "quoting the gate to itself" failure the lock-wrap latch was already
+/// criticised for, so the three rows that lost them read from the census alone and say so.
+///
+/// What remains needs no keychain read at all, which is why ``take(defaults:)`` no longer takes the
+/// census `Inputs`: the one reader that needed the shared keychain-service spelling is gone.
+///
+/// There is no `printedLines` any more either. The three bits used to be printed together in one
+/// export section, and that section existed for exactly one reason — to preserve the six-bit reading
+/// this page destroyed when the owner cleared the sealed-column latch. No control here writes a
+/// latch now, so nothing is destroyed and there is nothing to preserve; each surviving bit reaches
+/// the export through the row that actually folds it, under that row's own framing.
 nonisolated struct Phase3LatchReadings: Sendable, Equatable {
-    /// `SealedColumnMigrationLatch.isComplete`.
-    let sealedColumn: Bool
     /// `MediaAtRestFormatMigrationLatch.isComplete` — gate part (a) for the media surface.
     let mediaAtRest: Bool
     /// `OwnPhotoMigrationLatch.isComplete` — an INPUT to the media gate, never a gate of its own.
     let ownPhotoKey: Bool
-    /// `HeartDropSidecarMigrationLatch.isComplete`.
-    let heartDropSidecar: Bool
     /// `SealedPhotoBackupMigrationLatch.isComplete` — explicitly NOT the sealed-photo gate.
     let sealedPhotoBackup: Bool
-    /// `LockWrapRowLatch.isComplete` — derived, and not evidence. See the type doc.
-    let lockWrapRow: Bool
 
     /// Creates a latch reading.
     init(
-        sealedColumn: Bool,
         mediaAtRest: Bool,
         ownPhotoKey: Bool,
-        heartDropSidecar: Bool,
-        sealedPhotoBackup: Bool,
-        lockWrapRow: Bool
+        sealedPhotoBackup: Bool
     ) {
-        self.sealedColumn = sealedColumn
         self.mediaAtRest = mediaAtRest
         self.ownPhotoKey = ownPhotoKey
-        self.heartDropSidecar = heartDropSidecar
         self.sealedPhotoBackup = sealedPhotoBackup
-        self.lockWrapRow = lockWrapRow
     }
 
-    /// Takes all six bits.
+    /// Takes all three bits.
     ///
-    /// The keychain service is threaded from the SAME ``CryptoFormatCensus/Inputs`` the scan used
-    /// rather than re-spelled here. The census's own recorded hazard is the reason: a re-spelled
-    /// constant is not READ from the service, so nothing makes the two readers keep agreeing — and
-    /// two readers that diverge either agree by making the same mistake or disagree for a reason
-    /// that is not a signal.
-    ///
-    /// Blocking: five `UserDefaults` reads and one keychain read. Call it off the main actor beside
-    /// the census scan.
-    static func take(inputs: CryptoFormatCensus.Inputs, defaults: UserDefaults = .standard) -> Phase3LatchReadings {
+    /// Blocking: three `UserDefaults` reads, no keychain and no disk. Call it off the main actor
+    /// beside the census scan anyway — it is cheap, and taking it there keeps the latch stamp beside
+    /// the census stamp rather than an actor hop away from it.
+    static func take(defaults: UserDefaults = .standard) -> Phase3LatchReadings {
         Phase3LatchReadings(
-            sealedColumn: SealedColumnFormatMigrator.latch(defaults: defaults).isComplete,
             // Read through the latch TYPE rather than through `Migrator.latch(defaults:)`: this
             // reading is taken off the main actor beside the census scan, and that accessor is
             // `@MainActor` (its migrator is), so the bit would otherwise cost an actor hop for a
             // `UserDefaults` read.
             mediaAtRest: MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete,
             ownPhotoKey: OwnPhotoKeyMigrator.latch(defaults: defaults).isComplete,
-            heartDropSidecar: HeartDropSidecarMigrationLatch(defaults: defaults).isComplete,
-            sealedPhotoBackup: SealedPhotoBackupMigrationLatch(defaults: defaults).isComplete,
-            lockWrapRow: LockWrapRowLatch(keychainService: inputs.lockKeychainService).isComplete
+            sealedPhotoBackup: SealedPhotoBackupMigrationLatch(defaults: defaults).isComplete
         )
     }
 
-    /// The six bits as report lines, in a fixed order, each naming the latch it came from.
-    var printedLines: [String] {
-        [
-            "sealedColumn: \(sealedColumn)",
-            "mediaAtRest: \(mediaAtRest)",
-            "ownPhotoKey (input, not a gate): \(ownPhotoKey)",
-            "heartDropSidecar: \(heartDropSidecar)",
-            "sealedPhotoBackup (not the gate): \(sealedPhotoBackup)",
-            "lockWrapRow (derived, not evidence): \(lockWrapRow)"
-        ]
-    }
 }
 
 // MARK: - The readout
@@ -636,7 +613,7 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
 ///
 /// A separate input type rather than the `@MainActor @Observable` session itself, so the fold stays
 /// a pure function the tests can drive with hand-built fixtures and no store. The session's
-/// ``Phase3ReadoutSession/inputs(environment:ownPhotoDocumentsDirectory:friendWallSupportDirectory:sealedColumnWitness:sealedColumnPassInFlight:)``
+/// ``Phase3ReadoutSession/inputs(environment:ownPhotoDocumentsDirectory:friendWallSupportDirectory:mediaLaunchPass:sealedPhotoFullPassVerdicts:)``
 /// is the one production spelling.
 nonisolated struct Phase3GateReadoutInputs: Sendable {
     /// The device and preference context.
@@ -649,12 +626,10 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
     var census: CryptoFormatCensus.Readings?
     /// When the census landed.
     var censusStamp: Phase3Stamp?
-    /// The six latch bits, or nil when the local scan has not landed.
+    /// The three latch bits, or nil when the local scan has not landed.
     var latches: Phase3LatchReadings?
     /// When the latches were read.
     var latchStamp: Phase3Stamp?
-    /// The six bits as they read BEFORE a reset was taken this sitting, when one was.
-    var preResetLatchSnapshot: Phase3LatchReadings?
     /// Every manifest probe taken this sitting, in acquisition order.
     var manifestProbes: [Phase3ManifestProbe]
     /// Body-record probes, by corpus.
@@ -666,21 +641,10 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
     /// What the LAUNCH media pass returned, so a `latch == false` with no funded witness never
     /// renders as "no pass has been observed this process" while the launch record stands.
     var mediaLaunchPass: MediaLaunchPassRecord?
-    /// Whether a keyed sealed-column pass was running at any point while the census scan ran.
-    ///
-    /// Recorded at scan START and again at LANDING, because the render-time flag says nothing about
-    /// the window the bytes were read in — and the verdict's own sentence claims it does.
-    var censusOverlappedKeyedPass: Bool
     /// The last own-photo full-verification pass's per-corpus verdicts — a BY-PRODUCT of a writing
     /// pass, never the gate. Its `examined` bit is the "never looked / examined-none" fact a live
     /// probe structurally cannot produce.
     var sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]?
-    /// The retained sealed-column witness, or nil when no trigger ran this process.
-    var sealedColumnWitness: SealedColumnPassWitness?
-    /// Whether a sealed-column run is in flight — a discharge is refused outright while it is.
-    var sealedColumnPassInFlight: Bool
-    /// When the sealed-column latch was reset this sitting, if it was.
-    var sealedColumnResetTakenAt: Date?
     /// The sitting checklist with its derived done-states.
     var checklist: [Phase3SittingStep]
     /// Refusals recorded this sitting (a disabled control the owner pressed, a probe that declined).
@@ -696,17 +660,12 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
         censusStamp: Phase3Stamp? = nil,
         latches: Phase3LatchReadings? = nil,
         latchStamp: Phase3Stamp? = nil,
-        preResetLatchSnapshot: Phase3LatchReadings? = nil,
         manifestProbes: [Phase3ManifestProbe] = [],
         bodyProbes: [SealedPhotoCorpus: BodyProbeReading] = [:],
         mediaWitness: MediaPassWitness? = nil,
         mediaPassInFlight: Bool = false,
         mediaLaunchPass: MediaLaunchPassRecord? = nil,
-        censusOverlappedKeyedPass: Bool = false,
         sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]? = nil,
-        sealedColumnWitness: SealedColumnPassWitness? = nil,
-        sealedColumnPassInFlight: Bool = false,
-        sealedColumnResetTakenAt: Date? = nil,
         checklist: [Phase3SittingStep] = [],
         refusals: [String] = []
     ) {
@@ -717,26 +676,27 @@ nonisolated struct Phase3GateReadoutInputs: Sendable {
         self.censusStamp = censusStamp
         self.latches = latches
         self.latchStamp = latchStamp
-        self.preResetLatchSnapshot = preResetLatchSnapshot
         self.manifestProbes = manifestProbes
         self.bodyProbes = bodyProbes
         self.mediaWitness = mediaWitness
         self.mediaPassInFlight = mediaPassInFlight
         self.mediaLaunchPass = mediaLaunchPass
-        self.censusOverlappedKeyedPass = censusOverlappedKeyedPass
         self.sealedPhotoFullPassVerdicts = sealedPhotoFullPassVerdicts
-        self.sealedColumnWitness = sealedColumnWitness
-        self.sealedColumnPassInFlight = sealedColumnPassInFlight
-        self.sealedColumnResetTakenAt = sealedColumnResetTakenAt
         self.checklist = checklist
         self.refusals = refusals
     }
 }
 
-/// One sitting's whole reading: every stamp taken, the environment, six gate rows, and the
-/// pre-reset latch snapshot when a reset was taken.
+/// One sitting's whole reading: every stamp taken, the environment, and six gate rows.
 ///
 /// There is no single `takenAt` — see ``Phase3Stamp``.
+///
+/// It used to carry a pre-reset latch snapshot too. That existed to preserve the one reading this
+/// page could destroy — the sealed-column completion latch, which the page offered a control to
+/// clear so the next hub unlock would fund a fresh keyed pass. The latch, the migrator and the
+/// control are all gone, so nothing in this sitting writes a latch at all and there is no
+/// destroyed reading left to rescue. Keeping the field would have left a report section that no
+/// code path can ever fill.
 nonisolated struct Phase3GateReadout: Sendable, Equatable {
     /// Every stamp taken this sitting, in acquisition order.
     let stamps: [Phase3Stamp]
@@ -744,11 +704,6 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
     let environment: Phase3GateEnvironment
     /// One row per gate, in ``Phase3Gate/allCases`` order.
     let rows: [Phase3GateRow]
-    /// The six bits as they read before the one reset this design offers, when it was taken.
-    let preResetLatchSnapshot: Phase3LatchReadings?
-    /// When the sealed-column latch was reset this sitting. Carried so the export can say the
-    /// pre-reset snapshot was NOT captured, rather than omitting the section and saying nothing.
-    let sealedColumnResetTakenAt: Date?
     /// The sitting checklist with its derived done-states.
     let checklist: [Phase3SittingStep]
     /// Refusals recorded this sitting.
@@ -764,8 +719,6 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
         stamps: [Phase3Stamp],
         environment: Phase3GateEnvironment,
         rows: [Phase3GateRow],
-        preResetLatchSnapshot: Phase3LatchReadings?,
-        sealedColumnResetTakenAt: Date? = nil,
         checklist: [Phase3SittingStep],
         refusals: [String],
         mediaAudit: MediaResidueAudit?,
@@ -774,8 +727,6 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
         self.stamps = stamps
         self.environment = environment
         self.rows = rows
-        self.preResetLatchSnapshot = preResetLatchSnapshot
-        self.sealedColumnResetTakenAt = sealedColumnResetTakenAt
         self.checklist = checklist
         self.refusals = refusals
         self.mediaAudit = mediaAudit
@@ -818,8 +769,6 @@ nonisolated enum Phase3GateReadoutBuilder {
             stamps: stamps(from: inputs),
             environment: inputs.environment,
             rows: rows(from: inputs, audit: audit),
-            preResetLatchSnapshot: inputs.preResetLatchSnapshot,
-            sealedColumnResetTakenAt: inputs.sealedColumnResetTakenAt,
             checklist: inputs.checklist,
             refusals: inputs.refusals,
             mediaAudit: audit,
@@ -842,7 +791,6 @@ nonisolated enum Phase3GateReadoutBuilder {
             stamps: [],
             environment: environment,
             rows: Phase3Gate.allCases.map { notTakenRow($0, reason: reason) },
-            preResetLatchSnapshot: nil,
             checklist: [],
             refusals: [],
             mediaAudit: nil,
@@ -870,7 +818,6 @@ nonisolated enum Phase3GateReadoutBuilder {
         // R2: bounded by the probe cap `Phase3ReadoutSession` enforces.
         for probe in inputs.manifestProbes { taken.append(probe.stamp) }
         if let witness = inputs.mediaWitness { taken.append(witness.stamp) }
-        if let witness = inputs.sealedColumnWitness { taken.append(witness.stamp) }
         return taken.sorted { $0.takenAt < $1.takenAt }
     }
 
@@ -885,18 +832,14 @@ nonisolated enum Phase3GateReadoutBuilder {
             return Phase3Gate.allCases.map { notTakenRow($0, reason: reason) }
         }
         return [
-            row(forSealedColumns: census.sealedColumns, latch: latches.sealedColumn,
-                witness: inputs.sealedColumnWitness, censusStamp: inputs.censusStamp,
-                passInFlight: inputs.sealedColumnPassInFlight,
-                overlappedKeyedPass: inputs.censusOverlappedKeyedPass,
-                resetTakenAt: inputs.sealedColumnResetTakenAt),
+            row(forSealedColumns: census.sealedColumns, stamp: inputs.censusStamp),
             row(forPendingNarrative: census.pendingNarrative, stamp: inputs.censusStamp),
             row(forMedia: audit, latches: latches, witness: inputs.mediaWitness,
                 passInFlight: inputs.mediaPassInFlight, censusStamp: inputs.censusStamp,
                 launchPass: inputs.mediaLaunchPass),
-            row(forLockWrap: census.lockWrap, rowLatch: latches.lockWrapRow,
+            row(forLockWrap: census.lockWrap,
                 lockConfigured: inputs.environment.lockConfigured, stamp: inputs.censusStamp),
-            row(forHeartDrop: census.heartDrop, latch: latches.heartDropSidecar, stamp: inputs.censusStamp),
+            row(forHeartDrop: census.heartDrop, stamp: inputs.censusStamp),
             row(forSealedPhoto: inputs.manifestProbes.last, bodyProbes: inputs.bodyProbes,
                 latch: latches.sealedPhotoBackup, environment: inputs.environment,
                 fullPassVerdicts: inputs.sealedPhotoFullPassVerdicts)
@@ -917,138 +860,62 @@ nonisolated enum Phase3GateReadoutBuilder {
 
     // MARK: Sealed columns
 
-    /// The sealed-column gate: two witnesses side by side, and a discharge only when BOTH answer.
+    /// The sealed-column row, which no longer gates anything and says so.
     ///
-    /// Four distinct non-discharges, each named rather than collapsed: no keyed pass ran; a KEYLESS
-    /// revalidation confirmed the latch and left the collided sliver unresolved; the hub re-locked
-    /// mid-pass (a clean stop, not a witness); and a pass that ran and was not clean.
+    /// It used to fold two witnesses: the keyless marker census, and a FRESH keyed
+    /// `SealedColumnFormatMigrator` pass run after a latch reset the owner took here. That second
+    /// witness existed to resolve the collided ~1-in-256 marker sliver, and it is gone — the
+    /// migrator was deleted along with `ColumnCrypto`'s legacy read rung, which is the very deletion
+    /// this row was read to license. Nothing is left to fund, nothing is left to reset, and there is
+    /// no ordering left to check, so the row keeps the one reading it can still take honestly.
+    ///
+    /// The count it prints has changed MEANING rather than importance. Before the delete a non-zero
+    /// `unprefixed` meant "not converted yet"; now it means "this many stored values no reader in
+    /// this build can open", and no pass exists that could convert them. That is a worse finding
+    /// than the one this row used to report, so it still `blocked`s.
     static func row(
         forSealedColumns outcome: CryptoFormatCensus.SealedColumnOutcome,
-        latch: Bool,
-        witness: SealedColumnPassWitness?,
-        censusStamp: Phase3Stamp?,
-        passInFlight: Bool,
-        overlappedKeyedPass: Bool = false,
-        resetTakenAt: Date? = nil
+        stamp: Phase3Stamp?
     ) -> Phase3GateRow {
-        var stamps: [Phase3Stamp] = []
-        if let censusStamp { stamps.append(censusStamp) }
-        if let witness { stamps.append(witness.stamp) }
-        return Phase3GateRow(
+        Phase3GateRow(
             gate: .sealedColumns,
-            witnesses: [.markerCensus, .keyedMigratorPass, .completionLatch],
-            stamps: stamps,
-            verdict: sealedColumnVerdict(outcome, witness: witness, censusStamp: censusStamp,
-                                         passInFlight: passInFlight,
-                                         overlappedKeyedPass: overlappedKeyedPass,
-                                         resetTakenAt: resetTakenAt),
-            evidence: sealedColumnEvidence(outcome, latch: latch, witness: witness),
-            caveats: sealedColumnCaveats(outcome, witness: witness, censusStamp: censusStamp)
+            witnesses: [.markerCensus],
+            stamps: stamp.map { [$0] } ?? [],
+            verdict: sealedColumnVerdict(outcome),
+            evidence: sealedColumnEvidence(outcome),
+            caveats: sealedColumnCaveats(outcome)
         )
     }
 
     private static func sealedColumnVerdict(
-        _ outcome: CryptoFormatCensus.SealedColumnOutcome,
-        witness: SealedColumnPassWitness?,
-        censusStamp: Phase3Stamp?,
-        passInFlight: Bool,
-        overlappedKeyedPass: Bool,
-        resetTakenAt: Date?
+        _ outcome: CryptoFormatCensus.SealedColumnOutcome
     ) -> Phase3GateVerdict {
         guard case let .counted(result) = outcome else {
             guard case let .failed(reason) = outcome else { return .notTaken("no census reading") }
             return .unavailable("the sealed store could not be censused: \(reason). This is not a zero.")
         }
-        guard !passInFlight, !overlappedKeyedPass else {
-            return .notTaken("a keyed pass was writing the corpus while this scan ran, so the marker"
-                + " counts are neither the before nor the after state. Re-take the local scan once"
-                + " the pass has landed.")
-        }
-        guard let witness, let final = witness.finalPass else {
-            return .notTaken(passlessReason(witness))
-        }
-        guard !final.stoppedOnlyByKeyRevocation else {
-            return .notTaken("the hub re-locked mid-pass — a clean stop, not a witness. Turn Auto-Lock"
-                + " off and re-arm the pass.")
-        }
-        guard final.isClean else { return .blocked(blockingDescription(final)) }
-        if let stale = sealedColumnFreshnessRefusal(witness, resetTakenAt: resetTakenAt) { return stale }
-        return dischargeSealedColumns(result, witness: witness, censusStamp: censusStamp)
-    }
-
-    /// The plan's "a FRESH clean keyed pass run at GATE TIME — never this latch quoted from memory".
-    ///
-    /// Without this, any keyed witness the process happens to hold discharges the row: a pass run at
-    /// the first hub unlock of the day, hours before the sitting, satisfies the ordering rule the
-    /// moment the census is re-taken — while proving nothing about the rows written since. Those
-    /// rows matter: ~1 in 256 legacy blobs collides with a marker byte and is invisible to
-    /// `unprefixed == 0`, so a stale pass can leave that sliver unresolved over rows the census
-    /// has since counted. Resolving it is the keyed pass's whole job. (Through Phase 2.6 the
-    /// hazard was sharper still — `ColumnCrypto.sealPlaintext` fell open to an unprefixed legacy
-    /// write whenever the device binding could not be read, so the rows written since a stale pass
-    /// could include brand-new legacy ones. That writer is closed; the freshness rule stands,
-    /// because a stale pass still says nothing about the collided sliver among rows it never saw.)
-    private static func sealedColumnFreshnessRefusal(
-        _ witness: SealedColumnPassWitness,
-        resetTakenAt: Date?
-    ) -> Phase3GateVerdict? {
-        guard let resetAt = resetTakenAt else {
-            return .notTaken("no latch reset was taken this sitting, so the keyed pass beside this"
-                + " census is one the process happened to have — not a pass run at gate time. Reset"
-                + " the latch here, dismiss Settings, open the Private tab and unlock (step 7).")
-        }
-        guard witness.stamp.takenAt > resetAt else {
-            return .notTaken("the keyed pass (\(witness.stamp.printed)) predates this sitting's latch"
-                + " reset (\(resetAt.ISO8601Format())), so it says nothing about rows written since."
-                + " Complete step 7.")
-        }
-        return nil
-    }
-
-    /// Why a witness carries no keyed pass — the state that is completely silent in the app today.
-    private static func passlessReason(_ witness: SealedColumnPassWitness?) -> String {
-        guard let witness else { return "no keyed pass ran this process" }
-        guard witness.revalidation == .confirmed else {
-            return "no keyed pass ran this process (revalidation:"
-                + " \(witness.revalidation.map { "\($0)" } ?? "none"))"
-        }
-        return "the latch was re-confirmed by a KEYLESS census at launch; no keyed pass ran, so the"
-            + " census's ~1-in-256 collided-marker sliver is unresolved"
-    }
-
-    /// The last clause: a marker zero taken AT OR AFTER the pass that could have changed it, over a
-    /// corpus that held something to count.
-    private static func dischargeSealedColumns(
-        _ result: SealedColumnFormatCensusResult,
-        witness: SealedColumnPassWitness,
-        censusStamp: Phase3Stamp?
-    ) -> Phase3GateVerdict {
         let unprefixed = result.total.unprefixed
         guard unprefixed == 0 else {
-            return .blocked("the marker census still counts \(unprefixed) unprefixed column values")
+            return .blocked("\(unprefixed) stored column values carry no format marker, and no"
+                + " reader in this build can open them — ColumnCrypto reads V3 only, and the"
+                + " migrator that could have converted them was deleted with the legacy rung. This"
+                + " is a count of unreadable journal / cycle / intimacy / worry text, not a"
+                + " conversion backlog.")
         }
         guard !result.truncated else {
             return .unavailable("the marker census stopped at its \(result.rowCap)-row cap after"
                 + " \(result.rowsScanned) of \(result.rowsAvailable) rows, so its zero describes a"
                 + " SUBSET of the corpus and says nothing about the rows it never reached.")
         }
-        guard let censusStamp else { return .notTaken("no census stamp, so the two halves cannot be ordered") }
-        guard censusStamp.takenAt >= witness.stamp.takenAt else {
-            return .notTaken("the marker census was taken BEFORE the keyed pass beside it, so the"
-                + " zero it reports is not a reading of the corpus the pass left. Retake the census.")
-        }
         return emptyCorpusRefusal(result) ?? .discharged
     }
 
-    /// The `.vacuous` branch the sealed-column row was missing: both halves are trivially satisfied
-    /// over a corpus that holds nothing.
+    /// The `.vacuous` branch: the reading is trivially satisfied over a corpus that holds nothing.
     ///
-    /// The census's tally is empty, so `unprefixed == 0`; `SealedColumnMigrationResult.isClean` is
-    /// `converted == 0 && blocking == 0 && notAttemptedTotal == 0 && …`, all satisfied by a pass over
-    /// zero pages — which also means the per-page content key was never vended, so that "keyed" pass
-    /// opened NOTHING and resolved none of the collided-marker sliver it exists for. `emptyOrNil` is
-    /// counted separately from `unprefixed`, so a store with rows whose sealed columns are all nil
-    /// reads a healthy non-zero row count and is the variant a bare `rowsAvailable > 0` floor misses.
+    /// The census's tally is empty, so `unprefixed == 0` — and a zero over no bytes is not a
+    /// statement about bytes. `emptyOrNil` is counted separately from `unprefixed`, so a store with
+    /// rows whose sealed columns are all nil reads a healthy non-zero row count and is the variant a
+    /// bare `rowsAvailable > 0` floor misses.
     private static func emptyCorpusRefusal(_ result: SealedColumnFormatCensusResult) -> Phase3GateVerdict? {
         let classified = result.total
         let sealedValues = classified.total - classified.emptyOrNil
@@ -1057,11 +924,9 @@ nonisolated enum Phase3GateReadoutBuilder {
         }
         guard result.rowsAvailable == 0 || sealedValues == 0 else { return nil }
         return .vacuous("the sealed corpora hold \(result.rowsAvailable) rows and \(sealedValues)"
-            + " sealed column values, so the census's zero and the keyed pass's clean verdict are"
-            + " both over an EMPTY corpus. With no page to sweep the pass never vended the content"
-            + " key — it opened nothing and resolved none of the ~1-in-256 collided-marker sliver."
-            + " Read this gate on a device that actually holds sealed journal / cycle / intimacy /"
-            + " worry text.")
+            + " sealed column values, so this zero is a count over an EMPTY corpus and says nothing"
+            + " about whether this build can open a stored value. Read this row on a device that"
+            + " actually holds sealed journal / cycle / intimacy / worry text.")
     }
 
     /// `.vacuous` when some sealed COLUMN contributed no value, even though the store as a whole
@@ -1070,9 +935,9 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// The store-wide floor above is necessary but far too weak: the four sealed entities
     /// (`JournalNarrative`, `MenstrualNarrative`, `IntimacyLog`, `WorryNarrative`) share one
     /// aggregate, so a single journal row satisfies it while three entities have never been written
-    /// at all. Deleting `ColumnCrypto`'s legacy rung retires the read path for EVERY column, so the
-    /// gate has to be covered per column and not per store — otherwise the discharge is carried by
-    /// whichever entity the owner happened to exercise.
+    /// at all. `ColumnCrypto`'s legacy rung was the read path for EVERY column alike, so a reading
+    /// covering one entity says nothing about the other three — and this row's whole remaining job
+    /// is to count what the surviving reader cannot open.
     private static func uncoveredColumnRefusal(_ result: SealedColumnFormatCensusResult) -> Phase3GateVerdict? {
         // R2: bounded by the census's column map.
         let uncovered = result.columns
@@ -1082,124 +947,46 @@ nonisolated enum Phase3GateReadoutBuilder {
             .sorted()
         guard !uncovered.isEmpty else { return nil }
         return .vacuous("\(uncovered.count) sealed column(s) contributed NO value to this reading —"
-            + " \(uncovered.joined(separator: ", ")). The keyed pass swept the columns that do hold"
-            + " values and says nothing about these, yet deleting the legacy rung retires the read"
-            + " path for all of them alike. Exercise every sealed entity (journal, cycle, intimacy,"
-            + " worry) on the device before reading this gate.")
+            + " \(uncovered.joined(separator: ", ")). The census counted the columns that do hold"
+            + " values and says nothing about these, yet the deleted legacy rung was the read path"
+            + " for all of them alike. Exercise every sealed entity (journal, cycle, intimacy,"
+            + " worry) on the device before reading this row.")
     }
 
     private static func sealedColumnEvidence(
-        _ outcome: CryptoFormatCensus.SealedColumnOutcome,
-        latch: Bool,
-        witness: SealedColumnPassWitness?
+        _ outcome: CryptoFormatCensus.SealedColumnOutcome
     ) -> [String] {
-        var lines: [String] = []
-        if case let .counted(result) = outcome {
-            let tally = result.total
-            lines.append("marker census: legacy \(tally.unprefixed) exact · v3 <=\(tally.v3Marked)"
+        guard case let .counted(result) = outcome else { return [] }
+        let tally = result.total
+        return [
+            "marker census: legacy \(tally.unprefixed) exact · v3 <=\(tally.v3Marked)"
                 + " / v2 <=\(tally.v2Marked) upper bounds · indeterminate \(tally.indeterminate)"
                 + " · empty \(tally.emptyOrNil) · scanned \(result.rowsScanned) of \(result.rowsAvailable)"
-                + " rows · truncated \(result.truncated)")
-        }
-        lines.append("completion latch: \(latch)")
-        lines.append(contentsOf: sealedColumnWitnessLines(witness))
-        return lines
-    }
-
-    private static func sealedColumnWitnessLines(_ witness: SealedColumnPassWitness?) -> [String] {
-        guard let witness else { return ["keyed pass: no trigger ran this process"] }
-        var lines = [
-            "keyed pass: \(witness.passes.count) pass(es), latched \(witness.latched),"
-                + " revalidation \(witness.revalidation.map { "\($0)" } ?? "none")"
+                + " rows · truncated \(result.truncated)"
         ]
-        // R2: bounded by `SealedColumnFormatMigrator.maxMigrationPasses`.
-        for (index, pass) in witness.passes.enumerated() {
-            lines.append("  pass \(index + 1): converted \(pass.convertedTotal) · blocking"
-                + " \(pass.total.blocking) · notAttempted \(pass.notAttemptedTotal)"
-                + " · rows \(pass.rowsScanned)/\(pass.rowsAvailable) · truncated \(pass.truncated)"
-                + " · abortedNoBinding \(pass.abortedNoBinding) · aborted \(pass.aborted)"
-                + " · isClean \(pass.isClean) · madeForwardProgress \(pass.madeForwardProgress)"
-                + " · stoppedOnlyByKeyRevocation \(pass.stoppedOnlyByKeyRevocation)")
-            lines.append(contentsOf: sealedColumnPerColumnLines(pass))
-        }
-        return lines
-    }
-
-    private static func sealedColumnPerColumnLines(_ pass: SealedColumnMigrationResult) -> [String] {
-        // R2: bounded by the census's fixed column table.
-        pass.columns.keys.sorted().compactMap { identifier in
-            guard let tally = pass.columns[identifier] else { return nil }
-            return "    \(identifier): openedV3 \(tally.openedV3) · fromV2 \(tally.convertedFromV2)"
-                + " · fromUnprefixed \(tally.convertedFromLegacyUnprefixed)"
-                + " · fromCollided \(tally.convertedFromLegacyCollided)"
-                + " · indeterminate \(tally.indeterminate) · bindingReadError \(tally.bindingReadError)"
-                + " · unopenableUnprefixed \(tally.unopenableUnprefixed)"
-                + " · unopenableMarked \(tally.unopenableMarked)"
-                + " · skippedConcurrentlyModified \(tally.skippedConcurrentlyModified)"
-                + " · clearedDuringReadBack \(tally.clearedDuringReadBack)"
-                + " · convertFailures \(tally.convertFailures) · readBackFailed \(tally.readBackFailed)"
-        }
     }
 
     private static func sealedColumnCaveats(
-        _ outcome: CryptoFormatCensus.SealedColumnOutcome,
-        witness: SealedColumnPassWitness?,
-        censusStamp: Phase3Stamp?
+        _ outcome: CryptoFormatCensus.SealedColumnOutcome
     ) -> [String] {
         var caveats = [
-            "The keyed pass is the SECOND witness and it cannot be funded from Settings: Settings is"
-                + " reached from Home, where the hub is always re-locked, so the content-key vend"
-                + " answers nil there. Reset the latch here, dismiss Settings, open the Private tab"
-                + " and unlock — the shipped trigger funds the pass ~300 ms after the unlock, and a"
-                + " cancelled grace records an EMPTY run (which never displaces a keyed witness)."
+            "THIS ROW LICENSES NOTHING. The legacy read path it was taken to license — ColumnCrypto's"
+                + " unprefixed rung — is already deleted, and so is the keyed migrator that was this"
+                + " row's second witness. What is left is a count of stored values this build cannot"
+                + " open. No control is offered because there is nothing left to fund: no pass can"
+                + " convert an unprefixed value once the rung that reads it is gone."
         ]
         if case let .counted(result) = outcome {
             let marked = result.total.v3Marked + result.total.v2Marked
             if marked > 0 {
-                caveats.append("0 is necessary, not sufficient: up to \(marked) marked blobs could be"
-                    + " collided legacy (a legacy nonce's first byte hits a marker ~1/256). Only the"
-                    + " keyed pass resolves that sliver.")
+                caveats.append("Every count here is a LOWER bound, permanently: up to \(marked)"
+                    + " marked blobs could be collided legacy values (a legacy nonce's first byte"
+                    + " hits a marker ~1/256). Only a keyed pass could ever tell them apart, and the"
+                    + " keyed pass is gone — so that sliver is now unresolvable by anything in the"
+                    + " app, and a zero above cannot rule it out.")
             }
         }
-        if let witness, let censusStamp, censusStamp.takenAt < witness.stamp.takenAt {
-            caveats.append("ORDERING: the census stamp (\(censusStamp.printed)) precedes the keyed-pass"
-                + " stamp (\(witness.stamp.printed)). The two halves are NOT paired.")
-        }
-        caveats.append("Auto-Lock must be off: the key is re-vended per page, so a screen lock ends"
-            + " the sweep fail-closed as stoppedOnlyByKeyRevocation.")
         return caveats
-    }
-
-    /// Every blocking bucket a sealed-column pass hit, by name.
-    private static func blockingDescription(_ pass: SealedColumnMigrationResult) -> String {
-        var named: [String] = []
-        let folded = pass.total
-        if folded.converted > 0 { named.append("converted \(folded.converted)") }
-        if folded.indeterminate > 0 { named.append("indeterminate \(folded.indeterminate)") }
-        if folded.bindingReadError > 0 { named.append("bindingReadError \(folded.bindingReadError)") }
-        if folded.unopenableUnprefixed > 0 { named.append("unopenableUnprefixed \(folded.unopenableUnprefixed)") }
-        if folded.unopenableMarked > 0 { named.append("unopenableMarked \(folded.unopenableMarked)") }
-        if folded.skippedConcurrentlyModified > 0 {
-            named.append("skippedConcurrentlyModified \(folded.skippedConcurrentlyModified)")
-        }
-        if folded.clearedDuringReadBack > 0 { named.append("clearedDuringReadBack \(folded.clearedDuringReadBack)") }
-        if folded.convertFailures > 0 { named.append("convertFailures \(folded.convertFailures)") }
-        if folded.readBackFailed > 0 { named.append("readBackFailed \(folded.readBackFailed)") }
-        if pass.notAttemptedTotal > 0 { named.append(notAttemptedDescription(pass)) }
-        if pass.truncated { named.append("truncated") }
-        if pass.abortedNoBinding { named.append("abortedNoBinding") }
-        if pass.aborted { named.append("aborted") }
-        let joined = named.isEmpty ? "the pass reported isClean == false with no named bucket" : named.joined(separator: ", ")
-        return "the keyed pass ran and was not clean: \(joined)"
-    }
-
-    private static func notAttemptedDescription(_ pass: SealedColumnMigrationResult) -> String {
-        // R2: bounded by `SealedColumnNotAttemptedReason.allCases`.
-        let named = SealedColumnNotAttemptedReason.allCases.compactMap { reason -> String? in
-            guard let count = pass.notAttempted[reason], count > 0 else { return nil }
-            return "\(reason.rawValue) \(count)"
-        }
-        return "notAttempted(" + named.joined(separator: " ") + ")"
     }
 
     // MARK: Pending narrative buffer
@@ -1501,7 +1288,7 @@ nonisolated enum Phase3GateReadoutBuilder {
 
     // MARK: Lock wrap
 
-    /// The wrap gate, with the reviewer's earned-absence rule applied.
+    /// The wrap row, with the reviewer's earned-absence rule applied — and one witness now, not two.
     ///
     /// `.absent` discharges ONLY alongside `isLockConfigured == false`. The census has no choice but
     /// to print all three absences — it is a keychain-only reader — but the readout holds
@@ -1509,24 +1296,29 @@ nonisolated enum Phase3GateReadoutBuilder {
     /// Discharging over an unresolved absence whose third reading is "a wrap that has gone missing,
     /// which is a fault" would be an unearned zero on the surface whose own doc warns that
     /// collapsing "could not read" into "not there" is what licenses Phase 3 to lock a user out.
+    /// That rule is unchanged, and it is the whole of what this row still decides.
+    ///
+    /// What it no longer decides is a deletion. The legacy wrap reader is already gone, and
+    /// `LockWrapRowLatch` — the DERIVED bit this row printed under a "licenses nothing" caveat —
+    /// went with the migrator that owned it. The row therefore folds the census alone and reports
+    /// whether the one stored content-key wrap is one this build can still open; on this surface a
+    /// legacy reading is not a backlog but an app-lock the owner may be unable to pass.
     static func row(
         forLockWrap report: LockWrapFormatCensusReport,
-        rowLatch: Bool,
         lockConfigured: Bool,
         stamp: Phase3Stamp?
     ) -> Phase3GateRow {
         Phase3GateRow(
             gate: .lockContentKeyWrap,
-            witnesses: [.markerCensus, .derivedRowLatch],
+            witnesses: [.markerCensus],
             stamps: stamp.map { [$0] } ?? [],
             verdict: lockWrapVerdict(report, lockConfigured: lockConfigured),
             evidence: [
                 "\(report.account): \(lockWrapState(report))",
                 "legacyWrapCount: \(report.legacyWrapCount.map(String.init) ?? "—")",
-                "isLockConfigured: \(lockConfigured)",
-                "LockWrapRowLatch.isComplete (DERIVED — not evidence): \(rowLatch)"
+                "isLockConfigured: \(lockConfigured)"
             ],
-            caveats: lockWrapCaveats(report, rowLatch: rowLatch)
+            caveats: lockWrapCaveats()
         )
     }
 
@@ -1568,53 +1360,60 @@ nonisolated enum Phase3GateReadoutBuilder {
         }
     }
 
-    private static func lockWrapCaveats(_ report: LockWrapFormatCensusReport, rowLatch: Bool) -> [String] {
-        var caveats = [
-            "The row latch licenses NOTHING by itself: it re-reads the same keychain byte through the"
-                + " same LockWrapFormatCensus.classify this row uses, so quoting it as the gate would"
-                + " be quoting the gate to itself. It is printed because the two can only disagree if"
-                + " the keychain's answer changed between the reads — which makes a disagreement a"
-                + " genuine signal.",
-            "No pass can be funded for this surface at all: the migrator is credential-gated by"
-                + " construction (no initializer that does not take the recovered content key and the"
-                + " just-derived wrapping key), and markComplete()/reset() are documented no-ops on"
-                + " this latch — so the absence of a button here is a decision, not a gap."
+    private static func lockWrapCaveats() -> [String] {
+        [
+            "THIS ROW LICENSES NOTHING. The legacy wrap reader it was taken to license is already"
+                + " deleted; what is left is a report of whether the one stored content-key wrap is"
+                + " one this build can still open. A legacy reading here is not a backlog — it is an"
+                + " app lock whose content key this build cannot unwrap.",
+            "No pass could be funded for this surface even before the delete: the migrator was"
+                + " credential-gated by construction (no initializer that did not take the recovered"
+                + " content key and the just-derived wrapping key), so the absence of a button here"
+                + " has always been a decision rather than a gap — and there is now no migrator to"
+                + " offer one for.",
+            "The derived row latch is no longer printed. It re-read the same keychain byte through"
+                + " the same LockWrapFormatCensus.classify this row uses, so it never licensed"
+                + " anything on its own; its one use was that a DISAGREEMENT between the two reads"
+                + " meant the keychain's answer had changed between them. That cross-check is gone"
+                + " with the latch type, so this row's single reading has no second opinion."
         ]
-        let censusSaysComplete = report.state == .absent || report.state == .v2Marked
-        if censusSaysComplete != rowLatch {
-            caveats.append("The census row and the derived latch DISAGREE. They read the same byte,"
-                + " so the keychain's answer changed between the two reads — retake both.")
-        }
-        return caveats
     }
 
     // MARK: Heart-drop sidecars
 
-    /// The sidecar gate applied PER ROW, with the quarantine visibly excluded.
+    /// The sidecar reading applied PER ROW, with the quarantine visibly excluded.
     ///
-    /// The census already prints every file's state, so the plan's per-row gate is applicable today
+    /// The census already prints every file's state, so the plan's per-row rule is applicable today
     /// — but a reader has to apply "three main rows, quarantine excluded" by eye off a `·`-joined
     /// line, against an aggregate `legacySealedCount` that INCLUDES the quarantine. This applies the
-    /// rule and says which files it applied it to.
+    /// rule and says which files it applied it to. That per-row verdict is unchanged.
+    ///
+    /// What changed is what the row is FOR. The legacy sidecar reader is already deleted, and
+    /// `HeartDropSidecarMigrationLatch` went with the migrator that owned it, so there is no
+    /// completion bit left to print and no deletion left to license. A legacy main row is now a
+    /// stored outbox, peer-bundle or dedup file this build can no longer open.
     static func row(
         forHeartDrop report: HeartDropSidecarFormatCensus.Report,
-        latch: Bool,
         stamp: Phase3Stamp?
     ) -> Phase3GateRow {
         Phase3GateRow(
             gate: .heartDropSidecars,
-            witnesses: [.markerCensus, .completionLatch],
+            witnesses: [.markerCensus],
             stamps: stamp.map { [$0] } ?? [],
             verdict: heartDropVerdict(report),
-            evidence: heartDropEvidence(report, latch: latch),
+            evidence: heartDropEvidence(report),
             caveats: [
+                "THIS ROW LICENSES NOTHING. The legacy sidecar reader it was taken to license is"
+                    + " already deleted, and so is the migrator whose completion latch this row used"
+                    + " to print. A legacy main row below is a stored sidecar this build cannot"
+                    + " open, not a conversion still owed.",
                 "outboxQuarantine is EXCLUDED from the verdict, and the plan's reason is the whole"
                     + " point: no reader ever opens the quarantine path, so a legacy tombstone there"
                     + " is not a reader dependency — folding it into an aggregate would strand the"
-                    + " gate forever on bytes whose format cannot matter.",
-                "No control is offered: this surface re-surveys the disk on EVERY launch and"
-                    + " self-invalidates when any main row blocks, so resetting the latch buys no"
-                    + " observation the next launch would not already produce."
+                    + " reading forever on bytes whose format cannot matter.",
+                "No control is offered, and none is possible: this surface re-surveys the disk on"
+                    + " EVERY launch, and there is no longer a pass that could convert what the"
+                    + " survey finds."
             ]
         )
     }
@@ -1656,15 +1455,14 @@ nonisolated enum Phase3GateReadoutBuilder {
         guard !sealed.isEmpty else {
             return .vacuous("none of the three main sidecars holds a sealed byte — every row read"
                 + " absent or empty, so the survey found no heart-drop bytes AT ALL. A zero over no"
-                + " bytes is not a converted corpus. Read this gate on a device that has actually"
-                + " sent or received a heart.")
+                + " bytes is not a corpus this build has been shown to open. Read this row on a"
+                + " device that has actually sent or received a heart.")
         }
         return .discharged
     }
 
     private static func heartDropEvidence(
-        _ report: HeartDropSidecarFormatCensus.Report,
-        latch: Bool
+        _ report: HeartDropSidecarFormatCensus.Report
     ) -> [String] {
         // R2: bounded by `Sidecar.allCases` (four).
         var lines = HeartDropSidecarFormatCensus.Sidecar.allCases.map { sidecar -> String in
@@ -1676,7 +1474,6 @@ nonisolated enum Phase3GateReadoutBuilder {
             + " \(report.legacySealedCount) · v2 \(report.v2SealedCount) · absent \(report.absentCount)"
             + " · unsealedOrUnrecognised \(report.unsealedOrUnrecognizedCount)"
             + " · unreadable \(report.unreadableCount)")
-        lines.append("launch latch (this surface re-surveys every launch anyway): \(latch)")
         return lines
     }
 
@@ -1977,8 +1774,6 @@ nonisolated enum Phase3GateReportBuilder {
     static func lines(for readout: Phase3GateReadout) -> [String] {
         var out = headerLines(readout)
         out.append(contentsOf: environmentLines(readout.environment))
-        out.append(contentsOf: preResetLines(readout.preResetLatchSnapshot,
-                                             resetTakenAt: readout.sealedColumnResetTakenAt))
         // R2: bounded by `Phase3Gate.allCases` (six).
         for row in readout.rows { out.append(contentsOf: gateLines(row)) }
         out.append(contentsOf: manifestProbeHistoryLines(readout.manifestProbes))
@@ -2082,26 +1877,6 @@ nonisolated enum Phase3GateReportBuilder {
             "  embedded provisioning profile present (a WEAK signal): \(environment.hasEmbeddedProvisioningProfile)",
             "  \(Phase3GateEnvironment.cloudKitDatabaseCaveat)"
         ]
-    }
-
-    private static func preResetLines(
-        _ snapshot: Phase3LatchReadings?,
-        resetTakenAt: Date?
-    ) -> [String] {
-        guard let snapshot else {
-            // Nothing-silent: the reset dialog promises "the pre-reset value of all six latches is
-            // captured into the report first". An omitted section would let an unkept promise read
-            // as an untaken reset.
-            guard let resetTakenAt else { return [] }
-            return ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING",
-                    "  NOT CAPTURED — the reset at \(resetTakenAt.ISO8601Format()) was taken before"
-                        + " the local scan had landed, so the six pre-reset bits for this device"
-                        + " are gone for this sitting."]
-        }
-        var out = ["", "LATCHES AS THEY READ BEFORE THE RESET TAKEN THIS SITTING"]
-        // R2: bounded by the six printed bits.
-        for line in snapshot.printedLines { out.append("  \(line)") }
-        return out
     }
 
     private static func gateLines(_ row: Phase3GateRow) -> [String] {

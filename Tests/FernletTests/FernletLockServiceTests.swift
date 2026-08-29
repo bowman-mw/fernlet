@@ -693,83 +693,109 @@ struct FernletLockServiceTests {
         #expect(serviceB.passcodeUnlockedThisProcess)
         #expect(serviceB.isBiometricUnlockAvailable)
     }
-    // MARK: Phase 2.6, §9 caller 2: the destructive lock reset purges and rebuilds the sealed
-    // store INSIDE FernletLock (never through the app's delete-all funnel), so it must clear the
-    // sealed-column format-migration latch beside its own purge — a failed purge would otherwise
-    // leave rows behind, under a destroyed content key, with the latch still standing over them.
-    @Test func lockServiceDestructiveResetClearsTheLatch() throws {
+}
+
+/// Phase 3's four-caller pin for the app lock's retired content-key wrap format.
+///
+/// The unprefixed wrap's reader was this module's last `legacy-read` escape hatch. Deleting it is
+/// the one change in the round whose worst case is TOTAL LOCKOUT, so the property that matters is
+/// not just "it refuses" but "it refuses **by name** and destroys nothing" — at every one of the
+/// four call sites that unwrap, not only at the unlock path everyone thinks of first.
+///
+/// The fixture plants a legacy wrap the fake crypto provider CAN open, so a passing test proves the
+/// refusal came from the format gate rather than from bytes nobody recognized.
+@MainActor
+@Suite(.serialized)
+struct RetiredLockWrapFormatTests {
+
+    /// Configures a lock, then replaces the live wrap with a registered UNPREFIXED one — putting
+    /// the install in the custody state (`.legacyScryptWrapped`) whose reader is gone.
+    private func harnessWithLegacyWrap() async throws -> (LockTestHarness, FernletLockService) {
         let harness = LockTestHarness()
-        defer { harness.cleanup() }
-        // The reset clears the PRODUCTION latch (standard defaults) — pin the real seam, then
-        // restore whatever state the host had.
-        let latch = SealedColumnFormatMigrator.latch()
-        let hadLatch = latch.isComplete
-        defer {
-            if hadLatch { latch.markComplete() } else { latch.reset() }
-        }
-        latch.markComplete()
-
-        let service = FernletLockService(
-            keychainService: harness.serviceID,
-            sealedContentKeyServices: [harness.sealedContentKeyServiceID],
-            mediaKeychainServices: [harness.mediaKeychainServiceID],
-            narrativeBufferScope: harness.narrativeBufferScope,
-            dateProvider: harness.clock,
-            uptimeProvider: harness.uptime,
-            cryptoProvider: harness.crypto,
-            privatePersistenceController: PrivatePersistenceController(inMemory: true)
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        let derived = try await harness.crypto.deriveVerifier(
+            passcode: "123456",
+            salt: try #require(KeychainItem.load(for: .salt, service: harness.serviceID)),
+            n: FernletLockCrypto.scryptN
         )
-        try service.reset()
-
-        #expect(!latch.isComplete, "the destructive reset must clear the sealed-column migration latch")
+        let legacy = harness.crypto.makeLegacyWrap(contentKey: Data(repeating: 0x7E, count: 32),
+                                                   wrappingKey: derived)
+        #expect(KeychainItem.store(legacy, for: .wrappedContentKey, service: harness.serviceID) == errSecSuccess)
+        service.lock(reason: .manual)
+        return (harness, service)
     }
 
-    // MARK: The reset-FIRST half of the same pin: the latch is cleared BEFORE the destructive
-    // sealed-store legs, so a reset whose sealed-store work FAILS (the exact case the ordering
-    // exists for — rows or residue left behind under a destroyed content key) still cannot
-    // leave a stale proof standing. The failure is constructed at the rebuild leg — the sqlite
-    // file is replaced by a DIRECTORY at the same path, which neither `destroyPersistentStore`
-    // nor the re-add can open as a database — because the review-prescribed storeless-coordinator
-    // purge turns out NOT to throw on this SDK (a fetch over zero stores answers empty, so the
-    // purge finds nothing to save); the ordering property pinned is identical, since the latch
-    // reset precedes both sealed-store legs.
-    @Test func lockServiceDestructiveResetClearsTheLatchEvenWhenTheStoreLegFails() throws {
-        let harness = LockTestHarness()
+    /// Every row that could ever be destroyed on a failure path, as it stands right now.
+    private func keyRows(_ harness: LockTestHarness) -> [LockKeychainKey: Data?] {
+        let keys: [LockKeychainKey] = [
+            .salt, .verifier, .kind, .wrappedContentKey, .seWrappedContentKey,
+            .biometricBypass, .biometricEnabledFlag, .wrappedContentKeyRewrapStaging
+        ]
+        return Dictionary(uniqueKeysWithValues: keys.map {
+            ($0, KeychainItem.load(for: $0, service: harness.serviceID))
+        })
+    }
+
+    // MARK: `unlock` refuses by name, stays locked, and leaves every key row byte-identical.
+    @Test func unlockRefusesARetiredWrapWithoutTouchingAKey() async throws {
+        let (harness, service) = try await harnessWithLegacyWrap()
         defer { harness.cleanup() }
-        let latch = SealedColumnFormatMigrator.latch()
-        let hadLatch = latch.isComplete
-        defer {
-            if hadLatch { latch.markComplete() } else { latch.reset() }
+        let before = keyRows(harness)
+        await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            _ = try await service.unlock(passcode: "123456", for: .privateHub)
         }
-        latch.markComplete()
+        #expect(!service.isUnlocked(for: .privateHub), "a refused unlock must not open the hub")
+        #expect(keyRows(harness) == before, "the refusal must not write or delete a single key row")
+    }
 
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("fernlet-lock-reset-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
-        let controller = PrivatePersistenceController(storeURL: storeURL)
-        #expect(controller.isStoreLoaded, "the on-disk fixture store must have loaded")
-        // Swap the sqlite FILE for a DIRECTORY at the same path: the open file descriptors keep
-        // the purge working, but the rebuild's destroy-and-re-add cannot open a directory as a
-        // database — the deterministic sealed-store-leg failure.
-        try FileManager.default.removeItem(at: storeURL)
-        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: false)
-
-        let service = FernletLockService(
-            keychainService: harness.serviceID,
-            sealedContentKeyServices: [harness.sealedContentKeyServiceID],
-            mediaKeychainServices: [harness.mediaKeychainServiceID],
-            narrativeBufferScope: harness.narrativeBufferScope,
-            dateProvider: harness.clock,
-            uptimeProvider: harness.uptime,
-            cryptoProvider: harness.crypto,
-            privatePersistenceController: controller
-        )
-        #expect(throws: (any Error).self, "a reset whose sealed-store leg fails must fail loudly") {
-            try service.reset()
+    // MARK: `changeCredential` refuses BEFORE the atomic credential rewrite, so the old passcode
+    // still governs — the failure mode this guards is a new verifier written over a wrap nothing
+    // can open, which is a lock that takes the new passcode and opens nothing forever.
+    @Test func changeCredentialRefusesARetiredWrapWithoutRewritingCredentials() async throws {
+        let (harness, service) = try await harnessWithLegacyWrap()
+        defer { harness.cleanup() }
+        let before = keyRows(harness)
+        await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            try await service.changeCredential(current: "123456", new: .pin6("654321"))
         }
-        #expect(!latch.isComplete, "cleared FIRST: even a failed sealed-store leg cannot leave a stale proof standing")
+        #expect(keyRows(harness) == before, "a refused re-key must leave salt, verifier, kind and wrap untouched")
+    }
+
+    // MARK: `setBiometricEnabled(true,…)` refuses before it can write the raw content key into the
+    // `.biometryCurrentSet` bypass row — and, just as importantly, before it flips the enabled flag.
+    @Test func enablingBiometricsRefusesARetiredWrapWithoutWritingABypass() async throws {
+        let (harness, service) = try await harnessWithLegacyWrap()
+        defer { harness.cleanup() }
+        let before = keyRows(harness)
+        await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            try await service.setBiometricEnabled(true, passcode: "123456")
+        }
+        #expect(keyRows(harness) == before, "a refused enable must not mint a bypass row or set the flag")
+    }
+
+    // MARK: `enrollRecoveryCustodian` refuses before it deletes the existing recovery blob — the
+    // one caller whose failure path would otherwise destroy the material that gives the key back.
+    @Test func enrollingACustodianRefusesARetiredWrapWithoutDeletingRecoveryMaterial() async throws {
+        let (harness, service) = try await harnessWithLegacyWrap()
+        defer { harness.cleanup() }
+        let publicKey = Data(repeating: 0x2B, count: FernletLockService.recoveryCustodianPublicKeyByteCount)
+        let before = keyRows(harness)
+        var sealCalls = 0
+        await #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
+            try await service.enrollRecoveryCustodian(
+                passcode: "123456",
+                signingPublicKey: publicKey,
+                keyAgreementPublicKey: publicKey,
+                ownKeyAgreementPublicKey: publicKey
+            ) { contentKey in
+                sealCalls += 1
+                return contentKey
+            }
+        }
+        #expect(sealCalls == 0, "the content key must never reach the sealing closure")
+        #expect(keyRows(harness) == before)
+        #expect(KeychainItem.load(for: .recoveryBlob, service: harness.serviceID) == nil)
     }
 }
 
@@ -889,15 +915,26 @@ final class FakeLockCryptoProvider: FernletLockCryptoProviding {
     }
 
     /// Registers and returns an UNPREFIXED wrap — the legacy-writer stand-in for service-level
-    /// migration tests (no shipping build can produce one; the fixture is the format). A UUID
-    /// string is hex digits plus dashes, so it can never accidentally start with `FLW2`.
+    /// tests of the retired format (no shipping build can produce one; the fixture IS the format).
+    /// A UUID string is hex digits plus dashes, so it can never accidentally start with `FLW2`.
+    ///
+    /// It is registered in the map like any other wrap, deliberately: the point of the pin it
+    /// feeds is that the row WOULD open if the format check were absent, so the refusal is proven
+    /// to come from the format and not from the fake not knowing the bytes.
     func makeLegacyWrap(contentKey: Data, wrappingKey: Data) -> Data {
         let wrapped = Data(UUID().uuidString.utf8)
         wrappedKeys[wrapped] = (wrappingKey, contentKey)
         return wrapped
     }
 
+    /// Mirrors production's format gate before the map lookup. A fake that opened a retired wrap
+    /// the shipping code refuses would make every service-level test agree with a reality that
+    /// does not exist — the fake's job is to stand in for the crypto, not to be more permissive
+    /// than it.
     func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
+        guard wrappedContentKey.starts(with: FernletLockCrypto.wrappedContentKeyFormatV2) else {
+            throw FernletLockError.contentKeyWrapFormatRetired
+        }
         guard let stored = wrappedKeys[wrappedContentKey],
               stored.wrappingKey == wrappingKeyData else {
             throw FernletLockError.invalidPasscode

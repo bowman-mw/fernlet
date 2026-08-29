@@ -39,9 +39,10 @@ struct CryptographicEscapeHatch: Sendable {
 /// ## Updating the pins
 ///
 /// Deliberately. A hatch removed by the crypto standardization round's Phase 3 or Phase 4
-/// decrements its label here in the same commit as the deletion, and §Escape-hatch abuse's table is
-/// updated to match. Both numbers reach zero for `legacy-read` when the last Class-A and Class-B
-/// legacy reader goes.
+/// decremented its label here in the same commit as the deletion, and §Escape-hatch abuse's table
+/// was updated to match. Both numbers reached zero for `legacy-read` when the last Class-A legacy
+/// reader went, and the row was REMOVED rather than left at zero — a label pinned at 0 reads as a
+/// category that still exists and happens to be empty, which is the opposite of what happened.
 ///
 /// Phase 4 took `legacy-read` 10 → 6 by deleting the four Class-B WIRE readers (`meshGroupPhotoV2`
 /// and the mesh group payload in `MeshNetworkManager`, the `proximityTransportV2` AAD selector and
@@ -49,18 +50,27 @@ struct CryptographicEscapeHatch: Sendable {
 ///
 /// Phase 3 then took it 6 → 3 by deleting three of the six Class-A AT-REST readers: the
 /// `PendingNarrativeBuffer` buffer-file open, `MediaAtRestCrypto.gcmOpen`'s unprefixed no-AAD
-/// branch, and `SealedPhotoBackupService`'s v1 digest comparison. The three that remain are the
-/// delicate ones — `ColumnCrypto`, `FernletLockService`'s content-key wrap, and
-/// `HeartDropSidecarKey`.
+/// branch, and `SealedPhotoBackupService`'s v1 digest comparison.
+///
+/// Phase 3's second half took it **3 → 0** with the three delicate ones: `ColumnCrypto`'s
+/// unprefixed no-AAD rung, `FernletLockService`'s unprefixed content-key unwrap, and
+/// `HeartDropSidecarKey`'s `FSC1` open. The same change removed the last
+/// `v2 device-bound read` — `ColumnCrypto`'s `0x02` rung, owner decision D2 — so that label
+/// leaves the pin entirely rather than sitting at zero.
+///
+/// **`legacy-read` is now absent from ``pinnedByLabel``, and that absence is the wall.** A
+/// re-introduced legacy reader fails ``everyEscapeHatchLabelIsPinnedAtItsOwnCount`` as "1 found, 0
+/// pinned" and ``theTotalEscapeHatchCountIsPinned`` as a seventh hatch, so restoring one is a
+/// deliberate act with a failing test attached — which is the end state the whole round was for.
+/// The six that remain are all annotations where the domain IS bound, just not within three lines
+/// of the call; none of them is debt.
 struct CryptographicEscapeHatchCensusTests {
 
     /// The label → count pin. The sum is the number §Escape-hatch abuse quotes.
     private static let pinnedByLabel: [String: Int] = [
-        "legacy-read": 3,
         "purpose-derived salt": 2,
         "key-derived": 2,
-        "authenticatedData-bound aad": 2,
-        "v2 device-bound read": 1
+        "authenticatedData-bound aad": 2
     ]
 
     /// The number of distinct files holding a hatch. §Escape-hatch abuse said 11; the tree has only
@@ -79,7 +89,13 @@ struct CryptographicEscapeHatchCensusTests {
     /// uniform: `PendingNarrativeBuffer.swift` and `MediaAtRestCrypto.swift` held only their one
     /// `legacy-read` each and left the set, while `SealedPhotoBackupService.swift` STAYS — its
     /// `authenticatedData-bound aad` hatch is untouched by this round.
-    private static let pinnedFileCount = 6
+    ///
+    /// Moved 6 → **3** by Phase 3's last three, and this time it IS uniform: `ColumnCrypto.swift`
+    /// (which held both the `legacy-read` and the `v2 device-bound read`), `FernletLockService.swift`
+    /// and `HeartDropSidecarKey.swift` each held only the hatches that were deleted, so all three
+    /// left the set. What remains is `SealedBackupService.swift`, `SealedPhotoBackupService.swift`
+    /// and `HeartDropSealer.swift` — no file in the tree carries a reader hatch any more.
+    private static let pinnedFileCount = 3
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,
     /// which is what ``proseMentionsCannotSilenceTheWall`` checks.

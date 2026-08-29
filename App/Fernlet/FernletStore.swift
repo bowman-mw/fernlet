@@ -193,17 +193,7 @@ final class FernletStore {
         derivedSignalsService.derivedSignals
     }
     var photowallSeeds: [PhotowallSeed] = []
-    var lockState: FernletLockState = .notConfigured {
-        didSet {
-            // §8 pin 2 of the Phase 2.6 design: the sealed-column migration status is
-            // session-scoped and must not survive a lock engage into anyone's NEXT session —
-            // duress or real. Riding the one mirror point (every lock-state transition lands
-            // here) makes the reset an invariant instead of a call site to remember.
-            if !lockState.isUnlocked(for: .privateHub), sealedColumnMigrationStatus != .idle {
-                sealedColumnMigrationStatus = .idle
-            }
-        }
-    }
+    var lockState: FernletLockState = .notConfigured
     /// Mirror of `FernletLockService.isDuressSessionActive`: true while the app is showing the
     /// DECOY because the duress PIN was entered (Phase 7).
     ///
@@ -5413,13 +5403,6 @@ final class FernletStore {
         // Then the local state: prekeys (keychain), peer bundle cache, outbox, durable dedup, and
         // the service's own identity cache (the 4th live instance).
         heartDropService.wipeForDeleteAll()
-        // The Phase 2.2 sidecar-format migration latch: the wipe just destroyed its entire
-        // subject — the sidecar files above AND (via `HeartPrekeyStore.wipeForDeleteAll()`'s
-        // service-wide delete) the key that sealed them — so the recorded proof predates the
-        // wipe and is cleared with it. The `hashVersionMigrationComplete` mirror-image case
-        // (subject destroyed → cleared), not the `ownPhotoKeyMigrationComplete` case (subject
-        // survives → kept); the next launch re-proves with a four-stat marker survey.
-        HeartDropSidecarMigrationLatch.resetForDeleteAll()
         // No `heartsAwayPurgePending` reset needed: it derives from the outbox this just emptied, so
         // the Settings "it'll keep trying" notice cannot outlive the wipe that made retrying
         // impossible — which is the honest reading, since nothing addressable is left.
@@ -5761,28 +5744,6 @@ final class FernletStore {
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
         migrateAndBindOwnPhotoKey()
-        migrateHeartDropSidecarFormat()
-    }
-
-    /// Crypto-standardization Phase 2.2: convert any `FSC1`-format heart-drop sidecar to `FSC2`,
-    /// once per launch until proven complete.
-    ///
-    /// Synchronous, on the main actor, after the UI is up — no detached task, unlike the photo
-    /// migrator, because the work does not warrant one: at most three opens/re-seals of files
-    /// that top out around 1 MB on the launches that still hold legacy bytes, and four `stat`s
-    /// afterwards (a set latch is revalidated with a marker-only survey every launch, so
-    /// observation always beats memory). Running on the main actor is also what makes the pass
-    /// atomic with respect to the `@MainActor` sidecar stores — no persist can interleave
-    /// mid-file. The store's injected `heartDropStorage` (never the production scope directly)
-    /// keeps scoped test stores migrating their own directories, and this timing means the
-    /// device is unlocked, so `.completeFileProtection` reads and the sidecars'
-    /// `WhenUnlockedThisDeviceOnly` seal key are both available — a locked-anyway edge lands in
-    /// an indeterminate bucket and retries next launch.
-    private func migrateHeartDropSidecarFormat() {
-        let migrator = HeartDropSidecarFormatMigrator.standard(scope: heartDropStorage)
-        if !migrator.runAtLaunch() {                       // R7: the Bool is never discarded
-            FernletAuditLog.log("heartdrop.sidecarFormat.incomplete")
-        }
     }
 
     /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media
@@ -5870,73 +5831,11 @@ final class FernletStore {
     private(set) var mediaAtRestLaunchPassLatched: Bool?
     /// When the launch media pass finished.
     private(set) var mediaAtRestLaunchPassCompletedAt: Date?
-    #endif
 
-    // MARK: - Sealed-column format migration (crypto-standardization Phase 2.6)
-
-    /// D3 session status of the Phase 2.6 sealed-column format migration — the in-hub status
-    /// capsule's feed. Session state ONLY (the `ownPhotoBackupVerifiedUnreadable` precedent —
-    /// explicitly no new `UserDefaults` key for display): a lock engage resets it to `.idle`,
-    /// so no prior session's state can render into anyone's next session, duress or real.
-    private(set) var sealedColumnMigrationStatus: SealedColumnMigrationStatus = .idle
-
-    /// The ONE render condition for the hub's migration status capsule — the single filter both
-    /// `PrivateHubView` and the tests read (the `visibleSections` lesson: two copies of a
-    /// filter is how the UI diverges from the tests). `nil` means render nothing. Duress-blind
-    /// (§8 pin 1): a decoy hub never shows any migration state — a "couldn't be re-secured yet"
-    /// line over an apparently empty store would announce that hidden sealed entries exist.
-    var sealedColumnMigrationCapsuleStatus: SealedColumnMigrationStatus? {
-        guard !duressSessionActive else { return nil }
-        return sealedColumnMigrationStatus == .idle ? nil : sealedColumnMigrationStatus
-    }
-
-    /// Process-local: some pass in this process converted ≥ 1 row — the `.finished` epoch flag
-    /// covering the convert-then-relock-then-confirm split (§8). Across a process death the
-    /// capsule is forfeited and the audit line remains the record.
-    @ObservationIgnored private var sealedColumnMigrationConvertedThisProcess = false
-    /// In-flight guard (the 2.1 precedent): one funded run at a time; cleared when the run's
-    /// record lands, so a blocked pass can be re-funded at a later unlock.
-    ///
-    /// Deliberately TRACKED, unlike its `@ObservationIgnored` neighbours above: the DEBUG Phase 3
-    /// gate readout reads it in three places that all assume it is live — the reset control's
-    /// `.disabled`, that control's printed reason, and the fold's refusal to discharge while a pass
-    /// is writing the corpus. Untracked, the reset stayed tappable through a running pass and the
-    /// row never re-folded when one ended. Nothing about the 2.1 guard requires it to be untracked;
-    /// it is only ever written from a funded run's start and its record, never during a view update.
-    private(set) var sealedColumnMigrationInFlight = false
-    /// The once-per-process revalidation slot: a SET latch is re-checked with one keyless
-    /// census on the first funded trigger per process, then believed as a Bool. NOT consumed by
-    /// an `.unavailable` recheck (the next funded trigger retries).
-    @ObservationIgnored private(set) var sealedColumnLatchRevalidatedThisProcess = false
-
-    #if DEBUG
     /// The Phase 3 gate readout's process-scoped, non-persisted session (see
-    /// ``Phase3ReadoutSession``). Lives here because the sitting spans a Settings sheet DISMISSAL —
-    /// the sealed-column keyed pass can only be funded by a hub unlock, which is another tab.
+    /// ``Phase3ReadoutSession``). Lives here rather than on the view because a sitting spans a
+    /// Settings sheet DISMISSAL, and a reading taken before the dismissal must survive it.
     @ObservationIgnored let phase3ReadoutSession = Phase3ReadoutSession()
-
-    /// The last sealed-column migration trigger's witness — retained for the Phase 3 gate readout,
-    /// and observed so the row updates itself when a pass lands.
-    ///
-    /// **Replacement rule:** the witness is replaced only when the incoming one carries passes, or
-    /// when the existing one is nil. ``recordSealedColumnMigrationRun(latched:passResults:)`` is also
-    /// called with `passResults: []` from the cancelled-grace path, and an unconditional assignment
-    /// there would destroy the keyed witness the owner just earned and silently revert the row from
-    /// discharged to not-taken.
-    ///
-    /// Retained as typed state rather than through `FernletAuditLog.addCaptureHandler` because the
-    /// `.confirmed` revalidation branch logs NOTHING — the very state the readout most needs is
-    /// invisible to a capture handler, which would also be a permanent process-lifetime registrant.
-    private(set) var lastSealedColumnPassWitness: SealedColumnPassWitness?
-
-    /// Records a sealed-column witness under the replacement rule above.
-    private func retainSealedColumnWitness(_ witness: SealedColumnPassWitness) {
-        guard witness.isKeyedWitness || lastSealedColumnPassWitness == nil else { return }
-        lastSealedColumnPassWitness = witness
-        // The census half of that gate must be re-taken after a keyed pass, or a stale zero taken
-        // BEFORE the pass would be quoted beside it as if it described the corpus the pass left.
-        if witness.isKeyedWitness { phase3ReadoutSession.invalidateCensus() }
-    }
 
     /// Whether a readout-funded media pass is running (the control's in-flight guard; the migrator
     /// has none of its own).
@@ -5999,204 +5898,20 @@ final class FernletStore {
         )
     }
 
-    /// Clears the sealed-column keyed witness so the readout cannot fall back on a pre-reset pass.
-    ///
-    /// Called from the reset control, ordered BEFORE the reset is stamped so no fold can observe a
-    /// reset time beside a witness that predates it.
-    func clearSealedColumnPassWitness() {
-        lastSealedColumnPassWitness = nil
-    }
-
     /// Drops every Phase 3 readout reading held OUTSIDE ``phase3ReadoutSession``, then clears the
     /// session — the single point every wipe and the duress engage both go through.
     ///
-    /// `lastSealedColumnPassWitness` is the one retained value that reaches a VERDICT, and it lives
-    /// on the store rather than the session because the sitting spans a sheet dismissal. Clearing
-    /// only the session therefore left a pre-wipe keyed pass standing while the wipe supplied a
-    /// census zero over the emptied corpus for free — manufacturing exactly the "gate discharged"
-    /// reading `DeleteEverythingFlow` clears the session to prevent.
+    /// The launch media pass is the retained value that reaches a VERDICT, and it lives on the
+    /// store rather than the session because the sitting spans a sheet dismissal. Clearing only the
+    /// session would therefore leave a pre-wipe pass standing while the wipe supplied a census zero
+    /// over the emptied corpus for free — manufacturing exactly the "gate discharged" reading
+    /// `DeleteEverythingFlow` clears the session to prevent.
     func clearPhase3Evidence() {
-        lastSealedColumnPassWitness = nil
         mediaAtRestLaunchPassLatched = nil
         mediaAtRestLaunchPassCompletedAt = nil
         phase3ReadoutSession.clear()
     }
     #endif
-
-    /// R2/R5: how long a pass must have run — with ≥ 1 conversion — before the capsule shows
-    /// `.running`, so the steady-state clean pass never flickers (§8).
-    static let sealedColumnRunningCapsuleDelay: Duration = .seconds(1)
-
-    /// The `.privateHub` unlock's funding call for the Phase 2.6 sealed-column format migration.
-    ///
-    /// Unlock-frame budget, pinned (§1.2): NOTHING synchronous happens here beyond the
-    /// in-flight guard, the duress check, and one `UserDefaults` latch read. The §9
-    /// revalidation census (keyless but a full-corpus disk sweep) and the pass itself run
-    /// inside the detached utility task, after the same 300 ms first-frame grace the sealed
-    /// backup settlement takes — the migrator is a lower-priority tenant of the same unlock
-    /// tail. A duress unlock never funds (defense in depth on top of the key vend answering
-    /// nil for the decoy session).
-    ///
-    /// - Parameter keySource: The per-page content-key vend, wired by `ContentView` to
-    ///   `FernletLockService.contentKey(for: .privateHub)` — the shipped decrypt seam.
-    /// - Returns: Whether a detached run was funded (false for every early-out) — the pin the
-    ///   duress/in-flight/latch tests read.
-    /// Test seam (internal): when set, the trigger's synchronous latch read goes to this suite
-    /// instead of `UserDefaults.standard`, so no status test ever touches the device's real
-    /// completion state. `nil` in production — the wiring is byte-identical then.
-    @ObservationIgnored var sealedColumnMigrationLatchDefaultsForTesting: UserDefaults?
-
-    /// Test seam (internal): when set, the funded detached task calls THIS after its 300 ms
-    /// grace instead of the production body, so no status test ever reaches
-    /// `PrivatePersistenceController.shared` or `UserDefaults.standard` through a stray task.
-    /// The test's body owns its own isolated latch/controller and drives the record methods
-    /// itself. `nil` in production — the wiring is byte-identical then.
-    @ObservationIgnored var sealedColumnMigrationTaskBodyForTesting:
-        (@Sendable (_ latchWasComplete: Bool, _ keySource: @escaping @Sendable () async -> SymmetricKey?) async -> Void)?
-
-    func runSealedColumnFormatMigrationIfNeeded(
-        keySource: @escaping @Sendable () async -> SymmetricKey?
-    ) -> Bool {
-        guard !sealedColumnMigrationInFlight else { return false }
-        guard !duressSessionActive else { return false }
-        let latchWasComplete = SealedColumnFormatMigrator
-            .latch(defaults: sealedColumnMigrationLatchDefaultsForTesting ?? .standard)
-            .isComplete
-        if latchWasComplete && sealedColumnLatchRevalidatedThisProcess { return false }
-        sealedColumnMigrationInFlight = true
-        let taskBody = sealedColumnMigrationTaskBodyForTesting
-        Task.detached(priority: .utility) { [weak self] in
-            // First-page deferral (§1.2): give authentication, lock-gate removal, and the hub's
-            // first frame priority — the same courtesy `drainSealedBackupSettlements` takes.
-            do {
-                try await Task.sleep(for: .milliseconds(300))
-            } catch {
-                await self?.recordSealedColumnMigrationRun(latched: false, passResults: [])
-                return
-            }
-            if let taskBody {
-                await taskBody(latchWasComplete, keySource)
-                return
-            }
-            await Self.runSealedColumnMigrationTask(
-                store: self, latchWasComplete: latchWasComplete, keySource: keySource
-            )
-        }
-        return true
-    }
-
-    /// The detached task's body: the once-per-process revalidation of a set latch (before any
-    /// key vend), then the migrator run with the D3 observation wiring. Static + nonisolated so
-    /// the migrator and its non-Sendable controller reference are built INSIDE the task (the
-    /// 2.3 shape) — only Sendable values cross the boundary.
-    private nonisolated static func runSealedColumnMigrationTask(
-        store: FernletStore?,
-        latchWasComplete: Bool,
-        keySource: @escaping @Sendable () async -> SymmetricKey?
-    ) async {
-        let controller = PrivatePersistenceController.shared
-        let latch = SealedColumnFormatMigrator.latch()
-        if latchWasComplete {
-            let outcome = SealedColumnFormatMigrator.revalidate(controller: controller, latch: latch)
-            let shouldRunPass = await store?.recordSealedColumnRevalidationOutcome(outcome) ?? false
-            guard shouldRunPass else { return }
-        }
-        var migrator = SealedColumnFormatMigrator(controller: controller, keySource: keySource, latch: latch)
-        let passLog = SealedColumnMigrationPassLog()
-        let runStart = ContinuousClock.now
-        migrator.progressObserver = { [weak store] event in
-            switch event {
-            case .pageCommitted(let convertedSoFar):
-                let elapsed = runStart.duration(to: .now)
-                Task { @MainActor [weak store] in
-                    store?.recordSealedColumnMigrationProgress(convertedSoFar: convertedSoFar, elapsed: elapsed)
-                }
-            case .passEnded(let result):
-                passLog.append(result)
-            }
-        }
-        let latched = await migrator.run()
-        await store?.recordSealedColumnMigrationRun(latched: latched, passResults: passLog.snapshot)
-    }
-
-    /// Folds one §9 revalidation outcome into the process state.
-    ///
-    /// - Returns: whether the funded task should continue into a keyed pass (only after a
-    ///   `.reset` — the latch was contradicted and cleared).
-    func recordSealedColumnRevalidationOutcome(
-        _ outcome: SealedColumnFormatMigrator.RevalidationOutcome
-    ) -> Bool {
-        #if DEBUG
-        // The `.confirmed` and `.unavailable` legs return WITHOUT calling
-        // `recordSealedColumnMigrationRun`, so without this second site a silently-confirmed latch
-        // would leave the readout unable to tell "confirmed keylessly" from "nothing ran".
-        retainSealedColumnWitness(SealedColumnPassWitness(
-            stamp: Phase3Stamp(label: "sealed-column revalidation"),
-            revalidation: outcome,
-            latched: outcome != .reset,
-            passes: []
-        ))
-        #endif
-        switch outcome {
-        case .confirmed:
-            sealedColumnLatchRevalidatedThisProcess = true
-            sealedColumnMigrationInFlight = false
-            return false
-        case .unavailable:
-            // Neither confirmation nor a reset: the slot is NOT consumed, so the next funded
-            // trigger retries the recheck. The audit line already landed in `revalidate`.
-            sealedColumnMigrationInFlight = false
-            return false
-        case .reset:
-            sealedColumnLatchRevalidatedThisProcess = true
-            return true
-        }
-    }
-
-    /// Mid-pass D3 progress: shows `.running` only once a pass has both run longer than
-    /// ``sealedColumnRunningCapsuleDelay`` and converted at least one row (§8) — the
-    /// steady-state clean pass never flickers the capsule.
-    func recordSealedColumnMigrationProgress(convertedSoFar: Int, elapsed: Duration) {
-        guard lockState.isUnlocked(for: .privateHub), !duressSessionActive else { return }
-        guard sealedColumnMigrationStatus == .idle || sealedColumnMigrationStatus == .running else { return }
-        guard convertedSoFar >= 1, elapsed > Self.sealedColumnRunningCapsuleDelay else { return }
-        sealedColumnMigrationStatus = .running
-    }
-
-    /// Records a finished migration run into the D3 session status (§8):
-    /// - latched + converted (this run, or earlier this process) ⇒ `.finished` for the rest of
-    ///   the hub session;
-    /// - latched with nothing ever converted ⇒ `.idle` (the steady state shows nothing);
-    /// - a stop whose ONLY reason is the key vend answering nil ⇒ `.idle`, never `.blocked`
-    ///   (§8 pin 3 — the duress session's own would-be pass stops exactly this way, and the
-    ///   `sealedColumn.formatMigrationPass` audit line remains the nothing-silent record);
-    /// - anything else unlatched ⇒ `.blocked` ("Fernlet will retry" — details in the ledger).
-    func recordSealedColumnMigrationRun(latched: Bool, passResults: [SealedColumnMigrationResult]) {
-        #if DEBUG
-        retainSealedColumnWitness(SealedColumnPassWitness(
-            stamp: Phase3Stamp(label: "sealed-column keyed run"),
-            revalidation: nil,
-            latched: latched,
-            passes: passResults
-        ))
-        #endif
-        sealedColumnMigrationInFlight = false
-        if latched { sealedColumnLatchRevalidatedThisProcess = true }
-        let convertedThisRun = passResults.reduce(0) { $0 + $1.convertedTotal }
-        if convertedThisRun > 0 { sealedColumnMigrationConvertedThisProcess = true }
-        guard lockState.isUnlocked(for: .privateHub), !duressSessionActive else {
-            // The session the run belonged to is over; the lock-engage reset governs.
-            sealedColumnMigrationStatus = .idle
-            return
-        }
-        if latched {
-            sealedColumnMigrationStatus = sealedColumnMigrationConvertedThisProcess ? .finished : .idle
-        } else if let finalResult = passResults.last, !finalResult.stoppedOnlyByKeyRevocation {
-            sealedColumnMigrationStatus = .blocked
-        } else {
-            sealedColumnMigrationStatus = .idle
-        }
-    }
 
     /// Whether the user's own-photo key is bound to this device — read from the keychain row itself,
     /// then held as observable state so Privacy & Data can reflect it without polling.
@@ -6697,44 +6412,4 @@ extension FernletStore: SealedBackupContext {
 
 extension FernletStore: HealthSyncContext {
     func scheduleSnapshotSave() { snapshotSaveCoordinator.schedule() }
-}
-
-// MARK: - Models
-
-/// D3 session status of the Phase 2.6 sealed-column format migration — what the private hub's
-/// status capsule renders (via `FernletStore.sealedColumnMigrationCapsuleStatus`, the one render
-/// condition). Session state only: never persisted, reset to `.idle` whenever the lock engages.
-nonisolated enum SealedColumnMigrationStatus: Equatable {
-    /// Nothing to show: no pass running, or the latched steady state.
-    case idle
-    /// A pass has run > 1 s and converted ≥ 1 row — "Securing your private entries…".
-    case running
-    /// The last run ended unlatched with a real failure (never for a key-revocation-only stop) —
-    /// "Some entries couldn't be re-secured yet. Fernlet will retry." Details go to the audit
-    /// ledger, never the UI.
-    case blocked
-    /// A run latched and rows were converted this process — "Your entries are secured." Shown
-    /// for the remainder of the hub session, then cleared by the lock-engage reset.
-    case finished
-}
-
-/// Thread-safe accumulator for the detached migration task's per-pass results, filled by the
-/// migrator's `@Sendable` progress observer and drained once after `run()` returns — so the
-/// final status computation sees every pass, in order, with no cross-task ordering races.
-///
-/// `@unchecked Sendable` on the same documented invariant as the sealed repositories: the one
-/// mutable field is only ever touched under `lock`.
-private nonisolated final class SealedColumnMigrationPassLog: @unchecked Sendable {
-    private let lock = NSLock()
-    private var results: [SealedColumnMigrationResult] = []
-
-    /// Appends one finished pass's result.
-    func append(_ result: SealedColumnMigrationResult) {
-        lock.withLock { results.append(result) }
-    }
-
-    /// Every pass result recorded so far, in completion order.
-    var snapshot: [SealedColumnMigrationResult] {
-        lock.withLock { results }
-    }
 }

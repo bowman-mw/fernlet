@@ -49,6 +49,18 @@
         }
       }
     },
+    "lock.error.contentKeyWrapFormatRetired" : {
+      "comment" : "Shown when the passcode was CORRECT but the stored content-key wrap is in a retired at-rest format this build no longer reads. Must NOT suggest retrying the passcode — nothing about the entry was wrong — and must name the destructive reset as the only way forward.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This phone's saved key is in an older format Fernlet no longer opens. Reset app lock to continue."
+          }
+        }
+      }
+    },
     "lock.error.cooldownHours" : {
       "comment" : "Shown during the failed-attempt cooldown when over an hour is left. The argument is a whole number of hours; 'h' is the abbreviated unit.",
       "extractionState" : "extracted_with_value",

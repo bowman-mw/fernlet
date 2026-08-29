@@ -17,21 +17,20 @@ import Foundation
 /// the purpose is part of the at-rest format: changing a repository's purpose orphans
 /// every ciphertext already sealed under the old purpose.
 ///
-/// **At-rest format (two coexisting generations).** *Legacy:* the sealed box's raw
-/// `combined` bytes, no AAD. *Device-bound v2* (all new writes when a binding ID is
-/// available): a ``deviceBoundFormatVersion`` prefix byte followed by `combined`,
-/// sealed with this install's ``DeviceBindingID`` as ChaChaPoly additional
-/// authenticated data — so the ciphertext itself refuses to authenticate on any
-/// other install, not just under a different key. Opens are dual-path: a
-/// v2-prefixed blob is tried with the AAD first, then every blob falls back to the
-/// legacy no-AAD open (which also disambiguates the 1-in-256 legacy blob whose
-/// first ciphertext byte happens to equal the version tag). Legacy rows are
-/// progressively rebound because every routine re-seal — edits, the
-/// device-key→user-key migration at lock setup, period restore-on-unhide — writes
-/// v2. When no binding ID is available, sealing **refuses**: it throws
-/// ``SealedColumnStrictSealError/bindingUnavailable`` rather than writing an
-/// un-domained legacy blob (the write-side fail-close of the crypto
-/// standardization round's Phase 3 — see ``sealPlaintextV3Strict(_:contentKey:)``).
+/// **At-rest format — ONE generation.** Every blob is `0x03`
+/// (``deviceBoundFormatVersionV3``) followed by the sealed box's `combined` bytes, sealed
+/// with this column's purpose ‖ this install's ``DeviceBindingID`` as ChaChaPoly additional
+/// authenticated data — so the ciphertext refuses to authenticate on any other install, not
+/// just under a different key. Both halves of the round's Phase 3 landed here: sealing
+/// **refuses** when no binding ID is available
+/// (``SealedColumnStrictSealError/bindingUnavailable``, owner decision D4) rather than
+/// writing an un-domained blob, and opening reads V3 and nothing else.
+///
+/// Two earlier generations were readable until then — an unprefixed no-AAD blob (`legacy`) and
+/// a `0x02` binding-only-AAD blob (`v2`) — and their rungs were deleted together with the
+/// migrator that converted through them. Their bytes are still CLASSIFIED, by
+/// ``ColumnCryptoStoredFormat``, so a refusal can name what it refused; they are simply no
+/// longer opened. See ``SealedColumnOpenError``.
 ///
 /// Explicitly `nonisolated` (overriding this module's MainActor default isolation):
 /// it is a pure, stateless crypto value type called synchronously from the
@@ -44,30 +43,52 @@ import Foundation
 ///
 /// Failure modes: sealing rethrows CryptoKit errors, and throws
 /// ``SealedColumnStrictSealError/bindingUnavailable`` when no durable install binding
-/// exists (a save FAILS rather than degrading to the legacy format); opening throws when the blob is
-/// truncated, tampered with, or sealed under a different content key or label
-/// (Poly1305 authentication failure). One retryable exception: when a v2-tagged blob
-/// cannot be opened because the install-binding keychain read *errored* (as opposed
-/// to the row being absent), the open throws `DeviceBindingID.ReadError` instead of
-/// an authentication failure — a transient keychain outage means "try again", not
-/// "data corrupted". The `Codable` variants additionally rethrow JSON
-/// encoding/decoding errors.
+/// exists (a save FAILS rather than degrading to an older format). Opening throws
+/// ``SealedColumnOpenError`` — naming a retired format, an empty column, or an absent install
+/// binding — when the bytes are not openable V3 at all, and a Poly1305 authentication failure
+/// when a V3 blob is truncated, tampered with, or sealed under a different content key, label,
+/// or install. One retryable exception: when the install-binding keychain read *errored* (as
+/// opposed to the row being absent), the open throws `DeviceBindingID.ReadError` instead of
+/// either — a transient keychain outage means "try again", not "data corrupted". The `Codable`
+/// variants additionally rethrow JSON encoding/decoding errors.
 public nonisolated struct ColumnCrypto: Sendable {
-    /// Which branch of the shipping reader's dispatch actually opened a stored blob — the receipt
-    /// ``openReportingRung(_:contentKey:)`` returns beside the plaintext, so the Phase 2.6 format
-    /// migrator can tally *proven-by-open* generations instead of trusting marker bytes.
+    /// Why a stored sealed-column blob could not be opened, **named by what the bytes are**.
+    ///
+    /// Phase 3 of the crypto standardization round left V3 as the only readable generation. The
+    /// two rungs below it — the `0x02` binding-only open and the unconditional unprefixed no-AAD
+    /// fallback — are gone, and with them the ability to open the bytes they read. What replaces
+    /// them is this: a refusal that says *which* format it found, because "the bytes are V2 and
+    /// this build only reads V3" is something a person can act on and "decryption failed" is not.
+    ///
+    /// Deliberately NOT thrown for a tampered or wrong-key V3 blob: that is a genuine
+    /// authentication failure and CryptoKit's own error is the honest answer there. And
+    /// deliberately NOT thrown when `DeviceBindingID.currentForOpen()` *errors* — that keeps
+    /// throwing ``DeviceBindingID/ReadError``, which is retryable by contract, so a transient
+    /// keychain outage never masquerades as "your data is in a dead format".
     ///
     /// `nonisolated` (overriding this module's MainActor default isolation) and `Sendable` for the
     /// same reason ``ColumnCrypto`` itself is: a pure value crossing `performAndWait` closures.
-    public nonisolated enum SealedColumnOpenRung: Sendable, Equatable {
-        /// The `0x03` branch: purpose + binding AAD authenticated.
-        case v3
-        /// The `0x02` branch: binding-only AAD authenticated.
-        case v2
-        /// The unconditional no-AAD fallback. `markerCollision` is non-nil when the first byte was
-        /// `0x03`/`0x02` and the marked attempt failed — the 1-in-256 collided-sliver legacy blob,
-        /// now proven legacy *by open* rather than inferred from a byte.
-        case legacy(markerCollision: ColumnCryptoStoredFormat?)
+    public nonisolated enum SealedColumnOpenError: Error, Sendable, Equatable {
+        /// The blob's marker byte says it is a generation this build no longer reads: `0x02`
+        /// (device-bound v2, binding-only AAD) or no marker at all (the pre-binding legacy blob).
+        /// Terminal — nothing here can open it, and no migrator can either, because the migrator
+        /// converted THROUGH the rung that is gone.
+        ///
+        /// The classification is exact for ``ColumnCryptoStoredFormat/unprefixed`` and an upper
+        /// bound for ``ColumnCryptoStoredFormat/v2Marked``: a V3 blob is never misreported, but a
+        /// legacy blob whose random first nonce byte happened to equal `0x02` is reported as V2.
+        /// Both readings mean the same thing to a caller — this build cannot open these bytes.
+        case retiredFormat(ColumnCryptoStoredFormat)
+        /// The column holds zero bytes. No writer produces `Data()` and every real sealed blob is
+        /// at least nonce + tag, so this is a store fault rather than a format — Phase 2.6's
+        /// "empty bytes are corruption" finding, kept as its own case so it can never be filed as
+        /// a retired FORMAT and quietly counted with the legacy population.
+        case emptyBlob
+        /// The blob is V3 but the install binding its AAD needs is authoritatively ABSENT (not
+        /// unreadable — that throws ``DeviceBindingID/ReadError``). The AAD cannot be
+        /// reconstructed, so the blob cannot be opened on this install. Terminal, and distinct
+        /// from an authentication failure: nothing is wrong with the ciphertext.
+        case installBindingMissing
     }
 
     /// Refusal thrown by ``sealPlaintextV3Strict(_:contentKey:)`` — the ONE seal entry — when it
@@ -89,10 +110,15 @@ public nonisolated struct ColumnCrypto: Sendable {
     /// from every other column sealed under the same content key.
     let purpose: CryptographicPurpose
 
-    /// Version tag prefixed to device-bound (v2) sealed blobs. Part of the at-rest
-    /// format: changing it orphans every v2 ciphertext already written (the open path
-    /// would stop recognizing the prefix and misparse the blob as legacy).
+    /// Version tag of the retired device-bound v2 blob (binding-only AAD). **A CLASSIFIER, not a
+    /// reader** since Phase 3 deleted the v2 rung: nothing opens these bytes any more, and this
+    /// constant survives only so ``ColumnCryptoStoredFormat`` can tell a caller *which* retired
+    /// generation it is refusing. Changing it would silently reclassify every remaining v2 blob as
+    /// unprefixed legacy — a worse refusal, not a broken one, but still a lie.
     static let deviceBoundFormatVersionV2: UInt8 = 0x02
+    /// Version tag prefixed to every sealed blob this build writes or reads. Part of the at-rest
+    /// format: changing it orphans every ciphertext already written, because the open path would
+    /// stop recognizing the prefix and refuse the blob as a retired format.
     static let deviceBoundFormatVersionV3: UInt8 = 0x03
 
     /// Creates a helper bound to one reviewed column purpose.
@@ -202,8 +228,9 @@ public nonisolated struct ColumnCrypto: Sendable {
     /// copy can grow. The cost is deliberate and accepted: a sealed save can now FAIL where it used
     /// to succeed in the wrong format.
     ///
-    /// The `V3Strict` name is kept rather than renamed to `sealPlaintext`: it is public API the
-    /// migrator calls, and it still says exactly what the method does — v3 or nothing.
+    /// The `V3Strict` name is kept rather than renamed to `sealPlaintext`: it still says exactly
+    /// what the method does — v3 or nothing — which is now the whole of the surface's format story
+    /// on the write side and the read side alike.
     ///
     /// - Parameters:
     ///   - plaintext: The exact bytes to seal (byte-level — no UTF-8 or JSON semantics).
@@ -221,73 +248,51 @@ public nonisolated struct ColumnCrypto: Sendable {
         return Data([Self.deviceBoundFormatVersionV3]) + combined
     }
 
-    /// Opens a sealed blob of every at-rest generation: tries device-bound v3 (purpose + binding),
-    /// then v2 (binding only), then falls back to the legacy no-AAD open of the whole blob.
-    /// This keeps every
-    /// pre-binding row readable AND resolves the rare legacy blob whose first
-    /// ciphertext byte happens to equal the version tag.
+    /// Opens a sealed blob. **V3 is the only readable generation**: `0x03` ‖ `combined`,
+    /// authenticated with `purpose ‖ binding` as AAD.
     ///
-    /// - Important: Throws on authentication failure in *both* paths — a truncated or
-    ///   tampered blob, one sealed under a different content key or label, or a v2
-    ///   blob sealed by a different install (its AAD cannot be reproduced here). One
-    ///   distinct, retryable case: when the blob is version-tagged, the install-binding
-    ///   keychain read *errors* (`DeviceBindingID.ReadError` — the row's state is
-    ///   unknown, as opposed to authoritatively absent), and the legacy fallback cannot
-    ///   open the blob either, that read error is rethrown in place of the fallback's
-    ///   authentication error — so a transient keychain outage surfaces as "try again",
-    ///   never as corrupted data, matching the seal path's graceful degradation.
+    /// ## What was deleted, and what took its place
     ///
-    /// Implemented as `openReportingRung(...).plaintext`, so the reader and the Phase 2.6
-    /// migrator run ONE dispatch that cannot fork.
+    /// This used to be a three-rung ladder — try v3, then v2 (binding-only AAD), then fall back
+    /// unconditionally to an unprefixed no-AAD open of the whole blob, which also disambiguated
+    /// the rare legacy blob whose first ciphertext byte happened to equal a version tag. Phase 3
+    /// of the crypto standardization round deleted the lower two rungs (the `legacy-read` hatch
+    /// and the `v2 device-bound read` hatch, owner decision D2), leaving one at-rest format for
+    /// this surface. Their healer went with them: `SealedColumnFormatMigrator` converted THROUGH
+    /// this dispatch, so with the rungs gone it could no longer heal anything.
+    ///
+    /// Bytes those rungs used to open now throw ``SealedColumnOpenError/retiredFormat(_:)``,
+    /// naming the generation the marker byte reports — the classifier
+    /// (``ColumnCryptoStoredFormat``) OUTLIVES the reader precisely so the refusal can say what it
+    /// refused.
+    ///
+    /// - Important: Three failures, deliberately kept apart. A **retired format**, an **empty
+    ///   column**, or an **authoritatively absent install binding** each throw their own
+    ///   ``SealedColumnOpenError`` case — terminal, and none of them an authentication claim. A
+    ///   V3 blob that is truncated, tampered with, or sealed under a different content key or
+    ///   install fails with CryptoKit's own authentication error, which is the honest answer
+    ///   there. And when the install-binding keychain read *errors* — the row's state unknown, as
+    ///   opposed to authoritatively absent — ``DeviceBindingID/ReadError`` propagates unchanged,
+    ///   so a transient keychain outage still surfaces as "try again" and never as corrupted data.
+    ///   That distinction was the reason `currentForOpen()` exists and it survives the deletion.
     private func openBlob(_ data: Data, contentKey: SymmetricKey) throws -> Data {
-        try openReportingRung(data, contentKey: contentKey).plaintext
-    }
-
-    /// ``openBlob(_:contentKey:)`` with a receipt: same dispatch, same unconditional legacy
-    /// fallback, same `ReadError` precedence — this IS the shipping reader's dispatch (`openBlob`
-    /// delegates here), returning which rung actually authenticated the blob. The Phase 2.6
-    /// migrator opens every stored blob through this so its tallies are *proven-by-open*, the
-    /// keyed second witness that resolves the census's 1-in-256 collided marker sliver.
-    ///
-    /// - Returns: The plaintext plus the ``SealedColumnOpenRung`` that opened it.
-    /// - Throws: Exactly what `openBlob` throws — an authentication failure when no rung opens
-    ///   the blob, with `DeviceBindingID.ReadError` taking precedence when a version-tagged
-    ///   blob's binding read errored and the legacy fallback failed too.
-    public func openReportingRung(
-        _ data: Data,
-        contentKey: SymmetricKey
-    ) throws -> (plaintext: Data, rung: SealedColumnOpenRung) {
+        let format = ColumnCryptoStoredFormat.classify(data)
+        switch format {
+        case .v3Marked:
+            break
+        case .empty:
+            throw SealedColumnOpenError.emptyBlob
+        case .v2Marked, .unprefixed:
+            throw SealedColumnOpenError.retiredFormat(format)
+        }
+        // Outside any `try?`: a ReadError here means the binding row's state is UNKNOWN, and it
+        // must reach the caller as itself rather than be flattened into an open failure.
+        guard let binding = try DeviceBindingID.currentForOpen() else {
+            throw SealedColumnOpenError.installBindingMissing
+        }
         let key = columnKey(from: contentKey)
-        var bindingReadError: (any Error)?
-        if data.first == Self.deviceBoundFormatVersionV3 {
-            do {
-                if let binding = try DeviceBindingID.currentForOpen(),
-                   let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
-                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: purpose.data + binding) {
-                    return (plaintext, .v3)
-                }
-            } catch {
-                bindingReadError = error
-            }
-        }
-        if data.first == Self.deviceBoundFormatVersionV2 {
-            do {
-                if let binding = try DeviceBindingID.currentForOpen(),
-                   let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
-                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) { // cryptographic-domain: v2 device-bound read
-                    return (plaintext, .v2)
-                }
-            } catch {
-                bindingReadError = error
-            }
-        }
-        do {
-            let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key) // cryptographic-domain: legacy-read
-            let marker = ColumnCryptoStoredFormat.classify(data)
-            return (plaintext, .legacy(markerCollision: marker.isMarkerAmbiguous ? marker : nil))
-        } catch {
-            throw bindingReadError ?? error
-        }
+        let box = try ChaChaPoly.SealedBox(combined: data.dropFirst())
+        return try ChaChaPoly.open(box, using: key, authenticating: purpose.data + binding)
     }
 
     // MARK: - Key derivation

@@ -2,14 +2,18 @@
 // FernletTests
 //
 // The stateful half of the Phase 3 gate readout: `Phase3ReadoutSession` (the sitting's
-// process-scoped home for every purchased reading, including the seven-step checklist) and the two
-// store-side clears that stand between a wipe and a false PASS.
+// process-scoped home for every purchased reading, including the five-step checklist) and the
+// store-side clear that stands between a wipe and a stale reading.
 //
 // The fold has `Phase3GateReadoutTests`; this file exists because none of the rules below live in
 // the fold. The checklist's done-states, the two fences (`scanGeneration` and `epoch`), the probe
-// cap's eviction policy and `clear()` were 300+ lines of untested state — and the one reading that
-// reaches a verdict, `FernletStore.lastSealedColumnPassWitness`, deliberately lives OUTSIDE the
-// session, which is exactly why clearing the session alone was not enough.
+// cap's eviction policy and `clear()` were 300+ lines of untested state.
+//
+// It used to also pin a store-side keyed sealed-column witness that lived OUTSIDE the session, so
+// that clearing the session alone could not manufacture a discharge. That witness, the migrator
+// that produced it and the store properties that held it all went with `ColumnCrypto`'s legacy read
+// rung; the session is now the whole of what a wipe has to reach, and the duress test below is what
+// pins that it still does.
 //
 // Deliberately NOT wrapped in `#if DEBUG`, for the reason `CryptoFormatCensusTests` states: the
 // scheme pins the test action to Debug, so guarding the suite would trade a compile error nobody
@@ -37,9 +41,7 @@ struct Phase3ReadoutSessionTests {
     }
 
     private func latches() -> Phase3LatchReadings {
-        Phase3LatchReadings(sealedColumn: true, mediaAtRest: true,
-                            ownPhotoKey: true, heartDropSidecar: true, sealedPhotoBackup: true,
-                            lockWrapRow: true)
+        Phase3LatchReadings(mediaAtRest: true, ownPhotoKey: true, sealedPhotoBackup: true)
     }
 
     private func readings() -> CryptoFormatCensus.Readings {
@@ -62,57 +64,34 @@ struct Phase3ReadoutSessionTests {
         [.meal: .noManifestReturned]
     }
 
-    private func keyedWitness(offset: TimeInterval) -> SealedColumnPassWitness {
-        SealedColumnPassWitness(
-            stamp: stamp("sealed-column keyed run", offset: offset),
-            revalidation: nil,
-            latched: true,
-            passes: [SealedColumnMigrationResult(columns: [:], rowsScanned: 4, rowsAvailable: 4)]
-        )
-    }
-
     // MARK: - The checklist
 
-    /// Step 2 is the one step whose done-state cannot be derived — Auto-Lock is a device setting no
-    /// app-side reading answers, and a diagnostic must not mutate one. It must render not-done
-    /// permanently and say why, rather than being "fixed" into a claim nobody observed.
-    @Test func theAutoLockStepIsNeverMarkedDone() {
+    /// The checklist is FIVE steps, and every one of them derives its done-state from an observation
+    /// actually taken. It was seven: the reset → unlock ritual that funded the keyed sealed-column
+    /// pass, and the "turn Auto-Lock off" step that existed only because that pass re-vended the hub
+    /// key per page. Both went with the migrator. The Auto-Lock step is the one this pins by
+    /// absence — it was the single step whose done-state could never be derived, so leaving it would
+    /// have meant a permanently unticked instruction to prepare for work nothing can now do.
+    @Test func theChecklistIsFiveDerivableSteps() {
         let session = Phase3ReadoutSession()
-        let step = session.checklist(lastFullPassCompletedAt: Date(),
-                                     sealedColumnWitness: keyedWitness(offset: 0))[1]
-        #expect(step.title.hasPrefix("2."))
-        #expect(!step.isDone)
-        #expect(step.detail.contains("cannot be observed"))
+        let steps = session.checklist(lastFullPassCompletedAt: nil)
+        #expect(steps.count == 5)
+        #expect(steps.map { String($0.title.prefix(2)) } == ["1.", "2.", "3.", "4.", "5."])
+        #expect(steps.allSatisfy { !$0.title.contains("Auto-Lock") })
+        #expect(steps.allSatisfy { !$0.title.contains("sealed-column") })
     }
 
-    /// Step 7 flips only for a KEYED witness stamped AFTER this sitting's reset. A passless witness
-    /// (the cancelled-grace shape) or a pass that predates the reset must leave it open — it is the
-    /// on-screen cross-reference to the freshness rule the sealed-column verdict enforces.
-    @Test func theSealedColumnStepFlipsOnlyForAKeyedPassAfterTheReset() {
-        let session = Phase3ReadoutSession()
-        func step(_ witness: SealedColumnPassWitness?) -> Phase3SittingStep {
-            session.checklist(lastFullPassCompletedAt: nil, sealedColumnWitness: witness)[6]
-        }
-        #expect(!step(keyedWitness(offset: 60)).isDone, "no reset taken: nothing to postdate")
-
-        session.recordSealedColumnReset(at: Self.epoch.addingTimeInterval(30))
-        #expect(!step(keyedWitness(offset: 0)).isDone, "a pass predating the reset is not the witness")
-        #expect(!step(SealedColumnPassWitness(stamp: stamp("sealed-column revalidation", offset: 60),
-                                              revalidation: .confirmed, latched: true, passes: [])).isDone,
-                "a KEYLESS revalidation is not the keyed pass step 7 asks for")
-        #expect(step(keyedWitness(offset: 60)).isDone)
-    }
-
-    /// Step 4 is done only when the full pass landed AFTER probe #1 — a pass that ran before the
+    /// Step 3 is done only when the full pass landed AFTER probe #1 — a pass that ran before the
     /// pre-Retry probe heals nothing the probe could have seen.
     @Test func theRetryStepRequiresTheFullPassToPostdateTheFirstProbe() {
         let session = Phase3ReadoutSession()
         func step(_ completedAt: Date?) -> Phase3SittingStep {
-            session.checklist(lastFullPassCompletedAt: completedAt, sealedColumnWitness: nil)[3]
+            session.checklist(lastFullPassCompletedAt: completedAt)[2]
         }
+        #expect(step(nil).title.hasPrefix("3."))
         #expect(!step(nil).isDone)
         session.recordManifests(manifestReadings(), at: Self.epoch.addingTimeInterval(30))
-        #expect(!step(Self.epoch).isDone, "a pass before probe #1 does not tick step 4")
+        #expect(!step(Self.epoch).isDone, "a pass before probe #1 does not tick step 3")
         #expect(step(Self.epoch.addingTimeInterval(60)).isDone)
     }
 
@@ -171,13 +150,11 @@ struct Phase3ReadoutSessionTests {
     @Test func clearEmptiesEveryPurchasedReading() {
         let session = Phase3ReadoutSession()
         session.recordScan(census: readings(), latches: latches())
-        session.recordPreResetSnapshot(latches())
         session.recordManifests(manifestReadings())
         session.recordBodyProbe(.counted(2, truncatedAtPageCap: false), for: .meal)
         session.recordMediaWitness(MediaPassWitness(stamp: stamp("media at-rest pass"),
                                                     result: MediaAtRestFormatMigrationResult(),
                                                     latchBefore: true, latchAfter: true))
-        session.recordSealedColumnReset()
         session.recordRefusal("something declined")
         let epochBefore = session.epoch
 
@@ -186,11 +163,10 @@ struct Phase3ReadoutSessionTests {
         #expect(session.censusReadings == nil)
         #expect(session.censusStamp == nil)
         #expect(session.latches == nil)
-        #expect(session.preResetLatchSnapshot == nil)
+        #expect(session.latchStamp == nil)
         #expect(session.manifestProbes.isEmpty)
         #expect(session.bodyProbes.isEmpty)
         #expect(session.mediaWitness == nil)
-        #expect(session.sealedColumnResetTakenAt == nil)
         #expect(session.refusals.isEmpty)
         #expect(session.epoch == epochBefore + 1)
     }
@@ -215,8 +191,8 @@ struct Phase3ReadoutSessionTests {
     }
 }
 
-/// Pins the store-side half: the one retained reading that reaches a VERDICT lives outside the
-/// session, so clearing the session alone let a wipe manufacture a discharge.
+/// Pins the store-side clear: a wipe must not leave a Phase 3 reading standing over corpora it is
+/// about to destroy.
 @MainActor
 @Suite(.serialized)
 struct Phase3StoreEvidenceClearTests {
@@ -229,48 +205,23 @@ struct Phase3StoreEvidenceClearTests {
         makeTestStore()
     }
 
-    private func seedKeyedWitness(_ store: FernletStore) {
-        store.recordSealedColumnMigrationRun(
-            latched: true,
-            passResults: [SealedColumnMigrationResult(columns: [:], rowsScanned: 4, rowsAvailable: 4)]
-        )
-    }
-
-    /// The wipe clears the session so no "gate discharged" reading is left standing over corpora it
-    /// is about to destroy. The sealed-column keyed witness lives on the STORE, so the session clear
-    /// could not reach it — and the wipe then supplied a census zero over the emptied corpus for
-    /// free, manufacturing exactly the reading the hook exists to prevent.
-    @Test func clearingPhase3EvidenceDropsTheStoreSideKeyedWitness() {
-        let store = makeStore()
-        seedKeyedWitness(store)
-        #expect(store.lastSealedColumnPassWitness != nil)
-        store.phase3ReadoutSession.recordSealedColumnReset()
-
-        store.clearPhase3Evidence()
-
-        #expect(store.lastSealedColumnPassWitness == nil)
-        #expect(store.phase3ReadoutSession.sealedColumnResetTakenAt == nil)
-    }
-
-    /// A duress engage goes through the same clear. The duress SILENT wipe reaches `deleteAllData`
-    /// directly and never through `DeleteEverythingFlow`, so this edge is the only one it gets.
+    /// A duress engage clears the whole sitting. It is the edge with the least other coverage: the
+    /// duress SILENT wipe reaches `deleteAllData` directly and never through `DeleteEverythingFlow`,
+    /// so nothing else stands between a decoy session and a reading about the real owner's corpora.
+    ///
+    /// The session is now the WHOLE subject of that clear. Until Phase 3 deleted the sealed-column
+    /// migrator, one reading that reached a verdict — the keyed pass witness — lived on the store
+    /// instead, and clearing the session alone left it standing while the wipe supplied a census
+    /// zero over the emptied corpus for free.
     @Test func engagingDuressClearsEveryPhase3Reading() {
         let store = makeStore()
-        seedKeyedWitness(store)
         store.phase3ReadoutSession.recordRefusal("something")
+        store.phase3ReadoutSession.recordBodyProbe(.counted(412, truncatedAtPageCap: false),
+                                                   for: .progress)
 
         store.duressSessionActive = true
 
-        #expect(store.lastSealedColumnPassWitness == nil)
         #expect(store.phase3ReadoutSession.refusals.isEmpty)
-    }
-
-    /// The reset control clears the standing witness too, so the row cannot fall back on a pass that
-    /// never saw the rows this sitting is about.
-    @Test func clearingTheSealedColumnWitnessLeavesNothingToFallBackOn() {
-        let store = makeStore()
-        seedKeyedWitness(store)
-        store.clearSealedColumnPassWitness()
-        #expect(store.lastSealedColumnPassWitness == nil)
+        #expect(store.phase3ReadoutSession.bodyProbes.isEmpty)
     }
 }

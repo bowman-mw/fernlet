@@ -852,7 +852,61 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       returns `.vacuous` naming what was missing. This does not discharge or block anything; it
       stops the instrument certifying an empty corpus, which is the round's own core failure mode
       occurring inside the thing that gates it.
-- [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
+- [x] Phase 3 — **DONE 2026-08-29.** All six Class-A legacy readers are deleted and
+      `sealPlaintext`'s legacy-write fail-open is closed (D4, landed first and alone in `eb6bdff`).
+      Three went in `f7dd2de` (`PendingNarrativeBuffer`, `MediaAtRestCrypto`,
+      `SealedPhotoBackupService`); the three DELICATE ones — whose failure mode is "the user's
+      sealed data becomes unopenable" — went last:
+      - **`ColumnCrypto`** loses BOTH lower rungs: the unprefixed no-AAD `legacy-read` and the
+        `0x02` `v2 device-bound read` (owner decision D2). V3 is now the only format on the read
+        side and the write side alike, and `openReportingRung` collapsed back into `openBlob`
+        because its only caller was the migrator. Bytes in either retired generation throw
+        `SealedColumnOpenError.retiredFormat(_:)`, naming the generation the MARKER reports;
+        `emptyBlob` and `installBindingMissing` are separate cases so a store fault and a lost
+        binding row can never be filed as a legacy row, and `DeviceBindingID.ReadError` still
+        propagates unchanged so a keychain outage stays "try again".
+      - **`FernletLockService`** requires `FLW2`. All four callers of the unwrap —
+        `changeCredential`, `unlock`, `setBiometricEnabled`, `enrollRecoveryCustodian` — now
+        surface `FernletLockError.contentKeyWrapFormatRetired`, which is deliberately neither
+        `invalidPasscode` (the entry was right) nor `contentKeyUnrecoverable` (no enclave key was
+        destroyed). Every one throws BEFORE its first write or delete, so the refusal is
+        non-destructive at all four. The `.wrappedContentKeyRewrapStaging` sweep MOVED, from before
+        the custody switch to after a key is recovered: with the legacy reader gone a staging
+        orphan can be the only openable copy of the content key, and sweeping it on a path that
+        then throws would delete key material on a failure path.
+      - **`HeartDropSidecarKey`** requires `FSC2` and refuses `FSC1` as
+        `SidecarSeal.SealError.legacyFormatRetired`, audit-logged before it is thrown, so
+        `ProtectedSidecar` quarantines the file instead of deferring on it forever.
+        **`legacyMagic` and its clause in `isSealed` SURVIVE** — that predicate is what splits a
+        file into sealed vs legacy PLAINTEXT v0, so a marker that stopped classifying would send
+        ciphertext down the plaintext branch and into the *corrupt* path, which destroys it.
+      - **Healers:** all three migrators converted THROUGH the deleted branches, so all three are
+        gone — `SealedColumnFormatMigration` (with its latch, both wipe rows, the D3 in-hub status
+        capsule, the unlock-tail funding trigger and the destructive-reset latch clear),
+        `LockWrapFormatMigration` and `HeartDropSidecarFormatMigration` (with its latch, launch
+        call and wipe rows). None had a second job. All three CENSUSES stay, with their marker
+        constants: a classifier is not a reader, and a refusal that cannot name what it refused is
+        indistinguishable from a corruption bug.
+      - **Recorded loss:** the ~1-in-256 sealed-column blob whose first nonce byte collides with a
+        marker was resolved *by open* by the keyed migrator pass. Nothing can resolve it now — a
+        `0x02` collision reports as a retired v2 row and a `0x03` collision fails authentication
+        without naming itself. Pinned as `aCollidedLegacyBlobCanNoLongerBeResolvedByOpen`.
+      - **Pins moved in the same commit:** `legacy-read` 3 → **0** (the label leaves
+        `pinnedByLabel` entirely rather than sitting at 0), `v2 device-bound read` 1 → **0** and
+        likewise gone, total 10 → **6**, files 6 → **3**. Every remaining hatch is an annotation
+        where the domain IS bound. [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md)
+        §Escape-hatch abuse rewritten to the end state.
+      - **The DEBUG Phase 3 gate readout is KEPT and trimmed**, not deleted: its media and
+        sealed-photo halves still answer the question that outlives the round ("how many stored
+        rows can this build no longer open?"). The sealed-column gate loses its keyed-pass second
+        witness and becomes census-only, and the two latch readings whose latches are gone go with
+        them.
+
+      **The basis is "nothing to lose", NOT "migration proven complete"** — see below; nothing in
+      this entry should be read as a discharged gate.
+
+      Superseded record of the block, kept because the reasoning becomes live again the moment a
+      second install exists:
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
       do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
       and the keyed migrator's clean pass is the second witness). Deletion diffs may be drafted on

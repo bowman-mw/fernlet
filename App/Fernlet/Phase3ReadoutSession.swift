@@ -3,11 +3,14 @@
 //
 // The process-scoped, non-persisted home for every reading the Phase 3 sitting purchases.
 //
-// It exists because the sitting spans a sheet DISMISSAL. The sealed-column keyed pass cannot be
-// funded from Settings at all — Settings is reached from Home, where the hub is always re-locked, so
-// `FernletLockService.contentKey(for: .privateHub)` answers nil there — so the ritual is: reset the
-// latch here, dismiss Settings, open the Private tab, unlock (which funds the SHIPPED trigger), and
-// come back. A pushed destination's `@State` does not survive that, and neither does the sheet's.
+// It was built because the sitting used to span a sheet DISMISSAL: the sealed-column keyed pass
+// could not be funded from Settings at all, so the ritual was to reset the latch here, dismiss
+// Settings, open the Private tab, unlock (which funded the SHIPPED trigger), and come back — and a
+// pushed destination's `@State` survives none of that. That pass and its trigger are gone with the
+// sealed-column migrator, so no reading now needs a round trip out of Settings. The session stays
+// because the readings that remain are still bought one at a time over minutes, still cost network
+// fetches and a writing media pass, and must still survive a push → pop → push of the destination
+// without being re-purchased.
 //
 // DEBUG-ONLY for the reason stated at CryptoFormatCensus.swift:15-21.
 
@@ -26,8 +29,8 @@ nonisolated struct Phase3SittingStep: Sendable, Equatable, Identifiable {
     let title: String
     /// What it costs and why the order matters.
     let detail: String
-    /// Whether an observation taken this process shows the step was performed. One step is
-    /// deliberately never derivable — see ``Phase3ReadoutSession/checklist(lastFullPassCompletedAt:sealedColumnWitness:)``.
+    /// Whether an observation taken this process shows the step was performed — see
+    /// ``Phase3ReadoutSession/checklist(lastFullPassCompletedAt:)``.
     let isDone: Bool
 
     var id: String { title }
@@ -52,11 +55,10 @@ nonisolated struct Phase3SittingStep: Sendable, Equatable, Identifiable {
 ///    prints real per-corpus photo counts, and numbers that contradict an apparently empty decoy are
 ///    exactly the disclosure duress mode exists to prevent.
 /// 3. **It is DEBUG evidence only**, read by exactly one surface. No shipping code path may consult
-///    it; the D3 capsule's `sealedColumnMigrationStatus` remains the only migration state any
-///    user-facing surface reads.
+///    it, and none does.
 ///
-/// It holds no closures, no observers, no timers and no capture-handler tokens — deliberately, and
-/// it is the reason the sealed-column witness is retained as typed store state rather than through
+/// It holds no closures, no observers, no timers and no capture-handler tokens — deliberately.
+/// Every reading it keeps is handed to it by the caller that bought it, rather than harvested from
 /// `FernletAuditLog.addCaptureHandler`, which would be a permanent process-lifetime registrant whose
 /// token must be held.
 @MainActor
@@ -72,12 +74,10 @@ final class Phase3ReadoutSession {
     private(set) var censusReadings: CryptoFormatCensus.Readings?
     /// When the census landed.
     private(set) var censusStamp: Phase3Stamp?
-    /// The seven latch bits.
+    /// The three latch bits.
     private(set) var latches: Phase3LatchReadings?
     /// When the latches were read.
     private(set) var latchStamp: Phase3Stamp?
-    /// The seven bits as they read BEFORE the one reset this design offers.
-    private(set) var preResetLatchSnapshot: Phase3LatchReadings?
     /// Every manifest probe taken this sitting, KEPT rather than overwritten: Retry forces
     /// `generation` and `deviceHighWater` into agreement, so a second probe structurally cannot show
     /// the stale-manifest disagreement the first exists to capture.
@@ -90,20 +90,17 @@ final class Phase3ReadoutSession {
     private(set) var mediaPassInFlight = false
     /// Whether a manifest probe is running right now.
     private(set) var manifestProbeInFlight = false
-    /// When the sealed-column latch was reset this sitting, if it was.
-    private(set) var sealedColumnResetTakenAt: Date?
     /// Refusals recorded this sitting — a control that declined, a probe that could not run.
     private(set) var refusals: [String] = []
-    /// Whether a keyed sealed-column pass overlapped the scan that produced ``censusReadings``.
-    private(set) var censusOverlappedKeyedPass = false
 
     /// The scan fence. Bumped by ``invalidateCensus()`` and ``clear()``; a landing whose captured
     /// generation no longer matches is DROPPED (with a recorded refusal) rather than stamped fresh.
     ///
     /// `CryptoFormatCensus.takeReadings` does not observe cancellation, so a sweep that started
     /// before an invalidation cannot be stopped — only fenced. Without this, an orphaned scan that
-    /// sampled the corpus BEFORE a keyed pass lands afterwards carrying a stamp taken after it, and
-    /// the sealed-column ordering guard passes on stamps ordered opposite to reality.
+    /// sampled the corpus BEFORE the media pass that healed it lands afterwards carrying a stamp
+    /// taken after it, and the media row's ordering guard passes on stamps ordered opposite to
+    /// reality.
     ///
     /// It is also the view's `.task(id:)` key, so an invalidation re-arms the scan on its own rather
     /// than leaving six blank rows until the owner happens to navigate away and back.
@@ -124,12 +121,12 @@ final class Phase3ReadoutSession {
     /// Records a landed census scan and the latch bits taken beside it, or drops it when the fence
     /// has moved. Returns whether the reading was kept.
     ///
-    /// `takenAt` is the moment the census sweep STARTED, not the moment it landed: the sealed-column
-    /// gate consumes this stamp as a SAMPLING-order proof ("a marker zero taken at or after the pass
-    /// that could have changed it"), and a landing time over a multi-second sweep would let a census
-    /// read entirely before a keyed pass claim to postdate it.
+    /// `takenAt` is the moment the census sweep STARTED, not the moment it landed: the media row
+    /// consumes this stamp as a SAMPLING-order proof ("U and K describe one filesystem state"), and
+    /// a landing time over a multi-second sweep would let a census read entirely before a converting
+    /// pass claim to postdate it.
     ///
-    /// `latchesAt` is separate because the seven bits are read AFTER the sweep, not beside it: one
+    /// `latchesAt` is separate because the three bits are read AFTER the sweep, not beside it: one
     /// stamp over two observations minutes apart is the thing this whole model refuses.
     @discardableResult
     func recordScan(
@@ -137,8 +134,7 @@ final class Phase3ReadoutSession {
         latches: Phase3LatchReadings,
         at takenAt: Date = Date(),
         latchesAt: Date? = nil,
-        generation: Int? = nil,
-        overlappedKeyedPass: Bool = false
+        generation: Int? = nil
     ) -> Bool {
         if let generation, generation != scanGeneration {
             recordRefusal("A local scan landed against a stale fence (generation \(generation), now"
@@ -150,14 +146,7 @@ final class Phase3ReadoutSession {
         censusStamp = Phase3Stamp(label: "marker census (stamped at sweep START)", takenAt: takenAt)
         self.latches = latches
         latchStamp = Phase3Stamp(label: "completion latches", takenAt: latchesAt ?? takenAt)
-        censusOverlappedKeyedPass = overlappedKeyedPass
         return true
-    }
-
-    /// Records the seven bits as they read before a reset, so the destroyed reading survives in the
-    /// export.
-    func recordPreResetSnapshot(_ snapshot: Phase3LatchReadings) {
-        preResetLatchSnapshot = snapshot
     }
 
     /// Records one manifest probe, keeping earlier ones.
@@ -228,11 +217,6 @@ final class Phase3ReadoutSession {
         manifestProbeInFlight = inFlight
     }
 
-    /// Records that the sealed-column latch was cleared, arming the next hub unlock.
-    func recordSealedColumnReset(at takenAt: Date = Date()) {
-        sealedColumnResetTakenAt = takenAt
-    }
-
     /// Records a refusal. Bounded (R2).
     func recordRefusal(_ refusal: String) {
         guard !refusal.isEmpty else { return }
@@ -242,15 +226,15 @@ final class Phase3ReadoutSession {
 
     /// Drops the census half so it is re-taken.
     ///
-    /// The store calls this when a KEYED sealed-column pass lands, so the census reading quoted
-    /// beside that pass is always one taken AFTER the pass that could have changed it. Without it the
-    /// two halves of that gate would be quoted out of order and a stale zero would discharge.
+    /// Called whenever something that could change what the census counts has run — the media
+    /// at-rest pass writes, so the reading quoted beside it must be one taken AFTER it. Without
+    /// this the two halves of the media row would be quoted out of order and a stale count would
+    /// stand beside a pass that has since altered the corpus.
     func invalidateCensus() {
         censusReadings = nil
         censusStamp = nil
         latches = nil
         latchStamp = nil
-        censusOverlappedKeyedPass = false
         scanGeneration += 1
     }
 
@@ -265,15 +249,12 @@ final class Phase3ReadoutSession {
         censusStamp = nil
         latches = nil
         latchStamp = nil
-        censusOverlappedKeyedPass = false
-        preResetLatchSnapshot = nil
         manifestProbes = []
         manifestProbesTaken = 0
         bodyProbes = [:]
         mediaWitness = nil
         mediaPassInFlight = false
         manifestProbeInFlight = false
-        sealedColumnResetTakenAt = nil
         refusals = []
         scanGeneration += 1
         epoch += 1
@@ -283,25 +264,23 @@ final class Phase3ReadoutSession {
 
     /// The sitting checklist, in the order source forces.
     ///
-    /// Two facts live on `FernletStore` rather than here (the own-photo pass's completion time and
-    /// the sealed-column witness), so they are passed in rather than reached for — the session holds
-    /// no reference to its owner.
+    /// One fact lives on `FernletStore` rather than here — the own-photo pass's completion time — so
+    /// it is passed in rather than reached for: the session holds no reference to its owner.
     ///
-    /// - Note: step 2 is the one step whose done-state cannot be derived. Auto-Lock is a device
-    ///   setting no app-side reading answers, and a diagnostic must not mutate one, so it renders as
-    ///   not-done permanently and says why rather than claiming an observation it never took.
-    func checklist(
-        lastFullPassCompletedAt: Date?,
-        sealedColumnWitness: SealedColumnPassWitness?
-    ) -> [Phase3SittingStep] {
+    /// It was seven steps. Two went with the sealed-column keyed pass: step 7 was the reset →
+    /// dismiss → unlock ritual that funded it, and step 2 ("turn Auto-Lock off") existed only
+    /// because that pass re-vended the hub key per page and a screen lock ended it mid-sweep.
+    /// Nothing that remains is hub-keyed or interruptible by a screen lock, so both steps would have
+    /// been instructions to prepare for work this sitting can no longer do — and step 2 in
+    /// particular was the one step whose done-state could never be derived, so it would have sat
+    /// permanently unticked with no reading behind it and no pass to justify it.
+    func checklist(lastFullPassCompletedAt: Date?) -> [Phase3SittingStep] {
         [
             skipRestoreStep(),
-            autoLockStep(),
             firstProbeStep(),
             retryStep(lastFullPassCompletedAt: lastFullPassCompletedAt),
             secondProbeStep(),
-            mediaWitnessStep(),
-            sealedColumnStep(sealedColumnWitness)
+            mediaWitnessStep()
         ]
     }
 
@@ -315,23 +294,12 @@ final class Phase3ReadoutSession {
         )
     }
 
-    private func autoLockStep() -> Phase3SittingStep {
-        Phase3SittingStep(
-            title: "2. Turn Auto-Lock off (Settings › Display & Brightness)",
-            detail: "The keyed sealed-column pass re-vends the hub key per page, so a screen lock"
-                + " ends it fail-closed as stoppedOnlyByKeyRevocation — a clean stop that is NOT a"
-                + " witness. This step cannot be observed from inside the app and is deliberately"
-                + " never marked done; it is the one item the owner confirms themselves.",
-            isDone: false
-        )
-    }
-
     private func firstProbeStep() -> Phase3SittingStep {
         Phase3SittingStep(
-            title: "3. Fetch manifests BEFORE any healing pass",
+            title: "2. Fetch manifests BEFORE any healing pass",
             detail: "Captures the pre-pass minima and any generation-vs-deviceHighWater disagreement"
                 + " while they can still disagree. Costs three CloudKit fetches and three AES-GCM"
-                + " opens; writes nothing. This probe CANNOT be re-taken after step 4, and nothing"
+                + " opens; writes nothing. This probe CANNOT be re-taken after step 3, and nothing"
                 + " here survives a relaunch — do not stop or re-run the app until the report is"
                 + " exported.",
             isDone: !manifestProbes.isEmpty
@@ -344,7 +312,7 @@ final class Phase3ReadoutSession {
             firstProbeAt.map { completed > $0 } ?? true
         } ?? false
         return Phase3SittingStep(
-            title: "4. Run Privacy & Data → Retry to completion",
+            title: "3. Run Privacy & Data → Retry to completion",
             detail: "Its FULL payload, not one clause: restoreSealedBackupsIfNeeded(userInitiated:"
                 + " true) restores sealed narratives into the local stores FIRST, then runs"
                 + " synchronizeFullyVerified(), which rewrites all three manifests and mints"
@@ -356,7 +324,7 @@ final class Phase3ReadoutSession {
 
     private func secondProbeStep() -> Phase3SittingStep {
         Phase3SittingStep(
-            title: "5. Fetch manifests a SECOND time",
+            title: "4. Fetch manifests a SECOND time",
             detail: "Kept as its own labelled reading rather than overwriting the first. Only the"
                 + " rungs that read the plaintext stamp version 2, so a full-verification pass must"
                 + " run between the two probes.",
@@ -366,7 +334,7 @@ final class Phase3ReadoutSession {
 
     private func mediaWitnessStep() -> Phase3SittingStep {
         Phase3SittingStep(
-            title: "6. Fund a media at-rest pass",
+            title: "5. Fund a media at-rest pass",
             detail: "MediaAtRestFormatMigrator.performPass() produces unopenableUnprefixed — the"
                 + " plan's own residue evidence — and NEVER touches the latch, in either direction."
                 + " On a latched device it should convert nothing; if it converts something, that is"
@@ -377,28 +345,11 @@ final class Phase3ReadoutSession {
         )
     }
 
-    private func sealedColumnStep(_ witness: SealedColumnPassWitness?) -> Phase3SittingStep {
-        let done = sealedColumnResetTakenAt.map { resetAt in
-            guard let witness, witness.isKeyedWitness else { return false }
-            return witness.stamp.takenAt > resetAt
-        } ?? false
-        return Phase3SittingStep(
-            title: "7. Reset the sealed-column latch, dismiss Settings, open the Private tab, unlock",
-            detail: "The reset only ARMS. The shipped trigger funds the keyed pass ~300 ms after the"
-                + " unlock, with a live per-page key vend Settings can never supply. Come back here"
-                + " afterwards: the witness lands on FernletStore, which outlives the sheet, and the"
-                + " census is re-taken so the two halves of that gate are never quoted out of order.",
-            isDone: done
-        )
-    }
-
     /// Assembles the fold's input value from everything purchased so far.
     func inputs(
         environment: Phase3GateEnvironment,
         ownPhotoDocumentsDirectory: URL,
         friendWallSupportDirectory: URL,
-        sealedColumnWitness: SealedColumnPassWitness?,
-        sealedColumnPassInFlight: Bool,
         mediaLaunchPass: MediaLaunchPassRecord? = nil,
         sealedPhotoFullPassVerdicts: [SealedPhotoCorpusFormatVerdict]? = nil
     ) -> Phase3GateReadoutInputs {
@@ -410,19 +361,13 @@ final class Phase3ReadoutSession {
             censusStamp: censusStamp,
             latches: latches,
             latchStamp: latchStamp,
-            preResetLatchSnapshot: preResetLatchSnapshot,
             manifestProbes: manifestProbes,
             bodyProbes: bodyProbes,
             mediaWitness: mediaWitness,
             mediaPassInFlight: mediaPassInFlight,
             mediaLaunchPass: mediaLaunchPass,
-            censusOverlappedKeyedPass: censusOverlappedKeyedPass,
             sealedPhotoFullPassVerdicts: sealedPhotoFullPassVerdicts,
-            sealedColumnWitness: sealedColumnWitness,
-            sealedColumnPassInFlight: sealedColumnPassInFlight,
-            sealedColumnResetTakenAt: sealedColumnResetTakenAt,
-            checklist: checklist(lastFullPassCompletedAt: environment.lastFullPassCompletedAt,
-                                 sealedColumnWitness: sealedColumnWitness),
+            checklist: checklist(lastFullPassCompletedAt: environment.lastFullPassCompletedAt),
             refusals: refusals
         )
     }

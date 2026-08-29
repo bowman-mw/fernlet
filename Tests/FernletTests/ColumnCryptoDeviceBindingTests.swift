@@ -3,8 +3,14 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 
-/// Pins the device-bound sealed-column format (`ColumnCrypto` v2/v3 + `DeviceBindingID`) and — the
-/// migration-safety half — proves that every pre-binding (legacy) blob still opens unchanged.
+/// Pins the device-bound sealed-column format (`ColumnCrypto` V3 + `DeviceBindingID`) and — the
+/// half that used to be "migration safety" — proves that every RETIRED generation is now refused
+/// **by name**, never opened and never mistaken for corruption.
+///
+/// Phase 3 of the crypto standardization round left V3 as the only readable format. Every test
+/// below that once asserted "a legacy/v2 blob still opens" is inverted here rather than deleted:
+/// the fixtures that mint those bytes are kept precisely so the REFUSAL stays exercised, and an
+/// inverted pin is what stops a future change quietly re-opening a format the round retired.
 ///
 /// The binding overrides use `DeviceBindingID`'s `@TaskLocal` test seam, so each test pins its
 /// own install identity without touching the real keychain row or leaking into concurrently
@@ -35,7 +41,8 @@ struct ColumnCryptoDeviceBindingTests {
     /// the v2 version tag, then `combined`, sealed under the column key with the install binding
     /// ALONE as additional authenticated data — where v3 authenticates the column purpose *and*
     /// the binding. Nothing else in the suite can make one, because `sealString` has written v3
-    /// exclusively since the format split, so the v2 open path would otherwise go unexercised.
+    /// exclusively since the format split — and since Phase 3 deleted the v2 rung, the only thing
+    /// left to exercise is the REFUSAL, which still needs real v2 bytes to refuse.
     ///
     /// The HKDF is spelled out here instead of calling `ColumnCrypto.deriveColumnKey`: a
     /// compatibility fixture must not move when the production derivation moves. Pinned this way,
@@ -58,8 +65,10 @@ struct ColumnCryptoDeviceBindingTests {
     /// **production can no longer make one.** Through Phase 2.6 these fixtures were minted by
     /// sealing with the binding override pinned to `.unavailable`, riding `sealPlaintext`'s
     /// fail-open; Phase 3 closed that branch (owner decision D4), so the migration-safety tests
-    /// below would otherwise have lost their corpus along with the writer. The legacy READ path is
-    /// untouched and still has to be exercised — real rows written by shipped builds are out there.
+    /// below would otherwise have lost their corpus along with the writer. Phase 3 then deleted the
+    /// legacy READ path too, so what these bytes exercise now is the named refusal — which is the
+    /// thing most worth pinning, because real rows written by shipped builds are out there and a
+    /// refusal that cannot name them is indistinguishable from a corruption bug.
     private func sealLegacy(_ plaintext: Data, label: String) throws -> Data {
         let key = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: contentKey,
@@ -82,14 +91,18 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == "a private thought")
     }
 
-    // MARK: MIGRATION SAFETY: proves a legacy (pre-binding, no-AAD, unprefixed) blob still opens
-    // on an install that now has a binding ID — the dual-open fallback existing users depend on.
-    @Test func legacyBlobStillOpensOnABoundInstall() throws {
+    // MARK: RETIRED FORMAT, unprefixed: a legacy (pre-binding, no-AAD) blob is REFUSED by name on
+    // an install that has a binding. This pin is the inversion of `legacyBlobStillOpensOnABoundInstall`:
+    // the dual-open fallback existing rows depended on is gone, and what matters now is that the
+    // failure SAYS SO — `retiredFormat(.unprefixed)`, not a Poly1305 authentication error that would
+    // read as "your data is corrupt" and send someone looking for a corruption bug that isn't there.
+    @Test func legacyBlobIsRefusedByNameOnABoundInstall() throws {
         let legacySealed = try sealLegacy("written before binding existed", label: "worry-box")
         // Legacy layout sanity: exactly nonce(12) + ciphertext + tag(16), i.e. no version prefix.
         #expect(legacySealed.count == 12 + "written before binding existed".utf8.count + 16)
-        let opened = try open(legacySealed, label: "worry-box", override: .identifier(installA))
-        #expect(opened == "written before binding existed")
+        #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.unprefixed)) {
+            _ = try self.open(legacySealed, label: "worry-box", override: .identifier(self.installA))
+        }
     }
 
     // MARK: Proves the binding property itself: a device-bound blob sealed on install A does NOT open on
@@ -99,99 +112,95 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(throws: (any Error).self) {
             _ = try self.open(sealed, label: "intimacy-log", override: .identifier(self.installB))
         }
-        // And on an install with no binding at all (fresh keychain), it must also refuse.
-        #expect(throws: (any Error).self) {
+        // On an install with no binding row at all the AAD cannot be rebuilt, and that is its own
+        // named terminal state — distinct from an authentication failure, because nothing is wrong
+        // with the ciphertext.
+        #expect(throws: ColumnCrypto.SealedColumnOpenError.installBindingMissing) {
             _ = try self.open(sealed, label: "intimacy-log", override: .unavailable)
         }
     }
 
-    // MARK: Proves the 2-in-256 ambiguity is handled: a LEGACY blob whose first (nonce) byte
-    // happens to equal a recognized version tag still opens via the fallback path.
-    @Test func legacyBlobStartingWithTheVersionByteStillOpens() throws {
-        var collidingBlob: Data?
-        for _ in 0..<8192 {  // P(miss all) ≈ (254/256)^8192 ≈ 10^-28
-            let sealed = try sealLegacy("nonce collision", label: "menstrual-narrative")
-            if sealed.first == ColumnCrypto.deviceBoundFormatVersionV2
-                || sealed.first == ColumnCrypto.deviceBoundFormatVersionV3 {
-                collidingBlob = sealed
+    // MARK: THE RESOLUTION THAT WAS LOST, pinned so it cannot be forgotten. A legacy blob whose
+    // first (nonce) byte happens to equal a version tag is indistinguishable from a marked blob by
+    // bytes alone — 2 in 256 of them. Until Phase 3 the unconditional fallback resolved that sliver
+    // BY OPEN. Nothing can now: the `0x02` collision is reported as a retired v2 row (true enough —
+    // it is retired either way), and the `0x03` collision is tried as V3 and fails AUTHENTICATION,
+    // which is the one refusal in this file that cannot name what it found. That is a real loss and
+    // this pin is where it is recorded.
+    @Test func aCollidedLegacyBlobCanNoLongerBeResolvedByOpen() throws {
+        let v2Collision = try drawLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV2)
+        #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.v2Marked)) {
+            _ = try self.open(v2Collision, label: "menstrual-narrative", override: .identifier(self.installA))
+        }
+        // The 0x03 collision: the marker says V3, so the reader believes it and the failure is an
+        // AUTHENTICATION failure — deliberately asserted as "not a SealedColumnOpenError", because
+        // the honest statement is that this one row cannot be named, not that it fails somehow.
+        let v3Collision = try drawLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV3)
+        do {
+            _ = try open(v3Collision, label: "menstrual-narrative", override: .identifier(installA))
+            Issue.record("a legacy blob must not open under the V3 rung")
+        } catch let error as ColumnCrypto.SealedColumnOpenError {
+            Issue.record("a 0x03-collided legacy blob classified as \(error) instead of failing authentication")
+        } catch {
+            // The expected shape: CryptoKit's own authentication error.
+        }
+    }
+
+    // MARK: Draws a legacy blob whose first nonce byte equals `marker`. Bounded (R2) and
+    // astronomically unlikely to miss: P(miss all 8192) ≈ (255/256)^8192 ≈ 1e-14.
+    private func drawLegacyBlob(startingWith marker: UInt8) throws -> Data {
+        var drawn: Data?
+        for _ in 0..<8192 {
+            let candidate = try sealLegacy("nonce collision", label: "menstrual-narrative")
+            if candidate.first == marker {
+                drawn = candidate
                 break
             }
         }
-        let blob = try #require(collidingBlob, "could not produce a legacy blob starting with the version byte")
-        let opened = try open(blob, label: "menstrual-narrative", override: .identifier(installA))
-        #expect(opened == "nonce collision")
+        return try #require(drawn, "could not draw a legacy blob starting with \(marker)")
     }
 
-    // MARK: MIGRATION ROUND TRIP: models the routine re-seal (edit / lock-setup migration /
-    // restore-on-unhide) that progressively rebinds the legacy corpus — open legacy, re-seal,
-    // and the result is current-version and opens only on this install.
-    @Test func routineReSealRebindsALegacyBlob() throws {
-        let legacySealed = try sealLegacy("migrate me", label: "journal-narrative")
-        let plaintext = try #require(try open(legacySealed, label: "journal-narrative", override: .identifier(installA)))
-        let rebound = try seal(plaintext, label: "journal-narrative", override: .identifier(installA))
-        #expect(rebound.first == ColumnCrypto.deviceBoundFormatVersionV3)
-        let reopened = try open(rebound, label: "journal-narrative", override: .identifier(installA))
-        #expect(reopened == "migrate me")
-        #expect(throws: (any Error).self) {
-            _ = try self.open(rebound, label: "journal-narrative", override: .identifier(self.installB))
-        }
-    }
-
-    // MARK: V2 COMPATIBILITY: proves a genuine v2 blob — the pre-purpose generation, binding-only
-    // AAD — still opens on the install that sealed it. Fresh seals are v3, so without the
-    // hand-built fixture the v2 arm of the open path is dead code no test reaches.
-    @Test func v2BlobOpensOnTheSealingInstall() throws {
+    // MARK: RETIRED FORMAT, v2: the pre-purpose generation (binding-only AAD) is refused by name on
+    // the very install that sealed it. Fresh seals have been v3 since the split, so without the
+    // hand-built fixture this refusal would be unreachable code no test touches — which is exactly
+    // how a deleted branch quietly comes back.
+    @Test func v2BlobIsRefusedByNameOnTheSealingInstall() throws {
         let value = "sealed before purposes existed"
         let v2Sealed = try sealV2(value, label: "journal-narrative", binding: installA)
         // v2 layout: version byte + nonce(12) + ciphertext + tag(16) — one byte longer than legacy.
         #expect(v2Sealed.first == ColumnCrypto.deviceBoundFormatVersionV2)
         #expect(v2Sealed.count == 1 + 12 + value.utf8.count + 16)
-        #expect(try open(v2Sealed, label: "journal-narrative", override: .identifier(installA)) == value)
-    }
-
-    // MARK: Proves the v2 binding property survived the format split: a v2 blob sealed on install A
-    // still refuses to open on install B, and on an install with no binding row at all — the
-    // legacy fallback must not quietly rescue a blob whose AAD cannot be reproduced.
-    @Test func v2BlobRefusesToOpenOnAnotherInstall() throws {
-        let v2Sealed = try sealV2("bound to install A", label: "intimacy-log", binding: installA)
-        #expect(throws: (any Error).self) {
-            _ = try self.open(v2Sealed, label: "intimacy-log", override: .identifier(self.installB))
-        }
-        #expect(throws: (any Error).self) {
-            _ = try self.open(v2Sealed, label: "intimacy-log", override: .unavailable)
+        for override in [DeviceBindingID.TestOverride.identifier(installA), .identifier(installB), .unavailable] {
+            #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.v2Marked)) {
+                _ = try self.open(v2Sealed, label: "journal-narrative", override: override)
+            }
         }
     }
 
-    // MARK: V2 → V3 MIGRATION: the same routine re-seal that rebinds legacy rows also upgrades a v2
-    // row to v3 (purpose + binding AAD) — the path that progressively drains the v2 generation —
-    // and the upgraded row stays bound to this install.
-    @Test func routineReSealMigratesAV2BlobToV3() throws {
-        let v2Sealed = try sealV2("migrate me to v3", label: "worry-box", binding: installA)
-        let plaintext = try #require(try open(v2Sealed, label: "worry-box", override: .identifier(installA)))
-        let migrated = try seal(plaintext, label: "worry-box", override: .identifier(installA))
-        #expect(migrated.first == ColumnCrypto.deviceBoundFormatVersionV3)
-        #expect(try open(migrated, label: "worry-box", override: .identifier(installA)) == "migrate me to v3")
-        #expect(throws: (any Error).self) {
-            _ = try self.open(migrated, label: "worry-box", override: .identifier(self.installB))
-        }
-    }
-
-    // MARK: RESILIENCE, v2 arm: the v2 open path keeps its own binding-read-error branch, so a
-    // transient keychain outage over a v2 row must also surface as the retryable ReadError rather
-    // than an authentication failure that reads like corruption — and the row must open unchanged
-    // once the keychain recovers.
-    @Test func v2BlobSurfacesATransientBindingReadErrorAsRetryable() throws {
+    // MARK: FORMAT BEATS KEYCHAIN STATE, and it must. A v2 row during a transient binding-read
+    // outage is still refused as a RETIRED FORMAT rather than as the retryable `ReadError` — the
+    // classification happens before any keychain access, so the reader never tells someone to try
+    // again over bytes no retry could ever open. The retryable path is V3's alone; see
+    // `transientBindingReadErrorIsRetryableAndSelfHeals`, which still holds.
+    @Test func v2BlobRefusesByFormatEvenDuringABindingReadError() throws {
         let v2Sealed = try sealV2("retry my v2 row", label: "menstrual-narrative", binding: installA)
-        #expect(throws: DeviceBindingID.ReadError.self) {
+        #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.v2Marked)) {
             _ = try self.open(v2Sealed, label: "menstrual-narrative", override: .readError)
         }
-        let opened = try open(v2Sealed, label: "menstrual-narrative", override: .identifier(installA))
-        #expect(opened == "retry my v2 row")
     }
 
-    // MARK: Proves the Codable seal/open pair speaks the same two-generation format as the
-    // string pair (both route through the shared core).
-    @Test func codableSealsAreDeviceBoundAndLegacyCompatible() throws {
+    // MARK: An EMPTY column is its own named state, never a retired FORMAT. No writer produces
+    // `Data()` and every real sealed blob is at least nonce + tag, so empty is a store fault —
+    // Phase 2.6's finding, kept here so a corruption can never be counted as a legacy row.
+    @Test func anEmptyBlobIsRefusedAsEmptyAndNotAsARetiredFormat() throws {
+        #expect(throws: ColumnCrypto.SealedColumnOpenError.emptyBlob) {
+            _ = try self.open(Data(), label: "worry-box", override: .identifier(self.installA))
+        }
+    }
+
+    // MARK: Proves the Codable seal/open pair speaks the same ONE format as the string pair (both
+    // route through the shared core), and refuses a retired blob identically.
+    @Test func codableSealsAreDeviceBoundAndRefuseRetiredBlobs() throws {
         let crypto = ColumnCrypto(label: "menstrual-narrative")
         let value = ["cramps", "fatigue"]
 
@@ -205,10 +214,11 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == value)
 
         let legacy = try sealLegacy(try JSONEncoder().encode(value), label: "menstrual-narrative")
-        let legacyOpened: [String]? = try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            try crypto.open(legacy, contentKey: contentKey)
+        DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
+            #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.unprefixed)) {
+                let _: [String]? = try crypto.open(legacy, contentKey: self.contentKey)
+            }
         }
-        #expect(legacyOpened == value)
     }
 
     // MARK: FAIL-CLOSE: proves that when no durable binding ID exists, sealing REFUSES — it
@@ -238,8 +248,9 @@ struct ColumnCryptoDeviceBindingTests {
 
     // MARK: RESILIENCE: a transient keychain READ ERROR (row state unknown, nothing cached)
     // must surface as the distinct, retryable DeviceBindingID.ReadError — not as an
-    // authentication failure that reads like corrupted data — and the same blob must open
-    // unchanged once the keychain recovers.
+    // authentication failure that reads like corrupted data, and not as one of the terminal
+    // `SealedColumnOpenError` cases — and the same blob must open unchanged once the keychain
+    // recovers. This is the distinction `currentForOpen()` exists for, and it survives Phase 3.
     @Test func transientBindingReadErrorIsRetryableAndSelfHeals() throws {
         let sealed = try seal("retry me", label: "journal-narrative", override: .identifier(installA))
         #expect(throws: DeviceBindingID.ReadError.self) {
@@ -247,26 +258,6 @@ struct ColumnCryptoDeviceBindingTests {
         }
         let opened = try open(sealed, label: "journal-narrative", override: .identifier(installA))
         #expect(opened == "retry me")
-    }
-
-    // MARK: RESILIENCE: during the same read error, legacy blobs — including the 2-in-256 blob
-    // whose first nonce byte collides with a version tag — keep opening; the outage affects
-    // only blobs that genuinely need the binding.
-    @Test func legacyBlobsStillOpenDuringABindingReadError() throws {
-        let legacy = try sealLegacy("still readable", label: "worry-box")
-        #expect(try open(legacy, label: "worry-box", override: .readError) == "still readable")
-
-        var collidingBlob: Data?
-        for _ in 0..<8192 {  // P(miss all) ≈ (254/256)^8192 ≈ 10^-28
-            let sealed = try sealLegacy("collision", label: "worry-box")
-            if sealed.first == ColumnCrypto.deviceBoundFormatVersionV2
-                || sealed.first == ColumnCrypto.deviceBoundFormatVersionV3 {
-                collidingBlob = sealed
-                break
-            }
-        }
-        let blob = try #require(collidingBlob, "could not produce a legacy blob starting with the version byte")
-        #expect(try open(blob, label: "worry-box", override: .readError) == "collision")
     }
 
     // MARK: FAIL-CLOSE parity: a transient keychain READ ERROR during SEAL refuses exactly like
@@ -284,121 +275,20 @@ struct ColumnCryptoDeviceBindingTests {
         }
     }
 
-    // MARK: - Phase 2.6 pins: the rung-reporting refactor and the strict v3 seal
-
-    // MARK: C1 — BEHAVIOR-PRESERVATION PROOF for the openBlob → openReportingRung refactor:
-    // for every rung (v3 / v2 / legacy / both collided slivers) the receipt-bearing dispatch
-    // returns the same plaintext the shipping string reader does, with the right rung receipt;
-    // and for every failure shape (garbage, truncated, ReadError precedence) both paths throw
-    // the same class of error. The migrator's tallies are only as honest as these receipts.
-    @Test func openReportingRungMatchesOpenBlobOnEveryRung() throws {
-        let crypto = ColumnCrypto(label: "journal-narrative")
-
-        // v3 rung.
-        let v3 = try seal("rung three", label: "journal-narrative", override: .identifier(installA))
-        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            let opened = try crypto.openReportingRung(v3, contentKey: contentKey)
-            #expect(opened.rung == .v3)
-            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung three")
-            #expect(try crypto.openString(v3, contentKey: contentKey) == "rung three")
-        }
-
-        // v2 rung (the hand-built pre-purpose generation).
-        let v2 = try sealV2("rung two", label: "journal-narrative", binding: installA)
-        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            let opened = try crypto.openReportingRung(v2, contentKey: contentKey)
-            #expect(opened.rung == .v2)
-            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung two")
-        }
-
-        // Legacy rung, unprefixed: the fallback, with a nil collision receipt.
-        let legacy = try sealLegacy("rung legacy", label: "journal-narrative")
-        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            let opened = try crypto.openReportingRung(legacy, contentKey: contentKey)
-            #expect(opened.rung == .legacy(markerCollision: nil))
-            #expect(String(data: opened.plaintext, encoding: .utf8) == "rung legacy")
-        }
-
-        // Both collided slivers: a LEGACY blob whose first nonce byte is a marker opens via the
-        // fallback and the receipt names the collided marker — legacy proven BY OPEN, the second
-        // witness Phase 3 needs against the census's byte-only upper bounds.
-        for marker in [ColumnCrypto.deviceBoundFormatVersionV3, ColumnCrypto.deviceBoundFormatVersionV2] {
-            var collided: Data?
-            for _ in 0..<8192 {  // P(miss all) ≈ (255/256)^8192 ≈ 1e-14
-                let candidate = try sealLegacy("collide", label: "journal-narrative")
-                if candidate.first == marker {
-                    collided = candidate
-                    break
-                }
-            }
-            let blob = try #require(collided, "could not draw a colliding legacy blob")
-            let expectedCollision: ColumnCryptoStoredFormat =
-                marker == ColumnCrypto.deviceBoundFormatVersionV3 ? .v3Marked : .v2Marked
-            try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-                let opened = try crypto.openReportingRung(blob, contentKey: contentKey)
-                #expect(opened.rung == .legacy(markerCollision: expectedCollision))
-                #expect(String(data: opened.plaintext, encoding: .utf8) == "collide")
-            }
-        }
-
-        // Failure shapes: garbage and a truncated blob throw on BOTH paths.
-        let garbage = Data((0..<44).map { UInt8(truncatingIfNeeded: $0 &* 7 &+ 13) })
-        DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            #expect(throws: (any Error).self) { _ = try crypto.openReportingRung(garbage, contentKey: self.contentKey) }
-            #expect(throws: (any Error).self) { _ = try crypto.openString(garbage, contentKey: self.contentKey) }
-            let truncated = v3.prefix(8)
-            #expect(throws: (any Error).self) { _ = try crypto.openReportingRung(Data(truncated), contentKey: self.contentKey) }
-        }
-
-        // ReadError precedence: a marked blob during a keychain outage surfaces the retryable
-        // ReadError on the receipt path exactly as on the shipping path.
-        DeviceBindingID.$testOverride.withValue(.readError) {
-            #expect(throws: DeviceBindingID.ReadError.self) {
-                _ = try crypto.openReportingRung(v3, contentKey: self.contentKey)
-            }
-            #expect(throws: DeviceBindingID.ReadError.self) {
-                _ = try crypto.openString(v3, contentKey: self.contentKey)
-            }
-        }
-    }
-
-    // MARK: C2 — the strict seal REFUSES without a binding (both the authoritative absence and
-    // the transient read error), and never emits a legacy blob. It was the format migrator's only
-    // seal entry in Phase 2.6; since Phase 3 collapsed the fall-open twin into it, it is the whole
-    // codebase's, and must be structurally unable to re-mint the format the pass exists to retire.
-    @Test func sealPlaintextV3StrictRefusesWithoutBinding() throws {
-        let crypto = ColumnCrypto(label: "worry-box")
-        DeviceBindingID.$testOverride.withValue(.unavailable) {
-            #expect(throws: ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
-                _ = try crypto.sealPlaintextV3Strict(Data("refuse me".utf8), contentKey: self.contentKey)
-            }
-        }
-        DeviceBindingID.$testOverride.withValue(.readError) {
-            #expect(throws: ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
-                _ = try crypto.sealPlaintextV3Strict(Data("refuse me too".utf8), contentKey: self.contentKey)
-            }
-        }
-    }
-
-    // MARK: C3 — the strict seal's output is byte-compatible with the shipping writer's v3: it
-    // starts with the version tag, opens under the v3 rung on the sealing install, and refuses
-    // on any other install.
-    @Test func strictSealOutputStartsWith0x03AndOpensV3() throws {
+    // MARK: The strict seal's output IS the shipping format: version tag, opens on the sealing
+    // install, refuses on any other. (Through Phase 2.6 this went through `openReportingRung`; that
+    // receipt-bearing dispatch existed only for the format migrator, which Phase 3 deleted along
+    // with the rungs it reported, so the assertion runs on the shipping reader now.)
+    @Test func strictSealOutputStartsWith0x03AndOpensAsV3() throws {
         let crypto = ColumnCrypto(label: "intimacy-log")
         let plaintext = Data("strictly bound".utf8)
         let sealed = try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
             try crypto.sealPlaintextV3Strict(plaintext, contentKey: contentKey)
         }
         #expect(sealed.first == ColumnCrypto.deviceBoundFormatVersionV3)
-        try DeviceBindingID.$testOverride.withValue(.identifier(installA)) {
-            let opened = try crypto.openReportingRung(sealed, contentKey: contentKey)
-            #expect(opened.rung == .v3)
-            #expect(opened.plaintext == plaintext)
-        }
+        #expect(try open(sealed, label: "intimacy-log", override: .identifier(installA)) == "strictly bound")
         #expect(throws: (any Error).self) {
-            try DeviceBindingID.$testOverride.withValue(.identifier(self.installB)) {
-                _ = try crypto.openReportingRung(sealed, contentKey: self.contentKey)
-            }
+            _ = try self.open(sealed, label: "intimacy-log", override: .identifier(self.installB))
         }
     }
 

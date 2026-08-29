@@ -400,21 +400,36 @@ enum FernletLockCrypto {
         return wrappedContentKeyFormatV2 + combined
     }
 
-    /// Opens a ChaChaPoly-wrapped content key; throws on tampering or a wrong wrapping key.
+    /// Opens a `FLW2`-marked ChaChaPoly-wrapped content key; throws on tampering or a wrong
+    /// wrapping key, and refuses anything that is not `FLW2` **by name**.
+    ///
+    /// ## The retired generation
+    ///
+    /// Through Phase 2.6 an unprefixed wrap was opened by a second, no-AAD branch — the last
+    /// `legacy-read` on this surface. Phase 3 of the crypto standardization round deleted it, so
+    /// a wrap without the marker now throws
+    /// ``FernletLockError/contentKeyWrapFormatRetired`` instead of degrading into a bare
+    /// ChaChaPoly authentication error that reads, wrongly, as "your data is corrupt".
+    ///
+    /// The marker itself STAYS — ``wrappedContentKeyFormatV2`` and ``LockWrapFormatCensus`` are
+    /// what let this refusal say *which* format it found. A refusal that cannot classify what it
+    /// is refusing cannot explain itself, and the four callers all surface this error to a person.
+    ///
+    /// Non-destructive by construction: it throws before any caller writes or deletes a row, so
+    /// the wrap it refused is still there for a future build or a forensic recovery.
     nonisolated static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
-        let wrappingKey = SymmetricKey(data: wrappingKeyData)
-        if wrappedContentKey.starts(with: wrappedContentKeyFormatV2) {
-            let sealedBox = try ChaChaPoly.SealedBox(
-                combined: wrappedContentKey.dropFirst(wrappedContentKeyFormatV2.count)
-            )
-            return try ChaChaPoly.open(
-                sealedBox,
-                using: wrappingKey,
-                authenticating: FernletCryptoPurpose.AEAD.lockContentKeyWrapV2.data
-            )
+        guard wrappedContentKey.starts(with: wrappedContentKeyFormatV2) else {
+            throw FernletLockError.contentKeyWrapFormatRetired
         }
-        let sealedBox = try ChaChaPoly.SealedBox(combined: wrappedContentKey)
-        return try ChaChaPoly.open(sealedBox, using: wrappingKey) // cryptographic-domain: legacy-read
+        let wrappingKey = SymmetricKey(data: wrappingKeyData)
+        let sealedBox = try ChaChaPoly.SealedBox(
+            combined: wrappedContentKey.dropFirst(wrappedContentKeyFormatV2.count)
+        )
+        return try ChaChaPoly.open(
+            sealedBox,
+            using: wrappingKey,
+            authenticating: FernletCryptoPurpose.AEAD.lockContentKeyWrapV2.data
+        )
     }
 
     /// The at-rest passcode verifier is the SHA-256 digest of the scrypt-derived key — NOT the derived
@@ -516,20 +531,25 @@ public enum LockKeychainKey: String {
     /// exact same key (keep-old-until-verified), and is never written again once gone.
     case wrappedContentKey = "com.fernlet.lock.wrappedContentKey"
     /// STAGING slot for the one-time legacy→`FLW2` re-wrap of ``wrappedContentKey``
-    /// (crypto-standardization Phase 2.5, `LockWrapFormatMigrator`).
+    /// (crypto-standardization Phase 2.5).
     ///
-    /// Holds the freshly written `FLW2` wrap ONLY between the migration pass's stage step and its
-    /// verified post-promote delete — the new wrap is proven to persist and unwrap on this device
-    /// here, while the legacy wrap still stands untouched, before the single transactional
-    /// `SecItemUpdate` promote ever touches the live row. **No reader ever consults it**: custody
+    /// **Nothing writes this row any more.** Phase 3 deleted the legacy wrap reader, which made
+    /// the Phase 2.5 migrator that staged here unable to convert anything, so it went with it.
+    /// The row and its sweep are KEPT deliberately: an orphan left by a pass that staged and
+    /// failed to promote is a scrypt-openable copy of the content key sitting on disk right now,
+    /// and retiring the only code that deletes it would strand it there forever.
+    ///
+    /// It held the freshly written `FLW2` wrap ONLY between the pass's stage step and its
+    /// verified post-promote delete — the new wrap proven to persist and unwrap on this device
+    /// while the legacy wrap still stood untouched, before the single transactional
+    /// `SecItemUpdate` promote ever touched the live row. **No reader ever consults it**: custody
     /// stays discriminated by ``wrappedContentKey`` alone, so this row can never resurrect a
-    /// scrypt custody state. Because an orphan is a scrypt-openable copy of the content key, its
-    /// lifetime is bounded by the custody-independent sweep in `unlock(passcode:for:)` — every
-    /// successful passcode verification deletes it, under EVERY custody state — and it is
-    /// destroyed by `destroyLocalUnlockKeys` (both duress responses) like the live wrap it stages
-    /// for. Written only through the service's `keychainStore` seam, so it inherits the same
-    /// `WhenUnlockedThisDeviceOnly`, never-synchronized class as the live row (pinned by
-    /// `KeyCustodyBoundaryTests`).
+    /// scrypt custody state. Its lifetime is bounded by the sweep in `unlock(passcode:for:)` —
+    /// every passcode unlock that RECOVERS a content key deletes it, under every custody arm that
+    /// gets that far — and it is destroyed by `destroyLocalUnlockKeys` (both duress responses)
+    /// like the live wrap it staged for. Written only through the service's `keychainStore` seam,
+    /// so it inherits the same `WhenUnlockedThisDeviceOnly`, never-synchronized class as the live
+    /// row (pinned by `KeyCustodyBoundaryTests`).
     case wrappedContentKeyRewrapStaging = "com.fernlet.lock.wrappedContentKey.rewrapStaging"
     /// The content key ECIES-wrapped under the non-exportable Secure Enclave key
     /// (`SecureEnclaveContentKeyWrap`). Additive while ``wrappedContentKey`` still exists;
@@ -1741,23 +1761,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // the biometric repair path; PIN-before-biometrics is untouched because only a verifier
         // match reaches this line.
         passcodeVerifiedThisProcess = true
-        // Custody-independent staging sweep (crypto-standardization Phase 2.5, §Q2a): a re-wrap
-        // staging orphan is a scrypt-openable copy of the content key; its lifetime is bounded by
-        // the next successful passcode verification under EVERY custody state — legacy,
-        // hard-bound, even undeterminable — never by the legacy arm, which the hard-bind flip may
-        // retire in the very unlock that orphaned it. `errSecItemNotFound` is the silent benign
-        // case; a real failure is audited inside `delete` (R7).
-        KeychainItem.delete(for: .wrappedContentKeyRewrapStaging, service: keychainService)
 
         let contentKeyData: Data?
         switch custody {
         case .legacyScryptWrapped(let wrappedData):
             let scryptUnwrapped = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
-            // Phase 2.5: standardize the row's wrap format at the ONE moment the wrapping key and
-            // the provably recoverable content key are both in hand — after the successful scrypt
-            // unwrap, before the SE flip below, so the convert runs on SE hardware too and the row
-            // is standardized closest to its proof. Never throws, never gates the unlock.
-            runLockWrapFormatMigration(contentKey: scryptUnwrapped, wrappingKey: computedVerifier)
             // Prefer the Secure-Enclave wrap when it exists AND provably matches the
             // scrypt-unwrapped key (the authoritative source while the legacy item is kept);
             // otherwise repair it.
@@ -1789,6 +1797,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             // live legacy install or advise a destructive reset on a transient. Neither.
             throw FernletLockError.keychainFailure(operation: "read wrappedContentKey", status: status)
         }
+        // Staging sweep (crypto-standardization Phase 2.5, §Q2a; re-placed by Phase 3): a re-wrap
+        // staging orphan is a scrypt-openable copy of the content key, and its lifetime is bounded
+        // here rather than in the legacy arm, which the hard-bind flip may retire in the very
+        // unlock that orphaned it. It runs under every custody arm that RECOVERED a key — legacy
+        // and hard-bound alike, including the tolerated nil — and no longer before the switch:
+        // Phase 3 deleted the legacy wrap READER, so a live row this build cannot open makes a
+        // staging orphan the only openable copy of the content key left. Sweeping it on a path
+        // that then throws would delete key material on a failure path. `errSecItemNotFound` is
+        // the silent benign case; a real failure is audited inside `delete` (R7).
+        KeychainItem.delete(for: .wrappedContentKeyRewrapStaging, service: keychainService)
         // First successful unlock under a build that splits the verifier from the wrapping key:
         // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).
         migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
@@ -2004,12 +2022,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             KeychainItem.deleteAll(service: service)
         }
         try buffer.purge()
-        // The Phase 2.6 sealed-column format-migration latch's entire subject is the store the
-        // next two lines purge and rebuild, and both tolerate partial failure — so the latch is
-        // cleared FIRST, unconditionally (the delete-all funnel's `sealedStoreRebuildHook` places
-        // the same reset the same way): a failed purge here would otherwise leave rows behind —
-        // under a destroyed content key — with the latch still standing over them.
-        SealedColumnFormatMigrator.latch().reset()
         try privatePersistenceController.purgeEncryptedEntities()
         // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
         // locked deletion path, and this one has just destroyed the key anyway.
@@ -3450,43 +3462,6 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             if case .hardBoundToSecureEnclave = contentKeyCustody() {
                 FernletAuditLog.log("lock.seWrapMissingAfterFailedStore")
             }
-        }
-    }
-
-    // MARK: - Phase 2.5: legacy wrap → FLW2 re-wrap (crypto-standardization)
-
-    /// Runs the Phase 2.5 legacy→`FLW2` wrap re-wrap at its SOLE production seam: the
-    /// `.legacyScryptWrapped` arm of a passcode unlock, immediately after the successful scrypt
-    /// unwrap proved the content key recoverable and before the Secure-Enclave flip.
-    ///
-    /// Never throws, never gates the unlock: a failed re-wrap leaves the legacy wrap in place and
-    /// the user in — the unlock tail is byte-identical on every migration outcome, and the pass
-    /// retries at the next passcode unlock (resumable by re-derivation, not by memory). The
-    /// migrator is credential-gated BY CONSTRUCTION (its init requires the recovered content key
-    /// and the just-derived wrapping key), so no launch task or credential-free caller can ever
-    /// exist. The staging-row orphan cleanup does NOT live here: this helper runs only in the
-    /// legacy arm, which the hard-bind flip can retire in the very unlock that orphaned the row —
-    /// the custody-independent sweep in `unlock(passcode:for:)` owns that bound (§Q2a).
-    ///
-    /// R7: `run()`'s Bool is read and audited (`lock.wrapFormatMigrationIncomplete`), never
-    /// dropped.
-    private func runLockWrapFormatMigration(contentKey: Data, wrappingKey: Data) {
-        let migrator = LockWrapFormatMigrator(
-            keychainService: keychainService,
-            contentKey: contentKey,
-            wrappingKey: wrappingKey,
-            wrap: { [cryptoProvider] in try cryptoProvider.wrapContentKey($0, using: $1) },
-            unwrap: { [cryptoProvider] in try cryptoProvider.unwrapContentKey($0, using: $1) },
-            loadRow: keychainLoadDistinguishing,
-            storeRow: keychainStore,
-            updateRow: keychainUpdate,
-            deleteRow: keychainDelete,
-            // The latch reads through the SAME injected seam as S0 and custody — one keychain
-            // view per pass, in tests and production alike (never a defaulted real read here).
-            latch: LockWrapRowLatch(keychainService: keychainService, loadingRow: keychainLoadDistinguishing)
-        )
-        if !migrator.run() {
-            FernletAuditLog.log("lock.wrapFormatMigrationIncomplete")
         }
     }
 

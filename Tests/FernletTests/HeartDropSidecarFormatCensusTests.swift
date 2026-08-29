@@ -126,9 +126,10 @@ struct HeartDropSidecarFormatCensusTests {
 
     // MARK: - Legacy (FSC1)
 
-    /// The first `FSC1` fixture in the repo, counted as legacy. This is THE number Phase 3 waits to
-    /// see reach zero, so a census that failed to recognise the legacy prefix would authorise
-    /// deleting a reader while readable-only-by-it bytes were still on disk.
+    /// The first `FSC1` fixture in the repo, counted as legacy. This WAS the number Phase 3 waited
+    /// to see reach zero; now that the reader is gone it is the number that says how many stored
+    /// sidecars this build can no longer open — which makes recognising the legacy prefix more
+    /// important, not less, since a census that missed it would under-report real losses.
     @Test func aByteExactLegacyBlobIsCountedAsLegacySealed() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -144,10 +145,19 @@ struct HeartDropSidecarFormatCensusTests {
         #expect(!report.isClean, "a scope holding a legacy blob is not proof of completion")
     }
 
-    /// The fixture is a GENUINE legacy blob, not just four convincing bytes: the shipping seal —
-    /// the one whose legacy branch Phase 3 deletes — opens it back to the original plaintext.
-    /// Without this, the census test above could pass against a fixture no real device ever wrote.
-    @Test func theLegacyFixtureOpensThroughTheShippingLegacyBranch() throws {
+    /// Inverted by Phase 3, which deleted the `FSC1` open. This asserted that the shipping seal
+    /// OPENED the fixture back to its plaintext — the proof that the census was counting a format
+    /// a real device could have written, rather than four convincing bytes. That proof is no longer
+    /// available by opening, so what it becomes is the pair of properties the deletion turns on:
+    ///
+    /// 1. **The seal still CLASSIFIES the fixture as sealed.** This is the load-bearing half.
+    ///    `ProtectedSidecar` splits on `isSealed` into "sealed" and "legacy PLAINTEXT v0 — read it
+    ///    as JSON and re-seal it", so an `FSC1` blob that stopped answering true would be handed to
+    ///    the plaintext branch, fail to decode, and be destroyed as *corrupt* — data destruction,
+    ///    not a failed read.
+    /// 2. **And the open refuses it BY NAME**, with a usable key sitting in the keychain, so the
+    ///    refusal is provably about the format and not about a key nobody could find.
+    @Test func theLegacyFixtureStillClassifiesAsSealedAndIsRefusedByName() throws {
         let service = uniqueHeartDropKeychainService()
         defer { KeychainItem.deleteAll(service: service) }
 
@@ -157,7 +167,9 @@ struct HeartDropSidecarFormatCensusTests {
 
         let seal = HeartDropSidecarSeal.make(keychainService: service)
         #expect(seal.isSealed(blob), "the shipping seal does not recognise its own legacy prefix")
-        #expect(try seal.open(blob) == plaintext)
+        #expect(throws: SidecarSeal.SealError.legacyFormatRetired) { _ = try seal.open(blob) }
+        // The key really is usable — otherwise the refusal above would prove nothing about format.
+        #expect(try seal.open(try seal.seal(plaintext)) == plaintext)
     }
 
     // MARK: - Current (FSC2), as production writes it

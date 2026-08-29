@@ -11,7 +11,13 @@ import Security
 /// ``errorDescription`` renders each case as user-facing copy, including a relative countdown for
 /// ``cooldownActive(deadline:)`` and a decoded `OSStatus` message for
 /// ``keychainFailure(operation:status:)``.
-public enum FernletLockError: Error, LocalizedError {
+///
+/// `Equatable` so a test can require an exact case rather than the type. That distinction is
+/// load-bearing on this type in particular: `#expect(throws: FernletLockError.self)` passes for
+/// ``invalidPasscode`` and ``contentKeyWrapFormatRetired`` alike, and telling those two apart is
+/// the whole point of the second one existing. Every associated value is already `Equatable`
+/// (`String`, `Date`, `OSStatus`), so the conformance is synthesized.
+public enum FernletLockError: Error, LocalizedError, Equatable {
     /// No app lock has been set up yet; the operation requires a configured lock.
     case notConfigured
     /// A credential was rejected during setup/validation; the associated message is shown verbatim.
@@ -46,6 +52,21 @@ public enum FernletLockError: Error, LocalizedError {
     /// ``contentKeyUnrecoverable``: nothing here justifies telling the user to run a destructive
     /// reset. Retry once the device is unlocked.
     case contentKeyTemporarilyUnavailable(status: OSStatus)
+    /// The passcode was CORRECT, the scrypt-wrapped content key is PRESENT, and it is in the
+    /// pre-`FLW2` unprefixed format whose reader Phase 3 of the crypto standardization round
+    /// deleted. Nothing is wrong with the passcode, the wrapping key, or the ciphertext — this
+    /// build simply stopped reading that generation, so the wrap is terminal here.
+    ///
+    /// Deliberately distinct from all three neighbours. Not ``invalidPasscode``: the entry was
+    /// right, and telling the user to try again would be a lie they could repeat forever. Not
+    /// ``contentKeyUnrecoverable``: that one means a Secure-Enclave key was destroyed, a
+    /// different diagnosis with a different history. Not a bare ChaChaPoly authentication throw,
+    /// which is what this branch used to degrade into and reads as "your data is corrupt".
+    ///
+    /// Non-destructive by construction: it is thrown from ``FernletLockCrypto`` before any caller
+    /// has written or deleted a row, so the wrap, the verifier, the salt, the enclave wrap and the
+    /// biometric bypass all survive the refusal untouched.
+    case contentKeyWrapFormatRetired
 
     /// User-facing description for each case, suitable for direct display in the lock UI.
     ///
@@ -109,6 +130,11 @@ public enum FernletLockError: Error, LocalizedError {
                           defaultValue: "Fernlet couldn't reach this device's secure hardware. Make sure iPhone is unlocked and try again.",
                           bundle: .module,
                           comment: "Shown when the Secure Enclave could not be READ at this instant, typically because the device is locked. Must NEVER mention resetting: unlike the unrecoverable case the key is probably intact, and a reset here would destroy data for nothing.")
+        case .contentKeyWrapFormatRetired:
+            return String(localized: "lock.error.contentKeyWrapFormatRetired",
+                          defaultValue: "This phone's saved key is in an older format Fernlet no longer opens. Reset app lock to continue.",
+                          bundle: .module,
+                          comment: "Shown when the passcode was CORRECT but the stored content-key wrap is in a retired at-rest format this build no longer reads. Must NOT suggest retrying the passcode — nothing about the entry was wrong — and must name the destructive reset as the only way forward.")
         }
     }
 
