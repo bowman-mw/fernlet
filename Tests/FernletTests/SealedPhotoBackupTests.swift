@@ -942,7 +942,7 @@ struct SealedPhotoBackupTests {
 
         // ...and the binding gate refuses on that proof even with the migration latch satisfied.
         let bindingDefaults = isolatedDefaults()
-        OwnPhotoMigrationLatch(defaults: bindingDefaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: bindingDefaults).markComplete()
         #expect(
             OwnPhotoKeyBinder(
                 escrowRouteCommitted: OwnPhotoEscrowCommitLedger(defaults: defaults).isCommitted,

@@ -837,8 +837,8 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.ownPhotos.deviceBound")
-            } else if !store.ownPhotoKeyMigrationComplete {
-                Text("Fernlet is still moving your existing photos onto their own encryption key. "
+            } else if !store.ownPhotoSweepComplete {
+                Text("Fernlet is still checking your existing photos. "
                     + "Locking them to this device becomes available once that finishes.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)

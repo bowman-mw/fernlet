@@ -19,7 +19,7 @@ import Security
 /// taken after the flip (stated honestly in `Docs/Verifiability.md` §5).
 ///
 /// Device-local by construction (`UserDefaults`, never synced), exactly like
-/// ``OwnPhotoMigrationLatch``: it records a decision about THIS device's keychain row.
+/// ``MediaAtRestFormatMigrationLatch``: it records a decision about THIS device's keychain row.
 ///
 /// Concurrency: a `nonisolated` value type over `UserDefaults` (itself thread-safe).
 public struct OwnPhotoDeviceBindingConsent {
@@ -62,10 +62,14 @@ public struct OwnPhotoDeviceBindingConsent {
 public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
     /// The own-photos row is device-bound now — either it already was, or this call re-bound it.
     case bound
-    /// ``OwnPhotoMigrationLatch`` is not set: at least one own file may still be sealed under the
-    /// pre-split key (or the pass could not prove otherwise). Binding here is the documented
-    /// data-loss path — the straggler would become permanently unreadable bytes with no error
-    /// anywhere — so the gate refuses.
+    /// The sweep latch is not set: this device has not successfully walked and classified its own
+    /// photo corpora (or a pass found something it could not classify). Binding on a corpus nobody
+    /// managed to LOOK at is the documented data-loss path — a straggler would become permanently
+    /// unreadable bytes with no error anywhere — so the gate refuses.
+    ///
+    /// The name is kept from when `OwnPhotoMigrationLatch` filled this half, because it is a
+    /// public case other layers switch on and renaming it buys nothing; what changed underneath is
+    /// which pass proves the property. See ``OwnPhotoKeyBinder`` for that history.
     case refusedMigrationIncomplete
     /// The migration is proven complete, but the user has neither the escrow photo backup switched
     /// on nor recorded ``OwnPhotoDeviceBindingConsent``. Binding would silently trade away their
@@ -93,13 +97,34 @@ public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
 /// the whole design: binding is only safe when **both** conditions hold, and both are facts about
 /// this device at this moment, not about the build:
 ///
-/// 1. ``OwnPhotoMigrationLatch`` is set — no own file this build can open is still sealed under the
-///    pre-split key. Binding before that turns any straggler into permanently unreadable bytes.
-///    (That wording is narrower than the latch's original "every own file is on the own key", and
-///    deliberately so: Phase 3 of the crypto standardization plan retired the reader for unmarked
-///    bytes, so a genuine pre-split file is now unopenable residue the latch steps over. Binding on
-///    that reading takes nothing further away — those bytes are already unreadable — but the gate
-///    should not be quoted as proving more than it does. See ``OwnPhotoMigrationLatch``.)
+/// 1. ``MediaAtRestFormatMigrationLatch`` is set — this device has walked every own-photo location
+///    and classified every file it found. Binding on a corpus nobody managed to look at turns any
+///    straggler into permanently unreadable bytes.
+///
+///    **This half changed hands at the close of the crypto standardization round, and the history
+///    matters more than the diff.** It used to be `OwnPhotoMigrationLatch`, set by the eager
+///    `OwnPhotoKeyMigrator` re-seal pass of the media-key split, and it attested the strong thing:
+///    every own file is sealed under the own-photos key. Phase 3 deleted the unmarked at-rest read,
+///    which (a) left that pass with no input any shipping writer could produce, and (b) silently
+///    narrowed what its latch attested, since a genuine pre-split file became `unopenable` residue —
+///    a bucket deliberately outside `isClean`, so a pass over a corpus of them latched anyway. The
+///    owner retired the pass and its latch rather than keep a healer that could no longer heal.
+///
+///    ``MediaAtRestFormatMigrationLatch`` replaces it because it sweeps the same locations
+///    (`OwnPhotoCorpusLayout.sealedLocations`) and refuses on the same fail-closed grounds:
+///    `indeterminate` (an unlistable directory, or bytes that could not be READ at all — own files
+///    are `.completeFileProtection` while both key rows are `AfterFirstUnlock` and cached, so a
+///    device that locks mid-pass fails every read while the keys stay perfectly available) and
+///    `abortedNoOwnKey`. That "I could not look" refusal is the half of the old latch that still had
+///    teeth, and it is preserved exactly.
+///
+///    **What it does NOT preserve, stated rather than glossed.** The new latch also sweeps the
+///    FRIEND WALL, so `abortedNoWallKey` — Phase 2.3's benign-pending state on a wall root whose
+///    keychain row was never minted — can hold this gate open where the old one would not have. That
+///    is strictly harder to satisfy and never looser, which is the correct direction for a gate on an
+///    irreversible flip; and it is a format proof rather than a key-custody proof, so it no longer
+///    asserts anything about WHICH key a file opens under. Nothing else does either: the reader that
+///    could have told the difference is what Phase 3 removed.
 /// 2. The user has a sanctioned cross-device route: the opt-in own-photo escrow backup has
 ///    actually **committed** a copy (not merely been switched on — see ``escrowRouteCommitted``),
 ///    or ``OwnPhotoDeviceBindingConsent`` is recorded. Binding before that silently deletes their
@@ -140,7 +165,9 @@ public struct OwnPhotoKeyBinder {
     ///   there was nothing to commit because the user has no own photos at all); see
     ///   `OwnPhotoEscrowCommitLedger` on the app side.
     private let escrowRouteCommitted: Bool
-    private let migrationLatch: OwnPhotoMigrationLatch
+    /// The sweep proof for gate half 1 — see the type doc for why this is the media at-rest format
+    /// latch and not the retired own-photo key latch.
+    private let sweepLatch: MediaAtRestFormatMigrationLatch
     private let consent: OwnPhotoDeviceBindingConsent
 
     /// Creates a gate evaluation.
@@ -148,11 +175,11 @@ public struct OwnPhotoKeyBinder {
     /// - Parameters:
     ///   - escrowRouteCommitted: Whether the own-photo escrow backup has committed a copy of this
     ///     device's photos — see ``escrowRouteCommitted``. Never merely the preference.
-    ///   - defaults: Backing store for the migration latch and the consent record; tests inject an
+    ///   - defaults: Backing store for the sweep latch and the consent record; tests inject an
     ///     isolated suite.
     public init(escrowRouteCommitted: Bool, defaults: UserDefaults = .standard) {
         self.escrowRouteCommitted = escrowRouteCommitted
-        self.migrationLatch = OwnPhotoMigrationLatch(defaults: defaults)
+        self.sweepLatch = MediaAtRestFormatMigrationLatch(defaults: defaults)
         self.consent = OwnPhotoDeviceBindingConsent(defaults: defaults)
     }
 
@@ -165,14 +192,14 @@ public struct OwnPhotoKeyBinder {
     /// Whether both halves of the gate hold right now. Used by the UI to decide whether the
     /// consent ceremony is offerable yet, without performing any keychain work.
     public var isEligible: Bool {
-        migrationLatch.isComplete && hasCrossDeviceRoute
+        sweepLatch.isComplete && hasCrossDeviceRoute
     }
 
-    /// Whether the eager re-seal pass has proven every own file is on the own-photos key — the
+    /// Whether the media at-rest sweep has walked and classified every own-photo location — the
     /// half of the gate the user cannot influence, surfaced so the UI can say "still preparing"
     /// instead of offering a button that would refuse.
     public var isMigrationComplete: Bool {
-        migrationLatch.isComplete
+        sweepLatch.isComplete
     }
 
     /// Binds the own-photos row to this device if — and only if — both halves of the gate hold.
@@ -186,7 +213,7 @@ public struct OwnPhotoKeyBinder {
     ///   `@discardableResult` — the value is Result-shaped (it carries `.rebindFailed(OSStatus)`),
     ///   so ignoring it would drop a failure.
     public func bindIfEligible() -> OwnPhotoKeyBindingOutcome {
-        guard migrationLatch.isComplete else { return .refusedMigrationIncomplete }
+        guard sweepLatch.isComplete else { return .refusedMigrationIncomplete }
         guard hasCrossDeviceRoute else { return .refusedNoRecoveryRoute }
         // Mints device-bound when the row is absent; reads (and leaves alone) an existing row.
         let provider = KeychainPrivateMediaKeyProvider(role: .ownPhotos, deviceBound: true)

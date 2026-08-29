@@ -496,9 +496,12 @@ final class FernletStore {
     /// keychain row, so they share the key material and differ only in their private cache), and
     /// every one of them stays on this main-actor store — see `PrivateMediaKeyProviding`.
     /// `ownPhotoLegacyKeyProvider` is the PRE-SPLIT key, injected as the read-path dual-open
-    /// fallback for files `OwnPhotoKeyMigrator`'s eager pass has not re-sealed yet — and dropped
-    /// (nil) the moment the own key is device-bound, which is what makes that binding mean
-    /// anything (step 5c).
+    /// fallback for own files not yet re-sealed under the own key — and dropped (nil) the moment the
+    /// own key is device-bound, which is what makes that binding mean anything (step 5c). Since
+    /// Phase 3 of the crypto standardization plan required the `FMA2` marker on read, that fallback
+    /// reaches only marked files and in practice recovers nothing: every file the pre-split key
+    /// actually sealed predates the marker. It is kept because dropping it is the BINDING's job and
+    /// not a read path's.
     nonisolated private static func ownPhotoKeyProvider() -> KeychainPrivateMediaKeyProvider {
         KeychainPrivateMediaKeyProvider(role: .ownPhotos)
     }
@@ -509,7 +512,9 @@ final class FernletStore {
     /// Nil once the own-photos row is device-bound. The question is asked of the KEYCHAIN, not of a
     /// persisted flag, so a device restored from a backup taken before the flip (bound row absent,
     /// loose row restored) correctly keeps its fallback. Safe by construction: the row can only be
-    /// bound after `OwnPhotoMigrationLatch` proved there is nothing left for the fallback to open.
+    /// bound after the media at-rest sweep proved this device could walk and classify every
+    /// own-photo location (`OwnPhotoKeyBinder`'s first gate half; it was `OwnPhotoMigrationLatch`
+    /// until that pass was retired).
     ///
     /// Internal rather than private purely so `OwnPhotoKeyBindingTests` can pin that biconditional
     /// — "fallback present exactly when the key is not bound" is the property, and asserting it on
@@ -3165,7 +3170,7 @@ final class FernletStore {
 
     /// Whether this device's sealed-photo-backup format check has latched (crypto-standardization
     /// Phase 2.1) — observable so Privacy & Data can render the pending nudge, following the
-    /// `ownPhotoKeyMigrationComplete` pattern: initialized from the latch at construction and
+    /// `ownPhotoSweepComplete` pattern: initialized from the latch at construction and
     /// re-read after every seam that can move it, because the latch says what is true.
     private(set) var sealedPhotoHashMigrationComplete = SealedPhotoBackupMigrationLatch().isComplete
 
@@ -5788,19 +5793,24 @@ final class FernletStore {
         // carried in as a Bool, because only `Sendable` values may cross into the detached task.
         let escrowRouteCommitted = OwnPhotoEscrowCommitLedger().isCommitted
         Task.detached(priority: .utility) { [weak self] in
-            let complete = OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
-            let outcome = complete
-                ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
-                : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
-            await self?.recordOwnPhotoKeyBindingOutcome(outcome)
-            // After the key pass — the ordering contract above. The Bool is consumed by the
-            // pass's own `privateMedia.formatMigrationPass` audit line, which names every tally
-            // and any blocking bucket; nothing downstream gates on it (Phase 3 reads the latch
-            // plus the census on a real device, never this launch's return value).
-            let mediaLatched = MediaAtRestFormatMigrator.standard(
+            // The ONE own-photo sweep since the crypto standardization round retired
+            // `OwnPhotoKeyMigrator` (owner decision, 2026-08-29). This used to run second, after the
+            // key pass, under an ordering contract that no longer has two sides — and the binding
+            // gate now reads THIS latch, so the bind has to follow it rather than precede it. The
+            // returned Bool is the latch state, not the tally; the pass's own
+            // `privateMedia.formatMigrationPass` audit line names every bucket.
+            let sweepLatched = MediaAtRestFormatMigrator.standard(
                 documentsDirectory: documentsDirectory,
                 proximitySupportDirectory: proximityDirectory
             ).run()
+            // Refuse WITHOUT touching the keychain when the sweep did not latch: `bindIfEligible`
+            // would return the same case, and asking it to would spend a `SecItemCopyMatching` to
+            // learn what the Bool in hand already says.
+            let outcome = sweepLatched
+                ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
+                : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
+            await self?.recordOwnPhotoKeyBindingOutcome(outcome)
+            let mediaLatched = sweepLatched
             #if DEBUG
             // Phase 3 gate readout: the launch pass's verdict is retained (DEBUG only, nothing
             // shipping gates on it) so a `latch == false` on this device is never rendered as a bare
@@ -5921,17 +5931,22 @@ final class FernletStore {
     /// instant before the launch pass runs.
     private(set) var ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
 
-    /// Whether the eager own-photo re-seal pass has proven completion — the half of the binding gate
-    /// the user cannot influence. Observable so the settings screen can say "still preparing"
-    /// instead of offering a button that would refuse.
-    private(set) var ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+    /// Whether the media at-rest sweep has walked and classified every own-photo location — the half
+    /// of the binding gate the user cannot influence. Observable so the settings screen can say
+    /// "still preparing" instead of offering a button that would refuse.
+    ///
+    /// Was `ownPhotoKeyMigrationComplete` over `OwnPhotoMigrationLatch` until that pass was retired
+    /// (crypto standardization round, owner decision 2026-08-29); renamed rather than repointed
+    /// quietly, because "migration complete" is not what the surviving latch attests. See
+    /// `OwnPhotoKeyBinder` for the full history and for what the replacement does not preserve.
+    private(set) var ownPhotoSweepComplete = MediaAtRestFormatMigrationLatch().isComplete
 
     /// Folds a binding evaluation back into the observable custody state.
     ///
     /// Both flags are re-read from their sources rather than inferred from `outcome`: the outcome
     /// says what this evaluation did, the keychain and the latch say what is true.
     private func recordOwnPhotoKeyBindingOutcome(_ outcome: OwnPhotoKeyBindingOutcome) {
-        ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+        ownPhotoSweepComplete = MediaAtRestFormatMigrationLatch().isComplete
         ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
         switch outcome {
         case .bound:

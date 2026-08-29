@@ -217,7 +217,7 @@ struct KeyCustodyBoundaryTests {
         let suiteName = "KeyCustodyBoundaryTests-ownPhotoBinding-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
 
         let before = KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey()
             .map { $0.withUnsafeBytes { Data($0) } }

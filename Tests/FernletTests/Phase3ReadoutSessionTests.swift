@@ -41,7 +41,7 @@ struct Phase3ReadoutSessionTests {
     }
 
     private func latches() -> Phase3LatchReadings {
-        Phase3LatchReadings(mediaAtRest: true, ownPhotoKey: true, sealedPhotoBackup: true)
+        Phase3LatchReadings(mediaAtRest: true, sealedPhotoBackup: true)
     }
 
     private func readings() -> CryptoFormatCensus.Readings {

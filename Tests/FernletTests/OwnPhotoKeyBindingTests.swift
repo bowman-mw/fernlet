@@ -104,9 +104,13 @@ struct OwnPhotoKeyBindingTests {
 
     // MARK: - The gate's closed directions
 
-    // MARK: The load-bearing refusal: until `OwnPhotoMigrationLatch` proves every own file is sealed
-    // under the own key, binding is refused even with the escrow route on — because a file still
-    // under the pre-split key would become unreadable the moment the fallback that opens it goes.
+    // MARK: The load-bearing refusal: until the media at-rest sweep proves this device walked and
+    // classified every own-photo location, binding is refused even with the escrow route on —
+    // because a straggler would become unreadable the moment the fallback that opens it goes.
+    //
+    // The latch behind this half was `OwnPhotoMigrationLatch` until the crypto standardization
+    // round retired the pass that set it; `MediaAtRestFormatMigrationLatch` inherited the job. What
+    // survives is the "I could not look" refusal, which is the half that ever had teeth.
     @Test func bindingIsRefusedUntilTheMigrationLatchIsSet() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -123,7 +127,7 @@ struct OwnPhotoKeyBindingTests {
     @Test func bindingIsRefusedWithoutACrossDeviceRoute() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
 
         let before = ownRowAccessibility()
         let binder = OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults)
@@ -144,7 +148,7 @@ struct OwnPhotoKeyBindingTests {
         #expect(outcome == .refusedMigrationIncomplete)
         #expect(OwnPhotoDeviceBindingConsent(defaults: defaults).isRecorded)
         // ...and the recorded consent is what makes the NEXT evaluation eligible.
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
         #expect(OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults).isEligible)
     }
 
@@ -155,7 +159,7 @@ struct OwnPhotoKeyBindingTests {
     @Test func theEscrowRouteUnlocksTheFlip() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
 
         let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
         #expect(outcome == .bound)
@@ -168,7 +172,7 @@ struct OwnPhotoKeyBindingTests {
     @Test func recordedConsentSubstitutesForTheEscrowRoute() {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
 
         let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: false, defaults: defaults).recordConsentAndBind()
         #expect(outcome == .bound)
@@ -181,7 +185,7 @@ struct OwnPhotoKeyBindingTests {
     @Test func bindingIsIdempotentAndNeverChangesTheKeyMaterial() throws {
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+        MediaAtRestFormatMigrationLatch(defaults: defaults).markComplete()
         let binder = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults)
 
         #expect(binder.bindIfEligible() == .bound)
@@ -194,27 +198,32 @@ struct OwnPhotoKeyBindingTests {
 
     // MARK: - The property the phase exists for
 
-    // MARK: End to end, on the real rows: a corpus sealed under the PRE-SPLIT key is migrated, the
-    // key is bound, the dual-open fallback is dropped — and every photo still opens, byte-identical.
-    // If the flip could strand a photo, this is where it would show.
+    // MARK: End to end, on the real rows: a corpus sealed under the OWN key is swept, the key is
+    // bound, the dual-open fallback is dropped — and every photo still opens, byte-identical. If
+    // the flip could strand a photo, this is where it would show.
+    //
+    // The corpus is seeded under the OWN key because that is what every shipping writer produces.
+    // Until the crypto standardization round's close this test seeded the PRE-SPLIT key and had
+    // `OwnPhotoKeyMigrator` re-seal it, which is exactly the step that no longer exists — see
+    // ``aWallKeySealedOwnFileNoLongerBlocksTheGateAndIsLostAcrossTheFlip`` for what that costs,
+    // pinned rather than left as a surprise.
     @Test func noOwnPhotoBecomesUnreadableAcrossTheFlip() throws {
         let root = try makeDocumentsDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let (defaults, suiteName) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let legacyKey = try #require(KeychainPrivateMediaKeyProvider(role: .friendWall).mediaKey())
         let ownKeyBefore = try #require(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
 
-        // One legacy-sealed photo in every own corpus, plus the sealed progress index.
+        // One photo in every own corpus, plus the sealed progress index.
         //
         // The purpose beside each directory is the one the SHIPPING store is wired with —
         // `FernletStore`'s recipe store, `ProgressPhotoStore`'s inner store, and `MealPhotoStore`'s
         // own default. It is spelled out rather than taken from `OwnPhotoCorpusLayout.sealPurpose`
-        // on purpose: reading with the migrator's own mapping would make a migrator that resealed a
-        // corpus under the wrong domain invisible here, which is precisely the stranding this test
-        // exists to catch. The set check keeps the explicit list honest — a fourth corpus fails
-        // loudly instead of being silently skipped.
+        // on purpose: reading with the sweep's own mapping would make a pass that rewrote a corpus
+        // under the wrong domain invisible here, which is precisely the stranding this test exists
+        // to catch. The set check keeps the explicit list honest — a fourth corpus fails loudly
+        // instead of being silently skipped.
         let locations = OwnPhotoCorpusLayout.sealedLocations(in: root)
         let corpora: [(directory: URL, purpose: CryptographicPurpose)] = [
             (OwnPhotoCorpusLayout.mealPhotosDirectory(in: root), FernletCryptoPurpose.AEAD.mealPhotoV2),
@@ -233,20 +242,24 @@ struct OwnPhotoKeyBindingTests {
             let plaintext = jpeg()
             let id = UUID()
             let url = corpus.directory.appendingPathComponent("\(id.uuidString).jpg")
-            try sealed(plaintext, under: legacyKey, at: url).write(to: url)
+            try sealed(plaintext, under: ownKeyBefore, at: url).write(to: url)
             photos.append((corpus.directory, corpus.purpose, id, plaintext))
         }
         let indexURL = try #require(locations.files.first)
         let indexPlaintext = Data("[]".utf8)
-        try sealed(indexPlaintext, under: legacyKey, at: indexURL).write(to: indexURL)
+        try sealed(indexPlaintext, under: ownKeyBefore, at: indexURL).write(to: indexURL)
 
-        // Binding is refused while those files are still legacy — the latch has not been earned yet.
+        // Binding is refused before any pass has looked — the latch has not been earned yet.
         #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
                 == .refusedMigrationIncomplete)
 
-        // The eager pass earns it.
-        #expect(OwnPhotoKeyMigrator.standard(documentsDirectory: root, defaults: defaults).run(),
-                "the migration did not reach a clean pass")
+        // The sweep earns it. An empty proximity root means the wall half has no candidates, so
+        // `abortedNoWallKey` cannot fire and the verdict is about the own corpora alone.
+        #expect(MediaAtRestFormatMigrator.standard(
+            documentsDirectory: root,
+            proximitySupportDirectory: root.appendingPathComponent("Proximity", isDirectory: true),
+            defaults: defaults
+        ).run(), "the media at-rest sweep did not reach a clean pass")
         #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible() == .bound)
         #expect(ownRowAccessibility() == deviceBoundClass)
 
@@ -270,6 +283,57 @@ struct OwnPhotoKeyBindingTests {
         }
         #expect(opens(indexURL, under: ownKeyAfter) == indexPlaintext,
                 "the sealed progress index became unreadable across the binding flip")
+    }
+
+    // MARK: What retiring `OwnPhotoKeyMigrator` COST, pinned so it is a recorded trade and not a
+    // surprise. A marked own-corpus file sealed under the WALL key used to block this gate (the key
+    // pass would report `resealed > 0`, `isClean` false) and then be healed onto the own key. The
+    // sweep that replaced it classifies by MARKER and never asks which key opens a file, so such a
+    // file is `alreadyCurrentFormat`, the latch sets, the bind proceeds, and the fallback that was
+    // the file's last reader is dropped.
+    //
+    // Accepted knowingly at the round's close: no shipping writer produces this state (the key
+    // split predates the `FMA2` marker, so every genuinely wall-key-sealed own file is UNMARKED and
+    // was already unopenable after Phase 3 deleted the unmarked read), and Phase 2.3's
+    // `legacyKeySealedOwnFile` probe — the one other check on the same hole — had already gone with
+    // the wall-key open it depended on. If a future feature can land marked foreign-key bytes in an
+    // own corpus (an escrow restore sealed elsewhere is the named candidate), this pin is where the
+    // consequence is written down and `MediaAtRestFormatMigrationLatch.reset()` is the remedy.
+    @Test func aWallKeySealedOwnFileNoLongerBlocksTheGateAndIsLostAcrossTheFlip() throws {
+        let root = try makeDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (defaults, suiteName) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let wallKey = try #require(KeychainPrivateMediaKeyProvider(role: .friendWall).mediaKey())
+        let ownKey = try #require(KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey())
+        #expect(bytes(wallKey) != bytes(ownKey), "the two media rows vend the same key")
+
+        let id = UUID()
+        let directory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: root)
+        let url = directory.appendingPathComponent("\(id.uuidString).jpg")
+        try sealed(jpeg(), under: wallKey, at: url).write(to: url)
+
+        // The sweep latches over it: the marker is current, and nothing asks which key opens it.
+        #expect(MediaAtRestFormatMigrator.standard(
+            documentsDirectory: root,
+            proximitySupportDirectory: root.appendingPathComponent("Proximity", isDirectory: true),
+            defaults: defaults
+        ).run(), "the sweep blocked on a marked file, so this pin is describing the wrong behaviour")
+        #expect(OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).isEligible,
+                "the gate refused, so the trade this pin records is not the one being made")
+
+        // And the file is unreadable the way the app reads once bound — fallback dropped.
+        let bound = MealPhotoStore(
+            directory: directory,
+            keyProvider: KeychainPrivateMediaKeyProvider(role: .ownPhotos),
+            allowsLegacyPlaintextUpgrade: false,
+            legacyKeyProvider: nil,
+            purpose: FernletCryptoPurpose.AEAD.mealPhotoV2
+        )
+        #expect(bound.imageData(for: id) == nil)
+        // Never handed back as garbage, and never deleted: the bytes are still exactly on disk.
+        #expect(opens(url, under: wallKey) != nil, "the sweep rewrote or removed bytes it cannot heal")
     }
 
     // MARK: - Wiring

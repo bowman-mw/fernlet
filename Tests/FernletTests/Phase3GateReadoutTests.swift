@@ -63,12 +63,10 @@ struct Phase3GateReadoutTests {
     }
 
     private func latches(
-        mediaAtRest: Bool = true,
-        ownPhotoKey: Bool = true
+        mediaAtRest: Bool = true
     ) -> Phase3LatchReadings {
         Phase3LatchReadings(
             mediaAtRest: mediaAtRest,
-            ownPhotoKey: ownPhotoKey,
             sealedPhotoBackup: true
         )
     }
@@ -1203,21 +1201,23 @@ struct Phase3GateReadoutTests {
         #expect(readout.stamps.isEmpty)
     }
 
-    /// `Phase3LatchReadings.take(defaults:)` reads all THREE surviving bits from an ISOLATED suite.
+    /// `Phase3LatchReadings.take(defaults:)` reads both surviving bits from an ISOLATED suite.
     ///
-    /// It used to read six and to take the census `Inputs` purely for one of them — the derived
+    /// It used to read six, and to take the census `Inputs` purely for one of them — the derived
     /// lock-wrap latch, which needed the same keychain-service spelling the census row resolved, so
     /// that the two could not diverge by re-spelling a constant. That latch, the sealed-column latch
-    /// and the sidecar latch all went with their migrators, and what is left is `UserDefaults` only:
-    /// no keychain, no `Inputs`, and no way for this reading to touch the process-wide sealed store.
-    @Test func latchReadingsTakeAllThreeSurvivingBitsFromAnInjectedSuite() throws {
+    /// and the sidecar latch all went with their migrators; the own-photo key latch went with
+    /// `OwnPhotoKeyMigrator` at the round's close, and the property it stood for now reaches this
+    /// page through `mediaAtRest`, which `OwnPhotoKeyBinder`'s first gate half reads. What is left is
+    /// `UserDefaults` only: no keychain, no `Inputs`, and no way for this reading to touch the
+    /// process-wide sealed store.
+    @Test func latchReadingsTakeBothSurvivingBitsFromAnInjectedSuite() throws {
         let suiteName = "fernlet.tests.phase3.latches.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(true, forKey: MediaAtRestFormatMigrationLatch.defaultsKey)
         let readings = Phase3LatchReadings.take(defaults: defaults)
         #expect(readings.mediaAtRest, "the media latch must be read from the injected suite")
-        #expect(!readings.ownPhotoKey)
         #expect(!readings.sealedPhotoBackup)
     }
 

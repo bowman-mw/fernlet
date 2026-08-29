@@ -11,7 +11,7 @@ import FernletFoundation
 /// So the bytes live here, in one place, and the extension's own alias reads them from here.
 /// `internal`, not `public`: the census shares this constant so the two can never disagree, while
 /// the test suites deliberately re-spell the marker themselves (see
-/// `OwnPhotoKeyMigrationTests.opens`) — a fixture that asked production what the format is could
+/// `MediaAtRestFormatMigrationTests`) — a fixture that asked production what the format is could
 /// never notice production changing it.
 ///
 /// Concurrency: `nonisolated` namespace of pure constants; no state.

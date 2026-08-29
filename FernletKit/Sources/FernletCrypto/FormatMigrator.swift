@@ -3,8 +3,14 @@ import Foundation
 /// The shared shape of every at-rest cryptographic format migration: **scan → convert → latch**,
 /// in bounded, resumable, idempotent passes (crypto-standardization plan Phase 1).
 ///
-/// `OwnPhotoKeyMigrator` is the shipping model this protocol was lifted from, and its contract is
-/// the contract every conformer inherits:
+/// `OwnPhotoKeyMigrator` — the media-key split's re-seal pass — is the shipping model this protocol
+/// was lifted FROM, and its contract is the contract every conformer inherits. That pass was retired
+/// at the close of the crypto standardization round (owner decision, 2026-08-29), once Phase 3's
+/// deletion of the unmarked at-rest read left its convert arm with no reachable input; the contract
+/// below is unchanged, and `MediaAtRestFormatMigrator` is now the reference conformer to read.
+/// (The lift's proof was that the untouched `OwnPhotoKeyMigrationTests` passed over the replaced
+/// loop. That proof was consumed when it was performed and does not need the suite to survive;
+/// `FormatMigratorTests` pins the loop directly, from its own side, against a scripted conformer.)
 /// - **Bounded passes.** ``run(maxPasses:)`` funds at most ``maxMigrationPasses`` sweeps — one to
 ///   convert, one to confirm the corpus is now clean — so a migration can never spin on a corpus
 ///   it cannot finish (the jetsam failure bounded passes exist to prevent).

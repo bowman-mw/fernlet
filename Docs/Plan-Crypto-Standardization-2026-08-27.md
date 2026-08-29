@@ -1,7 +1,8 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
 **Status (2026-08-29): THE ROUND IS CLOSED.** Every phase is done and every checklist item is
-ticked. All ten `// cryptographic-domain: legacy-read` call sites are deleted, `ColumnCrypto`'s
+ticked, the last of them being the `OwnPhotoKeyMigrator` residual, which the owner resolved as
+**retire** rather than keep. All ten `// cryptographic-domain: legacy-read` call sites are deleted, `ColumnCrypto`'s
 `0x02` rung went with them (D2) and its write-side fail-open was closed first (D4); the tree holds
 6 escape hatches across 3 files, every one an annotation where the domain IS bound, pinned by
 `CryptographicEscapeHatchCensusTests` and by `noLegacyReadPathRemainsAnywhere`. **Read §9 before
@@ -902,9 +903,9 @@ defect standing open.
   this to bite; it needs no fleet.**
 - **§0 itself.** Every conclusion above is downstream of "there are no other users". The first
   outside tester invalidates the premise, not just the schedule.
-- **`OwnPhotoKeyMigrator`'s unreachable convert path** — kept deliberately, because its latch is half
-  of `OwnPhotoKeyBinder`'s irreversible binding gate. Recorded as a residual below; retiring it is a
-  security-design decision and not a cleanup.
+- **`OwnPhotoKeyMigrator`** — no longer parked. Put to the owner at this final pass and RETIRED
+  (2026-08-29), with `MediaAtRestFormatMigrationLatch` taking over `OwnPhotoKeyBinder`'s first gate
+  half. What that swap gave up is pinned, not merely written down; see the closed residual below.
 - **The four walls that still omit `App/FernletMessagesExtension`** (`TestHookBoundaryTests`,
   `PasteboardBoundaryTests`, `MemoryLifecycleBoundaryTests`, `Scripts/accessibility-scan.py`) —
   measured clean, four one-line root additions, deliberately left out as not-crypto.
@@ -1178,7 +1179,55 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
     crypto, and it belongs in its own change. `Docs/Power-of-10-Swift.md` said "four shipping roots"
     against a five-entry `SHIPPING_ROOTS` and was corrected here, because that one was the wall
     UNDERSTATING coverage it already had, not a hole.
-- [ ] RESIDUAL from Phase 3 — **`OwnPhotoKeyMigrator`'s convert is now unreachable in production**
+- [x] RESIDUAL from Phase 3 — **CLOSED 2026-08-29. RETIRED, and the binding gate's first half
+      changed hands.** `OwnPhotoKeyMigrator`, `OwnPhotoKeyMigrationResult` and
+      `OwnPhotoMigrationLatch` are deleted; `OwnPhotoKeyMigration.swift` became
+      `OwnPhotoCorpusLayout.swift`, holding only the two layout types the format sweep and the
+      census still need. `OwnPhotoKeyBinder`'s gate half 1 now reads
+      `MediaAtRestFormatMigrationLatch`, which sweeps the SAME locations
+      (`OwnPhotoCorpusLayout.sealedLocations`) and refuses on the same fail-closed grounds —
+      `indeterminate` (an unlistable directory, or bytes that could not be READ at all) and
+      `abortedNoOwnKey`. That "I could not look" refusal was the half of the old latch that still had
+      teeth after Phase 3, and it is preserved exactly.
+
+      **What the swap costs, pinned rather than left as a surprise.** The surviving latch classifies
+      by format MARKER and never asks which key opens a file, so a *marked* own-corpus file sealed
+      under the wall key no longer blocks the gate and is unreadable once the fallback drops.
+      `OwnPhotoKeyBindingTests.aWallKeySealedOwnFileNoLongerBlocksTheGateAndIsLostAcrossTheFlip` is
+      that pin, and it also asserts the bytes are never rewritten or deleted. The state is
+      unproducible by any shipping writer — the key split predates the `FMA2` marker, so every
+      genuinely wall-key-sealed own file is unmarked and was already unopenable after Phase 3 — and
+      Phase 2.3's `legacyKeySealedOwnFile` probe, the one other check on it, had already gone with
+      the wall-key open it depended on. A future feature that can land marked foreign-key bytes in an
+      own corpus (an escrow restore sealed elsewhere is the named candidate) must call
+      `MediaAtRestFormatMigrationLatch.reset()`.
+
+      **Everything else the change owed, and where it landed.** The launch task now runs the format
+      sweep FIRST and binds after it (the old order — key pass, binder, format pass — had two sides
+      and now has one, and the binder reads the sweep's latch). `FernletStore.ownPhotoKeyMigrationComplete`
+      became `ownPhotoSweepComplete`, renamed rather than repointed quietly, because "migration
+      complete" is not what the surviving latch attests; Privacy & Data's "still preparing" copy
+      stopped describing a re-seal that no longer happens. The DEBUG Phase 3 readout dropped its
+      `ownPhotoKey` latch row and its report line — the bit is still on that page once, under
+      `mediaAtRest`, which is the row that now folds it. The wipe wall's
+      `com.fernlet.private-media.ownPhotoKeyMigrationComplete` row is DELETED, because the wall
+      DISCOVERS keys from shipping sources and `staleRows` fails on a row nothing declares any more;
+      `Docs/PrivacyWipeCoverage.md` says so and names the one orphaned `true` bool a device that
+      already latched keeps (no content, dies with the container). `NoMediaKeyProvider` — a fixture
+      four suites share — moved from the deleted test file into `MediaAtRestFormatMigrationTests`.
+      `FormatMigrator`'s doc now names `MediaAtRestFormatMigrator` as the reference conformer and
+      records that the lift's proof (untouched tests over a replaced loop) was consumed when it was
+      performed and does not need the suite to survive.
+
+      **Gate:** full unit suite **3280 tests / 295 suites green** (653 s), power-of-10 0,
+      doc-coverage 0, accessibility 0. The delta against the final pass's gate is **−12 tests / −1
+      suite**, and it reconciles exactly: the deleted `OwnPhotoKeyMigrationTests` held 13 tests, and
+      one new pin replaced them. One environment flake on the way (`The test runner hung before
+      establishing connection`, zero tests executed, exit 65) — the second of this session; cycling
+      the simulator cleared it.
+
+      Superseded record of the open question:
+      **`OwnPhotoKeyMigrator`'s convert is now unreachable in production**
       and it was KEPT deliberately. Every pre-split own-photo file is unmarked, so after
       `MediaAtRestCrypto`'s legacy open went, nothing can reach its conversion path. It is not
       leftovers: its LATCH is half of `OwnPhotoKeyBinder`'s irreversible binding gate, so retiring

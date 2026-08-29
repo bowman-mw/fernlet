@@ -14,9 +14,13 @@
 // to open each photo; and it keeps counting the unopenable unprefixed residue, which is
 // classification, not reading.
 //
-// Division of labor with `OwnPhotoKeyMigrator` (which stays byte-for-byte untouched): the KEY
-// migrator converts own files sealed under the pre-split shared key. Disjoint convert sets, one
-// launch task, strict order — key pass, then binder, then format pass.
+// This was one of TWO passes over the own corpora. The other was `OwnPhotoKeyMigrator`, the
+// media-key split's re-seal pass, which converted own files sealed under the pre-split shared key;
+// the two had disjoint convert sets and ran in one launch task in strict order — key pass, binder,
+// format pass. Phase 3 of the crypto standardization plan deleted the unmarked at-rest read that
+// pass converted THROUGH, and the owner retired it at the round's close (2026-08-29). So this is now
+// the only sweep, it runs FIRST, and `OwnPhotoKeyBinder`'s first gate half reads this latch — which
+// is why the binder now follows this pass instead of preceding it.
 //
 // Classification goes through the census's own shared classifier
 // (`MediaAtRestFormatCensus.format(ofFileAt:)` / `format(ofHeader:)`), so the counter and the
@@ -53,11 +57,12 @@ import FernletFoundation
 /// format — so the claim stays true of everything the wipe leaves behind, and clearing it would
 /// only force a pointless re-scan. One bit recording a format fact, never content.
 ///
-/// **Invalidation rule** (mirroring `OwnPhotoMigrationLatch.reset`): no shipped in-app write
+/// **Invalidation rule** (inherited from the retired `OwnPhotoMigrationLatch.reset`): no shipped in-app write
 /// re-introduces the legacy format, so no production reset seam is wired — but any future
 /// feature that lands media bytes on disk VERBATIM from another device or era must call
 /// ``reset()`` in the same change. One known platform exposure is accepted on the same terms it
-/// already shipped with for `OwnPhotoMigrationLatch`: iOS container restores are progressive,
+/// already shipped with for `OwnPhotoMigrationLatch`, whose gate role this latch has since
+/// inherited: iOS container restores are progressive,
 /// so a pass that runs mid-restore can latch before the remaining legacy files finish landing.
 /// The compensating control is the census-vs-latch cross-check on a real device — a latch-true
 /// device whose census shows unprefixed counts beyond the named residues is that scenario's
@@ -67,7 +72,8 @@ import FernletFoundation
 /// to whatever isolation domain built it.
 public struct MediaAtRestFormatMigrationLatch: FormatMigrationLatching {
     /// The `UserDefaults` key holding the latch. A `static let` literal so the wipe wall's
-    /// discovery scan finds it (the `OwnPhotoMigrationLatch` shape, byte for byte).
+    /// discovery scan finds it (the `OwnPhotoMigrationLatch` shape, byte for byte — and, since
+    /// that latch was retired, its job as ``OwnPhotoKeyBinder``'s first gate half as well).
     public static let defaultsKey = "com.fernlet.private-media.mediaAtRestFormatMigrationComplete"
 
     private let defaults: UserDefaults
@@ -157,7 +163,7 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
     /// Could not be classified: bytes unreadable (header or full read), an existing directory
     /// that would not enumerate, or a listed entry whose type could not be read. Blocks the
     /// latch — "I could not see the bytes" is never "there is nothing here to seal"; see
-    /// `OwnPhotoKeyMigrationResult.indeterminate` for the house statement of why (these are
+    /// the retired `OwnPhotoKeyMigrationResult.indeterminate` for the house statement of why (these are
     /// `.completeFileProtection` files, so a device locking mid-pass must block, never look
     /// clean).
     public let indeterminate: Int
@@ -220,7 +226,8 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
 
 /// Seals every remaining pre-sealing plaintext photo into the current `FMA2` + purpose-AAD
 /// format, and counts what is left that nothing can open — the format half of the media
-/// migration, beside `OwnPhotoKeyMigrator`'s key half.
+/// migration — and, since the key half (`OwnPhotoKeyMigrator`) was retired at the close of the
+/// crypto standardization round, the whole of it.
 ///
 /// Phase 3 took the ciphertext half of this job away by deleting `gcmOpen`'s legacy-read branch:
 /// an unmarked box has no reader left, so it is classified into
@@ -228,7 +235,7 @@ public struct MediaAtRestFormatMigrationResult: Sendable, Equatable, FormatMigra
 /// generation is the half that survives, and it is the more urgent one anyway — those bytes are
 /// photographs sitting on disk in the clear.
 ///
-/// **Eager, idempotent, crash-safe**, on the `OwnPhotoKeyMigrator` contract: per file the first
+/// **Eager, idempotent, crash-safe**, on the `FormatMigrator` contract: per file the first
 /// question is a header-only "is it already current?", so a confirming pass over a converted
 /// corpus is a read-only sweep of 4-byte reads; every convert is verified in memory before any
 /// byte lands, written through the surface's one atomic fully-protected path (`sealAndWrite`),

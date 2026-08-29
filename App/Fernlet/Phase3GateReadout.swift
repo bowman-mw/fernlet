@@ -572,25 +572,28 @@ nonisolated enum Phase3ProbeFailure {
 nonisolated struct Phase3LatchReadings: Sendable, Equatable {
     /// `MediaAtRestFormatMigrationLatch.isComplete` — gate part (a) for the media surface.
     let mediaAtRest: Bool
-    /// `OwnPhotoMigrationLatch.isComplete` — an INPUT to the media gate, never a gate of its own.
-    let ownPhotoKey: Bool
     /// `SealedPhotoBackupMigrationLatch.isComplete` — explicitly NOT the sealed-photo gate.
     let sealedPhotoBackup: Bool
 
     /// Creates a latch reading.
     init(
         mediaAtRest: Bool,
-        ownPhotoKey: Bool,
         sealedPhotoBackup: Bool
     ) {
         self.mediaAtRest = mediaAtRest
-        self.ownPhotoKey = ownPhotoKey
         self.sealedPhotoBackup = sealedPhotoBackup
     }
 
-    /// Takes all three bits.
+    /// Takes both bits.
     ///
-    /// Blocking: three `UserDefaults` reads, no keychain and no disk. Call it off the main actor
+    /// There was a third — `OwnPhotoMigrationLatch`, rendered as an INPUT to the media gate and
+    /// never a gate of its own. It went with the pass that set it when the crypto standardization
+    /// round retired `OwnPhotoKeyMigrator` (owner decision, 2026-08-29). The property it stood for
+    /// did not disappear: `OwnPhotoKeyBinder`'s first gate half now reads ``mediaAtRest``, so the
+    /// bit is still on this page — once, under the row that actually folds it, rather than twice
+    /// under two names.
+    ///
+    /// Blocking: two `UserDefaults` reads, no keychain and no disk. Call it off the main actor
     /// beside the census scan anyway — it is cheap, and taking it there keeps the latch stamp beside
     /// the census stamp rather than an actor hop away from it.
     static func take(defaults: UserDefaults = .standard) -> Phase3LatchReadings {
@@ -600,7 +603,6 @@ nonisolated struct Phase3LatchReadings: Sendable, Equatable {
             // `@MainActor` (its migrator is), so the bit would otherwise cost an actor hop for a
             // `UserDefaults` read.
             mediaAtRest: MediaAtRestFormatMigrationLatch(defaults: defaults).isComplete,
-            ownPhotoKey: OwnPhotoKeyMigrator.latch(defaults: defaults).isComplete,
             sealedPhotoBackup: SealedPhotoBackupMigrationLatch(defaults: defaults).isComplete
         )
     }
@@ -1232,8 +1234,6 @@ nonisolated enum Phase3GateReadoutBuilder {
         var lines = ["(a) " + mediaLatchLine(latch: latches.mediaAtRest, witness: witness,
                                              passInFlight: passInFlight, launchPass: launchPass)]
         lines.append("launch pass: \(launchPass?.printed ?? "none has finished this process")")
-        lines.append("ownPhotoKeyMigrationComplete (an INPUT to this gate, never a gate of its own):"
-            + " \(latches.ownPhotoKey)")
         guard let audit else { return lines }
         lines.append(contentsOf: audit.printedLocationLines)
         lines.append(contentsOf: audit.printedArithmeticLines)

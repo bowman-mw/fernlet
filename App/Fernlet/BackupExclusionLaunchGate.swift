@@ -31,7 +31,7 @@ import FernletFoundation
 /// Device-local by construction (`UserDefaults`, never the synced prefs blob or iCloud): "this
 /// install has been used" is a fact about THIS device, and riding a synced channel would make a
 /// second device inherit "already used/already chose" — the exact misclassification the marker
-/// exists to prevent. Same pattern as `OwnPhotoMigrationLatch` (Phase 5). Deliberately NOT
+/// exists to prevent. Same pattern as `MediaAtRestFormatMigrationLatch`. Deliberately NOT
 /// cleared by "delete everything": the prefs reset clears `backupExclusionChoiceMade`, so the
 /// next launch re-runs the gate — and a wiped-but-reused device should get the honest one-time
 /// prompt again, never a silent exclusion flip.

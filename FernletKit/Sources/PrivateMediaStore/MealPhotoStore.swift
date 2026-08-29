@@ -34,8 +34,11 @@ public struct MealPhotoStore {
     /// share the same keychain role during a migration.
     private let atRestPurpose: CryptographicPurpose
     /// Optional PRE-SPLIT key, tried on read when the own key can't open a file — the dual-open
-    /// safety net for the window in which `OwnPhotoKeyMigrator`'s eager pass has not yet re-sealed
-    /// everything (a crash, a locked keychain, a corpus larger than one launch's work).
+    /// safety net for files not yet re-sealed under the own key. Since Phase 3 of the crypto
+    /// standardization plan required the `FMA2` marker on read it reaches only marked files, and the
+    /// eager re-seal pass it was a net for was retired at that round's close — so in practice it
+    /// recovers nothing. Dropping it is the BINDING's decision (`OwnPhotoKeyBinder`), not this
+    /// store's, which is why it is still here.
     ///
     /// Bytes it opens are authentic ciphertext under a key this app owns, so — unlike the
     /// legacy-PLAINTEXT branch — trusting them launders nothing: they are re-sealed under the own

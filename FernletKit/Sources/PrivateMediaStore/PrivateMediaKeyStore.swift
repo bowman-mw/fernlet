@@ -53,11 +53,14 @@ extension PrivateMediaKeyProviding {
 /// - ``Role/ownPhotos`` — account `com.fernlet.private-media.ownContentKey`, a NEW row for the
 ///   user's own meal / recipe / progress (body) photos. **Minted** backup-restorable and
 ///   **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** by ``OwnPhotoKeyBinder`` once, and
-///   only once, its gate holds: ``OwnPhotoMigrationLatch`` proves no own file is still under the
-///   pre-split key, AND the user has a sanctioned cross-device route (the opt-in own-photo escrow
-///   backup, or a recorded ``OwnPhotoDeviceBindingConsent``). Binding before the first would turn
-///   stragglers into permanently unreadable bytes; binding before the second would silently delete
-///   the user's only path onto a replacement phone. Both are facts about this device at this
+///   only once, its gate holds: ``MediaAtRestFormatMigrationLatch`` proves this device walked and
+///   classified every own-photo location, AND the user has a sanctioned cross-device route (the
+///   opt-in own-photo escrow backup, or a recorded ``OwnPhotoDeviceBindingConsent``). Binding before
+///   the first would turn stragglers into permanently unreadable bytes; binding before the second
+///   would silently delete the user's only path onto a replacement phone. (That first half was
+///   `OwnPhotoMigrationLatch` until the crypto standardization round retired it with the re-seal
+///   pass that set it — see ``OwnPhotoKeyBinder`` for why, and for what the replacement does and
+///   does not preserve.) Both are facts about this device at this
 ///   moment, which is why the flip is a runtime gate and not the build-time constant below.
 ///
 /// Once the row is bound, the own read paths stop carrying their dual-open legacy fallback

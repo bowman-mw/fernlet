@@ -910,3 +910,14 @@ private final class RewritingOnKeyAccessProvider: PrivateMediaKeyProviding {
         return key
     }
 }
+
+/// A provider that can never produce a key — the "locked or failing keychain" shape every media
+/// store and every sweep must fail closed on.
+///
+/// Lived in `OwnPhotoKeyMigrationTests` until that suite was deleted with `OwnPhotoKeyMigrator`
+/// (crypto standardization round, owner decision 2026-08-29). It moved HERE rather than to any of
+/// its other three users — `SealedPhotoBackupTests`, `MeshPhotoCacheSealingTests` and this file —
+/// because this suite is both its heaviest user and the successor to the one that defined it.
+struct NoMediaKeyProvider: PrivateMediaKeyProviding {
+    func mediaKey() -> SymmetricKey? { nil }
+}

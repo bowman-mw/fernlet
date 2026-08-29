@@ -77,8 +77,8 @@ protocol OwnPhotoBackupContext: AnyObject {
 /// Builds its own `MealPhotoStore`/`ProgressPhotoStore` instances over the shared
 /// ``OwnPhotoCorpusLayout`` paths rather than borrowing `FernletStore`'s: the stores are value types
 /// over a directory and their key providers read the same keychain rows, so this is the same data —
-/// and it keeps a non-`Sendable` provider from being shared across owners (the precedent
-/// `OwnPhotoKeyMigrator` set).
+/// and it keeps a non-`Sendable` provider from being shared across owners (the precedent the
+/// media-key split's own launch pass set).
 ///
 /// Main-actor isolated, like every collaborator it touches.
 @MainActor
@@ -980,8 +980,9 @@ final class OwnPhotoBackupCoordinator {
         // ...and the hash-version migration latch: the manifests it makes a claim about die with
         // this call, so keeping it would carry a proof about destroyed objects onto a future
         // re-enable's brand-new lineage. (The deliberate mirror-image of
-        // `ownPhotoKeyMigrationComplete`'s kept row, whose subject — the re-sealed local files —
-        // survives the wipe. Docs/PrivacyWipeCoverage.md + PersistedSurfaceWipeBoundaryTests.)
+        // `mediaAtRestFormatMigrationComplete`'s kept row, whose subject — the local media files,
+        // own corpora emptied and friend wall intact — outlives the wipe in a state the latch's
+        // claim still describes. Docs/PrivacyWipeCoverage.md + PersistedSurfaceWipeBoundaryTests.)
         SealedPhotoBackupMigrationLatch(defaults: defaults).reset()
         return allCleared
     }

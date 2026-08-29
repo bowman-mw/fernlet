@@ -394,30 +394,41 @@ shipped; the rest are still open.
    changed is that binding is now a one-line policy flip
    (`KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for:)`) instead of a flag-day. An eager,
    idempotent, crash-safe pass (`OwnPhotoKeyMigrator`, run once per launch off the main path)
-   re-seals the own corpora onto the own key, with a read-path dual-open fallback so nothing is
-   unreadable in the meantime. **The crypto standardization round's Phase 3 narrowed both halves of
-   that sentence, and it is recorded here rather than left to be rediscovered:** `MediaAtRestCrypto`
-   now requires the `FMA2` marker on read, and every file the pre-split key actually sealed predates
-   that marker — so the pass can no longer OPEN a genuine pre-split file (it counts one as
-   `unopenable`, never deletes it, and the read path resolves it to nil), and the dual-open fallback
-   reaches only marked files, which in practice means it recovers nothing. Those photos are not
-   recoverable by anything this build ships. What the latch still proves is therefore narrower than
-   its name: "no own file that this build can open is still under the old key", not "every own file
-   is on the own key". Binding on that reading takes nothing further away — the bytes it stops
-   protecting were already unopenable — but the two readings are not the same and only the second
-   was ever the intent. Pinned by
-   `OwnPhotoKeyMigrationTests.preSplitUnprefixedBytesAreUnopenableResidueNow`.
-   The flip is gated on `OwnPhotoMigrationLatch` — the persisted proof
-   that zero own files are still under the old key — AND on the sanctioned cross-device route
-   (a COMMITTED escrow photo backup, or explicit consent). The latch is fail-closed in all three
-   ways a pass can fail to prove the property: the own key is unavailable, the legacy key is
-   unavailable, or a file's BYTES could not be read at all. That third one is subtle and is why it
+   re-sealed the own corpora onto the own key, with a read-path dual-open fallback so nothing was
+   unreadable in the meantime.
+
+   **That pass no longer exists, and the sentence above is history. Recorded here in full, because
+   the property it used to guarantee is one this document claims.** The crypto standardization
+   round's Phase 3 made `MediaAtRestCrypto` require the `FMA2` marker on read, and every file the
+   pre-split key actually sealed predates that marker. Two things followed at once: the pass could no
+   longer OPEN a genuine pre-split file (it counted one as `unopenable`, never deleted it, and the
+   read path resolves it to nil), and its latch silently stopped meaning what its name said — because
+   `unopenable` is deliberately outside `isClean`, so a pass over a corpus of such files latched
+   anyway. **Those photos are not recoverable by anything this build ships, and no future build can
+   make them so.** At the round's close the owner retired the pass and its latch rather than keep a
+   healer that could not heal, and `MediaAtRestFormatMigrationLatch` — which sweeps the same
+   locations and refuses on the same "I could not look" grounds (an unlistable directory, bytes that
+   could not be READ, no own key) — took over the gate half.
+
+   **What the swap costs, stated rather than glossed:** the surviving latch classifies by format
+   MARKER and never asks which key opens a file, so a *marked* own-corpus file sealed under the wall
+   key no longer blocks the gate and becomes unreadable when the fallback drops. No shipping writer
+   produces that state — the key split predates the marker, so every genuinely wall-key-sealed own
+   file is unmarked and was already unopenable — and the Phase 2.3 probe that was the one other check
+   on it had already gone with the wall-key open it depended on. It is accepted knowingly and pinned
+   by `OwnPhotoKeyBindingTests.aWallKeySealedOwnFileNoLongerBlocksTheGateAndIsLostAcrossTheFlip`; a
+   future feature that can land marked foreign-key bytes in an own corpus (an escrow restore sealed
+   elsewhere is the named candidate) must call `MediaAtRestFormatMigrationLatch.reset()`.
+
+   The flip is gated on that latch AND on the sanctioned cross-device route
+   (a COMMITTED escrow photo backup, or explicit consent). The latch is fail-closed in the ways a
+   pass can fail to prove the property: the own key is unavailable, a directory will not enumerate,
+   or a file's BYTES could not be read at all. That last one is subtle and is why it
    is spelled out here — own photo files are `.completeFileProtection` while both key rows are
    `AfterFirstUnlock` and cached in memory, so a device that locks mid-pass fails every read while
-   both providers keep vending keys; counting those as "opens under no key" would let a pass that
-   read nothing look identical to a fully migrated corpus. Honest limit until the latch is set: an
-   un-migrated own photo is still openable under the backup-restorable friend key. Pinned by
-   `Tests/FernletTests/OwnPhotoKeyMigrationTests` and `KeyCustodyBoundaryTests`
+   both providers keep vending keys; counting those as "nothing here to look at" would let a pass that
+   read nothing look identical to a fully swept corpus. Pinned by
+   `Tests/FernletTests/OwnPhotoKeyBindingTests` and `KeyCustodyBoundaryTests`
    (`ownPhotoKeyIsASecondRowDistinctFromTheFriendWallKey` asserts the two rows really are two
    independent, non-synchronizable keys, so a "split" that vended the same bytes twice fails loudly;
    the row's accessibility class is asserted by the step-5c test named below).
@@ -456,7 +467,8 @@ shipped; the rest are still open.
    (`deleteOwnPhotoEscrowBackups`).
    **UPDATE (2026-08-11, Phase 5 step 5c): the binding is flipped, and the fallback is gone with it.**
    `…ownContentKey` is re-bound to `AfterFirstUnlockThisDeviceOnly` by `OwnPhotoKeyBinder`, gated on
-   `OwnPhotoMigrationLatch` **AND** a sanctioned cross-device route — the escrow photo backup above
+   `MediaAtRestFormatMigrationLatch` (`OwnPhotoMigrationLatch` until the crypto standardization round
+   retired the pass that set it — see §5a) **AND** a sanctioned cross-device route — the escrow photo backup above
    having actually committed a copy of this device's photos (a manifest write that reached iCloud;
    the preference alone is intent, not a route, and binding is irreversible), or an explicit
    `OwnPhotoDeviceBindingConsent` recorded through Privacy & Data →

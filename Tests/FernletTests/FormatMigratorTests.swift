@@ -115,8 +115,9 @@ private struct ScriptedSyncLatch: FormatMigrationLatching {
 /// A ``FormatMigrator`` whose passes are a script, counting how many the loop actually funded.
 ///
 /// `nonisolated` throughout, and that is the point: the sync protocol exists for the file and
-/// keychain surfaces that migrate inside off-main launch tasks (`OwnPhotoKeyMigrator` is the
-/// shipping model), so a loop that quietly required the main actor would be unusable by every one
+/// keychain surfaces that migrate inside off-main launch tasks (`MediaAtRestFormatMigrator` is the
+/// shipping model, and `OwnPhotoKeyMigrator` was the one this protocol was lifted from before it
+/// was retired), so a loop that quietly required the main actor would be unusable by every one
 /// of them. A class rather than a struct only because the protocol's `performPass()` is
 /// non-mutating and this double has to count its own invocations.
 private final class ScriptedSyncMigrator: FormatMigrator {

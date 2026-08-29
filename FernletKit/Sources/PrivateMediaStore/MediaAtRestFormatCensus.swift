@@ -72,8 +72,9 @@ public enum MediaAtRestFormatClass: String, Sendable, Equatable, CaseIterable {
     /// mid-census fails every read; scoring those as "no legacy blobs found" would let a pass that
     /// saw nothing look identical to a fully-migrated corpus and license the deletion of the legacy
     /// reader. "I could not see the bytes" is never "there are no legacy bytes". This is the same
-    /// distinction `OwnPhotoKeyMigrationResult.indeterminate` exists for — read its doc comment for
-    /// the house statement of why.
+    /// distinction ``MediaAtRestFormatMigrationResult/indeterminate`` exists for — read its doc
+    /// comment for the house statement of why. (It was `OwnPhotoKeyMigrationResult.indeterminate`
+    /// that first stated it; that type was retired with its pass, and the rule outlived it.)
     case indeterminate
 }
 
@@ -120,7 +121,7 @@ public struct MediaAtRestFormatTally: Sendable, Equatable {
     /// to be zero on real devices. A zero from a pass with blind spots is not that observation: it
     /// may mean "no legacy blobs", or it may mean "the device was locked". Gate on
     /// `!hasBlindSpots && unprefixedLegacyOrUnrecognized == 0`, never on the count alone. This is
-    /// the census's analogue of `OwnPhotoKeyMigrationResult.isClean`.
+    /// the census's analogue of ``MediaAtRestFormatMigrationResult/isClean``.
     public var hasBlindSpots: Bool {
         indeterminate > 0 || unlistableDirectories > 0 || truncated
     }
@@ -439,7 +440,7 @@ public struct MediaAtRestFormatCensus: Sendable {
     /// - Parameters:
     ///   - locationSets: One or more location sets to sweep, in order. Missing paths are skipped
     ///     (and report zeros with ``MediaAtRestFormatLocationCensus/existed`` `false`, so a caller
-    ///     can tell them from swept-empty ones), exactly as `OwnPhotoKeyMigrator.candidateFiles()`
+    ///     can tell them from swept-empty ones), exactly as the format migrator's own file scan
     ///     skips them.
     ///   - maxFilesPerDirectory: Per-directory bound on files examined; values below 1 are clamped
     ///     to 1 rather than silently censusing nothing.
@@ -535,9 +536,9 @@ public struct MediaAtRestFormatCensus: Sendable {
               isDirectory.boolValue else {
             return MediaAtRestFormatLocationCensus(url: directory, kind: .directory, existed: false, tally: .zero)
         }
-        // Non-recursive, hidden files skipped — the same enumeration
-        // `OwnPhotoKeyMigrator.candidateFiles()` performs, because these are the same flat
-        // id-to-file corpora and the two passes must agree on what "every file" means.
+        // Non-recursive, hidden files skipped — the same enumeration `MediaAtRestFormatMigrator`
+        // performs, because these are the same flat id-to-file corpora and the counter and the
+        // converter must agree on what "every file" means.
         guard let contents = try? fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],

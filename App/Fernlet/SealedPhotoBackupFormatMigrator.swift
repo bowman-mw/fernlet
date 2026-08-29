@@ -37,8 +37,8 @@ import Foundation
 ///
 /// Device-local (`UserDefaults`, never synced). Cleared by
 /// `OwnPhotoBackupCoordinator.tearDownForDeleteAll` — the wipe destroys the manifests this bit
-/// makes a claim about (the deliberate mirror-image of `OwnPhotoMigrationLatch`'s kept row,
-/// whose subject — the re-sealed local files — survives the wipe). Also reset on escrow-key
+/// makes a claim about (the deliberate mirror-image of `MediaAtRestFormatMigrationLatch`'s kept
+/// row, whose subject — the local media files — outlives the wipe). Also reset on escrow-key
 /// adoption and on any pass that OBSERVES a manifest minimum of 1 (a foreign legacy write). A
 /// device-backup restore carries the bit to a new phone; tolerable for a nudge-only latch,
 /// because the manifests are shared account state and the foreign-write observation re-grounds

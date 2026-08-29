@@ -48,32 +48,30 @@ migration, and the survives-delete-all / never-deleted-by-wipe properties hold v
 `ownPhotos` row is the one that becomes device-bound, which is what makes bulk file + keychain
 theft of the user's own photos worthless off-device.
 
-Three pieces carry own photos across that split, all in `OwnPhotoKeyMigration.swift`:
+One piece carries the on-disk half of that split, in `OwnPhotoCorpusLayout.swift`:
 
-- ``OwnPhotoCorpusLayout`` — the on-disk names of the own corpora, in one place, because a name
-  that drifted would silently leave a corpus un-migrated (and therefore still backup-restorable)
-  without failing any build.
-- ``OwnPhotoKeyMigrator`` — the **eager, idempotent, crash-safe** re-seal pass, run once per launch
-  off the main path. Eager is not an optimization: a lazily-migrated corpus leaves every photo the
-  user never reopens under the backup-restorable key forever.
-- ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing this build can
-  OPEN is left under the old key. Both the 5c binding flip and the removal of the dual-open fallback
-  are gated on it. That wording is narrower than the latch's original "every own file is on the own
-  key": Phase 3 retired the reader for unmarked bytes, so a genuine pre-split file is now
-  ``OwnPhotoKeyMigrationResult/unopenable`` residue, which is deliberately not part of `isClean` and
-  so does not hold the latch open. Binding on the narrow reading takes nothing further away (those
-  bytes are unopenable either way), but the two sentences are not interchangeable and only the
-  narrow one is still true.
-  Fail-closed means all three ways a pass can fail to establish the property, and the third is the
-  one that looks benign: a file whose **bytes could not be read at all** is
-  ``OwnPhotoKeyMigrationResult/indeterminate``, never ``OwnPhotoKeyMigrationResult/unopenable``. Own
-  photo files are `.completeFileProtection` while both key rows are `AfterFirstUnlock` and cached in
-  memory, so a device that locks mid-pass fails every read while both providers keep vending keys —
-  and a pass that read nothing would otherwise be indistinguishable from a fully migrated corpus.
+- ``OwnPhotoCorpusLayout`` — the on-disk names of the own corpora, in one place, because a name that
+  drifted would silently leave a corpus unswept (and therefore still backup-restorable) without
+  failing any build. ``OwnPhotoSealedLocations`` is the value it hands to whatever walks them.
 
-Until the key is bound, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under the own key on access. That fallback only ever trusts bytes that GCM-open under a key this app owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused exactly where it was before. Since Phase 3 it reaches only files carrying the `FMA2` marker, which in practice means it no longer recovers anything: every file the pre-split key actually sealed predates the marker. Those photos are unopenable — a consequence of the deletion recorded here rather than left to be rediscovered (see ``OwnPhotoKeyMigrator``).
+**There were three, and the other two were retired at the close of the crypto standardization
+round** (owner decision, 2026-08-29; `Docs/Plan-Crypto-Standardization-2026-08-27.md`).
+`OwnPhotoKeyMigrator` was the eager, idempotent, crash-safe re-seal pass that moved own files off
+the shared friend-wall key, and `OwnPhotoMigrationLatch` was its persisted proof — half of
+``OwnPhotoKeyBinder``'s irreversible binding gate. Phase 3 deleted `MediaAtRestCrypto`'s unmarked
+at-rest read, which did two things at once: it left that pass with no input any shipping writer can
+produce (every file the pre-split key ever sealed predates the `FMA2` marker, so none of them opens
+any more), and it silently NARROWED what the latch attested, because a pre-split file became
+`unopenable` residue — a bucket deliberately outside `isClean`, so a pass over a corpus of them
+latched regardless. Rather than keep a healer that could no longer heal and a proof that no longer
+proved what its name said, both went, and ``MediaAtRestFormatMigrator``'s latch inherited the gate
+half. See ``OwnPhotoKeyBinder`` for exactly what the replacement does and does not preserve, and
+`OwnPhotoKeyBindingTests.aWallKeySealedOwnFileNoLongerBlocksTheGateAndIsLostAcrossTheFlip` for the
+one thing it costs, pinned rather than left as a surprise.
 
-Beside that KEY migration sits the **format** migration, ``MediaAtRestFormatMigrator`` (crypto-standardization Phase 2.3, cut back by Phase 3) — a `FormatMigrator` conformer on the same shared `FernletCrypto` contract, running in the same launch task strictly after the key pass so the two sweeps compose instead of fighting. **Phase 3 deleted `gcmOpen`'s legacy-read branch, and the migrator's ciphertext conversion went with it**: an unmarked box has no reader left, so re-sealing one is not a thing that can be attempted, and the pass now classifies it into ``MediaAtRestFormatMigrationResult/unopenableUnprefixed`` and leaves it byte-identical forever (non-blocking — a latch that waited for that count to fall would wait forever). What it still converts is the **pre-sealing plaintext JPEG** generation, exactly where the read paths' upgrade branches exist (meal corpus, wall photos, wall thumbnails) — a generation that never went near the deleted branch and is the more urgent one anyway, since those bytes are photographs sitting on disk in the clear. Classification goes through ``MediaAtRestFormatCensus``'s own shared classifier, so the counter and the converter can never disagree about what a blob is, and every seal goes through the existing `sealAndWrite` path binding the existing per-location purposes — no new purpose, no new crypto call shape, and nothing is ever deleted. ``MediaAtRestFormatMigrationResult/refusedPlaintext`` (parseable plaintext the pass refuses to seal, in the born-sealed corpora where sealing would be laundering) is the other non-blocking bucket. The two mutable index manifests are no longer writable by this pass at all — neither sits inside a plaintext-eligible directory — so the compare-before-write guard that bounded their stale-write race went with the arm it guarded; they are still enumerated and classified, simply never replaced.
+Until the key is bound, the own read paths (``MealPhotoStore`` and ``ProgressPhotoStore``, via an injected `legacyKeyProvider`) **dual-open**: own key first, then the pre-split key, re-sealing under the own key on access. That fallback only ever trusts bytes that GCM-open under a key this app owns, so it is not a widening of the legacy-plaintext rule below — plaintext is still refused exactly where it was before. Since Phase 3 it reaches only files carrying the `FMA2` marker, which in practice means it no longer recovers anything: every file the pre-split key actually sealed predates the marker. Those photos are unopenable — a consequence of the deletion recorded here rather than left to be rediscovered. Dropping the fallback is the BINDING's decision (``OwnPhotoKeyBinder``) and not a read path's, which is why it is still wired.
+
+Where that KEY migration used to sit, the **format** migration now stands alone: ``MediaAtRestFormatMigrator`` (crypto-standardization Phase 2.3, cut back by Phase 3) — a `FormatMigrator` conformer on the same shared `FernletCrypto` contract. It ran second, after the key pass, under an ordering contract that no longer has two sides; it now runs FIRST in the launch task, and the binder follows it, because ``OwnPhotoKeyBinder``'s first gate half reads this pass's latch. **Phase 3 deleted `gcmOpen`'s legacy-read branch, and the migrator's ciphertext conversion went with it**: an unmarked box has no reader left, so re-sealing one is not a thing that can be attempted, and the pass now classifies it into ``MediaAtRestFormatMigrationResult/unopenableUnprefixed`` and leaves it byte-identical forever (non-blocking — a latch that waited for that count to fall would wait forever). What it still converts is the **pre-sealing plaintext JPEG** generation, exactly where the read paths' upgrade branches exist (meal corpus, wall photos, wall thumbnails) — a generation that never went near the deleted branch and is the more urgent one anyway, since those bytes are photographs sitting on disk in the clear. Classification goes through ``MediaAtRestFormatCensus``'s own shared classifier, so the counter and the converter can never disagree about what a blob is, and every seal goes through the existing `sealAndWrite` path binding the existing per-location purposes — no new purpose, no new crypto call shape, and nothing is ever deleted. ``MediaAtRestFormatMigrationResult/refusedPlaintext`` (parseable plaintext the pass refuses to seal, in the born-sealed corpora where sealing would be laundering) is the other non-blocking bucket. The two mutable index manifests are no longer writable by this pass at all — neither sits inside a plaintext-eligible directory — so the compare-before-write guard that bounded their stale-write race went with the arm it guarded; they are still enumerated and classified, simply never replaced.
 
 ### The binding gate (step 5c)
 
@@ -81,8 +79,12 @@ Beside that KEY migration sits the **format** migration, ``MediaAtRestFormatMigr
 flip. It is a **runtime gate, not a build-time constant**, and that is the design rather than an
 unfinished version of one — both of its conditions are facts about this device at this moment:
 
-1. ``OwnPhotoMigrationLatch`` is set. Binding before it turns any straggler still sealed under the
-   pre-split key into permanently unreadable bytes, with no error anywhere.
+1. ``MediaAtRestFormatMigrationLatch`` is set — this device walked every own-photo location and
+   classified every file it found. Binding on a corpus nobody managed to look at turns any straggler
+   into permanently unreadable bytes, with no error anywhere. (This half was `OwnPhotoMigrationLatch`
+   until that pass was retired; the "I could not look" refusal — an unlistable directory, bytes that
+   could not be READ, no own key — is preserved exactly, and what is not is spelled out at
+   ``OwnPhotoKeyBinder``.)
 2. The user has a sanctioned cross-device route — the own-photo escrow backup has actually
    **committed** a copy (``OwnPhotoKeyBinder/init(escrowRouteCommitted:defaults:)`` takes evidence
    that a manifest reached iCloud, never the bare preference: a switch flipped while offline or
@@ -211,13 +213,10 @@ provider instance across isolation domains.
 - ``PrivateMediaKeyProviding``
 - ``KeychainPrivateMediaKeyProvider``
 
-### Own-photo key migration
+### Own-photo corpus layout
 
 - ``OwnPhotoCorpusLayout``
 - ``OwnPhotoSealedLocations``
-- ``OwnPhotoKeyMigrator``
-- ``OwnPhotoKeyMigrationResult``
-- ``OwnPhotoMigrationLatch``
 
 ### At-rest format census (Phase 0)
 
