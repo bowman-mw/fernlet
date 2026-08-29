@@ -229,9 +229,9 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send: seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off. |
 | `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind both senders above: encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
 | `encryptPhoto(_:key:)` | AES-GCM encrypts image data with the mesh group key and returns ciphertext+tag plus nonce. |
-| `decryptPhoto(_:nonce:key:)` | AES-GCM decrypts a friend photo payload. |
+| `decryptPhoto(_:nonce:key:)` | AES-GCM decrypts a friend photo payload. Requires the `FMGP2` marker since crypto-standardization Phase 4 deleted the unprefixed read; an unmarked payload throws `MeshEncryptionError.legacyWireFormat`, which `decryptedIncomingPhoto` names in the trail as `mesh.friendPhoto.droppedLegacyWireFormat` rather than folding into the silent drop that also covers a wrong key. |
 | `encryptPayload(_:key:)` | Shared AES-GCM wrapper for closed-mode metadata encryption. |
-| `decryptPayload(_:nonce:key:)` | Shared AES-GCM wrapper for closed-mode metadata decryption. |
+| `decryptPayload(_:nonce:key:)` | Shared AES-GCM wrapper for closed-mode metadata decryption. Same Phase 4 rule: no `FMGM2` marker ⇒ `MeshEncryptionError.legacyWireFormat`, audited as `mesh.encryptedMetadata.droppedLegacyWireFormat`. |
 | `sendEncryptedMetadata(_:encodable:via:)` | Encrypts a control payload into `meshEncryptedMetadata` and sends it. |
 | `handleEncryptedMetadata(_:from:slot:)` | Decrypts closed-mode metadata and redispatches supported inner payloads. |
 | `isLocalCoordinator()` | Elects coordinator by lowest fingerprint among local and active connected peers. |
@@ -378,7 +378,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
 | `verify(_:of:by:)` | Verifies an Ed25519 signature against raw public key bytes. |
 | `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly. |
-| `open(_:from:)` | Opens payloads created by `seal(_:to:)`. |
+| `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM. |
 | `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`. |
 | `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. |
@@ -802,7 +802,7 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 
 | Function | What It Does |
 | --- | --- |
-| `HeartDropSidecarSeal.make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration; protection class stays `.completeFileProtection`. Every caller states its service (via `HeartDropStorageScope`); there is deliberately no argument-less production variant. |
+| `HeartDropSidecarSeal.make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration (that leg SURVIVES — it is the v0 plaintext generation, not the retired ciphertext one); protection class stays `.completeFileProtection`. Requires `FSC2` since crypto-standardization Phase 3: an `FSC1` row is refused as `SidecarSeal.SealError.legacyFormatRetired`, audit-logged before it is thrown so `ProtectedSidecar` quarantines rather than defers forever, and the Phase 2.2 migrator went with the reader it converted through. `legacyMagic` and its `isSealed` clause are KEPT and load-bearing — that predicate is what splits sealed from plaintext-v0, so a marker that stopped classifying would send ciphertext down the plaintext branch into the *corrupt* path. Every caller states its service (via `HeartDropStorageScope`); there is deliberately no argument-less production variant. |
 
 ### `HeartDropStorageScope.swift`
 

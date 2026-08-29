@@ -1,11 +1,20 @@
 # Plan — Cryptographic format standardization (no legacy paths)
 
-**Status (2026-08-28):** Phases 0, 1 and 2.1–2.6 are BUILT — every Class-A migrator has landed.
-Phase 3's gate INSTRUMENT is built and its three false-pass arms are closed; Phase 5's
-Phase-3/4-independent parts have landed. **The deletions themselves — Phase 3 (six Class-A readers)
-and Phase 4 (four Class-B readers) — are now UNBLOCKED and are the remaining work**, together with
-D4's write-side closure. See §0 for the premise that unblocked them, and the Progress checklist for
-where each stands.
+**Status (2026-08-29): THE ROUND IS CLOSED.** Every phase is done and every checklist item is
+ticked. All ten `// cryptographic-domain: legacy-read` call sites are deleted, `ColumnCrypto`'s
+`0x02` rung went with them (D2) and its write-side fail-open was closed first (D4); the tree holds
+6 escape hatches across 3 files, every one an annotation where the domain IS bound, pinned by
+`CryptographicEscapeHatchCensusTests` and by `noLegacyReadPathRemainsAnywhere`. **Read §9 before
+quoting any of the ticked boxes as evidence:** the deletions proceeded on the owner's risk judgement
+under §0 — one install, test data only — and three of the six Phase 3 gates read VACUOUS rather than
+discharged. Two decisions are parked, not settled (D1's hard cutover and D5's accepted backup
+hazard); both re-open the moment a second install exists.
+
+Superseded status line, kept for the reading order it implies — *(2026-08-28)*: Phases 0, 1 and
+2.1–2.6 are BUILT — every Class-A migrator has landed. Phase 3's gate INSTRUMENT is built and its
+three false-pass arms are closed; Phase 5's Phase-3/4-independent parts have landed. The deletions
+themselves — Phase 3 (six Class-A readers) and Phase 4 (four Class-B readers) — are now UNBLOCKED
+and are the remaining work, together with D4's write-side closure.
 **Goal (owner, 2026-08-27, restated 2026-08-28):** review the domain-separation work and update
 everything so there is no "legacy" code — one standardized format per cryptographic surface.
 **Remove all legacy items, or update them to the new standard.** The measurable end state is zero
@@ -52,6 +61,19 @@ backup hazard and D1's hard cutover both. They are dormant, not absent.
 
 ## 1. Why this is not a delete
 
+> **RECONCILED 2026-08-29, at the round's close. Sections 1–3 are written in the present tense
+> about a tree that no longer exists, and they are kept as the record of WHY the deletions took ten
+> phases rather than one commit — not as a description of the code.** All ten `legacy-read` call
+> sites below are gone, `ColumnCrypto`'s `0x02` rung went with them (D2), and the write-side
+> fail-open went first (D4). The tree holds **6** escape hatches across **3** files, every one an
+> annotation where the domain IS bound and none of them a reader; the numbers are pinned by
+> `CryptographicEscapeHatchCensusTests` and stated in
+> [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md) §Escape-hatch abuse, which is the
+> CURRENT description. §3's "nobody can count legacy blobs" was answered by Phase 0 and every
+> census it built is still in the tree — the classifiers deliberately outlived the readers. The
+> line numbers in §2's tables are as-of-`def4726` and will not resolve today.
+
+
 Ten call sites carry `// cryptographic-domain: legacy-read`. Each one exists because **bytes already
 written under the old format are still on a device**. Deleting the reader does not standardize those
 bytes; it makes them unopenable. For six of the ten that means a tester's sealed journal, worry
@@ -69,26 +91,26 @@ is a peer-version decision, not a migration. See §5.
 
 ### Class A — at rest, on this device (6). Migratable.
 
-| Site | Marker that distinguishes new from legacy | Target |
-|---|---|---|
-| `FernletCrypto/ColumnCrypto.swift:196,204` | first byte `0x03` (V3) / `0x02` (V2) / unprefixed | V3 |
-| `PrivateStoreCore/PendingNarrativeBuffer.swift:193` | `isV2` flag | V2 |
-| `PrivateMediaStore/MediaAtRestCrypto.swift:47` | `atRestFormatV2` prefix | V2 |
-| `FernletLock/FernletLockService.swift:410` | `wrappedContentKeyFormatV2` prefix | V2 |
-| `App/Fernlet/SealedPhotoBackupService.swift:765` (`contentHashMatches`) | digest equality against the v2 pre-image | V2 |
-| `ProximityKit/HeartSharing/HeartDropSidecarKey.swift:61` | `magic` vs `legacyMagic` | V2 |
+| Site | Marker that distinguishes new from legacy | Target | Now (2026-08-29) |
+|---|---|---|---|
+| `FernletCrypto/ColumnCrypto.swift:196,204` | first byte `0x03` (V3) / `0x02` (V2) / unprefixed | V3 | **DELETED, both lower rungs** (D2 took `0x02`); `SealedColumnOpenError.retiredFormat(_:)` |
+| `PrivateStoreCore/PendingNarrativeBuffer.swift:193` | `isV2` flag | V2 | **DELETED**; `PendingNarrativeBufferError.legacyUnprefixedFormat` |
+| `PrivateMediaStore/MediaAtRestCrypto.swift:47` | `atRestFormatV2` prefix | V2 | **DELETED**; nil + a `privateMedia.legacyFormatRefused` audit line |
+| `FernletLock/FernletLockService.swift:410` | `wrappedContentKeyFormatV2` prefix | V2 | **DELETED**; `FernletLockError.contentKeyWrapFormatRetired`, thrown before any write at all four callers |
+| `App/Fernlet/SealedPhotoBackupService.swift:765` (`contentHashMatches`) | digest equality against the v2 pre-image | V2 | **DELETED**; `SealedPhotoRestoreSummary.unverifiableLegacyDigest`, a TERMINAL list so the repair ledger cannot loop |
+| `ProximityKit/HeartSharing/HeartDropSidecarKey.swift:61` | `magic` vs `legacyMagic` | V2 | **DELETED**; `SidecarSeal.SealError.legacyFormatRetired`. `legacyMagic` and its `isSealed` clause SURVIVE — they split sealed from plaintext-v0 |
 
 `ColumnCrypto` is the only three-rung ladder (legacy → V2 → V3) and the only one holding the sealed
 corpora, so it is both the highest-risk and the highest-value.
 
 ### Class B — wire, from a peer (4). NOT migratable.
 
-| Site | Purpose | Why migration cannot help |
-|---|---|---|
-| `ProximityKit/Mesh/MeshNetworkManager.swift:3582` | `meshGroupPhotoV2` | The bytes arrive from another device at open time |
-| `ProximityKit/Mesh/MeshNetworkManager.swift:3616` | mesh group payload | ” |
-| `ProximityKit/Identity/IdentityService.swift:271` | `proximityTransportV2` AAD | ” |
-| `ProximityKit/Identity/IdentityService.swift:466` | `meshGroupKeyWrapV2` | ” |
+| Site | Purpose | Why migration cannot help | Now (2026-08-29) |
+|---|---|---|---|
+| `ProximityKit/Mesh/MeshNetworkManager.swift:3582` | `meshGroupPhotoV2` | The bytes arrive from another device at open time | **DELETED** (D1(a)); `MeshEncryptionError.legacyWireFormat` → `mesh.friendPhoto.droppedLegacyWireFormat` |
+| `ProximityKit/Mesh/MeshNetworkManager.swift:3616` | mesh group payload | ” | **DELETED**; same error → `mesh.encryptedMetadata.droppedLegacyWireFormat` |
+| `ProximityKit/Identity/IdentityService.swift:271` | `proximityTransportV2` AAD | ” | **DELETED**; `IdentityError.legacyWireFormat`, reaching the Connection Inspector via `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat`, and — since the round's final pass — the three duress-ceremony hops as `reason=legacyWireFormat` |
+| `ProximityKit/Identity/IdentityService.swift:466` | `meshGroupKeyWrapV2` | ” | **DELETED**; same error → `mesh.admissionGrant.droppedLegacyKeyWrap`. `FGK2`'s absence at exactly 92 bytes is KEPT as the classifier |
 
 There is nothing stored to convert. The legacy branch fires only when a peer running an older build
 sends old-format bytes, so removal is governed by *which builds are still in the field*.
@@ -99,6 +121,12 @@ sends old-format bytes, so removal is governed by *which builds are still in the
 ×1, `purpose-derived legacy-write` ×1. The domain IS bound at these; the marker only silences a grep
 that cannot see three lines up. They are annotations, not debt — except the `legacy-write` fail-open
 in `ColumnCrypto.sealPlaintext`, which §4 Phase 3 addresses.
+
+**Now (2026-08-29): 6 of those 8 survive and are the WHOLE remaining set.** The two that did not are
+the two that were debt: `purpose-derived legacy-write` went with D4's write-side closure, and
+`v2 device-bound read` went with D2's `0x02` rung. Both labels left `pinnedByLabel` entirely rather
+than sitting at 0 — a label pinned at zero reads as a category that still exists and happens to be
+empty, which is the opposite of what happened.
 
 ## 3. The missing precondition: nobody can count legacy blobs
 
@@ -402,7 +430,16 @@ manifests are re-read immediately before the write and proceed only on byte-equa
 orphan-sweep race in which a stale index write could permanently delete a raced-in friend photo's
 files. An own-root file that fails to open is **probed against the wall key**: it opens ⇒ blocking
 `legacyKeySealedOwnFile` (a state the key latch claims cannot exist, checked rather than assumed,
-because that proof has a real hole); the wall key is unavailable ⇒ indeterminate. Two non-blocking
+because that proof has a real hole); the wall key is unavailable ⇒ indeterminate.
+
+**Reconciled 2026-08-29 (final pass): that probe and its `legacyKeySealedOwnFile` bucket are GONE.**
+They needed the wall-key open that Phase 3 deleted, so they went out with the migrator's ciphertext
+arm; the bucket now exists in this paragraph and nowhere in the tree. The consequence is worth
+carrying, because it bears on the `OwnPhotoKeyMigrator` residual: **nothing checks that hole any
+more except `OwnPhotoKeyMigrator`'s own re-seal arm**, which is the arm the residual describes as
+unreachable. It is unreachable for the *pre-split* generation (all unmarked) and remains the only
+healer for a *marked* own-corpus file sealed under the wall key — the exact state this probe was
+written to catch. Two non-blocking
 buckets are deliberately **split so the Phase-3 gate reads the right one**: `unopenableUnprefixed`
 (bytes read, every key the legacy branch could ever pair them with tried, nothing opens — so
 deleting the branch cannot change what any reader gets) versus `refusedPlaintext` (parseable
@@ -452,7 +489,9 @@ The key-pinning split moved the module's single `// cryptographic-domain: legacy
 `PrivateStoreCore`, still the Phase 3 delete target. *Known stale, deliberately not fixed here:*
 `PendingNarrativeBufferFormatCensus.swift:14`'s doc comment still attributes that branch to
 `loadEntries()`; census files were out of scope for this pass, so the correction is owed to whoever
-next touches that file, or to the final docs-vs-code reconciliation sweep.
+next touches that file, or to the final docs-vs-code reconciliation sweep. **CLOSED — Phase 3 fixed
+it in the commit that deleted the branch, and the refusal now genuinely does live in
+`loadEntries()`; the final sweep re-verified it rather than taking the note's word.**
 
 ### Phase 2.5 — `FernletLockService` content-key re-wrap — **BUILT**
 
@@ -799,6 +838,84 @@ shareable) is tracked separately — it is a wire change to `SharedRecipePayload
 Note for whoever takes it: `RecipeExchangePacketHashInput` is a **frozen** hash pre-image, so adding
 fields to the shared payload interacts with `contentHash` and needs a version story of its own.
 
+## 9. Closing gate report (2026-08-29)
+
+The round's last item asked for this, and it exists to stop the completed checkboxes above being
+read later as discharged gates. **They are not.** The deletions in Phases 3 and 4 proceeded on the
+owner's risk judgement under §0 — one install, test data only — and the honest one-line summary of
+the evidence is: *three of the six gates could not be satisfied because the corpora they interrogate
+do not exist on the only device that could answer, and the round proceeded anyway, knowingly.*
+
+### What the sitting returned
+
+One real-device sitting was taken (owner's iPhone, 2026-08-28) on the DEBUG Phase 3 gate readout.
+Two facts about it govern how it may be quoted, and both are already recorded above rather than
+being new findings here:
+
+- **Under the CORRECTED instrument, three gates read `vacuous`, not `discharged`** — heart-drop (all
+  three main sidecar rows absent), media (all 51 files friend-wall; both own-photo corpora empty)
+  and sealed columns (one `JournalNarrative` row; three sealed entities never written). The
+  `discharged` verdicts the sitting first printed for those three were artifacts of the instrument's
+  own false-pass arms, closed in `739eb78`. A vacuous verdict is not a weak pass; it is the
+  instrument refusing to certify an empty corpus, which is this round's core failure mode occurring
+  inside the thing that gates it.
+- **The other three gates have no verdict of record.** A peer session summarized the sitting as
+  "five discharged / one vacuous", and that summary is recorded above as a REPORT, deliberately not
+  as the gate record: the exported readout never reached a session that could quote it, and one of
+  its six verdicts was resolved by the peer after the instrument printed `notTaken`. Per §4 the
+  readout's own printed verdict is the gate, so for the pending-narrative buffer, the lock-wrap and
+  the sealed-photo surfaces this document records **no reading**, not a passing one. Nothing was
+  deleted on the strength of them either — see the basis below.
+
+The one piece of positive evidence the sitting did produce, and the only one any deletion actually
+leaned on: that install's own bytes read `alreadyCurrent 51` and `openedV3` — i.e. the device's real
+data was already in the current format on every surface that held any.
+
+### What is OWED, and by whom
+
+Nothing in this list blocks the round; each is a claim that would have to be re-established, not a
+defect standing open.
+
+- **Real-device census readings for all six surfaces, on a device carrying pre-`91c3956` data.**
+  Permanently un-owed in practice on the current install (its data is already current) and
+  impossible to obtain anywhere else while §0 holds. It becomes owed the moment a device exists that
+  upgraded across the domain separation with real content on it — at which point the readings are
+  owed *before* the reasoning below can be relied on, not after.
+- **A `SealedPhotoBackupService` zero-proof** (`minimumEntryHashVersion >= 2` across the three
+  corpora, read from the manifests at gate time). Never obtained. It is the one surface whose gate
+  was never a census, and its six misquotation traps are recorded in §4 Phase 3 for whoever reads it
+  next. Note the Debug-vs-Production CloudKit database caveat there is permanent and not fixable by
+  the instrument.
+- **The sealed-column keyed second witness.** Gone with the migrator that produced it. The ~1-in-256
+  collided-marker blob is now unresolvable by any means this build ships, pinned as
+  `aCollidedLegacyBlobCanNoLongerBeResolvedByOpen`.
+
+### What is PARKED, and what wakes it
+
+- **D1 (minimum peer build)** — resolved as (a) hard cutover on the no-peers predicate. **Re-open as
+  (b), a negotiated versioned refusal, the moment a second install exists.** A hard cutover chosen
+  when the population was zero is not a hard cutover justified when it is two. The four Class-B
+  readers are gone, so option (b) would now be new work rather than a decision not to delete.
+- **D5 (the iOS-backup re-introduction channel)** — ACCEPTED, not mitigated. The sealed store and
+  both media roots still ride the device backup by default, and restoring an older backup onto this
+  build puts legacy bytes on a device that can neither read nor heal them. **One user is enough for
+  this to bite; it needs no fleet.**
+- **§0 itself.** Every conclusion above is downstream of "there are no other users". The first
+  outside tester invalidates the premise, not just the schedule.
+- **`OwnPhotoKeyMigrator`'s unreachable convert path** — kept deliberately, because its latch is half
+  of `OwnPhotoKeyBinder`'s irreversible binding gate. Recorded as a residual below; retiring it is a
+  security-design decision and not a cleanup.
+- **The four walls that still omit `App/FernletMessagesExtension`** (`TestHookBoundaryTests`,
+  `PasteboardBoundaryTests`, `MemoryLifecycleBoundaryTests`, `Scripts/accessibility-scan.py`) —
+  measured clean, four one-line root additions, deliberately left out as not-crypto.
+
+### The basis, stated one more time
+
+**"Nothing to lose", not "migration proven complete".** The two are easy to conflate later, and the
+completed checkboxes above are exactly the shape that invites the conflation. If a future session
+needs to know whether these surfaces were proven migrated: they were not, and the document says so
+in four places on purpose.
+
 ## Progress
 
 Single source of truth for the standardization loop (owner-approved 2026-08-28). Every loop
@@ -810,7 +927,8 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
 - [x] Phase 1 — `FormatMigrator` lift + sealed-photo `hashVersion` marker (`94a8bc4`, merged to
       main 2026-08-28; boundary gate: full unit phase 3143 tests / 285 suites green from a private
       DerivedData, power-of-10 and doc-coverage scans clean)
-- [x] Phase 2.1 — `SealedPhotoBackupService` migrator (source `db40984`; tests/docs commit follows.
+- [x] Phase 2.1 — `SealedPhotoBackupService` migrator (source `db40984`, tests/docs `baba163`,
+      gate fixes `174c9e5`.
       `AsyncFormatMigrator` sibling + the policy shell over the existing healing reconcile, zero new
       crypto; latch key landed with both wipe-wall rows. Three planned pins deferred as recorded
       testability residuals — see the phase section)
@@ -831,7 +949,7 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       through the reader's own dispatch with a strict V3 seal, discriminated verified read-back,
       private-hub-only duress-blind status; latch + both wipe rows, cleared first. Adversarial
       diff review: 16 findings, 1 fatal, all applied)
-- [x] Phase 3 gate INSTRUMENT — the DEBUG Phase 3 gate readout (`App/Fernlet/Phase3GateReadout.swift`,
+- [x] Phase 3 gate INSTRUMENT — `a0998f1` + fixes `b265b0c`. The DEBUG Phase 3 gate readout (`App/Fernlet/Phase3GateReadout.swift`,
       `MediaResidueAudit.swift`, `Phase3ReadoutSession.swift`, `Phase3GateReadoutView.swift`; sibling
       of the marker-bytes census in Settings → Debug). It does NOT discharge anything — it makes all
       six gates readable and exportable from a real device in one sitting, which three of them were
@@ -856,7 +974,7 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       `sealPlaintext`'s legacy-write fail-open is closed (D4, landed first and alone in `eb6bdff`).
       Three went in `f7dd2de` (`PendingNarrativeBuffer`, `MediaAtRestCrypto`,
       `SealedPhotoBackupService`); the three DELICATE ones — whose failure mode is "the user's
-      sealed data becomes unopenable" — went last:
+      sealed data becomes unopenable" — went last, in `c291380`:
       - **`ColumnCrypto`** loses BOTH lower rungs: the unprefixed no-AAD `legacy-read` and the
         `0x02` `v2 device-bound read` (owner decision D2). V3 is now the only format on the read
         side and the write side alike, and `openReportingRung` collapsed back into `openBlob`
@@ -970,7 +1088,7 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       were artifacts of the false passes fixed in `739eb78`. The deletions proceed on the owner's
       risk judgement — one install, no other users, and that install's own bytes already reading
       `alreadyCurrent 51` and `openedV3` — not on gate evidence.
-- [x] Phase 4 — Class B wire readers — **DONE 2026-08-29**. D1 resolved as a hard cutover (owner:
+- [x] Phase 4 — Class B wire readers — **DONE 2026-08-29, `5c2326f`**. D1 resolved as a hard cutover (owner:
       *"No users, use the new paths."*), and all four readers are deleted in one commit: the
       unprefixed `meshGroupPhotoV2` photo and mesh group payload opens in `MeshNetworkManager`, the
       AAD ternary that selected a bare static key for a pre-`FPT2` transport seal, and the 92-byte
@@ -1000,7 +1118,7 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
         have started passing for the wrong reason; it now flips a byte inside the sealed body and
         still reaches the AEAD tag. Three new tests pin the refusal by name (unmarked photo,
         legacy 92-byte wrap vs a merely malformed 91-byte one, unmarked transport seal).
-- [x] Phase 5 — wall the end state (§4). **CLOSED 2026-08-29** with
+- [x] Phase 5 — wall the end state (§4). **CLOSED 2026-08-29 (`2e42b07`, compile fix `282fbd4`)** with
       `noLegacyReadPathRemainsAnywhere` — the zero-`legacy-read` assertion the round was for. It is
       deliberately redundant with the per-label pin, because that wall lives in the ABSENCE of a
       dictionary key and absence is repaired by typing `"legacy-read": 1`, a one-line edit that
@@ -1067,12 +1185,39 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       it is a security-design change and not a cleanup. Documented at the type and pinned by a test.
       Decide it deliberately, in its own change, or leave it — but do not let a future "delete dead
       code" sweep take it for dead weight.
-- [ ] RESIDUAL from Phase 4 — `DuressRecoveryCoordinator` (app target) swallows the new
-      `legacyWireFormat` refusal in three `try? identity.open(…)` calls, so a legacy peer fails
-      INVISIBLY there and only there. Pre-existing, and it swallows every open failure equally
-      rather than being anything Phase 4 introduced — but Phase 4 is what made "a peer on an old
-      build" a thing that fails rather than a thing that works, and nothing-silent says the one
-      remaining invisible path should be named. Small, self-contained, not blocking.
+
+      **PUT TO THE OWNER 2026-08-29 (final pass); awaiting an answer. Two findings sharpen the
+      question and neither was in the residual as written:**
+      1. **What Phase 3 killed is the REPAIR arm, not the verifier.** `performPass()` has five
+         buckets and only two of them (`resealed`, `resealFailures`) go through the deleted reader.
+         The three the binding gate actually consumes are untouched: `alreadyOwnKey` is the positive
+         per-file proof, and `indeterminate` + `abortedNoOwnKey` are the fail-closed refusals that
+         stop the irreversible bind on a device that could not LOOK at its own corpus — an
+         unlistable directory, a `.completeFileProtection` file on a device that locked mid-pass, or
+         a keychain that would not vend. So this is not a migrator with a vestigial latch; it is a
+         VERIFIER whose repair arm became unreachable, and retiring it retires the verification.
+      2. **The one check that covered the same hole is already gone.** Phase 2.3 added a wall-key
+         probe (`legacyKeySealedOwnFile`) precisely because the key latch's proof "has a real hole",
+         and Phase 3 deleted that probe with the arm it depended on (recorded in the 2.3 section).
+         The migrator's own re-seal arm is now the ONLY code that would notice or heal a *marked*
+         own-corpus file sealed under the wall key — which is the state the probe existed for, and
+         the state `OwnPhotoMigrationLatch.reset()`'s doc names as a future invalidator (own photos
+         restored from an escrow backup sealed elsewhere). Unreachable for the historical pre-split
+         generation is not the same as unreachable.
+- [x] RESIDUAL from Phase 4 — **DONE 2026-08-29.** `DuressRecoveryCoordinator`'s three
+      `try? identity.open(…)` calls now separate `IdentityError.legacyWireFormat` from the three
+      other causes they were collapsing it into, through one private `openCeremonyHop(_:from:)`.
+      Every drop line and every thrown error is unchanged; what is added is the reason.
+      **Deliberate deviation from `MeshNetworkManager`'s shape, and the reason is this file's own
+      threat model:** the mesh names it in the EVENT NAME
+      (`mesh.friendPhoto.droppedLegacyWireFormat`), but `FernletAuditLog` logs names with `.auto`
+      privacy — they survive into a sysdiagnose — and context with `.private`. This coordinator
+      borrows the neutral `mesh.verifyQR.*` family precisely so no name it emits can hint that a
+      duress PIN exists on the phone, so the reason rides `context: ["reason": "legacyWireFormat"]`
+      on the drop line that was already being emitted. Four tests pin it: one per hop, plus the
+      negative (a marked-but-tampered payload keeps the bare line — a reason that fires on
+      everything names nothing). The fixture strips the four `FPT2` bytes from a current seal, which
+      is byte-for-byte the retired layout rather than a stand-in for it.
 - [x] Round REVIEW + boundary gate — **2026-08-29, `ad224a7`.** The six deletion commits had never
       been gated end to end: the last recorded gate (`2df8d29`) predates all of them. Gate run from
       a private DerivedData at `282fbd4`: full unit suite **3277 tests / 293 suites green**,
@@ -1100,8 +1245,76 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       own contract says no reader may ever consult it, so sweeping it is what hard binding is for),
       and the heart-drop stores' split policy is deliberate (the outbox quarantines because it holds
       user content; the dedup and peer-bundle caches discard because their contents re-derive).
-- [ ] Final pass — docs-vs-code reconciliation sweep + purpose-statement sweep, then stop the loop
-      with the gate report (real-device census readings owed, D1, anything parked).
+- [x] Final pass — **DONE 2026-08-29.** Docs-vs-code reconciliation sweep, purpose-statement sweep,
+      the closing gate report (new §9), and the round's own bookkeeping.
+      **Boundary gate, from a private DerivedData: full unit suite 3292 tests / 296 suites green
+      (640 s), power-of-10 0 violations, doc-coverage 0 undocumented types, accessibility 0
+      violations.** The delta against the round review's gate is exactly **+4 tests / +0 suites** —
+      the four new hop pins landing in an existing suite — which is the arithmetic that says nothing
+      else moved. One environment flake on the way (`The test runner hung before establishing
+      connection`, zero tests executed, `TEST EXECUTE FAILED`); re-run clean, and it is recorded
+      here because an exit-65 with no test output reads exactly like a red suite and is not one.
+      - **The purpose-statement sweep came back clean.** All six surviving
+        `// cryptographic-domain:` markers still state something true about the line they annotate:
+        two `authenticatedData-bound aad` (`SealedBackupService:182`, `SealedPhotoBackupService:110`
+        — the domain is inside the `aad` local, built above the wall's window) and four in
+        `HeartDropSealer` (two `purpose-derived salt` where `heartDropOuterSealV1` reaches HKDF as
+        the salt, two `key-derived` where the ChaChaPoly call binds it through the derived key).
+        **None of the six had a sibling rung deleted** — the ten that did were all in other files,
+        and every one of those files left the hatch set entirely. The failure mode the sweep was
+        looking for — a marker describing a dispatch that no longer exists — did not occur.
+      - **Six docs-vs-code defects found and fixed**, all of them claims the deletions falsified
+        without anyone noticing:
+        1. `Docs/Verifiability.md` still described the sealed column as **format v2** and said
+           "Legacy blobs still open (dual-open fallback) and are progressively rebound as they are
+           routinely re-sealed" — three false clauses in one sentence, in the document that is the
+           app's security-claims record. Rewritten to v3, no fallback, fail-closed write.
+        2. The same file's test-map row sold `ColumnCryptoDeviceBindingTests` as pinning "format v2
+           + legacy compatibility"; it now pins the opposite. Fixed there and in
+           [FileIndex.md](FileIndex.md).
+        3. **`OwnPhotoMigrationLatch`'s meaning was silently NARROWED by Phase 3 and nothing said
+           so.** It promised "every own photo is sealed under the own-photos key"; since the
+           unmarked read went, a genuine pre-split file lands in `unopenable`, which is deliberately
+           not part of `isClean`, so a pass over a corpus full of them latches. The narrow reading —
+           "no own file this build can OPEN is still under the old key" — is what is now true, and
+           the strong one was still being quoted at the type, in the DocC page, in
+           [FileIndex.md](FileIndex.md), in `OwnPhotoKeyBinder`'s gate doc (where it is half of an
+           irreversible security decision) and in `Verifiability.md` §5a. All five corrected.
+           **Not a data-loss defect** — binding on the narrow reading takes nothing further away,
+           because those bytes are unopenable either way — but it is the gate for an irreversible
+           flip, and a gate must not be quoted as proving more than it does.
+        4. Three `ProximityFunctionIndex.md` rows (`decryptPhoto`, `decryptPayload`,
+           `IdentityService.open`) and one (`HeartDropSidecarSeal.make`) described opens that now
+           refuse by name, with no mention of the refusal.
+        5. **This plan's own §Phase 2.3 still described `legacyKeySealedOwnFile`**, the wall-key
+           probe over own-corpus files — a bucket Phase 3 deleted along with the wall-key open it
+           needed. It existed in that paragraph and nowhere in the tree. Recorded there, because it
+           bears directly on the open `OwnPhotoKeyMigrator` residual: the probe was the OTHER check
+           on the same hole, and the residual's re-seal arm is now the only one left.
+        6. `Docs/PrivacyWipeCoverage.md` (and the matching `reason:` in the wipe wall's own fixture)
+           justified KEEPING the own-photo latch on the premise that "the files it describes were
+           re-sealed under the own key". Same narrowing as (3): the conclusion survives — the wipe
+           empties the own corpora, so a post-wipe pass latches trivially either way — but the
+           premise had to stop claiming the strong property.
+        The plan's own §§1–3 and its two ten-site tables were the seventh, and are handled by the
+        reconciliation banner and the per-row disposition column rather than by rewriting history.
+      - **What the sweep checked and found already correct**, recorded so it is not re-swept:
+        [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md) §Escape-hatch abuse (Phase 5's
+        rewrite did land, and its table matches `pinnedByLabel` exactly) and §5's versioned-format
+        table; all eleven DocC landing pages that mention a legacy path or a migrator; every
+        `FileIndex.md` row for a deleted file (there are none — the deletions took their rows with
+        them) and for the seven files the round added; and `Docs/StoreRepositoryFunctionIndex.md`,
+        whose only stale row was the buffer's `loadEntries()`. Historical round records
+        (`Plan-Security-Hardening-*`, `CODE_REVIEW_*`, `Next-Round-Prompt-*`) were deliberately NOT
+        rewritten: they are dated records of what was true then.
+      - **Bookkeeping.** Five checklist lines were missing the landing SHA they promised (2.1's
+        tests/docs and gate commits, the Phase 3 instrument, Phase 3's delicate-three commit, Phase
+        4, and Phase 5's closing assertion); all five now name it. Phase 2.4's recorded-stale census
+        doc comment is CLOSED — Phase 3 fixed it in the commit that deleted the branch, verified
+        rather than taken on the note's word. §§1–3 carry a reconciliation banner and the two
+        ten-site tables carry a per-row disposition column, because they are written in the present
+        tense about a tree that no longer exists.
+
 
 Token log (per phase: spent / big consumers / remaining):
 - Phase 1: ~1.0M output tokens. Big consumers: three Opus agents — the verifier's three gate runs
@@ -1136,6 +1349,17 @@ Token log (per phase: spent / big consumers / remaining):
   the docs pass (~60k), the gate (~100k, green first pass). Gate history for the whole round:
   2.1 needed five fixes; 2.2–2.4, 2.5, and 2.6 each passed their boundary gate on the first
   attempt. Remaining at the loop's end: ~15.0M.
+
+- **Token-log GAP, named rather than back-filled.** Phase 0, the Phase 3 gate instrument (and its
+  false-pass fix), Phase 3, Phase 4 and the round review + boundary gate have **no token-log entry**.
+  Each ran in a separate session — §0's premise and the Phase 3 handoff both required fresh contexts
+  — and the per-agent usage blocks those numbers come from do not survive a session boundary. They
+  are unrecoverable, not merely unrecorded, and inventing a plausible figure would corrupt the one
+  thing this log is for. Everything from Phase 1 through Phase 2.6 ran in ONE self-paced loop and is
+  complete below.
+- Final pass: main loop only, no subagents (the second-cheapest phase of the round, after Phase 5's
+  early parts, and for the same reason: a sweep is reading, not building). One build + one full-suite
+  gate.
 
 - Phase 5 (early parts): main loop only — **no subagents were spawned this phase**, so there are no
   per-agent usage blocks to quote and the spend is the session's own; it is the cheapest phase of

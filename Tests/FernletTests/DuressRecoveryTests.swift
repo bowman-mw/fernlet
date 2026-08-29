@@ -26,6 +26,7 @@ import CryptoKit
 import Foundation
 import Security
 import Testing
+import FernletCrypto
 import FernletFoundation
 import ProximityKit
 @testable import Fernlet
@@ -1046,6 +1047,157 @@ struct DuressRecoveryCeremonyTests {
         #expect(throws: DuressRecoveryError.noRecoveryMaterial) {
             _ = try pair.primary.beginRecovery(scannedURL: url)
         }
+    }
+
+    // MARK: The refusal Phase 4 created, at the three hops where it used to arrive mute
+    //
+    // Phase 4 of the crypto standardization plan deleted `IdentityService`'s pre-`FPT2` transport
+    // reader, so "the peer is on an old build" stopped being a thing that works and became a thing
+    // that FAILS. All three hops here open through `try?`, which swallowed that refusal exactly as
+    // it swallowed a wrong key, a tampered blob and a stranger's garbage — one silence for four
+    // causes with four different remedies. The `try?` predates Phase 4 and is not what Phase 4
+    // introduced; what Phase 4 changed is that one of the four now has a name worth saying.
+    //
+    // The drop line and the thrown error are unchanged at every hop. The reason rides the audit
+    // CONTEXT rather than a new event name because `FernletAuditLog` logs names with `.auto`
+    // privacy (they reach a sysdiagnose) and context with `.private`, and this coordinator's whole
+    // audit posture is that no name it emits may hint a duress PIN exists on this phone.
+
+    /// The retired pre-`FPT2` transport layout, built the way a pre-Phase-4 build wrote it.
+    ///
+    /// `IdentityService.seal` writes `FPT2 ‖ eskPub ‖ combined`, and the retired layout is
+    /// byte-for-byte that same payload starting at `eskPub` — so dropping the four marker bytes
+    /// yields a genuine pre-marker payload rather than a stand-in for one. The marker is re-spelled
+    /// here rather than read from production: a fixture that asks production what the format is can
+    /// never notice production changing it.
+    private func strippedOfTheFormatMarker(_ sealed: Data) throws -> Data {
+        let marker = Data("FPT2".utf8)
+        try #require(sealed.starts(with: marker), "the seal no longer writes the marker this strips")
+        return Data(sealed.dropFirst(marker.count))
+    }
+
+    /// Hop 1 — the custodian's inbound REQUEST.
+    @Test func aLegacyWireFormatRequestIsRefusedByName() async throws {
+        let pair = try await recoveryLockedPair()
+        defer { pair.cleanup() }
+        let primaryKA = pair.fixture.primaryIdentity.localKeyAgreementPublicKey
+        let response = try runVerificationRound(pair) { try pair.primary.beginRecovery(scannedURL: $0) }
+        let legacyRequest = try strippedOfTheFormatMarker(try pair.primary.makeRecoveryRequest(
+            response: response,
+            senderSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey
+        ))
+        let capture = RecoveryAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        #expect(throws: DuressRecoveryError.malformedPayload) {
+            _ = try pair.custodian.openRecoveryRequest(legacyRequest, from: primaryKA)
+        }
+        #expect(capture.contains(event: "mesh.verifyQR.malformedPayloadDropped",
+                                 context: ["reason": "legacyWireFormat"]))
+    }
+
+    /// …and it does not OVER-claim. Bytes that DO carry the marker and fail for any of the other
+    /// three reasons keep the bare drop line they always had: a reason that fires on everything
+    /// names nothing, and "an old build" is the one diagnosis that must not be guessed.
+    @Test func aTamperedButCurrentFormatRequestIsRefusedWithNoReason() async throws {
+        let pair = try await recoveryLockedPair()
+        defer { pair.cleanup() }
+        let primaryKA = pair.fixture.primaryIdentity.localKeyAgreementPublicKey
+        let response = try runVerificationRound(pair) { try pair.primary.beginRecovery(scannedURL: $0) }
+        var tampered = Data(try pair.primary.makeRecoveryRequest(
+            response: response,
+            senderSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey
+        ))
+        // Inside the AEAD tag, well past the marker — so it reaches the open and fails there.
+        tampered[tampered.count - 1] ^= 0xFF
+        let capture = RecoveryAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        #expect(throws: DuressRecoveryError.malformedPayload) {
+            _ = try pair.custodian.openRecoveryRequest(tampered, from: primaryKA)
+        }
+        #expect(capture.contains(event: "mesh.verifyQR.malformedPayloadDropped", context: [:]))
+        #expect(!capture.contains(event: "mesh.verifyQR.malformedPayloadDropped",
+                                  context: ["reason": "legacyWireFormat"]))
+    }
+
+    /// Hop 2 — the recovery BLOB the custodian opens once its human says yes. The request envelope
+    /// is current so the refusal happens at this hop and not the previous one, which is why the
+    /// request has to be composed by hand rather than taken from `makeRecoveryRequest`.
+    @Test func aLegacyWireFormatRecoveryBlobIsRefusedByName() async throws {
+        let pair = try await recoveryLockedPair()
+        defer { pair.cleanup() }
+        let primaryKA = pair.fixture.primaryIdentity.localKeyAgreementPublicKey
+        let primarySigning = pair.fixture.primaryIdentity.localSigningPublicKey
+        let custodianKA = pair.fixture.custodianIdentity.localKeyAgreementPublicKey
+        let response = try runVerificationRound(pair) { try pair.primary.beginRecovery(scannedURL: $0) }
+        let legacyBlob = try strippedOfTheFormatMarker(
+            try #require(pair.fixture.service.custodianRecoveryBlob))
+        let transcript = DuressRecoveryTranscript.request(
+            challengeNonce: response.challengeNonce,
+            requesterSigningPublicKey: primarySigning,
+            requesterKeyAgreementPublicKey: primaryKA,
+            custodianSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey,
+            custodianKeyAgreementPublicKey: custodianKA,
+            recoveryBlob: legacyBlob
+        )
+        let request = DuressRecoveryRequest(
+            version: 1,
+            challengeNonce: response.challengeNonce,
+            requesterSigningPublicKey: primarySigning,
+            requesterKeyAgreementPublicKey: primaryKA,
+            recoveryBlob: legacyBlob,
+            signature: try pair.fixture.primaryIdentity.sign(
+                transcript,
+                purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1
+            )
+        )
+        _ = try pair.custodian.openRecoveryRequest(
+            try pair.fixture.primaryIdentity.seal(
+                try JSONEncoder().encode(request), to: custodianKA, format: .wire2),
+            from: primaryKA
+        )
+        let capture = RecoveryAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        #expect(throws: DuressRecoveryError.recoveryBlobUnreadable) {
+            _ = try pair.custodian.answerPendingRecoveryRequest(.returnKey)
+        }
+        #expect(capture.contains(event: "mesh.verifyQR.sealedPayloadUnreadable",
+                                 context: ["reason": "legacyWireFormat"]))
+    }
+
+    /// Hop 3 — the custodian's REPLY, arriving back at the primary. The round survives a rejected
+    /// reply by design, so this pins the reason without spending it.
+    @Test func aLegacyWireFormatReplyIsRefusedByName() async throws {
+        let pair = try await recoveryLockedPair()
+        defer { pair.cleanup() }
+        let primaryKA = pair.fixture.primaryIdentity.localKeyAgreementPublicKey
+        let response = try runVerificationRound(pair) { try pair.primary.beginRecovery(scannedURL: $0) }
+        let sealedRequest = try pair.primary.makeRecoveryRequest(
+            response: response,
+            senderSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey
+        )
+        _ = try pair.custodian.openRecoveryRequest(sealedRequest, from: primaryKA)
+        let legacyReply = try strippedOfTheFormatMarker(
+            try pair.custodian.answerPendingRecoveryRequest(.returnKey))
+        let capture = RecoveryAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+
+        await #expect(throws: DuressRecoveryError.malformedPayload) {
+            _ = try await pair.primary.completeRecovery(
+                sealedReply: legacyReply,
+                credential: .pin6("222222"),
+                grantingScope: .privateHub
+            )
+        }
+        #expect(capture.contains(event: "mesh.verifyQR.malformedReplyDropped",
+                                 context: ["reason": "legacyWireFormat"]))
+        #expect(pair.fixture.service.isAwaitingCustodianRecovery)
     }
 }
 

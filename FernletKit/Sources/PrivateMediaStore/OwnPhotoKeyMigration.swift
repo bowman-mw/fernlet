@@ -97,7 +97,21 @@ public struct OwnPhotoSealedLocations: Sendable, Equatable {
     }
 }
 
-/// The persisted "every own photo is sealed under the own-photos key" completion latch.
+/// The persisted "no own photo this build can open is still under the pre-split key" completion
+/// latch.
+///
+/// **What it attests was NARROWED by Phase 3 of the crypto standardization plan, and the wording
+/// above is the narrow reading.** Until then it meant the strong thing its name suggests — every
+/// own file is sealed under the own-photos key — because a pre-split file opened under the legacy
+/// key and was re-sealed. Phase 3 deleted `MediaAtRestCrypto.gcmOpen`'s unmarked read, and every
+/// file the pre-split key ever sealed is unmarked, so such a file now lands in
+/// ``OwnPhotoKeyMigrationResult/unopenable`` — which is deliberately NOT part of
+/// ``OwnPhotoKeyMigrationResult/isClean``, so a pass over a corpus full of them latches. That is
+/// the safe direction and not a regression: those bytes are already unopenable by anything this
+/// build ships, so binding on the strength of this latch takes nothing further away. But the two
+/// readings are not the same sentence, and only the second one is still true. See
+/// ``OwnPhotoKeyMigrator`` for what the pass gave up, and
+/// `OwnPhotoKeyMigrationTests.preSplitUnprefixedBytesAreUnopenableResidueNow` for the pin.
 ///
 /// **Load-bearing, and deliberately one-way + fail-closed.** Two later steps are gated on it:
 /// flipping the own-photos keychain row to `AfterFirstUnlockThisDeviceOnly` (step 5c) and dropping
@@ -128,8 +142,10 @@ public struct OwnPhotoMigrationLatch: FormatMigrationLatching {
         self.defaults = defaults
     }
 
-    /// Whether a full clean pass has proven every own-photo file is sealed under the own key.
-    /// Absent (never set) reads as false — the fail-closed direction.
+    /// Whether a full clean pass has proven that no own-photo file this build can open is still
+    /// sealed under the pre-split key (see the type doc: this used to be the stronger "every own
+    /// file is on the own key", and Phase 3 narrowed it). Absent (never set) reads as false — the
+    /// fail-closed direction.
     public var isComplete: Bool {
         defaults.bool(forKey: Self.defaultsKey)
     }

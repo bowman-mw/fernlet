@@ -583,7 +583,7 @@ The debounce/queue mechanics this service used to own now live in `PendingWriteB
 | `append(_:)` | Loads encrypted buffer entries, appends one, evicts oldest entries past the cap, audits eviction, and saves. |
 | `drainAll()` | Loads all buffered payloads, purges the file, and returns entries for unlocked processing. |
 | `purge()` | Deletes the pending buffer file. |
-| `loadEntries()` | Opens the ChaChaPoly buffer file with the buffer key and decodes payloads. |
+| `loadEntries()` | Opens the ChaChaPoly buffer file with the buffer key and decodes payloads. Requires the `FNB2` marker since crypto-standardization Phase 3: a non-empty file without it is refused by name as `PendingNarrativeBufferError.legacyUnprefixedFormat` (audit-logged, never opened under no domain, and never deleted), and the Phase 2.4 migrator that converted such files went with the reader it converted through. |
 | `saveEntries(_:)` | Encodes, encrypts, atomically writes, excludes from backup, and marks complete file protection. |
 | `bufferKey()` | Loads or creates the background-accessible buffer key. |
 | `loadBufferKey()` | Reads the buffer key through the shared `KeychainItem.load(account:service:)`, migrating a legacy v1 row into the scoped v2 slot via `KeychainItem.store(...)`. |

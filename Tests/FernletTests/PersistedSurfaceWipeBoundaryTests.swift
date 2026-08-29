@@ -260,7 +260,7 @@ struct PersistedSurfaceWipeBoundaryTests {
             reason: "The own-photo device-binding consent bit. Clearing it would silently WIDEN custody for everything captured after the wipe, because the next launch would find the gate unsatisfied and photos would go back to being backup-restorable."
         ),
         "com.fernlet.private-media.ownPhotoKeyMigrationComplete": .kept(
-            reason: "The own-photo key migration latch. The files it describes were re-sealed under the own-photos key and survive as ciphertext nothing can open; clearing the latch would only force a pointless re-scan."
+            reason: "The own-photo key migration latch. Nothing the wipe leaves behind is under the pre-split key, and what survives is ciphertext nothing can open; clearing the latch would only force a pointless re-scan. (Worded that way since crypto-standardization Phase 3 narrowed what the latch attests, from 'every own file was re-sealed' to 'no own file this build can open is still under the old key' — the keep decision is unaffected, because the wipe empties the own corpora and a post-wipe pass latches trivially either way.)"
         ),
         "com.fernlet.savedRecipeMigrationCompleted": .kept(
             reason: "The saved-recipe legacy-migration latch. A wipe leaves the Core Data store empty by definition, so clearing this bit would re-run the JSON migration on the next launch and resurrect every recipe it describes."

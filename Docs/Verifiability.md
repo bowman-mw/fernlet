@@ -87,7 +87,7 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 | AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
 | Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
-| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
+| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format **v3** — the round trip, the cross-install refusal, and, since the crypto standardization round's Phase 3, the two retired generations pinned as *refusals by name* rather than as compatibility: every "still opens" assertion there is now an inverted "is refused" one, and the fail-open write is pinned CLOSED), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
 | Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 
@@ -121,10 +121,19 @@ protected by keys that never leave the device:
   `…ThisDeviceOnly`, non-synchronizable). Column keys are never stored at all — they are derived
   per call via HKDF-SHA256 from the content key, and those derivations are pinned by
   known-answer tests.
-- **Bound further by this change:** new sealed-column writes carry a per-install random ID as
-  AEAD associated data (format v2, version-byte-prefixed), so the ciphertext itself — not just
-  its keys — refuses to open on any other install. Legacy blobs still open (dual-open fallback)
-  and are progressively rebound as they are routinely re-sealed.
+- **Bound further by this change:** sealed-column writes carry the column purpose plus a
+  per-install random ID as AEAD associated data (format **v3**, version-byte-prefixed), so the
+  ciphertext itself — not just its keys — refuses to open on any other install. **There is no
+  fallback left, and no progressive rebinding**: the crypto standardization round's Phase 3 deleted
+  both lower rungs — the unprefixed no-AAD blob and the v2 binding-only blob (owner decision D2) —
+  together with the migrator that converted through them, so v3 is the only format on the read side
+  and the write side alike. Bytes in either retired generation are refused by name
+  (`SealedColumnOpenError.retiredFormat(_:)`, which says WHICH generation the marker reports) and
+  the writer fails closed rather than degrading to an unbound blob when no binding ID exists
+  (`SealedColumnStrictSealError.bindingUnavailable`) — the sealed save can now FAIL where it used to
+  succeed in the wrong format, which is the accepted cost of making a format-census zero a latch
+  rather than a moment. See [Crypto-Domain-Separation.md](Crypto-Domain-Separation.md) §5 for the
+  one resolution that was lost with the rungs.
 - **Hard-bound to the Secure Enclave (§6.1, done):** where a Secure Enclave is present, the lock
   content key is wrapped under a non-exportable enclave-resident key **and the scrypt-wrapped
   copy is deleted** — after, and only after, a freshly re-read enclave wrap is proven to unwrap
@@ -386,7 +395,19 @@ shipped; the rest are still open.
    (`KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for:)`) instead of a flag-day. An eager,
    idempotent, crash-safe pass (`OwnPhotoKeyMigrator`, run once per launch off the main path)
    re-seals the own corpora onto the own key, with a read-path dual-open fallback so nothing is
-   unreadable in the meantime. The flip is gated on `OwnPhotoMigrationLatch` — the persisted proof
+   unreadable in the meantime. **The crypto standardization round's Phase 3 narrowed both halves of
+   that sentence, and it is recorded here rather than left to be rediscovered:** `MediaAtRestCrypto`
+   now requires the `FMA2` marker on read, and every file the pre-split key actually sealed predates
+   that marker — so the pass can no longer OPEN a genuine pre-split file (it counts one as
+   `unopenable`, never deletes it, and the read path resolves it to nil), and the dual-open fallback
+   reaches only marked files, which in practice means it recovers nothing. Those photos are not
+   recoverable by anything this build ships. What the latch still proves is therefore narrower than
+   its name: "no own file that this build can open is still under the old key", not "every own file
+   is on the own key". Binding on that reading takes nothing further away — the bytes it stops
+   protecting were already unopenable — but the two readings are not the same and only the second
+   was ever the intent. Pinned by
+   `OwnPhotoKeyMigrationTests.preSplitUnprefixedBytesAreUnopenableResidueNow`.
+   The flip is gated on `OwnPhotoMigrationLatch` — the persisted proof
    that zero own files are still under the old key — AND on the sanctioned cross-device route
    (a COMMITTED escrow photo backup, or explicit consent). The latch is fail-closed in all three
    ways a pass can fail to prove the property: the own key is unavailable, the legacy key is

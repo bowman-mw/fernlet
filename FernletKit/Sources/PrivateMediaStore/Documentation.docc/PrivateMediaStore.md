@@ -56,8 +56,14 @@ Three pieces carry own photos across that split, all in `OwnPhotoKeyMigration.sw
 - ``OwnPhotoKeyMigrator`` — the **eager, idempotent, crash-safe** re-seal pass, run once per launch
   off the main path. Eager is not an optimization: a lazily-migrated corpus leaves every photo the
   user never reopens under the backup-restorable key forever.
-- ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing is left under
-  the old key. Both the 5c binding flip and the removal of the dual-open fallback are gated on it.
+- ``OwnPhotoMigrationLatch`` — the persisted, one-way, fail-closed proof that nothing this build can
+  OPEN is left under the old key. Both the 5c binding flip and the removal of the dual-open fallback
+  are gated on it. That wording is narrower than the latch's original "every own file is on the own
+  key": Phase 3 retired the reader for unmarked bytes, so a genuine pre-split file is now
+  ``OwnPhotoKeyMigrationResult/unopenable`` residue, which is deliberately not part of `isClean` and
+  so does not hold the latch open. Binding on the narrow reading takes nothing further away (those
+  bytes are unopenable either way), but the two sentences are not interchangeable and only the
+  narrow one is still true.
   Fail-closed means all three ways a pass can fail to establish the property, and the third is the
   one that looks benign: a file whose **bytes could not be read at all** is
   ``OwnPhotoKeyMigrationResult/indeterminate``, never ``OwnPhotoKeyMigrationResult/unopenable``. Own

@@ -93,8 +93,13 @@ public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
 /// the whole design: binding is only safe when **both** conditions hold, and both are facts about
 /// this device at this moment, not about the build:
 ///
-/// 1. ``OwnPhotoMigrationLatch`` is set — every own file is proven to be sealed under the
-///    own-photos key. Binding before that turns any straggler into permanently unreadable bytes.
+/// 1. ``OwnPhotoMigrationLatch`` is set — no own file this build can open is still sealed under the
+///    pre-split key. Binding before that turns any straggler into permanently unreadable bytes.
+///    (That wording is narrower than the latch's original "every own file is on the own key", and
+///    deliberately so: Phase 3 of the crypto standardization plan retired the reader for unmarked
+///    bytes, so a genuine pre-split file is now unopenable residue the latch steps over. Binding on
+///    that reading takes nothing further away — those bytes are already unreadable — but the gate
+///    should not be quoted as proving more than it does. See ``OwnPhotoMigrationLatch``.)
 /// 2. The user has a sanctioned cross-device route: the opt-in own-photo escrow backup has
 ///    actually **committed** a copy (not merely been switched on — see ``escrowRouteCommitted``),
 ///    or ``OwnPhotoDeviceBindingConsent`` is recorded. Binding before that silently deletes their

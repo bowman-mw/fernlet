@@ -580,11 +580,12 @@ final class DuressRecoveryCoordinator {
         // A rejected reply deliberately does NOT clear `pendingRound`: burning the round on
         // somebody else's garbage is exactly how a racing third party would deny the genuine
         // custodian their answer (the rule carried forward from the 2026-07-25 mesh review).
-        guard let plaintext = try? identity.open(sealedReply, from: enrolledKeyAgreement, format: .wire2),
+        let replyHop = openCeremonyHop(sealedReply, from: enrolledKeyAgreement)
+        guard let plaintext = replyHop.plaintext,
               let reply = try? JSONDecoder().decode(DuressRecoveryReply.self, from: plaintext),
               reply.version == 1,
               reply.challengeNonce == round.challengeNonce else {
-            FernletAuditLog.log("mesh.verifyQR.malformedReplyDropped")
+            FernletAuditLog.log("mesh.verifyQR.malformedReplyDropped", context: replyHop.auditContext)
             throw DuressRecoveryError.malformedPayload
         }
         let transcript = DuressRecoveryTranscript.reply(
@@ -645,7 +646,8 @@ final class DuressRecoveryCoordinator {
             FernletAuditLog.log("mesh.verifyQR.unboundPayloadDropped")
             throw DuressRecoveryError.noRoundInProgress
         }
-        guard let plaintext = try? identity.open(sealed, from: senderKeyAgreementPublicKey, format: .wire2),
+        let requestHop = openCeremonyHop(sealed, from: senderKeyAgreementPublicKey)
+        guard let plaintext = requestHop.plaintext,
               let request = try? JSONDecoder().decode(DuressRecoveryRequest.self, from: plaintext),
               request.version == 1,
               request.challengeNonce == proven.challengeNonce,
@@ -655,7 +657,7 @@ final class DuressRecoveryCoordinator {
                   signingPublicKey: request.requesterSigningPublicKey,
                   keyAgreementPublicKey: request.requesterKeyAgreementPublicKey
               ) else {
-            FernletAuditLog.log("mesh.verifyQR.malformedPayloadDropped")
+            FernletAuditLog.log("mesh.verifyQR.malformedPayloadDropped", context: requestHop.auditContext)
             throw DuressRecoveryError.malformedPayload
         }
         let transcript = DuressRecoveryTranscript.request(
@@ -691,12 +693,12 @@ final class DuressRecoveryCoordinator {
         let recipientKeyAgreementPublicKey = pending.senderKeyAgreementPublicKey
         var contentKey = Data()
         if decision == .returnKey {
-            guard let opened = try? identity.open(
+            let blobHop = openCeremonyHop(
                 pending.request.recoveryBlob,
-                from: recipientKeyAgreementPublicKey,
-                format: .wire2
-            ), !opened.isEmpty else {
-                FernletAuditLog.log("mesh.verifyQR.sealedPayloadUnreadable")
+                from: recipientKeyAgreementPublicKey
+            )
+            guard let opened = blobHop.plaintext, !opened.isEmpty else {
+                FernletAuditLog.log("mesh.verifyQR.sealedPayloadUnreadable", context: blobHop.auditContext)
                 throw DuressRecoveryError.recoveryBlobUnreadable
             }
             contentKey = opened
@@ -728,6 +730,53 @@ final class DuressRecoveryCoordinator {
     }
 
     // MARK: - Shared scanner plumbing
+
+    /// The result of one ``openCeremonyHop(_:from:)``: the plaintext when the hop opened, and the
+    /// audit context its caller attaches to the drop line it already emits when it did not.
+    ///
+    /// A struct rather than a bare `Data?` because the *reason* an open failed is the whole point:
+    /// the three ceremony hops all fail the same way today, and one of those failures now has a
+    /// name.
+    private struct CeremonyHopOpen {
+        /// The opened bytes, or nil when the hop did not open for any reason.
+        let plaintext: Data?
+        /// Context for the caller's existing drop line. Empty for the failures with no nameable
+        /// cause; `reason=legacyWireFormat` for the one that has one.
+        let auditContext: [String: String]
+    }
+
+    /// Opens one sealed ceremony hop, separating the ONE open failure that has a nameable cause
+    /// from the several that do not.
+    ///
+    /// ``IdentityError/legacyWireFormat`` means the bytes carry no `FPT2` marker — the retired
+    /// pre-marker transport format whose reader Phase 4 of the crypto standardization plan deleted
+    /// (`Docs/Plan-Crypto-Standardization-2026-08-27.md`). Its remedy is "the other phone is on an
+    /// old build", which is nothing like the remedy for a wrong key, a tampered blob or a
+    /// stranger's garbage — and the `try?` these three call sites used collapsed all four into one
+    /// silence. That `try?` predates Phase 4 and swallowed every open failure equally; what Phase 4
+    /// changed is that one of them became a thing that FAILS rather than a thing that works, so it
+    /// is the one that now needs a name. Each caller keeps its own drop line and its own thrown
+    /// error exactly as they were; what this adds is the reason on that same line.
+    ///
+    /// **Why the reason rides the CONTEXT rather than a new event name**, unlike
+    /// `MeshNetworkManager.decryptedIncomingPhoto`'s `mesh.friendPhoto.droppedLegacyWireFormat`:
+    /// `FernletAuditLog` logs the event NAME with `.auto` privacy — it survives into a sysdiagnose —
+    /// and the context with `.private`, redacted outside a connected debugger. This type's audit
+    /// posture (see the type doc) is that no name it emits may hint a duress PIN exists on this
+    /// phone, which is why it borrows the neutral `mesh.verifyQR.*` family in the first place. A
+    /// new event name would be a new `.auto` string minted by this ceremony and nothing else; a
+    /// context value is not. The refusal is named either way — this just names it where naming it
+    /// discloses nothing.
+    private func openCeremonyHop(_ sealed: Data, from peerKeyAgreementPublicKey: Data) -> CeremonyHopOpen {
+        do {
+            let plaintext = try identity.open(sealed, from: peerKeyAgreementPublicKey, format: .wire2)
+            return CeremonyHopOpen(plaintext: plaintext, auditContext: [:])
+        } catch IdentityError.legacyWireFormat {
+            return CeremonyHopOpen(plaintext: nil, auditContext: ["reason": "legacyWireFormat"])
+        } catch {
+            return CeremonyHopOpen(plaintext: nil, auditContext: [:])
+        }
+    }
 
     /// Provisions the identity or refuses; every entry point runs this first so a missing key pair
     /// is one named error rather than a nil deep inside a seal.
