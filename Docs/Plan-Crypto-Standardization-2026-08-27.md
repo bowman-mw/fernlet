@@ -599,6 +599,19 @@ the one that governs:
   a wrap that has gone missing — the row's three honest absences). The 2.5 **row-latch licenses
   nothing by itself**: it is a derived read of the same marker the census reads, so quoting it as the
   gate would be quoting the gate to itself. `malformedEmpty` and `unreadable` are not zeros.
+
+  **Wording defect, found 2026-08-28 and corrected here: on Secure-Enclave hardware the `v2Marked`
+  half is UNREACHABLE at rest**, so it is not an alternative — it is a clause nothing can satisfy.
+  `hardBindToSecureEnclaveIfVerified` (FernletLockService.swift:3354) deletes `wrappedContentKey`
+  in the same unlock that Phase 2.5's converter writes it, once the enclave blob unwraps and
+  `constantTimeEqual`s the authoritative key. Since `SecureEnclave.isAvailable` is true on every
+  modern iPhone, the converter's own output never survives to be read as a marker. **The earned
+  absence is therefore the only reachable discharge on real hardware**, and the enclave-bound
+  reading is a PROOF rather than a fault: that delete sits behind the verification and nothing in
+  the file deletes on an error path, so "the wrap went missing" cannot produce the same state.
+  Distinguishing the absences does NOT require turning biometrics off — `setBiometricEnabled(false,…)`
+  (:2093) deletes `.biometricBypass` unconditionally, which in the fault reading is the very data at
+  risk. A successful passcode unlock (which vends a live content key) settles it non-destructively.
 - **`SealedPhotoBackupService` — `minimumEntryHashVersion >= 2` across the three corpora**, read
   from the manifests at gate time (§4's exception, restated here because this is the section a
   Phase 3 session actually reads). Six things that reading must not be misquoted as:
@@ -761,16 +774,63 @@ mid-phase that is new work gets ADDED here, never done silently or dropped.
       named-residue arithmetic needed LLDB plus a downloaded app container, and the sealed-column
       keyed-pass witness existed only as a one-shot `os_log` line. See "How the Phase 3 gates are
       read" above.
+- [x] Phase 3 instrument — **three false-pass arms closed, 2026-08-28.** The readout printed
+      `discharged` over corpora that do not exist, in three places, and the owner's own sitting hit
+      all three: `heartDropVerdict` treated `.absent` and `.empty` as non-blocking and fell through
+      to `.discharged`, so all-three-rows-absent read as a converted corpus; `mediaVerdict` had no
+      arm for own-photo corpora holding zero files, so a reading that was 100% friend-wall — born
+      sealed, and whose unopenable bytes `dispatchUnprefixedWall` deliberately routes clear of
+      `isClean` — discharged over bytes that were never capable of failing it; and the sealed-column
+      vacuity floor was per-STORE, so one `JournalNarrative` row satisfied it while three entities
+      had never been written (the census seeds every censused column with a zero tally, so the
+      untouched ones were present and readable — the verdict simply was not looking). Each now
+      returns `.vacuous` naming what was missing. This does not discharge or block anything; it
+      stops the instrument certifying an empty corpus, which is the round's own core failure mode
+      occurring inside the thing that gates it.
 - [ ] Phase 3 — delete the Class-A legacy readers + close `sealPlaintext`'s legacy-write fail-open
       — HARD GATE per surface: census reads zero on a REAL upgraded tester device (simulator zeros
       do not discharge it; for `ColumnCrypto`, `definitelyLegacy == 0` is necessary-not-sufficient
       and the keyed migrator's clean pass is the second witness). Deletion diffs may be drafted on
       a parked branch; the gate itself cannot be self-satisfied by the loop.
-      **BLOCKED 2026-08-28 on the owner's exported gate report.** The instrument is built and merged
-      to main (`b265b0c`) and the owner has run the sitting, but the exported reading has not
-      reached a session, so nothing is deleted and no verdict is recorded. A simulator zero, a latch
-      quoted to itself, and a verdict inferred from the code all read exactly like a discharge and
-      none of them is one.
+      **BLOCKED 2026-08-28. Nothing is deleted.** The block is no longer "we have not read the
+      gates" — it is four constraints that survive any reading, each verified against the source in
+      this session rather than taken on report:
+
+      - **(a) The legacy WRITER is still live.** `ColumnCrypto.sealPlaintext` (:186-187) still falls
+        open and writes an unprefixed legacy blob whenever `DeviceBindingID.current()` is nil, and
+        the binding row is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — so the pre-first-unlock
+        window alone can mint a fresh legacy blob tomorrow. A census zero here is, in this document's
+        own words at :110-113, *a moment, not a latch*.
+      - **(b) The migrators convert THROUGH the readers.** `MediaAtRestFormatMigration.swift:7`
+        states it outright: the conversion path IS `gcmOpen`'s legacy branch, and `ColumnCrypto`'s
+        legacy rung plays the same role for the sealed columns. Deleting a reader retires its
+        HEALER in the same stroke. With (a) still true, that is an unhealable state.
+      - **(c) iOS backup is a re-introduction channel.** `localBackupExcludedFromiOSBackup` defaults
+        to NOT excluded (`PrivatePersistenceController.swift:112` says so in its own comment), so the
+        sealed store and both media roots ride in the device backup. Restoring an older backup onto
+        a build with no readers puts legacy bytes on a device that can neither read nor heal them.
+        **One user is enough for this to bite** — it needs no fleet.
+      - **(d) Three gates printed DISCHARGED over corpora that do not exist.** FIXED in this session
+        (see the Phase 3 instrument entry below); it was a live false pass in the instrument that
+        gates the deletions.
+
+      **Provenance note.** A peer session reported a device sitting (owner's iPhone, 2026-08-28,
+      five gates discharged / one vacuous). That summary is recorded here as a REPORT, not as the
+      gate record: the exported readout has not reached this session, and one of its six verdicts
+      was explicitly resolved by the peer AFTER the instrument printed `notTaken`. Per §4 the
+      readout's own printed verdict is the gate. The four constraints above are what actually
+      blocks, and none of them depends on which reading is right.
+
+      **Two OWNER decisions now gate the rest** (neither may be picked silently):
+      - **D4 — the write-side closure.** Closing `sealPlaintext`'s fail-open turns a silent legacy
+        write into a refused save. That is the house's nothing-silent principle applied to the write
+        path, but it means a sealed save can now FAIL during the pre-first-unlock window instead of
+        succeeding in the wrong format. Recommend closing it, in its own commit, BEFORE any reader
+        is deleted — it is what converts every census zero from a moment into a latch. But the
+        user-visible failure mode is the owner's call.
+      - **D5 — the iOS-backup channel.** Three options: keep one minimal legacy read path
+        permanently, exclude those roots from the device backup, or accept and document the
+        restore-an-old-backup hazard. Owner's call; surface, do not choose.
 - [ ] Phase 4 — Class B wire readers — BLOCKED: owner decision D1 (§5). No Class-B site is touched
       until it lands.
 - [~] Phase 5 — wall the end state (§4). **The three Phase-3/4-independent parts LANDED 2026-08-28**

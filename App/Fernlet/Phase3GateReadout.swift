@@ -1061,6 +1061,9 @@ nonisolated enum Phase3GateReadoutBuilder {
     private static func emptyCorpusRefusal(_ result: SealedColumnFormatCensusResult) -> Phase3GateVerdict? {
         let classified = result.total
         let sealedValues = classified.total - classified.emptyOrNil
+        if let perColumn = uncoveredColumnRefusal(result), result.rowsAvailable > 0, sealedValues > 0 {
+            return perColumn
+        }
         guard result.rowsAvailable == 0 || sealedValues == 0 else { return nil }
         return .vacuous("the sealed corpora hold \(result.rowsAvailable) rows and \(sealedValues)"
             + " sealed column values, so the census's zero and the keyed pass's clean verdict are"
@@ -1068,6 +1071,30 @@ nonisolated enum Phase3GateReadoutBuilder {
             + " key — it opened nothing and resolved none of the ~1-in-256 collided-marker sliver."
             + " Read this gate on a device that actually holds sealed journal / cycle / intimacy /"
             + " worry text.")
+    }
+
+    /// `.vacuous` when some sealed COLUMN contributed no value, even though the store as a whole
+    /// did.
+    ///
+    /// The store-wide floor above is necessary but far too weak: the four sealed entities
+    /// (`JournalNarrative`, `MenstrualNarrative`, `IntimacyLog`, `WorryNarrative`) share one
+    /// aggregate, so a single journal row satisfies it while three entities have never been written
+    /// at all. Deleting `ColumnCrypto`'s legacy rung retires the read path for EVERY column, so the
+    /// gate has to be covered per column and not per store — otherwise the discharge is carried by
+    /// whichever entity the owner happened to exercise.
+    private static func uncoveredColumnRefusal(_ result: SealedColumnFormatCensusResult) -> Phase3GateVerdict? {
+        // R2: bounded by the census's column map.
+        let uncovered = result.columns
+            .filter { $0.value.total - $0.value.emptyOrNil == 0 }
+            .keys
+            .map(\.description)
+            .sorted()
+        guard !uncovered.isEmpty else { return nil }
+        return .vacuous("\(uncovered.count) sealed column(s) contributed NO value to this reading —"
+            + " \(uncovered.joined(separator: ", ")). The keyed pass swept the columns that do hold"
+            + " values and says nothing about these, yet deleting the legacy rung retires the read"
+            + " path for all of them alike. Exercise every sealed entity (journal, cycle, intimacy,"
+            + " worry) on the device before reading this gate.")
     }
 
     private static func sealedColumnEvidence(
@@ -1292,7 +1319,43 @@ nonisolated enum Phase3GateReadoutBuilder {
         }
         guard !audit.hasBlindSpots else { return .blocked(mediaBlindSpotDescription(audit)) }
         guard unaccounted == 0 else { return mediaUnaccountedVerdict(audit, unaccounted: unaccounted) }
+        if let refusal = ownPhotoVacuityRefusal(audit) { return refusal }
         return .discharged
+    }
+
+    /// The own-photo corpora, which is where a legacy media byte can actually be.
+    ///
+    /// `MealPhotos/` is the ONE corpus with a legitimate pre-sealing plaintext generation; the other
+    /// three are born sealed. The friend wall is born sealed too, and by
+    /// `dispatchUnprefixedWall`'s design an unopenable wall byte is deliberately absent from
+    /// `isClean` — so a corpus that is nothing but wall files can satisfy every clause of this gate
+    /// while saying nothing whatever about the bytes the gate exists for.
+    private static let ownPhotoLabels: [MediaCorpusLabel] =
+        [.mealPhotos, .recipePhotos, .progressPhotos, .progressIndex]
+
+    /// `.vacuous` when the sweep found own-photo bytes nowhere.
+    ///
+    /// Reached only where every other clause would have discharged, so it never masks a stronger
+    /// finding — it separates "swept clean" from "there was nothing to sweep".
+    private static func ownPhotoVacuityRefusal(_ audit: MediaResidueAudit) -> Phase3GateVerdict? {
+        // R2: bounded by `audit.locations`.
+        let ownPhotoFiles = audit.locations
+            .filter { $0.label.map(Self.ownPhotoLabels.contains) ?? false }
+            .reduce(0) { $0 + mediaTallyFileCount($1.tally) }
+        guard ownPhotoFiles == 0 else { return nil }
+        return .vacuous("every byte this gate examined belongs to the FRIEND WALL: the four"
+            + " own-photo locations (\(Self.ownPhotoLabels.map(\.displayName).joined(separator: ", ")))"
+            + " hold no files at all. The wall is born sealed and its unopenable bytes are"
+            + " deliberately outside `isClean`, while MealPhotos is the one corpus with a legitimate"
+            + " pre-sealing plaintext generation — so this reading cannot speak for the bytes the"
+            + " gate is about. Read it on a device that has logged a meal photo.")
+    }
+
+    /// Every classified file in one location's tally. There is no scalar total on the tally itself,
+    /// and the five class counts are the whole of it.
+    private static func mediaTallyFileCount(_ tally: MediaAtRestFormatTally) -> Int {
+        tally.v2Marked + tally.plaintextJPEG + tally.unprefixedLegacyOrUnrecognized
+            + tally.empty + tally.indeterminate
     }
 
     /// The three ways this row's own inputs disqualify themselves before the latch is even consulted.
@@ -1596,6 +1659,18 @@ nonisolated enum Phase3GateReadoutBuilder {
                 + " unlocked; this is not a zero")
         }
         guard blocking.isEmpty else { return .blocked(blocking.joined(separator: ", ")) }
+        // Positive evidence, not merely "nothing blocking". `.absent` and `.empty` both `continue`
+        // above because neither is a legacy byte — but neither is a CURRENT byte either, and a row
+        // that was never written cannot demonstrate that the writer stopped emitting `legacyMagic`.
+        // Without this arm all-three-absent reached `.discharged`, which is the vacuous reading
+        // wearing the discharge's face.
+        let sealed = heartDropMainSidecars.filter { report.state(of: $0) == .v2Sealed }
+        guard !sealed.isEmpty else {
+            return .vacuous("none of the three main sidecars holds a sealed byte — every row read"
+                + " absent or empty, so the survey found no heart-drop bytes AT ALL. A zero over no"
+                + " bytes is not a converted corpus. Read this gate on a device that has actually"
+                + " sent or received a heart.")
+        }
         return .discharged
     }
 

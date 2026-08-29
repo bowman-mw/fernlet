@@ -255,6 +255,53 @@ struct Phase3GateReadoutTests {
         )
     }
 
+    /// A store-wide floor lets ONE exercised entity carry three that were never written.
+    ///
+    /// The owner's 2026-08-28 sitting was exactly this shape: one `JournalNarrative` row, and zero
+    /// rows in `MenstrualNarrative`, `IntimacyLog` and `WorryNarrative`. The census seeds EVERY
+    /// censused column with a zero tally, so the untouched entities are present and readable — the
+    /// verdict simply was not looking at them. Deleting the legacy rung retires the read path for
+    /// every column alike, so coverage has to be per column.
+    @Test func aColumnThatContributedNoValueMakesTheSealedGateVacuous() {
+        let exercised = SealedColumnIdentifier(entityName: "JournalNarrative", attributeName: "textCiphertext")
+        let untouched = SealedColumnIdentifier(entityName: "IntimacyLog", attributeName: "noteCiphertext")
+        let census = SealedColumnFormatCensusResult(
+            columns: [exercised: SealedColumnFormatTally(v3Marked: 1),
+                      untouched: SealedColumnFormatTally()],
+            rowsScanned: 1, rowsAvailable: 1, truncated: false, rowCap: 20_000
+        )
+        let row = dischargingSealedColumnRow(census: census)
+        guard case let .vacuous(reason) = row.verdict else {
+            Issue.record("expected .vacuous, got \(row.verdict)")
+            return
+        }
+        #expect(reason.contains("IntimacyLog.noteCiphertext"))
+        #expect(!row.isDischarged)
+    }
+
+    /// All three main sidecars absent is NOT a converted corpus — it is no corpus.
+    ///
+    /// `.absent` and `.empty` are both non-blocking, so the verdict walked its whole switch without
+    /// appending anything and fell through to `.discharged`. That is the vacuous reading wearing the
+    /// discharge's face, and the owner's device produced it.
+    @Test func heartDropWithNoSealedByteAnywhereIsVacuousRatherThanDischarged() {
+        let report = sidecarReport([.outbox: .absent, .peerBundles: .absent, .dedup: .absent])
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: true, stamp: stamp("heart-drop"))
+        guard case let .vacuous(reason) = row.verdict else {
+            Issue.record("expected .vacuous, got \(row.verdict)")
+            return
+        }
+        #expect(reason.contains("no heart-drop bytes AT ALL"))
+        #expect(!row.isDischarged)
+    }
+
+    /// One sealed sidecar is enough to make the reading real, so the arm above does not over-refuse.
+    @Test func heartDropWithOneSealedSidecarStillDischarges() {
+        let report = sidecarReport([.outbox: .v2Sealed, .peerBundles: .absent, .dedup: .absent])
+        let row = Phase3GateReadoutBuilder.row(forHeartDrop: report, latch: true, stamp: stamp("heart-drop"))
+        #expect(row.isDischarged)
+    }
+
     /// A discharge is refused outright while a keyed pass is writing the corpus the scan read.
     @Test func aSealedColumnPassInFlightRefusesADischarge() {
         let row = Phase3GateReadoutBuilder.row(
@@ -487,6 +534,38 @@ struct Phase3GateReadoutTests {
                                                witness: mediaWitness(unopenable: 2, examined: 2),
                                                passInFlight: false, censusStamp: stamp("marker census"))
         #expect(row.verdict == .discharged)
+    }
+
+    /// A corpus that is nothing but friend-wall files discharges over the wrong bytes.
+    ///
+    /// The owner's 2026-08-28 sitting read 51 files, every one of them wall (25 photos, 25 thumbs,
+    /// one sealed index), while `MealPhotos/`, `RecipePhotos/` and `ProgressPhotos/` held zero. The
+    /// wall is born sealed and `dispatchUnprefixedWall` deliberately routes its unopenable bytes
+    /// clear of `isClean`, so every clause of this gate can be satisfied by bytes that were never
+    /// capable of failing it. MealPhotos — the one corpus with a legitimate pre-sealing plaintext
+    /// generation — is the corpus the gate is actually about.
+    @Test func aWallOnlyCorpusIsVacuousRatherThanDischarged() {
+        let own = ownRoot
+        let wall = wallRoot
+        let report = mediaReport(
+            locations: [(.wallPhotos, MediaAtRestFormatTally(v2Marked: 25), true),
+                        (.wallThumbnails, MediaAtRestFormatTally(v2Marked: 25), true),
+                        (.wallIndexSealed, MediaAtRestFormatTally(v2Marked: 1), true)],
+            ownRoot: own, wallRoot: wall
+        )
+        let audit = MediaResidueAudit.take(report: report, ownPhotoDocumentsDirectory: own,
+                                           friendWallSupportDirectory: wall,
+                                           latches: latches(),
+                                           witness: mediaWitness(unopenable: 0, examined: 51))
+        let row = Phase3GateReadoutBuilder.row(forMedia: audit, latches: latches(),
+                                               witness: mediaWitness(unopenable: 0, examined: 51),
+                                               passInFlight: false, censusStamp: stamp("marker census"))
+        guard case let .vacuous(reason) = row.verdict else {
+            Issue.record("expected .vacuous, got \(row.verdict)")
+            return
+        }
+        #expect(reason.contains("FRIEND WALL"))
+        #expect(!row.isDischarged)
     }
 
     /// A live pass that looked and accounted for NOTHING makes the location blocking — the only path
