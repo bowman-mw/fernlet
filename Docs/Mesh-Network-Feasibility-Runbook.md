@@ -150,18 +150,58 @@ Wi-Fi. This is the standing development loop, not a release gate.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Not yet run** — no physical device available to the sessions that built the spike | — |
-| QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Not yet run** | — |
-| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | **Not yet run** | — |
-| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero (a zero size is a reportable negative result, not a retry). | **Not yet run** | — |
-| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Not yet run** | — |
+| Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
+| QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
+| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | Not yet recorded | — |
+| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero (a zero size is a reportable negative result, not a retry). | Not yet recorded | — |
+| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | Not yet recorded | — |
 | Channel binding (off-radio) | A changed mesh ID, epoch, nonce, identity, or binding hash fails verification. | **Pass** — `MeshNetworkFeasibilityTests.signedIntroductionRejectsAnyChangedChannelBinding`, run in the standard suite | 2026-08-29 |
 | Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates` | 2026-08-29 |
 | Plist configuration | The three keys the lane needs are present and the registration identifier is concrete, not the wildcard. | **Pass** — `MeshNetworkFeasibilityTests.probeInfoPlistConfigurationAllowsTheDeviceSpike` | 2026-08-29 |
 
 The three `Pass` rows are what the radio-free unit suite can honestly prove. They are listed here
-rather than omitted so the gap is legible: everything above them needs hardware, and nothing in the
-automated suite substitutes for it.
+rather than omitted so the gap is legible.
+
+**"Observed working" is not a Pass, deliberately.** The owner reports that a device and a Simulator do
+discover and connect (2026-08-31). That is real information and worth recording, but it is not the
+same as a captured **Copy diagnostic report** with byte counts, connect timestamps and the negotiated
+datagram frame size in it. Promote those rows to Pass when a report is attached; until then the lane
+is known-good, not evidenced.
+
+### What this lane can and cannot prove
+
+This matters more than it looks: the device↔Simulator lane is the **cheap, high-frequency** loop —
+Xcode is attached, logs are right there, and a run costs minutes. Two-device runs are slow and
+awkward by comparison. So the standing rule for every phase is: **push work down this list, never
+up.**
+
+| Tier | Prove it here | Why |
+|---|---|---|
+| **1. Unit tests, no radio at all** | Anything that is pure logic: the dial tie-breaker's total order, retry budgets, state machines, framing bounds, rejection rules, partition scenarios. | Free, deterministic, runs in CI. `Tests/FernletTests/Mocks/FakePeerTransport.swift` exists for exactly this. If a check *can* live here, it must. |
+| **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. | One device, attached debugger, fast turnaround. |
+| **3. Two or more physical devices** | Only what is genuinely radio physics or OS policy: Apple peer-to-peer Wi-Fi (AWDL), the Local Network permission prompt, background and locked operation, battery, thermal, Low Power Mode. | Slow and hard to log. Keep this list as short as the work allows. |
+
+**Known limitations of tier 2, stated so nobody mistakes them for bugs:**
+
+- **The Simulator disables Apple peer-to-peer Wi-Fi.** This lane is infrastructure Wi-Fi only, so it
+  cannot say anything about AWDL. That is a tier-3 question, permanently.
+- **The dial direction is one-way.** The Simulator's link-local address is host-only, so a physical
+  device cannot reach it; the TXT marking makes the Simulator always the dialer. Consequence worth
+  naming: the tie-breaker's *device↔device* branch (`localServiceName < candidateServiceName`) is
+  **never exercised on this lane** — and that comparison is the one that deadlocked the mesh before.
+  Cover it at tier 1, exhaustively, rather than hoping a hardware run reaches it.
+- **No Local Network permission flow.** The Simulator does not present it.
+- **Background, locked, battery and thermal behaviour do not transfer** from a Simulator.
+
+**Simulator ↔ Simulator is refused by policy, and that policy may be wider than it needs to be.**
+`MeshProbeDiscoveryPolicy.allowsOutboundConnection` returns `!candidateRunsInSimulator` when the
+local side is a Simulator, so one Simulator will not dial another. The documented reason — the
+Simulator's host-only address — justifies the *device→Simulator* refusal, not this one: two
+Simulators on the same Mac share the host's network stack, and the probe already uses a random
+per-instance service name, so an instance-name collision is not the obstacle either. **If sim↔sim
+connects, multi-node testing (3, 4, 6 nodes) becomes possible entirely on one Mac**, which would
+change the cost of every phase from P3 onward. Untested; see the P2 launcher for the bounded
+experiment.
 
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
