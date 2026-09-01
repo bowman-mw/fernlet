@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 4 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `bf2e32d`
+**Started:** 2026-08-31 · **Iteration:** 5 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `145a051`
 
 ## Items
 
@@ -21,7 +21,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | done | `b8d7a5a` | `SessionPeerIdentity` minted once per peer, session-scoped, cleared in `stop()`; 9 tier-1 tests; goldens un-re-pinned |
 | 3b | Close the two remaining id-only `handleChannelReady` guards (RecipeShare + Presence) | 1 | 3 | done | `2a03800` | Endpoint helper + 3-case admission enum per manager, item-3 idiom; 4 tests; suite green (3320) |
 | 3c | Outbound `sendHeart` gate: endpoint recognition via `hasHeartConnection(with:)` | 1 | 3b | done | `8c258b5` | Negative-checked against the old line; 45 tests in 4 suites green |
-| 3d | **Close the id-vs-endpoint family for good**: fix `PresenceManager.swift:1011`/`:1034` (`handleHeartConnectTimeout` + re-invite task read "connected?" by id, so they re-invite a device connected under a churned handle) **and run an exhaustive audit** of ProximityKit for id-only containment/lookup against peer-keyed collections; fix in-family sites, list not-in-family sites with one-line verdicts so the drip ends here | 1 | 3c | todo | | Serial discovery has found 1 site per iteration — audit, don't drip |
+| 3d | Close the id-vs-endpoint family for good (timeout path + exhaustive audit) | 1 | 3c | done | `2f273a9` | 14 sites fixed; full audit table with per-site verdicts is in the commit message. FAMILY CLOSED — do not re-audit |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | todo | | The comparison that deadlocked the mesh |
 | 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
@@ -66,6 +66,15 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 - `MeshMultipeerSessionIdentityTests` first test can take ~90–110 s in a loaded full-suite run —
   min-poll-floor absorbing MainActor starvation, bounded, terminates. Not a hang; don't drop the
   poll floor.
+- **Standing down a fail-loud path needs a dependents audit** (3d lesson): fixing the heart
+  connect-timeout's false retry exposed `pendingHeartSends` quietly depending on that failure —
+  the send would have hung at `.connecting` forever. Closing a retry ≠ done; ask what its firing
+  was cleaning up.
+- Recipe picker rows can't reach an endpoint directly — device recognition from a row is
+  three-arm: row id ∨ proven fingerprint ∨ endpoint of the handle the row was minted from.
+- `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer`
+  flaked once under full-suite load (fixed 20 ms sleep vs 80 ms send); passes alone. A spawn-task
+  chip exists to convert it to a polled wait — not this loop's work.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -74,6 +83,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**3d** (family-closing audit + timeout-path fix), then **4** (tie-breaker tier-1 tests, incl. the
-missing/late-TXT case from the item-0 surprise). Item 1 waits on a device; item 2 stays skip-gated
-while `Localizable.xcstrings` is held by another session.
+**4** — dial-policy tie-breaker tier-1 tests (incl. the missing/late-TXT case from the item-0
+surprise). Item 1 waits on a device; item 2 stays skip-gated while `Localizable.xcstrings` is held
+by another session.
