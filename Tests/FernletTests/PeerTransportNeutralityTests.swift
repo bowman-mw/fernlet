@@ -1,7 +1,9 @@
 import Combine
 import Foundation
+import MultipeerConnectivity
 import ProximityKit
 import Testing
+@testable import ProximityKit
 
 /// The identity rule the seven "same device?" call sites depend on, which had **no test at all**
 /// before transport neutrality made it nameable.
@@ -94,6 +96,160 @@ struct PeerHandleIdentityTests {
             advertisedFingerprint: nil,
             endpoint: endpoint
         )
+    }
+}
+
+/// The §6.5 root fix: the transport's endpoint→identity map lives **outside** the dictionary
+/// discovery prunes, so `PeerHandle.id` is stable for the life of a session.
+///
+/// Before the split, `peer(for:)` minted a fresh `UUID` on every `peerMap` miss, and `peerMap` was
+/// evicted whenever a peer was lost while holding no channel — so ordinary discovery churn silently
+/// changed a device's `id` under every owner holding a record for it. That is what made `id` a
+/// false-negative-only test and forced seven call sites into a disjunction. These tests drive the
+/// real MC delegate callbacks, which are the only production writers of that map.
+///
+/// The suite is `.serialized` and every test builds its own transport with an EPHEMERAL peer ID, so
+/// none of them touches the archived `FileMCPeerIDStore` the other radios depend on.
+@MainActor
+@Suite(.serialized)
+struct MeshMultipeerSessionIdentityTests {
+
+    /// The core property. A prune between two sightings must cost a `PeerHandle` rebuild and
+    /// nothing else — same `id`, same endpoint, same peer to every owner.
+    @Test func aPeerReDiscoveredAfterADiscoveryPruneKeepsItsIdentity() async {
+        let session = MeshMultipeerSession(usesEphemeralPeerID: true)
+        var discovered: [PeerHandle] = []
+        var lost: [PeerHandle] = []
+        session.onPeerDiscovered = { discovered.append($0) }
+        session.onPeerLost = { lost.append($0) }
+        let browser = Self.makeBrowser(for: session)
+        let remote = MCPeerID(displayName: "Robin")
+
+        session.browser(browser, foundPeer: remote, withDiscoveryInfo: ["sid": "one"])
+        await waitUntil { discovered.count == 1 }
+        // No channel exists for this peer, so this is the eviction that used to re-mint the id.
+        session.browser(browser, lostPeer: remote)
+        await waitUntil { lost.count == 1 }
+        session.browser(browser, foundPeer: remote, withDiscoveryInfo: ["sid": "one"])
+        await waitUntil { discovered.count == 2 }
+
+        #expect(discovered.count == 2)
+        #expect(discovered.first?.id == discovered.last?.id,
+                "a discovery prune must not re-mint the peer's id — this is the §6.5 root fix")
+        #expect(discovered.first?.endpoint == discovered.last?.endpoint)
+        #expect(discovered.first == discovered.last,
+                "`==` is by id, so a returning device is now the same peer to every owner")
+        #expect(session.trackedEndpointCountForTesting == 1,
+                "one device, one identity — a re-sighting must not grow the map")
+    }
+
+    /// The other cache-miss source §6.1 named: an inbound invitation is resolved *before* the
+    /// channel is prepared, so a device that drops and re-invites arrives through a path that had
+    /// nothing cached. Its slot, QR binding and admission request are all keyed on the id it
+    /// carried the first time.
+    @Test func aReconnectingPeerInvitesUsUnderTheSameID() async {
+        let session = MeshMultipeerSession(usesEphemeralPeerID: true)
+        var discovered: [PeerHandle] = []
+        var invitedBy: [PeerHandle] = []
+        session.onPeerDiscovered = { discovered.append($0) }
+        session.shouldAcceptInvitation = { invitedBy.append($0); return false }
+        let browser = Self.makeBrowser(for: session)
+        let advertiser = MCNearbyServiceAdvertiser(
+            peer: session.localPeerID,
+            discoveryInfo: nil,
+            serviceType: MeshMultipeerSession.friendServiceType
+        )
+        let remote = MCPeerID(displayName: "Robin")
+
+        session.browser(browser, foundPeer: remote, withDiscoveryInfo: nil)
+        await waitUntil { discovered.count == 1 }
+        session.browser(browser, lostPeer: remote)
+        session.advertiser(advertiser, didReceiveInvitationFromPeer: remote, withContext: nil) { _, _ in }
+        await waitUntil { invitedBy.count == 1 }
+
+        #expect(discovered.first?.id == invitedBy.first?.id,
+                "the reconnecting device must be the same peer as the one we discovered")
+        #expect(discovered.first?.isSameEndpoint(as: invitedBy[0]) == true)
+    }
+
+    /// Two devices must never collapse into one identity, however the discovery cycles interleave.
+    /// A false positive here would seat one peer in another's slot.
+    @Test func distinctDevicesNeverShareAnIdentity() async {
+        let session = MeshMultipeerSession(usesEphemeralPeerID: true)
+        var discovered: [PeerHandle] = []
+        session.onPeerDiscovered = { discovered.append($0) }
+        let browser = Self.makeBrowser(for: session)
+        let robin = MCPeerID(displayName: "Robin")
+        let sam = MCPeerID(displayName: "Sam")
+
+        session.browser(browser, foundPeer: robin, withDiscoveryInfo: nil)
+        session.browser(browser, foundPeer: sam, withDiscoveryInfo: nil)
+        session.browser(browser, lostPeer: robin)
+        session.browser(browser, foundPeer: robin, withDiscoveryInfo: nil)
+        await waitUntil { discovered.count == 3 }
+
+        let robinHandles = discovered.filter { $0.displayHint == "Robin" }
+        let samHandles = discovered.filter { $0.displayHint == "Sam" }
+        #expect(robinHandles.count == 2)
+        #expect(robinHandles.first?.id == robinHandles.last?.id)
+        #expect(samHandles.first?.id != robinHandles.first?.id)
+        #expect(samHandles.first?.isSameEndpoint(as: robinHandles[0]) == false)
+        #expect(session.trackedEndpointCountForTesting == 2)
+    }
+
+    /// The privacy constraint plan §6.5 attaches to the fix, asserted directly rather than inferred.
+    ///
+    /// The map is session-scoped: memory-only, never persisted, never advertised, and gone at
+    /// teardown. That is what keeps it off the privacy-wipe ledger, and what keeps the presence
+    /// radio's per-start-random posture intact — a map that outlived a stop/start would link two
+    /// runs of that radio to one device.
+    @Test func stopClearsEverySessionIdentity() async {
+        let session = MeshMultipeerSession(usesEphemeralPeerID: true)
+        var discovered: [PeerHandle] = []
+        session.onPeerDiscovered = { discovered.append($0) }
+        let browser = Self.makeBrowser(for: session)
+        let remote = MCPeerID(displayName: "Robin")
+
+        session.browser(browser, foundPeer: remote, withDiscoveryInfo: nil)
+        await waitUntil { discovered.count == 1 }
+        #expect(session.trackedEndpointCountForTesting == 1)
+
+        session.stop()
+        #expect(session.trackedEndpointCountForTesting == 0,
+                "no peer identity may outlive the session that minted it")
+
+        session.browser(browser, foundPeer: remote, withDiscoveryInfo: nil)
+        await waitUntil { discovered.count == 2 }
+        #expect(discovered.first?.id != discovered.last?.id,
+                "a new session mints a new identity for the same device — that is the session scope")
+    }
+
+    private static func makeBrowser(for session: MeshMultipeerSession) -> MCNearbyServiceBrowser {
+        // Never started: the delegate methods under test ignore the browser they are handed, and
+        // starting one would put a real advertisement on the local network from a unit test.
+        MCNearbyServiceBrowser(peer: session.localPeerID, serviceType: MeshMultipeerSession.friendServiceType)
+    }
+
+    /// The MC delegates are `nonisolated` and hop to the main actor via `Task { @MainActor }`, so a
+    /// `@MainActor` test observes nothing until it suspends.
+    ///
+    /// Polls with BOTH a wall-clock deadline and a minimum observation count. That pairing is this
+    /// repository's house rule for exactly this shape: a deadline alone measures wall time, which
+    /// keeps advancing while a `@MainActor` suite is starved by every other `@MainActor` suite in a
+    /// loaded full-suite run, and expires having genuinely looked only a handful of times.
+    private func waitUntil(
+        timeout: Duration = .seconds(5),
+        minimumPolls: Int = 200,
+        _ condition: @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
     }
 }
 

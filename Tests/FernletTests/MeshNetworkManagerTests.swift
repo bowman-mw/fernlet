@@ -319,12 +319,16 @@ struct MeshNetworkManagerTests {
 
     /// A transport peer for `addSlotForTesting` — a non-nil fingerprint on the slot models a
     /// COMMITTED (post-dwell) session member, nil a pre-commit candidate.
-    private func makePeer(name: String) -> PeerHandle {
+    ///
+    /// `endpoint` defaults to a fresh key, so two calls are two devices. Passing the same key twice
+    /// is the only way to express "one device, two discovery handles" — see `makeReturningDevice`.
+    private func makePeer(name: String, endpoint: PeerEndpointKey = PeerEndpointKey()) -> PeerHandle {
         PeerHandle(
             id: UUID(),
             displayHint: name,
             discoveryInfo: nil,
-            advertisedFingerprint: nil
+            advertisedFingerprint: nil,
+            endpoint: endpoint
         )
     }
 
@@ -940,6 +944,121 @@ struct MeshNetworkManagerTests {
             discoveryInfo: info,
             advertisedFingerprint: nil
         )
+    }
+
+    // MARK: - Identity asymmetries (plan §6.4 findings 1–2, closed with the §6.5 root fix)
+
+    /// One device seen twice under different discovery handles.
+    ///
+    /// §6.5 made `PeerHandle.id` stable for the life of a transport session, so the transport no
+    /// longer produces this pair casually — but it still produces it: the identity map is bounded
+    /// (a very old endpoint ages out), a `stop()`/`start()` re-mints deliberately, and the next
+    /// transport is free to key identity differently. The gates below are the ones that must
+    /// absorb it, and each of them used to compare `id` alone while the disconnect path two lines
+    /// away compared endpoints.
+    private func makeReturningDevice(named name: String) -> (first: PeerHandle, again: PeerHandle) {
+        let endpoint = PeerEndpointKey(UUID())
+        return (makePeer(name: name, endpoint: endpoint), makePeer(name: name, endpoint: endpoint))
+    }
+
+    /// §6.4 finding 1, mesh half (`MeshNetworkManager` :2051). `shouldAcceptInvitation` admits a
+    /// returning device by the endpoint test; the seat gate compared `id`, so the same device was
+    /// admitted once and then *appended a second time* — breaking the slot cap from the inside,
+    /// with two coordinators, two ranging sessions and two Live Activity anchors for one peer.
+    @Test func channelAdmission_returningDeviceIsRecognizedAsAlreadySeated() {
+        let manager = MeshNetworkManager(store: store)
+        let robin = makeReturningDevice(named: "Robin")
+        manager.addSlotForTesting(coordinator: throwawayCoordinator(), peer: robin.first, fingerprint: nil)
+
+        #expect(manager.channelAdmission(for: robin.again) == .alreadySeated,
+                "a device that already holds a slot must never be seated twice")
+        #expect(manager.channelAdmission(for: makePeer(name: "Stranger")) == .seat,
+                "control: a genuinely new device is still seated")
+    }
+
+    /// The other two arms of the same decision, pinned so the extraction cannot quietly lose them:
+    /// a closed proximity-join session and a session already at the overflow ceiling both kick,
+    /// because a connected peer with no slot holds a zombie MC link until the search stops.
+    @Test func channelAdmission_kicksWhatItWillNotSeat() {
+        let manager = MeshNetworkManager(store: store)
+        manager.markProximityJoinForTesting()
+        manager.setSessionOpen(false)
+
+        #expect(manager.channelAdmission(for: makePeer(name: "Stranger")) == .kick)
+
+        manager.setSessionOpen(true)
+        for index in 0..<6 {
+            manager.addSlotForTesting(
+                coordinator: throwawayCoordinator(),
+                peer: makePeer(name: "Seated \(index)"),
+                fingerprint: "fp-\(index)"
+            )
+        }
+        #expect(manager.channelAdmission(for: makePeer(name: "Stranger")) == .kick,
+                "at the overflow ceiling there is no seat to give")
+    }
+
+    /// §6.4 finding 1, overflow half (`MeshNetworkManager` :2548). A full mesh may evaluate ONE
+    /// temporary candidate above the cap. Keyed on `id`, a device that already held a lightweight
+    /// slot and came back under a new handle qualified as its own overflow candidate — a second
+    /// seat for one device at the exact moment the session is over capacity.
+    @Test func overflowCandidate_returningDeviceIsRefusedBySlotItAlreadyHolds() {
+        let manager = MeshNetworkManager(store: store)
+        let robin = makeReturningDevice(named: "Robin")
+        manager.addSlotForTesting(
+            coordinator: throwawayCoordinator(),
+            peer: robin.first,
+            fingerprint: "fp-robin",
+            kind: .lightweight,
+            stableDistanceMeters: 4.2
+        )
+
+        #expect(!manager.canEvaluateOverflowCandidate(robin.again),
+                "a device already holding a slot is not a candidate for another one")
+        #expect(manager.canEvaluateOverflowCandidate(makePeer(name: "Stranger")),
+                "control: with a settled lightweight slot to compare against, a new device IS evaluable")
+    }
+
+    /// §6.4 finding 2, the local-kick half. `kickEvictedPeer` notes the device so the
+    /// `.notConnected` it causes is not read as the transient socket loss the re-invite retry
+    /// exists for. Noted by `id`, a device whose handle churned between the kick and the callback
+    /// lost that note — and the manager immediately re-invited a peer it had just evicted on
+    /// purpose (a moderation removal, an overflow eviction, a closed session).
+    @Test func localKick_survivesAHandleChurnAndSuppressesTheReInvite() {
+        let manager = MeshNetworkManager(store: store)
+        manager.markProximityJoinForTesting()
+        let robin = makeReturningDevice(named: "Robin")
+        manager.addSlotForTesting(coordinator: throwawayCoordinator(), peer: robin.first, fingerprint: nil)
+
+        manager.evictSlotForTesting(peerID: robin.first.id)
+        #expect(manager.locallyKickedEndpointCountForTesting == 1, "the eviction must leave a note")
+
+        manager.multipeerSessionForTesting.onPeerDisconnected?(robin.again, "Peer disconnected")
+
+        #expect(manager.peerRetryEntryCountForTesting == 0,
+                "a deliberate eviction must never arm a re-invite retry")
+        #expect(manager.locallyKickedEndpointCountForTesting == 0,
+                "and the note is consumed by the disconnect it was written for")
+    }
+
+    /// §6.4 finding 2, the retry-budget half. `maxPeerRetries` is a budget per DEVICE. Keyed on
+    /// `id`, every reconnect opened a fresh entry with a fresh budget, so a peer that flaps forever
+    /// is re-invited forever — the bound existed on paper and never bound anything.
+    @Test func retryBudget_isSpentPerDeviceNotPerDiscoveryHandle() {
+        let manager = MeshNetworkManager(store: store)
+        manager.markProximityJoinForTesting()
+        let endpoint = PeerEndpointKey(UUID())
+        // One more sighting than the budget allows, each under its own discovery handle.
+        for _ in 0..<4 {
+            manager.multipeerSessionForTesting.onPeerDisconnected?(
+                makePeer(name: "Robin", endpoint: endpoint), "Peer disconnected"
+            )
+        }
+
+        #expect(manager.peerRetryEntryCountForTesting == 1,
+                "four sightings of one device must share one budget, not open four")
+        #expect(manager.peerRetryCountForTesting(for: makePeer(name: "Robin", endpoint: endpoint)) == 3,
+                "and that budget must actually run out")
     }
 }
 
