@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 11 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `7be47c8`
+**Started:** 2026-08-31 · **Iteration:** 12 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `190b6e0`
 
 ## Items
 
@@ -16,7 +16,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | # | Item | Tier | Prereq | State | SHA | Note |
 |---|---|---|---|---|---|---|
 | 0 | Sim↔sim experiment (prompt §2). Timeboxed to ONE iteration, DEBUG toggle only. | 2 | — | done | `926a791` | **CONNECTED** — Bonjour + QUIC/TLS + signed introduction both ways; multi-node on one Mac is a real lane (re-tier P3–P6 at close-out). Datagrams didn't negotiate — see surprises |
-| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Must also settle the datagram row (see surprises) |
+| 1 | Capture Lane A diagnostic report; promote runbook rows *Observed working* → *Pass* | 2 | 1 device | todo | | Owner reports it connects; no report captured. Datagram row now expected Pass (item 15 fixed the probe's false gate) — confirm on hardware |
 | 2 | String-catalog repair (9 stale keys, pre-existing) | 1 | quiet tree | todo | | SKIP if `Localizable.xcstrings` still held by another session |
 | 3 | §6.5 root fix: stable `id` per session + close §6.4 asymmetries 1–3 | 1 | — | done | `b8d7a5a` | `SessionPeerIdentity` minted once per peer, session-scoped, cleared in `stop()`; 9 tier-1 tests; goldens un-re-pinned |
 | 3b | Close the two remaining id-only `handleChannelReady` guards (RecipeShare + Presence) | 1 | 3 | done | `2a03800` | Endpoint helper + 3-case admission enum per manager, item-3 idiom; 4 tests; suite green (3320) |
@@ -33,7 +33,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 12 | Convert the heartbeat flake test to a polled wait | 1 | — | done | `3ca3ddb` | Reused suite's `waitUntil` (2 s deadline, 200-poll floor); 3 isolated passes + suite |
 | 13 | **Verified pair converges to ONE tunnel.** Observed on-radio (item 9, both baseline runs): nil-`sid` window ⇒ both dial; inbound keys off `connection.id`, never colliding with the browsed key ⇒ suppression never fires. After introduction both sides KNOW the verified `sid` — collapse there by deterministic rule (dial preference), close the loser. Tier-1 repro on fakes + Lane C re-run as proof | 1 | 9 | done | `96337a3` | Fix real by construction, 14 tier-1 tests (repro red pre-fix). **Item 9's two-tunnel reading was churn misread as duplication** — Lane C can't form the duplicate (TXT arrives with browse); the collapse is a Lane B (hardware) row |
 | 14 | Widen `TestHookBoundaryTests` to the mesh/probe env families | 1 | — | done | `7ff49fc` | Per-family floors; planted Release-reachable read tripped TH1 by name; all 14 existing reads were clean |
-| 15 | **Diagnose the tunnel churn**: 3 activations per side in ~100 s with NO dial failure, refusal, give-up, or transport error logged on either side; predates item 13; reproduces with convergence disabled. First add the missing diagnostic — a live tunnel that ends logs NOTHING (`endTunnel` with a control stream emits no line) — then re-run Lane C and name the cause. Note the unverified correlation: churn cadence ≈ the 30 s heartbeat interval — check whether heartbeats actually flow on the real radio before believing anything else | 2 | 13 | todo | | Precedes item 10 — flows over churning tunnels would be flaky |
+| 15 | **Diagnose the tunnel churn**: 3 activations per side in ~100 s with NO dial failure, refusal, give-up, or transport error logged on either side; predates item 13; reproduces with convergence disabled. First add the missing diagnostic — a live tunnel that ends logs NOTHING (`endTunnel` with a control stream emits no line) — then re-run Lane C and name the cause. Note the unverified correlation: churn cadence ≈ the 30 s heartbeat interval — check whether heartbeats actually flow on the real radio before believing anything else | 2 | 13 | done | `a9597d3` | Cause: QUIC `max_idle_timeout` defaulted ~30 s = heartbeat interval. Now 3× interval on both param sets; every tunnel end logs a reason; 170 s stable Lane C |
 
 ## Blocked on owner
 
@@ -59,11 +59,13 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Surprises worth not re-deriving
 
-- **QUIC datagrams show usable frame size 0 on sim↔sim — but NO lane has ever recorded a non-zero
-  size** (Lane A's Datagram row was never captured). Equally consistent with a probe QUIC-parameter
-  defect that would fail against a device too. Do not record it as a Simulator limitation; one
-  device↔Sim run (item 1) settles it. Both ends advertised `maxDatagramFrameSize=1024`, both saw
-  `datagram-flow=false`.
+- **RESOLVED (item 15, inverts the item-0 reading): QUIC datagrams WORK on the sim lane** — the
+  heartbeats flow over datagram both directions. The recorded zero was a wrong-object accessor
+  (`usableDatagramFrameSize` on the parent connection; the flow's metadata holds the real value)
+  and the probe threw on it before sending. Lesson: **a negative read off an accessor is not a
+  negative observed on the wire** — two wrong-question zeroes were read as one corroborated
+  negative and cost a fortnight + an unnecessary hardware re-tier. Datagram-borne work is back on
+  the sim↔sim lane.
 - **An absent Bonjour TXT record reads as `device`** — a Sim saw a peer before its TXT arrived,
   logged it `[device]`, and dialed (a dial the pre-existing policy also allowed). The old sim→sim
   refusal was never airtight; no Simulator-origin check may rest on TXT presence alone. Item 4's
@@ -112,6 +114,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
   wire-level inference, instrument the counter (`tunnels=`) and run the control. The Lane C
   duplicate can never form (TXT arrives with the browse result — only one side dials); the
   double-dial window is physical-radio behaviour, so its collapse is proven at tier 1 + Lane B.
+- The full test suite resets simulator app state — Lane C scripts must re-harvest identities
+  after any `xcodebuild test` run.
 - `MeshMultipeerSession.onDisconnectPeerRequestedForTesting` was deleted (item 8 seam replaced it);
   `Docs/Memory-Leak-Review-2026-08-17.md` lines 82/84 name it as a dated historical record — fine.
 
@@ -122,6 +126,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**15** — the tunnel-churn diagnosis (instrument the silent live-disconnect path, re-run Lane C,
-name the cause; heartbeat-flow check first). Then **10**. Item 1 waits on a device; item 2 stays
-skip-gated while `Localizable.xcstrings` is held by another session.
+**10** — mesh flows at tier 2 over QUIC (Lane C harness; membership seeded first per the item-10
+note; photo streams residual to close on the way). The LAST item doable without the owner — after
+it: close-out per prompt §8, then stop (items 1/11 need the owner, 2 stays skip-gated).
