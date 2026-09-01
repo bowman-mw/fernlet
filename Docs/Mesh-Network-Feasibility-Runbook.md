@@ -337,7 +337,8 @@ up the responder (and, because hellos are exchanged before either is judged, usu
 
 | Row | Result | Evidence |
 | --- | --- | --- |
-| **Accepted baseline** | **Observed** — both devices rostered in one mesh complete the introduction and activate a tunnel, in both directions | `[mesh-quic] accepted fb795f343c2954da sid=5894C3A5-…: tunnel activated` on A, and `accepted 0a676d9bbfcbbced sid=9ABA2D76-…` on B |
+| **Accepted baseline** | **Observed** — both devices rostered in one mesh complete the introduction and activate a tunnel, in both directions. *Amended 2026-09-01: the same line now carries `tunnels=`, and re-runs show `tunnels=1` throughout — see the convergence row below for what that corrects* | `[mesh-quic] accepted fb795f343c2954da sid=5894C3A5-…: tunnel activated` on A, and `accepted 0a676d9bbfcbbced sid=9ABA2D76-…` on B |
+| **Convergence: at most one tunnel per verified pair** (2026-09-01, P2 item 13) | **Observed — and it corrects the reading below.** Four instrumented runs, ~100 s each, both Simulators rostered in one mesh over QUIC: every activation reports `tunnels=1`, so the pair holds exactly one connection at every instant. The repeated `accepted` lines are one tunnel that comes up, ends, and re-forms — **not** two coexisting ones | `[mesh-quic] accepted fb795f343c2954da sid=97D76DF2-…: tunnel activated, tunnels=1` ×3 on A, `accepted 3ed10f78c02b580a sid=A3456D0E-…: tunnel activated, tunnels=1` ×3 on B. **Control** (same binary, `MeshTunnelConvergence.resolve` stubbed to `.keepBoth`, i.e. the pre-item-13 behaviour): `tunnels=1` ×3 on both sides again, and no `redundantTunnelClosed` — so the single tunnel is **not** attributable to the collapse. The duplicate does not form on this lane at all |
 | 1. Unknown identity (no roster at all) | **Observed** — neither device holds a descriptor, so every peer verdicts stranger | `refused unknownIdentity as responder: mesh=00000000-…-000000000000 epoch="" rosterMembers=0 rosterBarred=0` → `A QUIC tunnel was refused: The peer is not a member of this mesh.` |
 | 2. Non-roster member (valid identity, absent from THIS roster) | **Observed** — same mesh id on both sides, each roster holds two members and neither holds the peer | `refused unknownIdentity as responder: mesh=11111111-…-555555555555 epoch="" rosterMembers=2 rosterBarred=0`. Row 1 and row 2 are the same *rejection* and different *situations*; `rosterMembers` is what tells them apart, which is why the console line carries it. |
 | 3. Hard-departed / removed member | **Observed as `barredMember`, with a caveat that matters** | `refused barredMember as responder: … rosterMembers=2 rosterBarred=1` → `The peer has departed, been removed, or been blocked.` **The shipping authority never produces this.** `MeshNetworkManager.roster` keeps `barred` empty on purpose: it records removals by *fingerprint* and holds no signing key for a member it dropped, so a genuinely removed member falls out of `members` and refuses as `unknownIdentity` — row 2's evidence is also the real removal path's evidence. The `barred` branch needed `FERNLET_MESH_CHAOS_BARRED` to be reachable on a radio at all. |
@@ -355,16 +356,35 @@ without editing the transport, and `missingPeerHello` names a caller-order fault
 
 #### Two observations to carry forward
 
-**A verified pair activated two tunnels, not one.** In the accepted baseline each device logged
-`accepted` twice — once as initiator, once as responder — meaning *both* sides dialed and
-duplicate-tunnel suppression did not collapse the pair. The `sid` tie-break is symmetric, so the
-likely cause is the documented `shouldInitiateInvite` fallback: a peer discovered before its Bonjour
-TXT record resolves has no `sid`, and "deadlock is worse than a redundant invite" makes both sides
-dial. The inbound tunnel then keys off `connection.id` rather than the browsed key when
-`links.key(advertisingSessionID:)` cannot resolve it, so the two never collide. Nothing about
-selectivity is affected — both tunnels are between two verified roster members — but "at most one
-connection per peer pair" is a Lane B row that this lane can now test cheaply, and today it would
-not pass.
+**~~A verified pair activated two tunnels, not one.~~ Corrected 2026-09-01 (P2 item 13).** The
+original reading was: each device logged `accepted` twice — inferred as "once as initiator, once as
+responder" — so both sides dialed and duplicate-tunnel suppression did not collapse the pair. That
+inference was **wrong about this lane**, and it was wrong because the console line said a tunnel came
+up and nothing about whether the previous one was still there. It now carries `tunnels=`, and four
+re-runs (two with the item-13 collapse, two with it stubbed out) report `tunnels=1` at *every*
+activation on *both* sides. The repeated lines are churn: one tunnel forms, ends, and re-forms.
+
+Two things follow, and they point in opposite directions:
+
+* **The cross-key duplicate is real by construction, and is fixed** — an inbound tunnel whose
+  verified `sid` resolves to no browsed advertisement keys off `connection.id`, so it can never
+  collide with the browsed key and duplicate suppression is never asked. `MeshTunnelConvergence`
+  closes it on the durable verified identity, and the tier-1 battery reproduces the double
+  activation and pins the collapse (`MeshTunnelConvergenceTests`). What this lane cannot do is
+  *exercise* it: reaching the double-dial window needs a peer discovered **before** its TXT record
+  resolves, and two Simulators browsing over the infrastructure path get the TXT with the browse
+  result, so the `sid` ranks immediately and only one side dials. Producing a late TXT is a physical
+  radio's behaviour — the Lane B row "at most one connection per peer pair" (deferred to P8) is
+  where the collapse gets exercised rather than merely held.
+* **A live tunnel that ends logs NOTHING.** `endTunnel` on a tunnel that had a control stream books
+  `links.noteClosed`, tells the channel, and calls `onPeerDisconnected` — no `Logger` line, no
+  console echo. That silence is the whole reason three sequential tunnels read as duplicated ones
+  for a fortnight. It is not fixed here (an unasked-for diagnostic on the live disconnect path is
+  its own change) and is carried forward as an open observation.
+
+**Why the pair churns at all is unexplained.** Three activations per side in ~100 s, with no dial
+failure, no give-up, no refusal and no transport error logged on either side. It reproduces with the
+collapse disabled, so it predates item 13.
 
 **The refusal is charged to the dial budget, and the budget holds.** Every refused row ended with
 `The QUIC tunnel gave up after 3 attempts` on the dialing side and silence thereafter. A peer that

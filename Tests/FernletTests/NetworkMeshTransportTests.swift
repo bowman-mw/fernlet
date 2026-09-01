@@ -1683,3 +1683,310 @@ struct MeshInboundRankingTests {
         #expect(table.phase(of: connectionKey) == .connected)
     }
 }
+
+// MARK: - MeshTunnelConvergenceTests
+
+/// P2 item 13: a verified pair must converge to exactly ONE tunnel — and to the *same* one on both
+/// sides.
+///
+/// The defect these pin was found on the radio, not here: two Simulators running the production mesh
+/// over QUIC each logged `tunnel activated` twice for one peer. The chain is three documented,
+/// individually-correct behaviours meeting: in the pre-TXT window neither side can rank the other so
+/// **both dial** (the deadlock-avoiding fallback ``MeshDialPreference`` exists for); an inbound
+/// tunnel whose verified `sid` still matches no cached advertisement keeps its own connection key;
+/// and two keys never collide, so ``MeshLinkTable``'s duplicate suppression is never asked. The pair
+/// stayed selective — both tunnels were verified — and stopped converging.
+///
+/// Nothing here sleeps or opens a socket. The rule is a pure function, and the session's half is
+/// driven through the same functions the radio calls.
+@MainActor
+@Suite(.serialized)
+struct MeshTunnelConvergenceTests {
+
+    // MARK: The rule
+
+    /// **The property the whole item exists for.** Over every pair of session ids two real devices
+    /// could hold, both ends keep the same connection — and neither ends with none.
+    ///
+    /// Read the two sides as one wire: connection A→B is A's ``MeshChannelRole/initiator`` tunnel
+    /// and B's ``MeshChannelRole/responder`` tunnel; B→A is the mirror. A verdict pair is correct
+    /// only when the tunnel A keeps and the tunnel B keeps name the *same* connection — that is,
+    /// exactly one of the two sides keeps its own dial.
+    @Test func bothSidesOfAMutuallyDialedPairKeepTheSameConnection() {
+        let ids = ["aaaa", "mmmm", "zzzz"]
+        for local in ids {
+            for peer in ids where peer != local {
+                let localKeepsOwnDial = Self.keepsOwnDial(localSessionID: local, peerSessionID: peer)
+                let peerKeepsOwnDial = Self.keepsOwnDial(localSessionID: peer, peerSessionID: local)
+                #expect(
+                    localKeepsOwnDial != peerKeepsOwnDial,
+                    "local=\(local) peer=\(peer): the two sides did not name one connection"
+                )
+            }
+        }
+    }
+
+    /// Whether this side keeps its own dial — asked BOTH ways round, because which tunnel activated
+    /// second is a race and the verdict must not depend on it. The equality is the race-safety
+    /// property, asserted on every input the callers above enumerate.
+    static func keepsOwnDial(localSessionID: String, peerSessionID: String) -> Bool {
+        let peerDialArrivedSecond = MeshTunnelConvergence.resolve(
+            incomingRole: .responder, establishedRole: .initiator,
+            localSessionID: localSessionID, peerSessionID: peerSessionID
+        )
+        let ownDialArrivedSecond = MeshTunnelConvergence.resolve(
+            incomingRole: .initiator, establishedRole: .responder,
+            localSessionID: localSessionID, peerSessionID: peerSessionID
+        )
+        #expect(
+            (peerDialArrivedSecond == .keepEstablished) == (ownDialArrivedSecond == .keepIncoming),
+            "the verdict changed with activation order — a race would leave the pair disagreeing"
+        )
+        return peerDialArrivedSecond == .keepEstablished
+    }
+
+    /// The survivor is always the connection the *preferred dialer* opened — the same `sid`
+    /// comparison `MeshNetworkManager.shouldInitiateInvite` and ``MeshDialPreference`` make, so the
+    /// transport can never collapse onto the direction the manager would not have dialed.
+    @Test func theSurvivorIsTheConnectionThePreferredDialerOpened() {
+        for (local, peer) in [("zzzz", "aaaa"), ("aaaa", "zzzz"), ("mmmm", "aaaa")] {
+            let preference = MeshDialPreference.rank(localSessionID: local, peerSessionID: peer)
+            #expect(Self.keepsOwnDial(localSessionID: local, peerSessionID: peer)
+                    == (preference == .localDials),
+                    "local=\(local) peer=\(peer): the collapse and the dial tie-break disagree")
+        }
+    }
+
+    /// An unranked pair keeps BOTH. Ranking fails only for this process's own echo or a session
+    /// advertising no `sid`; inventing a tie-break there risks the one outcome — zero tunnels — that
+    /// no timer-free path recovers from.
+    @Test func anUnrankedPairKeepsBothRatherThanRiskingNone() {
+        let roles: [(MeshChannelRole, MeshChannelRole)] = [
+            (.initiator, .responder), (.responder, .initiator),
+            (.initiator, .initiator), (.responder, .responder)
+        ]
+        for (local, peer) in [("", "aaaa"), ("aaaa", ""), ("same", "same"), ("", "")] {
+            for (incoming, established) in roles {
+                #expect(MeshTunnelConvergence.resolve(
+                    incomingRole: incoming, establishedRole: established,
+                    localSessionID: local, peerSessionID: peer
+                ) == .keepBoth, "local=\(local) peer=\(peer) closed a tunnel it cannot rank")
+            }
+        }
+    }
+
+    /// Two tunnels in the SAME direction have no symmetric discriminator — direction is the only
+    /// fact both ends name identically — so the established one stays and the newcomer yields. It
+    /// still converges: the connection this side closes is closed at the peer's end too.
+    @Test func aSameDirectionDuplicateKeepsTheEstablishedTunnel() {
+        for role in [MeshChannelRole.initiator, .responder] {
+            for (local, peer) in [("zzzz", "aaaa"), ("aaaa", "zzzz")] {
+                #expect(MeshTunnelConvergence.resolve(
+                    incomingRole: role, establishedRole: role,
+                    localSessionID: local, peerSessionID: peer
+                ) == .keepEstablished)
+            }
+        }
+    }
+
+    /// The close names itself. A collapsed duplicate and a refused peer are two different events,
+    /// and a log that spells them the same way is how a healthy radio reads as a hostile one.
+    @Test func theDedupCloseNamesItselfRatherThanLookingLikeARefusal() {
+        #expect(MeshTunnelConvergence.closeReason.hasPrefix("redundantTunnelClosed"))
+        #expect(!MeshTunnelConvergence.closeReason.lowercased().contains("refus"))
+    }
+
+    // MARK: The session
+
+    /// One peer's verified identity. The keys are the durable half — the collapse matches on the
+    /// signing key, never on the fingerprint string or the per-launch `sid`.
+    static let peerSigningKey = Data(repeating: 0x11, count: 32)
+    static let otherSigningKey = Data(repeating: 0x22, count: 32)
+
+    static func verified(
+        _ signingPublicKey: Data,
+        sessionID: String,
+        fingerprint: String = "abcd-efgh-ijkl"
+    ) -> MeshVerifiedPeer {
+        MeshVerifiedPeer(
+            signingPublicKey: signingPublicKey, fingerprint: fingerprint, sessionID: sessionID
+        )
+    }
+
+    /// A stopped session advertising `sessionID`. `updateDiscoveryInfo` is production API and a
+    /// documented no-op for the radios while stopped, so giving a session its own `sid` needs no seam.
+    static func session(advertising sessionID: String) -> NetworkMeshSession {
+        let session = NetworkMeshSession()
+        session.updateDiscoveryInfo([MeshLinkAdvertisement.sessionIDKey: sessionID])
+        session.invitationGate = { _ in true }
+        return session
+    }
+
+    /// **The item-9 repro.** Both sides dialed, both verified, and the peer's tunnel landed under
+    /// its own connection key because no cached advertisement carried its `sid` yet — the state two
+    /// Simulators were in when each logged `accepted … tunnel activated` twice.
+    ///
+    /// Also the budget and owner-path assertions: a dedup close returns the link to
+    /// ``MeshLinkPhase/idle`` with a FULL dial budget (a dial-failure charge would have left it
+    /// backing off or exhausted), fires no `onPeerDisconnected`, and is not a transport error.
+    @Test func aMutuallyDialedPairConvergesToOneTunnel() {
+        let session = Self.session(advertising: "zzzz")
+        var disconnects: [String] = []
+        var errors: [String] = []
+        session.onPeerDisconnected = { _, reason in disconnects.append(reason) }
+        session.onTransportError = { errors.append($0) }
+        let peer = Self.verified(Self.peerSigningKey, sessionID: "aaaa")
+        let ownDial = MeshLinkKey("browsed-endpoint")
+        let peerDial = MeshLinkKey("quic-connection-1")
+
+        session.bookTunnelForTesting(ownDial, role: .initiator, verified: peer)
+        // The peer's connection, through the production admission: unresolvable to any browsed
+        // advertisement, so it keeps its own key and collides with nothing.
+        #expect(session.admitVerifiedInboundForTesting(peer, pendingKey: peerDial) == peerDial)
+        session.bookTunnelForTesting(peerDial, role: .responder, verified: nil)
+        #expect(session.tunnelKeysForTesting.count == 2, "the pre-fix state: one peer, two tunnels")
+        #expect(session.linkTableForTesting.phase(of: peerDial) == .connected)
+
+        // "zzzz" > "aaaa": this side is the preferred dialer, so its own dial is the survivor.
+        #expect(!session.admitActivationForTesting(at: peerDial, role: .responder, verified: peer))
+
+        #expect(session.tunnelKeysForTesting == [ownDial])
+        #expect(session.linkTableForTesting.connectedCount == 1)
+        #expect(session.linkTableForTesting.phase(of: ownDial) == .connected)
+        #expect(session.linkTableForTesting.phase(of: peerDial) == .idle,
+                "a dedup close is not a dial failure")
+        #expect(session.linkTableForTesting.dialAttempts(for: peerDial) == 0,
+                "a dedup close must not spend the three-attempt dial budget")
+        #expect(disconnects.isEmpty, "a dedup close must not re-enter the owner's removal funnel")
+        #expect(errors.isEmpty, "a dedup close is not a transport error")
+    }
+
+    /// Both devices, one wire. The tunnel each side keeps must be the same connection — the whole
+    /// reason the rule ranks instead of letting each side prefer its own dial.
+    @Test func bothSessionsKeepOneConnectionBetweenThem() {
+        let alpha = Self.session(advertising: "zzzz")
+        let bravo = Self.session(advertising: "aaaa")
+        let bravoSeenByAlpha = Self.verified(Self.peerSigningKey, sessionID: "aaaa")
+        let alphaSeenByBravo = Self.verified(Self.otherSigningKey, sessionID: "zzzz")
+
+        let alphaOwn = MeshLinkKey("alpha-dialed-bravo")
+        let alphaInbound = MeshLinkKey("alpha-conn-1")
+        alpha.bookTunnelForTesting(alphaOwn, role: .initiator, verified: bravoSeenByAlpha)
+        _ = alpha.admitVerifiedInboundForTesting(bravoSeenByAlpha, pendingKey: alphaInbound)
+        alpha.bookTunnelForTesting(alphaInbound, role: .responder, verified: nil)
+        let alphaKeepsPeerDial = alpha.admitActivationForTesting(
+            at: alphaInbound, role: .responder, verified: bravoSeenByAlpha
+        )
+
+        let bravoOwn = MeshLinkKey("bravo-dialed-alpha")
+        let bravoInbound = MeshLinkKey("bravo-conn-1")
+        bravo.bookTunnelForTesting(bravoOwn, role: .initiator, verified: alphaSeenByBravo)
+        _ = bravo.admitVerifiedInboundForTesting(alphaSeenByBravo, pendingKey: bravoInbound)
+        bravo.bookTunnelForTesting(bravoInbound, role: .responder, verified: nil)
+        let bravoKeepsPeerDial = bravo.admitActivationForTesting(
+            at: bravoInbound, role: .responder, verified: alphaSeenByBravo
+        )
+
+        #expect(alpha.tunnelKeysForTesting == [alphaOwn], "alpha holds the higher sid: its dial wins")
+        #expect(bravo.tunnelKeysForTesting == [bravoInbound], "bravo keeps the tunnel alpha opened")
+        #expect(!alphaKeepsPeerDial)
+        #expect(bravoKeepsPeerDial)
+        #expect(alpha.linkTableForTesting.connectedCount == 1)
+        #expect(bravo.linkTableForTesting.connectedCount == 1)
+    }
+
+    /// **The simultaneous case.** Either connection may activate first on either side, and both
+    /// sides may act at once. The verdict depends on no ordering, so the same connection survives
+    /// either way — and a second pass over the loser (two callbacks racing) changes nothing.
+    @Test func theCollapseIsIndependentOfWhichTunnelActivatedFirst() {
+        for peerDialActivatedFirst in [true, false] {
+            let session = Self.session(advertising: "zzzz")
+            let peer = Self.verified(Self.peerSigningKey, sessionID: "aaaa")
+            let ownDial = MeshLinkKey("browsed-endpoint")
+            let peerDial = MeshLinkKey("quic-connection-1")
+            let first = peerDialActivatedFirst ? peerDial : ownDial
+            let firstRole: MeshChannelRole = peerDialActivatedFirst ? .responder : .initiator
+            let second = peerDialActivatedFirst ? ownDial : peerDial
+            let secondRole: MeshChannelRole = peerDialActivatedFirst ? .initiator : .responder
+
+            session.bookTunnelForTesting(first, role: firstRole, verified: peer)
+            session.bookTunnelForTesting(second, role: secondRole, verified: nil)
+            let admitted = session.admitActivationForTesting(
+                at: second, role: secondRole, verified: peer
+            )
+            // What `activate` records next, and the reason the re-check below is meaningful: the
+            // survivor is only recognisable as this peer's once its verified identity is on it.
+            if admitted { session.bookTunnelForTesting(second, role: secondRole, verified: peer) }
+
+            #expect(admitted == peerDialActivatedFirst)
+            #expect(session.tunnelKeysForTesting == [ownDial],
+                    "the preferred dialer's own connection must survive either activation order")
+            #expect(!session.admitActivationForTesting(at: peerDial, role: .responder, verified: peer))
+            #expect(session.tunnelKeysForTesting == [ownDial], "the collapse is idempotent")
+        }
+    }
+
+    /// A dedup close touches exactly one link: another peer's tunnel, budget and slot are untouched.
+    @Test func aDedupCloseLeavesAnUnrelatedPeerAlone() {
+        let session = Self.session(advertising: "zzzz")
+        let peer = Self.verified(Self.peerSigningKey, sessionID: "aaaa")
+        let stranger = Self.verified(Self.otherSigningKey, sessionID: "mmmm", fingerprint: "zzzz-yyyy-xxxx")
+        let ownDial = MeshLinkKey("browsed-endpoint")
+        let peerDial = MeshLinkKey("quic-connection-1")
+        let unrelated = MeshLinkKey("other-peer-endpoint")
+        session.bookTunnelForTesting(ownDial, role: .initiator, verified: peer)
+        session.bookTunnelForTesting(unrelated, role: .initiator, verified: stranger)
+        session.bookTunnelForTesting(peerDial, role: .responder, verified: nil)
+
+        #expect(!session.admitActivationForTesting(at: peerDial, role: .responder, verified: peer))
+        #expect(session.tunnelKeysForTesting == [ownDial, unrelated])
+        #expect(session.linkTableForTesting.phase(of: unrelated) == .connected)
+        #expect(session.linkTableForTesting.connectedCount == 2)
+    }
+
+    /// The collapse keys on the **durable verified identity**, never on the per-launch `sid`: two
+    /// devices that happen to advertise one `sid` are two peers, and closing one of their tunnels
+    /// would be a disconnection dressed up as a dedup.
+    @Test func twoIdentitiesSharingOneSessionIDAreNotADuplicate() {
+        let session = Self.session(advertising: "zzzz")
+        let first = Self.verified(Self.peerSigningKey, sessionID: "aaaa")
+        let second = Self.verified(Self.otherSigningKey, sessionID: "aaaa")
+        let one = MeshLinkKey("peer-one")
+        let two = MeshLinkKey("peer-two")
+        session.bookTunnelForTesting(one, role: .initiator, verified: first)
+        session.bookTunnelForTesting(two, role: .responder, verified: nil)
+
+        #expect(session.admitActivationForTesting(at: two, role: .responder, verified: second))
+        #expect(session.tunnelKeysForTesting == [one, two])
+    }
+
+    /// The same-key half of the collapse.
+    ///
+    /// When a side HAS cached the peer's `sid`, both connections resolve to one ``MeshLinkKey`` and
+    /// the table refuses the second as a duplicate — correct only if the peer's side refuses the
+    /// mirror, which it must not: two refusals close one connection each and leave the pair with
+    /// none. The same rule runs here, so the side that does not outrank the peer **yields** its own
+    /// dial rather than refusing the peer's, and the channel above it is kept — one link key is one
+    /// peer to every owner, and evicting a live coordinator to hand back an identical one is not a
+    /// dedup.
+    @Test func aSameKeyDuplicateYieldsInsteadOfRefusingOnBothSides() {
+        let shared = MeshLinkKey("browsed-endpoint")
+
+        let outranked = Self.session(advertising: "aaaa")
+        let higherPeer = Self.verified(Self.peerSigningKey, sessionID: "zzzz")
+        outranked.bookTunnelForTesting(shared, role: .initiator, verified: higherPeer)
+        #expect(outranked.admitVerifiedInboundForTesting(higherPeer, pendingKey: shared) == shared,
+                "the outranked side must yield its own dial, not refuse the peer's")
+        #expect(outranked.tunnelKeysForTesting == [shared], "the channel is kept, not re-minted")
+        #expect(outranked.linkTableForTesting.phase(of: shared) == .connected)
+        #expect(outranked.linkTableForTesting.dialAttempts(for: shared) == 0)
+
+        let outranking = Self.session(advertising: "zzzz")
+        let lowerPeer = Self.verified(Self.otherSigningKey, sessionID: "aaaa")
+        outranking.bookTunnelForTesting(shared, role: .initiator, verified: lowerPeer)
+        #expect(outranking.admitVerifiedInboundForTesting(lowerPeer, pendingKey: shared) == nil,
+                "the outranking side keeps its own dial")
+        #expect(outranking.tunnelKeysForTesting == [shared])
+        #expect(outranking.linkTableForTesting.connectedCount == 1)
+    }
+}
