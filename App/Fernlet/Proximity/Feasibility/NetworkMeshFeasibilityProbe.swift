@@ -332,8 +332,24 @@ enum MeshProbeDiscoveryPolicy {
     }
 
     static func candidateRunsInSimulator(_ endpoint: Bonjour.Endpoint) -> Bool {
-        endpoint.txtRecord.dictionary[MeshProbeNetworkProfile.txtRecordKey]
-            == MeshProbeNetworkProfile.simulatorTXTValue
+        runsInSimulator(txtRecord: endpoint.txtRecord.dictionary)
+    }
+
+    /// Classifies a browsed peer from its TXT payload alone.
+    ///
+    /// Split out from ``candidateRunsInSimulator(_:)`` because `Bonjour.Endpoint` has no public
+    /// initializer, so the classification rule — the input the whole dial policy pivots on — was
+    /// unreachable from a unit test. Nothing about the rule changed.
+    ///
+    /// An ABSENT record reads as `device`, and that is not a formality: a Simulator has been
+    /// observed seeing a peer before its TXT arrived, classifying it `[device]`, and dialling on
+    /// that basis. Classification is therefore not stable at first sight, and the dial policy has
+    /// to be safe in the window before it settles — see ``allowsOutboundConnection(localServiceName:candidateServiceName:candidateID:attemptedEndpointIDs:localRunsInSimulator:candidateRunsInSimulator:allowsSimulatorToSimulatorDial:)``.
+    /// Reading a missing record as `device` is the safe direction: `device` is the classification
+    /// that grants the *most* permission to dial, so a late TXT can only ever withdraw one, never
+    /// grant one — a pair can double-dial while it settles, but it can never deadlock waiting.
+    static func runsInSimulator(txtRecord: [String: String]) -> Bool {
+        txtRecord[MeshProbeNetworkProfile.txtRecordKey] == MeshProbeNetworkProfile.simulatorTXTValue
     }
 }
 
