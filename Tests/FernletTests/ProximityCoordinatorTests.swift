@@ -703,7 +703,11 @@ struct ProximityCoordinatorTests {
         let (remote, remoteServiceID) = try makeIdentity()
         defer { cleanup(remoteServiceID) }
         let transport = MockMultipeerTransport()
-        transport.sendDelayNanoseconds = 80_000_000
+        // The observation WINDOW, not a timing assumption: the mock holds the send open for a
+        // second so a starved poll still gets many chances to look while the coordinator is
+        // `.transferring`. The 80 ms it used to hold was fine on an idle machine and a coin flip
+        // under full-suite load, because the test's single fixed 20 ms sleep had exactly one look.
+        transport.sendDelayNanoseconds = 1_000_000_000
         var currentDate = Date()
         let coordinator = makeCoordinator(identity: local, transport: transport) { currentDate }
         let payload = try FernletIdentityEnvelope.signed(
@@ -716,7 +720,11 @@ struct ProximityCoordinatorTests {
 
         _ = try await connectCoordinator(coordinator, transport: transport, local: local, remote: remote)
         let sendTask = Task { try await coordinator.send(payload) }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        // The house idiom (deadline + minimum-poll floor) instead of a fixed sleep racing the send:
+        // `heartbeatInterval == 3` is exactly `state == .transferring`, so this polls for the state
+        // the assertion is about. A send that finished before we ever saw it leaves the condition
+        // false, `waitUntil` gives up, and the expectation below fails loudly — never silently.
+        await waitUntil { coordinator.heartbeatInterval == 3 }
         #expect(coordinator.heartbeatInterval == 3)
         try await sendTask.value
         #expect(coordinator.heartbeatInterval == 10)
