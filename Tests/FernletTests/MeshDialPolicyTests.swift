@@ -509,11 +509,12 @@ struct MeshDialPolicyTests {
 /// The manager half: the same decision reached through a live `MeshNetworkManager`, over the
 /// discovery info it actually advertises.
 ///
-/// Only the DECISION is observable at tier 1. `MeshNetworkManager` owns its `MeshMultipeerSession`
-/// outright (`private let meshSession = MeshMultipeerSession()`), so there is no seam to inject a
-/// `FakePeerTransport` through and no way to assert that an invite was actually SENT without
-/// starting real radios. Whether the manager re-invites a peer whose classification changed after
-/// the fact is therefore a transport-level question, and belongs with the QUIC conformer.
+/// The decision AND the act are observable now. `MeshNetworkManager` used to own its
+/// `MeshMultipeerSession` outright (`private let meshSession = MeshMultipeerSession()`), so nothing
+/// at tier 1 could assert an invite was actually SENT without starting real radios — only that the
+/// policy said to send one. P2 item 8 replaced that with an injected ``MeshTransportSession``, so
+/// the last three tests here drive discovery through a `FakeMeshTransportSession` and read the
+/// invite off it.
 @Suite(.serialized) @MainActor
 struct MeshDialPolicyManagerTests {
     let store = makeTestStore()
@@ -579,15 +580,80 @@ struct MeshDialPolicyManagerTests {
                 "A peer whose arriving sid sorts below ours leaves us the inviter")
     }
 
-    /// A peer handle carrying exactly the advertisement under test.
-    static func peer(sessionID: String?) -> PeerHandle {
+    // MARK: - Through the injected transport
+
+    /// The decision, now followed all the way to the radio: a peer this manager outranks is not
+    /// merely *judged* invitable, an invite is handed to the transport.
+    @Test func manager_actuallySendsTheInviteForAPeerItOutranks() {
+        let transport = FakeMeshTransportSession()
+        let manager = MeshNetworkManager(store: store, transport: transport)
+        manager.markProximityJoinForTesting()
+        let lower = Self.peer(sessionID: "00000000-0000-0000-0000-000000000000")
+        #expect(manager.shouldInitiateInvite(to: lower), "test premise: we outrank this peer")
+
+        transport.discover(lower)
+
+        #expect(transport.invitedPeers.map(\.id) == [lower.id],
+                "the manager must hand the invite to its transport, not merely decide to")
+    }
+
+    /// The other side of the tie-break, at the same vantage point: a peer that outranks US must
+    /// leave the radio untouched. Deadlock is what this asymmetry exists to prevent, and until the
+    /// seam landed nothing could observe the silent half at all.
+    @Test func manager_sendsNoInviteToAPeerThatOutranksIt() {
+        let transport = FakeMeshTransportSession()
+        let manager = MeshNetworkManager(store: store, transport: transport)
+        manager.markProximityJoinForTesting()
+        let higher = Self.peer(sessionID: "ffffffff-ffff-ffff-ffff-ffffffffffff")
+        #expect(!manager.shouldInitiateInvite(to: higher), "test premise: this peer outranks us")
+
+        transport.discover(higher)
+
+        #expect(transport.invitedPeers.isEmpty, "the higher-sid peer is the inviter; we stay silent")
+    }
+
+    /// A device that already holds a seat must not be invited again, however often discovery
+    /// re-reports it. The seat gate is checked by ``PeerHandle/isSameEndpoint(as:)``, so a
+    /// re-minted handle for the same device is still refused.
+    @Test func manager_sendsNoInviteToADeviceThatAlreadyHoldsASlot() {
+        let transport = FakeMeshTransportSession()
+        let manager = MeshNetworkManager(store: store, transport: transport)
+        manager.markProximityJoinForTesting()
+        let endpoint = PeerEndpointKey(UUID())
+        let seated = Self.peer(sessionID: "00000000-0000-0000-0000-000000000000", endpoint: endpoint)
+        let rediscovered = Self.peer(sessionID: "00000000-0000-0000-0000-000000000000", endpoint: endpoint)
+        manager.addSlotForTesting(coordinator: Self.throwawayCoordinator(), peer: seated, fingerprint: nil)
+
+        transport.discover(rediscovered)
+
+        #expect(transport.invitedPeers.isEmpty, "a seated device must never be invited a second time")
+    }
+
+    /// A never-begun coordinator, so a slot can be seeded without a live radio or ranging session.
+    static func throwawayCoordinator() -> ProximityCoordinator {
+        ProximityCoordinator(
+            identity: IdentityService(keychainService: "test.mesh.dialpolicy.\(UUID().uuidString)"),
+            transport: MockMultipeerTransport(),
+            ranging: MockRangingProvider(),
+            inspector: nil,
+            replayCache: ReplayCache(),
+            foregroundAnchor: nil,
+            displayName: "Local",
+            timeoutSeconds: 0
+        )
+    }
+
+    /// A peer handle carrying exactly the advertisement under test. `endpoint` is supplied only
+    /// when a test needs two handles to stand for the SAME device.
+    static func peer(sessionID: String?, endpoint: PeerEndpointKey? = nil) -> PeerHandle {
         var info: [String: String] = ["v": "1"]
         if let sessionID { info["sid"] = sessionID }
         return PeerHandle(
             id: UUID(),
             displayHint: "iPhone",
             discoveryInfo: info,
-            advertisedFingerprint: nil
+            advertisedFingerprint: nil,
+            endpoint: endpoint ?? PeerEndpointKey()
         )
     }
 }

@@ -247,19 +247,22 @@ struct MeshEvictionReleasesTransportLinkTests {
     let store = makeTestStore()
 
     /// `removeSlot` (timeouts, stale sweep, remote goodbye, session close, transport loss) must
-    /// request the per-peer MC kick — before the fix nothing in the eviction chain touched the
-    /// MCSession, so the link lingered until the whole search stopped.
-    @Test func evictingASlotRequestsTheMultipeerKick() {
-        let manager = MeshNetworkManager(store: store)
-        var kicked: [UUID] = []
-        manager.setDisconnectPeerObserverForTesting { kicked.append($0.id) }
+    /// request the per-peer kick — before the fix nothing in the eviction chain touched the shared
+    /// radio, so the link lingered until the whole search stopped.
+    ///
+    /// Asserted on the INJECTED radio rather than through a hook inside the MC session, which is
+    /// what the P2 item-8 seam bought: the claim is now "the eviction chain reached the transport",
+    /// read off the transport, and it holds whichever conformer is behind it.
+    @Test func evictingASlotRequestsTheTransportKick() {
+        let transport = FakeMeshTransportSession()
+        let manager = MeshNetworkManager(store: store, transport: transport)
         let peer = makePeer()
         manager.addSlotForTesting(coordinator: makeThrowawayCoordinator(), peer: peer, fingerprint: nil)
 
         manager.evictSlotForTesting(peerID: peer.id)
 
-        #expect(kicked == [peer.id], "the evicted peer's MC link must be released, not left as a zombie")
-        manager.setDisconnectPeerObserverForTesting(nil)
+        #expect(transport.disconnectedPeers.map(\.id) == [peer.id],
+                "the evicted peer's link must be released, not left as a zombie")
     }
 }
 

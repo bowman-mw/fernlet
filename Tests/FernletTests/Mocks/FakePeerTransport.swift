@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import ProximityKit
+@testable import ProximityKit
 
 // The deterministic in-memory transport fabric. `MockMultipeerTransport` beside it stays: it is a
 // single-peer script for coordinator handshake tests and does its job. This is the other thing —
@@ -343,5 +343,28 @@ final class FakePeerTransport: PeerTransport {
         )
         receivedFrames.append(frame)
         inboundSubject.send(frame)
+    }
+}
+
+// MARK: - MeshPeerChannel
+
+/// The fake also serves as a mesh slot CHANNEL, so `FakeMeshTransportSession` can hand
+/// `MeshNetworkManager` a real endpoint of this fabric where production hands it a
+/// `PeerChannelTransport` (MC) or a `NetworkPeerChannel` (QUIC).
+///
+/// `peer` is this endpoint's own handle: a slot addresses its channel by the peer that channel
+/// carries, and on the fabric that is the endpoint itself. `notifyConnected()` publishes
+/// `.connected` WITHOUT touching `connectedPeers`, which the fabric owns — an endpoint recording
+/// itself as its own connected peer would quietly corrupt every reach test in this file.
+extension FakePeerTransport: MeshPeerChannel {
+
+    var peer: PeerHandle { handle }
+
+    func notifyConnected() {
+        stateSubject.send(.connected(handle))
+    }
+
+    func notifyDisconnected(reason: String) {
+        stateSubject.send(.disconnected(reason: reason))
     }
 }

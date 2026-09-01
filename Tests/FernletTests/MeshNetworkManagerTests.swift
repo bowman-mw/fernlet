@@ -1033,7 +1033,7 @@ struct MeshNetworkManagerTests {
         manager.evictSlotForTesting(peerID: robin.first.id)
         #expect(manager.locallyKickedEndpointCountForTesting == 1, "the eviction must leave a note")
 
-        manager.multipeerSessionForTesting.onPeerDisconnected?(robin.again, "Peer disconnected")
+        manager.transportHandlersForTesting.onPeerDisconnected?(robin.again, "Peer disconnected")
 
         #expect(manager.peerRetryEntryCountForTesting == 0,
                 "a deliberate eviction must never arm a re-invite retry")
@@ -1050,7 +1050,7 @@ struct MeshNetworkManagerTests {
         let endpoint = PeerEndpointKey(UUID())
         // One more sighting than the budget allows, each under its own discovery handle.
         for _ in 0..<4 {
-            manager.multipeerSessionForTesting.onPeerDisconnected?(
+            manager.transportHandlersForTesting.onPeerDisconnected?(
                 makePeer(name: "Robin", endpoint: endpoint), "Peer disconnected"
             )
         }
