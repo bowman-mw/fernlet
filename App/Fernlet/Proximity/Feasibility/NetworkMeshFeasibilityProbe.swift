@@ -982,7 +982,7 @@ final class NetworkMeshFeasibilityProbe {
         record("Control initiator accepted remote signed channel introduction.")
         markControlStreamVerified()
         let datagrams = try await connection.datagrams
-        try requireDatagramCapacity(for: datagrams)
+        recordDatagramCapacity(for: datagrams)
         try await sendInitialDatagram(over: datagrams)
         startHeartbeatLoop(over: datagrams)
     }
@@ -1018,7 +1018,7 @@ final class NetworkMeshFeasibilityProbe {
         record("Control responder sent signed channel introduction.")
         markControlStreamVerified()
         let datagrams = try await connection.datagrams
-        try requireDatagramCapacity(for: datagrams)
+        recordDatagramCapacity(for: datagrams)
         try await answerDatagrams(over: datagrams)
     }
 
@@ -1078,15 +1078,31 @@ final class NetworkMeshFeasibilityProbe {
         received.hasSameTranscript(as: expected) && received.verifies(using: signer)
     }
 
-    private func requireDatagramCapacity(
-        for datagrams: Network.QUIC.Datagrams<QUICDatagram>
-    ) throws {
+    /// Records the framework's reported usable datagram frame size, and deliberately does **not**
+    /// gate the lane on it.
+    ///
+    /// **This gate produced a false negative for a fortnight.** It read zero, threw, and ended the
+    /// probe before a single datagram was attempted — which is how the runbook came to record
+    /// "QUIC datagrams do not negotiate" on the simulator lane, and how everything riding on
+    /// datagrams was re-tiered to hardware. P2 item 15 disproved it from the *shipping* transport:
+    /// with the same reported size of zero, mesh heartbeats were sent and received over QUIC
+    /// datagrams in both directions for the whole of a 170-second run.
+    ///
+    /// Why the number lies: `usableDatagramFrameSize` is only reachable on the **parent
+    /// connection**, and the underlying `nw_quic_get_stream_usable_datagram_frame_size` is
+    /// documented as reading *a QUIC datagram flow's* metadata. A parent connection is not a
+    /// datagram flow, so zero there means "this object is not a datagram flow" and says nothing
+    /// about what the peer negotiated. (`NWProtocolQUIC.Options.isDatagram`, logged alongside it as
+    /// `datagram-flow=false`, was the same mistake: it is the per-stream flag asking whether *this
+    /// stream should be* the datagram flow, not a report of peer support.)
+    ///
+    /// The ping/pong that follows is the real capability test, and it is now the only one.
+    private func recordDatagramCapacity(for datagrams: Network.QUIC.Datagrams<QUICDatagram>) {
         let usableSize = datagrams.parent.usableDatagramFrameSize
         lastUsableDatagramFrameSize = usableSize
-        record("QUIC datagram capability check: usable frame size=\(usableSize), required=\(MeshProbeDatagram.ping.count).")
-        guard usableSize >= MeshProbeDatagram.ping.count else {
-            throw MeshProbeError.datagramUnavailable(usableSize)
-        }
+        record("QUIC datagram capability check: reported usable frame size=\(usableSize), "
+            + "required=\(MeshProbeDatagram.ping.count). Reported on the parent connection, so it "
+            + "is evidence only — the ping/pong below is the test.")
     }
 
     private func sendInitialDatagram(over datagrams: Network.QUIC.Datagrams<QUICDatagram>) async throws {
@@ -1102,7 +1118,10 @@ final class NetworkMeshFeasibilityProbe {
             record("Initial QUIC datagram attempt \(attempt) did not receive pong; retrying.")
             try await answerProbeDatagram(response, over: datagrams)
         }
-        throw MeshProbeError.invalidDatagram
+        // Every attempt in the budget is spent with no pong: *this* is the honest "datagrams are
+        // not usable on this lane" verdict, reached by trying rather than by reading a number off
+        // the wrong object. It carries the reported size so the two can be compared in one line.
+        throw MeshProbeError.datagramUnavailable(lastUsableDatagramFrameSize ?? 0)
     }
 
     private func answerDatagrams(over datagrams: Network.QUIC.Datagrams<QUICDatagram>) async throws {

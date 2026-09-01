@@ -517,6 +517,123 @@ struct MeshHeartbeatScheduleTests {
     }
 }
 
+// MARK: - MeshHeartbeatLivenessTests
+
+/// The two numbers and the one choice that decide whether a live tunnel survives its own keepalive.
+///
+/// **The defect these pin, measured on the radio in P2 item 15.** A verified pair churned — a tunnel
+/// formed, ended and re-formed roughly every 37 s — with no dial failure, no refusal and no
+/// transport error on either side. Instrumenting the disconnect path named it: `NWError 60 -
+/// Operation timed out`, QUIC's own idle timer, firing at the default of about 30 s. The heartbeat
+/// that existed to prevent exactly that was scheduled 30 s after activation, so it was due *at or
+/// after* the reap and lost the race nearly every time. And on the lane where it did fire, its
+/// datagram flow reported a usable frame size of 0, so it could not have arrived anyway.
+///
+/// Two independent faults, one symptom. Both are held here, at tier 1, on arithmetic and a pure
+/// function — no radio, no clock, no sleep.
+@Suite(.serialized)
+struct MeshHeartbeatLivenessTests {
+
+    /// The keepalive must fire strictly inside the timeout it defends against, with room for a
+    /// dropped beat. Equality is the bug: a beat due exactly at the reap is a coin flip, and it is
+    /// what the framework default produced.
+    @Test func theIdleTimeoutOutlastsSeveralHeartbeats() {
+        let beatMilliseconds = Int(MeshHeartbeatSchedule.intervalSeconds) * 1_000
+        #expect(beatMilliseconds > 0)
+        #expect(MeshHeartbeatSchedule.idleTimeoutMilliseconds > beatMilliseconds,
+                "a keepalive due no sooner than the idle reap is not a keepalive")
+        #expect(MeshHeartbeatSchedule.missedBeatsBeforeIdleReap >= 2,
+                "surviving one dropped beat is the point of the margin")
+        #expect(MeshHeartbeatSchedule.idleTimeoutMilliseconds
+                == beatMilliseconds * MeshHeartbeatSchedule.missedBeatsBeforeIdleReap,
+                "the timeout is derived from the interval so the two cannot drift back into a race")
+    }
+
+    /// The margin holds however the interval is retuned — the property, not today's numbers.
+    @Test func theMarginSurvivesRetuningTheInterval() {
+        let beats = MeshHeartbeatSchedule.missedBeatsBeforeIdleReap
+        for seconds in [1, 5, 30, 120, 600] {
+            #expect(seconds * beats * 1_000 > seconds * 1_000)
+        }
+    }
+
+    /// A fresh tunnel tries the designed channel; one that has no datagram flow does not.
+    @Test func afreshTunnelPrefersTheDatagramChannel() {
+        #expect(MeshHeartbeatChannel.choice(hasDatagramFlow: true, datagramWriteFailed: false)
+                == .datagram)
+        #expect(MeshHeartbeatChannel.choice(hasDatagramFlow: false, datagramWriteFailed: false)
+                == .controlStream)
+    }
+
+    /// Once the datagram write has been refused the tunnel never asks again — the one-shot latch.
+    /// Without it, the lane whose usable frame size is 0 pays a failed write on every beat forever.
+    @Test func arefusedDatagramLatchesOntoTheControlStream() {
+        #expect(MeshHeartbeatChannel.choice(hasDatagramFlow: true, datagramWriteFailed: true)
+                == .controlStream)
+        #expect(MeshHeartbeatChannel.choice(hasDatagramFlow: false, datagramWriteFailed: true)
+                == .controlStream)
+    }
+
+    /// Every combination is answered, and the control stream is the answer wherever the datagram
+    /// flow is not both present and unrefused. Exhaustive, so a later input cannot fall through.
+    @Test func theChannelChoiceIsTotal() {
+        for hasFlow in [true, false] {
+            for failed in [true, false] {
+                let choice = MeshHeartbeatChannel.choice(
+                    hasDatagramFlow: hasFlow,
+                    datagramWriteFailed: failed
+                )
+                #expect(choice == (hasFlow && !failed ? .datagram : .controlStream))
+            }
+        }
+    }
+}
+
+// MARK: - MeshTunnelEndReasonTests
+
+/// The vocabulary that ended the silence on the disconnect path.
+///
+/// Before P2 item 15 a live tunnel that ended emitted nothing at all, which is why item 13 read
+/// three sequential tunnels as three coexisting ones and why the churn behind that misreading went
+/// undiagnosed for another fortnight. These hold the two properties a transcript reader depends on:
+/// the tokens are frozen, and a benign tidy-up is distinguishable from a fault.
+@Suite(.serialized)
+struct MeshTunnelEndReasonTests {
+
+    /// Frozen automation tokens. Editing one silently breaks every runbook grep and every
+    /// transcript already captured, so the spellings are pinned rather than trusted.
+    @Test func theTokensAreFrozen() {
+        #expect(MeshTunnelEndReason.heartbeatSendFailed.rawValue == "heartbeatSendFailed")
+        #expect(MeshTunnelEndReason.controlStreamEnded.rawValue == "controlStreamEnded")
+        #expect(MeshTunnelEndReason.introductionFailed.rawValue == "introductionFailed")
+        #expect(MeshTunnelEndReason.frameBudgetSpent.rawValue == "frameBudgetSpent")
+        #expect(MeshTunnelEndReason.localEviction.rawValue == "localEviction")
+        #expect(MeshTunnelEndReason.redundantDuplicate.rawValue == "redundantDuplicate")
+        #expect(MeshTunnelEndReason.unverifiedFingerprint == "unverified")
+    }
+
+    /// Every reason round-trips through its own raw value, and no two share one — the property that
+    /// makes a token in a transcript resolve to exactly one cause.
+    @Test func everyReasonIsDistinctAndRoundTrips() {
+        let all = MeshTunnelEndReason.allCases
+        #expect(Set(all.map(\.rawValue)).count == all.count)
+        for reason in all {
+            #expect(MeshTunnelEndReason(rawValue: reason.rawValue) == reason)
+        }
+    }
+
+    /// Exactly the two ends that are the radio tidying itself are benign; every other end is a
+    /// fault. The split is what keeps an owner's slot eviction from reading as a radio failure —
+    /// and, the other way, keeps a real timeout out of the noise floor.
+    @Test func onlyTheRadiosOwnTidyUpIsBenign() {
+        let benign = MeshTunnelEndReason.allCases.filter(\.isBenign)
+        #expect(Set(benign) == Set([.localEviction, .redundantDuplicate]))
+        #expect(!MeshTunnelEndReason.controlStreamEnded.isBenign,
+                "the idle-timeout reap that caused the churn must never be filed as routine")
+        #expect(!MeshTunnelEndReason.heartbeatSendFailed.isBenign)
+    }
+}
+
 // MARK: - MeshLinkAdvertisementTests
 
 /// The TXT vocabulary: what the QUIC radio publishes, and what it believes.

@@ -51,9 +51,18 @@ recognized probe message kinds or an unknown payload's byte count. This makes
 transient simulator infrastructure ordering observable without logging content.
 Both endpoints explicitly advertise a 1,024-byte DATAGRAM-frame limit and a
 1,280-byte QUIC UDP-payload limit; the copied diagnostic report records both
-advertised values and the negotiated usable frame size.
-If QUIC negotiates a zero usable datagram frame size, the probe reports that
-negative result directly and does not retry the same unsupported path.
+advertised values and the reported usable frame size.
+
+**The reported usable frame size is evidence, not a verdict** (corrected 2026-09-01, P2 item 15).
+The probe used to *throw* on a zero usable size and end the run before attempting a single
+datagram, which is how this document came to record "QUIC datagrams do not negotiate". That was
+wrong. `usableDatagramFrameSize` is only reachable on the **parent connection**, and the underlying
+`nw_quic_get_stream_usable_datagram_frame_size` is documented as reading *a QUIC datagram flow's*
+metadata — so a zero there means "this object is not a datagram flow", not "the peer refused
+datagrams". `NWProtocolQUIC.Options.isDatagram`, logged beside it as `datagram-flow=false`, is the
+same mistake: it is the per-stream flag asking whether *this stream should be* the datagram flow.
+The probe now records both numbers and lets its bounded ping/pong decide; the "datagrams are not
+usable" verdict is reached by trying and failing, never by reading.
 
 Use **Copy diagnostic report** in the probe's Local events section to put the
 bounded DEBUG-only report on the pasteboard for review. It includes transport
@@ -155,7 +164,7 @@ Wi-Fi. This is the standing development loop, not a release gate.
 | Discovery | Each endpoint lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`; the Simulator's TXT marking makes the device the dialer. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
 | QUIC connect | Exactly one connection per pair reaches `.ready`; the deterministic tie-breaker suppresses the duplicate tunnel. | **Observed working** (owner report) — no diagnostic report captured yet | 2026-08-31 |
 | Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | Not yet recorded | — |
-| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero (a zero size is a reportable negative result, not a retry). | Not yet recorded | — |
+| Datagram | Ping/pong completes. (The reported usable frame size is recorded but is **not** the criterion — see the correction above.) | Not yet recorded on this lane. Answered on Lane C instead: datagrams carry traffic between two Simulators with a reported usable size of 0 | 2026-09-01 |
 | Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | Not yet recorded | — |
 | Channel binding (off-radio) | A changed mesh ID, epoch, nonce, identity, or binding hash fails verification. | **Pass** — `MeshNetworkFeasibilityTests.signedIntroductionRejectsAnyChangedChannelBinding`, run in the standard suite | 2026-08-29 |
 | Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused by default. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates`; the sim→sim refusal is opt-out only via `FERNLET_PROBE_ALLOW_SIM_DIAL` (Lane A2) | 2026-08-29 |
@@ -180,8 +189,8 @@ up.**
 | Tier | Prove it here | Why |
 |---|---|---|
 | **1. Unit tests, no radio at all** | Anything that is pure logic: the dial tie-breaker's total order, retry budgets, state machines, framing bounds, rejection rules, partition scenarios. | Free, deterministic, runs in CI. `Tests/FernletTests/Mocks/FakePeerTransport.swift` exists for exactly this. If a check *can* live here, it must. |
-| **1b. Simulator ↔ Simulator, N nodes** | Real Bonjour, real QUIC, real TLS exporter, real crypto, real signed introductions — across 2, 3, 4 or 6 nodes, scripted, on one Mac with no hardware at all. **Not** QUIC datagrams (see the lane's result below). | Proven 2026-08-31. No device, no cable, no human tapping Start; `simctl` drives the whole run. Anything provable here must not be pushed up to tier 2. |
-| **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. **QUIC datagrams**, which tier 1b could not negotiate. | One device, attached debugger, fast turnaround. |
+| **1b. Simulator ↔ Simulator, N nodes** | Real Bonjour, real QUIC, real TLS exporter, real crypto, real signed introductions — across 2, 3, 4 or 6 nodes, scripted, on one Mac with no hardware at all. **And QUIC datagrams**: proven on Lane C, 2026-09-01 (P2 item 15), correcting the earlier "not datagrams" reading. | Proven 2026-08-31. No device, no cable, no human tapping Start; `simctl` drives the whole run. Anything provable here must not be pushed up to tier 2. |
+| **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. | One device, attached debugger, fast turnaround. ~~QUIC datagrams, which tier 1b could not negotiate~~ — struck 2026-09-01: tier 1b *can* carry datagrams, so this is no longer a reason to come up here. |
 | **3. Two or more physical devices** | Only what is genuinely radio physics or OS policy: Apple peer-to-peer Wi-Fi (AWDL), the Local Network permission prompt, background and locked operation, battery, thermal, Low Power Mode. | Slow and hard to log. Keep this list as short as the work allows. |
 
 **Known limitations of tier 2, stated so nobody mistakes them for bugs:**
@@ -205,9 +214,13 @@ experiment was run on 2026-08-31 and **two Simulators do connect**; the lane bel
 ### Lane A2 — simulator ↔ simulator (answered 2026-08-31)
 
 **Two Simulators on one Mac connect: Bonjour discovery, QUIC/TLS, and the signed,
-TLS-exporter-bound introduction all complete in both directions. QUIC datagrams do not
-negotiate.** This is a real multi-node lane for everything up to and including the signed control
-stream, and it needs no hardware and no human at all.
+TLS-exporter-bound introduction all complete in both directions.** This is a real multi-node lane
+for everything up to and including the signed control stream, and it needs no hardware and no human
+at all.
+
+~~QUIC datagrams do not negotiate.~~ **Struck 2026-09-01 (P2 item 15): they do.** See the Datagram
+row below and Lane C's datagram finding — the probe was gating on a number that does not mean what
+it was read to mean, and aborted before ever sending one.
 
 Two Simulators on the same Mac share the host's network stack, so the peer resolves to a routable
 host address (`172.20.6.146` in the run below) rather than the host-only link-local address that
@@ -240,7 +253,7 @@ total order as the device↔device branch, so exactly one Simulator of a pair di
 | QUIC connect / TLS | The connection reaches `.ready` on both endpoints. | **Pass** — initiator ready at `172.20.6.146%en0:57837`, responder ready at `172.20.6.146:64794` | 2026-08-31 |
 | Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | **Pass** — both sides logged `Verified both Fernlet signatures against the same TLS exporter hash` | 2026-08-31 |
 | Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Pass** — implied by the line above; the introduction does not verify unless both hashes match | 2026-08-31 |
-| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero. | **Fail** — `usable frame size=0, required=23`, with `datagram-flow=false`; the probe reported the negative result and stopped, as designed. **Not attributed to this lane** — see below | 2026-08-31 |
+| Datagram | Datagrams carry traffic in both directions. | ~~**Fail** — `usable frame size=0, required=23`~~ **Corrected to Pass, 2026-09-01 (P2 item 15).** The 2026-08-31 Fail was the probe refusing to try, not the transport refusing to carry: it threw on the reported usable size before sending a datagram. With the *shipping* transport on this same lane, mesh heartbeats were sent **and received** over QUIC datagrams in both directions for a full 170 s run — with the reported usable size still `0`. The number is read off the parent connection, which is not a datagram flow; see the correction under "How the probe is bounded" | 2026-09-01 |
 | Dial policy, default off | With `FERNLET_PROBE_ALLOW_SIM_DIAL` absent, two Simulators discover each other and neither dials. | **Pass** — control run held ~90 s: two candidates on each side, zero `Opening QUIC tunnel` lines, zero connections | 2026-08-31 |
 
 Evidence — the two console transcripts, trimmed to the load-bearing lines:
@@ -262,21 +275,35 @@ Evidence — the two console transcripts, trimmed to the load-bearing lines:
 6:53:49 PM: Verified both Fernlet signatures against the same TLS exporter hash.
 ```
 
-**The datagram failure is not yet attributed to this lane, and must not be recorded as a sim↔sim
-limitation.** Lane A's own Datagram row is still `Not yet recorded`, so nobody has seen a non-zero
-usable frame size on *any* lane. Both endpoints advertised `maxDatagramFrameSize = 1024` and both
-observed `datagram-flow=false` with a usable size of 0, which is equally consistent with a probe
-QUIC-parameter defect that would fail the same way against a physical device. Settle it by reading
-the usable frame size on one device↔Simulator run — one line of evidence decides it — before
-concluding anything about Simulators.
+~~**The datagram failure is not yet attributed to this lane.**~~ **Settled 2026-09-01 (P2 item 15),
+and the answer was neither of the two candidates.** The suspicion recorded here was right that the
+fault was on this side and not in the Simulator — but it was not a QUIC *parameter* defect. The
+parameters were correct all along: both ends really did advertise `maxDatagramFrameSize = 1024`, and
+the peer really did accept it. The defect was in the **reading**, in two places at once:
+
+* `usableDatagramFrameSize` is only exposed on the **parent connection**, while
+  `nw_quic_get_stream_usable_datagram_frame_size` is documented as reading *a QUIC datagram flow's*
+  metadata. Asking a parent connection returns 0 because it is not a datagram flow — which says
+  nothing whatever about the peer.
+* `NWProtocolQUIC.Options.isDatagram`, logged as `datagram-flow=false`, is the per-**stream**
+  configuration flag "should this stream be the datagram flow". Reading it off connection-level
+  options is expected to be false and was never a report of peer support.
+
+Two zeroes that both mean "wrong question" were read as one corroborated negative. The correction
+came from the shipping transport, which stopped gating on the number and simply sent: heartbeats
+crossed as QUIC datagrams in both directions, for 170 s, with the reported usable size still `0`.
+The lesson worth keeping is the one the runbook's own "observed working is not a Pass" rule already
+states in the other direction — **a negative result read off an accessor is not the same as a
+negative result observed on the wire**, and this one cost the loop a fortnight and an unnecessary
+re-tiering of every datagram-borne feature to hardware.
 
 **What this re-tiers.** Any P3–P6 work whose correctness lives above the control stream — routing,
 membership, partition walks, departure transactions, N-node topology and simultaneous-start
 races — can now be exercised on 3, 4 or 6 Simulators from a script, with no hardware and no
 tester. That is a step change in the cost of those phases and the reason this experiment was worth
 running. What it does **not** move: Apple peer-to-peer Wi-Fi, the Local Network permission prompt,
-background/locked operation, battery and thermal, and (until the paragraph above is settled)
-anything that rides on QUIC datagrams. Those stay at tier 3 / Lane B.
+background/locked operation, battery and thermal. Those stay at tier 3 / Lane B. ~~And anything
+riding QUIC datagrams~~ — struck 2026-09-01: datagram-borne work comes back down to this lane.
 
 **One surprise worth carrying forward: an absent Bonjour TXT record reads as `device`.**
 `MeshProbeDiscoveryPolicy.candidateRunsInSimulator` returns false when the TXT key is missing, and
@@ -376,15 +403,86 @@ Two things follow, and they point in opposite directions:
   result, so the `sid` ranks immediately and only one side dials. Producing a late TXT is a physical
   radio's behaviour — the Lane B row "at most one connection per peer pair" (deferred to P8) is
   where the collapse gets exercised rather than merely held.
-* **A live tunnel that ends logs NOTHING.** `endTunnel` on a tunnel that had a control stream books
-  `links.noteClosed`, tells the channel, and calls `onPeerDisconnected` — no `Logger` line, no
-  console echo. That silence is the whole reason three sequential tunnels read as duplicated ones
-  for a fortnight. It is not fixed here (an unasked-for diagnostic on the live disconnect path is
-  its own change) and is carried forward as an open observation.
+* ~~**A live tunnel that ends logs NOTHING.**~~ **Closed 2026-09-01 (P2 item 15).** `endTunnel` now
+  takes a `MeshTunnelEndReason` and every end — including a live one — emits a permanent `os.log`
+  line plus the console echo, naming the cause, the peer's key fingerprint, whether the tunnel had
+  gone live, and the surviving tunnel count. The six frozen tokens are `heartbeatSendFailed`,
+  `controlStreamEnded`, `introductionFailed`, `frameBudgetSpent`, `localEviction` and
+  `redundantDuplicate`; the first four log at `error`, the last two at `notice`, so an owner tidying
+  a slot does not read as a radio fault. This is production logging, not a debug hook — on a device
+  there is no console mirror, and the disconnect path is exactly where silence costs most.
 
-**Why the pair churns at all is unexplained.** Three activations per side in ~100 s, with no dial
-failure, no give-up, no refusal and no transport error logged on either side. It reproduces with the
-collapse disabled, so it predates item 13.
+#### Why the pair churned (answered 2026-09-01, P2 item 15)
+
+~~**Why the pair churns at all is unexplained.**~~ **It was QUIC's own idle timeout, reaping every
+tunnel a moment before its first heartbeat was due.**
+
+The instrumented re-run named it on the first pass, on both sides:
+
+```
+[mesh-quic] accepted fb795f343c2954da sid=58C9DE24-…: tunnel activated, tunnels=1
+[mesh-quic] datagramCapacity usable=0 requested=1024 required=22 …
+[mesh-quic] tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 for
+            fernlet-mesh-446ba51a9384…: The inbound QUIC tunnel ended: The operation couldn't be
+            completed. (Network.NWError error 60 - Operation timed out)
+```
+
+`NWError 60` is `ETIMEDOUT` — the QUIC connection's `max_idle_timeout`, left at the framework
+default of roughly 30 s. `MeshHeartbeatSchedule.intervalSeconds` is also 30, so the first beat was
+scheduled for the instant the reap was already due, and lost the race nearly every time: across a
+150 s diagnostic run, four activations per side and **one** heartbeat line in total. A keepalive
+that fires no sooner than the timeout it defends against is not a keepalive. Nothing was refused,
+nothing failed to dial, and no budget was spent — which is exactly why the churn presented as
+silent, and why it survived item 13's convergence work untouched.
+
+The fix declares the timeout instead of inheriting it:
+`MeshHeartbeatSchedule.idleTimeoutMilliseconds` is derived from the beat interval as
+`intervalSeconds × missedBeatsBeforeIdleReap`, i.e. three intervals, and is set on **both** the
+listener and the connection parameters — QUIC negotiates the minimum of the two advertised values,
+so a listener left on the default would pull it straight back under the interval. Dead-peer
+detection is not weakened, it is relocated: the app's heartbeat is the detector and QUIC's idle
+timer is the backstop three beats behind it. Before, the backstop *was* the detector, firing so
+early the detector never ran.
+
+A second, independent fault was found in the same place and fixed with it: a failed heartbeat write
+used to end the tunnel outright, so any transport that would not carry a beat was indistinguishable
+from a peer that had left. A datagram write that fails now latches the tunnel onto the control
+stream (`MeshHeartbeatChannel`) instead of killing it; only a beat the *reliable* stream also
+refuses ends anything. On this lane the latch never fires — the datagrams work — but it removes the
+fail-open that would have resurrected the churn on any lane where they do not.
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Tunnel stability | A verified pair holds one tunnel for the whole run, with no unexplained ends. | **Pass** — 170 s, **one** `tunnel activated, tunnels=1` per side and **zero** `tunnelEnded` lines on either side. The same binary before the idle-timeout fix: four activations per side in 150 s | 2026-09-01 |
+| Heartbeat flow | Beats are observably sent and received, not merely scheduled. | **Pass** — five `heartbeat sending over datagram` and five `heartbeat received over datagram` per side, at 30 s spacing, in both directions | 2026-09-01 |
+| Datagram transport | QUIC datagrams carry traffic between two Simulators. | **Pass** — every heartbeat above rode a datagram, with `usableDatagramFrameSize` still reporting `0`. This is the evidence that corrects Lane A2's Datagram row | 2026-09-01 |
+| End-reason diagnostic | A deliberate teardown names its cause in the transcript. | **Pass** — see the teardown lines below | 2026-09-01 |
+
+Evidence — the stable pair, then one side killed on purpose at t≈45 s:
+
+```
+# survivor, before the teardown
+[mesh-quic] accepted fb795f343c2954da sid=AE2FBAD2-…: tunnel activated, tunnels=1
+[mesh-quic] datagramCapacity usable=0 requested=1024 required=22 idleTimeoutMs=90000 beatSeconds=30 …
+[mesh-quic] heartbeat sending over datagram for fernlet-mesh-5b3ce2003939…
+[mesh-quic] heartbeat received over datagram for fernlet-mesh-5b3ce2003939…
+
+# survivor, the instant the peer was terminated
+[mesh-quic] tunnelEnded controlStreamEnded fb795f343c2954da live=true tunnels=0 for
+            fernlet-mesh-5b3ce2003939…: The outbound QUIC tunnel ended: The operation couldn't be
+            completed. (Network.NWError error 61 - Connection refused)
+```
+
+Worth noting what the two runs now let a reader do that they could not before: the churn ended with
+`NWError 60 - Operation timed out` and a real departure ends with `NWError 61 - Connection refused`,
+under the same `controlStreamEnded` token. "The peer went away" and "we timed the peer out" are
+different faults with different fixes, and until item 15 both were the same blank line.
+
+A third path was exercised incidentally, by a run whose seeded roster had gone stale:
+`tunnelEnded introductionFailed unverified live=false tunnels=0 … The outbound QUIC tunnel failed
+its signed channel introduction.` — `live=false` marks a tunnel that never came up (so the close is
+charged to the dial budget, and the `gave up after 3 attempts` line follows), and `unverified`
+is the placeholder for a tunnel that died before anyone proved who they were.
 
 **The refusal is charged to the dial budget, and the budget holds.** Every refused row ended with
 `The QUIC tunnel gave up after 3 attempts` on the dialing side and silence thereafter. A peer that
@@ -412,7 +510,7 @@ carried out on 2–4 physical devices per plan §15.1–15.4.
 
 | Check | Required result | Result | Date |
 | --- | --- | --- | --- |
-| Security | No untrusted peer reaches the post-introduction state. | **Partly proven** — the introduction's rejection rules hold off-radio (Lane A), and six of them now hold **on-radio** between two Simulators running the production transport, against an accepted baseline (Lane C). What is still deferred to P8 is the hostile-peer walk on *physical* radios and anything riding QUIC datagrams | 2026-09-01 (Lane C; physical deferred) |
+| Security | No untrusted peer reaches the post-introduction state. | **Partly proven** — the introduction's rejection rules hold off-radio (Lane A), and six of them now hold **on-radio** between two Simulators running the production transport, against an accepted baseline (Lane C). What is still deferred to P8 is the hostile-peer walk on *physical* radios | 2026-09-01 (Lane C; physical deferred) |
 
 ## Decision
 
