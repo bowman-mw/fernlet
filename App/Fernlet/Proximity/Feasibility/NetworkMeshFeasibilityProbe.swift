@@ -274,6 +274,38 @@ enum MeshProbeNetworkProfile {
     }
 }
 
+/// DEBUG launch switches for the feasibility probe, read once per process from the environment so
+/// `xcrun simctl launch` can drive a whole run without touching the probe's UI.
+///
+/// Every switch is off when its variable is absent, and off means *exactly* today's behaviour: the
+/// simulator→simulator dial stays refused, nothing starts by itself, and the event ring is not
+/// echoed anywhere. The variable names are frozen automation tokens, never display strings.
+enum MeshProbeDebugOptions {
+    static let allowSimulatorDialKey = "FERNLET_PROBE_ALLOW_SIM_DIAL"
+    static let autostartKey = "FERNLET_PROBE_AUTOSTART"
+    static let consoleLogKey = "FERNLET_PROBE_CONSOLE_LOG"
+
+    /// Permits one Simulator to dial another. It widens the simulator→simulator case only: a
+    /// physical device still refuses a Simulator candidate, because *that* refusal is the one the
+    /// Simulator's host-only link-local address actually justifies.
+    static let allowsSimulatorToSimulatorDial = isEnabled(allowSimulatorDialKey)
+    /// Starts the probe from `FernletApp.init()` instead of the Settings screen's Start button.
+    static let startsAutomatically = isEnabled(autostartKey)
+    /// Mirrors every event-ring entry to stdout, where `simctl launch --console-pty` can read it.
+    static let echoesEventsToConsole = isEnabled(consoleLogKey)
+
+    /// Frozen diagnostic token naming the dial policy in force, for the copied report.
+    static var simulatorDialDescription: String {
+        allowsSimulatorToSimulatorDial
+            ? "allowed (\(allowSimulatorDialKey)=1)"
+            : "refused (default)"
+    }
+
+    private static func isEnabled(_ key: String) -> Bool {
+        ProcessInfo.processInfo.environment[key] == "1"
+    }
+}
+
 /// Keeps automatic DEBUG probing deterministic while avoiding self and failed Bonjour results.
 enum MeshProbeDiscoveryPolicy {
     static func allowsOutboundConnection(
@@ -282,13 +314,19 @@ enum MeshProbeDiscoveryPolicy {
         candidateID: String,
         attemptedEndpointIDs: Set<String>,
         localRunsInSimulator: Bool,
-        candidateRunsInSimulator: Bool
+        candidateRunsInSimulator: Bool,
+        allowsSimulatorToSimulatorDial: Bool = false
     ) -> Bool {
         guard !localServiceName.isEmpty, !candidateServiceName.isEmpty,
               !candidateID.isEmpty else { return false }
         guard localServiceName != candidateServiceName,
               !attemptedEndpointIDs.contains(candidateID) else { return false }
-        if localRunsInSimulator { return !candidateRunsInSimulator }
+        if localRunsInSimulator {
+            guard candidateRunsInSimulator else { return true }
+            // Same total order as the device↔device branch, so exactly one Simulator of a pair
+            // dials: two mutual dials would open two tunnels for one peer pair.
+            return allowsSimulatorToSimulatorDial && localServiceName < candidateServiceName
+        }
         if candidateRunsInSimulator { return false }
         return localServiceName < candidateServiceName
     }
@@ -314,6 +352,9 @@ final class NetworkMeshFeasibilityProbe {
     static let bonjourServiceType = "_fernlet-mesh2._udp"
 
     private static let alpn = "fernlet-mesh-probe-v1"
+    /// Frozen console tag so a `simctl launch --console-pty` transcript can be grepped down to the
+    /// probe's own lines. Never shown in the UI.
+    private static let consoleLogPrefix = "[mesh-probe]"
     /// Four, not two: the runbook's four-device step (step 6 — topology changes and
     /// simultaneous starts) is impossible at a cap of two. DEBUG-only, like the rest of the file.
     private static let maxConnections = 4
@@ -398,6 +439,7 @@ final class NetworkMeshFeasibilityProbe {
         Fernlet mesh feasibility diagnostic (DEBUG only)
         generated: \(Date.now.formatted(date: .numeric, time: .standard))
         transport: \(transportDisplayName)
+        simulator-to-simulator dial: \(MeshProbeDebugOptions.simulatorDialDescription)
         status: \(status)
         running: \(isRunning)
         background task: \(taskState)
@@ -480,8 +522,20 @@ final class NetworkMeshFeasibilityProbe {
             }
         }
         shared.backgroundTaskHandlerRegistered = registered
-        guard !registered else { return }
-        shared.record("Background task registration was rejected; check the debug app Info.plist.")
+        if !registered {
+            shared.record("Background task registration was rejected; check the debug app Info.plist.")
+        }
+        startFromLaunchEnvironmentIfRequested()
+    }
+
+    /// Starts a run from the launch environment so an automated two-Simulator experiment needs no
+    /// UI navigation. Absent `FERNLET_PROBE_AUTOSTART=1` this does nothing at all, which is what
+    /// every ordinary DEBUG launch sees. The start is deferred one main-actor turn: `init()` has
+    /// not returned yet, and the listener plus its BackgroundTasks submission want a live app.
+    private static func startFromLaunchEnvironmentIfRequested() {
+        guard MeshProbeDebugOptions.startsAutomatically else { return }
+        shared.record("Autostart requested by \(MeshProbeDebugOptions.autostartKey); simulator→simulator dial is \(MeshProbeDebugOptions.simulatorDialDescription).")
+        Task { @MainActor in shared.start() }
     }
 
     func start() {
@@ -748,7 +802,8 @@ final class NetworkMeshFeasibilityProbe {
                 candidateID: $0.id,
                 attemptedEndpointIDs: attemptedOutboundEndpointIDs,
                 localRunsInSimulator: MeshProbeNetworkProfile.runsInSimulator,
-                candidateRunsInSimulator: MeshProbeDiscoveryPolicy.candidateRunsInSimulator($0)
+                candidateRunsInSimulator: MeshProbeDiscoveryPolicy.candidateRunsInSimulator($0),
+                allowsSimulatorToSimulatorDial: MeshProbeDebugOptions.allowsSimulatorToSimulatorDial
             )
         }
     }
@@ -1280,7 +1335,12 @@ final class NetworkMeshFeasibilityProbe {
 
     private func record(_ message: String) {
         if events.count == Self.maxEventCount { events.removeFirst() }
-        events.append("\(Date.now.formatted(date: .omitted, time: .standard)): \(message)")
+        let entry = "\(Date.now.formatted(date: .omitted, time: .standard)): \(message)"
+        events.append(entry)
+        // The ring holds 80 entries and is only readable through the UI. Echoing it lets a
+        // headless `simctl launch --console-pty` run read the same evidence, and only when asked.
+        guard MeshProbeDebugOptions.echoesEventsToConsole else { return }
+        print("\(Self.consoleLogPrefix) \(entry)")
     }
 
     // MARK: - P8 gate counters

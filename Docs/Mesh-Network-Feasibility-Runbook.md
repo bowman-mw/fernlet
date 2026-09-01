@@ -77,7 +77,9 @@ Wi-Fi, waits for the QUIC listener and its Bonjour advertisement before
 browsing, and records each bounded candidate plus its connection state. Its
 Bonjour TXT record marks it as a Simulator, so it always dials a physical
 device; the physical device never attempts to dial the Simulator's host-only
-link-local address.
+link-local address. A Simulator will also dial another Simulator when the
+DEBUG-only `FERNLET_PROBE_ALLOW_SIM_DIAL=1` switch is set — see **Lane A2**,
+which is the multi-node lane and needs no hardware.
 
 Use one Simulator and one physical device on the same non-isolated Wi-Fi to
 exercise Bonjour discovery, QUIC framing, the signed introduction, and
@@ -156,7 +158,7 @@ Wi-Fi. This is the standing development loop, not a release gate.
 | Datagram | Ping/pong completes and the negotiated usable frame size is non-zero (a zero size is a reportable negative result, not a retry). | Not yet recorded | — |
 | Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | Not yet recorded | — |
 | Channel binding (off-radio) | A changed mesh ID, epoch, nonce, identity, or binding hash fails verification. | **Pass** — `MeshNetworkFeasibilityTests.signedIntroductionRejectsAnyChangedChannelBinding`, run in the standard suite | 2026-08-29 |
-| Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates` | 2026-08-29 |
+| Dial policy | Self-candidates, already-failed candidates, and simulator→simulator dials are refused by default. | **Pass** — `MeshNetworkFeasibilityTests.discoveryPolicyRejectsSelfAndPreviouslyFailedCandidates`; the sim→sim refusal is opt-out only via `FERNLET_PROBE_ALLOW_SIM_DIAL` (Lane A2) | 2026-08-29 |
 | Plist configuration | The three keys the lane needs are present and the registration identifier is concrete, not the wildcard. | **Pass** — `MeshNetworkFeasibilityTests.probeInfoPlistConfigurationAllowsTheDeviceSpike` | 2026-08-29 |
 
 The three `Pass` rows are what the radio-free unit suite can honestly prove. They are listed here
@@ -178,7 +180,8 @@ up.**
 | Tier | Prove it here | Why |
 |---|---|---|
 | **1. Unit tests, no radio at all** | Anything that is pure logic: the dial tie-breaker's total order, retry budgets, state machines, framing bounds, rejection rules, partition scenarios. | Free, deterministic, runs in CI. `Tests/FernletTests/Mocks/FakePeerTransport.swift` exists for exactly this. If a check *can* live here, it must. |
-| **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. | One device, attached debugger, fast turnaround. |
+| **1b. Simulator ↔ Simulator, N nodes** | Real Bonjour, real QUIC, real TLS exporter, real crypto, real signed introductions — across 2, 3, 4 or 6 nodes, scripted, on one Mac with no hardware at all. **Not** QUIC datagrams (see the lane's result below). | Proven 2026-08-31. No device, no cable, no human tapping Start; `simctl` drives the whole run. Anything provable here must not be pushed up to tier 2. |
+| **2. Device ↔ Simulator** | Real Bonjour, real QUIC, real TLS exporter, real crypto, and every app-layer mesh flow over them. Reconnection via endpoint cache. The full rejection matrix, by making the Simulator misbehave on purpose. **QUIC datagrams**, which tier 1b could not negotiate. | One device, attached debugger, fast turnaround. |
 | **3. Two or more physical devices** | Only what is genuinely radio physics or OS policy: Apple peer-to-peer Wi-Fi (AWDL), the Local Network permission prompt, background and locked operation, battery, thermal, Low Power Mode. | Slow and hard to log. Keep this list as short as the work allows. |
 
 **Known limitations of tier 2, stated so nobody mistakes them for bugs:**
@@ -193,15 +196,94 @@ up.**
 - **No Local Network permission flow.** The Simulator does not present it.
 - **Background, locked, battery and thermal behaviour do not transfer** from a Simulator.
 
-**Simulator ↔ Simulator is refused by policy, and that policy may be wider than it needs to be.**
-`MeshProbeDiscoveryPolicy.allowsOutboundConnection` returns `!candidateRunsInSimulator` when the
-local side is a Simulator, so one Simulator will not dial another. The documented reason — the
-Simulator's host-only address — justifies the *device→Simulator* refusal, not this one: two
-Simulators on the same Mac share the host's network stack, and the probe already uses a random
-per-instance service name, so an instance-name collision is not the obstacle either. **If sim↔sim
-connects, multi-node testing (3, 4, 6 nodes) becomes possible entirely on one Mac**, which would
-change the cost of every phase from P3 onward. Untested; see the P2 launcher for the bounded
-experiment.
+**Simulator ↔ Simulator was refused by policy, and that policy was wider than it needed to be.**
+`MeshProbeDiscoveryPolicy.allowsOutboundConnection` returned `!candidateRunsInSimulator` when the
+local side was a Simulator, so one Simulator would not dial another. The documented reason — the
+Simulator's host-only address — justified the *device→Simulator* refusal, not that one. The
+experiment was run on 2026-08-31 and **two Simulators do connect**; the lane below is the result.
+
+### Lane A2 — simulator ↔ simulator (answered 2026-08-31)
+
+**Two Simulators on one Mac connect: Bonjour discovery, QUIC/TLS, and the signed,
+TLS-exporter-bound introduction all complete in both directions. QUIC datagrams do not
+negotiate.** This is a real multi-node lane for everything up to and including the signed control
+stream, and it needs no hardware and no human at all.
+
+Two Simulators on the same Mac share the host's network stack, so the peer resolves to a routable
+host address (`172.20.6.146` in the run below) rather than the host-only link-local address that
+justifies the device→Simulator refusal. Instance-name collision was never an obstacle either: the
+probe's service name is a fresh UUID per process.
+
+How to run it — no UI navigation, no Start button:
+
+```
+xcrun simctl install <udid> <path>/Fernlet.app
+SIMCTL_CHILD_FERNLET_PROBE_ALLOW_SIM_DIAL=1 \
+SIMCTL_CHILD_FERNLET_PROBE_AUTOSTART=1 \
+SIMCTL_CHILD_FERNLET_PROBE_CONSOLE_LOG=1 \
+xcrun simctl launch --console-pty <udid> MBO.Fernlet
+```
+
+The three `FERNLET_PROBE_*` variables are DEBUG-only, read once per process by
+`MeshProbeDebugOptions`, and **each is off when absent**. Off is not a near-equivalent of today's
+behaviour, it is today's behaviour: `ALLOW_SIM_DIAL` widens the simulator→simulator case *only* (a
+physical device still refuses a Simulator candidate), `AUTOSTART` replaces a tap on the probe
+screen's Start button, and `CONSOLE_LOG` mirrors the existing 80-entry event ring to stdout so a
+headless run has the same evidence the **Copy diagnostic report** button produces. When
+`ALLOW_SIM_DIAL` is on, the sim→sim dial uses the same `localServiceName < candidateServiceName`
+total order as the device↔device branch, so exactly one Simulator of a pair dials.
+
+| Check | Required result | Result | Date |
+| --- | --- | --- | --- |
+| Discovery | Each Simulator lists the other as a bounded Bonjour candidate on `_fernlet-mesh2._udp`. | **Pass** — both sides logged `Bonjour discovery has 2 candidate(s)` | 2026-08-31 |
+| Dial | Exactly one Simulator of the pair dials, by the service-name tie-breaker. | **Pass** — `fernlet-probe-70215e98…` dialed `fernlet-probe-d8d9ebf9…`, and `70215e98 < d8d9ebf9` | 2026-08-31 |
+| QUIC connect / TLS | The connection reaches `.ready` on both endpoints. | **Pass** — initiator ready at `172.20.6.146%en0:57837`, responder ready at `172.20.6.146:64794` | 2026-08-31 |
+| Control stream | Signed identity hello and signed channel introduction complete in both directions; `controlStreamVerified` becomes true on both endpoints. | **Pass** — both sides logged `Verified both Fernlet signatures against the same TLS exporter hash` | 2026-08-31 |
+| Channel binding (on-radio) | Both endpoints derive the same TLS-exporter hash from the live connection and each verifies the other's signature over it. | **Pass** — implied by the line above; the introduction does not verify unless both hashes match | 2026-08-31 |
+| Datagram | Ping/pong completes and the negotiated usable frame size is non-zero. | **Fail** — `usable frame size=0, required=23`, with `datagram-flow=false`; the probe reported the negative result and stopped, as designed. **Not attributed to this lane** — see below | 2026-08-31 |
+| Dial policy, default off | With `FERNLET_PROBE_ALLOW_SIM_DIAL` absent, two Simulators discover each other and neither dials. | **Pass** — control run held ~90 s: two candidates on each side, zero `Opening QUIC tunnel` lines, zero connections | 2026-08-31 |
+
+Evidence — the two console transcripts, trimmed to the load-bearing lines:
+
+```
+# initiator (iPhone 17 Pro)
+6:53:48 PM: Opening QUIC tunnel attempt 1 to fernlet-probe-d8d9ebf9-….local. [Simulator].
+6:53:49 PM: QUIC ready with …[Simulator] at 172.20.6.146%en0:57837; DATAGRAM=1024, UDP=1280,
+            datagram-flow=false, usable datagram frame size=0 bytes.
+6:53:49 PM: Control initiator accepted remote signed channel introduction.
+6:53:49 PM: Verified both Fernlet signatures against the same TLS exporter hash.
+6:53:49 PM: QUIC datagram capability check: usable frame size=0, required=23.
+6:53:49 PM: Ending mesh feasibility probe: QUIC datagrams were not negotiated; usable frame size is 0 bytes.
+
+# responder (iPhone 17)
+6:53:49 PM: Accepted inbound QUIC tunnel id=1.
+6:53:49 PM: QUIC ready with an inbound peer at 172.20.6.146:64794; …usable datagram frame size=0 bytes.
+6:53:49 PM: Control responder accepted signed channel introduction.
+6:53:49 PM: Verified both Fernlet signatures against the same TLS exporter hash.
+```
+
+**The datagram failure is not yet attributed to this lane, and must not be recorded as a sim↔sim
+limitation.** Lane A's own Datagram row is still `Not yet recorded`, so nobody has seen a non-zero
+usable frame size on *any* lane. Both endpoints advertised `maxDatagramFrameSize = 1024` and both
+observed `datagram-flow=false` with a usable size of 0, which is equally consistent with a probe
+QUIC-parameter defect that would fail the same way against a physical device. Settle it by reading
+the usable frame size on one device↔Simulator run — one line of evidence decides it — before
+concluding anything about Simulators.
+
+**What this re-tiers.** Any P3–P6 work whose correctness lives above the control stream — routing,
+membership, partition walks, departure transactions, N-node topology and simultaneous-start
+races — can now be exercised on 3, 4 or 6 Simulators from a script, with no hardware and no
+tester. That is a step change in the cost of those phases and the reason this experiment was worth
+running. What it does **not** move: Apple peer-to-peer Wi-Fi, the Local Network permission prompt,
+background/locked operation, battery and thermal, and (until the paragraph above is settled)
+anything that rides on QUIC datagrams. Those stay at tier 3 / Lane B.
+
+**One surprise worth carrying forward: an absent Bonjour TXT record reads as `device`.**
+`MeshProbeDiscoveryPolicy.candidateRunsInSimulator` returns false when the TXT key is missing, and
+in the first run one Simulator saw the other's freshly-published record before its TXT arrived,
+logging `…[device]` and dialing it — a dial the *pre-existing* policy would also have allowed. It
+did not recur in the control run. Two consequences: a Simulator-origin check that must be reliable
+cannot be built on TXT presence alone, and the old sim→sim refusal was never quite airtight.
 
 ### Lane B — physical multi-device and background (deferred to P8; see plan §15)
 
