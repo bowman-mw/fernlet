@@ -23,12 +23,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 3c | Outbound `sendHeart` gate: endpoint recognition via `hasHeartConnection(with:)` | 1 | 3b | done | `8c258b5` | Negative-checked against the old line; 45 tests in 4 suites green |
 | 3d | Close the id-vs-endpoint family for good (timeout path + exhaustive audit) | 1 | 3c | done | `2f273a9` | 14 sites fixed; full audit table with per-site verdicts is in the commit message. FAMILY CLOSED — do not re-audit |
 | 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | done | `ce91f5d` | Policy sound, 18 tests both-sides-exhaustive. Late TXT only ever WITHDRAWS dial permission (double-dial possible pre-TXT, deadlock impossible) |
-| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | in-flight | | Slice 1 + item 6 dispatched (iteration 7). **Two item-4 constraints:** (a) decide whether to emit `.discovered` — `ProximityCoordinator.shouldInviteDiscoveredPeer` (dormant) points the OPPOSITE way (`<`) to `shouldInitiateInvite` (`>`); if emitted, align one direction first. (b) TXT advertisement MUST carry `sid` (probe's doesn't) or the tie-break degrades to both-sides-dial. No `fp` in TXT (decision table) |
-| 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
+| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | done | `5835b52` | Full duty list in one slice; 47 tier-1 tests, no `.discovered`, TXT carries `sid`/no `fp`, cellular prohibited, TLS identity ephemeral. Residuals live in items 7/8/10 + P9 |
+| 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | done | `5835b52` | `localLinkMarkers` + `permittedLocalLinkFiles` (2 files), disjoint-by-test from the HTTP family, planted-marker proven |
 | 7 | Signed channel introduction productionized | 1 | 5 | todo | | Serializer + registry framing together |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | todo | | |
 | 9 | Rejection matrix at tier 2 | 2 | 8 | todo | | Drive by making the Simulator misbehave |
-| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | |
+| 10 | Mesh flows at tier 2 (admission, QR, photos, chat, hearts, shop, moderation, age gates) | 2 | 8 | todo | | Needs per-transfer photo streams in `NetworkPeerChannel` (named residual from item 5) |
 | 11 | Tier-3, and only this: AWDL path + Local Network permission prompt | 3 | 10 | todo | | Justify any addition to this row |
 | 12 | Convert `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer` from fixed 20 ms sleep to a polled wait (deadline + min-poll floor, house idiom) | 1 | — | todo | | Owner 2026-08-31: do in THIS loop, not a spawned session; chip task_916baef8 dismissed. Good bundle candidate with any small iteration |
 
@@ -36,6 +36,10 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 - **Item 1** needs one physical iOS 26.5+ device on the same non-isolated Wi-Fi as the Mac. Not
   blocking: items 2–8 are all tier 1 and can proceed while this waits.
+- **Non-blocking, wants owner eyes:** item 5 took the FIRST crypto escape hatch since the
+  standardization round (`x509-self-signature` — an X.509 self-signature has no Fernlet domain to
+  name; census 3→4 files / 6→7 hatches, `Crypto-Domain-Separation.md` updated same commit).
+  Review as a policy act.
 
 ## Decisions taken (defaults from prompt §3 unless the owner overrides)
 
@@ -82,6 +86,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 - `MeshNetworkManager` owns `private let meshSession = MeshMultipeerSession()` outright — no seam
   to inject `FakePeerTransport`, so manager-level invite behavior is untestable at tier 1 until
   item 8 (transport selection) introduces the seam.
+- Purpose-wall escape-hatch markers must sit within 3 lines of the call — the scan window is
+  `[line−3, line+6]`, so a marker above a long comment falls outside it.
+- **Concurrent-session test contention protocol:** another session runs suites on this Mac. Use a
+  FRESH log path per xcodebuild run, and `pgrep xcodebuild` before believing a failure — one
+  crossed log showed ~20 phantom `FernletLock*`/`SecureEnclaveWrap*` failures that vanished
+  uncontended. Boot the destination sim + ~20 s settle remains the hang cure.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -90,6 +100,7 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**5** — `NetworkMeshSession` skeleton, first slice, **with item 6 (no-tracking second marker
-family) in the same commit as the first QUIC file** per prompt §5. Item 1 waits on a device; item 2
-stays skip-gated while `Localizable.xcstrings` is held by another session.
+**7** — signed channel introduction productionized (serializer + registry framing together; the
+introduction also supplies the inbound peer `sid` that un-unranks `acceptInbound`). Bundle **item
+12** (the polled-wait flake fix) into whichever upcoming iteration is smallest. Item 1 waits on a
+device; item 2 stays skip-gated while `Localizable.xcstrings` is held by another session.
