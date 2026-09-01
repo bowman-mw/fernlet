@@ -6,7 +6,7 @@ line costs orchestrator budget forever. Prune the surprises list when an entry s
 place.
 
 **Phase:** P2 (NetworkMeshSession) · **Prompt:** [Next-Round-Prompt-Mesh-P2-2026-08-31.md](Next-Round-Prompt-Mesh-P2-2026-08-31.md)
-**Started:** 2026-08-31 · **Iteration:** 5 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `145a051`
+**Started:** 2026-08-31 · **Iteration:** 6 · **Tree at seed:** main = `16b9cb2` (pushed); loop head `1f2d56f`
 
 ## Items
 
@@ -22,8 +22,8 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 | 3b | Close the two remaining id-only `handleChannelReady` guards (RecipeShare + Presence) | 1 | 3 | done | `2a03800` | Endpoint helper + 3-case admission enum per manager, item-3 idiom; 4 tests; suite green (3320) |
 | 3c | Outbound `sendHeart` gate: endpoint recognition via `hasHeartConnection(with:)` | 1 | 3b | done | `8c258b5` | Negative-checked against the old line; 45 tests in 4 suites green |
 | 3d | Close the id-vs-endpoint family for good (timeout path + exhaustive audit) | 1 | 3c | done | `2f273a9` | 14 sites fixed; full audit table with per-site verdicts is in the commit message. FAMILY CLOSED — do not re-audit |
-| 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | todo | | The comparison that deadlocked the mesh |
-| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations |
+| 4 | Dial-policy tie-breaker: exhaustive tier-1 tests BEFORE any QUIC code | 1 | 3 | done | `ce91f5d` | Policy sound, 18 tests both-sides-exhaustive. Late TXT only ever WITHDRAWS dial permission (double-dial possible pre-TXT, deadlock impossible) |
+| 5 | `NetworkMeshSession` skeleton (listener/browser/connection/session actor) | 1 | 3, 4 | todo | | May take 2–3 iterations. **Two item-4 constraints:** (a) decide whether to emit `.discovered` — `ProximityCoordinator.shouldInviteDiscoveredPeer` (dormant) points the OPPOSITE way (`<`) to `shouldInitiateInvite` (`>`); if emitted, align one direction first. (b) TXT advertisement MUST carry `sid` (probe's doesn't) or the tie-break degrades to both-sides-dial. No `fp` in TXT (decision table) |
 | 6 | No-tracking wall extension — SECOND marker family, not `httpClientMarkers` | 1 | 5 | todo | | Same commit as first QUIC file |
 | 7 | Signed channel introduction productionized | 1 | 5 | todo | | Serializer + registry framing together |
 | 8 | Transport selection in `MeshNetworkManager`; QUIC NOT default | 1 | 5, 7 | todo | | |
@@ -75,6 +75,12 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 - `ProximityCoordinatorTests.heartbeatAcceleratesDuringTransferAndUsesCooldownAfterTransfer`
   flaked once under full-suite load (fixed 20 ms sleep vs 80 ms send); passes alone. A spawn-task
   chip exists to convert it to a polled wait — not this loop's work.
+- **Runner-hang flake protocol updated (iteration 6):** `simctl shutdown all` did NOT cure it —
+  three consecutive ~371 s hangs. What works: `xcrun simctl boot "iPhone 17"` + ~20 s settle
+  *before* `xcodebuild`. A concurrent session shares this Mac's simulator fleet.
+- `MeshNetworkManager` owns `private let meshSession = MeshMultipeerSession()` outright — no seam
+  to inject `FakePeerTransport`, so manager-level invite behavior is untestable at tier 1 until
+  item 8 (transport selection) introduces the seam.
 
 ## Known-red gates that are NOT this phase's fault
 
@@ -83,6 +89,6 @@ Tier per prompt §2 — 1 = no radio, 2 = device↔Simulator, 3 = two physical d
 
 ## Next item
 
-**4** — dial-policy tie-breaker tier-1 tests (incl. the missing/late-TXT case from the item-0
-surprise). Item 1 waits on a device; item 2 stays skip-gated while `Localizable.xcstrings` is held
-by another session.
+**5** — `NetworkMeshSession` skeleton, first slice, **with item 6 (no-tracking second marker
+family) in the same commit as the first QUIC file** per prompt §5. Item 1 waits on a device; item 2
+stays skip-gated while `Localizable.xcstrings` is held by another session.
