@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import Security
 import Testing
+@testable import FernletCrypto
 @testable import ProximityKit
 
 // MARK: - NetworkMeshTransportTests
@@ -852,14 +853,75 @@ struct NetworkMeshSessionTests {
     /// Teardown leaves no peer identities behind. The map exists only to keep one device the same
     /// peer for the life of a session; keeping it past a stop would link two runs of the radio to
     /// one device, which is what the per-session random Bonjour name exists to prevent.
+    ///
+    /// The introduction's replay cache and its pending inbound connections die with it for the same
+    /// reason: nothing this radio learns survives its own stop, so nothing owes a wipe-ledger row.
     @Test func stopClearsEverySessionScopedMap() {
         let session = NetworkMeshSession()
         session.stop()
         #expect(session.trackedEndpointCountForTesting == 0)
         #expect(session.linkTableForTesting.occupiedSlotCount == 0)
         #expect(session.linkTableForTesting.cachedEndpointCount == 0)
+        #expect(session.trackedIntroductionNonceCountForTesting == 0)
+        #expect(session.pendingInboundCountForTesting == 0)
         #expect(session.connectedPeers.isEmpty)
         #expect(!session.isRunning)
+    }
+
+    /// A connection that never finishes its introduction is dropped, not held forever.
+    ///
+    /// The seat it holds is pre-authentication and there are only eight of them, so an unbounded
+    /// wait on a peer that says nothing is how eight silent connections keep every real member out.
+    /// The sweep rides the one poll the radio already owns, so there is no timer per connection.
+    @Test func aPendingIntroductionThatNeverFinishesIsSweptAway() {
+        let session = NetworkMeshSession()
+        let started = Date(timeIntervalSince1970: 1_800_000_000)
+        session.bookPendingInboundForTesting(MeshLinkKey("silent"), startedAt: started)
+        session.bookPendingInboundForTesting(MeshLinkKey("prompt"), startedAt: started)
+        #expect(session.pendingInboundCountForTesting == 2)
+
+        // A hair inside the deadline: both survive.
+        session.expirePendingInboundForTesting(
+            now: started.addingTimeInterval(NetworkMeshSession.introductionDeadlineSeconds)
+        )
+        #expect(session.pendingInboundCountForTesting == 2)
+
+        session.expirePendingInboundForTesting(
+            now: started.addingTimeInterval(NetworkMeshSession.introductionDeadlineSeconds + 0.001)
+        )
+        #expect(session.pendingInboundCountForTesting == 0)
+        #expect(
+            NetworkMeshSession.maxPendingInboundTunnels == MeshLinkTable.maxConcurrentLinks,
+            "a pending seat must never be scarcer than a roster seat, or a member is refused before a stranger"
+        )
+        #expect(session.linkTableForTesting.occupiedSlotCount == 0, "a pending connection holds no roster slot")
+    }
+
+    /// The accept path cannot be reached without a verified peer.
+    ///
+    /// Item 5 left exactly one `peerSessionID: nil` in the transport, which made every inbound
+    /// tunnel ``MeshDialPreference/unranked``. This pins the closure: the only `admitInbound` call in
+    /// the file takes its `sid` from a ``MeshVerifiedPeer``, so an unauthenticated connection can no
+    /// longer reach duplicate-tunnel suppression at all — the publisher test above can only cover
+    /// paths it drives, and this covers the one nobody can drive without two radios.
+    @Test func theAcceptPathIsUnreachableWithoutAVerifiedPeer() throws {
+        let path = "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"
+        let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
+        let lines = source.components(separatedBy: .newlines)
+        let code = lines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("///")
+        }
+        #expect(
+            !code.contains { $0.contains("peerSessionID: nil") },
+            "the QUIC transport still admits an inbound tunnel with no peer session id — item 5's residual is open"
+        )
+        let admissions = code.filter { $0.contains("links.admitInbound(") }
+        #expect(admissions.count == 1, "expected exactly one inbound admission site, found \(admissions.count)")
+        #expect(
+            code.contains { $0.contains("peerSessionID: verified.sessionID") },
+            "the inbound admission must rank on the session id the signed introduction verified"
+        )
     }
 
     /// A session identity is minted once per endpoint and both halves are minted together, so a
@@ -902,5 +964,722 @@ struct NetworkMeshSessionTests {
 
         map.removeAll()
         #expect(map.trackedCount == 0)
+    }
+}
+
+// MARK: - MeshIntroductionHarness
+
+/// Two endpoints and one channel, enough to drive plan §7.2's introduction end to end without a
+/// radio, a keychain, or an `IdentityService`.
+///
+/// Signing goes through `CryptographicPurpose.signingBytes` exactly as `IdentityService.sign` does,
+/// so a transcript that would be refused at the real signing boundary is refused here too — the
+/// harness cannot accidentally mint bytes production could not.
+enum MeshIntroductionHarness {
+
+    /// The channel binding both ends of an untampered tunnel derive.
+    static let binding = Data(repeating: 0xB1, count: MeshChannelIntroductionFormat.channelBindingByteCount)
+
+    /// A different one — what the two ends see when they are not on the same tunnel.
+    static let otherBinding = Data(repeating: 0xB2, count: MeshChannelIntroductionFormat.channelBindingByteCount)
+
+    /// One side of an introduction: its signing key and the hello it sends.
+    struct Endpoint {
+        let signingKey: Curve25519.Signing.PrivateKey
+        let hello: MeshChannelHello
+
+        var publicKey: Data { signingKey.publicKey.rawRepresentation }
+    }
+
+    static func endpoint(
+        meshID: UUID,
+        epochRef: String = "7",
+        sessionID: String,
+        protocolVersion: Int = MeshChannelIntroductionFormat.protocolVersion,
+        nonce: Data = MeshChannelIntroductionFormat.randomNonce()
+    ) -> Endpoint {
+        let key = Curve25519.Signing.PrivateKey()
+        return Endpoint(signingKey: key, hello: MeshChannelHello(
+            protocolVersion: protocolVersion,
+            meshID: meshID,
+            epochRef: epochRef,
+            signingPublicKey: key.publicKey.rawRepresentation,
+            nonce: nonce,
+            sessionID: sessionID
+        ))
+    }
+
+    static func roster(_ endpoints: Endpoint..., barred: [Data] = []) -> MeshIntroductionRoster {
+        MeshIntroductionRoster(members: endpoints.map(\.publicKey), barred: barred)
+    }
+
+    /// Signs a transcript the way `IdentityService.sign` does — through the purpose's framing check.
+    static func signature(over transcript: Data, by key: Curve25519.Signing.PrivateKey) throws -> Data {
+        let purpose = FernletCryptoPurpose.Signature.meshChannelIntroductionV1
+        let bytes = try #require(
+            purpose.signingBytes(transcript),
+            "the transcript does not satisfy meshChannelIntroductionV1's declared framing"
+        )
+        return try key.signature(for: bytes)
+    }
+
+    static func introduction(
+        over transcript: Data,
+        binding: Data,
+        by key: Curve25519.Signing.PrivateKey
+    ) throws -> MeshChannelIntroduction {
+        MeshChannelIntroduction(
+            channelBindingHash: binding,
+            signature: try signature(over: transcript, by: key)
+        )
+    }
+
+    /// Everything one run of the handshake produced, so a test can assert on any stage of it.
+    struct Run {
+        var initiator: MeshChannelIntroductionExchange
+        var responder: MeshChannelIntroductionExchange
+        var initiatorHelloRejection: MeshIntroductionRejection?
+        var responderHelloRejection: MeshIntroductionRejection?
+        var initiatorTranscript: Data?
+        var responderTranscript: Data?
+        var initiatorOutcome: MeshChannelIntroductionOutcome?
+        var responderOutcome: MeshChannelIntroductionOutcome?
+    }
+
+    /// Drives both sides through hello → bind → sign → review, stopping at the first refusal.
+    ///
+    /// Each side gets its own nonce cache, matching production: the caches are per session, not per
+    /// mesh, so a replay is only a replay to the side that already saw it.
+    static func run(
+        initiator: Endpoint,
+        responder: Endpoint,
+        roster: MeshIntroductionRoster,
+        initiatorBinding: Data = binding,
+        responderBinding: Data = binding
+    ) throws -> Run {
+        var state = Run(
+            initiator: MeshChannelIntroductionExchange(role: .initiator, localHello: initiator.hello),
+            responder: MeshChannelIntroductionExchange(role: .responder, localHello: responder.hello)
+        )
+        var initiatorNonces = MeshIntroductionNonceCache()
+        var responderNonces = MeshIntroductionNonceCache()
+        state.responderHelloRejection = state.responder.receive(
+            initiator.hello, roster: roster, nonces: &responderNonces
+        )
+        state.initiatorHelloRejection = state.initiator.receive(
+            responder.hello, roster: roster, nonces: &initiatorNonces
+        )
+        guard state.responderHelloRejection == nil, state.initiatorHelloRejection == nil else { return state }
+        state.initiatorTranscript = state.initiator.bind(channelBindingHash: initiatorBinding)
+        state.responderTranscript = state.responder.bind(channelBindingHash: responderBinding)
+        guard let initiatorTranscript = state.initiatorTranscript,
+              let responderTranscript = state.responderTranscript else { return state }
+        state.responderOutcome = state.responder.review(
+            try introduction(over: initiatorTranscript, binding: initiatorBinding, by: initiator.signingKey)
+        )
+        state.initiatorOutcome = state.initiator.review(
+            try introduction(over: responderTranscript, binding: responderBinding, by: responder.signingKey)
+        )
+        return state
+    }
+}
+
+// MARK: - MeshChannelIntroductionTests
+
+/// Plan §7.2's signed channel introduction: the decision that lets a stranger onto the mesh, or
+/// does not.
+///
+/// Every refusal below asserts two things, never one — that the introduction was rejected, **and**
+/// that nothing about the peer survived it. A rejection that still handed a `sid` or a handle to the
+/// accept path would be a degraded accept wearing a rejection's name, which is exactly what plan
+/// §7.2 forbids.
+@Suite(.serialized)
+struct MeshChannelIntroductionTests {
+
+    // MARK: Happy path
+
+    /// Both directions of one untampered channel: each side verifies the other, and both agree on
+    /// exactly the same transcript bytes.
+    @Test func bothSidesVerifyEachOtherOverOneChannel() throws {
+        let meshID = UUID()
+        let alice = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "alice-sid")
+        let bob = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "bob-sid")
+        let run = try MeshIntroductionHarness.run(
+            initiator: alice, responder: bob, roster: MeshIntroductionHarness.roster(alice, bob)
+        )
+
+        #expect(run.initiatorHelloRejection == nil)
+        #expect(run.responderHelloRejection == nil)
+        #expect(run.initiatorTranscript == run.responderTranscript, "both ends must sign identical bytes")
+        #expect(run.responderOutcome?.verifiedPeer?.signingPublicKey == alice.publicKey)
+        #expect(run.responderOutcome?.verifiedPeer?.sessionID == "alice-sid")
+        #expect(run.initiatorOutcome?.verifiedPeer?.signingPublicKey == bob.publicKey)
+        #expect(run.initiatorOutcome?.verifiedPeer?.sessionID == "bob-sid")
+        #expect(
+            run.initiatorOutcome?.verifiedPeer?.fingerprint == IdentityService.fingerprint(of: bob.publicKey)
+        )
+    }
+
+    /// A peer being admitted holds no group key, so it presents no epoch. Requiring equality
+    /// outright would make admission itself impossible — the joining side could never introduce
+    /// itself to the mesh it is asking to join.
+    @Test func aPeerWithNoEpochYetIsAdmitted() throws {
+        let meshID = UUID()
+        let joiner = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "", sessionID: "joiner")
+        let member = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "9", sessionID: "member")
+        let run = try MeshIntroductionHarness.run(
+            initiator: joiner, responder: member, roster: MeshIntroductionHarness.roster(joiner, member)
+        )
+
+        #expect(run.responderOutcome?.verifiedPeer?.signingPublicKey == joiner.publicKey)
+        #expect(run.initiatorOutcome?.verifiedPeer?.signingPublicKey == member.publicKey)
+        #expect(run.initiatorTranscript == run.responderTranscript)
+        #expect(MeshChannelIntroductionExchange.agreedEpoch("", "9") == "9")
+        #expect(MeshChannelIntroductionExchange.agreedEpoch("4", "") == "4")
+    }
+
+    // MARK: Refusals
+
+    /// A tampered or forged signature never verifies, and hands nothing onward.
+    @Test func aBadSignatureIsRefusedAndLeaksNothing() throws {
+        let meshID = UUID()
+        let alice = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "alice-sid")
+        let bob = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "bob-sid")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: bob.hello)
+        var nonces = MeshIntroductionNonceCache()
+        let helloRejection = exchange.receive(
+            alice.hello, roster: MeshIntroductionHarness.roster(alice, bob), nonces: &nonces
+        )
+        #expect(helloRejection == nil)
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        let transcript = try #require(bound)
+
+        // Signed by a key that is not the one the hello claims.
+        let impostor = Curve25519.Signing.PrivateKey()
+        let forged = try MeshIntroductionHarness.introduction(
+            over: transcript, binding: MeshIntroductionHarness.binding, by: impostor
+        )
+        #expect(exchange.review(forged) == .rejected(.signatureInvalid))
+        #expect(exchange.review(forged).verifiedPeer == nil)
+
+        // A single flipped byte in an otherwise valid signature.
+        var bytes = [UInt8](try MeshIntroductionHarness.signature(over: transcript, by: alice.signingKey))
+        bytes[0] ^= 0xFF
+        let mangled = MeshChannelIntroduction(
+            channelBindingHash: MeshIntroductionHarness.binding, signature: Data(bytes)
+        )
+        #expect(exchange.review(mangled) == .rejected(.signatureInvalid))
+        #expect(exchange.review(mangled).verifiedPeer == nil)
+    }
+
+    /// A peer naming another mesh is refused before anything is signed, and the exchange keeps no
+    /// hello — so there is no transcript to sign and no identity to hand onward.
+    @Test func aForeignMeshIsRefusedAndLeavesNoTranscript() {
+        let alice = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "alice-sid")
+        let stranger = MeshIntroductionHarness.endpoint(meshID: UUID(), sessionID: "stranger-sid")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: alice.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            stranger.hello, roster: MeshIntroductionHarness.roster(alice, stranger), nonces: &nonces
+        )
+
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(rejection == .foreignMesh)
+        #expect(bound == nil)
+        #expect(exchange.derivedTranscript == nil)
+    }
+
+    /// Two peers each holding a DIFFERENT epoch are on diverged branches, which P2 cannot merge.
+    /// Refusing is the honest answer until plan §8.4's merge lands.
+    @Test func aDivergentEpochIsRefusedAndLeavesNoTranscript() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "4", sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, epochRef: "9", sessionID: "peer")
+        var exchange = MeshChannelIntroductionExchange(role: .initiator, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            peer.hello, roster: MeshIntroductionHarness.roster(local, peer), nonces: &nonces
+        )
+
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(rejection == .divergentEpoch)
+        #expect(bound == nil)
+        #expect(exchange.derivedTranscript == nil)
+        #expect(!MeshChannelIntroductionExchange.epochsConverge("4", "9"))
+        #expect(MeshChannelIntroductionExchange.epochsConverge("4", "4"))
+        #expect(MeshChannelIntroductionExchange.epochsConverge("", "9"))
+    }
+
+    /// A peer the roster has never heard of is refused, whatever else it gets right.
+    @Test func aRosterAbsentPeerIsRefusedAndLeavesNoTranscript() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let outsider = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "outsider")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        // Everything about the hello is well-formed and on-mesh; only membership is missing.
+        let rejection = exchange.receive(
+            outsider.hello, roster: MeshIntroductionHarness.roster(local), nonces: &nonces
+        )
+
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(rejection == .unknownIdentity)
+        #expect(bound == nil)
+        #expect(exchange.derivedTranscript == nil)
+    }
+
+    /// A departed, removed, revoked or blocked key is refused even while it is still on the member
+    /// list — the removal that rotates the group key must already be enforced at the transport.
+    @Test func aBarredMemberIsRefusedEvenWhileStillListed() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let removed = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "removed")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let rejection = exchange.receive(
+            removed.hello,
+            roster: MeshIntroductionHarness.roster(local, removed, barred: [removed.publicKey]),
+            nonces: &nonces
+        )
+
+        #expect(rejection == .barredMember)
+        #expect(exchange.derivedTranscript == nil)
+    }
+
+    /// A nonce this session already accepted is a replay, and so is one that reflects this side's
+    /// own — the two are the same attack from different directions.
+    @Test func aReplayedOrReflectedNonceIsRefused() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "peer")
+        let roster = MeshIntroductionHarness.roster(local, peer)
+        var nonces = MeshIntroductionNonceCache()
+
+        var first = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let accepted = first.receive(peer.hello, roster: roster, nonces: &nonces)
+        #expect(accepted == nil)
+
+        // The same peer re-introducing itself with the nonce this session already accepted.
+        var replay = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let replayed = replay.receive(peer.hello, roster: roster, nonces: &nonces)
+        let replayBound = replay.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(replayed == .replayedNonce)
+        #expect(replayBound == nil)
+        #expect(replay.derivedTranscript == nil)
+
+        // A peer echoing this side's own nonce back at it.
+        let mirror = MeshIntroductionHarness.endpoint(
+            meshID: meshID, sessionID: "mirror", nonce: local.hello.nonce
+        )
+        var reflected = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let reflection = reflected.receive(
+            mirror.hello, roster: MeshIntroductionHarness.roster(local, mirror), nonces: &nonces
+        )
+        #expect(reflection == .replayedNonce)
+        #expect(reflected.derivedTranscript == nil)
+    }
+
+    /// The two ends of a tampered channel derive different exporter secrets, so neither accepts the
+    /// other. Named separately from an invalid signature: "someone is between you" and "that peer
+    /// signed badly" send a developer to completely different places.
+    @Test func aTamperedChannelIsRefusedOnBothSides() throws {
+        let meshID = UUID()
+        let alice = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "alice-sid")
+        let bob = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "bob-sid")
+
+        let run = try MeshIntroductionHarness.run(
+            initiator: alice,
+            responder: bob,
+            roster: MeshIntroductionHarness.roster(alice, bob),
+            initiatorBinding: MeshIntroductionHarness.binding,
+            responderBinding: MeshIntroductionHarness.otherBinding
+        )
+
+        #expect(run.initiatorTranscript != run.responderTranscript, "different channels, different bytes")
+        #expect(run.initiatorOutcome == .rejected(.channelBindingMismatch))
+        #expect(run.responderOutcome == .rejected(.channelBindingMismatch))
+        #expect(run.initiatorOutcome?.verifiedPeer == nil)
+        #expect(run.responderOutcome?.verifiedPeer == nil)
+    }
+
+    /// A peer that reports the right binding but signed under a different one still fails: the hash
+    /// is inside the signed bytes, not merely beside them.
+    @Test func aBindingThatOnlyLooksRightStillFailsTheSignature() throws {
+        let meshID = UUID()
+        let alice = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "alice-sid")
+        let bob = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "bob-sid")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: bob.hello)
+        var nonces = MeshIntroductionNonceCache()
+        let localRejection = exchange.receive(
+            alice.hello, roster: MeshIntroductionHarness.roster(alice, bob), nonces: &nonces
+        )
+        #expect(localRejection == nil)
+        _ = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+
+        var elsewhere = MeshChannelIntroductionExchange(role: .initiator, localHello: alice.hello)
+        var otherNonces = MeshIntroductionNonceCache()
+        let peerRejection = elsewhere.receive(
+            bob.hello, roster: MeshIntroductionHarness.roster(alice, bob), nonces: &otherNonces
+        )
+        #expect(peerRejection == nil)
+        let otherBound = elsewhere.bind(channelBindingHash: MeshIntroductionHarness.otherBinding)
+        let otherTranscript = try #require(otherBound)
+        let mismatched = MeshChannelIntroduction(
+            channelBindingHash: MeshIntroductionHarness.binding,
+            signature: try MeshIntroductionHarness.signature(over: otherTranscript, by: alice.signingKey)
+        )
+
+        #expect(exchange.review(mismatched) == .rejected(.signatureInvalid))
+        #expect(exchange.review(mismatched).verifiedPeer == nil)
+    }
+
+    /// Width checks run first, on untrusted bytes, so no later step reasons about a short key.
+    @Test func malformedFramesAreRefusedBeforeAnythingElse() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "peer")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+
+        let short = MeshChannelHello(
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion,
+            meshID: meshID,
+            epochRef: "7",
+            signingPublicKey: Data(repeating: 3, count: 16),
+            nonce: peer.hello.nonce,
+            sessionID: "peer"
+        )
+        let shortRejection = exchange.receive(short, roster: .empty, nonces: &nonces)
+        #expect(shortRejection == .malformedHello)
+        let long = MeshChannelHello(
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion,
+            meshID: meshID,
+            epochRef: String(repeating: "e", count: MeshChannelIntroductionFormat.maxEpochRefLength + 1),
+            signingPublicKey: peer.publicKey,
+            nonce: peer.hello.nonce,
+            sessionID: "peer"
+        )
+        let longRejection = exchange.receive(long, roster: .empty, nonces: &nonces)
+        #expect(longRejection == .malformedHello)
+
+        let goodRejection = exchange.receive(
+            peer.hello, roster: MeshIntroductionHarness.roster(local, peer), nonces: &nonces
+        )
+        #expect(goodRejection == nil)
+        _ = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        let stub = MeshChannelIntroduction(
+            channelBindingHash: MeshIntroductionHarness.binding, signature: Data(repeating: 9, count: 8)
+        )
+        #expect(exchange.review(stub) == .rejected(.malformedIntroduction))
+    }
+
+    /// Version, self-connection and caller-order faults each name themselves.
+    @Test func theRemainingRefusalsEachNameThemselves() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        var nonces = MeshIntroductionNonceCache()
+
+        var versions = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let future = MeshIntroductionHarness.endpoint(
+            meshID: meshID, sessionID: "future",
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion + 1
+        )
+        let versionRejection = versions.receive(
+            future.hello, roster: MeshIntroductionHarness.roster(local, future), nonces: &nonces
+        )
+        #expect(versionRejection == .unsupportedProtocolVersion)
+
+        var mirror = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        let echo = MeshChannelHello(
+            protocolVersion: local.hello.protocolVersion,
+            meshID: meshID,
+            epochRef: local.hello.epochRef,
+            signingPublicKey: local.publicKey,
+            nonce: MeshChannelIntroductionFormat.randomNonce(),
+            sessionID: "echo"
+        )
+        let echoRejection = mirror.receive(
+            echo, roster: MeshIntroductionHarness.roster(local), nonces: &nonces
+        )
+        #expect(echoRejection == .selfIntroduction)
+
+        let unarmed = MeshChannelIntroductionExchange(role: .initiator, localHello: local.hello)
+        let stub = MeshChannelIntroduction(
+            channelBindingHash: MeshIntroductionHarness.binding,
+            signature: Data(repeating: 1, count: MeshChannelIntroductionFormat.signatureByteCount)
+        )
+        #expect(unarmed.review(stub) == .rejected(.missingPeerHello))
+
+        for rejection: MeshIntroductionRejection in [
+            .malformedHello, .unsupportedProtocolVersion, .foreignMesh, .divergentEpoch,
+            .selfIntroduction, .replayedNonce, .unknownIdentity, .barredMember,
+            .malformedIntroduction, .channelBindingMismatch, .signatureInvalid, .missingPeerHello
+        ] {
+            #expect(!rejection.diagnosticDescription.isEmpty)
+        }
+    }
+
+    /// A binding of the wrong width is never signed over — the exchange refuses to produce bytes
+    /// rather than committing to a value it cannot have derived from a real exporter.
+    @Test func aMalformedBindingProducesNoTranscript() {
+        let meshID = UUID()
+        let local = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "local")
+        let peer = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "peer")
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: local.hello)
+        var nonces = MeshIntroductionNonceCache()
+        let rejection = exchange.receive(
+            peer.hello, roster: MeshIntroductionHarness.roster(local, peer), nonces: &nonces
+        )
+        #expect(rejection == nil)
+
+        let bound = exchange.bind(channelBindingHash: Data(repeating: 7, count: 8))
+        #expect(bound == nil)
+        #expect(exchange.derivedTranscript == nil)
+    }
+}
+
+// MARK: - MeshChannelIntroductionTranscriptTests
+
+/// The bytes both peers sign: their layout, and that every field in them is load-bearing.
+@Suite(.serialized)
+struct MeshChannelIntroductionTranscriptTests {
+
+    static func transcript(
+        protocolVersion: Int = MeshChannelIntroductionFormat.protocolVersion,
+        meshID: UUID = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA") ?? UUID(),
+        epochRef: String = "7",
+        initiatorSigningPublicKey: Data = Data(repeating: 1, count: 32),
+        responderSigningPublicKey: Data = Data(repeating: 2, count: 32),
+        initiatorNonce: Data = Data(repeating: 3, count: 16),
+        responderNonce: Data = Data(repeating: 4, count: 16),
+        channelBindingHash: Data = Data(repeating: 5, count: 32)
+    ) -> MeshChannelIntroductionTranscript {
+        MeshChannelIntroductionTranscript(
+            protocolVersion: protocolVersion,
+            meshID: meshID,
+            epochRef: epochRef,
+            initiatorSigningPublicKey: initiatorSigningPublicKey,
+            responderSigningPublicKey: responderSigningPublicKey,
+            initiatorNonce: initiatorNonce,
+            responderNonce: responderNonce,
+            channelBindingHash: channelBindingHash
+        )
+    }
+
+    /// Changing any field changes the bytes. A field that did not would be a field the signature
+    /// does not actually cover — which is how "the epoch is bound into the transcript" becomes a
+    /// comment rather than a property.
+    @Test func everyTranscriptFieldReachesTheSignedBytes() {
+        let base = canonicalBytes(for: Self.transcript())
+        let variants: [String: MeshChannelIntroductionTranscript] = [
+            "protocolVersion": Self.transcript(protocolVersion: 2),
+            "meshID": Self.transcript(meshID: UUID()),
+            "epochRef": Self.transcript(epochRef: "8"),
+            "initiatorSigningPublicKey": Self.transcript(initiatorSigningPublicKey: Data(repeating: 9, count: 32)),
+            "responderSigningPublicKey": Self.transcript(responderSigningPublicKey: Data(repeating: 9, count: 32)),
+            "initiatorNonce": Self.transcript(initiatorNonce: Data(repeating: 9, count: 16)),
+            "responderNonce": Self.transcript(responderNonce: Data(repeating: 9, count: 16)),
+            "channelBindingHash": Self.transcript(channelBindingHash: Data(repeating: 9, count: 32))
+        ]
+        for (field, variant) in variants {
+            #expect(canonicalBytes(for: variant) != base, "\(field) does not reach the signed bytes")
+        }
+    }
+
+    /// Swapping the two roles produces different bytes, which is what makes "who dialed whom" part
+    /// of the signature rather than a convention the two ends have to agree on separately.
+    @Test func theRolesAreNotInterchangeable() {
+        let forward = Self.transcript()
+        let swapped = Self.transcript(
+            initiatorSigningPublicKey: forward.responderSigningPublicKey,
+            responderSigningPublicKey: forward.initiatorSigningPublicKey,
+            initiatorNonce: forward.responderNonce,
+            responderNonce: forward.initiatorNonce
+        )
+        #expect(canonicalBytes(for: forward) != canonicalBytes(for: swapped))
+    }
+
+    /// The transcript begins with the domain as a length-prefixed field, in plan §7.2's order, and
+    /// the domain is the production spelling — never the DEBUG probe's.
+    @Test func theTranscriptOpensWithItsLengthPrefixedDomain() {
+        let purpose = FernletCryptoPurpose.Signature.meshChannelIntroductionV1
+        let bytes = canonicalBytes(for: Self.transcript())
+        let expectedCount = Data([0, 0, 0, 0, 0, 0, 0, UInt8(purpose.data.count)])
+
+        #expect(bytes.starts(with: expectedCount + purpose.data))
+        #expect(purpose.signingBytes(bytes) != nil)
+        #expect(!purpose.rawValue.contains(".probe."))
+    }
+}
+
+// MARK: - MeshIntroductionRosterTests
+
+/// Who the introduction is judged against: bounded, and fail-closed where the two lists overlap.
+@Suite(.serialized)
+struct MeshIntroductionRosterTests {
+
+    static func key(_ byte: UInt8) -> Data { Data(repeating: byte, count: 32) }
+
+    @Test func aMemberIsAdmittedAndAStrangerIsNot() {
+        let roster = MeshIntroductionRoster(members: [Self.key(1), Self.key(2)])
+        #expect(roster.verdict(for: Self.key(1)) == .member)
+        #expect(roster.verdict(for: Self.key(3)) == .stranger)
+        #expect(MeshIntroductionRoster.empty.verdict(for: Self.key(1)) == .stranger)
+    }
+
+    /// A key on both lists is barred. A removal that raced an admission must not be resolved in the
+    /// removed member's favour — the rotation that follows a removal assumes exactly this.
+    @Test func barredWinsOverMember() {
+        let roster = MeshIntroductionRoster(members: [Self.key(1)], barred: [Self.key(1)])
+        #expect(roster.verdict(for: Self.key(1)) == .barred)
+    }
+
+    @Test func bothListsAreBoundedByConstruction() {
+        let members = (0..<UInt8(MeshIntroductionRoster.maxMembers + 4)).map(Self.key)
+        let barred = (100..<UInt8(100 + MeshIntroductionRoster.maxBarred + 4)).map(Self.key)
+        let roster = MeshIntroductionRoster(members: members, barred: barred)
+        #expect(roster.memberCount == MeshIntroductionRoster.maxMembers)
+        #expect(roster.barredCount == MeshIntroductionRoster.maxBarred)
+    }
+}
+
+// MARK: - MeshIntroductionNonceCacheTests
+
+/// The replay cache: what it refuses, and exactly how far its bound reaches.
+@Suite(.serialized)
+struct MeshIntroductionNonceCacheTests {
+
+    @Test func aSecondSightingOfANonceIsRefused() {
+        var cache = MeshIntroductionNonceCache()
+        let nonce = MeshChannelIntroductionFormat.randomNonce()
+        let firstAdmit = cache.admit(nonce)
+        let secondAdmit = cache.admit(nonce)
+        let otherAdmit = cache.admit(MeshChannelIntroductionFormat.randomNonce())
+        #expect(firstAdmit)
+        #expect(!secondAdmit)
+        #expect(otherAdmit)
+        #expect(cache.trackedCount == 2)
+    }
+
+    /// Bounded oldest-first. The evicted nonce becomes admissible again — which is safe only
+    /// because the exporter binding, not the nonce, is what makes a cross-tunnel replay useless.
+    @Test func theCacheIsBoundedOldestFirst() {
+        var cache = MeshIntroductionNonceCache()
+        let first = MeshChannelIntroductionFormat.randomNonce()
+        let seeded = cache.admit(first)
+        #expect(seeded)
+        var everyFillAdmitted = true
+        for _ in 0..<MeshIntroductionNonceCache.maxTrackedNonces {
+            everyFillAdmitted = cache.admit(MeshChannelIntroductionFormat.randomNonce()) && everyFillAdmitted
+        }
+        #expect(everyFillAdmitted)
+        #expect(cache.trackedCount == MeshIntroductionNonceCache.maxTrackedNonces)
+        let readmitted = cache.admit(first)
+        #expect(readmitted, "the oldest nonce should have been evicted")
+
+        cache.removeAll()
+        #expect(cache.trackedCount == 0)
+    }
+
+    /// Nonces are 16 bytes of platform CSPRNG output — distinct in practice, which is what makes the
+    /// cache a replay check rather than a collision generator.
+    @Test func nonceMintingIsTheRightWidthAndDoesNotRepeat() {
+        var seen: Set<Data> = []
+        for _ in 0..<64 {
+            let nonce = MeshChannelIntroductionFormat.randomNonce()
+            #expect(nonce.count == MeshChannelIntroductionFormat.nonceByteCount)
+            seen.insert(nonce)
+        }
+        #expect(seen.count == 64)
+    }
+}
+
+// MARK: - MeshInboundRankingTests
+
+/// Item 5's named residual, closed: an inbound tunnel is ranked once the introduction has named its
+/// peer, so duplicate-tunnel suppression makes a real decision instead of falling through to
+/// ``MeshDialPreference/unranked``.
+@MainActor
+@Suite(.serialized)
+struct MeshInboundRankingTests {
+
+    static func table(withBrowsed sessionID: String, as key: MeshLinkKey, at now: Date) -> MeshLinkTable {
+        var table = MeshLinkTable()
+        table.remember(MeshEndpointRecord(
+            key: key,
+            instanceName: "fernlet-mesh-abcdef123456",
+            advertisement: [MeshLinkAdvertisement.sessionIDKey: sessionID, "meshName": "Quiet Fern"],
+            lastSeenAt: now
+        ))
+        return table
+    }
+
+    /// The verified `sid` resolves an inbound connection to the browsed advertisement it came from.
+    /// Without it the two are a host/port and a Bonjour instance, with nothing in common.
+    @Test func aVerifiedSessionIDResolvesToTheBrowsedEndpoint() {
+        let clock = VirtualClock()
+        let browsed = MeshLinkKey("browsed-endpoint")
+        let table = Self.table(withBrowsed: "peer-sid", as: browsed, at: clock.now)
+
+        #expect(table.key(advertisingSessionID: "peer-sid") == browsed)
+        #expect(table.key(advertisingSessionID: "someone-else") == nil)
+        #expect(table.key(advertisingSessionID: "") == nil, "an absent id must never match an endpoint")
+    }
+
+    /// The pair that used to end with two tunnels now ends with one: this side is mid-dial, the peer
+    /// outranks it, and the inbound tunnel is admitted onto the SAME key the dial is using.
+    @Test func aRankedInboundTunnelCollidesWithTheOutboundDial() {
+        let clock = VirtualClock()
+        let browsed = MeshLinkKey("browsed-endpoint")
+        var table = Self.table(withBrowsed: "zzzz", as: browsed, at: clock.now)
+        let dialAdmission = table.admitDial(to: browsed, now: clock.now)
+        #expect(dialAdmission == .admit)
+        #expect(table.phase(of: browsed) == .dialing)
+
+        // The peer's sid outranks the local one, so the peer is the designated dialer.
+        let resolved = table.key(advertisingSessionID: "zzzz")
+        #expect(resolved == browsed)
+        #expect(MeshDialPreference.rank(localSessionID: "aaaa", peerSessionID: "zzzz") == .peerDials)
+        let inboundAdmission = table.admitInbound(
+            from: browsed, localSessionID: "aaaa", peerSessionID: "zzzz", now: clock.now
+        )
+        #expect(inboundAdmission == .admit)
+        #expect(table.phase(of: browsed) == .connected)
+        #expect(table.occupiedSlotCount == 1, "the inbound tunnel reuses the dialing slot, never a second one")
+    }
+
+    /// The other direction: this side outranks the peer, so its own dial survives and the inbound
+    /// tunnel is refused as the duplicate it is. Under `unranked` this case admitted both.
+    @Test func theOutrankingDialerKeepsItsOwnTunnel() {
+        let clock = VirtualClock()
+        let browsed = MeshLinkKey("browsed-endpoint")
+        var table = Self.table(withBrowsed: "aaaa", as: browsed, at: clock.now)
+        _ = table.admitDial(to: browsed, now: clock.now)
+
+        #expect(MeshDialPreference.rank(localSessionID: "zzzz", peerSessionID: "aaaa") == .localDials)
+        let refusal = table.admitInbound(
+            from: browsed, localSessionID: "zzzz", peerSessionID: "aaaa", now: clock.now
+        )
+        #expect(refusal == .refusedDuplicateTunnel(.dialing))
+        #expect(table.phase(of: browsed) == .dialing)
+    }
+
+    /// A peer this side never browsed keeps its own connection key, and is still admitted — an
+    /// inbound tunnel from an un-browsed member is normal, not suspicious.
+    @Test func anUnbrowsedPeerKeepsItsConnectionKey() {
+        let clock = VirtualClock()
+        var table = MeshLinkTable()
+        let connectionKey = MeshLinkKey("quic-connection-1")
+
+        #expect(table.key(advertisingSessionID: "peer-sid") == nil)
+        let admission = table.admitInbound(
+            from: connectionKey, localSessionID: "aaaa", peerSessionID: "peer-sid", now: clock.now
+        )
+        #expect(admission == .admit)
+        #expect(table.phase(of: connectionKey) == .connected)
     }
 }

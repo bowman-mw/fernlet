@@ -1,8 +1,8 @@
 import Foundation
 import FernletCrypto
 import FernletDomainModel
-import ProximityKit
 import Testing
+@testable import ProximityKit
 
 /// Grep-wall for purpose separation at the raw CryptoKit boundary. It deliberately scans source,
 /// rather than testing a few hand-picked code paths, so a newly-added primitive call cannot rely on
@@ -78,11 +78,31 @@ struct CryptographicPurposeBoundaryTests {
             "canonicalBytes(for: entry) must satisfy moderationReportV2's declared framing"
         )
 
+        // The QUIC mesh channel introduction (network migration P2, plan §7.2). Registered as
+        // `.lengthPrefixed` before anything signed under it; this is the serializer arriving and
+        // being held to that declaration in the same change, which is the pairing 91c3956 broke.
+        let introductionPurpose = FernletCryptoPurpose.Signature.meshChannelIntroductionV1
+        let transcript = MeshChannelIntroductionTranscript(
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion,
+            meshID: UUID(),
+            epochRef: "7",
+            initiatorSigningPublicKey: Data(repeating: 6, count: 32),
+            responderSigningPublicKey: Data(repeating: 7, count: 32),
+            initiatorNonce: Data(repeating: 8, count: 16),
+            responderNonce: Data(repeating: 9, count: 16),
+            channelBindingHash: Data(repeating: 10, count: 32)
+        )
+        #expect(
+            introductionPurpose.signingBytes(canonicalBytes(for: transcript)) != nil,
+            "canonicalBytes(for: transcript) must satisfy meshChannelIntroductionV1's declared framing"
+        )
+
         // Still POSITIONAL, not a substring search: a length-prefixed purpose rejects its own raw
         // spelling. Accepting that would let a transcript carry the domain in an attacker-chosen
         // field and still reach the identity key.
         #expect(envelopePurpose.signingBytes(envelopePurpose.data) == nil)
         #expect(reportPurpose.signingBytes(reportPurpose.data) == nil)
+        #expect(introductionPurpose.signingBytes(introductionPurpose.data) == nil)
     }
 
     /// The raw-prefix family: transcripts that concatenate their domain directly. Rejecting a

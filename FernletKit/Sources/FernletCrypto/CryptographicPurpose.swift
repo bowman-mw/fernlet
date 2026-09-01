@@ -100,18 +100,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// from production mesh admissions so the device spike cannot become a signing oracle
         /// for a future shipping protocol.
         public static let meshProbeChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.probe.channel-introduction.v1")
-        /// **Reserved, not yet written.** The production successor to
-        /// ``meshProbeChannelIntroductionV1``: the mutually-signed QUIC channel introduction that
-        /// authenticates a `NetworkMeshSession` peer (plan §7.2 — purpose ‖ version ‖ meshID ‖
-        /// epochRef ‖ both signing public keys ‖ both nonces ‖ TLS-exporter hash). Distinct from
-        /// the probe spelling on purpose: the DEBUG spike must never be able to mint bytes a
-        /// shipping peer would accept.
+        /// The production successor to ``meshProbeChannelIntroductionV1``: the mutually-signed QUIC
+        /// channel introduction that authenticates a `NetworkMeshSession` peer (plan §7.2 —
+        /// purpose ‖ version ‖ meshID ‖ epochRef ‖ both signing public keys ‖ both nonces ‖
+        /// TLS-exporter hash). Distinct from the probe spelling on purpose: the DEBUG spike must
+        /// never be able to mint bytes a shipping peer would accept.
         ///
-        /// Framing is declared `.lengthPrefixed` because P2 must serialize this transcript with
-        /// `CanonicalByteWriter`, like every other production canonical signature. Nothing has
-        /// signed under this spelling yet, so P2 may still change the framing — but it must change
-        /// BOTH sides together, and `CryptographicPurposeBoundaryTests` is where that pairing is
-        /// proven once a serializer exists.
+        /// **Written since P2 item 7.** `MeshChannelIntroductionTranscript` is serialized by
+        /// `canonicalBytes(for:)` with `CanonicalByteWriter`, like every other production canonical
+        /// signature, so the domain reaches the signing boundary behind its own 8-byte count —
+        /// hence `.lengthPrefixed`. `CryptographicPurposeBoundaryTests` holds the serializer to that
+        /// declaration; changing one without the other is what broke in `91c3956`.
         public static let meshChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.channel-introduction.v1", framing: .lengthPrefixed)
         /// **Reserved, not yet written.** P5's routed-content manifest signature (plan §11): item
         /// ID, type token, content hash, size, immutable destination set, expiry, and the
@@ -140,10 +139,12 @@ public nonisolated enum FernletCryptoPurpose {
         /// framing is immaterial; what matters is that it is a reviewed constant rather than a bare
         /// string literal in the probe, and that it stays distinct from ``meshTLSExporterV1``.
         public static let meshProbeTLSExporterV1 = CryptographicPurpose("fernlet.mesh.probe.tls-exporter.v1")
-        /// **Reserved, not yet written.** The production TLS-exporter label for P2's QUIC mesh
-        /// channel binding (plan §7.2), the shipping counterpart to ``meshProbeTLSExporterV1``.
-        /// Keeping the two apart is what stops a spike build and a shipping build deriving the same
-        /// binding secret from the same connection.
+        /// The production TLS-exporter label for the QUIC mesh channel binding (plan §7.2), the
+        /// shipping counterpart to ``meshProbeTLSExporterV1``. Keeping the two apart is what stops a
+        /// spike build and a shipping build deriving the same binding secret from the same
+        /// connection. **In use since P2 item 7**: `NetworkMeshSession.channelBindingHash(for:)`
+        /// hands it to `sec_protocol_metadata_create_secret` and signs the SHA-256 of the result
+        /// into ``FernletCryptoPurpose/Signature/meshChannelIntroductionV1``'s transcript.
         public static let meshTLSExporterV1 = CryptographicPurpose("fernlet.mesh.tls-exporter.v1")
         /// **Reserved, not yet written.** P5's per-recipient content-key wrap (plan §11): the
         /// X25519 shared secret between the origin and one destination is run through HKDF under
